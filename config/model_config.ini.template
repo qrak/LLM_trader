@@ -1,0 +1,11 @@
+[model]
+name = LM_Studio_local_model_or_API_model
+base_url = http://localhost:1234/v1
+api_key = your_api_key_here
+
+
+# EXAMPLE WITH OPENROUTER AND DEEPSEEK R1 REASONER:
+# [model]
+# name = deepseek/deepseek-r1:free
+# base_url = https://openrouter.ai/api/v1
+# api_key = your_api_key_here
