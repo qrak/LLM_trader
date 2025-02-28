@@ -112,9 +112,11 @@ class ModelManager:
 
     async def _process_stream(self, stream: Any, buffer: ResponseBuffer) -> str:
         current_content = {"reasoning": "", "response": ""}
-        sentence_endings = (".", "!", "?", "\n")
+        paragraph_break = "\n\n"
+        min_content_length = 120
         
         in_thinking_mode = False
+        full_response = buffer.full_response if buffer.full_response else ""
 
         try:
             async for chunk in stream:
@@ -130,43 +132,51 @@ class ModelManager:
                         if not in_thinking_mode:
                             in_thinking_mode = True
                             header = f"=== Thinking Process ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ==="
-                            self.logger.info(header)
-                            buffer.full_response += f"<think>{header}\n"
+                            self.logger.stream_info(header)
+                            full_response += f"<think>{header}\n"
                             
                         current_content["reasoning"] += reasoning
-                        if any(current_content["reasoning"].rstrip().endswith(end) for end in sentence_endings):
-                            self.logger.stream_info(f"  {current_content['reasoning'].strip()}")
-                            buffer.full_response += f"{current_content['reasoning'].strip()}\n"
+                        # Only flush content if it contains a paragraph break or is long enough
+                        if paragraph_break in current_content["reasoning"] or len(current_content["reasoning"]) >= min_content_length:
+                            formatted_reasoning = current_content["reasoning"].strip()
+                            self.logger.stream_info(f"  {formatted_reasoning}")
+                            full_response += f"  {formatted_reasoning}\n"
                             current_content["reasoning"] = ""
 
                 if hasattr(delta, 'content') and delta.content:
                     if in_thinking_mode:
                         in_thinking_mode = False
                         footer = f"=== Analysis Results ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ==="
-                        self.logger.info(footer)
-                        buffer.full_response += f"</think>\n{footer}\n"
+                        self.logger.stream_info(footer)
+                        full_response += f"</think>\n{footer}\n"
                         
                     current_content["response"] += delta.content
-                    if any(current_content["response"].rstrip().endswith(end) for end in sentence_endings):
-                        self.logger.stream_info(current_content["response"].strip())
-                        buffer.full_response += f"{current_content['response'].strip()}\n"
+                    # Only flush content if it contains a paragraph break or is long enough
+                    if paragraph_break in current_content["response"] or len(current_content["response"]) >= min_content_length:
+                        formatted_response = current_content["response"].strip()
+                        self.logger.stream_info(f"  {formatted_response}")
+                        full_response += f"  {formatted_response}\n"
                         current_content["response"] = ""
 
         except Exception as e:
             self.logger.error(f"Error processing stream: {str(e)}")
             raise
 
+        # Process any remaining content
         if current_content["reasoning"].strip():
-            self.logger.stream_info(f"  {current_content['reasoning'].strip()}")
-            buffer.full_response += f"{current_content['reasoning'].strip()}\n"
+            formatted_reasoning = current_content["reasoning"].strip()
+            self.logger.stream_info(f"  {formatted_reasoning}")
+            full_response += f"  {formatted_reasoning}\n"
             
         if current_content["response"].strip():
-            self.logger.stream_info(current_content["response"].strip())
-            buffer.full_response += f"{current_content['response'].strip()}\n"
+            formatted_response = current_content["response"].strip()
+            self.logger.stream_info(f"  {formatted_response}")
+            full_response += f"  {formatted_response}\n"
             
         if in_thinking_mode:
             footer = f"=== Analysis Results ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ==="
-            self.logger.info(footer)
-            buffer.full_response += f"</think>\n{footer}\n"
+            self.logger.stream_info(footer)
+            full_response += f"</think>\n{footer}\n"
             
-        return buffer.full_response
+        buffer.full_response = full_response
+        return full_response
