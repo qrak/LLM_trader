@@ -46,20 +46,8 @@ async def _wait_for_next_timeframe_step(analyzer, delay: Optional[int] = None, a
         
         wait_time = str(timedelta(seconds=int(delay_seconds)))
         analyzer.logger.info(f"Next check in {wait_time} at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
-        if delay_seconds > 600:
-            remaining = delay_seconds
-            update_interval = min(60, delay_seconds)
-            
-            while remaining > update_interval:
-                await asyncio.sleep(update_interval)
-                remaining -= update_interval
-                time_left = str(timedelta(seconds=int(remaining)))
-                analyzer.logger.info(f"Time remaining until next check: {time_left}")
-            
-            if remaining > 0:
-                await asyncio.sleep(remaining)
-            return
+        await asyncio.sleep(delay_seconds)
+        return
     else:
         delay_ms = delay * 1000
         wait_time = str(timedelta(seconds=delay))
