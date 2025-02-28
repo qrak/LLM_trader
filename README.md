@@ -23,6 +23,16 @@ LLM-Trader is a demo of how transformer models can be leveraged to analyze crypt
 - **Stream Processing**: Efficiently handle streaming responses from AI models, ensuring low-latency analysis and quick adaptation to changing market conditions.
 - **Fallback Mechanisms**: Automatic switching to backup models if the primary model fails, ensuring continuous operation and reliable analysis even in case of service disruptions.
 
+## Screenshots
+
+Here are some screenshots of LLM-Trader in action:
+
+![Trading Analysis Interface](img/1.png)
+*The main trading analysis dashboard showing real-time market data and LLM-generated insights*
+
+![Technical Indicators Overview](img/2.png)
+*Detailed view of technical indicators and market sentiment analysis*
+
 ## Architecture
 
 LLM-Trader consists of several core components:

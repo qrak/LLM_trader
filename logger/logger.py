@@ -89,8 +89,8 @@ class Logger(logging.Logger):
         current_date = datetime.now().strftime("%Y_%m_%d")
         
         # Console handler
-        console = Console(color_system="auto", width=180)
-        rich_handler = RichHandler(console=console, rich_tracebacks=False)
+        self.console = Console(color_system="auto", width=180)
+        rich_handler = RichHandler(console=self.console, rich_tracebacks=False, markup=True)
         rich_handler.setLevel(self.level)
         self.addHandler(rich_handler)
 
@@ -116,14 +116,25 @@ class Logger(logging.Logger):
                 return
             self._last_header_time = current_time
             self._logged_headers.add(message.strip())
+            message = self._format_header_text(message)
 
         # Record for file logging
         record = logging.LogRecord(self.name, logging.INFO, "", 0, message, (), None)
         
         for handler in self.handlers:
             if isinstance(handler, RichHandler):
-                print(message, end=end, flush=flush)
+                if is_header:
+                    self.console.print(message, end=end or "\n", markup=True)
+                else:
+                    print(message, end=end, flush=flush)
             elif isinstance(handler, DailyRotatingFileHandler):
+                # Strip rich markup for file logging
+                plain_message = message
+                if "[bold cyan]" in plain_message:
+                    plain_message = plain_message.replace("[bold cyan]", "").replace("[/bold cyan]", "")
+                if "[bold green]" in plain_message:
+                    plain_message = plain_message.replace("[bold green]", "").replace("[/bold green]", "")
+                record.msg = plain_message
                 handler.emit(record)
 
     def _plain_formatter(self) -> logging.Formatter:
@@ -135,3 +146,19 @@ class Logger(logging.Logger):
         new_dir = self._get_log_dir(new_date, is_error=is_error)
         new_file = os.path.join(new_dir, os.path.basename(source))
         open(new_file, 'a').close()
+
+    def _format_header_text(self, message: str) -> str:
+        """Apply rich formatting to header text"""
+        if "=== Thinking Process" in message:
+            return message.replace("=== Thinking Process", "[bold cyan]=== Thinking Process[/bold cyan]")
+        elif "=== Analysis Results" in message:
+            return message.replace("=== Analysis Results", "[bold green]=== Analysis Results[/bold green]")
+        return message
+
+    def info(self, msg, *args, **kwargs):
+        """Override info to support rich markup"""
+        if "=== " in str(msg):
+            msg = self._format_header_text(str(msg))
+            kwargs["extra"] = kwargs.get("extra", {})
+            kwargs["extra"]["markup"] = True
+        super().info(msg, *args, **kwargs)

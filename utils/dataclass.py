@@ -156,14 +156,16 @@ class ResponseBuffer:
             self.timestamp_logged = False
             if self._should_show_header("Thinking Process"):
                 self.last_header = "Thinking Process"
-                return f"\n=== Thinking Process ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ===\n", True
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                return f"\n[bold cyan]=== Thinking Process ({timestamp}) ===[/bold cyan]\n", True
             return "", False
         if "</think>" in content and self.thinking_mode:
             self.thinking_mode = False
             self.analysis_mode = True
             if self._should_show_header("Analysis Results"):
                 self.last_header = "Analysis Results"
-                return f"\n=== Analysis Results ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ===\n", False
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                return f"\n[bold green]=== Analysis Results ({timestamp}) ===[/bold green]\n", False
             return "", False
         return content, False
 
