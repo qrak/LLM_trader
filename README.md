@@ -28,10 +28,8 @@ LLM-Trader is a demo of how transformer models can be leveraged to analyze crypt
 Here are some screenshots of LLM-Trader in action:
 
 ![Trading Analysis Interface](img/1.png)
-*The main trading analysis dashboard showing real-time market data and LLM-generated insights*
 
 ![Technical Indicators Overview](img/2.png)
-*Detailed view of technical indicators and market sentiment analysis*
 
 ## Architecture
 
