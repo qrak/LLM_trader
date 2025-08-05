@@ -1,4 +1,5 @@
 # LLM-Trader - AI-Powered Trading Analysis Tool
+## Check my new repository: https://github.com/qrak/DiscordCryptoAnalyzer
 
 ![Python](https://img.shields.io/badge/python-3.13+-blue.svg)
 ![Numba](https://img.shields.io/badge/numba-0.61.0-blue.svg)
