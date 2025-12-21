@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.db
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+.github/
+*.swp
+*.swo
+.devcontainer/
+
+
+
+# Testing
+.pytest_cache/
+.coverage
+*.future
+htmlcov/
+
+# Project specific
+*.log
+/data/
+/cache/
+/logs/
+# Updated configuration file management
+# Private keys and sensitive data
+keys.env
+*.env
