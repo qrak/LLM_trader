@@ -108,13 +108,34 @@ class TechnicalFormatter:
 
     def format_key_levels_section(self, td: dict) -> str:
         """Format key levels section."""
+        # Format Fibonacci retracement levels if available
+        fib_section = ""
+        if 'fibonacci_retracement' in td:
+            fib_levels = td['fibonacci_retracement']
+            if isinstance(fib_levels, list) and len(fib_levels) == 7:
+                # Levels: 0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0
+                fib_section = (
+                    f"\n- Fibonacci 50-Period: "
+                    f"0.0={self.format_utils.format_number(fib_levels[0], 8)} | "
+                    f"0.236={self.format_utils.format_number(fib_levels[1], 8)} | "
+                    f"0.382={self.format_utils.format_number(fib_levels[2], 8)} | "
+                    f"0.5={self.format_utils.format_number(fib_levels[3], 8)} | "
+                    f"0.618={self.format_utils.format_number(fib_levels[4], 8)} | "
+                    f"0.786={self.format_utils.format_number(fib_levels[5], 8)} | "
+                    f"1.0={self.format_utils.format_number(fib_levels[6], 8)}"
+                )
+        
         return (
             "## Key Levels:\n"
             f"- Basic Support: {self.format_utils.fmt_ta(self.technical_calculator, td, 'basic_support', 8)}\n"
             f"- Basic Resistance: {self.format_utils.fmt_ta(self.technical_calculator, td, 'basic_resistance', 8)}\n"
             f"- Pivot Point: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_point', 8)}\n"
             f"- Pivot S1: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_s1', 8)} | S2: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_s2', 8)} | S3: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_s3', 8)} | S4: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_s4', 8)}\n"
-            f"- Pivot R1: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r1', 8)} | R2: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r2', 8)} | R3: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r3', 8)} | R4: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r4', 8)}"
+            f"- Pivot R1: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r1', 8)} | R2: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r2', 8)} | R3: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r3', 8)} | R4: {self.format_utils.fmt_ta(self.technical_calculator, td, 'pivot_r4', 8)}\n"
+            f"- Fibonacci Pivot Point: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_point', 8)}\n"
+            f"- Fib Pivot S1: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_s1', 8)} | S2: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_s2', 8)} | S3: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_s3', 8)}\n"
+            f"- Fib Pivot R1: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_r1', 8)} | R2: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_r2', 8)} | R3: {self.format_utils.fmt_ta(self.technical_calculator, td, 'fib_pivot_r3', 8)}"
+            f"{fib_section}"
         )
 
     def format_advanced_indicators_section(self, td: dict, crypto_data: dict) -> str:
@@ -162,15 +183,21 @@ class TechnicalFormatter:
                             if last_candle_index is not None and pattern_index is not None:
                                 total_candles = last_candle_index + 1
                                 
-                                # For long-term signals (MA crossovers), use wider window (50% of data)
+                                # For long-term signals (MA crossovers), use wider window (30% of data)
                                 if category == 'ma_crossover':
-                                    recency_threshold = int(total_candles * 0.5)  # Last 50% of candles
+                                    recency_threshold = int(total_candles * 0.3)  # Last 30% of candles
                                 # For persistent patterns (volatility, volume), use narrow window (5% of data)
                                 elif category in ['volatility', 'volume']:
                                     recency_threshold = max(10, int(total_candles * 0.05))  # Last 5% or min 10 candles
-                                # For other patterns (divergences, crossovers, etc.), use moderate window (20% of data)
+                                # For swing points (HH, HL, LH, LL, Multiple Top/Bottom), limit to last 10%
+                                elif category in ['swing_points', 'multi_extremes']:
+                                    recency_threshold = max(24, int(total_candles * 0.10))  # Last 10% or min 24 candles (~1 day on 1h)
+                                # For divergences, use narrow window (10% of data) - they're time-sensitive
+                                elif category == 'divergence':
+                                    recency_threshold = max(20, int(total_candles * 0.10))  # Last 10% or min 20 candles
+                                # For other patterns (crossovers, etc.), use moderate window (15% of data)
                                 else:
-                                    recency_threshold = max(20, int(total_candles * 0.2))  # Last 20% or min 20 candles
+                                    recency_threshold = max(20, int(total_candles * 0.15))  # Last 15% or min 20 candles
                                 
                                 is_recent = pattern_index >= (last_candle_index - recency_threshold)
                             else:
@@ -184,7 +211,7 @@ class TechnicalFormatter:
                 if pattern_summaries:
                     if self.logger:
                         self.logger.debug(f"Including {len(pattern_summaries)} recent patterns in technical analysis (adaptive recency filter)")
-                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-50:])  # Show last 50 recent patterns
+                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])  # Show last 25 recent patterns
             except Exception as e:
                 if self.logger:
                     self.logger.debug(f"Error using stored technical_patterns: {e}")

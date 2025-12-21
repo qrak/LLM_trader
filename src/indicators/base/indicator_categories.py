@@ -488,6 +488,20 @@ class SupportResistanceIndicators(IndicatorCategory['SupportResistanceIndicators
             self.close,
             required_length=1
         )
+    
+    def fibonacci_pivot_points(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Calculate Fibonacci pivot points using Fibonacci ratios (0.382, 0.618, 1.0)
+        
+        Returns:
+            Tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
+        """
+        return self._base.calculate_indicator(
+            fibonacci_pivot_points_numba,
+            self.high,
+            self.low,
+            self.close,
+            required_length=1
+        )
 
 
 class TrendIndicators(IndicatorCategory['TrendIndicators']):

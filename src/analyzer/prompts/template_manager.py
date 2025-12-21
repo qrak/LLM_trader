@@ -21,7 +21,7 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
@@ -29,33 +29,44 @@ class TemplateManager:
             timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
             language: Optional language (unused - always English for trading)
             has_chart_image: Whether a chart image is being provided for visual analysis
+            previous_response: Previous AI response for context continuity
             
         Returns:
             str: Formatted system prompt
         """
         header_lines = [
-            f"You are an automated trading system analyzing {symbol} on {timeframe} timeframe.",
-            "Your task is to analyze all provided technical indicators, market data, patterns, and news to make a trading decision.",
+            f"You are a professional automated trading system for {symbol} on {timeframe} timeframe.",
             "",
-            "ANALYSIS APPROACH:",
-            "- Thoroughly analyze ALL provided data: technical indicators, price action, volume, sentiment, news",
-            "- Identify trend direction and strength from multiple indicators (ADX, MACD, RSI, SMAs)",
-            "- Detect chart patterns, divergences, and key price levels",
-            "- Consider market context (Fear & Greed, BTC correlation, broader market)",
-            "- Evaluate risk/reward based on support/resistance levels",
+            "CORE PRINCIPLES:",
+            "- All data is based on CLOSED CANDLES ONLY (no incomplete candle data)",
+            "- Trading decisions must be based on confirmed signals, not speculation",
+            "- Risk management is paramount: every trade requires proper stop loss and take profit",
+            "- Confidence must match signal strength: only high-confidence trades in strong setups",
             "",
-            "OUTPUT REQUIREMENT:",
-            "- After your analysis, output a JSON trading decision",
-            "- Be decisive: BUY, SELL, HOLD, or CLOSE",
-            "- Provide specific price levels for stop_loss and take_profit",
+            "YOUR TASK:",
+            "Analyze technical indicators, price action, volume, patterns, market sentiment, and news.",
+            "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
+            "Include specific entry, stop loss, and take profit levels with your reasoning.",
         ]
 
         if has_chart_image:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
             header_lines.extend([
                 "",
-                f"A chart image (~{cfg_limit} candlesticks) is provided. Integrate visual pattern analysis with numerical indicators.",
-                "Stay conservative - only report patterns that are clear and well-formed.",
+                f"CHART ANALYSIS:",
+                f"A chart image (~{cfg_limit} candlesticks) is provided for visual pattern recognition.",
+                "Integrate chart patterns with numerical indicators. Only report clear, well-formed patterns.",
+            ])
+        
+        # Add previous response context if available
+        if previous_response:
+            header_lines.extend([
+                "",
+                "PREVIOUS ANALYSIS CONTEXT:",
+                "Your last analysis reasoning (for continuity):",
+                previous_response,
+                "",
+                "Use this context to maintain consistency in your analysis approach.",
             ])
 
         return "\n".join(header_lines)
@@ -71,9 +82,8 @@ class TemplateManager:
         """
         response_template = '''RESPONSE FORMAT:
 
-First, provide your analysis reasoning (2-4 paragraphs covering key findings from technical indicators, patterns, and market context).
+Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, market context), then output JSON:
 
-Then output your trading decision in this exact JSON format:
 ```json
 {
     "analysis": {
@@ -83,41 +93,30 @@ Then output your trading decision in this exact JSON format:
         "stop_loss": number,
         "take_profit": number,
         "position_size": 0.0-1.0,
-        "reasoning": "1-2 sentence summary of why this decision",
-        "key_levels": {
-            "support": [level1, level2],
-            "resistance": [level1, level2]
-        },
-        "trend": {
-            "direction": "BULLISH|BEARISH|NEUTRAL",
-            "strength": 0-100,
-            "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"
-        },
+        "reasoning": "1-2 sentence summary",
+        "key_levels": {"support": [level1, level2], "resistance": [level1, level2]},
+        "trend": {"direction": "BULLISH|BEARISH|NEUTRAL", "strength": 0-100, "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"},
         "risk_reward_ratio": number
     }
 }
 ```
 
-SIGNAL DEFINITIONS:
-- BUY: Open LONG position (expect price to rise)
-- SELL: Open SHORT position (expect price to fall)  
-- HOLD: No action - wait for clearer setup or let existing position run
-- CLOSE: Close existing position (hit target, stop, or reversal signal)
+TRADING SIGNALS & CONFIDENCE:
+- BUY (70-100 confidence): Strong bullish trend (ADX >25, aligned SMAs) + 3+ indicator confluence + volume confirmation + clear SL below support, TP above resistance + minimum 2:1 R/R
+- SELL (70-100 confidence): Strong bearish trend + 3+ indicator confluence + volume confirmation + clear SL above resistance, TP below support + minimum 2:1 R/R  
+- HOLD (any confidence <70): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality. Patience over forced trades.
+- CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
 
-DECISION CRITERIA:
-- High confidence (70+): Strong trend + indicator confluence + volume confirmation
-- Medium confidence (50-70): Good setup but some mixed signals
-- Low confidence (<50): Unclear - prefer HOLD
+RISK MANAGEMENT (Stop Loss & Take Profit):
+LONG trades:
+- SL: Below swing low + 1x ATR buffer (max 2-3% from entry) | Example: Entry $100, Swing Low $97, ATR $1 → SL $96
+- TP: Key resistance levels, Fibonacci (0.618/0.786/1.0), previous highs | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
 
-STOP LOSS PLACEMENT:
-- For BUY: Below recent swing low or key support
-- For SELL: Above recent swing high or key resistance
-- Consider ATR for volatility-adjusted stops
+SHORT trades:  
+- SL: Above swing high + 1x ATR buffer (max 2-3% from entry) | Example: Entry $100, Swing High $103, ATR $1 → SL $104
+- TP: Key support levels, Fibonacci (0.382/0.236/0.0), previous lows | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
 
-TAKE PROFIT PLACEMENT:
-- Target key resistance (for BUY) or support (for SELL)
-- Aim for minimum 1.5:1 risk/reward ratio
-- Consider Fibonacci extensions and previous highs/lows'''
+Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit. Minimum 1.5:1 R/R (prefer 2:1+). Scale out at multiple targets (50%/30%/20%).'''
         
         return response_template
     
@@ -144,44 +143,22 @@ TAKE PROFIT PLACEMENT:
             timeframe_desc = "Analyze the provided Multi-Timeframe Price Summary periods (dynamically calculated based on your analysis timeframe)"
         
         analysis_steps = f"""
-ANALYSIS STEPS:
-Follow these steps to analyze the market. Use findings to determine your trading signal.
+ANALYSIS STEPS (use findings to determine trading signal):
 
 1. MULTI-TIMEFRAME ASSESSMENT:
-   - {timeframe_desc}
-   - Compare shorter periods vs multi-day periods vs long-term (30d+, 365d) price action
-   - Review weekly macro trend indicators if provided (200-week SMA, institutional positioning)
-   - Identify alignment or divergence across different timeframes
-   - KEY QUESTION: Are timeframes aligned (strong signal) or divergent (caution)?
+   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Review weekly macro (200-week SMA, institutions) | Identify alignment (strong signal) vs divergence (caution)
 
-2. TECHNICAL INDICATOR ANALYSIS:
-   - Evaluate core momentum: RSI (<30 oversold, >70 overbought), MACD (signal crosses, histogram)
-   - Assess trend strength: ADX (>25 = trending), DI+/DI- (direction)
-   - Check volatility: ATR (range expansion/contraction), Bollinger Bands (squeeze/breakout)
-   - Analyze volume: MFI (money flow), OBV (accumulation/distribution), Force Index
-   - SMA relationships: Price vs 20/50/200 SMA, golden/death crosses
-   - Advanced indicators: TSI, Vortex, PFE, RMI, Ultimate Oscillator, Supertrend
-   - KEY QUESTION: Do indicators show confluence (strong) or divergence (weak)?
+2. TECHNICAL INDICATORS:
+   Momentum: RSI (<30/>70), MACD (crosses, histogram) | Trend: ADX (>25), DI+/DI- | Volatility: ATR, Bollinger Bands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses | Advanced: TSI, Vortex, PFE, RMI, Ultimate, Supertrend | Assess confluence (strong) vs divergence (weak)
 
 3. PATTERN RECOGNITION:
-   - Identify chart patterns: wedges, triangles, H&S, double tops/bottoms
-   - Detect divergences: Price vs RSI, Price vs MACD (bullish/bearish divergence)
-   - Look for candlestick patterns: engulfing, doji, hammer, shooting star
-   - Note Fibonacci levels and harmonic patterns if visible
-   - Identify overbought/oversold extremes across indicators
-   - Prioritize RECENT patterns over older ones
-   - KEY QUESTION: What patterns suggest about next likely move?
+   Chart patterns (wedges, triangles, H&S, double tops/bottoms) | Divergences (price vs RSI/MACD) | Candlesticks (engulfing, doji, hammer, shooting star) | Fibonacci levels (50-period, pullback/extension zones) | Overbought/oversold extremes | Prioritize RECENT patterns
 
-4. SUPPORT/RESISTANCE & KEY LEVELS:
-   - Map key price levels from all timeframes
-   - Identify historical price reaction zones (multiple touches)
-   - Determine areas with technical confluences (S/R + Fib + SMA)
-   - Note volume profile levels (high volume nodes)
-   - Calculate risk/reward from current price to key levels
-   - KEY QUESTION: Where are the best stop loss and take profit levels?
+4. SUPPORT/RESISTANCE:
+   Map key levels across timeframes | Historical reaction zones (multiple touches) | Technical confluences (S/R + Fib + SMA) | Volume profile (high nodes) | Calculate risk/reward for SL/TP placement
 
 5. MARKET CONTEXT:
-   - Reference Market Overview data (global market cap, dominance)"""
+   Market Overview (global cap, dominance)"""
         
         if "BTC" not in analyzed_base:
             analysis_steps += "\n   - Compare performance relative to BTC (correlation/divergence)"
@@ -190,27 +167,13 @@ Follow these steps to analyze the market. Use findings to determine your trading
             analysis_steps += "\n   - Compare performance relative to ETH if relevant"
         
         analysis_steps += """
-   - Consider Fear & Greed Index (extreme fear = potential buy, extreme greed = caution)
-   - Analyze if asset is aligned with or diverging from general market
-   - Note relevant market events and their historical impact
-   - KEY QUESTION: Does market context support or contradict your technical view?
+ | Fear & Greed Index (extremes) | Asset alignment with market | Relevant events and impact | Assess if context supports or contradicts technicals
 
-6. NEWS & SENTIMENT ANALYSIS:
-   - Summarize relevant recent news about the asset
-   - Identify potential market-moving events or announcements
-   - Evaluate overall sentiment from news coverage
-   - Connect news events to recent price action
-   - Note institutional actions or corporate developments
-   - Identify regulatory news that might impact the asset
-   - KEY QUESTION: Any news that could override technical signals?
+6. NEWS & SENTIMENT:
+   Recent asset news | Market-moving events/announcements | Sentiment evaluation | News-to-price action correlation | Institutional/corporate developments | Regulatory impacts | Identify news that could override technical signals
 
 7. STATISTICAL ANALYSIS:
-   - Evaluate Z-Score (deviation from mean - extreme values may revert)
-   - Consider Kurtosis (fat tails = higher risk of extreme moves)
-   - Hurst Exponent (>0.5 = trending, <0.5 = mean-reverting)
-   - Note abnormal distribution patterns in price/volume
-   - Assess volatility cycles (expansion/contraction phases)
-   - KEY QUESTION: What do statistics say about probability of continuation vs reversal?"""
+   Z-Score (extremes may revert) | Kurtosis (fat tails = extreme move risk) | Hurst Exponent (>0.5 trending, <0.5 mean-reverting) | Distribution anomalies | Volatility cycles | Assess continuation vs reversal probability"""
         
         # Add chart analysis steps only if chart images are available
         step_number = 8
@@ -219,59 +182,20 @@ Follow these steps to analyze the market. Use findings to determine your trading
 
             analysis_steps += f"""
 
-{step_number}. CHART PATTERN ANALYSIS & VISUAL INTEGRATION:
-   CHART CONTEXT:
-   - Review the provided chart image (~{cfg_limit} candlesticks)
-   
-   VISUAL PATTERN DETECTION:
-   - Scan for classic patterns: Head and Shoulders, Double Tops/Bottoms, Wedges, Triangles, Flags/Pennants
-   - Only report patterns that are clear and well-formed (3-5% minimum price range)
-   - If no clear patterns visible, state "No clear classic patterns detected"
-   
-   PATTERN VALIDATION:
-   - For each pattern found, note:
-     * Pattern name and directional bias
-     * Price range and approximate location
-     * Confidence level (high/medium/low)
-     * Key levels (neckline, breakout points)
-   
-   CANDLESTICK ANALYSIS:
-   - Identify meaningful candle patterns (doji, hammer, engulfing)
-   - Note momentum shifts through candle size/color changes
-   
-   VISUAL-NUMERICAL INTEGRATION:
-   - Validate visual patterns against numerical indicators
-   - If chart contradicts indicators, note the discrepancy
-   - Prioritize numerical data over ambiguous visual signals
-   
-   KEY QUESTION: Do visual patterns confirm or contradict indicator analysis?"""
+{step_number}. CHART ANALYSIS (~{cfg_limit} candlesticks):
+   Scan for patterns: H&S, Double Tops/Bottoms, Wedges, Triangles, Flags/Pennants (3-5% min range, state "None detected" if unclear) | Validate each: name, bias, range, confidence, key levels | Candlestick patterns (doji, hammer, engulfing) & momentum shifts | Cross-validate visual vs numerical indicators (prioritize numerical if ambiguous) | Confirm or contradict?"""
             step_number += 1
         
         analysis_steps += f"""
 
-{step_number}. TRADING DECISION SYNTHESIS:
-   Synthesize all analysis into your trading decision:
-   - What is the predominant trend direction and strength?
-   - Are multiple indicators confirming the same signal?
-   - What are the key support/resistance levels for stop loss and take profit?
-   - What is the risk/reward ratio?
-   - What confidence level does the analysis support?
-   - What could invalidate this trade setup?
+{step_number}. SYNTHESIS:
+   Trend direction & strength? | Multiple indicator confluence? | Key SL/TP levels? | Risk/reward ratio? | Confidence level? | Trade invalidation triggers?
 
-TECHNICAL INDICATORS NOTE:
-- Current incomplete candle IS INCLUDED in all technical indicator calculations
-- This provides real-time assessment as the candle progresses
-- Indicator values will update as price action continues"""
+IMPORTANT: ALL data uses CLOSED CANDLES ONLY (no incomplete data). Decisions based on confirmed price action, preventing premature entries on unconfirmed signals."""
         
         if has_advanced_support_resistance:
             analysis_steps += """
 
-ADVANCED SUPPORT/RESISTANCE REFERENCE:
-- Volume-weighted pivot points with strength thresholds
-- Pivot = (High + Low + Close) / 3
-- S1 = (2 * Pivot) - High, R1 = (2 * Pivot) - Low
-- Tracks consecutive touches to measure level strength
-- Filters for above-average volume at reaction points
-- Returns ONLY strong S/R levels meeting all criteria"""
+ADVANCED S/R: Volume-weighted pivots [Pivot=(H+L+C)/3, S1=2P-H, R1=2P-L] with consecutive touches, above-average volume filters. Only strong levels provided."""
 
         return analysis_steps

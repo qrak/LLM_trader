@@ -2,6 +2,7 @@ import asyncio
 import time
 from datetime import datetime
 from typing import Optional
+import time
 
 from src.logger.logger import Logger
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -166,16 +167,21 @@ class CryptoTradingBot:
                 check_count += 1
                 await self._execute_trading_check(check_count)
                 
+                # Check if still running before waiting
+                if not self.running:
+                    break
+                
                 # Wait for next timeframe
                 await self._wait_for_next_timeframe()
                 
             except asyncio.CancelledError:
                 self.logger.info("Trading cancelled")
+                self.running = False
                 break
             except Exception as e:
                 self.logger.error(f"Error in trading loop: {e}")
                 # Wait 60 seconds before retrying on error
-                await asyncio.sleep(60)
+                await self._interruptible_sleep(60)
     
     async def _execute_trading_check(self, check_count: int):
         """Execute a single trading check iteration."""
@@ -208,8 +214,12 @@ class CryptoTradingBot:
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
         
+        # Load previous response for AI continuity
+        previous_response = self.data_persistence.load_previous_response()
+        
         result = await self.market_analyzer.analyze_market(
-            additional_context=f"\n\n{position_context}\n\n{memory_context}"
+            additional_context=f"\n\n{position_context}\n\n{memory_context}",
+            previous_response=previous_response
         )
         
         if "error" in result:
@@ -259,12 +269,12 @@ class CryptoTradingBot:
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
             self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)")
             
-            await asyncio.sleep(delay_seconds)
+            await self._interruptible_sleep(delay_seconds)
             
         except Exception as e:
             self.logger.error(f"Error calculating next timeframe: {e}")
             # Default to 5 minute wait on error
-            await asyncio.sleep(300)
+            await self._interruptible_sleep(300)
     
     async def _wait_until_next_timeframe_after(self, last_time: datetime):
         """Wait until the next timeframe candle after a specific timestamp.
@@ -305,14 +315,28 @@ class CryptoTradingBot:
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
                     f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
                 )
-                await asyncio.sleep(delay_seconds)
+                await self._interruptible_sleep(delay_seconds)
             else:
                 self.logger.info("Next timeframe already arrived, proceeding immediately")
             
         except Exception as e:
             self.logger.error(f"Error calculating wait time: {e}")
             # Default to 1 minute wait on error
-            await asyncio.sleep(60)
+            await self._interruptible_sleep(60)
+    
+    async def _interruptible_sleep(self, seconds: float):
+        """Sleep in small chunks to allow responsive shutdown."""
+        chunk_size = 1.0  # Check every second
+        elapsed = 0.0
+        
+        try:
+            while elapsed < seconds and self.running:
+                sleep_time = min(chunk_size, seconds - elapsed)
+                await asyncio.sleep(sleep_time)
+                elapsed += sleep_time
+        except asyncio.CancelledError:
+            # Allow immediate cancellation
+            raise
     
     def _print_trading_decision(self, decision):
         """Print a trading decision to console."""
@@ -338,6 +362,9 @@ class CryptoTradingBot:
     async def shutdown(self):
         self.logger.info("Shutting down gracefully...")
         self.running = False
+        
+        # Give a moment for loops to see running=False
+        await asyncio.sleep(0.1)
 
         # Cancel and wait for active tasks
         await self._shutdown_active_tasks()

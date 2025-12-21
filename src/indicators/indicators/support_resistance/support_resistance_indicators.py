@@ -184,6 +184,43 @@ def pivot_points_numba(high, low, close):
     return pivot_point, r1, r2, r3, r4, s1, s2, s3, s4
 
 @njit(cache=True)
+def fibonacci_pivot_points_numba(high, low, close):
+    """Calculate Fibonacci pivot points using Fibonacci ratios
+    
+    Uses Fibonacci ratios (0.382, 0.618, 1.0, 1.618) for support/resistance levels
+    
+    Returns:
+        Tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
+    """
+    n = len(high)
+    pivot_point = np.full(n, np.nan)
+    r1 = np.full(n, np.nan)
+    r2 = np.full(n, np.nan)
+    r3 = np.full(n, np.nan)
+    s1 = np.full(n, np.nan)
+    s2 = np.full(n, np.nan)
+    s3 = np.full(n, np.nan)
+    
+    for i in range(1, n):
+        # Calculate pivot point as simple average of H, L, C from previous period
+        pivot_point[i] = (high[i - 1] + low[i - 1] + close[i - 1]) / 3
+        
+        # Calculate range from previous period
+        range_val = high[i - 1] - low[i - 1]
+        
+        # Calculate Fibonacci resistance levels
+        r1[i] = pivot_point[i] + (0.382 * range_val)
+        r2[i] = pivot_point[i] + (0.618 * range_val)
+        r3[i] = pivot_point[i] + (1.000 * range_val)
+        
+        # Calculate Fibonacci support levels
+        s1[i] = pivot_point[i] - (0.382 * range_val)
+        s2[i] = pivot_point[i] - (0.618 * range_val)
+        s3[i] = pivot_point[i] - (1.000 * range_val)
+    
+    return pivot_point, r1, r2, r3, s1, s2, s3
+
+@njit(cache=True)
 def floating_levels_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
                          length: int, multiplier: float, lookback: int,
                          level_up: float, level_down: float):

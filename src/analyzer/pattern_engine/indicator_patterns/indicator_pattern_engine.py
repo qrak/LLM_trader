@@ -360,7 +360,8 @@ class IndicatorPatternEngine:
         second_p: float,
         first_i: float,
         second_i: float,
-        timestamps: Optional[List]
+        timestamps: Optional[List],
+        data_length: int = 0
     ) -> Dict[str, Any]:
         """
         Create a divergence pattern dictionary (helper method).
@@ -376,11 +377,19 @@ class IndicatorPatternEngine:
             first_i: First indicator value
             second_i: Second indicator value
             timestamps: Optional timestamp list
+            data_length: Total length of data array for calculating periods_ago
             
         Returns:
             Pattern dictionary
         """
-        timestamp_str = self._format_pattern_time(0, second_idx, timestamps)
+        # Calculate actual periods_ago from the end of the data
+        if data_length > 0:
+            periods_ago = data_length - 1 - second_idx
+        else:
+            # Fallback: calculate from timestamps length if available
+            periods_ago = (len(timestamps) - 1 - second_idx) if timestamps else 0
+        
+        timestamp_str = self._format_pattern_time(periods_ago, second_idx, timestamps)
         
         if is_bullish:
             if indicator_name == 'rsi':
@@ -405,7 +414,7 @@ class IndicatorPatternEngine:
                 'second_indicator': float(second_i),
                 'first_idx': int(first_idx),
                 'second_idx': int(second_idx),
-                'periods_ago': 0
+                'periods_ago': periods_ago
             }
         }
     
@@ -417,6 +426,7 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect divergence patterns across multiple indicators"""
         patterns = []
+        data_length = len(prices)
         
         # RSI Divergences
         if 'rsi' in technical_history:
@@ -428,7 +438,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append(self._create_divergence_pattern(
                     'rsi_bullish_divergence', 'rsi', True,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps
+                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
             
             # Bearish divergence
@@ -437,7 +447,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append(self._create_divergence_pattern(
                     'rsi_bearish_divergence', 'rsi', False,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps
+                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
         
         # MACD Divergences
@@ -450,7 +460,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append(self._create_divergence_pattern(
                     'macd_bullish_divergence', 'macd', True,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps
+                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
             
             # Bearish divergence
@@ -459,7 +469,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append(self._create_divergence_pattern(
                     'macd_bearish_divergence', 'macd', False,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps
+                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
         
         return patterns

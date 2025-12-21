@@ -613,12 +613,13 @@ class MarketFormatter:
         
         return "\n".join(lines)
     
-    def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256) -> str:
+    def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256, include_description: bool = False) -> str:
         """Format coin details into a structured section for prompt building
         
         Args:
             coin_details: Dictionary containing coin details from CryptoCompare API
-            max_description_tokens: Maximum tokens allowed for description (default: 150)
+            max_description_tokens: Maximum tokens allowed for description (default: 256)
+            include_description: Whether to include project description (default: False for trading bot)
             
         Returns:
             str: Formatted coin details section
@@ -677,17 +678,18 @@ class MarketFormatter:
                     section += f"- Market Performance Grade: {market_rating}\n"
 
         
-        # Project description (keep last as it can be long)
-        description = coin_details.get("description", "")
-        if description:
-            # Use token-based truncation instead of character-based
-            description_tokens = self.token_counter.count_tokens(description)
-            
-            if description_tokens > max_description_tokens:
-                # Truncate by sentences to maintain readability
-                description = self._truncate_description_by_tokens(description, max_description_tokens)
+        # Project description (optional - disabled by default for trading bot)
+        if include_description:
+            description = coin_details.get("description", "")
+            if description:
+                # Use token-based truncation instead of character-based
+                description_tokens = self.token_counter.count_tokens(description)
                 
-            section += f"\nProject Description:\n{description}\n"
+                if description_tokens > max_description_tokens:
+                    # Truncate by sentences to maintain readability
+                    description = self._truncate_description_by_tokens(description, max_description_tokens)
+                    
+                section += f"\nProject Description:\n{description}\n"
         
         return section
     

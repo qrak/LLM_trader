@@ -13,23 +13,26 @@ from numba import njit
 def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
     """
     Calculate average volume with NaN handling (helper function).
+    Uses last closed candle (data now excludes incomplete candle at fetch time).
     
     Args:
-        volume: Volume array
+        volume: Volume array (already excluding incomplete candle)
         lookback: Number of periods to look back
         
     Returns:
         (is_valid: bool, avg_volume: float, valid_count: int)
     """
+    # Need at least lookback + 1 candles (last closed candle + lookback period)
     if len(volume) < lookback + 1:
         return False, 0.0, 0
     
+    # Use last closed candle (volume[-1]) - incomplete candle already excluded at fetch
     current_vol = volume[-1]
     
     if np.isnan(current_vol) or current_vol < 0:
         return False, 0.0, 0
     
-    # Calculate average volume (excluding current)
+    # Calculate average volume from closed candles (excluding current closed candle)
     recent_volume = volume[-(lookback + 1):-1]
     
     # Skip if any NaN values
@@ -54,13 +57,14 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
 @njit
 def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookback: int = 20) -> tuple:
     """
-    Detect volume spike: current volume significantly above average.
+    Detect volume spike: last closed candle volume significantly above average.
+    Data already excludes incomplete candle at fetch time.
     
     Strong confirmation signal for breakouts when volume > multiplier * avg_volume.
     
     Args:
-        volume: Volume array
-        multiplier: Spike threshold multiplier (default 2.0 = 200% of average)
+        volume: Volume array (incomplete candle already excluded)
+        multiplier: Spike threshold multiplier (default 2.5 = 250% of average)
         lookback: Periods for average calculation (default 20)
         
     Returns:
@@ -71,6 +75,7 @@ def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookb
     if not is_valid:
         return False, 0.0, 0.0, 0.0
     
+    # Use last closed candle - incomplete candle already excluded at fetch
     current_vol = volume[-1]
     spike_ratio = current_vol / avg_vol
     
@@ -83,12 +88,13 @@ def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookb
 @njit
 def detect_volume_dryup_numba(volume: np.ndarray, threshold: float = 0.5, lookback: int = 20) -> tuple:
     """
-    Detect volume dry-up: current volume significantly below average.
+    Detect volume dry-up: last closed candle volume significantly below average.
+    Data already excludes incomplete candle at fetch time.
     
     Often precedes major moves - low volume indicates consolidation.
     
     Args:
-        volume: Volume array
+        volume: Volume array (incomplete candle already excluded)
         threshold: Dry-up threshold (default 0.5 = 50% of average)
         lookback: Periods for average calculation (default 20)
         
@@ -100,6 +106,7 @@ def detect_volume_dryup_numba(volume: np.ndarray, threshold: float = 0.5, lookba
     if not is_valid:
         return False, 0.0, 0.0, 0.0
     
+    # Use last closed candle - incomplete candle already excluded at fetch
     current_vol = volume[-1]
     dryup_ratio = current_vol / avg_vol
     
@@ -113,13 +120,14 @@ def detect_volume_dryup_numba(volume: np.ndarray, threshold: float = 0.5, lookba
 def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray, lookback: int = 20) -> tuple:
     """
     Detect divergence between volume and price movement.
+    Data already excludes incomplete candle at fetch time.
     
     Bearish: Price rising but volume declining (weak rally)
     Bullish: Price falling but volume declining (weak selloff)
     
     Args:
-        volume: Volume array
-        prices: Price array (typically close prices)
+        volume: Volume array (incomplete candle already excluded)
+        prices: Price array (incomplete candle already excluded)
         lookback: Periods to analyze (default 20)
         
     Returns:
@@ -128,7 +136,7 @@ def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray,
     if len(volume) < lookback or len(prices) < lookback:
         return False, False, 0.0, 0.0
     
-    # Get recent segments
+    # Get recent closed candles only
     recent_volume = volume[-lookback:]
     recent_prices = prices[-lookback:]
     
@@ -170,13 +178,14 @@ def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray,
 def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarray, lookback: int = 10) -> tuple:
     """
     Detect accumulation (buying pressure) or distribution (selling pressure).
+    Data already excludes incomplete candle at fetch time.
     
     Accumulation: Volume increases on up days, decreases on down days
     Distribution: Volume increases on down days, decreases on up days
     
     Args:
-        volume: Volume array
-        prices: Price array (typically close prices)
+        volume: Volume array (incomplete candle already excluded)
+        prices: Price array (incomplete candle already excluded)
         lookback: Recent periods to analyze (default 10)
         
     Returns:
@@ -185,6 +194,7 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
     if len(volume) < lookback + 1 or len(prices) < lookback + 1:
         return False, False, 0.0, 0.0
     
+    # Use closed candles only
     recent_volume = volume[-(lookback + 1):]
     recent_prices = prices[-(lookback + 1):]
     
@@ -230,11 +240,12 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
 def detect_climax_volume_numba(volume: np.ndarray, multiplier: float = 3.0, lookback: int = 50) -> tuple:
     """
     Detect climax volume: extreme volume spike indicating potential exhaustion.
+    Data already excludes incomplete candle at fetch time.
     
     Very high volume often marks trend reversals (buying/selling climax).
     
     Args:
-        volume: Volume array
+        volume: Volume array (incomplete candle already excluded)
         multiplier: Climax threshold (default 3.0 = 300% of average)
         lookback: Periods for average calculation (default 50)
         
@@ -246,6 +257,7 @@ def detect_climax_volume_numba(volume: np.ndarray, multiplier: float = 3.0, look
     if not is_valid:
         return False, 0.0, 0.0, 0.0
     
+    # Use last closed candle - incomplete candle already excluded at fetch
     current_vol = volume[-1]
     climax_ratio = current_vol / avg_vol
     

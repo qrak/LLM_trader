@@ -7,11 +7,11 @@ class GracefulShutdownManager:
         self.loop = loop
 
     def setup_signal_handlers(self):
+        # Only set up signal handlers on Unix systems
+        # On Windows, let KeyboardInterrupt propagate naturally
         if sys.platform != 'win32':
             for sig in (signal.SIGINT, signal.SIGTERM):
                 self.loop.add_signal_handler(sig, lambda s=sig, *args: self.handle_signal(s))
-        else:
-            signal.signal(signal.SIGINT, lambda s, f, *args: self.handle_signal(s))
 
     def handle_signal(self, sig: int):
         print(f"Received signal {sig}, initiating shutdown...")

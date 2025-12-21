@@ -193,6 +193,20 @@ class TechnicalCalculator:
         indicators["pivot_s3"] = s3
         indicators["pivot_s4"] = s4
         
+        # Fibonacci Pivot Points
+        fib_pivot, fib_r1, fib_r2, fib_r3, fib_s1, fib_s2, fib_s3 = self.ti.support_resistance.fibonacci_pivot_points()
+        indicators["fib_pivot_point"] = fib_pivot
+        indicators["fib_pivot_r1"] = fib_r1
+        indicators["fib_pivot_r2"] = fib_r2
+        indicators["fib_pivot_r3"] = fib_r3
+        indicators["fib_pivot_s1"] = fib_s1
+        indicators["fib_pivot_s2"] = fib_s2
+        indicators["fib_pivot_s3"] = fib_s3
+        
+        # Fibonacci Retracement (returns 2D array: [candles, levels])
+        # Levels: 0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0
+        indicators["fibonacci_retracement"] = self.ti.support_resistance.fibonacci_retracement(length=50)
+        
         return indicators
         
     def get_long_term_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, Any]:

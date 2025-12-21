@@ -60,19 +60,11 @@ async def main_async():
         logger.info(f"{'='*60}\n")
         
         await bot.run(symbol, timeframe)
-        
-    except KeyboardInterrupt:
-        logger.info("KeyboardInterrupt received")
-    except Exception as e:
-        logger.error(f"Unhandled exception in main: {e}")
-        import traceback
-        traceback.print_exc()
+    except asyncio.CancelledError:
+        logger.info("Trading cancelled, shutting down...")
     finally:
-        try:
-            await asyncio.wait_for(bot.shutdown(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.error("Shutdown timed out! Forcing exit...")
-            sys.exit(1)
+        # Clean shutdown
+        await bot.shutdown()
 
 
 def main() -> None:
@@ -83,21 +75,40 @@ def main() -> None:
     asyncio.set_event_loop(loop)
     shutdown_manager = GracefulShutdownManager(loop)
     shutdown_manager.setup_signal_handlers()
+    
+    bot = None
     try:
+        # Run the main async function - this will handle initialization and running
         loop.run_until_complete(main_async())
     except KeyboardInterrupt:
-        print("KeyboardInterrupt received in main loop")
+        print("\nKeyboardInterrupt received - shutting down...")
     except Exception as e:
         print(f"Unhandled exception in main: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
+        # Cancel all pending tasks
+        pending_tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        if pending_tasks:
+            print(f"Cancelling {len(pending_tasks)} pending tasks...")
+            for task in pending_tasks:
+                task.cancel()
+            # Give tasks a chance to clean up (with timeout)
+            try:
+                loop.run_until_complete(asyncio.wait_for(
+                    asyncio.gather(*pending_tasks, return_exceptions=True),
+                    timeout=2.0
+                ))
+                print("All tasks cancelled successfully")
+            except asyncio.TimeoutError:
+                print("Warning: Some tasks did not cancel in time")
+        
+        # Shutdown async generators
         try:
-            loop.run_until_complete(asyncio.wait_for(loop.shutdown_asyncgens(), timeout=5.0))
+            loop.run_until_complete(asyncio.wait_for(loop.shutdown_asyncgens(), timeout=3.0))
         except (asyncio.TimeoutError, Exception) as e:
             print(f"Error shutting down async generators: {e}")
-        import gc
-        for obj in gc.get_objects():
-            if isinstance(obj, asyncio.Task) and not obj.done():
-                obj.cancel()
+        
         loop.close()
 
 

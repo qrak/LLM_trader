@@ -43,17 +43,16 @@ class ContextBuilder:
         candle_status = ""
         timeframe_minutes = TimeframeValidator.to_minutes(self.timeframe)
         
-        # Calculate current position within the candle (only for intraday timeframes)
+        # Calculate time until next candle closes (for intraday timeframes)
         if timeframe_minutes < 1440:  # Less than 1 day
             total_minutes = current_time.hour * 60 + current_time.minute
             minutes_into_candle = total_minutes % timeframe_minutes
+            minutes_until_close = timeframe_minutes - minutes_into_candle
             
-            candle_progress = (minutes_into_candle / timeframe_minutes) * 100
             candle_status = (
-                f"\n- Current Candle: {minutes_into_candle}/{timeframe_minutes} minutes "
-                f"({candle_progress:.1f}% complete)"
+                f"\n- Next Candle Close: in {minutes_until_close} minutes"
             )
-            candle_status += f"\n- Analysis Note: Technical indicators calculated including the current incomplete candle"
+            candle_status += f"\n- Data Quality: All indicators based on CLOSED CANDLES ONLY (professional trading standard)"
         
         # Get analysis timeframes description
         analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"

@@ -49,19 +49,24 @@ class DataFetcher:
         self.logger.debug(f"Received {len(ohlcv)} raw candles from exchange for {pair}")
         
         ohlcv_array = np.array(ohlcv)
-        # Include all candles (including the incomplete current candle)
-        all_candles = ohlcv_array
-        latest_close = float(ohlcv_array[-1, 4])
+        # TRADING MODE: Use only COMPLETED candles (exclude the incomplete current candle)
+        # This ensures all trading decisions are based on confirmed closed candle data
+        if len(ohlcv_array) < 2:
+             self.logger.warning(f"Not enough candles to exclude incomplete one. Received: {len(ohlcv_array)}")
+             return None
+
+        closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
+        latest_close = float(closed_candles[-1, 4])  # Last closed candle close price
         
-        self.logger.debug(f"Processed {len(all_candles)} candles (including current incomplete candle), latest close: {latest_close}")
+        self.logger.debug(f"Processed {len(closed_candles)} closed candles (excluding current incomplete candle), latest close: {latest_close}")
         
         # Verify we have enough data
-        if len(all_candles) < min(720, limit):
-            self.logger.warning(f"Received fewer candles ({len(all_candles)}) than expected ({min(720, limit)})")
-            self.logger.debug(f"First candle timestamp: {all_candles[0][0] if len(all_candles) > 0 else 'N/A'}")
-            self.logger.debug(f"Last candle timestamp: {all_candles[-1][0] if len(all_candles) > 0 else 'N/A'}")
+        if len(closed_candles) < min(720, limit - 1):
+            self.logger.warning(f"Received fewer closed candles ({len(closed_candles)}) than expected ({min(720, limit - 1)})")
+            self.logger.debug(f"First candle timestamp: {closed_candles[0][0] if len(closed_candles) > 0 else 'N/A'}")
+            self.logger.debug(f"Last closed candle timestamp: {closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A'}")
 
-        return all_candles, latest_close
+        return closed_candles, latest_close
 
     @retry_async()
     async def fetch_daily_historical_data(self,
@@ -103,7 +108,7 @@ class DataFetcher:
                 
             ohlcv_data, latest_close = result
             available_days = len(ohlcv_data)
-            is_complete = (available_days >= days)  # All candles now included
+            is_complete = (available_days >= days - 1)  # Closed candles only (no incomplete)
             
             if not is_complete:
                 self.logger.info(f"Limited historical data for {pair}: requested {days} days, got {available_days} days")

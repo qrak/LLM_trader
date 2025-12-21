@@ -98,32 +98,37 @@ class TradingMemory:
         """Get the n most recent decisions."""
         return self.decisions[-n:]
     
-    def get_context_summary(self, current_price: Optional[float] = None) -> str:
+    def get_context_summary(self, current_price: Optional[float] = None, full_history: Optional[List['TradeDecision']] = None) -> str:
         """Generate a concise summary for prompt injection.
         
         Args:
             current_price: Current market price for P&L calculation on open positions
+            full_history: Complete trade history for calculating overall performance
             
         Returns:
-            Formatted summary of last 5 decisions with P&L data
+            Formatted summary of last 5 decisions with overall P&L data from all trades
         """
         if not self.decisions:
             return "No previous trading decisions."
         
         lines = ["RECENT TRADING HISTORY (Last 5 Decisions):"]
-        recent = self.decisions[-5:]  # Last 5 decisions
+        recent = self.decisions[-5:]  # Last 5 decisions for context
         
-        # Calculate P&L for BUY/SELL pairs
+        # Calculate P&L from FULL trade history, not just recent decisions
+        history_to_analyze = full_history if full_history else self.decisions
+        # Ensure chronological order for P&L calculation
+        history_to_analyze = sorted(history_to_analyze, key=lambda x: x.timestamp)
         total_pnl_usdt = 0.0
         total_pnl_pct = 0.0
         closed_trades = 0
+        winning_trades = 0
         
-        # Track open positions to calculate P&L
+        # Track open positions to calculate P&L across entire history
         open_position = None
-        for i, decision in enumerate(recent):
+        for decision in history_to_analyze:
             if decision.action in ['BUY', 'SELL']:
                 open_position = decision
-            elif decision.action == 'CLOSE' and open_position:
+            elif decision.action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
                 # Calculate P&L for closed trade
                 if open_position.action == 'BUY':
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
@@ -135,25 +140,28 @@ class TradingMemory:
                 total_pnl_usdt += pnl_usdt
                 total_pnl_pct += pnl_pct
                 closed_trades += 1
+                if pnl_pct > 0:
+                    winning_trades += 1
                 open_position = None
         
-        # Format each decision
+        # Format each recent decision for context
         for decision in recent:
             time_str = decision.timestamp.strftime("%Y-%m-%d %H:%M")
-            reasoning = decision.reasoning[:80] + "..." if len(decision.reasoning) > 80 else decision.reasoning
+            # Keep full reasoning for better AI context (no truncation)
             lines.append(
                 f"- [{time_str}] {decision.action} @ ${decision.price:,.2f} "
-                f"(Conf: {decision.confidence}) - {reasoning}"
+                f"(Conf: {decision.confidence}) - {decision.reasoning}"
             )
         
-        # Add P&L summary if we have closed trades
+        # Add overall performance summary from ALL closed trades
         if closed_trades > 0:
             avg_pnl_pct = total_pnl_pct / closed_trades
+            win_rate = (winning_trades / closed_trades) * 100
             lines.append("")
-            lines.append(f"Performance Summary (Last {closed_trades} Closed Trades):")
+            lines.append(f"OVERALL PERFORMANCE ({closed_trades} Total Closed Trades):")
             lines.append(f"- Total P&L: ${total_pnl_usdt:+,.2f} USDT ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
-            lines.append(f"- Win Rate: {sum(1 for i in range(closed_trades) if total_pnl_pct > 0) / closed_trades * 100:.1f}%" if closed_trades > 0 else "- Win Rate: N/A")
+            lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")
         
         return "\n".join(lines)
     

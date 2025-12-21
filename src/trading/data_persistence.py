@@ -161,9 +161,13 @@ class DataPersistence:
             current_price: Current market price for P&L calculation
             
         Returns:
-            Formatted memory context with P&L data
+            Formatted memory context with overall P&L data from all trades
         """
-        return self.memory.get_context_summary(current_price)
+        # Load full trade history for accurate performance calculation
+        full_history_dicts = self.load_trade_history()
+        full_history = [TradeDecision.from_dict(d) for d in full_history_dicts]
+        
+        return self.memory.get_context_summary(current_price, full_history)
     
     def get_recent_decisions(self, n: int = 5) -> List[TradeDecision]:
         """Get recent decisions from memory."""
