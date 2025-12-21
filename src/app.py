@@ -210,7 +210,7 @@ class CryptoTradingBot:
             self.logger.warning(f"Could not fetch current price for P&L: {e}")
             current_price = None
         
-        # Build trading context with P&L data
+        # Build trading context with P&L data (separate for system prompt)
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
         
@@ -218,8 +218,9 @@ class CryptoTradingBot:
         previous_response = self.data_persistence.load_previous_response()
         
         result = await self.market_analyzer.analyze_market(
-            additional_context=f"\n\n{position_context}\n\n{memory_context}",
-            previous_response=previous_response
+            previous_response=previous_response,
+            position_context=position_context,
+            performance_context=memory_context
         )
         
         if "error" in result:

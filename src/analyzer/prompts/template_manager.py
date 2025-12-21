@@ -21,7 +21,7 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
@@ -30,6 +30,8 @@ class TemplateManager:
             language: Optional language (unused - always English for trading)
             has_chart_image: Whether a chart image is being provided for visual analysis
             previous_response: Previous AI response for context continuity
+            position_context: Current position details and unrealized P&L
+            performance_context: Recent trading history and performance metrics
             
         Returns:
             str: Formatted system prompt
@@ -42,6 +44,7 @@ class TemplateManager:
             "- Trading decisions must be based on confirmed signals, not speculation",
             "- Risk management is paramount: every trade requires proper stop loss and take profit",
             "- Confidence must match signal strength: only high-confidence trades in strong setups",
+            "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate",
             "",
             "YOUR TASK:",
             "Analyze technical indicators, price action, volume, patterns, market sentiment, and news.",
@@ -56,6 +59,33 @@ class TemplateManager:
                 f"CHART ANALYSIS:",
                 f"A chart image (~{cfg_limit} candlesticks) is provided for visual pattern recognition.",
                 "Integrate chart patterns with numerical indicators. Only report clear, well-formed patterns.",
+            ])
+        
+        # Add current position context if available
+        if position_context:
+            header_lines.extend([
+                "",
+                "="*60,
+                "CURRENT POSITION & PERFORMANCE:",
+                "="*60,
+                position_context.strip(),
+            ])
+        
+        # Add performance context if available
+        if performance_context:
+            header_lines.extend([
+                "",
+                performance_context.strip(),
+                "",
+                "PROFIT MAXIMIZATION STRATEGY:",
+                "- LEARN from closed trades: Why did stops get hit? Were entries premature? Was trend strength misjudged?",
+                "- IMPROVE win rate: Only trade when multiple factors align strongly (3+ confluences)",
+                "- AVOID repeated mistakes: If recent trades failed due to weak setups, demand stronger confirmation",
+                "- HOLD discipline: Better to miss a trade than force a weak setup (HOLD is valid when confidence <70)",
+                "- UPDATE positions actively: Move SL to breakeven after 1:1 or 1.5:1 gain, trail stops on strong trends, adjust TP if momentum extends",
+                "- CLOSE proactively: Don't wait for SL if market structure breaks, trend reverses, or thesis invalidates",
+                "- ADAPT to performance: If win rate is low, increase entry standards and risk/reward requirements",
+                "="*60,
             ])
         
         # Add previous response context if available
@@ -87,7 +117,7 @@ Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, mark
 ```json
 {
     "analysis": {
-        "signal": "BUY|SELL|HOLD|CLOSE",
+        "signal": "BUY|SELL|HOLD|CLOSE|UPDATE",
         "confidence": 0-100,
         "entry_price": number,
         "stop_loss": number,
@@ -106,6 +136,7 @@ TRADING SIGNALS & CONFIDENCE:
 - SELL (70-100 confidence): Strong bearish trend + 3+ indicator confluence + volume confirmation + clear SL above resistance, TP below support + minimum 2:1 R/R  
 - HOLD (any confidence <70): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality. Patience over forced trades.
 - CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
+- UPDATE: Adjust existing position SL/TP when market structure improves (e.g., move SL to breakeven after 2:1 R/R, trail stop on trend continuation, adjust TP for extended targets)
 
 RISK MANAGEMENT (Stop Loss & Take Profit):
 LONG trades:

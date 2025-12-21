@@ -192,7 +192,7 @@ class TradingStrategy:
         updated = self._update_position_parameters(stop_loss, take_profit)
         
         if updated:
-            return TradeDecision(
+            decision = TradeDecision(
                 timestamp=datetime.now(),
                 symbol=symbol,
                 action="UPDATE",
@@ -202,6 +202,9 @@ class TradingStrategy:
                 take_profit=take_profit,
                 reasoning=f"Updated position parameters. {reasoning}",
             )
+            self.persistence.save_trade_decision(decision)
+            self.logger.info(f"Position updated: New SL=${stop_loss:,.2f}, TP=${take_profit:,.2f}")
+            return decision
         
         return None
     

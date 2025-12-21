@@ -21,7 +21,7 @@ class PositionExtractor:
         
         # Regex patterns for extracting trading information
         self.signal_pattern: Pattern = re.compile(
-            r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE|CLOSE_LONG|CLOSE_SHORT)\]?',
+            r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE|CLOSE_LONG|CLOSE_SHORT|UPDATE)\]?',
             re.IGNORECASE
         )
         self.confidence_pattern: Pattern = re.compile(
@@ -209,5 +209,5 @@ class PositionExtractor:
         Returns:
             True if valid signal
         """
-        valid_signals = {"BUY", "SELL", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
+        valid_signals = {"BUY", "SELL", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
         return signal.upper() in valid_signals

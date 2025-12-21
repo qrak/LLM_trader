@@ -211,7 +211,9 @@ class AnalysisEngine:
         provider: Optional[str] = None, 
         model: Optional[str] = None,
         additional_context: Optional[str] = None,
-        previous_response: Optional[str] = None
+        previous_response: Optional[str] = None,
+        position_context: Optional[str] = None,
+        performance_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
@@ -219,8 +221,10 @@ class AnalysisEngine:
         Args:
             provider: Optional AI provider override (admin only)
             model: Optional AI model override (admin only)
-            additional_context: Additional context to append to prompt (e.g., position info)
+            additional_context: Additional context to append to prompt (e.g., extra instructions)
             previous_response: Optional previous AI response for continuity
+            position_context: Current position details and unrealized P&L (goes to system prompt)
+            performance_context: Recent trading history and performance (goes to system prompt)
             
         Returns:
             Dictionary containing analysis results
@@ -237,7 +241,7 @@ class AnalysisEngine:
             await self._perform_technical_analysis()
             
             # Step 4: Generate AI analysis
-            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response)
+            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, position_context, performance_context)
             
             # Store the result for later publication
             self.last_analysis_result = analysis_result
@@ -331,12 +335,20 @@ class AnalysisEngine:
         provider: Optional[str], 
         model: Optional[str],
         additional_context: Optional[str] = None,
-        previous_response: Optional[str] = None
+        previous_response: Optional[str] = None,
+        position_context: Optional[str] = None,
+        performance_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         self.prompt_builder.language = self.language
         has_chart_analysis = False  # Chart analysis disabled for console-only version
-        system_prompt = self.prompt_builder.build_system_prompt(self.symbol, has_chart_analysis, previous_response)
+        system_prompt = self.prompt_builder.build_system_prompt(
+            self.symbol, 
+            has_chart_analysis, 
+            previous_response,
+            position_context,
+            performance_context
+        )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
             has_chart_analysis=has_chart_analysis,
