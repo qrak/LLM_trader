@@ -128,27 +128,27 @@ class MarketFormatter:
         market_cap_data = market_overview.get("market_cap", {})
         if 'total_usd' in market_cap_data:
             market_cap = market_cap_data['total_usd']
-            sections.append(f"📊 Total Market Cap: ${self.format_utils.fmt(market_cap)}")
+            sections.append(f"Total Market Cap: ${self.format_utils.fmt(market_cap)}")
         
         dominance_data = market_overview.get("dominance", {})
         if 'btc' in dominance_data:
             btc_dom = dominance_data['btc']
-            sections.append(f"₿ Bitcoin Dominance: {self.format_utils.fmt(btc_dom)}%")
+            sections.append(f"Bitcoin Dominance: {self.format_utils.fmt(btc_dom)}%")
         
         if 'eth' in dominance_data:
             eth_dom = dominance_data['eth']
-            sections.append(f"Ξ Ethereum Dominance: {self.format_utils.fmt(eth_dom)}%")
+            sections.append(f"Ethereum Dominance: {self.format_utils.fmt(eth_dom)}%")
         
         # Market metrics
         volume_data = market_overview.get("volume", {})
         total_volume = volume_data.get('total_usd', 0)
         if total_volume:
-            sections.append(f"📈 Total Market 24h Volume: ${self.format_utils.fmt(total_volume)}")
+            sections.append(f"Total Market 24h Volume: ${self.format_utils.fmt(total_volume)}")
         
         if 'change_24h' in market_cap_data:
             change = market_cap_data['change_24h']
-            direction = "📈" if change >= 0 else "📉"
-            sections.append(f"{direction} Total Market Cap Change (24h): {self.format_utils.fmt(change)}%")
+            direction = "UP" if change >= 0 else "DOWN"
+            sections.append(f"Total Market Cap Change 24h ({direction}): {self.format_utils.fmt(change)}%")
         
         # Find analyzed coin in top_coins if present
         top_coins = market_overview.get("top_coins", [])
@@ -235,8 +235,8 @@ class MarketFormatter:
         # Market cap change
         mcap_change_24h = coin_data.get("market_cap_change_percentage_24h", 0)
         if mcap_change_24h:
-            direction = "📈" if mcap_change_24h >= 0 else "📉"
-            lines.append(f"  • Market Cap 24h Change: {direction} {mcap_change_24h:+.2f}%")
+            direction = "UP" if mcap_change_24h >= 0 else "DOWN"
+            lines.append(f"  • Market Cap 24h Change ({direction}): {mcap_change_24h:+.2f}%")
         
         return "\n".join(lines)
     
@@ -263,8 +263,6 @@ class MarketFormatter:
             market_cap = coin.get("market_cap", 0)
             coin_volume = coin.get("total_volume", 0)
             
-            direction = "📈" if change_24h >= 0 else "📉"
-            
             # Parse ATH date if available
             ath_date_str = ""
             if ath_date:
@@ -281,10 +279,9 @@ class MarketFormatter:
             # Momentum: 1h, 24h, 7d
             momentum_parts = []
             if change_1h:
-                mom_dir = "📈" if change_1h >= 0 else "📉"
-                momentum_parts.append(f"{mom_dir}{change_1h:+.1f}% 1h")
+                momentum_parts.append(f"{change_1h:+.1f}% 1h")
             if change_24h is not None:
-                momentum_parts.append(f"{direction}{change_24h:+.2f}% 24h")
+                momentum_parts.append(f"{change_24h:+.2f}% 24h")
             if change_7d:
                 momentum_parts.append(f"{change_7d:+.1f}% 7d")
             
@@ -353,14 +350,14 @@ class MarketFormatter:
         avg_price = metrics.get('avg_price')
         
         if avg_price is not None:
-            price_sections.append(f"  💰 Average Price: ${self.format_utils.fmt(avg_price)}")
+            price_sections.append(f"  Average Price: ${self.format_utils.fmt(avg_price)}")
         
         if highest_price and lowest_price:
-            price_sections.append(f"  📈 Range: ${self.format_utils.fmt(lowest_price)} - ${self.format_utils.fmt(highest_price)}")
+            price_sections.append(f"  Range: ${self.format_utils.fmt(lowest_price)} - ${self.format_utils.fmt(highest_price)}")
         
         if price_change is not None and price_change_percent is not None:
-            direction = "📈" if price_change >= 0 else "📉"
-            price_sections.append(f"  {direction} Change: ${self.format_utils.fmt(price_change)} ({self.format_utils.fmt(price_change_percent)}%)")
+            direction = "UP" if price_change >= 0 else "DOWN"
+            price_sections.append(f"  Change ({direction}): ${self.format_utils.fmt(price_change)} ({self.format_utils.fmt(price_change_percent)}%)")
         
         return price_sections
     
@@ -372,10 +369,10 @@ class MarketFormatter:
         avg_volume = metrics.get('avg_volume')
         
         if total_volume is not None:
-            volume_sections.append(f"  📊 Total Volume: {self.format_utils.fmt(total_volume)}")
+            volume_sections.append(f"  Total Volume: {self.format_utils.fmt(total_volume)}")
         
         if avg_volume is not None:
-            volume_sections.append(f"  📊 Average Volume: {self.format_utils.fmt(avg_volume)}")
+            volume_sections.append(f"  Average Volume: {self.format_utils.fmt(avg_volume)}")
         
         return volume_sections
     
@@ -384,43 +381,43 @@ class MarketFormatter:
         if not indicator_changes:
             return []
         
-        changes_sections = [f"  📊 {period_name.capitalize()} Indicator Changes:"]
+        changes_sections = [f"  {period_name.capitalize()} Indicator Changes:"]
         
         # RSI changes
         rsi_change = indicator_changes.get('rsi_change')
         if rsi_change is not None:
-            rsi_direction = "📈" if rsi_change >= 0 else "📉"
-            changes_sections.append(f"    • RSI: {rsi_direction} {self.format_utils.fmt(abs(rsi_change))} value change")
+            rsi_direction = "UP" if rsi_change >= 0 else "DOWN"
+            changes_sections.append(f"    • RSI ({rsi_direction}): {self.format_utils.fmt(abs(rsi_change))} value change")
         
         # MACD changes (use macd_line which is the main MACD indicator)
         macd_change = indicator_changes.get('macd_line_change')
         if macd_change is not None:
-            macd_direction = "📈" if macd_change >= 0 else "📉"
-            changes_sections.append(f"    • MACD Line: {macd_direction} {self.format_utils.fmt(abs(macd_change))}")
+            macd_direction = "UP" if macd_change >= 0 else "DOWN"
+            changes_sections.append(f"    • MACD ({macd_direction}): {self.format_utils.fmt(abs(macd_change))} value change")
         
         # MACD Histogram changes
         macd_hist_change = indicator_changes.get('macd_hist_change')
         if macd_hist_change is not None:
-            macd_hist_direction = "📈" if macd_hist_change >= 0 else "📉"
-            changes_sections.append(f"    • MACD Histogram: {macd_hist_direction} {self.format_utils.fmt(abs(macd_hist_change))}")
+            macd_hist_direction = "UP" if macd_hist_change >= 0 else "DOWN"
+            changes_sections.append(f"    • MACD Histogram ({macd_hist_direction}): {self.format_utils.fmt(abs(macd_hist_change))}")
         
         # ADX changes
         adx_change = indicator_changes.get('adx_change')
         if adx_change is not None:
-            adx_direction = "📈" if adx_change >= 0 else "📉"
-            changes_sections.append(f"    • ADX: {adx_direction} {self.format_utils.fmt(abs(adx_change))} value change")
+            adx_direction = "UP" if adx_change >= 0 else "DOWN"
+            changes_sections.append(f"    • ADX ({adx_direction}): {self.format_utils.fmt(abs(adx_change))} value change")
         
         # Stochastic %K changes
         stoch_k_change = indicator_changes.get('stoch_k_change')
         if stoch_k_change is not None:
-            stoch_direction = "📈" if stoch_k_change >= 0 else "📉"
-            changes_sections.append(f"    • Stochastic %K: {stoch_direction} {self.format_utils.fmt(abs(stoch_k_change))} value change")
+            stoch_direction = "UP" if stoch_k_change >= 0 else "DOWN"
+            changes_sections.append(f"    • Stochastic %K ({stoch_direction}): {self.format_utils.fmt(abs(stoch_k_change))} value change")
         
         # Bollinger Bands position changes
         bb_position_change = indicator_changes.get('bb_position_change')
         if bb_position_change is not None:
-            bb_direction = "📈" if bb_position_change >= 0 else "📉"
-            changes_sections.append(f"    • BB Position: {bb_direction} {self.format_utils.fmt(abs(bb_position_change))}")
+            bb_direction = "UP" if bb_position_change >= 0 else "DOWN"
+            changes_sections.append(f"    • BB Position ({bb_direction}): {self.format_utils.fmt(abs(bb_position_change))}")
         
         return changes_sections
     
@@ -584,7 +581,7 @@ class MarketFormatter:
         cycle_phase = weekly_macro.get('cycle_phase')
         distance = weekly_macro.get('distance_from_200w_sma_pct')
         
-        lines = ["📊 WEEKLY MACRO TREND (200W SMA Analysis):"]
+        lines = ["WEEKLY MACRO TREND (200W SMA Analysis):"]
         lines.append(f"  • Overall Trend: **{trend}** (Confidence: {confidence}%)")
         
         if cycle_phase:
@@ -592,18 +589,18 @@ class MarketFormatter:
         if distance is not None:
             lines.append(f"  • Distance from 200W SMA: {distance:+.1f}%")
         if weekly_macro.get('price_above_200w_sma') is not None:
-            status = "✅ Above" if weekly_macro['price_above_200w_sma'] else "⚠️ Below"
+            status = "Above" if weekly_macro['price_above_200w_sma'] else "Below"
             lines.append(f"  • Price vs 200W SMA: {status}")
         
         # Golden/Death Cross with dates
         if weekly_macro.get('golden_cross'):
             weeks = weekly_macro.get('golden_cross_weeks_ago', 0)
             date = weekly_macro.get('golden_cross_date', 'N/A')
-            lines.append(f"  • 🌟 Golden Cross: {weeks} weeks ago ({date})")
+            lines.append(f"  • Golden Cross: {weeks} weeks ago ({date})")
         if weekly_macro.get('death_cross'):
             weeks = weekly_macro.get('death_cross_weeks_ago', 0)
             date = weekly_macro.get('death_cross_date', 'N/A')
-            lines.append(f"  • ⚠️ Death Cross: {weeks} weeks ago ({date})")
+            lines.append(f"  • Death Cross: {weeks} weeks ago ({date})")
         
         # Multi-year trend
         if weekly_macro.get('multi_year_trend'):
@@ -666,11 +663,7 @@ class MarketFormatter:
             weiss = rating.get("Weiss", {})
             if weiss:
                 section += "\nWeiss Cryptocurrency Ratings:\n"
-                section += "- Independent Rating System: Weiss Ratings is a US-based independent agency (since 1971)\n"
-                section += "- Scale: A=Excellent (strong buy), B=Good (buy), C=Fair (hold/avoid), D=Weak (sell), E=Very weak (sell)\n"
-                section += "- Modifiers: + indicates upper third of grade, - indicates lower third of grade\n"
-                section += "- Two Components: Tech/Adoption (long-term potential) + Market Performance (short-term price patterns)\n"
-                
+
                 overall_rating = weiss.get("Rating")
                 if overall_rating:
                     section += f"- Overall Rating: {overall_rating}\n"

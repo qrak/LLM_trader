@@ -6,16 +6,13 @@ This module provides a clean, logical organization of analysis components:
 - core/: Main analysis engine, context management, and result processing
 - data/: Data collection, fetching, and processing components  
 - calculations/: All calculation logic including indicators, metrics, and patterns
-- formatting/: Output formatting separated by concern (technical vs market analysis)
+- formatting/: Output formatting for AI prompts and console display
 - prompts/: Prompt building, context construction, and template management
-- publishing/: Result publishing and output management
 
 Key Components:
-- AnalysisEngine: Main analysis orchestrator (formerly MarketAnalyzer)
+- AnalysisEngine: Main analysis orchestrator
 - TechnicalCalculator: Technical indicator calculations
-- TechnicalAnalysisFormatter: Technical analysis output formatting
-- PromptBuilder: AI prompt construction (formerly prompt.py)
- - PromptBuilder: AI prompt construction
+- PromptBuilder: AI prompt construction
 """
 
 # Core analysis components
@@ -32,8 +29,6 @@ from .formatting import TechnicalFormatter, MarketFormatter, IndicatorFormatter
 
 # Prompt components
 from .prompts import PromptBuilder, ContextBuilder, TemplateManager
-# Publishing components
-from .publishing import AnalysisPublisher
 
 __all__ = [
     # Core
@@ -59,9 +54,5 @@ __all__ = [
     # Prompts
     'PromptBuilder',
     'ContextBuilder',
-    'TemplateManager',
-
-    
-    # Publishing
-    'AnalysisPublisher'
+    'TemplateManager'
 ]

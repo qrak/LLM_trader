@@ -12,15 +12,78 @@ This repository uses a **layered instruction system** for AI agents:
 
 ## Project Overview
 
-**Discord Crypto Analyzer** is a Python 3.11+ asyncio-first system that analyzes cryptocurrency markets using AI (Google AI/OpenRouter/LM Studio), publishes HTML reports to Discord automatically, and manages message lifecycle with automatic cleanup. Manual user command support has been deprecated in favor of scheduled or event-driven automated workflows.
+**Crypto Trading Bot** is a Python 3.11+ asyncio-first console application that performs **automated cryptocurrency trading** using AI (Google AI/OpenRouter/LM Studio). The system collects market data, calculates technical indicators, detects patterns, and makes trading decisions (BUY/SELL/HOLD) with position management.
+
+**IMPORTANT: This is a TRADING BOT, not an analysis tool. There is NO analysis mode.**
+
+### Key Features
+- **Automated Trading**: AI-powered trading decisions with stop-loss and take-profit management
+- **Continuous Mode**: Periodic checks every timeframe candle with position monitoring
+- **Rolling Memory**: Maintains context of last N trading decisions for better AI analysis
+- **Multi-Exchange Support**: Binance, KuCoin, GateIO, MEXC, Hyperliquid
+- **Streamlined Output**: JSON-only trading signals, no human-readable analysis
 
 ### Tech Stack
-- **Core**: Python 3.11+, asyncio, discord.py 2.6.3
+- **Core**: Python 3.11+, asyncio
 - **Data**: pandas 2.3.2, numpy 2.2.3, ccxt 4.5.3 (multi-exchange)
-- **Visualization**: plotly 6.3.0, kaleido (chart PNG export)
 - **AI**: google-genai, OpenRouter API, LM Studio (local)
 - **APIs**: CoinGecko, CryptoCompare, Alternative.me (Fear & Greed)
-- **Storage**: JSON files (`data/`), SQLite cache (`cache/coingecko_cache.db`)
+- **Storage**: JSON files (`data/`, `trading_data/`), SQLite cache (`cache/coingecko_cache.db`)
+- **Output**: Console only (no Discord, no HTML)
+
+---
+
+## Architecture: Trading Module
+
+### Components (`src/trading/`)
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| `Position` | `dataclasses.py` | Immutable position data (entry, SL, TP, direction) |
+| `TradeDecision` | `dataclasses.py` | Trading decision with timestamp, action, reasoning |
+| `TradingMemory` | `dataclasses.py` | Rolling memory of last N decisions |
+| `DataPersistence` | `data_persistence.py` | Save/load positions, trade history, memory |
+| `PositionExtractor` | `position_extractor.py` | Extract BUY/SELL/HOLD from AI response |
+| `TradingStrategy` | `trading_strategy.py` | Position management, SL/TP checks, decision execution |
+
+### Prompt Engine (`src/analyzer/prompts/`)
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| `TemplateManager` | `template_manager.py` | System prompts for trading decisions (JSON-only output) |
+| `PromptBuilder` | `prompt_builder.py` | Builds prompts with market data |
+| `ContextBuilder` | `context_builder.py` | Builds context sections (market data, sentiment) |
+
+**NOTE**: Modify existing prompt engine files. Do NOT create new template files.
+
+### Data Flow
+
+```
+start.py
+    ↓
+CryptoTradingBot.run()
+    ↓
+┌─────────────────────────────────────────────────────┐
+│                 PERIODIC LOOP                        │
+│                                                      │
+│  1. Check existing position (SL/TP hit?)            │
+│  2. Run AnalysisEngine.analyze_market()             │
+│  3. PositionExtractor.extract_trading_info()        │
+│  4. TradingStrategy.process_analysis()              │
+│  5. DataPersistence.save_trade_decision()           │
+│  6. Wait for next timeframe candle                  │
+│                                                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### Persistence Files (`trading_data/`)
+
+| File | Purpose |
+|------|---------|
+| `positions.json` | Current open position |
+| `trade_history.json` | Full history of all trading decisions |
+| `trading_memory.json` | Rolling memory of last N decisions for context |
+| `previous_response.json` | Last AI response for continuity |
 
 ---
 
@@ -28,9 +91,9 @@ This repository uses a **layered instruction system** for AI agents:
 
 ### Async & Initialization
 - **Asyncio-first**: Use `async def` and `await` everywhere. Mirror `start.py` event-loop setup (WindowsSelectorEventLoopPolicy on Windows)
-- **Initialization order matters**: Components initialized in `DiscordCryptoBot.initialize()`, torn down in reverse in `shutdown()`
+- **Initialization order matters**: Components initialized in `CryptoTradingBot.initialize()`, torn down in reverse in `shutdown()`
 - **Inject dependencies**: Pass initialized API clients/managers into constructors. Never construct services inside other classes
-- **Await readiness**: `discord_notifier.wait_until_ready()`, `symbol_manager.initialize()` must be awaited before use
+- **Await readiness**: `symbol_manager.initialize()` must be awaited before use
 
 ### Type Safety & Error Handling
 - **No defensive checks**: Do NOT use `isinstance`, `hasattr`, `getattr`. Correct types must be passed from init
@@ -48,7 +111,7 @@ This repository uses a **layered instruction system** for AI agents:
 - **Abstraction**: Use abstract base classes and abstract properties to define contracts for subsystems; keep implementations injectable for testing.
 
 ### Dataclasses
-- **Data classes for DTOs**: Use `@dataclass` for simple typed data carriers (Candle/OHLCV, IndicatorResult, PatternDetection, AnalysisResult). Prefer `frozen=True` for immutable value objects and `slots=True` for lower memory overhead when many instances are created.
+- **Data classes for DTOs**: Use `@dataclass` for simple typed data carriers (Position, TradeDecision, TradingMemory). Prefer `frozen=True` for immutable value objects and `slots=True` for lower memory overhead when many instances are created.
 - **Defaults**: Avoid mutable default arguments; use `field(default_factory=...)` for lists/dicts.
 - **When to avoid**: For bulk numeric operations prefer numpy arrays / pandas DataFrame; dataclasses are for small structured objects passed between components.
 
@@ -68,8 +131,17 @@ This repository uses a **layered instruction system** for AI agents:
 # Install dependencies
 pip install -r requirements.txt
 
-# Run bot
+# Start trading (default: BTC/USDT)
 python start.py
+
+# Trade specific symbol
+python start.py ETH/USDT
+
+# Trade with specific timeframe
+python start.py BTC/USDT -t 4h
+
+# Trade different symbol with timeframe
+python start.py SOL/USDT -t 1h
 ```
 
 ### Testing

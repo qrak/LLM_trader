@@ -255,6 +255,10 @@ class Config:
         return self.get_config('debug', 'test_environment', False)
     
     @property
+    def CRYPTO_PAIR(self):
+        return self.get_config('general', 'crypto_pair', 'BTC/USDT')
+    
+    @property
     def TIMEFRAME(self):
         return self.get_config('general', 'timeframe', '1h')
     

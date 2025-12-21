@@ -1,12 +1,21 @@
 <#
 start_script_test.ps1
 Purpose: Prepare .venv, ensure on 'development' git branch (if repo), install requirements, and run start.py
-Usage: pwsh.exe -File .\start_script_test.ps1
+Usage: pwsh.exe -File .\start_script_test.ps1 [symbol] [-Timeframe <tf>]
+Examples:
+  .\start_script_test.ps1                           # Run with default from config.ini
+  .\start_script_test.ps1 ETH/USDT                  # Trade ETH/USDT
+  .\start_script_test.ps1 BTC/USDT -Timeframe 4h    # Trade BTC/USDT on 4h timeframe
+  .\start_script_test.ps1 -SkipInstall              # Skip pip install step
 Parameters:
+  -Symbol <string>     Trading symbol (e.g., BTC/USDT, ETH/USDT)
+  -Timeframe <string>  Timeframe for trading (e.g., 1h, 4h, 1d)
   -Venv <path>         Path to virtual environment (default: .venv)
   -SkipInstall         Skip pip install step
 #>
 param(
+    [string]$Symbol = "",
+    [string]$Timeframe = "",
     [string]$Venv = ".venv",
     [switch]$SkipInstall
 )
@@ -81,8 +90,20 @@ else {
 
 # Run the project's start entrypoint
 if (Test-Path 'start.py') {
-    Write-Host "Running start.py..."
-    python start.py
+    # Build command with optional arguments
+    $startArgs = @()
+    if ($Symbol) { $startArgs += $Symbol }
+    if ($Timeframe) { $startArgs += "-t", $Timeframe }
+    
+    if ($startArgs.Count -gt 0) {
+        Write-Host "Running start.py with arguments: $($startArgs -join ' ')..."
+        python start.py @startArgs
+    }
+    else {
+        Write-Host "Running start.py with default settings..."
+        python start.py
+    }
+    
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
         Write-Host "`n=== Process exited with error code: $exitCode ===" -ForegroundColor Red

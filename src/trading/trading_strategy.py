@@ -1,0 +1,401 @@
+"""Trading strategy that wraps analysis with position management."""
+
+from datetime import datetime
+from typing import Optional, Any
+
+from src.logger.logger import Logger
+from .dataclasses import Position, TradeDecision
+from .data_persistence import DataPersistence
+from .position_extractor import PositionExtractor
+
+
+class TradingStrategy:
+    """Manages trading positions and decision execution based on AI analysis."""
+    
+    def __init__(
+        self,
+        logger: Logger,
+        data_persistence: DataPersistence,
+        config: Any = None,
+    ):
+        """Initialize the trading strategy.
+        
+        Args:
+            logger: Logger instance
+            data_persistence: Data persistence for positions and history
+            config: Configuration module
+        """
+        self.logger = logger
+        self.persistence = data_persistence
+        self.config = config
+        self.extractor = PositionExtractor(logger)
+        
+        # Load any existing position
+        self.current_position: Optional[Position] = self.persistence.load_position()
+        
+        if self.current_position:
+            self.logger.info(
+                f"Loaded existing position: {self.current_position.direction} "
+                f"{self.current_position.symbol} @ ${self.current_position.entry_price:,.2f}"
+            )
+    
+    async def check_position(self, current_price: float) -> Optional[str]:
+        """Check if current position hit stop loss or take profit.
+        
+        Args:
+            current_price: Current market price
+            
+        Returns:
+            Reason for closing position if hit, else None
+        """
+        if not self.current_position:
+            return None
+        
+        if self.current_position.is_stop_hit(current_price):
+            await self.close_position("stop_loss", current_price)
+            return "stop_loss"
+        
+        if self.current_position.is_target_hit(current_price):
+            await self.close_position("take_profit", current_price)
+            return "take_profit"
+        
+        return None
+    
+    async def close_position(self, reason: str, current_price: float) -> None:
+        """Close the current position.
+        
+        Args:
+            reason: Reason for closing (stop_loss, take_profit, signal)
+            current_price: Current market price
+        """
+        if not self.current_position:
+            return
+        
+        pnl = self.current_position.calculate_pnl(current_price)
+        
+        decision = TradeDecision(
+            timestamp=datetime.now(),
+            symbol=self.current_position.symbol,
+            action=f"CLOSE_{self.current_position.direction}",
+            confidence=self.current_position.confidence,
+            price=current_price,
+            stop_loss=self.current_position.stop_loss,
+            take_profit=self.current_position.take_profit,
+            position_size=self.current_position.size,
+            reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%",
+        )
+        
+        self.logger.info(
+            f"Closing {self.current_position.direction} position ({reason}) "
+            f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%"
+        )
+        
+        self.persistence.save_trade_decision(decision)
+        self.persistence.save_position(None)
+        self.current_position = None
+    
+    async def process_analysis(self, analysis_result: dict, symbol: str) -> Optional[TradeDecision]:
+        """Process AI analysis result and execute trading decision.
+        
+        Args:
+            analysis_result: Result from AnalysisEngine.analyze_market()
+            symbol: Trading symbol
+            
+        Returns:
+            TradeDecision if action taken, else None
+        """
+        try:
+            raw_response = analysis_result.get("raw_response", "")
+            current_price = self._extract_price_from_result(analysis_result)
+            
+            if not raw_response:
+                self.logger.warning("No response to process")
+                return None
+            
+            if current_price <= 0:
+                self.logger.error("Invalid current_price extracted, cannot process trade")
+                return None
+            
+            # Extract trading info from response
+            signal, confidence, stop_loss, take_profit, position_size, reasoning = \
+                self.extractor.extract_trading_info(raw_response)
+            
+            self.logger.info(f"Extracted Signal: {signal}, Confidence: {confidence}")
+            
+            # Validate signal
+            if not self.extractor.validate_signal(signal):
+                self.logger.warning(f"Invalid signal: {signal}")
+                return None
+            
+            # Handle existing position
+            if self.current_position:
+                return await self._handle_existing_position(
+                    signal, confidence, stop_loss, take_profit, 
+                    current_price, symbol, reasoning
+                )
+            
+            # Handle new position
+            if signal in ("BUY", "SELL"):
+                return await self._open_new_position(
+                    signal, confidence, stop_loss, take_profit,
+                    position_size, current_price, symbol, reasoning
+                )
+            
+            # HOLD or no action
+            if reasoning:
+                self.logger.info(f"No action taken. Signal: {signal}. Reasoning: {reasoning[:200]}")
+            else:
+                self.logger.info(f"No action taken. Signal: {signal}")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error processing analysis: {e}")
+            return None
+    
+    async def _handle_existing_position(
+        self,
+        signal: str,
+        confidence: str,
+        stop_loss: Optional[float],
+        take_profit: Optional[float],
+        current_price: float,
+        symbol: str,
+        reasoning: str,
+    ) -> Optional[TradeDecision]:
+        """Handle trading decision when position exists.
+        
+        Args:
+            signal: Trading signal
+            confidence: Confidence level
+            stop_loss: New stop loss (for update)
+            take_profit: New take profit (for update)
+            current_price: Current price
+            symbol: Trading symbol
+            reasoning: AI reasoning
+            
+        Returns:
+            TradeDecision if action taken
+        """
+        if signal == "CLOSE" or signal.startswith("CLOSE_"):
+            self.logger.info("Closing position based on analysis signal...")
+            await self.close_position("analysis_signal", current_price)
+            return TradeDecision(
+                timestamp=datetime.now(),
+                symbol=symbol,
+                action="CLOSE",
+                confidence=confidence,
+                price=current_price,
+                reasoning=reasoning,
+            )
+        
+        # Update stop loss / take profit if provided
+        updated = self._update_position_parameters(stop_loss, take_profit)
+        
+        if updated:
+            return TradeDecision(
+                timestamp=datetime.now(),
+                symbol=symbol,
+                action="UPDATE",
+                confidence=confidence,
+                price=current_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                reasoning=f"Updated position parameters. {reasoning}",
+            )
+        
+        return None
+    
+    async def _open_new_position(
+        self,
+        signal: str,
+        confidence: str,
+        stop_loss: Optional[float],
+        take_profit: Optional[float],
+        position_size: Optional[float],
+        current_price: float,
+        symbol: str,
+        reasoning: str,
+    ) -> TradeDecision:
+        """Open a new trading position.
+        
+        Args:
+            signal: BUY or SELL
+            confidence: Confidence level
+            stop_loss: Stop loss price
+            take_profit: Take profit price
+            position_size: Position size as decimal
+            current_price: Entry price
+            symbol: Trading symbol
+            reasoning: AI reasoning
+            
+        Returns:
+            TradeDecision for the new position
+        """
+        direction = "LONG" if signal == "BUY" else "SHORT"
+        
+        # Calculate default stop loss / take profit if not provided
+        if direction == "LONG":
+            default_sl = current_price * 0.98  # 2% below
+            default_tp = current_price * 1.04  # 4% above
+        else:  # SHORT
+            default_sl = current_price * 1.02  # 2% above
+            default_tp = current_price * 0.96  # 4% below
+        
+        final_sl = stop_loss if stop_loss and stop_loss > 0 else default_sl
+        final_tp = take_profit if take_profit and take_profit > 0 else default_tp
+        final_size = position_size if position_size and position_size > 0 else 0.02  # Default 2%
+        
+        # Validate stop loss and take profit make sense
+        if direction == "LONG":
+            if final_sl >= current_price:
+                self.logger.warning(f"Invalid SL for LONG ({final_sl} >= {current_price}), using default")
+                final_sl = default_sl
+            if final_tp <= current_price:
+                self.logger.warning(f"Invalid TP for LONG ({final_tp} <= {current_price}), using default")
+                final_tp = default_tp
+        else:  # SHORT
+            if final_sl <= current_price:
+                self.logger.warning(f"Invalid SL for SHORT ({final_sl} <= {current_price}), using default")
+                final_sl = default_sl
+            if final_tp >= current_price:
+                self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using default")
+                final_tp = default_tp
+        
+        # Create position (frozen dataclass, so we create new instance)
+        self.current_position = Position(
+            entry_price=current_price,
+            stop_loss=final_sl,
+            take_profit=final_tp,
+            size=final_size,
+            entry_time=datetime.now(),
+            confidence=confidence,
+            direction=direction,
+            symbol=symbol,
+        )
+        
+        self.persistence.save_position(self.current_position)
+        
+        self.logger.info(
+            f"Opened {direction} position @ ${current_price:,.2f} "
+            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Size: {final_size*100:.1f}%)"
+        )
+        
+        # Create and save decision
+        decision = TradeDecision(
+            timestamp=datetime.now(),
+            symbol=symbol,
+            action=signal,
+            confidence=confidence,
+            price=current_price,
+            stop_loss=final_sl,
+            take_profit=final_tp,
+            position_size=final_size,
+            reasoning=reasoning,
+        )
+        
+        self.persistence.save_trade_decision(decision)
+        
+        return decision
+    
+    def _update_position_parameters(
+        self,
+        stop_loss: Optional[float],
+        take_profit: Optional[float],
+    ) -> bool:
+        """Update position stop loss and take profit.
+        
+        Args:
+            stop_loss: New stop loss
+            take_profit: New take profit
+            
+        Returns:
+            True if anything was updated
+        """
+        if not self.current_position:
+            return False
+        
+        updated = False
+        new_sl = self.current_position.stop_loss
+        new_tp = self.current_position.take_profit
+        
+        if stop_loss and stop_loss != self.current_position.stop_loss:
+            new_sl = stop_loss
+            self.logger.info(f"Updated Stop Loss: ${stop_loss:,.2f}")
+            updated = True
+        
+        if take_profit and take_profit != self.current_position.take_profit:
+            new_tp = take_profit
+            self.logger.info(f"Updated Take Profit: ${take_profit:,.2f}")
+            updated = True
+        
+        if updated:
+            # Create new position with updated values (frozen dataclass)
+            self.current_position = Position(
+                entry_price=self.current_position.entry_price,
+                stop_loss=new_sl,
+                take_profit=new_tp,
+                size=self.current_position.size,
+                entry_time=self.current_position.entry_time,
+                confidence=self.current_position.confidence,
+                direction=self.current_position.direction,
+                symbol=self.current_position.symbol,
+            )
+            self.persistence.save_position(self.current_position)
+        
+        return updated
+    
+    def _extract_price_from_result(self, result: dict) -> float:
+        """Extract current price from analysis result.
+        
+        Args:
+            result: Analysis result dictionary
+            
+        Returns:
+            Current price
+        """
+        # Try different possible locations for price
+        if "current_price" in result:
+            return float(result["current_price"])
+        
+        if "context" in result and hasattr(result["context"], "current_price"):
+            return float(result["context"].current_price)
+        
+        # Default fallback
+        if self.logger:
+            self.logger.warning(f"Could not extract price from result keys: {list(result.keys())}")
+        return 0.0
+    
+    def get_position_context(self, current_price: Optional[float] = None) -> str:
+        """Get formatted context about current position for prompts.
+        
+        Args:
+            current_price: Current market price for P&L calculation
+            
+        Returns:
+            Formatted position context string
+        """
+        if not self.current_position:
+            return "CURRENT POSITION: None"
+        
+        pos = self.current_position
+        duration = datetime.now() - pos.entry_time
+        hours = duration.total_seconds() / 3600
+        
+        context_lines = [
+            "CURRENT POSITION:",
+            f"- Direction: {pos.direction}",
+            f"- Symbol: {pos.symbol}",
+            f"- Entry Price: ${pos.entry_price:,.2f}",
+            f"- Stop Loss: ${pos.stop_loss:,.2f}",
+            f"- Take Profit: ${pos.take_profit:,.2f}",
+            f"- Size: {pos.size * 100:.1f}%",
+            f"- Duration: {hours:.1f} hours",
+            f"- Confidence: {pos.confidence}",
+        ]
+        
+        if current_price and current_price > 0:
+            pnl_pct = pos.calculate_pnl(current_price)
+            pnl_usdt = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
+            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_usdt:+,.2f} USDT)")
+        
+        return "\n".join(context_lines)

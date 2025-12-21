@@ -38,12 +38,18 @@ class PromptBuilder:
         self.technical_analysis_formatter = TechnicalFormatter(self.technical_calculator, logger, format_utils)
         self.context_builder = ContextBuilder(timeframe, logger, format_utils, data_processor)
 
-    def build_prompt(self, context: AnalysisContext, has_chart_analysis: bool = False) -> str:
+    def build_prompt(
+        self, 
+        context: AnalysisContext, 
+        has_chart_analysis: bool = False,
+        additional_context: Optional[str] = None
+    ) -> str:
         """Build the complete prompt using component managers.
         
         Args:
             context: Analysis context containing all required data
             has_chart_analysis: Whether chart image analysis is available
+            additional_context: Additional context to append (e.g., position info, memory)
             
         Returns:
             str: Complete formatted prompt
@@ -130,6 +136,10 @@ class PromptBuilder:
         
         if long_term_sections:
             sections.append("\n\n".join(long_term_sections))
+        
+        # Add trading context EARLY for visibility (position, P&L, history)
+        if additional_context:
+            sections.append(additional_context)
 
         # Add custom instructions if available
         if self.custom_instructions:

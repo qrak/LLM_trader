@@ -1,4 +1,7 @@
 import asyncio
+import time
+from datetime import datetime
+from typing import Optional
 
 from src.logger.logger import Logger
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -6,17 +9,19 @@ from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.cryptocompare import CryptoCompareAPI
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.core.analysis_engine import AnalysisEngine
-from src.discord_interface.notifier import DiscordNotifier
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter
-from src.utils.keyboard_handler import KeyboardHandler
 from src.utils.loader import config
 from src.utils.format_utils import FormatUtils
+from src.utils.timeframe_validator import TimeframeValidator
 from src.analyzer.data.data_processor import DataProcessor
 from src.models.manager import ModelManager
+from src.trading import DataPersistence, TradingStrategy
 
 
-class DiscordCryptoBot:
+class CryptoTradingBot:
+    """Automated crypto trading bot - TRADING MODE ONLY."""
+    
     def __init__(self, logger: Logger):
         self.market_analyzer = None
         self.coingecko_api = None
@@ -24,19 +29,24 @@ class DiscordCryptoBot:
         self.alternative_me_api = None
         self.rag_engine = None
         self.logger = logger
-        self.discord_notifier = None
         self.symbol_manager = None
         self.token_counter = None
-        self.keyboard_handler = None
         self.format_utils = None
         self.data_processor = None
         self.model_manager = None
         self.tasks = []
         self.running = False
         self._active_tasks = set()
+        
+        # Trading components
+        self.data_persistence: Optional[DataPersistence] = None
+        self.trading_strategy: Optional[TradingStrategy] = None
+        self.current_exchange = None
+        self.current_symbol: Optional[str] = None
+        self.current_timeframe: Optional[str] = None
 
     async def initialize(self):
-        self.logger.info("Initializing Discord Crypto Bot...")
+        self.logger.info("Initializing Crypto Trading Bot...")
 
         # Initialize TokenCounter early
         self.token_counter = TokenCounter()
@@ -64,7 +74,7 @@ class DiscordCryptoBot:
         await self.alternative_me_api.initialize()
         self.logger.debug("AlternativeMeAPI initialized")
 
-        # Pass token_counter and initialized API clients to RagEngine to avoid double initialization
+        # Pass token_counter and initialized API clients to RagEngine
         self.rag_engine = RagEngine(
             self.logger, 
             self.token_counter,
@@ -79,7 +89,7 @@ class DiscordCryptoBot:
         self.rag_engine.set_symbol_manager(self.symbol_manager)
         self.logger.debug("Passed SymbolManager to RagEngine")
 
-        # Initialize ModelManager before AnalysisEngine (required dependency)
+        # Initialize ModelManager before AnalysisEngine
         self.model_manager = ModelManager(self.logger, config)
         self.logger.debug("ModelManager initialized")
 
@@ -94,125 +104,245 @@ class DiscordCryptoBot:
             data_processor=self.data_processor,
             config=config
         )
-
         self.logger.debug("AnalysisEngine initialized")
 
-        self.discord_notifier = DiscordNotifier(
-            logger=self.logger,
-            symbol_manager=self.symbol_manager,
-            market_analyzer=self.market_analyzer,
-            config=config,
-            format_utils=self.format_utils
-        )
-        discord_task = asyncio.create_task(
-            self.discord_notifier.start(),
-            name="Discord-Bot"
-        )
-        self._active_tasks.add(discord_task)
-        discord_task.add_done_callback(self._active_tasks.discard)
-        self.tasks.append(discord_task)
-
-        # Wait for Discord notifier to be fully ready
-        self.logger.debug("Waiting for Discord notifier to fully initialize...")
-        await self.discord_notifier.wait_until_ready()
-        self.logger.debug("DiscordNotifier initialized")
-
-        self.market_analyzer.set_discord_notifier(self.discord_notifier)
-        self.logger.debug("AnalysisEngine set DiscordNotifier")
+        # Initialize trading components
+        self.data_persistence = DataPersistence(self.logger, data_dir="data/trading", max_memory=10)
+        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, config)
+        self.logger.debug("Trading components initialized")
 
         await self.rag_engine.start_periodic_updates()
         
-        # Initialize keyboard handler
-        self.keyboard_handler = KeyboardHandler(logger=self.logger)
-        self.keyboard_handler.register_command('r', self.refresh_crypto_news, "Refresh crypto news")
-        self.keyboard_handler.register_command('o', self.refresh_market_overview, "Refresh market overview data")
-        self.keyboard_handler.register_command('h', self.show_help, "Show this help message")
-        self.keyboard_handler.register_command('q', self.request_shutdown, "Quit the application")
-        self.keyboard_handler.register_command('R', self.reload_configuration, "Reload config.ini and keys.env (SHIFT+R)")
+        self.logger.info("Crypto Trading Bot initialized successfully")
+
+    async def run(self, symbol: str, timeframe: str = None):
+        """Run the trading bot in continuous mode.
         
-        # Start keyboard handler
-        keyboard_task = asyncio.create_task(
-            self.keyboard_handler.start_listening(),
-            name="Keyboard-Handler"
+        Args:
+            symbol: Trading pair (e.g., "BTC/USDT")
+            timeframe: Optional timeframe override
+        """
+        self.current_symbol = symbol
+        self.current_timeframe = timeframe or config.TIMEFRAME
+        
+        # Find exchange that supports the symbol
+        exchange, exchange_id = await self.symbol_manager.find_symbol_exchange(symbol)
+        if not exchange:
+            self.logger.error(f"Symbol {symbol} not found on any configured exchange")
+            return
+        
+        self.current_exchange = exchange
+        self.logger.info(f"Starting trading for {symbol} on {exchange_id}")
+        self.logger.info(f"Timeframe: {self.current_timeframe}")
+        
+        # Initialize analyzer for this symbol
+        self.market_analyzer.initialize_for_symbol(
+            symbol=symbol,
+            exchange=exchange,
+            language="English",
+            timeframe=self.current_timeframe
         )
-        self._active_tasks.add(keyboard_task)
-        keyboard_task.add_done_callback(self._active_tasks.discard)
-        self.tasks.append(keyboard_task)
         
-        self.logger.info("Discord Crypto Bot initialized successfully")
-        self.logger.info("Keyboard commands available: Press 'h' for help")
-
-    async def start(self):
-        """Start the bot and its components"""
-        self.logger.info("Bot components running...")
+        # Log current position if any
+        if self.trading_strategy.current_position:
+            pos = self.trading_strategy.current_position
+            self.logger.info(f"Existing position: {pos.direction} @ ${pos.entry_price:,.2f}")
+        else:
+            self.logger.info("No existing position")
+        
+        # Start the periodic trading loop
         self.running = True
+        check_count = 0
+        
+        # If resuming with existing position, wait for next timeframe before first check
+        if self.trading_strategy.current_position:
+            last_analysis_time = self.data_persistence.get_last_analysis_time()
+            if last_analysis_time:
+                await self._wait_until_next_timeframe_after(last_analysis_time)
+                self.logger.info("Resumed from last check, ready for next analysis")
+        
+        while self.running:
+            try:
+                check_count += 1
+                await self._execute_trading_check(check_count)
+                
+                # Wait for next timeframe
+                await self._wait_for_next_timeframe()
+                
+            except asyncio.CancelledError:
+                self.logger.info("Trading cancelled")
+                break
+            except Exception as e:
+                self.logger.error(f"Error in trading loop: {e}")
+                # Wait 60 seconds before retrying on error
+                await asyncio.sleep(60)
     
+    async def _execute_trading_check(self, check_count: int):
+        """Execute a single trading check iteration."""
+        current_time = datetime.now()
+        self.logger.info("=" * 60)
+        self.logger.info(f"Trading Check #{check_count} at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info("=" * 60)
+        
+        # Check if existing position hit stop/target
+        if self.trading_strategy.current_position:
+            try:
+                current_price = await self._fetch_current_price()
+                close_reason = await self.trading_strategy.check_position(current_price)
+                if close_reason:
+                    self.logger.info(f"Position closed: {close_reason}")
+            except Exception as e:
+                self.logger.error(f"Error checking position: {e}")
+        
+        # Run market analysis
+        self.logger.info("Running market analysis...")
+        
+        # Fetch current price for P&L calculation
         try:
-            await asyncio.gather(*self.tasks)
-        except asyncio.CancelledError:
-            self.logger.info("Discord bot received cancellation request...")
+            current_price = await self._fetch_current_price()
         except Exception as e:
-            self.logger.error(f"Error in bot: {e}")
-
-    async def refresh_crypto_news(self):
-        """Refresh crypto news data"""
-        self.logger.info("Manually refreshing crypto news...")
+            self.logger.warning(f"Could not fetch current price for P&L: {e}")
+            current_price = None
+        
+        # Build trading context with P&L data
+        position_context = self.trading_strategy.get_position_context(current_price)
+        memory_context = self.data_persistence.get_memory_context(current_price)
+        
+        result = await self.market_analyzer.analyze_market(
+            additional_context=f"\n\n{position_context}\n\n{memory_context}"
+        )
+        
+        if "error" in result:
+            self.logger.error(f"Analysis failed: {result['error']}")
+            return
+        
+        # Process the analysis for trading decision
+        decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
+        
+        if decision:
+            self._print_trading_decision(decision)
+        else:
+            self.logger.info("No trading action taken")
+        
+        # Save the response for context
+        raw_response = result.get("raw_response", "")
+        if raw_response:
+            self.data_persistence.save_previous_response(raw_response)
+    
+    async def _fetch_current_price(self) -> float:
+        """Fetch current price from exchange."""
         try:
-            await self.rag_engine.refresh_market_data()
-            self.logger.info("Crypto news refreshed successfully")
+            ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
+            return float(ticker.get('last', ticker.get('close', 0)))
         except Exception as e:
-            self.logger.error(f"Error refreshing crypto news: {e}")
-
-    async def refresh_market_overview(self):
-        """Refresh market overview data"""
-        self.logger.info("Manually refreshing market overview data...")
+            self.logger.error(f"Error fetching current price: {e}")
+            return 0.0
+    
+    async def _wait_for_next_timeframe(self):
+        """Wait until the next timeframe candle starts."""
         try:
-            market_overview = await self.rag_engine.market_data_manager.fetch_market_overview()
-            if market_overview:
-                self.rag_engine.current_market_overview = market_overview
-                self.logger.info("Market overview data refreshed successfully")
+            # Get current time from exchange if possible
+            try:
+                current_time_ms = await self.current_exchange.fetch_time()
+            except Exception:
+                current_time_ms = int(time.time() * 1000)
+            
+            # Calculate interval in milliseconds
+            interval_seconds = TimeframeValidator.to_minutes(self.current_timeframe) * 60
+            interval_ms = interval_seconds * 1000
+            
+            # Calculate next candle start
+            next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
+            delay_ms = next_candle_ms - current_time_ms + 5000  # Add 5 second buffer
+            delay_seconds = delay_ms / 1000
+            
+            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+            self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)")
+            
+            await asyncio.sleep(delay_seconds)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating next timeframe: {e}")
+            # Default to 5 minute wait on error
+            await asyncio.sleep(300)
+    
+    async def _wait_until_next_timeframe_after(self, last_time: datetime):
+        """Wait until the next timeframe candle after a specific timestamp.
+        
+        Args:
+            last_time: Timestamp of last analysis
+        """
+        try:
+            # Get current time
+            try:
+                current_time_ms = await self.current_exchange.fetch_time()
+            except Exception:
+                current_time_ms = int(time.time() * 1000)
+            
+            current_time = datetime.fromtimestamp(current_time_ms / 1000)
+            
+            # Calculate interval
+            interval_seconds = TimeframeValidator.to_minutes(self.current_timeframe) * 60
+            interval_ms = interval_seconds * 1000
+            
+            # Get last analysis time in ms
+            last_time_ms = int(last_time.timestamp() * 1000)
+            
+            # Calculate next candle after last analysis
+            next_candle_ms = ((last_time_ms // interval_ms) + 1) * interval_ms
+            
+            # If we're already past the next candle, calculate from current time
+            if current_time_ms >= next_candle_ms:
+                next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
+            
+            delay_ms = next_candle_ms - current_time_ms + 5000  # Add 5 second buffer
+            delay_seconds = max(0, delay_ms / 1000)
+            
+            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+            
+            if delay_seconds > 0:
+                self.logger.info(
+                    f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
+                )
+                await asyncio.sleep(delay_seconds)
             else:
-                self.logger.warning("Failed to fetch market overview data")
+                self.logger.info("Next timeframe already arrived, proceeding immediately")
+            
         except Exception as e:
-            self.logger.error(f"Error refreshing market overview: {e}")
-
-    async def reload_configuration(self):
-        """Reload config.ini and keys.env without restarting"""
-        self.logger.info("Reloading configuration files (config.ini and keys.env)...")
-        try:
-            config.reload()
-            self.logger.info("Configuration files reloaded successfully!")
-            self.logger.info("Note: Some components may require manual refresh to use new settings")
-        except Exception as e:
-            self.logger.error(f"Error reloading configuration: {e}")
-
-    async def show_help(self):
-        """Show help information about available commands"""
-        self.logger.info("\n=== Available Keyboard Commands ===")
-        self.keyboard_handler.display_help()
-        self.logger.info("=================================")
-
-    async def request_shutdown(self):
-        """Request application shutdown"""
-        self.logger.info("Shutdown requested via keyboard command")
-        self.running = False
-        # Cancel all tasks to trigger shutdown
-        for task in self.tasks:
-            if not task.done():
-                task.cancel()
+            self.logger.error(f"Error calculating wait time: {e}")
+            # Default to 1 minute wait on error
+            await asyncio.sleep(60)
+    
+    def _print_trading_decision(self, decision):
+        """Print a trading decision to console."""
+        print("\n" + "=" * 60)
+        print("TRADING DECISION")
+        print("=" * 60)
+        print(f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Symbol: {decision.symbol}")
+        print(f"Action: {decision.action}")
+        print(f"Confidence: {decision.confidence}")
+        print(f"Price: ${decision.price:,.2f}")
+        
+        if decision.stop_loss:
+            print(f"Stop Loss: ${decision.stop_loss:,.2f}")
+        if decision.take_profit:
+            print(f"Take Profit: ${decision.take_profit:,.2f}")
+        if decision.position_size:
+            print(f"Position Size: {decision.position_size * 100:.1f}%")
+        
+        print(f"\nReasoning: {decision.reasoning}")
+        print("=" * 60 + "\n")
 
     async def shutdown(self):
         self.logger.info("Shutting down gracefully...")
         self.running = False
 
-        # Step 1: Cancel and wait for active tasks
+        # Cancel and wait for active tasks
         await self._shutdown_active_tasks()
         
-        # Step 2: Close keyboard handler
-        await self._shutdown_keyboard_handler()
-        
-        # Step 3: Close components in reverse initialization order
-        await self._shutdown_discord_notifier()
+        # Close components in reverse initialization order
         await self._shutdown_market_analyzer()
         await self._shutdown_rag_engine()
         await self._shutdown_api_clients()
@@ -237,35 +367,8 @@ class DiscordCryptoBot:
         except asyncio.TimeoutError:
             self.logger.warning("Some tasks didn't complete in time")
 
-    async def _shutdown_keyboard_handler(self):
-        """Close keyboard handler safely."""
-        if not self.keyboard_handler:
-            return
-            
-        try:
-            self.logger.info("Closing keyboard handler...")
-            await self.keyboard_handler.stop_listening()
-            self.keyboard_handler = None
-        except Exception as e:
-            self.logger.warning(f"Error closing keyboard handler: {e}")
-
-    async def _shutdown_discord_notifier(self):
-        """Close Discord notifier safely."""
-        if not self.discord_notifier:
-            return
-            
-        try:
-            self.logger.info("Closing Discord notifier...")
-            await asyncio.wait_for(self.discord_notifier.__aexit__(None, None, None), timeout=5.0)
-            self.discord_notifier = None
-        except asyncio.TimeoutError:
-            self.logger.warning("Discord notifier shutdown timed out")
-        except Exception as e:
-            self.logger.warning(f"Error closing Discord notifier: {e}")
-
     async def _shutdown_market_analyzer(self):
         """Close market analyzer and model manager safely."""
-        # Close model_manager first (part of market_analyzer dependencies)
         if hasattr(self, 'model_manager') and self.model_manager:
             try:
                 self.logger.info("Closing ModelManager...")
@@ -276,7 +379,6 @@ class DiscordCryptoBot:
             except Exception as e:
                 self.logger.warning(f"Error closing ModelManager: {e}")
         
-        # Then close market analyzer
         if not self.market_analyzer:
             return
             

@@ -93,18 +93,22 @@ class AnalysisResultProcessor:
                               technical_history: Optional[Dict[str, Any]] = None,
                               technical_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process mock analysis for testing purposes"""
-        # Try to import legacy mock data generator; if not present, fall back to a minimal mock implementation
-        try:
-            from src.html.mock import get_mock_analysis_data  # Import here to avoid circular imports
-        except Exception:
-            def get_mock_analysis_data(sym, price):
-                return {
-                    "analysis": {"summary": f"Mock analysis for {sym}", "confidence_score": 50},
-                    "markdown_content": f"## Mock analysis for {sym}\n\nNo html.mock module available.",
-                    "article_urls": {}
-                }
-
         self.logger.debug("Generating mock analysis instead of calling AI model")
+        
+        # Generate minimal mock data for trading (no dependency on non-existent src.html.mock)
+        def get_mock_analysis_data(sym, price):
+            return {
+                "analysis": {
+                    "summary": f"Mock trading analysis for {sym} at ${price}",
+                    "confidence_score": 50,
+                    "action": "HOLD",
+                    "entry_price": price,
+                    "stop_loss": price * 0.95,
+                    "take_profit": price * 1.10
+                },
+                "markdown_content": f"## Mock Trading Analysis for {sym}\\n\\nCurrent Price: ${price}\\n\\nRecommendation: HOLD",
+                "article_urls": {}
+            }
 
         # Get all mock data (JSON analysis, Markdown, article URLs)
         mock_data = get_mock_analysis_data(symbol, current_price)
@@ -186,10 +190,24 @@ class AnalysisResultProcessor:
         """Log analysis result information"""
         if "analysis" in parsed_response:
             analysis = parsed_response["analysis"]
-            bias = analysis.get("technical_bias", "UNKNOWN")
-            trend = analysis.get("observed_trend", "UNKNOWN")
-            confidence = analysis.get("confidence_score", 0)
-            self.logger.debug(f"Analysis complete: Technical bias {bias} with {trend} trend ({confidence}% confidence)")
+            
+            # Check if this is trading analysis (has signal field)
+            if "signal" in analysis:
+                signal = analysis.get("signal", "UNKNOWN")
+                confidence = analysis.get("confidence", 0)
+                trend_info = analysis.get("trend", {})
+                direction = trend_info.get("direction", "UNKNOWN") if isinstance(trend_info, dict) else "UNKNOWN"
+                strength = trend_info.get("strength", 0) if isinstance(trend_info, dict) else 0
+                self.logger.debug(
+                    f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
+                    f"Trend {direction} ({strength}% strength)"
+                )
+            else:
+                # Legacy analysis format
+                bias = analysis.get("technical_bias", "UNKNOWN")
+                trend = analysis.get("observed_trend", "UNKNOWN")
+                confidence = analysis.get("confidence_score", 0)
+                self.logger.debug(f"Analysis complete: Technical bias {bias} with {trend} trend ({confidence}% confidence)")
         else:
             self.logger.warning("Analysis complete but response format may be incomplete")
             
@@ -199,6 +217,10 @@ class AnalysisResultProcessor:
         """Format the final analysis response"""
         parsed_response["raw_response"] = cleaned_response
         parsed_response["language"] = language
+        
+        # Include current_price if available in context
+        if hasattr(self, 'context') and hasattr(self.context, 'current_price'):
+            parsed_response["current_price"] = self.context.current_price
         
         # Return formatted response - article_urls will be added by the caller
         return parsed_response

@@ -33,8 +33,7 @@ class AnalysisEngine:
         cryptocompare_api,
         format_utils,
         data_processor,
-        config: "ConfigProtocol",
-        discord_notifier=None
+        config: "ConfigProtocol"
     ) -> None:
         """
         Initialize AnalysisEngine with all required dependencies.
@@ -111,10 +110,6 @@ class AnalysisEngine:
             format_utils=format_utils,
             data_processor=data_processor
         )
-        # HTML and chart generation are optional (removed from repo).
-        # If you want to re-enable them later, inject implementations via attributes.
-        self.html_generator = None
-        self.chart_generator = None
         
         # Create specialized components for separated concerns
         self.data_collector = MarketDataCollector(
@@ -132,28 +127,14 @@ class AnalysisEngine:
             model_manager=self.model_manager, 
             logger=logger
         )
-        
-        self.publisher = AnalysisPublisher(
-            logger=logger,
-            html_generator=self.html_generator,
-            coingecko_api=coingecko_api,
-            config=config,
-            discord_notifier=discord_notifier
-        )
 
         # Store references to external services
         self.rag_engine = rag_engine
         self.coingecko_api = coingecko_api
         self.cryptocompare_api = cryptocompare_api
-        self.discord_notifier = discord_notifier
         
         # Use the token counter from model_manager
         self.token_counter = self.model_manager.token_counter
-
-    def set_discord_notifier(self, discord_notifier):
-        """Set the discord notifier after initialization to avoid circular dependencies"""
-        self.discord_notifier = discord_notifier
-        self.publisher.set_discord_notifier(discord_notifier)
 
     def initialize_for_symbol(self, symbol: str, exchange, language=None, timeframe=None) -> None:
         """
@@ -225,13 +206,19 @@ class AnalysisEngine:
         except Exception as e:
             self.logger.error(f"Error during MarketAnalyzer cleanup: {e}")
 
-    async def analyze_market(self, provider: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
+    async def analyze_market(
+        self, 
+        provider: Optional[str] = None, 
+        model: Optional[str] = None,
+        additional_context: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
         
         Args:
             provider: Optional AI provider override (admin only)
             model: Optional AI model override (admin only)
+            additional_context: Additional context to append to prompt (e.g., position info)
             
         Returns:
             Dictionary containing analysis results
@@ -248,7 +235,7 @@ class AnalysisEngine:
             await self._perform_technical_analysis()
             
             # Step 4: Generate AI analysis
-            analysis_result = await self._generate_ai_analysis(provider, model)
+            analysis_result = await self._generate_ai_analysis(provider, model, additional_context)
             
             # Store the result for later publication
             self.last_analysis_result = analysis_result
@@ -337,36 +324,19 @@ class AnalysisEngine:
         if any(technical_patterns.values()):
             self.context.technical_patterns = technical_patterns
 
-    async def _generate_ai_analysis(self, provider: Optional[str], model: Optional[str]) -> Dict[str, Any]:
+    async def _generate_ai_analysis(
+        self, 
+        provider: Optional[str], 
+        model: Optional[str],
+        additional_context: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         self.prompt_builder.language = self.language
-        has_chart_analysis = self.model_manager.supports_image_analysis(provider)
+        has_chart_analysis = False  # Chart analysis disabled for console-only version
         system_prompt = self.prompt_builder.build_system_prompt(self.symbol, has_chart_analysis)
         
-        # Generate chart image
-        chart_image = None
-        if has_chart_analysis:
-            if self.chart_generator and hasattr(self.chart_generator, 'create_chart_image'):
-                try:
-                    self.logger.info("Generating chart image for AI pattern analysis")
-                    chart_image = self.chart_generator.create_chart_image(
-                        ohlcv=self.context.ohlcv_candles,
-                        technical_history=self.context.technical_history,
-                        pair_symbol=self.symbol,
-                        timeframe=self.context.timeframe,
-                        save_to_disk=self.config.DEBUG_SAVE_CHARTS,
-                        timestamps=self.context.timestamps
-                    )
-                except Exception as e:
-                    self.logger.warning(f"Failed to generate chart image for AI analysis: {e}")
-                    chart_image = None
-                    has_chart_analysis = False
-            else:
-                self.logger.debug("Chart generation skipped: ChartGenerator not available")
-                has_chart_analysis = False
-        
-        # Build prompt
-        prompt = self.prompt_builder.build_prompt(self.context, has_chart_analysis)
+        # Build prompt (will include additional_context if provided)
+        prompt = self.prompt_builder.build_prompt(self.context, has_chart_analysis, additional_context)
         
         # Process analysis
         if self.config.TEST_ENVIRONMENT:
@@ -381,13 +351,13 @@ class AnalysisEngine:
             )
         else:
             analysis_result = await self._execute_ai_request(
-                system_prompt, prompt, chart_image, provider, model, has_chart_analysis
+                system_prompt, prompt, provider, model
             )
             
         # Add metadata to result
         analysis_result["article_urls"] = self.article_urls
         analysis_result["timeframe"] = self.context.timeframe
-        actual_provider, actual_model = self.model_manager.describe_provider_and_model(provider, model, chart=has_chart_analysis)
+        actual_provider, actual_model = self.model_manager.describe_provider_and_model(provider, model, chart=False)
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
         
@@ -397,38 +367,20 @@ class AnalysisEngine:
         self, 
         system_prompt: str, 
         prompt: str, 
-        chart_image: Any, 
         provider: Optional[str], 
-        model: Optional[str],
-        has_chart_analysis: bool
+        model: Optional[str]
     ) -> Dict[str, Any]:
-        """Execute the AI request with fallback logic"""
+        """Execute the AI request"""
         if provider and model:
             self.logger.info(f"Using admin-specified provider: {provider}, model: {model}")
         
-        # Try chart analysis if available
-        if chart_image is not None and has_chart_analysis:
-            prov_name, model_name = self.model_manager.describe_provider_and_model(provider, model, chart=True)
-            self.logger.info(f"Attempting chart image analysis via {prov_name.upper() if prov_name else 'UNKNOWN'} (model: {model_name})")
-            try:
-                return await self.result_processor.process_analysis(
-                    system_prompt, prompt, self.language, chart_image=chart_image, provider=provider, model=model
-                )
-            except ValueError as e:
-                self.logger.warning(f"Chart analysis failed: {e}. Retrying with text-only analysis...")
-                # Fallback to text-only
-                has_chart_analysis = False
-                system_prompt = self.prompt_builder.build_system_prompt(self.symbol, has_chart_analysis)
-                prompt = self.prompt_builder.build_prompt(self.context, has_chart_analysis)
-                
-                return await self.result_processor.process_analysis(
-                    system_prompt, prompt, self.language, chart_image=None, provider=provider, model=model
-                )
-        else:
-            # Text-only analysis
-            return await self.result_processor.process_analysis(
-                system_prompt, prompt, self.language, chart_image=None, provider=provider, model=model
-            )
+        # Give result processor access to context for current_price
+        self.result_processor.context = self.context
+        
+        # Text-only analysis
+        return await self.result_processor.process_analysis(
+            system_prompt, prompt, self.language, chart_image=None, provider=provider, model=model
+        )
 
     async def _calculate_technical_indicators(self) -> None:
         """Calculate technical indicators using the technical calculator"""
@@ -518,15 +470,3 @@ class AnalysisEngine:
         else:
             self.context.weekly_macro_indicators = None
 
-    async def publish_analysis(self) -> bool:
-        """Publish analysis results using the publisher component"""
-        if not self.last_analysis_result:
-            self.logger.warning("No analysis results available to publish")
-            return False
-            
-        return await self.publisher.publish_analysis(
-            symbol=self.symbol,
-            timeframe=self.context.timeframe,
-            analysis_result=self.last_analysis_result,
-            context=self.context
-        )

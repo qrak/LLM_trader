@@ -1,6 +1,6 @@
 """
 Template management for prompt building system.
-Handles system prompts, response templates, and analysis steps.
+Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
 from typing import Optional, Any
@@ -9,7 +9,7 @@ from src.logger.logger import Logger
 
 
 class TemplateManager:
-    """Manages prompt templates, system prompts, and analysis steps."""
+    """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
     
     def __init__(self, config: Any, logger: Optional[Logger] = None):
         """Initialize the template manager.
@@ -22,55 +22,46 @@ class TemplateManager:
         self.config = config
     
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False) -> str:
-        """Build the system prompt for the AI model.
+        """Build the system prompt for trading decision AI.
         
         Args:
             symbol: Trading symbol (e.g., "BTC/USDT")
             timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
-            language: Optional language for response (defaults to English)
+            language: Optional language (unused - always English for trading)
             has_chart_image: Whether a chart image is being provided for visual analysis
             
         Returns:
             str: Formatted system prompt
         """
-        language = language or self.config.DEFAULT_LANGUAGE
-
         header_lines = [
-            f"You are providing educational crypto market analysis of {symbol} on {timeframe} timeframe along with multi-timeframe technical metrics and recent market data.",
-            "Focus on objective technical indicator readings and historical pattern recognition (e.g., identify potential chart patterns like triangles, head and shoulders, flags based on OHLCV data) for educational purposes only.",
-            "Present clear, data-driven observations with specific numeric values from the provided metrics. Prioritize recent price action and technical indicators over older news unless the news is highly significant.",
-            "After presenting quantitative data in each section, provide brief interpretive commentary explaining what the numbers mean for traders. Balance technical precision with accessible explanations.",
-            "Identify key price levels based solely on technical analysis concepts (Support, Resistance, Pivot Points, Fibonacci levels if applicable).",
+            f"You are an automated trading system analyzing {symbol} on {timeframe} timeframe.",
+            "Your task is to analyze all provided technical indicators, market data, patterns, and news to make a trading decision.",
+            "",
+            "ANALYSIS APPROACH:",
+            "- Thoroughly analyze ALL provided data: technical indicators, price action, volume, sentiment, news",
+            "- Identify trend direction and strength from multiple indicators (ADX, MACD, RSI, SMAs)",
+            "- Detect chart patterns, divergences, and key price levels",
+            "- Consider market context (Fear & Greed, BTC correlation, broader market)",
+            "- Evaluate risk/reward based on support/resistance levels",
+            "",
+            "OUTPUT REQUIREMENT:",
+            "- After your analysis, output a JSON trading decision",
+            "- Be decisive: BUY, SELL, HOLD, or CLOSE",
+            "- Provide specific price levels for stop_loss and take_profit",
         ]
 
         if has_chart_image:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
             header_lines.extend([
                 "",
-                f"A chart image containing approximately {cfg_limit} candlesticks is provided for visual review. Integrate chart observations with numerical indicators as described in the analysis steps, stay conservative when qualifying patterns, and explicitly state when no clear classic patterns are visible instead of forcing a conclusion.",
+                f"A chart image (~{cfg_limit} candlesticks) is provided. Integrate visual pattern analysis with numerical indicators.",
+                "Stay conservative - only report patterns that are clear and well-formed.",
             ])
 
-        header_lines.extend([
-            "",
-            "THIS IS EDUCATIONAL CONTENT ONLY. All analysis is for informational and educational purposes - NOT financial advice.",
-            "Always include disclaimers that this is not investment advice and users must do their own research.",
-        ])
-
-        header_base = "\n".join(header_lines)
-
-        if language == self.config.DEFAULT_LANGUAGE or language == "English":
-            header = header_base
-        else:
-            header = (
-                f"{header_base}\n"
-                f"Write your entire response in {language} language. Only the JSON structure should remain in English, but all text content must be in {language}.\n"
-                f"Use appropriate {language} terminology for technical analysis concepts."
-            )
-
-        return header
+        return "\n".join(header_lines)
     
     def build_response_template(self, has_chart_analysis: bool = False) -> str:
-        """Build the response template for structured output.
+        """Build the response template for trading decision output.
         
         Args:
             has_chart_analysis: Whether chart image analysis is available
@@ -79,96 +70,54 @@ class TemplateManager:
             str: Formatted response template
         """
         response_template = '''RESPONSE FORMAT:
-        Please structure your response in JSON format as follows:
-        ```json
-        {
-            "analysis": {
-                "summary": "Concise overview of the current market situation",
-                "observed_trend": "BULLISH|BEARISH|NEUTRAL", // Justify this based on indicators/patterns
-                "trend_strength": 0-100, // Based on ADX or similar
-                "timeframes": {
-                    "short_term": "BULLISH|BEARISH|NEUTRAL",
-                    "medium_term": "BULLISH|BEARISH|NEUTRAL",
-                    "long_term": "BULLISH|BEARISH|NEUTRAL"
-                },
-                "key_levels": {
-                    "support": [level1, level2],
-                    "resistance": [level1, level2]
-                },
-                "price_scenarios": {
-                    "bullish_scenario": number, // Potential target/resistance if trend turns bullish
-                    "bearish_scenario": number // Potential target/support if trend continues bearish
-                },
-                "confidence_score": 0-100, // Overall confidence in the analysis
-                "technical_bias": "BULLISH|BEARISH|NEUTRAL", // Justify this based on indicator confluence
-                "risk_ratio": number, // Estimated risk/reward based on scenarios/levels
-                "market_structure": "BULLISH|BEARISH|NEUTRAL", // Based on price action patterns (higher highs/lows etc.)
-                "news_summary": "Brief summary of relevant recent news and their potential market impact"
-            }
-        }
-        ```        
-        After the JSON block, include a detailed human-readable analysis. 
-        **IMPORTANT: Format this detailed analysis using Markdown syntax.** Use headings (`##`), bold (`**text**`), italics (`*text*`), bullet points (`-` or `*`), numbered lists for enhanced readability. 
-        **Quantify observations where possible (e.g., "Price is X% below the 50-period MA", "RSI dropped Y points").**
-        
-        **IMPORTANT: Begin your analysis with a clear disclaimer that this is educational content only and not financial advice.**
-        
-        **IMPORTANT: Include a note that technical indicators are calculated including the current incomplete candle for real-time analysis.**
-        
-        **INTERPRETIVE GUIDANCE: After presenting raw numerical data in each section, provide a brief 4-8 sentence interpretation explaining what these numbers mean for traders. Use phrases like "What this means:", "Interpretation:", or "Key takeaway:" to clearly separate data from analysis.**
-        
-        Organize the Markdown analysis into these sections:
-        
-        - Disclaimer (emphasize this is for educational purposes only, not financial advice)
-        - Technical Analysis Overview (objective description of what the indicators show, quantified) - INCLUDE NOTE: "All technical indicators in this analysis are calculated including the current incomplete {timeframe} candle for real-time market assessment. Values will update as the candle progresses."
-          * After the quantified metrics, add: "**What this means:** [brief interpretation of the overall technical picture]"
-        - Multi-Timeframe Assessment (describe short, medium, long-term patterns with quantified changes)
-          * After each timeframe subsection, add: "**Interpretation:** [what this timeframe suggests for traders]"
-        - Technical Indicators Summary (describe indicators in organized paragraphs grouped by category)
-          * After each indicator category (Momentum, Trend, Volatility, Volume), add: "**Key takeaway:** [what these indicators collectively suggest]"
-        - Key Technical Levels (describe support and resistance levels in text format with specific prices and distances)
-          * After presenting levels, add: "**Trading implication:** [how these levels should inform decision-making]"
-        - Market Context (describe asset performance vs broader market)
-          * After the data, add: "**What this tells us:** [interpretation of relative performance and market positioning]"
-        - News Summary (summarize relevant recent news and their potential impact on the asset)
-          * After each major news item, briefly explain: "**Impact assessment:** [potential effect on price action]"'''
-        
-        # Add chart analysis sections only if chart images are available
-        if has_chart_analysis:
-            response_template += '''
-        - Chart Pattern Analysis & Visual Integration:
-          * **Identified Patterns**: List each pattern found with:
-            - Pattern name and type (e.g., "Bearish Head and Shoulders Top")
-            - Location (price range and approximate candle indices)
-            - Bias (bullish/bearish) and confidence level (high/medium/low)
-            - Key structural levels (neckline, shoulders, peaks, breakout points)
-            - Current status (forming, completed, breached)
-          * **Visual Observations**: Describe what you see in the chart image
-          * **Pattern-Indicator Alignment**: How visual patterns confirm or contradict technical indicators
-          * After pattern analysis, add: "**Visual interpretation:** [what the chart patterns suggest for near-term price action]"'''
-        
-        response_template += '''
-        - Potential Catalysts (Summarize factors like news, events, strong technical signals that could drive future price movement)
-          * Add: "**Catalyst assessment:** [which catalysts are most likely to materialize and their potential impact]"
-        - Educational Context (explain technical concepts related to the current market conditions)
-        - Historical Patterns (similar technical setups in the past and what they typically indicate)
-          * Add: "**Historical context takeaway:** [what past patterns suggest about current probabilities]"
-        - Risk Considerations (discuss technical factors that may invalidate the analysis)
-          * Add: "**Risk summary:** [key levels and scenarios that would invalidate the current thesis]"
-        
-      
-        **FINAL SECTION - Add this at the very end after all educational content:**
-        
-        - **Final Thoughts & Synthesis**:
-          * Provide a concise 3-5 paragraph synthesis that:
-            - Summarizes the current market state in plain language
-            - Highlights the 2-3 most critical factors driving the analysis
-            - Explains the highest-probability scenarios (bullish/bearish/neutral) with percentage likelihood estimates if appropriate
-            - Identifies the key levels or events that would confirm or invalidate each scenario
-            - Offers perspective on the risk/reward profile at current levels
-            - Concludes with what traders should be watching most closely in the coming days/weeks
-          * This should read as a cohesive "bottom line" summary that synthesizes all the technical, fundamental, and sentiment analysis into actionable insights while maintaining the educational disclaimer framework
-        '''
+
+First, provide your analysis reasoning (2-4 paragraphs covering key findings from technical indicators, patterns, and market context).
+
+Then output your trading decision in this exact JSON format:
+```json
+{
+    "analysis": {
+        "signal": "BUY|SELL|HOLD|CLOSE",
+        "confidence": 0-100,
+        "entry_price": number,
+        "stop_loss": number,
+        "take_profit": number,
+        "position_size": 0.0-1.0,
+        "reasoning": "1-2 sentence summary of why this decision",
+        "key_levels": {
+            "support": [level1, level2],
+            "resistance": [level1, level2]
+        },
+        "trend": {
+            "direction": "BULLISH|BEARISH|NEUTRAL",
+            "strength": 0-100,
+            "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"
+        },
+        "risk_reward_ratio": number
+    }
+}
+```
+
+SIGNAL DEFINITIONS:
+- BUY: Open LONG position (expect price to rise)
+- SELL: Open SHORT position (expect price to fall)  
+- HOLD: No action - wait for clearer setup or let existing position run
+- CLOSE: Close existing position (hit target, stop, or reversal signal)
+
+DECISION CRITERIA:
+- High confidence (70+): Strong trend + indicator confluence + volume confirmation
+- Medium confidence (50-70): Good setup but some mixed signals
+- Low confidence (<50): Unclear - prefer HOLD
+
+STOP LOSS PLACEMENT:
+- For BUY: Below recent swing low or key support
+- For SELL: Above recent swing high or key resistance
+- Consider ATR for volatility-adjusted stops
+
+TAKE PROFIT PLACEMENT:
+- Target key resistance (for BUY) or support (for SELL)
+- Aim for minimum 1.5:1 risk/reward ratio
+- Consider Fibonacci extensions and previous highs/lows'''
         
         return response_template
     
@@ -195,70 +144,73 @@ class TemplateManager:
             timeframe_desc = "Analyze the provided Multi-Timeframe Price Summary periods (dynamically calculated based on your analysis timeframe)"
         
         analysis_steps = f"""
-        ANALYSIS STEPS:
-        Follow these steps to generate the analysis. In the final JSON response, briefly justify the 'observed_trend' and 'technical_bias' fields by referencing specific indicators or patterns from the provided data (e.g., "Bearish due to MACD crossover and price below Supertrend").
-        
-        IMPORTANT: For each analysis step below, first present the quantitative data/observations, then provide a brief interpretation of what those findings mean for traders. This interpretive commentary should explain the practical implications and trading context.
+ANALYSIS STEPS:
+Follow these steps to analyze the market. Use findings to determine your trading signal.
 
-        1. Multi-Timeframe Assessment:
-            - {timeframe_desc}
-            - Compare shorter periods vs multi-day periods vs long-term (30d+, 365d) price action
-            - Review weekly macro trend indicators if provided (200-week SMA, institutional positioning)
-            - Identify alignment or divergence across different timeframes
-        
-        2. Technical Indicator Analysis:
-            - Evaluate core momentum indicators (RSI, MACD, Stochastic)
-            - Observe trend strength using ADX, DI readings
-            - Check volatility levels with ATR and Bollinger Bands
-            - Analyze volume indicators (MFI, OBV, Force Index) for context
-            - Consider SMA relationships (e.g., 50 vs 200) for trend context
-            - Assess advanced indicators (TSI, Vortex, PFE, RMI, Ultimate Oscillator)
-           
-        3. Key Pattern Recognition:
-            - Identify chart patterns (wedges, triangles, H&S, double tops/bottoms)
-            - Detect divergences between price and momentum indicators
-            - Look for candlestick reversal patterns
-            - Note potential harmonic patterns and Fibonacci relationships
-            - Identify overbought/oversold conditions across indicators
-            - Prioritize recent patterns over older ones; older patterns may be less relevant given the dynamic timeframe analysis (e.g., 1D).
-        
-        4. Support/Resistance Validation:
-            - Map key price levels from all timeframes
-            - Identify historical price reaction zones
-            - Determine areas with multiple technical confluences
-            - Compare current price with historical significant levels
-            - Basic Support/Resistance Indicator: Rolling min/max of high/low over specified period
-            - Volume profile analysis: Note price levels with high historical volume
-        
-        5. Market Context Integration:
-            - Reference the provided Market Overview data in your analysis
-            - Compare the asset's performance with the broader market (market cap %, dominance trends)"""
+1. MULTI-TIMEFRAME ASSESSMENT:
+   - {timeframe_desc}
+   - Compare shorter periods vs multi-day periods vs long-term (30d+, 365d) price action
+   - Review weekly macro trend indicators if provided (200-week SMA, institutional positioning)
+   - Identify alignment or divergence across different timeframes
+   - KEY QUESTION: Are timeframes aligned (strong signal) or divergent (caution)?
+
+2. TECHNICAL INDICATOR ANALYSIS:
+   - Evaluate core momentum: RSI (<30 oversold, >70 overbought), MACD (signal crosses, histogram)
+   - Assess trend strength: ADX (>25 = trending), DI+/DI- (direction)
+   - Check volatility: ATR (range expansion/contraction), Bollinger Bands (squeeze/breakout)
+   - Analyze volume: MFI (money flow), OBV (accumulation/distribution), Force Index
+   - SMA relationships: Price vs 20/50/200 SMA, golden/death crosses
+   - Advanced indicators: TSI, Vortex, PFE, RMI, Ultimate Oscillator, Supertrend
+   - KEY QUESTION: Do indicators show confluence (strong) or divergence (weak)?
+
+3. PATTERN RECOGNITION:
+   - Identify chart patterns: wedges, triangles, H&S, double tops/bottoms
+   - Detect divergences: Price vs RSI, Price vs MACD (bullish/bearish divergence)
+   - Look for candlestick patterns: engulfing, doji, hammer, shooting star
+   - Note Fibonacci levels and harmonic patterns if visible
+   - Identify overbought/oversold extremes across indicators
+   - Prioritize RECENT patterns over older ones
+   - KEY QUESTION: What patterns suggest about next likely move?
+
+4. SUPPORT/RESISTANCE & KEY LEVELS:
+   - Map key price levels from all timeframes
+   - Identify historical price reaction zones (multiple touches)
+   - Determine areas with technical confluences (S/R + Fib + SMA)
+   - Note volume profile levels (high volume nodes)
+   - Calculate risk/reward from current price to key levels
+   - KEY QUESTION: Where are the best stop loss and take profit levels?
+
+5. MARKET CONTEXT:
+   - Reference Market Overview data (global market cap, dominance)"""
         
         if "BTC" not in analyzed_base:
-            analysis_steps += "\n            - Compare the asset's performance relative to BTC"
+            analysis_steps += "\n   - Compare performance relative to BTC (correlation/divergence)"
         
         if "ETH" not in analyzed_base:
-            analysis_steps += "\n            - Compare the asset's performance relative to ETH if relevant"
+            analysis_steps += "\n   - Compare performance relative to ETH if relevant"
         
         analysis_steps += """
-            - Consider market sentiment metrics including Fear & Greed Index
-            - Analyze if the asset is aligned with or diverging from general market trends
-            - Note relevant market events and their historical impact
-            - Consider market structures observed in similar historical contexts
-        
-        6. News Analysis:
-            - Summarize relevant recent news articles about the asset
-            - Identify potential market-moving events or announcements
-            - Evaluate sentiment from news coverage
-            - Connect news events to recent price action when applicable
-            - Note institutional actions or corporate developments mentioned in news
-            - Identify any regulatory news that might impact the asset
-        
-        7. Statistical Analysis:
-            - Evaluate statistical indicators like Z-Score and Kurtosis
-            - Consider Hurst Exponent for trending vs mean-reverting behavior
-            - Note abnormal distribution patterns in price/volume
-            - Assess volatility cycles and potential expansion/contraction phases"""
+   - Consider Fear & Greed Index (extreme fear = potential buy, extreme greed = caution)
+   - Analyze if asset is aligned with or diverging from general market
+   - Note relevant market events and their historical impact
+   - KEY QUESTION: Does market context support or contradict your technical view?
+
+6. NEWS & SENTIMENT ANALYSIS:
+   - Summarize relevant recent news about the asset
+   - Identify potential market-moving events or announcements
+   - Evaluate overall sentiment from news coverage
+   - Connect news events to recent price action
+   - Note institutional actions or corporate developments
+   - Identify regulatory news that might impact the asset
+   - KEY QUESTION: Any news that could override technical signals?
+
+7. STATISTICAL ANALYSIS:
+   - Evaluate Z-Score (deviation from mean - extreme values may revert)
+   - Consider Kurtosis (fat tails = higher risk of extreme moves)
+   - Hurst Exponent (>0.5 = trending, <0.5 = mean-reverting)
+   - Note abnormal distribution patterns in price/volume
+   - Assess volatility cycles (expansion/contraction phases)
+   - KEY QUESTION: What do statistics say about probability of continuation vs reversal?"""
         
         # Add chart analysis steps only if chart images are available
         step_number = 8
@@ -266,68 +218,60 @@ class TemplateManager:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
 
             analysis_steps += f"""
-        {step_number}. Chart Pattern Analysis & Visual Integration:
-           CHART CONTEXT:
-           - Review the provided chart image (~{cfg_limit} candlesticks) optimized with high contrast and thin wicks for pattern clarity.
-           VISUAL PATTERN DETECTION (Priority):
-           - Systematically scan the chart image for classic patterns:
-             * Head and Shoulders (and inverse variants)
-             * Double Tops/Bottoms (compare peak/trough heights and spacing)
-             * Wedges (rising/falling with converging trend lines)
-             * Triangles (ascending/descending/symmetrical consolidations)
-             * Flags and Pennants (continuation patterns after strong moves)
-             * Support and resistance breakouts/breakdowns
-           PATTERN QUALITY & HONESTY:
-           - Only report patterns that are clear, well-formed, and span adequate range (target at least 3-5% move and 20-30+ candles for H&S/double tops).
-           - Reject noisy or ambiguous formations; if none qualify, explicitly state "No clear classic patterns detected."
-           - Stay conservative when uncertain rather than forcing a conclusion.
-           PATTERN STRUCTURE & REPORTING:
-           - For each accepted pattern, capture:
-             * Pattern name/type, directional bias (bullish/bearish), and status (forming, completed, breached)
-             * Exact price range and approximate candle indices
-             * Confidence level (high/medium/low) with justification
-             * Key structural components (neckline, shoulders, peaks, troughs) and breakout/breakdown levels
-             * Brief rationale for validity (structure quality, symmetry, price range, volume alignment)
-           CANDLESTICK FORMATIONS:
-           - Identify meaningful single/multi-candle patterns (doji, hammer, shooting star, engulfing) and note how they support or contradict broader setups.
-           - Observe momentum shifts through candle size and color changes.
-           SUPPORT & RESISTANCE VISUALIZATION:
-           - Mark horizontal levels where price repeatedly bounced/rejected.
-           - Identify trend lines connecting swing highs or swing lows and highlight channels where applicable.
-           VISUAL-NUMERICAL INTEGRATION:
-           - Validate each pattern against numerical indicators: ADX (>25) for trend strength, volume spikes on breakouts, momentum alignment (RSI, MACD), and divergences.
-           - Prioritize numerical data if it contradicts what the chart suggests and document any mismatches.
-           VISUAL SYNTHESIS:
-           - Fuse visual observations with calculated metrics, explaining how chart evidence reinforces or challenges the technical narrative.
-        """
+
+{step_number}. CHART PATTERN ANALYSIS & VISUAL INTEGRATION:
+   CHART CONTEXT:
+   - Review the provided chart image (~{cfg_limit} candlesticks)
+   
+   VISUAL PATTERN DETECTION:
+   - Scan for classic patterns: Head and Shoulders, Double Tops/Bottoms, Wedges, Triangles, Flags/Pennants
+   - Only report patterns that are clear and well-formed (3-5% minimum price range)
+   - If no clear patterns visible, state "No clear classic patterns detected"
+   
+   PATTERN VALIDATION:
+   - For each pattern found, note:
+     * Pattern name and directional bias
+     * Price range and approximate location
+     * Confidence level (high/medium/low)
+     * Key levels (neckline, breakout points)
+   
+   CANDLESTICK ANALYSIS:
+   - Identify meaningful candle patterns (doji, hammer, engulfing)
+   - Note momentum shifts through candle size/color changes
+   
+   VISUAL-NUMERICAL INTEGRATION:
+   - Validate visual patterns against numerical indicators
+   - If chart contradicts indicators, note the discrepancy
+   - Prioritize numerical data over ambiguous visual signals
+   
+   KEY QUESTION: Do visual patterns confirm or contradict indicator analysis?"""
             step_number += 1
         
         analysis_steps += f"""
-        
-        {step_number}. Educational Information:
-            - Explain possible scenarios based on technical analysis concepts
-            - Describe what traders typically watch for in similar situations
-            - Present educational information about risk management concepts
-            - Focus on explaining the "what" and "why" of technical patterns
-            - Offer context about typical behavior of similar assets in comparable market conditions
-        
-        TECHNICAL INDICATORS NOTE:
-            - Current incomplete candle is included in all technical indicator calculations
-            - This provides real-time market assessment as the candle progresses
-            - Indicator values will update as price action continues within the current timeframe"""
+
+{step_number}. TRADING DECISION SYNTHESIS:
+   Synthesize all analysis into your trading decision:
+   - What is the predominant trend direction and strength?
+   - Are multiple indicators confirming the same signal?
+   - What are the key support/resistance levels for stop loss and take profit?
+   - What is the risk/reward ratio?
+   - What confidence level does the analysis support?
+   - What could invalidate this trade setup?
+
+TECHNICAL INDICATORS NOTE:
+- Current incomplete candle IS INCLUDED in all technical indicator calculations
+- This provides real-time assessment as the candle progresses
+- Indicator values will update as price action continues"""
         
         if has_advanced_support_resistance:
             analysis_steps += """
-        
-        CUSTOM INDICATORS REFERENCE:
-        
-        Advanced Support/Resistance:
-            - Volume-weighted pivot points with strength thresholds
-            - Creates pivot points using (H+L+C)/3 formula
-            - Calculates S1 = (2*PP)-H and R1 = (2*PP)-L levels
-            - Tracks consecutive touches to measure level strength
-            - Filters for above-average volume at reaction points
-            - Returns ONLY strong support and resistance levels that meet all criteria 
-            - Uses price momentum and volume confirmations"""
+
+ADVANCED SUPPORT/RESISTANCE REFERENCE:
+- Volume-weighted pivot points with strength thresholds
+- Pivot = (High + Low + Close) / 3
+- S1 = (2 * Pivot) - High, R1 = (2 * Pivot) - Low
+- Tracks consecutive touches to measure level strength
+- Filters for above-average volume at reaction points
+- Returns ONLY strong S/R levels meeting all criteria"""
 
         return analysis_steps

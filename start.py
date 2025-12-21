@@ -1,23 +1,72 @@
+"""
+Crypto Trading Bot - Entry Point
+Automated trading with AI-powered decisions.
+"""
 import asyncio
 import sys
+import argparse
 
 from src.utils.loader import config
-from src.app import DiscordCryptoBot
+from src.app import CryptoTradingBot
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 
 
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Crypto Trading Bot - AI-powered automated trading",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python start.py                    # Trade default symbol from config
+  python start.py ETH/USDT           # Trade ETH/USDT
+  python start.py BTC/USDT -t 4h     # Trade BTC/USDT on 4h timeframe
+  python start.py SOL/USDT -t 1h     # Trade SOL/USDT on 1h timeframe
+        """
+    )
+    parser.add_argument(
+        "symbol",
+        nargs="?",
+        default=None,
+        help="Trading symbol (e.g., BTC/USDT). Default: from config"
+    )
+    parser.add_argument(
+        "-t", "--timeframe",
+        default=None,
+        help="Timeframe for trading (e.g., 1h, 4h, 1d). Default: from config"
+    )
+    return parser.parse_args()
+
+
 async def main_async():
     """Async entry point for the application"""
+    args = parse_args()
+    
     logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG)
-    bot = DiscordCryptoBot(logger)
+    bot = CryptoTradingBot(logger)
+    
     try:
         await bot.initialize()
-        await bot.start()
+        
+        symbol = args.symbol or config.CRYPTO_PAIR
+        timeframe = args.timeframe or config.TIMEFRAME
+        
+        logger.info(f"\n{'='*60}")
+        logger.info("CRYPTO TRADING BOT")
+        logger.info(f"Symbol: {symbol}")
+        logger.info(f"Timeframe: {timeframe}")
+        logger.info("Press Ctrl+C to stop")
+        logger.info(f"{'='*60}\n")
+        
+        await bot.run(symbol, timeframe)
+        
     except KeyboardInterrupt:
         logger.info("KeyboardInterrupt received")
     except Exception as e:
         logger.error(f"Unhandled exception in main: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         try:
             await asyncio.wait_for(bot.shutdown(), timeout=5.0)
@@ -50,8 +99,7 @@ def main() -> None:
             if isinstance(obj, asyncio.Task) and not obj.done():
                 obj.cancel()
         loop.close()
-        print("Event loop closed")
-        sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
