@@ -8,7 +8,7 @@ from src.parsing.unified_parser import UnifiedParser
 from src.utils.serialize import serialize_for_json, safe_tolist
 
 if TYPE_CHECKING:
-    from src.contracts.model_manager import ModelManagerProtocol
+    from src.contracts.manager_factory import ModelManagerProtocol
 
 
 class AnalysisResultProcessor:

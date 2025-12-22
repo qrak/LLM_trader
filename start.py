@@ -44,7 +44,7 @@ async def main_async():
     args = parse_args()
     
     logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG)
-    bot = CryptoTradingBot(logger)
+    bot = CryptoTradingBot(logger, config)
     
     try:
         await bot.initialize()

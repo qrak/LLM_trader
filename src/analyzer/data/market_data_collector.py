@@ -86,9 +86,9 @@ class MarketDataCollector:
             
             # Fetch news context via RAG engine
             market_context = await self.rag_engine.retrieve_context(
-                "current market news analysis trends", 
-                self.symbol, 
-                k=5
+                "current market news analysis trends",
+                self.symbol,
+                k=self.rag_engine.config.RAG_NEWS_LIMIT
             )
             result["market_context"] = market_context
             

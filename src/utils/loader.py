@@ -320,6 +320,11 @@ class Config:
     @property
     def RAG_COINGECKO_GLOBAL_API_URL(self):
         return self.get_config('rag', 'coingecko_global_api_url', 'https://api.coingecko.com/api/v3/global')
+
+    @property
+    def RAG_NEWS_LIMIT(self):
+        """Maximum number of news articles to include in context (configurable via [rag] news_limit)."""
+        return int(self.get_config('rag', 'news_limit', 3))
     
     # Language Configuration
     @property

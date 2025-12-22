@@ -11,7 +11,7 @@ from src.parsing.response_formatter import ResponseFormatter
 from src.platforms.ai_providers.openrouter import ResponseDict
 from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
 from src.utils.token_counter import TokenCounter
-from src.contracts.model_manager import ModelManagerProtocol
+from src.contracts.manager_factory import ModelManagerProtocol
 from src.factories import ProviderFactory
 
 

@@ -47,7 +47,7 @@ class TemplateManager:
             "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate",
             "",
             "YOUR TASK:",
-            "Analyze technical indicators, price action, volume, patterns, market sentiment, and news.",
+            "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
             "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
             "Include specific entry, stop loss, and take profit levels with your reasoning.",
         ]
@@ -57,8 +57,8 @@ class TemplateManager:
             header_lines.extend([
                 "",
                 f"CHART ANALYSIS:",
-                f"A chart image (~{cfg_limit} candlesticks) is provided for visual pattern recognition.",
-                "Integrate chart patterns with numerical indicators. Only report clear, well-formed patterns.",
+                f"A chart image (~{cfg_limit} candlesticks) is provided for OHLCV data and visual pattern recognition.",
+                "Integrate OHLCV chart, patterns with numerical indicators. Only report clear, well-formed patterns.",
             ])
         
         # Add current position context if available
@@ -213,8 +213,8 @@ ANALYSIS STEPS (use findings to determine trading signal):
 
             analysis_steps += f"""
 
-{step_number}. CHART ANALYSIS (~{cfg_limit} candlesticks):
-   Scan for patterns: H&S, Double Tops/Bottoms, Wedges, Triangles, Flags/Pennants (3-5% min range, state "None detected" if unclear) | Validate each: name, bias, range, confidence, key levels | Candlestick patterns (doji, hammer, engulfing) & momentum shifts | Cross-validate visual vs numerical indicators (prioritize numerical if ambiguous) | Confirm or contradict?"""
+{step_number}. CHART PATTERN ANALYSIS (~{cfg_limit} candles):
+   Visual patterns: H&S, double tops/bottoms, wedges, triangles, flags/pennants, S/R breakouts | Report only clear, well-formed patterns (3-5% range, 20-30+ candles for major patterns) | If ambiguous, state "No clear patterns detected" | Pattern details: type, bias, status, price range, confidence, structural components | Candlestick formations: doji, hammer, shooting star, engulfing | S/R levels: horizontal zones, trend lines, channels | Validate patterns against ADX (>25), volume spikes, RSI/MACD alignment | Integrate visual observations with numerical indicators"""
             step_number += 1
         
         analysis_steps += f"""

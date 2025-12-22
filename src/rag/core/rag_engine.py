@@ -185,12 +185,19 @@ class RagEngine:
             else:
                 self.logger.debug("No new articles to add or only duplicates found")
 
-    async def retrieve_context(self, query: str, symbol: str, k: int = 3, max_tokens: int = 8096) -> str:
-        """Retrieve relevant context for a query with token limiting
-        
+    async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: int = 8096) -> str:
+        """Retrieve relevant context for a query with token limiting.
+
+        If `k` is None, the configured RAG news limit (`[rag] news_limit`) will be used.
         Note: Market overview data is handled separately by PromptBuilder._build_market_overview_section()
         This method only returns news articles and market context to avoid redundancy.
         """
+        if k is None:
+            try:
+                k = int(self.config.RAG_NEWS_LIMIT)
+            except Exception:
+                k = 3
+
         if self.news_manager.get_database_size() == 0:
             self.logger.warning("News database is empty")
             return ""

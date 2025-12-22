@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional, TYPE_CHECKING
+import io
 
 from src.utils.timeframe_validator import TimeframeValidator
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -10,13 +11,14 @@ from ..calculations.pattern_analyzer import PatternAnalyzer
 from ..data.market_data_collector import MarketDataCollector
 from ..calculations.market_metrics_calculator import MarketMetricsCalculator
 from ..prompts.prompt_builder import PromptBuilder
+from ..pattern_engine.chart_generator import ChartGenerator
 from src.logger.logger import Logger
 from src.rag import RagEngine
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from src.contracts.model_manager import ModelManagerProtocol
+    from src.contracts.manager_factory import ModelManagerProtocol
     from src.contracts.config import ConfigProtocol
 
 
@@ -126,6 +128,13 @@ class AnalysisEngine:
         self.result_processor = AnalysisResultProcessor(
             model_manager=self.model_manager, 
             logger=logger
+        )
+        
+        # Initialize chart generator for AI visual analysis
+        self.chart_generator = ChartGenerator(
+            logger=logger,
+            config=config,
+            format_utils=format_utils
         )
 
         # Store references to external services
@@ -341,7 +350,17 @@ class AnalysisEngine:
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         self.prompt_builder.language = self.language
-        has_chart_analysis = False  # Chart analysis disabled for console-only version
+        
+        # Check if chart analysis is supported by the current provider
+        has_chart_analysis = self.model_manager.supports_image_analysis(provider)
+        chart_image: Optional[io.BytesIO] = None
+        
+        if has_chart_analysis:
+            chart_image = await self._generate_chart_image()
+            if chart_image is None:
+                has_chart_analysis = False
+                self.logger.warning("Chart generation failed, proceeding without chart analysis")
+        
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol, 
             has_chart_analysis, 
@@ -367,15 +386,16 @@ class AnalysisEngine:
             )
         else:
             analysis_result = await self._execute_ai_request(
-                system_prompt, prompt, provider, model
+                system_prompt, prompt, provider, model, chart_image
             )
             
         # Add metadata to result
         analysis_result["article_urls"] = self.article_urls
         analysis_result["timeframe"] = self.context.timeframe
-        actual_provider, actual_model = self.model_manager.describe_provider_and_model(provider, model, chart=False)
+        actual_provider, actual_model = self.model_manager.describe_provider_and_model(provider, model, chart=has_chart_analysis)
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
+        analysis_result["chart_analysis"] = has_chart_analysis
         
         return analysis_result
 
@@ -384,19 +404,75 @@ class AnalysisEngine:
         system_prompt: str, 
         prompt: str, 
         provider: Optional[str], 
-        model: Optional[str]
+        model: Optional[str],
+        chart_image: Optional[io.BytesIO] = None
     ) -> Dict[str, Any]:
-        """Execute the AI request"""
+        """Execute the AI request with optional chart image for visual analysis.
+        
+        Args:
+            system_prompt: System instructions for the AI
+            prompt: User prompt with market data
+            provider: Optional provider override
+            model: Optional model override
+            chart_image: Optional chart image for visual analysis
+            
+        Returns:
+            Analysis result dictionary
+        """
         if provider and model:
             self.logger.info(f"Using admin-specified provider: {provider}, model: {model}")
         
         # Give result processor access to context for current_price
         self.result_processor.context = self.context
         
-        # Text-only analysis
+        # Pass chart image to result processor (it will use chart analysis if image provided)
         return await self.result_processor.process_analysis(
-            system_prompt, prompt, self.language, chart_image=None, provider=provider, model=model
+            system_prompt, prompt, self.language, chart_image=chart_image, provider=provider, model=model
         )
+    
+    async def _generate_chart_image(self) -> Optional[io.BytesIO]:
+        """Generate chart image for AI visual analysis.
+        
+        Returns:
+            BytesIO containing PNG chart image, or None if generation fails
+        """
+        try:
+            # Get OHLCV data from context
+            if self.context.ohlcv_candles is None or len(self.context.ohlcv_candles) == 0:
+                self.logger.warning("No OHLCV data available for chart generation")
+                return None
+            
+            # Get timestamps if available
+            timestamps = getattr(self.context, 'timestamps', None)
+            
+            # Get technical history for RSI overlay (optional)
+            technical_history = getattr(self.context, 'technical_history', None)
+            
+            # Generate chart image using chart generator
+            # The chart_generator will automatically limit candles based on AI_CHART_CANDLE_LIMIT
+            chart_image = self.chart_generator.create_chart_image(
+                ohlcv=self.context.ohlcv_candles,
+                technical_history=technical_history,
+                pair_symbol=self.symbol,
+                timeframe=self.context.timeframe,
+                save_to_disk=self.config.DEBUG_SAVE_CHARTS,
+                timestamps=timestamps
+            )
+            
+            # If save_to_disk was True, chart_image will be a file path string
+            # Otherwise it's a BytesIO object
+            if isinstance(chart_image, str):
+                # Chart was saved to disk, read it back into BytesIO
+                with open(chart_image, 'rb') as f:
+                    img_buffer = io.BytesIO(f.read())
+                    img_buffer.seek(0)
+                    return img_buffer
+            else:
+                return chart_image
+                
+        except Exception as e:
+            self.logger.error(f"Failed to generate chart image: {e}")
+            return None
 
     async def _calculate_technical_indicators(self) -> None:
         """Calculate technical indicators using the technical calculator"""

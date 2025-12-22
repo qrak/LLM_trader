@@ -2,7 +2,6 @@ import asyncio
 import time
 from datetime import datetime
 from typing import Optional
-import time
 
 from src.logger.logger import Logger
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -12,24 +11,25 @@ from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.core.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter
-from src.utils.loader import config
 from src.utils.format_utils import FormatUtils
 from src.utils.timeframe_validator import TimeframeValidator
 from src.analyzer.data.data_processor import DataProcessor
-from src.models.manager import ModelManager
+from src.contracts.manager import ModelManager
 from src.trading import DataPersistence, TradingStrategy
+from src.discord_interface import DiscordNotifier
 
 
 class CryptoTradingBot:
     """Automated crypto trading bot - TRADING MODE ONLY."""
     
-    def __init__(self, logger: Logger):
+    def __init__(self, logger: Logger, config):
+        self.logger = logger
+        self.config = config
         self.market_analyzer = None
         self.coingecko_api = None
         self.cryptocompare_api = None
         self.alternative_me_api = None
         self.rag_engine = None
-        self.logger = logger
         self.symbol_manager = None
         self.token_counter = None
         self.format_utils = None
@@ -45,6 +45,10 @@ class CryptoTradingBot:
         self.current_exchange = None
         self.current_symbol: Optional[str] = None
         self.current_timeframe: Optional[str] = None
+        
+        # Discord notifier
+        self.discord_notifier: Optional[DiscordNotifier] = None
+        self._discord_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         self.logger.info("Initializing Crypto Trading Bot...")
@@ -58,7 +62,7 @@ class CryptoTradingBot:
         self.format_utils = FormatUtils(self.data_processor)
         self.logger.debug("DataProcessor and FormatUtils initialized")
 
-        self.symbol_manager = ExchangeManager(self.logger, config)
+        self.symbol_manager = ExchangeManager(self.logger, self.config)
         await self.symbol_manager.initialize()
         self.logger.debug("SymbolManager initialized")
 
@@ -67,7 +71,7 @@ class CryptoTradingBot:
         await self.coingecko_api.initialize()
         self.logger.debug("CoinGeckoAPI initialized")
         
-        self.cryptocompare_api = CryptoCompareAPI(logger=self.logger, config=config)
+        self.cryptocompare_api = CryptoCompareAPI(logger=self.logger, config=self.config)
         await self.cryptocompare_api.initialize()
         self.logger.debug("CryptoCompareAPI initialized")
         
@@ -79,7 +83,7 @@ class CryptoTradingBot:
         self.rag_engine = RagEngine(
             self.logger, 
             self.token_counter,
-            config,
+            self.config,
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
             format_utils=self.format_utils
@@ -91,7 +95,7 @@ class CryptoTradingBot:
         self.logger.debug("Passed SymbolManager to RagEngine")
 
         # Initialize ModelManager before AnalysisEngine
-        self.model_manager = ModelManager(self.logger, config)
+        self.model_manager = ModelManager(self.logger, self.config)
         self.logger.debug("ModelManager initialized")
 
         self.market_analyzer = AnalysisEngine(
@@ -103,14 +107,27 @@ class CryptoTradingBot:
             cryptocompare_api=self.cryptocompare_api,
             format_utils=self.format_utils,
             data_processor=self.data_processor,
-            config=config
+            config=self.config
         )
         self.logger.debug("AnalysisEngine initialized")
 
         # Initialize trading components
         self.data_persistence = DataPersistence(self.logger, data_dir="data/trading", max_memory=10)
-        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, config)
+        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, self.config)
         self.logger.debug("Trading components initialized")
+
+        # Initialize Discord notifier if configured
+        if hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
+            try:
+                self.discord_notifier = DiscordNotifier(self.logger, self.config)
+                self._discord_task = asyncio.create_task(self.discord_notifier.start())
+                await self.discord_notifier.wait_until_ready()
+                self.logger.info("Discord notifier initialized and ready")
+            except Exception as e:
+                self.logger.warning(f"Discord initialization failed: {e}. Continuing without Discord.")
+                self.discord_notifier = None
+        else:
+            self.logger.info("Discord not configured, notifications disabled")
 
         await self.rag_engine.start_periodic_updates()
         
@@ -124,7 +141,7 @@ class CryptoTradingBot:
             timeframe: Optional timeframe override
         """
         self.current_symbol = symbol
-        self.current_timeframe = timeframe or config.TIMEFRAME
+        self.current_timeframe = timeframe or self.config.TIMEFRAME
         
         # Find exchange that supports the symbol
         exchange, exchange_id = await self.symbol_manager.find_symbol_exchange(symbol)
@@ -155,12 +172,12 @@ class CryptoTradingBot:
         self.running = True
         check_count = 0
         
-        # If resuming with existing position, wait for next timeframe before first check
-        if self.trading_strategy.current_position:
-            last_analysis_time = self.data_persistence.get_last_analysis_time()
-            if last_analysis_time:
-                await self._wait_until_next_timeframe_after(last_analysis_time)
-                self.logger.info("Resumed from last check, ready for next analysis")
+        # Check if resuming from previous session (regardless of position status)
+        last_analysis_time = self.data_persistence.get_last_analysis_time()
+        if last_analysis_time:
+            self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            await self._wait_until_next_timeframe_after(last_analysis_time)
+            self.logger.info("Ready for next analysis after wait")
         
         while self.running:
             try:
@@ -197,6 +214,14 @@ class CryptoTradingBot:
                 close_reason = await self.trading_strategy.check_position(current_price)
                 if close_reason:
                     self.logger.info(f"Position closed: {close_reason}")
+                    # Send performance stats to Discord
+                    if self.discord_notifier:
+                        history = self.data_persistence.load_trade_history()
+                        await self.discord_notifier.send_performance_stats(
+                            trade_history=history,
+                            symbol=self.current_symbol,
+                            channel_id=self.config.MAIN_CHANNEL_ID
+                        )
             except Exception as e:
                 self.logger.error(f"Error checking position: {e}")
         
@@ -234,6 +259,15 @@ class CryptoTradingBot:
             self._print_trading_decision(decision)
         else:
             self.logger.info("No trading action taken")
+        
+        # Send Discord notification
+        if self.discord_notifier:
+            await self.discord_notifier.send_analysis_notification(
+                result=result,
+                symbol=self.current_symbol,
+                timeframe=self.current_timeframe,
+                channel_id=self.config.MAIN_CHANNEL_ID
+            )
         
         # Save the response for context
         raw_response = result.get("raw_response", "")
@@ -306,7 +340,7 @@ class CryptoTradingBot:
             if current_time_ms >= next_candle_ms:
                 next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
             
-            delay_ms = next_candle_ms - current_time_ms + 5000  # Add 5 second buffer
+            delay_ms = next_candle_ms - current_time_ms + 1000  # Add 1 second buffer
             delay_seconds = max(0, delay_ms / 1000)
             
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
@@ -369,6 +403,9 @@ class CryptoTradingBot:
 
         # Cancel and wait for active tasks
         await self._shutdown_active_tasks()
+        
+        # Close Discord notifier
+        await self._shutdown_discord_notifier()
         
         # Close components in reverse initialization order
         await self._shutdown_market_analyzer()
@@ -470,9 +507,28 @@ class CryptoTradingBot:
             self.logger.warning("SymbolManager shutdown timed out")
         except Exception as e:
             self.logger.warning(f"Error closing SymbolManager: {e}")
+    
+    async def _shutdown_discord_notifier(self):
+        """Close Discord notifier safely."""
+        if self._discord_task and not self._discord_task.done():
+            self._discord_task.cancel()
+            try:
+                await asyncio.wait_for(self._discord_task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+        
+        if self.discord_notifier:
+            try:
+                self.logger.info("Closing Discord notifier...")
+                async with self.discord_notifier:
+                    pass  # __aexit__ handles cleanup
+                self.discord_notifier = None
+            except Exception as e:
+                self.logger.warning(f"Error closing Discord notifier: {e}")
 
     def _cleanup_references(self):
         """Set all component references to None to help garbage collection."""
         self.alternative_me_api = None
         self.cryptocompare_api = None
         self.coingecko_api = None
+        self.discord_notifier = None
