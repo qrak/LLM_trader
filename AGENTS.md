@@ -42,9 +42,35 @@ This repository uses a **layered instruction system** for AI agents:
 | `Position` | `dataclasses.py` | Immutable position data (entry, SL, TP, direction) |
 | `TradeDecision` | `dataclasses.py` | Trading decision with timestamp, action, reasoning |
 | `TradingMemory` | `dataclasses.py` | Rolling memory of last N decisions |
-| `DataPersistence` | `data_persistence.py` | Save/load positions, trade history, memory |
+| `TradingBrain` | `dataclasses.py` | Bounded memory system for distilled trading insights |
+| `TradingInsight` | `dataclasses.py` | Single distilled trading lesson from closed trades |
+| `ConfidenceStats` | `dataclasses.py` | Win/loss statistics per confidence level (HIGH/MEDIUM/LOW) |
+| `DataPersistence` | `data_persistence.py` | Save/load positions, trade history, memory, brain |
 | `PositionExtractor` | `position_extractor.py` | Extract BUY/SELL/HOLD from AI response |
 | `TradingStrategy` | `trading_strategy.py` | Position management, SL/TP checks, decision execution |
+
+### Trading Brain System
+
+The Trading Brain is a bounded, self-updating knowledge structure that stores **distilled trading insights** (not raw history) to help the AI avoid repeated mistakes and reinforce successful patterns.
+
+**Key Features:**
+- Fixed-size insight storage (max 10 insights) with FIFO eviction and category balancing
+- Confidence calibration tracking (win rate per HIGH/MEDIUM/LOW confidence)
+- Rule-based insight extraction from closed trades (no AI calls needed)
+- Categories: STOP_LOSS, ENTRY_TIMING, RISK_MANAGEMENT, MARKET_REGIME
+
+**Brain Context in Prompts:**
+The brain context is injected into the system prompt (after performance_context, before previous_response) containing:
+1. Confidence calibration stats (win rate per confidence level)
+2. Distilled insights organized by category
+3. Recommendations based on performance patterns
+
+**Data Flow for Brain Updates:**
+1. Position closes (SL/TP hit or signal close)
+2. `TradingStrategy.close_position()` extracts market conditions
+3. `DataPersistence.update_brain_from_closed_trade()` applies rule-based extraction
+4. New insights added to brain with FIFO eviction
+5. Brain saved to `trading_brain.json`
 
 ### Prompt Engine (`src/analyzer/prompts/`)
 
@@ -67,11 +93,14 @@ CryptoTradingBot.run()
 │                 PERIODIC LOOP                        │
 │                                                      │
 │  1. Check existing position (SL/TP hit?)            │
-│  2. Run AnalysisEngine.analyze_market()             │
-│  3. PositionExtractor.extract_trading_info()        │
-│  4. TradingStrategy.process_analysis()              │
-│  5. DataPersistence.save_trade_decision()           │
-│  6. Wait for next timeframe candle                  │
+│     └─ If closed: Update trading brain              │
+│  2. Get brain_context from DataPersistence          │
+│  3. Run AnalysisEngine.analyze_market()             │
+│     └─ brain_context injected into system prompt    │
+│  4. PositionExtractor.extract_trading_info()        │
+│  5. TradingStrategy.process_analysis()              │
+│  6. DataPersistence.save_trade_decision()           │
+│  7. Wait for next timeframe candle                  │
 │                                                      │
 └─────────────────────────────────────────────────────┘
 ```
@@ -84,6 +113,7 @@ CryptoTradingBot.run()
 | `trade_history.json` | Full history of all trading decisions |
 | `trading_memory.json` | Rolling memory of last N decisions for context |
 | `previous_response.json` | Last AI response for continuity |
+| `trading_brain.json` | Bounded memory of distilled trading insights |
 
 ---
 

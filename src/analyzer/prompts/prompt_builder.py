@@ -161,7 +161,7 @@ class PromptBuilder:
 
         return final_prompt
     
-    def build_system_prompt(self, symbol: str, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None) -> str:
         """Build system prompt using template manager.
         
         Args:
@@ -170,11 +170,12 @@ class PromptBuilder:
             previous_response: Optional previous AI response for continuity
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
+            brain_context: Distilled trading insights from closed trades
             
         Returns:
             str: Formatted system prompt
         """
-        return self.template_manager.build_system_prompt(symbol, self.timeframe, self.language, has_chart_image, previous_response, position_context, performance_context)
+        return self.template_manager.build_system_prompt(symbol, self.timeframe, self.language, has_chart_image, previous_response, position_context, performance_context, brain_context)
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.

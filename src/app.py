@@ -222,6 +222,14 @@ class CryptoTradingBot:
                             symbol=self.current_symbol,
                             channel_id=self.config.MAIN_CHANNEL_ID
                         )
+                else:
+                    # Position still open - send status update
+                    if self.discord_notifier:
+                        await self.discord_notifier.send_position_status(
+                            position=self.trading_strategy.current_position,
+                            current_price=current_price,
+                            channel_id=self.config.MAIN_CHANNEL_ID
+                        )
             except Exception as e:
                 self.logger.error(f"Error checking position: {e}")
         
@@ -238,6 +246,7 @@ class CryptoTradingBot:
         # Build trading context with P&L data (separate for system prompt)
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
+        brain_context = self.data_persistence.get_brain_context()
         
         # Load previous response for AI continuity
         previous_response = self.data_persistence.load_previous_response()
@@ -245,12 +254,16 @@ class CryptoTradingBot:
         result = await self.market_analyzer.analyze_market(
             previous_response=previous_response,
             position_context=position_context,
-            performance_context=memory_context
+            performance_context=memory_context,
+            brain_context=brain_context
         )
         
         if "error" in result:
             self.logger.error(f"Analysis failed: {result['error']}")
             return
+        
+        # Save the timestamp of successful analysis
+        self.data_persistence.save_last_analysis_time()
         
         # Process the analysis for trading decision
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
@@ -336,23 +349,39 @@ class CryptoTradingBot:
             # Calculate next candle after last analysis
             next_candle_ms = ((last_time_ms // interval_ms) + 1) * interval_ms
             
-            # If we're already past the next candle, calculate from current time
-            if current_time_ms >= next_candle_ms:
-                next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
+            # Check if we're still within the same candle as the last analysis
+            current_candle_ms = (current_time_ms // interval_ms) * interval_ms
+            last_candle_ms = (last_time_ms // interval_ms) * interval_ms
             
-            delay_ms = next_candle_ms - current_time_ms + 1000  # Add 1 second buffer
-            delay_seconds = max(0, delay_ms / 1000)
-            
-            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
-            
-            if delay_seconds > 0:
+            if current_candle_ms == last_candle_ms:
+                # Still in same candle - wait for next one
+                delay_ms = next_candle_ms - current_time_ms + 1000
+                delay_seconds = max(0, delay_ms / 1000)
+                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+                
+                self.logger.info(
+                    f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    f"Still in same candle - next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
+                )
+                await self._interruptible_sleep(delay_seconds)
+            elif current_time_ms >= next_candle_ms:
+                # Already past next candle - run immediately
+                self.logger.info(
+                    f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
+                    f"Next candle already passed - proceeding immediately"
+                )
+                return
+            else:
+                # In a different candle but not yet at next_candle_ms (edge case)
+                delay_ms = next_candle_ms - current_time_ms + 1000
+                delay_seconds = max(0, delay_ms / 1000)
+                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+                
                 self.logger.info(
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
                     f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
                 )
                 await self._interruptible_sleep(delay_seconds)
-            else:
-                self.logger.info("Next timeframe already arrived, proceeding immediately")
             
         except Exception as e:
             self.logger.error(f"Error calculating wait time: {e}")

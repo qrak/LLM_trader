@@ -194,21 +194,31 @@ class ContextBuilder:
         return "".join(context_parts), total_tokens
     
     def _format_single_article(self, article: Dict[str, Any]) -> Tuple[str, int]:
-        """Format a single article for context inclusion."""
+        """Format a single article for context inclusion (compressed format for token efficiency)."""
         published_date = self._format_article_date(article)
         title = article.get('title', 'No Title')
         source = article.get('source', 'Unknown Source')
 
-        article_text = f"## {title}\n"
-        article_text += f"**Source:** {source} | **Date:** {published_date}\n\n"
+        # Compressed format: headline (source, date) - key facts
+        article_text = f"## {title}\n**Source:** {source} | **Date:** {published_date}\n\n"
 
         body = article.get('body', '')
         if body:
-            paragraphs = body.split('\n\n')[:5]
-            summary = '\n\n'.join(paragraphs)
-            if len(summary) > 2500:
-                summary = summary[:2500] + "..."
-            article_text += f"{summary}\n\n"
+            # Extract first 2-3 COMPLETE sentences as key facts (no mid-sentence truncation)
+            sentences = body.replace('\n\n', ' ').replace('\n', ' ').strip()
+            # Split by sentence endings
+            import re
+            sentence_list = re.split(r'(?<=[.!?])\s+', sentences)
+            # Take first 2-3 complete sentences that fit under ~400 chars total
+            key_facts = ""
+            for i, sent in enumerate(sentence_list[:3]):
+                if len(key_facts) + len(sent) < 400:
+                    key_facts += sent + " "
+                else:
+                    break
+            key_facts = key_facts.strip()
+            if key_facts:
+                article_text += f"{key_facts}\n\n"
 
         categories = article.get('categories', '')
         tags = article.get('tags', '')

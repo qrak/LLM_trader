@@ -5,6 +5,7 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 import asyncio
 import re
 import json
+from datetime import datetime
 from typing import Optional, TYPE_CHECKING, List, Dict, Any
 
 import discord
@@ -212,6 +213,78 @@ class DiscordNotifier:
                         
         except Exception as e:
             self.logger.error(f"Error sending analysis notification: {e}")
+    
+    async def send_position_status(
+            self,
+            position: Any,  # Position dataclass
+            current_price: float,
+            channel_id: int
+    ) -> None:
+        """Send current open position status embed.
+        
+        Args:
+            position: Current Position object
+            current_price: Current market price
+            channel_id: Discord channel ID
+        """
+        try:
+            # Calculate unrealized P&L
+            pnl_pct = position.calculate_pnl(current_price)
+            pnl_usdt = (current_price - position.entry_price) * position.size if position.direction == 'LONG' else (position.entry_price - current_price) * position.size
+            
+            # Calculate distance to stop and target
+            if position.direction == 'LONG':
+                stop_distance_pct = ((position.stop_loss - current_price) / current_price) * 100
+                target_distance_pct = ((position.take_profit - current_price) / current_price) * 100
+            else:  # SHORT
+                stop_distance_pct = ((current_price - position.stop_loss) / current_price) * 100
+                target_distance_pct = ((current_price - position.take_profit) / current_price) * 100
+            
+            # Determine embed color based on P&L
+            if pnl_pct > 0:
+                color = discord.Color.green()
+                emoji = "📈"
+            elif pnl_pct < 0:
+                color = discord.Color.red()
+                emoji = "📉"
+            else:
+                color = discord.Color.light_grey()
+                emoji = "➡️"
+            
+            # Create position embed
+            embed = discord.Embed(
+                title=f"{emoji} Open {position.direction} Position - {position.symbol}",
+                description=f"Current position monitoring",
+                color=color
+            )
+            
+            # Position details
+            embed.add_field(name="Entry Price", value=f"${position.entry_price:,.2f}", inline=True)
+            embed.add_field(name="Current Price", value=f"${current_price:,.2f}", inline=True)
+            embed.add_field(name="Position Size", value=f"{position.size:.4f}", inline=True)
+            
+            # P&L
+            embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
+            embed.add_field(name="P&L (USDT)", value=f"${pnl_usdt:+,.2f}", inline=True)
+            embed.add_field(name="Confidence", value=position.confidence, inline=True)
+            
+            # Stop Loss and Take Profit
+            embed.add_field(name="Stop Loss", value=f"${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)", inline=True)
+            embed.add_field(name="Take Profit", value=f"${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)", inline=True)
+            
+            # Entry time
+            time_held = datetime.now() - position.entry_time
+            hours_held = time_held.total_seconds() / 3600
+            embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
+            
+            embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+                
+        except Exception as e:
+            self.logger.error(f"Error sending position status: {e}")
     
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_performance_stats(

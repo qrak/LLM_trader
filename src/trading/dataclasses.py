@@ -5,6 +5,207 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 
+# ==================== Trading Brain Dataclasses ====================
+
+@dataclass(slots=True)
+class TradingInsight:
+    """Single distilled trading lesson.
+    
+    Represents a learned insight from closed trades, categorized by type
+    and associated with specific market conditions.
+    """
+    lesson: str                      # Concise insight (max 400 chars)
+    category: str                    # STOP_LOSS, ENTRY_TIMING, RISK_MANAGEMENT, MARKET_REGIME
+    condition: str                   # Market condition when learned (e.g., "Downtrend + High Vol")
+    trade_count: int                 # Number of trades validating this insight
+    last_validated: datetime         # Last time this lesson proved relevant
+    confidence_impact: str           # HIGH, MEDIUM, LOW - which confidence level this affects
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "lesson": self.lesson,
+            "category": self.category,
+            "condition": self.condition,
+            "trade_count": self.trade_count,
+            "last_validated": self.last_validated.isoformat(),
+            "confidence_impact": self.confidence_impact,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'TradingInsight':
+        """Create TradingInsight from dictionary."""
+        return cls(
+            lesson=data["lesson"],
+            category=data["category"],
+            condition=data["condition"],
+            trade_count=data["trade_count"],
+            last_validated=datetime.fromisoformat(data["last_validated"]),
+            confidence_impact=data["confidence_impact"],
+        )
+
+
+@dataclass(slots=True)
+class ConfidenceStats:
+    """Performance statistics per confidence level.
+    
+    Tracks win/loss ratios and P&L to help calibrate entry standards
+    for different confidence levels.
+    """
+    level: str                       # HIGH, MEDIUM, LOW
+    total_trades: int = 0
+    winning_trades: int = 0
+    avg_pnl_pct: float = 0.0
+    win_rate: float = 0.0
+    
+    def update(self, is_win: bool, pnl_pct: float) -> None:
+        """Update stats with new trade result."""
+        self.total_trades += 1
+        if is_win:
+            self.winning_trades += 1
+        # Rolling average P&L
+        self.avg_pnl_pct = ((self.avg_pnl_pct * (self.total_trades - 1)) + pnl_pct) / self.total_trades
+        self.win_rate = (self.winning_trades / self.total_trades) * 100
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "level": self.level,
+            "total_trades": self.total_trades,
+            "winning_trades": self.winning_trades,
+            "avg_pnl_pct": self.avg_pnl_pct,
+            "win_rate": self.win_rate,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ConfidenceStats':
+        """Create ConfidenceStats from dictionary."""
+        stats = cls(level=data["level"])
+        stats.total_trades = data.get("total_trades", 0)
+        stats.winning_trades = data.get("winning_trades", 0)
+        stats.avg_pnl_pct = data.get("avg_pnl_pct", 0.0)
+        stats.win_rate = data.get("win_rate", 0.0)
+        return stats
+
+
+@dataclass(slots=True)
+class TradingBrain:
+    """Bounded memory system for distilled trading insights.
+    
+    Stores learned trading wisdom from closed trades in a fixed-size structure.
+    Uses FIFO eviction with category balancing to maintain diversity.
+    """
+    insights: List[TradingInsight] = field(default_factory=list)
+    confidence_stats: Dict[str, ConfidenceStats] = field(default_factory=lambda: {
+        'HIGH': ConfidenceStats('HIGH'),
+        'MEDIUM': ConfidenceStats('MEDIUM'),
+        'LOW': ConfidenceStats('LOW')
+    })
+    last_updated: datetime = field(default_factory=datetime.now)
+    total_closed_trades: int = 0
+    max_insights: int = 10           # Fixed size - FIFO eviction
+    
+    # Category limits for diversity (class-level constant)
+    MAX_PER_CATEGORY: Dict[str, int] = field(default_factory=lambda: {
+        'STOP_LOSS': 3,
+        'ENTRY_TIMING': 3,
+        'RISK_MANAGEMENT': 2,
+        'MARKET_REGIME': 2
+    })
+    
+    def add_insight(self, insight: TradingInsight) -> None:
+        """Add insight with FIFO eviction and category balancing."""
+        # Count insights per category
+        category_counts = {}
+        for ins in self.insights:
+            category_counts[ins.category] = category_counts.get(ins.category, 0) + 1
+        
+        # Check if category limit reached
+        category_limit = self.MAX_PER_CATEGORY.get(insight.category, 2)
+        if category_counts.get(insight.category, 0) >= category_limit:
+            # Evict oldest insight in this category
+            for i, ins in enumerate(self.insights):
+                if ins.category == insight.category:
+                    self.insights.pop(i)
+                    break
+        elif len(self.insights) >= self.max_insights:
+            # Evict oldest insight from most-represented category
+            max_category = max(category_counts, key=category_counts.get) if category_counts else None
+            if max_category:
+                for i, ins in enumerate(self.insights):
+                    if ins.category == max_category:
+                        self.insights.pop(i)
+                        break
+            else:
+                self.insights.pop(0)
+        
+        self.insights.append(insight)
+        self.last_updated = datetime.now()
+    
+    def update_confidence_stats(self, confidence: str, is_win: bool, pnl_pct: float) -> None:
+        """Update confidence level statistics with new trade result."""
+        # Normalize confidence level
+        level = confidence.upper() if confidence else "MEDIUM"
+        if level not in self.confidence_stats:
+            level = "MEDIUM"  # Default fallback
+        
+        self.confidence_stats[level].update(is_win, pnl_pct)
+        self.total_closed_trades += 1
+        self.last_updated = datetime.now()
+    
+    def get_insights_by_category(self, category: str) -> List[TradingInsight]:
+        """Get all insights for a specific category."""
+        return [ins for ins in self.insights if ins.category == category]
+    
+    def get_confidence_recommendation(self) -> Optional[str]:
+        """Generate recommendation based on confidence calibration.
+        
+        Returns insight if calibration suggests adjustments needed.
+        """
+        high_stats = self.confidence_stats.get('HIGH')
+        medium_stats = self.confidence_stats.get('MEDIUM')
+        
+        if high_stats and high_stats.total_trades >= 5:
+            if high_stats.win_rate < 60:
+                return f"HIGH confidence win rate is only {high_stats.win_rate:.0f}% - increase entry criteria"
+            if medium_stats and medium_stats.total_trades >= 5:
+                if medium_stats.win_rate > high_stats.win_rate:
+                    return "MEDIUM confidence outperforming HIGH - current HIGH standards may be too loose"
+        
+        return None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "insights": [ins.to_dict() for ins in self.insights],
+            "confidence_stats": {k: v.to_dict() for k, v in self.confidence_stats.items()},
+            "last_updated": self.last_updated.isoformat(),
+            "total_closed_trades": self.total_closed_trades,
+            "max_insights": self.max_insights,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'TradingBrain':
+        """Create TradingBrain from dictionary."""
+        brain = cls()
+        brain.insights = [TradingInsight.from_dict(ins) for ins in data.get("insights", [])]
+        brain.confidence_stats = {
+            k: ConfidenceStats.from_dict(v) 
+            for k, v in data.get("confidence_stats", {}).items()
+        }
+        # Ensure all confidence levels exist
+        for level in ['HIGH', 'MEDIUM', 'LOW']:
+            if level not in brain.confidence_stats:
+                brain.confidence_stats[level] = ConfidenceStats(level)
+        
+        brain.last_updated = datetime.fromisoformat(data["last_updated"]) if "last_updated" in data else datetime.now()
+        brain.total_closed_trades = data.get("total_closed_trades", 0)
+        brain.max_insights = data.get("max_insights", 10)
+        return brain
+
+
+# ==================== Position Dataclasses ====================
+
 @dataclass(frozen=True, slots=True)
 class Position:
     """Represents an active trading position."""

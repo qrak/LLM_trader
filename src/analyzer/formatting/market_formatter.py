@@ -20,7 +20,7 @@ class MarketFormatter:
         self.INDICATOR_THRESHOLDS = INDICATOR_THRESHOLDS
     
     def format_market_period_metrics(self, market_metrics: dict) -> str:
-        """Format market metrics for different periods."""
+        """Format market metrics for different periods (compressed format)."""
         if not market_metrics:
             return ""
         
@@ -34,22 +34,39 @@ class MarketFormatter:
             metrics = period_data.get('metrics', {})
             if not metrics:
                 continue
-                
-            period_sections = []
-            period_sections.extend(self._format_period_price_section(metrics))
-            period_sections.extend(self._format_period_volume_section(metrics))
             
-            # Add indicator changes if available
+            # Build compressed single-line format
+            parts = []
+            
+            # Price metrics (compressed)
+            avg_price = metrics.get('avg_price')
+            lowest_price = metrics.get('lowest_price')
+            highest_price = metrics.get('highest_price')
+            price_change_percent = metrics.get('price_change_percent')
+            
+            if avg_price:
+                parts.append(f"Avg${self.format_utils.fmt(avg_price)}")
+            if lowest_price and highest_price:
+                parts.append(f"Range${self.format_utils.fmt(lowest_price)}-{self.format_utils.fmt(highest_price)}")
+            if price_change_percent is not None:
+                direction = "↑" if price_change_percent >= 0 else "↓"
+                parts.append(f"Δ{direction}{self.format_utils.fmt(abs(price_change_percent))}%")
+            
+            # Volume metrics (compressed)
+            total_volume = metrics.get('total_volume')
+            if total_volume:
+                parts.append(f"Vol:{self.format_utils.fmt(total_volume)}")
+            
+            # Indicator changes (compressed)
             if 'indicator_changes' in period_data:
-                period_sections.extend(self._format_indicator_changes_section(
-                    period_data['indicator_changes'], period
-                ))
+                ind_parts = self._format_indicator_changes_compressed(period_data['indicator_changes'])
+                if ind_parts:
+                    parts.append(ind_parts)
             
-            if period_sections:
-                sections.append(f"\n{period.upper()} Analysis:")
-                sections.extend(period_sections)
+            if parts:
+                sections.append(f"\n{period.upper()}: {' | '.join(parts)}")
         
-        return "\n".join(sections)
+        return "".join(sections)
     
     def format_long_term_analysis(self, long_term_data: dict, current_price: float = None) -> str:
         """Format comprehensive long-term analysis from historical data."""
@@ -338,6 +355,39 @@ class MarketFormatter:
             self.logger.warning(f"Error formatting DeFi summary: {e}") if self.logger else None
             return ""
     
+    def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
+        """Format indicator changes in compressed format (e.g., 'RSI↓9.1 ADX↑5.1')."""
+        if not indicator_changes:
+            return ""
+        
+        parts = []
+        
+        # RSI changes
+        rsi_change = indicator_changes.get('rsi_change')
+        if rsi_change is not None and abs(rsi_change) > 0.1:  # Only show significant changes
+            direction = "↑" if rsi_change >= 0 else "↓"
+            parts.append(f"RSI{direction}{self.format_utils.fmt(abs(rsi_change))}")
+        
+        # MACD changes
+        macd_change = indicator_changes.get('macd_line_change')
+        if macd_change is not None and abs(macd_change) > 1:  # Only show significant changes
+            direction = "↑" if macd_change >= 0 else "↓"
+            parts.append(f"MACD{direction}{self.format_utils.fmt(abs(macd_change))}")
+        
+        # ADX changes
+        adx_change = indicator_changes.get('adx_change')
+        if adx_change is not None and abs(adx_change) > 0.5:  # Only show significant changes
+            direction = "↑" if adx_change >= 0 else "↓"
+            parts.append(f"ADX{direction}{self.format_utils.fmt(abs(adx_change))}")
+        
+        # Stochastic %K changes
+        stoch_change = indicator_changes.get('stoch_k_change')
+        if stoch_change is not None and abs(stoch_change) > 1:  # Only show significant changes
+            direction = "↑" if stoch_change >= 0 else "↓"
+            parts.append(f"Stoch{direction}{self.format_utils.fmt(abs(stoch_change))}")
+        
+        return " ".join(parts) if parts else ""
+    
     def _format_period_price_section(self, metrics: dict) -> List[str]:
         """Format price-related metrics for a period."""
         price_sections = []
@@ -614,7 +664,7 @@ class MarketFormatter:
         return "\n".join(lines)
     
     def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256, include_description: bool = False) -> str:
-        """Format coin details into a structured section for prompt building
+        """Format coin details into a compressed section (removed low-trading-value data)
         
         Args:
             coin_details: Dictionary containing coin details from CryptoCompare API
@@ -622,61 +672,22 @@ class MarketFormatter:
             include_description: Whether to include project description (default: False for trading bot)
             
         Returns:
-            str: Formatted coin details section
+            str: Compressed coin details section
         """
         if not coin_details:
             return ""
         
+        # Only include high-value trading data (removed: Algorithm, Proof Type, Regulatory Classifications, Weiss Ratings)
+        # These rarely change and don't impact immediate trading decisions
+        
         section = "CRYPTOCURRENCY DETAILS:\n"
         
-        # Basic information
+        # Basic information only
         if coin_details.get("full_name"):
-            section += f"- Full Name: {coin_details['full_name']}\n"
-        if coin_details.get("coin_name"):
-            section += f"- Project: {coin_details['coin_name']}\n"
-        
-        # Technical details
-        algorithm = coin_details.get("algorithm", "N/A")
-        proof_type = coin_details.get("proof_type", "N/A")
-        if algorithm != "N/A" or proof_type != "N/A":
-            section += f"- Algorithm: {algorithm}\n"
-            section += f"- Proof Type: {proof_type}\n"
-        
-        # Taxonomy classifications
-        taxonomy = coin_details.get("taxonomy", {})
-        if taxonomy:
-            section += "\nRegulatory Classifications:\n"
-            if taxonomy.get("Access"):
-                section += f"- Access Model: {taxonomy['Access']}\n"
-            if taxonomy.get("FCA"):
-                section += f"- UK FCA Classification: {taxonomy['FCA']}\n"
-            if taxonomy.get("FINMA"):
-                section += f"- Swiss FINMA Classification: {taxonomy['FINMA']}\n"
-            if taxonomy.get("Industry"):
-                section += f"- Industry Category: {taxonomy['Industry']}\n"
-            if taxonomy.get("CollateralizedAsset"):
-                collateral_text = "Yes" if taxonomy["CollateralizedAsset"] == "Yes" else "No"
-                section += f"- Collateralized Asset: {collateral_text}\n"
-        
-        # Weiss ratings
-        rating = coin_details.get("rating", {})
-        if rating:
-            weiss = rating.get("Weiss", {})
-            if weiss:
-                section += "\nWeiss Cryptocurrency Ratings:\n"
-
-                overall_rating = weiss.get("Rating")
-                if overall_rating:
-                    section += f"- Overall Rating: {overall_rating}\n"
-                
-                tech_rating = weiss.get("TechnologyAdoptionRating")
-                if tech_rating:
-                    section += f"- Technology/Adoption Grade: {tech_rating}\n"
-                
-                market_rating = weiss.get("MarketPerformanceRating")
-                if market_rating:
-                    section += f"- Market Performance Grade: {market_rating}\n"
-
+            section += f"- {coin_details['full_name']}"
+            if coin_details.get("coin_name"):
+                section += f" ({coin_details['coin_name']} Project)"
+            section += "\n"
         
         # Project description (optional - disabled by default for trading bot)
         if include_description:

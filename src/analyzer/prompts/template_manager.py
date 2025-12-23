@@ -21,7 +21,7 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
@@ -32,12 +32,13 @@ class TemplateManager:
             previous_response: Previous AI response for context continuity
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
+            brain_context: Distilled trading insights from closed trades
             
         Returns:
             str: Formatted system prompt
         """
         header_lines = [
-            f"You are a professional automated trading system for {symbol} on {timeframe} timeframe.",
+            f"You are a professional automated trading system for {symbol} on {timeframe} timeframe and you will be called again in {timeframe} to analyze market again.",
             "",
             "CORE PRINCIPLES:",
             "- All data is based on CLOSED CANDLES ONLY (no incomplete candle data)",
@@ -45,6 +46,7 @@ class TemplateManager:
             "- Risk management is paramount: every trade requires proper stop loss and take profit",
             "- Confidence must match signal strength: only high-confidence trades in strong setups",
             "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate",
+            "- ONE DECISION PER RESPONSE: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE). Never combine decisions like 'CLOSE then HOLD' - make only the immediate action.",
             "",
             "YOUR TASK:",
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
@@ -59,6 +61,7 @@ class TemplateManager:
                 f"CHART ANALYSIS:",
                 f"A chart image (~{cfg_limit} candlesticks) is provided for OHLCV data and visual pattern recognition.",
                 "Integrate OHLCV chart, patterns with numerical indicators. Only report clear, well-formed patterns.",
+                "Identify swing structure: Higher Highs (HH), Higher Lows (HL), Lower Highs (LH), Lower Lows (LL) to determine trend.",
             ])
         
         # Add current position context if available
@@ -86,6 +89,13 @@ class TemplateManager:
                 "- CLOSE proactively: Don't wait for SL if market structure breaks, trend reverses, or thesis invalidates",
                 "- ADAPT to performance: If win rate is low, increase entry standards and risk/reward requirements",
                 "="*60,
+            ])
+        
+        # Add brain context (distilled trading wisdom) if available
+        if brain_context:
+            header_lines.extend([
+                "",
+                brain_context.strip(),
             ])
         
         # Add previous response context if available
@@ -130,6 +140,8 @@ Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, mark
     }
 }
 ```
+
+CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL". Make only the immediate action decision.
 
 TRADING SIGNALS & CONFIDENCE:
 - BUY (70-100 confidence): Strong bullish trend (ADX >25, aligned SMAs) + 3+ indicator confluence + volume confirmation + clear SL below support, TP above resistance + minimum 2:1 R/R
@@ -214,7 +226,7 @@ ANALYSIS STEPS (use findings to determine trading signal):
             analysis_steps += f"""
 
 {step_number}. CHART PATTERN ANALYSIS (~{cfg_limit} candles):
-   Visual patterns: H&S, double tops/bottoms, wedges, triangles, flags/pennants, S/R breakouts | Report only clear, well-formed patterns (3-5% range, 20-30+ candles for major patterns) | If ambiguous, state "No clear patterns detected" | Pattern details: type, bias, status, price range, confidence, structural components | Candlestick formations: doji, hammer, shooting star, engulfing | S/R levels: horizontal zones, trend lines, channels | Validate patterns against ADX (>25), volume spikes, RSI/MACD alignment | Integrate visual observations with numerical indicators"""
+   Swing structure: Identify HH/HL (uptrend) vs LH/LL (downtrend) sequence from price peaks/troughs | Visual patterns: H&S, double tops/bottoms, wedges, triangles, flags/pennants, S/R breakouts | Report only clear, well-formed patterns (3-5% range, 20-30+ candles for major patterns) | If ambiguous, state "No clear patterns detected" | Candlestick formations: doji, hammer, shooting star, engulfing | S/R levels: horizontal zones, trend lines, channels | Validate patterns against ADX (>25), volume spikes, RSI/MACD alignment"""
             step_number += 1
         
         analysis_steps += f"""

@@ -1,7 +1,7 @@
 """Trading strategy that wraps analysis with position management."""
 
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 from src.logger.logger import Logger
 from .dataclasses import Position, TradeDecision
@@ -61,12 +61,18 @@ class TradingStrategy:
         
         return None
     
-    async def close_position(self, reason: str, current_price: float) -> None:
-        """Close the current position.
+    async def close_position(
+        self, 
+        reason: str, 
+        current_price: float,
+        market_conditions: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Close the current position and update trading brain.
         
         Args:
             reason: Reason for closing (stop_loss, take_profit, signal)
             current_price: Current market price
+            market_conditions: Optional market conditions for brain learning
         """
         if not self.current_position:
             return
@@ -89,6 +95,18 @@ class TradingStrategy:
             f"Closing {self.current_position.direction} position ({reason}) "
             f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%"
         )
+        
+        # Update trading brain with closed trade insights
+        try:
+            self.persistence.update_brain_from_closed_trade(
+                position=self.current_position,
+                close_price=current_price,
+                close_reason=reason,
+                entry_decision=None,  # Could be loaded from history if needed
+                market_conditions=market_conditions
+            )
+        except Exception as e:
+            self.logger.error(f"Error updating trading brain: {e}")
         
         self.persistence.save_trade_decision(decision)
         self.persistence.save_position(None)
@@ -127,11 +145,14 @@ class TradingStrategy:
                 self.logger.warning(f"Invalid signal: {signal}")
                 return None
             
+            # Extract market conditions for brain learning
+            market_conditions = self._extract_market_conditions(analysis_result)
+            
             # Handle existing position
             if self.current_position:
                 return await self._handle_existing_position(
                     signal, confidence, stop_loss, take_profit, 
-                    current_price, symbol, reasoning
+                    current_price, symbol, reasoning, market_conditions
                 )
             
             # Handle new position
@@ -161,6 +182,7 @@ class TradingStrategy:
         current_price: float,
         symbol: str,
         reasoning: str,
+        market_conditions: Optional[Dict[str, Any]] = None,
     ) -> Optional[TradeDecision]:
         """Handle trading decision when position exists.
         
@@ -172,13 +194,14 @@ class TradingStrategy:
             current_price: Current price
             symbol: Trading symbol
             reasoning: AI reasoning
+            market_conditions: Market state for brain learning
             
         Returns:
             TradeDecision if action taken
         """
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
             self.logger.info("Closing position based on analysis signal...")
-            await self.close_position("analysis_signal", current_price)
+            await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
                 timestamp=datetime.now(),
                 symbol=symbol,
@@ -367,6 +390,60 @@ class TradingStrategy:
         if self.logger:
             self.logger.warning(f"Could not extract price from result keys: {list(result.keys())}")
         return 0.0
+    
+    def _extract_market_conditions(self, result: dict) -> Dict[str, Any]:
+        """Extract market conditions from analysis result for brain learning.
+        
+        Args:
+            result: Analysis result dictionary
+            
+        Returns:
+            Dictionary with trend_direction, adx, volatility, etc.
+        """
+        conditions = {}
+        
+        try:
+            # Try to extract from parsed JSON analysis
+            parsed = result.get("parsed_json", {})
+            analysis = parsed.get("analysis", {})
+            
+            # Get trend info
+            trend = analysis.get("trend", {})
+            if trend:
+                conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
+                conditions["trend_strength"] = trend.get("strength", 50)
+            
+            # Try to get context data for more details
+            context = result.get("context")
+            if context and hasattr(context, "technical_data"):
+                tech_data = context.technical_data or {}
+                conditions["adx"] = tech_data.get("adx", 0)
+                conditions["rsi"] = tech_data.get("rsi", 50)
+                
+                # Determine volatility from ATR or other indicators
+                atr = tech_data.get("atr", 0)
+                atr_pct = tech_data.get("atr_percentage", 0)
+                if atr_pct > 3:
+                    conditions["volatility"] = "HIGH"
+                elif atr_pct < 1.5:
+                    conditions["volatility"] = "LOW"
+                else:
+                    conditions["volatility"] = "MEDIUM"
+            
+            # Fallback: try to extract from raw response keywords
+            raw_response = result.get("raw_response", "").lower()
+            if not conditions.get("trend_direction"):
+                if "bullish" in raw_response or "uptrend" in raw_response:
+                    conditions["trend_direction"] = "BULLISH"
+                elif "bearish" in raw_response or "downtrend" in raw_response:
+                    conditions["trend_direction"] = "BEARISH"
+                else:
+                    conditions["trend_direction"] = "NEUTRAL"
+                    
+        except Exception as e:
+            self.logger.warning(f"Could not extract market conditions: {e}")
+        
+        return conditions
     
     def get_position_context(self, current_price: Optional[float] = None) -> str:
         """Get formatted context about current position for prompts.

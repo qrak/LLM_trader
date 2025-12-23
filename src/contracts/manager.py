@@ -70,7 +70,7 @@ class ModelManager(ModelManagerProtocol):
                 'default_model': self.google_model,
                 'config': self.google_config,
                 'supports_chart': True,
-                'has_rate_limits': False  # Google handles internally
+                'has_rate_limits': True  # Google has rate limits (free tier: 20 req/day)
             },
             'openrouter': {
                 'name': 'OpenRouter',
@@ -415,16 +415,18 @@ class ModelManager(ModelManagerProtocol):
         else:
             response = await client.chat_completion(messages, config, model=effective_model)
         
-        # If free tier is overloaded and paid client is available, retry with paid API
-        if response and response.get("error") == "overloaded" and self.google_paid_client:
-            self.logger.warning("Google AI free tier overloaded, retrying with paid API key")
+        # If free tier is overloaded/rate-limited and paid client is available, retry with paid API
+        error_type = response.get("error") if response else None
+        if error_type in ("overloaded", "rate_limit") and self.google_paid_client:
+            error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
+            self.logger.warning(f"Google AI free tier {error_reason}, retrying with paid API key")
             if chart:
                 response = await self.google_paid_client.chat_completion_with_chart_analysis(messages, cast(Any, chart_image), config, model=effective_model)
             else:
                 response = await self.google_paid_client.chat_completion(messages, config, model=effective_model)
             
             if self._is_valid_response(response):
-                self.logger.info("Successfully used paid Google AI API after free tier overload")
+                self.logger.info(f"Successfully used paid Google AI API after free tier {error_reason}")
             else:
                 # Paid API also failed - log the specific error
                 paid_error = response.get("error", "unknown") if response else "no response"
@@ -561,6 +563,9 @@ class ModelManager(ModelManagerProtocol):
         
     def _prepare_messages(self, prompt: str, system_message: Optional[str] = None) -> List[Dict[str, str]]:
         """Prepare message structure and track tokens"""
+        # Reset token counter for this request to avoid accumulation
+        self.token_counter.reset_session_stats()
+        
         messages = []
     
         if system_message:

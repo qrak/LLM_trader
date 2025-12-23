@@ -83,8 +83,8 @@ class PatternAnalyzer:
         try:
             dummy_ohlcv = self._build_dummy_ohlcv(sample_count)
             dummy_history = self._build_dummy_history(sample_count, dummy_ohlcv[:, 4])
-            # Run both engines to trigger numba compilation
-            self.pattern_engine.detect_patterns(dummy_ohlcv, None)
+            # Run engines to trigger numba compilation
+            self.pattern_engine.get_swing_points(dummy_ohlcv)  # Warm up swing detection
             self.indicator_pattern_engine.detect_patterns(dummy_history, dummy_ohlcv, None, None)
             self._warmed_up = True
             if self.logger:

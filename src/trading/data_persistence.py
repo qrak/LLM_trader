@@ -1,12 +1,12 @@
 """Data persistence for trading decisions and positions."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
-from .dataclasses import Position, TradeDecision, TradingMemory
+from .dataclasses import Position, TradeDecision, TradingMemory, TradingBrain, TradingInsight, ConfidenceStats
 
 
 class DataPersistence:
@@ -27,10 +27,15 @@ class DataPersistence:
         self.positions_file = self.data_dir / "positions.json"
         self.history_file = self.data_dir / "trade_history.json"
         self.previous_response_file = self.data_dir / "previous_response.json"
+        self.brain_file = self.data_dir / "trading_brain.json"
+        self.last_analysis_file = self.data_dir / "last_analysis.json"
         
         self.max_memory = max_memory
         # Memory is kept in RAM only, built from recent history
         self.memory = self._build_memory_from_history()
+        
+        # Load trading brain (bounded memory system)
+        self.brain = self._load_brain()
     
     # ==================== Position Management ====================
     
@@ -173,15 +178,33 @@ class DataPersistence:
         """Get recent decisions from memory."""
         return self.memory.get_recent_decisions(n)
     
+    def save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
+        """Save the timestamp of the last successful analysis.
+        
+        Args:
+            timestamp: Timestamp to save (defaults to now)
+        """
+        try:
+            if timestamp is None:
+                timestamp = datetime.now()
+            
+            with open(self.last_analysis_file, 'w') as f:
+                json.dump({
+                    "timestamp": timestamp.isoformat()
+                }, f, indent=2)
+                
+        except Exception as e:
+            self.logger.error(f"Error saving last analysis time: {e}")
+    
     def get_last_analysis_time(self) -> Optional[datetime]:
-        """Get timestamp of last analysis (from most recent decision)."""
-        history = self.load_trade_history()
-        if not history:
+        """Get timestamp of last successful analysis."""
+        if not self.last_analysis_file.exists():
             return None
         
         try:
-            last_decision = history[-1]
-            return datetime.fromisoformat(last_decision["timestamp"])
+            with open(self.last_analysis_file, 'r') as f:
+                data = json.load(f)
+                return datetime.fromisoformat(data["timestamp"])
         except Exception as e:
             self.logger.warning(f"Could not get last analysis time: {e}")
             return None
@@ -287,3 +310,307 @@ class DataPersistence:
         
         self.logger.debug(f"Built memory with {len(memory.decisions)} decisions from history")
         return memory
+
+    # ==================== Trading Brain ====================
+    
+    def _load_brain(self) -> TradingBrain:
+        """Load trading brain from disk."""
+        if not self.brain_file.exists():
+            return TradingBrain()
+        
+        try:
+            with open(self.brain_file, 'r') as f:
+                data = json.load(f)
+                brain = TradingBrain.from_dict(data)
+                self.logger.debug(f"Loaded trading brain with {len(brain.insights)} insights, {brain.total_closed_trades} closed trades")
+                return brain
+        except Exception as e:
+            self.logger.error(f"Error loading trading brain: {e}")
+            return TradingBrain()
+    
+    def save_brain(self) -> None:
+        """Save trading brain to disk."""
+        try:
+            with open(self.brain_file, 'w') as f:
+                json.dump(self.brain.to_dict(), f, indent=2)
+            self.logger.debug(f"Saved trading brain with {len(self.brain.insights)} insights")
+        except Exception as e:
+            self.logger.error(f"Error saving trading brain: {e}")
+    
+    def get_brain_context(self) -> str:
+        """Generate formatted brain context for prompt injection.
+        
+        Returns:
+            Formatted string with confidence calibration and distilled insights.
+        """
+        if self.brain.total_closed_trades == 0:
+            return ""  # No context if no closed trades
+        
+        lines = [
+            "=",
+            f"LEARNED TRADING WISDOM (Distilled from {self.brain.total_closed_trades} closed trades):",
+            "=",
+            "",
+            "CONFIDENCE CALIBRATION:",
+        ]
+        
+        # Format confidence stats
+        for level in ['HIGH', 'MEDIUM', 'LOW']:
+            stats = self.brain.confidence_stats.get(level)
+            if stats and stats.total_trades > 0:
+                lines.append(
+                    f"- {level} Confidence: Win Rate {stats.win_rate:.0f}% "
+                    f"({stats.winning_trades}/{stats.total_trades} trades) | Avg P&L: {stats.avg_pnl_pct:+.2f}%"
+                )
+        
+        # Add confidence recommendation if available
+        recommendation = self.brain.get_confidence_recommendation()
+        if recommendation:
+            lines.append(f"  → INSIGHT: {recommendation}")
+        
+        # Add distilled insights by category
+        if self.brain.insights:
+            lines.extend(["", "DISTILLED INSIGHTS (Most Recent):"])
+            
+            # Group insights by category for better organization
+            categories_order = ['STOP_LOSS', 'ENTRY_TIMING', 'RISK_MANAGEMENT', 'MARKET_REGIME']
+            insight_count = 0
+            
+            for category in categories_order:
+                category_insights = self.brain.get_insights_by_category(category)
+                for insight in category_insights[-2:]:  # Max 2 per category in context
+                    insight_count += 1
+                    days_ago = (datetime.now() - insight.last_validated).days
+                    lines.append(
+                        f"{insight_count}. [{insight.category}] {insight.lesson} | "
+                        f"Validated: {insight.trade_count} trades | "
+                        f"Condition: {insight.condition}"
+                    )
+        
+        lines.extend([
+            "",
+            "APPLY THESE INSIGHTS: Avoid repeating documented mistakes. Adjust confidence based on calibration data.",
+            "=" * 60,
+        ])
+        
+        return "\n".join(lines)
+    
+    def update_brain_from_closed_trade(
+        self,
+        position: Position,
+        close_price: float,
+        close_reason: str,
+        entry_decision: Optional[TradeDecision] = None,
+        market_conditions: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Extract insights from a closed trade and update brain.
+        
+        Uses rule-based extraction to generate insights from trade outcomes.
+        
+        Args:
+            position: The closed position
+            close_price: Price at which position was closed
+            close_reason: Why position was closed (stop_loss, take_profit, analysis_signal)
+            entry_decision: Original entry decision (for reasoning context)
+            market_conditions: Market state at close (trend, volatility, etc.)
+        """
+        # Calculate P&L
+        pnl_pct = position.calculate_pnl(close_price)
+        is_win = pnl_pct > 0
+        
+        # Update confidence statistics
+        self.brain.update_confidence_stats(position.confidence, is_win, pnl_pct)
+        
+        # Build market condition string
+        conditions = market_conditions or {}
+        condition_str = self._build_condition_string(conditions)
+        
+        # Extract insights based on trade outcome
+        insights = self._extract_insights_from_trade(
+            position=position,
+            close_price=close_price,
+            close_reason=close_reason,
+            pnl_pct=pnl_pct,
+            is_win=is_win,
+            condition_str=condition_str,
+            entry_decision=entry_decision
+        )
+        
+        # Add new insights to brain
+        for insight in insights:
+            self.brain.add_insight(insight)
+        
+        # Save updated brain
+        self.save_brain()
+        
+        self.logger.info(
+            f"Updated brain: {len(insights)} insight(s) added from "
+            f"{position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"
+        )
+    
+    def _build_condition_string(self, conditions: Dict[str, Any]) -> str:
+        """Build human-readable market condition string.
+        
+        Args:
+            conditions: Dictionary with market indicators
+            
+        Returns:
+            Formatted condition string (e.g., "Downtrend + High Vol")
+        """
+        parts = []
+        
+        # Trend direction
+        trend = conditions.get('trend_direction', '').upper()
+        if trend in ('BULLISH', 'UP', 'UPTREND'):
+            parts.append("Uptrend")
+        elif trend in ('BEARISH', 'DOWN', 'DOWNTREND'):
+            parts.append("Downtrend")
+        else:
+            parts.append("Sideways")
+        
+        # Trend strength (ADX)
+        adx = conditions.get('adx', 0)
+        if adx > 30:
+            parts.append("Strong Trend")
+        elif adx < 20:
+            parts.append("Weak Trend")
+        
+        # Volatility
+        vol = conditions.get('volatility', '').upper()
+        if vol == 'HIGH' or conditions.get('atr_percentile', 0) > 70:
+            parts.append("High Vol")
+        elif vol == 'LOW' or conditions.get('atr_percentile', 0) < 30:
+            parts.append("Low Vol")
+        
+        return " + ".join(parts) if parts else "Unknown"
+    
+    def _extract_insights_from_trade(
+        self,
+        position: Position,
+        close_price: float,
+        close_reason: str,
+        pnl_pct: float,
+        is_win: bool,
+        condition_str: str,
+        entry_decision: Optional[TradeDecision]
+    ) -> List[TradingInsight]:
+        """Rule-based insight extraction from closed trade.
+        
+        Args:
+            position: Closed position
+            close_price: Exit price
+            close_reason: Why closed (stop_loss, take_profit, analysis_signal)
+            pnl_pct: P&L percentage
+            is_win: Whether trade was profitable
+            condition_str: Market conditions at entry
+            entry_decision: Original entry decision
+            
+        Returns:
+            List of extracted insights
+        """
+        insights = []
+        now = datetime.now()
+        
+        # Calculate risk metrics
+        if position.direction == 'LONG':
+            sl_distance_pct = ((position.entry_price - position.stop_loss) / position.entry_price) * 100
+            tp_distance_pct = ((position.take_profit - position.entry_price) / position.entry_price) * 100
+        else:  # SHORT
+            sl_distance_pct = ((position.stop_loss - position.entry_price) / position.entry_price) * 100
+            tp_distance_pct = ((position.entry_price - position.take_profit) / position.entry_price) * 100
+        
+        rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0
+        
+        # ========== STOP LOSS ANALYSIS ==========
+        if close_reason == 'stop_loss':
+            # SL was hit - analyze if it was appropriate
+            if sl_distance_pct < 1.5:
+                insights.append(TradingInsight(
+                    lesson=f"SL too tight ({sl_distance_pct:.1f}%) caused early exit. Consider 1.5-2% minimum in {condition_str}.",
+                    category="STOP_LOSS",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+            elif sl_distance_pct > 3.0:
+                insights.append(TradingInsight(
+                    lesson=f"Wide SL ({sl_distance_pct:.1f}%) led to large loss. Tighten to 2-3% or skip in {condition_str}.",
+                    category="STOP_LOSS",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+        
+        # ========== TAKE PROFIT ANALYSIS ==========
+        elif close_reason == 'take_profit':
+            # TP was hit - record successful setup
+            if rr_ratio >= 2:
+                insights.append(TradingInsight(
+                    lesson=f"Successful {rr_ratio:.1f}:1 R/R setup. Entry criteria and SL/TP placement optimal in {condition_str}.",
+                    category="RISK_MANAGEMENT",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+        
+        # ========== SIGNAL CLOSE ANALYSIS ==========
+        elif close_reason == 'analysis_signal':
+            if is_win:
+                insights.append(TradingInsight(
+                    lesson=f"Proactive exit at {pnl_pct:+.1f}% preserved gains. Good read of reversal signals in {condition_str}.",
+                    category="ENTRY_TIMING",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+            elif pnl_pct < -1.0:
+                insights.append(TradingInsight(
+                    lesson=f"Signal close at {pnl_pct:.1f}% loss. Consider earlier exit or waiting for better setup in {condition_str}.",
+                    category="ENTRY_TIMING",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+        
+        # ========== CONFIDENCE CALIBRATION INSIGHTS ==========
+        # Check if confidence was miscalibrated
+        confidence_stats = self.brain.confidence_stats.get(position.confidence)
+        if confidence_stats and confidence_stats.total_trades >= 5:
+            if position.confidence == 'HIGH' and confidence_stats.win_rate < 55:
+                insights.append(TradingInsight(
+                    lesson=f"HIGH confidence trades underperforming ({confidence_stats.win_rate:.0f}% win rate). Raise entry bar.",
+                    category="RISK_MANAGEMENT",
+                    condition="All Conditions",
+                    trade_count=confidence_stats.total_trades,
+                    last_validated=now,
+                    confidence_impact="HIGH"
+                ))
+        
+        # ========== MARKET REGIME INSIGHTS ==========
+        # Detect regime-specific patterns
+        if "Strong Trend" in condition_str:
+            if position.direction == 'SHORT' and close_reason == 'stop_loss' and "Uptrend" in condition_str:
+                insights.append(TradingInsight(
+                    lesson=f"Shorting strong uptrends fails. Wait for trend exhaustion or momentum divergence.",
+                    category="MARKET_REGIME",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+            elif position.direction == 'LONG' and close_reason == 'stop_loss' and "Downtrend" in condition_str:
+                insights.append(TradingInsight(
+                    lesson=f"Buying strong downtrends fails. Wait for reversal confirmation or key support.",
+                    category="MARKET_REGIME",
+                    condition=condition_str,
+                    trade_count=1,
+                    last_validated=now,
+                    confidence_impact=position.confidence
+                ))
+        
+        return insights
