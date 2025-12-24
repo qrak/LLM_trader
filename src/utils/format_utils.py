@@ -6,7 +6,7 @@ This module has NO dependencies on analyzer module to avoid circular imports.
 """
 import numpy as np
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 from src.analyzer.data.data_processor import DataProcessor
 
@@ -43,13 +43,12 @@ class FormatUtils:
                 return f"{val:.2f}"  # 2 decimal places for larger values
         return "N/A"
 
-    def fmt_ta(self, technical_calculator, td: dict, key: str, precision: int = 8, default: str = 'N/A') -> str:
+    def fmt_ta(self, td: dict, key: str, precision: int = 8, default: str = 'N/A') -> str:
         """Format technical-analysis indicator values.
         
         Centralizes the logic used across all formatter classes.
         
         Args:
-            technical_calculator: TechnicalCalculator instance (for compatibility, not used)
             td: Technical data dictionary
             key: Indicator key to retrieve
             precision: Number of decimal places
@@ -151,17 +150,6 @@ class FormatUtils:
         except (ValueError, TypeError, OSError):
             return None
 
-    def is_valid_value(self, value) -> bool:
-        """Check if a value is valid for formatting.
-        
-        Args:
-            value: Value to check
-            
-        Returns:
-            bool: True if value is valid number, False otherwise
-        """
-        return isinstance(value, (int, float)) and not np.isnan(value)
-
     def format_value(self, value, precision: int = 8) -> str:
         """Format a value with specified precision.
         
@@ -172,7 +160,7 @@ class FormatUtils:
         Returns:
             str: Formatted value or 'N/A' if invalid
         """
-        if self.is_valid_value(value):
+        if isinstance(value, (int, float)) and not np.isnan(value):
             return self.fmt(value, precision)
         return 'N/A'
 
@@ -185,7 +173,7 @@ class FormatUtils:
         else:
             return 'Neutral'
 
-    def format_bollinger_interpretation(self, technical_calculator, td: dict) -> str:
+    def format_bollinger_interpretation(self, td: dict) -> str:
         """Format Bollinger Bands interpretation."""
         try:
             bb_position = self.data_processor.get_indicator_value(td, 'bb_position')
@@ -200,7 +188,7 @@ class FormatUtils:
             pass
         return ""
 
-    def format_cmf_interpretation(self, technical_calculator, td: dict) -> str:
+    def format_cmf_interpretation(self, td: dict) -> str:
         """Format Chaikin Money Flow interpretation."""
         try:
             cmf_val = self.data_processor.get_indicator_value(td, 'cmf')
@@ -214,15 +202,3 @@ class FormatUtils:
         except Exception:
             pass
         return ""
-
-    def _get_timeframe_minutes(self, timeframe: str) -> int:
-        """Convert timeframe string to minutes."""
-        if timeframe.endswith('m'):
-            return int(timeframe[:-1])
-        elif timeframe.endswith('h'):
-            return int(timeframe[:-1]) * 60
-        elif timeframe.endswith('d'):
-            return int(timeframe[:-1]) * 24 * 60
-        else:
-            return 60  # Default to 1 hour
-

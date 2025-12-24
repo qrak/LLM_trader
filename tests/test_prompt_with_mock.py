@@ -88,6 +88,10 @@ async def test_prompt_flow_with_mock_provider():
     # Create ModelManager and inject MockClient as the OpenRouter-like provider
     manager = ModelManager(logger=logger, config=config)
     manager.openrouter_client = MockClient(logger=logger)
+    # CRITICAL: Must update PROVIDER_METADATA because it caches the client reference from __init__
+    if 'openrouter' in manager.PROVIDER_METADATA:
+        manager.PROVIDER_METADATA['openrouter']['client'] = manager.openrouter_client
+    
     manager.provider = 'openrouter'
 
     # Call the prompt flow (text-only)
@@ -107,6 +111,17 @@ async def test_prompt_flow_with_mock_provider():
     assert 'signal' in analysis
     assert 'confidence' in analysis
     assert 'entry_price' in analysis
+    
+    # Validate new confluence_factors structure
+    assert 'confluence_factors' in analysis, "confluence_factors missing from analysis"
+    cf = analysis['confluence_factors']
+    assert isinstance(cf, dict), "confluence_factors should be a dict"
+    required_factors = ['trend_alignment', 'momentum_strength', 'volume_support', 
+                       'pattern_quality', 'support_resistance_strength']
+    for factor in required_factors:
+        assert factor in cf, f"Missing confluence factor: {factor}"
+        assert isinstance(cf[factor], (int, float)), f"{factor} should be numeric"
+        assert 0 <= cf[factor] <= 100, f"{factor} should be in range 0-100"
 
     # Test chart analysis flow as well (image provided)
     # Create a small PNG image
@@ -117,6 +132,14 @@ async def test_prompt_flow_with_mock_provider():
 
     response_with_chart = await manager.send_prompt_with_chart_analysis(main_prompt, buf, provider='openrouter')
     assert response_with_chart is not None and 'analysis' in response_with_chart
+    # Verify that the mock now returns chart-specific reasoning
+    # This confirms that our fix to MockClient is working and satisfying the user request
+    if isinstance(response_with_chart, str) and '```json' in response_with_chart:
+        # It returned the raw string with JSON block
+        assert "Chart Pattern Analysis" in response_with_chart, "Mock response should mention chart analysis"
+    elif isinstance(response_with_chart, dict) and "raw_response" in response_with_chart:
+        # It returned the processed dict which contains raw_response
+        assert "Chart Pattern Analysis" in response_with_chart["raw_response"], "Mock response should mention chart analysis"
 
     # Done
     logger.info("Mock prompt flow test completed successfully")

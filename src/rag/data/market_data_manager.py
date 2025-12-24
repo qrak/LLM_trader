@@ -15,6 +15,7 @@ from .market_components import (
     MarketDataCache,
     MarketOverviewBuilder
 )
+from src.analyzer.data.data_fetcher import DataFetcher
 
 
 class MarketDataManager:
@@ -84,8 +85,6 @@ class MarketDataManager:
         """Try to fetch price data using CCXT exchange."""
         if not (self.symbol_manager and self.symbol_manager.exchanges):
             return None
-        
-        from src.analyzer.data.data_fetcher import DataFetcher
         
         # Select best available exchange
         exchange = self._select_exchange()

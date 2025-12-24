@@ -2,16 +2,28 @@
 Collision resolution utilities for category-word mappings.
 Centralizes priority-based collision resolution logic to avoid code duplication.
 """
-from typing import Set
+from typing import Set, Dict
 
 
 class CategoryCollisionResolver:
     """Handles priority-based collision resolution for category-word mappings."""
     
-    def __init__(self, important_categories: Set[str] = None, ticker_categories: Set[str] = None, general_categories: Set[str] = None):
+    def __init__(self, important_categories: Set[str] = None, ticker_categories: Set[str] = None, 
+                 general_categories: Set[str] = None, generic_priorities: Dict[str, int] = None):
         self.important_categories = important_categories or set()
         self.ticker_categories = ticker_categories or set()
         self.general_categories = general_categories or set()
+        
+        # Load generic priorities from config or use defaults
+        self.generic_priorities = generic_priorities or {
+            'cryptocurrency': 10,
+            'exchange': 15,
+            'regulation': 20,
+            'macroeconomics': 20,
+            'token listing and delisting': 25,
+            'token sale': 25,
+            'digital asset treasury': 30
+        }
     
     def resolve_collision(self, existing_category: str, new_category: str, word: str) -> str:
         """
@@ -58,19 +70,9 @@ class CategoryCollisionResolver:
         if category_lower in self.ticker_categories:
             return 70
         
-        # Generic/broad categories get lower priority
-        generic_categories = {
-            'cryptocurrency': 10,
-            'exchange': 15,
-            'regulation': 20,
-            'macroeconomics': 20,
-            'token listing and delisting': 25,
-            'token sale': 25,
-            'digital asset treasury': 30
-        }
-        
-        if category_lower in generic_categories:
-            return generic_categories[category_lower]
+        # Generic/broad categories get lower priority (from config)
+        if category_lower in self.generic_priorities:
+            return self.generic_priorities[category_lower]
         
         # General categories get low-medium priority
         if category_lower in self.general_categories:

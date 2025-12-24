@@ -31,6 +31,9 @@ class RagFileHandler:
         self.market_data_dir = os.path.join(self.data_dir, self.MARKET_DATA_DIR)
         self.news_file_path = os.path.join(self.data_dir, self.NEWS_FILE)
         self.tickers_file = os.path.join(self.data_dir, "known_tickers.json")
+        # RAG priorities are configuration, not data - store in config directory
+        config_dir = os.path.join(self.base_dir, "config")
+        self.rag_priorities_file = os.path.join(config_dir, "rag_priorities.json")
         self._last_news_save_time = 0
         self.unified_parser = UnifiedParser(logger)
         
@@ -183,3 +186,15 @@ class RagFileHandler:
             self.save_json_file(self.tickers_file, data)
         except Exception as e:
             self.logger.error(f"Error saving known tickers: {e}")
+    
+    def load_rag_priorities(self) -> Optional[Dict]:
+        """Load RAG priorities configuration from disk."""
+        try:
+            data = self.load_json_file(self.rag_priorities_file)
+            if data:
+                self.logger.debug("Loaded RAG priorities configuration")
+                return data
+            return None
+        except Exception as e:
+            self.logger.error(f"Error loading RAG priorities: {e}")
+            return None

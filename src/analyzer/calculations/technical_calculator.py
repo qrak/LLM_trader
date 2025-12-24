@@ -4,6 +4,9 @@ import numpy as np
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.indicators.constants import INDICATOR_THRESHOLDS
 from src.logger.logger import Logger
+from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
+    detect_golden_cross_numba, detect_death_cross_numba
+)
 
 
 class TechnicalCalculator:
@@ -116,6 +119,9 @@ class TechnicalCalculator:
         atr_values = indicators["atr"]
         indicators["atr_percent"] = (atr_values / current_price) * 100 if current_price > 0 else np.full_like(atr_values, np.nan)
         
+        # Choppiness Index
+        indicators["choppiness"] = self.ti.volatility.choppiness_index(length=14)
+        
         return indicators
 
     def _calculate_trend_indicators(self) -> Dict[str, np.ndarray]:
@@ -202,10 +208,6 @@ class TechnicalCalculator:
         indicators["fib_pivot_s1"] = fib_s1
         indicators["fib_pivot_s2"] = fib_s2
         indicators["fib_pivot_s3"] = fib_s3
-        
-        # Fibonacci Retracement (returns 2D array: [candles, levels])
-        # Levels: 0.0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0
-        indicators["fibonacci_retracement"] = self.ti.support_resistance.fibonacci_retracement(length=50)
         
         return indicators
         
@@ -362,9 +364,7 @@ class TechnicalCalculator:
                 sma_50w_array = ti.overlap.sma(ti.close, 50)
                 sma_200w_array = ti.overlap.sma(ti.close, 200)
             
-            from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
-                detect_golden_cross_numba, detect_death_cross_numba
-            )
+
             
             golden_found, golden_weeks_ago, _, _ = detect_golden_cross_numba(sma_50w_array, sma_200w_array)
             if golden_found:
@@ -728,7 +728,6 @@ class TechnicalCalculator:
             if all(isinstance(val, (int, float)) and not np.isnan(val) for val in [bb_upper, bb_middle, bb_lower]):
                 # Calculate distance to each band as percentage
                 upper_dist = abs(current_price - bb_upper) / bb_upper
-                _middle_dist = abs(current_price - bb_middle) / bb_middle
                 lower_dist = abs(current_price - bb_lower) / bb_lower
                 
                 # Find closest band (threshold of 2% to determine "near")

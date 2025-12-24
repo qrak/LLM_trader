@@ -9,11 +9,10 @@ from src.logger.logger import Logger
 
 class PatternAnalyzer:
     
-    def __init__(self, logger: Optional[Logger] = None, format_utils=None):
+    def __init__(self, logger: Optional[Logger] = None):
         self.logger = logger
-        self.format_utils = format_utils
-        self.pattern_engine = PatternEngine(lookback=5, lookahead=5, format_utils=format_utils)
-        self.indicator_pattern_engine = IndicatorPatternEngine(format_utils=format_utils)
+        self.pattern_engine = PatternEngine(lookback=5, lookahead=5)
+        self.indicator_pattern_engine = IndicatorPatternEngine()
         self._warmed_up = False
     
     def detect_patterns(

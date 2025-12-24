@@ -7,7 +7,6 @@ Complements chart pattern engine by providing momentum and confirmation signals.
 
 import numpy as np
 from typing import Dict, List, Any, Optional
-from datetime import datetime
 
 from .rsi_patterns import (
     detect_rsi_oversold_numba,
@@ -33,8 +32,7 @@ from .volatility_patterns import (
 from .ma_crossover_patterns import (
     detect_golden_cross_numba,
     detect_death_cross_numba,
-    detect_short_term_crossover_numba,
-    check_ma_alignment_numba
+    detect_short_term_crossover_numba
 )
 from .stochastic_patterns import (
     detect_stoch_oversold_numba,

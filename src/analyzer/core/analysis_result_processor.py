@@ -58,7 +58,7 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-            except ValueError as e:
+            except ValueError:
                 # Chart analysis failed, re-raise to let analysis engine handle logging and fallback
                 raise
         else:
@@ -198,10 +198,20 @@ class AnalysisResultProcessor:
                 trend_info = analysis.get("trend", {})
                 direction = trend_info.get("direction", "UNKNOWN") if isinstance(trend_info, dict) else "UNKNOWN"
                 strength = trend_info.get("strength", 0) if isinstance(trend_info, dict) else 0
-                self.logger.debug(
-                    f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
-                    f"Trend {direction} ({strength}% strength)"
-                )
+                
+                # Log confluence factors if available (Chain-of-Thought scoring)
+                confluence_factors = analysis.get("confluence_factors", {})
+                if confluence_factors and isinstance(confluence_factors, dict):
+                    cf_str = ", ".join([f"{k}={v}" for k, v in confluence_factors.items()])
+                    self.logger.debug(
+                        f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
+                        f"Trend {direction} ({strength}% strength) | Confluence: {cf_str}"
+                    )
+                else:
+                    self.logger.debug(
+                        f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
+                        f"Trend {direction} ({strength}% strength)"
+                    )
             else:
                 # Legacy analysis format
                 bias = analysis.get("technical_bias", "UNKNOWN")

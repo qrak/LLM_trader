@@ -26,7 +26,8 @@ class RagEngine:
         coingecko_api: Optional[CoinGeckoAPI] = None,
         cryptocompare_api: Optional[CryptoCompareAPI] = None,
         symbol_manager=None,
-        format_utils=None
+        format_utils=None,
+        sentence_splitter=None
     ):
         """Initialize RagEngine with dependencies.
         
@@ -37,7 +38,9 @@ class RagEngine:
             coingecko_api: CoinGecko API client (optional)
             cryptocompare_api: CryptoCompare API client (optional)
             symbol_manager: Exchange manager (optional)
+            symbol_manager: Exchange manager (optional)
             format_utils: Format utilities (optional)
+            sentence_splitter: Sentence splitter instance (optional)
         """
         self.logger = logger
         self.config = config
@@ -45,7 +48,7 @@ class RagEngine:
         self.file_handler = RagFileHandler(logger=self.logger, config=config)
         
         # Initialize component managers
-        self.news_manager = NewsManager(logger, self.file_handler, cryptocompare_api, format_utils)
+        self.news_manager = NewsManager(logger, self.file_handler, cryptocompare_api, format_utils, sentence_splitter)
         self.market_data_manager = MarketDataManager(
             logger, self.file_handler, coingecko_api, cryptocompare_api, symbol_manager
         )
@@ -53,7 +56,8 @@ class RagEngine:
         self.category_manager = CategoryManager(
             logger, self.file_handler, cryptocompare_api, symbol_manager
         )
-        self.context_builder = ContextBuilder(logger, token_counter, format_utils)
+        self.context_builder = ContextBuilder(logger, token_counter, format_utils, sentence_splitter)
+        self.context_builder.config = config # Inject config
         
         # API clients with dependency injection
         self.coingecko_api = coingecko_api
@@ -68,6 +72,9 @@ class RagEngine:
 
         # Task management
         self._periodic_update_task = None
+        
+        # Async lock to prevent concurrent updates
+        self._update_lock = asyncio.Lock()
 
         # Closure flag
         self._is_closed = False
@@ -125,35 +132,36 @@ class RagEngine:
 
     async def update_if_needed(self) -> bool:
         """Update market data if needed based on time intervals"""
-        if not self.last_update:
-            self.logger.debug("No previous update, refreshing market knowledge base")
+        async with self._update_lock:
+            if not self.last_update:
+                self.logger.debug("No previous update, refreshing market knowledge base")
+                try:
+                    await self.refresh_market_data()
+                    self.last_update = datetime.now()
+                    return True
+                except Exception as e:
+                    self.logger.error(f"Failed to update market knowledge: {e}")
+                    return False
+
+            time_since_update = datetime.now() - self.last_update
+            if time_since_update > self.update_interval:
+                self.logger.debug(f"Last update was {time_since_update.total_seconds()/60:.1f} minutes ago, refreshing market knowledge")
+                try:
+                    await self.refresh_market_data()
+                    self.last_update = datetime.now()
+                    return True
+                except Exception as e:
+                    self.logger.error(f"Failed to update market knowledge: {e}")
+                    return False
+
             try:
-                await self.refresh_market_data()
-                self.last_update = datetime.now()
-                return True
+                categories_updated = await self.category_manager.ensure_categories_updated()
+                if categories_updated:
+                    self._build_indices()
             except Exception as e:
-                self.logger.error(f"Failed to update market knowledge: {e}")
-                return False
+                self.logger.error(f"Failed to update categories: {e}")
 
-        time_since_update = datetime.now() - self.last_update
-        if time_since_update > self.update_interval:
-            self.logger.debug(f"Last update was {time_since_update.total_seconds()/60:.1f} minutes ago, refreshing market knowledge")
-            try:
-                await self.refresh_market_data()
-                self.last_update = datetime.now()
-                return True
-            except Exception as e:
-                self.logger.error(f"Failed to update market knowledge: {e}")
-                return False
-
-        try:
-            categories_updated = await self.category_manager.ensure_categories_updated()
-            if categories_updated:
-                self._build_indices()
-        except Exception as e:
-            self.logger.error(f"Failed to update categories: {e}")
-
-        return False
+            return False
 
     async def refresh_market_data(self) -> None:
         """Refresh all market data from external sources"""

@@ -2,19 +2,24 @@
 Shared article processing utilities for RAG components.
 Eliminates code duplication between news_manager and context_builder.
 """
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, List
 import logging
 
 from src.parsing.unified_parser import UnifiedParser
+from src.utils.text_splitting import SentenceSplitter
 
 
 class ArticleProcessor:
     """Utility class for common article processing operations."""
     
-    def __init__(self, logger: logging.Logger = None, format_utils=None):
+    def __init__(self, logger: logging.Logger = None, format_utils=None, sentence_splitter=None):
         self.logger = logger or logging.getLogger(__name__)
         self.parser = UnifiedParser(self.logger, format_utils)
+
         self.format_utils = format_utils
+        
+        # Initialize shared sentence splitter
+        self.sentence_splitter = sentence_splitter
     
     def detect_coins_in_article(self, article: Dict[str, Any], known_crypto_tickers: Set[str]) -> Set[str]:
         """Detect cryptocurrency mentions in article content."""
@@ -53,4 +58,11 @@ class ArticleProcessor:
     
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
+
         return self.parser.extract_base_coin(symbol)
+
+    def split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences using shared splitter."""
+        if not text:
+            return []
+        return self.sentence_splitter.split_text(text)

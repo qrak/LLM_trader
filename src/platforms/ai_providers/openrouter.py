@@ -146,72 +146,7 @@ class OpenRouterClient(BaseApiClient):
             self.logger.error(f"Error during OpenRouter chart analysis request: {str(e)}")
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_images(self, 
-                                        model: str,
-                                        messages: List[Dict[str, Any]], 
-                                        images: List[Union[Image.Image, bytes, str]], 
-                                        model_config: Dict[str, Any]) -> Optional[ResponseDict]:
-        """
-        Send a chat completion request with image inputs.
-        
-        Args:
-            model: Model name to use
-            messages: List of OpenAI-style messages
-            images: List of images (PIL Images, bytes, or file paths)
-            model_config: Configuration parameters for the model
-            
-        Returns:
-            Response in OpenRouter-compatible format or None if failed
-        """
-        try:
-            # Process images to base64
-            image_parts = []
-            for image in images:
-                img_data = self._process_image(image)
-                base64_image = base64.b64encode(img_data).decode('utf-8')
-                image_parts.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{base64_image}"
-                    }
-                })
-            
-            user_text = self._extract_user_text_from_messages(messages)
-            
-            # Create multimodal content with images
-            multimodal_content = [{"type": "text", "text": user_text}] + image_parts
-            
-            multimodal_messages = self._prepare_multimodal_messages(
-                messages, user_text, multimodal_content
-            )
-            
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "Kuruś Crypto Analyzer",
-                "X-Title": "Kuruś Crypto Analyzer"
-            }
-            
-            payload = {
-                "model": model,
-                "messages": multimodal_messages,
-                **model_config
-            }
-            
-            self.logger.debug(f"Sending multimodal request to OpenRouter with {len(images)} images")
-            
-            url = f"{self.base_url}/chat/completions"
-            response = await self._make_post_request(url, headers, payload, model, timeout=600)
-            
-            if response:
-                self.logger.debug("Received successful multimodal response from OpenRouter")
-            
-            return cast(ResponseDict, response) if response else None
-            
-        except Exception as e:
-            self.logger.error(f"Error during OpenRouter multimodal request: {str(e)}")
-            return self._handle_exception(e)
+
 
     def _process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
         """

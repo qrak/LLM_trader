@@ -4,7 +4,7 @@ Handles building context sections like trading context, sentiment, market data, 
 """
 
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from src.logger.logger import Logger
@@ -37,13 +37,14 @@ class ContextBuilder:
             str: Formatted trading context section
         """
         # Get the current time to understand candle formation
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)  # Use UTC to match exchange candle boundaries
         
         # Create candle status message dynamically based on timeframe
         candle_status = ""
         timeframe_minutes = TimeframeValidator.to_minutes(self.timeframe)
         
         # Calculate time until next candle closes (for intraday timeframes)
+        # Exchange candles align to UTC boundaries (00:00, 04:00, 08:00 UTC etc.)
         if timeframe_minutes < 1440:  # Less than 1 day
             total_minutes = current_time.hour * 60 + current_time.minute
             minutes_into_candle = total_minutes % timeframe_minutes
@@ -211,3 +212,88 @@ class ContextBuilder:
             return ""
         
         return self.formatter.format_coin_details_section(coin_details)
+    
+    def build_previous_indicators_section(self, previous_indicators: Dict[str, Any], current_indicators: Dict[str, Any]) -> str:
+        """Build comparison section showing how key indicators changed since last analysis.
+        
+        Args:
+            previous_indicators: Previous technical indicator values
+            current_indicators: Current technical indicator values
+            
+        Returns:
+            str: Formatted previous indicators comparison section
+        """
+        if not previous_indicators or not current_indicators:
+            return ""
+        
+        lines = [
+            "INDICATOR CHANGES (Previous → Current):",
+            ""
+        ]
+        
+        # Key indicators to compare (in priority order)
+        key_indicators = [
+            ('rsi', 'RSI'),
+            ('macd_line', 'MACD Line'),
+            ('macd_signal', 'MACD Signal'),
+            ('macd_hist', 'MACD Histogram'),
+            ('adx', 'ADX'),
+            ('plus_di', '+DI'),
+            ('minus_di', '-DI'),
+            ('stoch_k', 'Stochastic %K'),
+            ('stoch_d', 'Stochastic %D'),
+            ('mfi', 'MFI'),
+            ('obv', 'OBV'),
+            ('atr', 'ATR'),
+            ('sma_20', '20 SMA'),
+            ('sma_50', '50 SMA'),
+            ('sma_200', '200 SMA'),
+        ]
+        
+        changes = []
+        for key, label in key_indicators:
+            prev_val = previous_indicators.get(key)
+            curr_val = current_indicators.get(key)
+            
+            # Skip if either value is missing or invalid
+            if prev_val is None or curr_val is None:
+                continue
+            
+            # Handle array values (take last element)
+            if isinstance(prev_val, (list, tuple)):
+                prev_val = prev_val[-1] if len(prev_val) > 0 else None
+            if isinstance(curr_val, (list, tuple)):
+                curr_val = curr_val[-1] if len(curr_val) > 0 else None
+            
+            if prev_val is None or curr_val is None:
+                continue
+            
+            try:
+                prev_val = float(prev_val)
+                curr_val = float(curr_val)
+                
+                # Calculate change
+                if abs(prev_val) > 0.0001:  # Avoid division by tiny numbers
+                    change_pct = ((curr_val - prev_val) / abs(prev_val)) * 100
+                    
+                    # Format change with arrow and color indicator
+                    if abs(change_pct) >= 1.0:  # Only show significant changes (>1%)
+                        arrow = "↑" if change_pct > 0 else "↓"
+                        sign = "+" if change_pct > 0 else ""
+                        
+                        # Format values appropriately
+                        if abs(curr_val) >= 1:
+                            changes.append(f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)")
+                        else:
+                            changes.append(f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)")
+            except (ValueError, TypeError):
+                continue
+        
+        if not changes:
+            return ""  # No significant changes
+        
+        lines.extend(changes)
+        lines.append("")
+        lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
+        
+        return "\n".join(lines)

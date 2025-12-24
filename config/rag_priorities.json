@@ -1,0 +1,38 @@
+{
+    "important_categories": [
+        "BTC",
+        "ETH",
+        "SOL",
+        "XRP",
+        "BNB",
+        "DOGE",
+        "MARKET",
+        "TRADING",
+        "REGULATION",
+        "MACROECONOMICS",
+        "BUSINESS",
+        "EXCHANGE",
+        "MINING",
+        "BLOCKCHAIN",
+        "AIRDROP",
+        "FIAT",
+        "MEME",
+        "ARB",
+        "OP",
+        "AVAX",
+        "LINK",
+        "ADA",
+        "DOT",
+        "SUI",
+        "APT"
+    ],
+    "generic_priorities": {
+        "CRYPTOCURRENCY": 10,
+        "EXCHANGE": 15,
+        "REGULATION": 20,
+        "MACROECONOMICS": 20,
+        "ICO": 25,
+        "AIRDROP": 25,
+        "DIGITAL ASSET TREASURY": 30
+    }
+}

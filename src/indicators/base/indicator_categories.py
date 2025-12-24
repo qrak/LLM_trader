@@ -662,6 +662,23 @@ class VolatilityIndicators(IndicatorCategory['VolatilityIndicators']):
             required_length=length
         )
 
+    def choppiness_index(self, length: int = 14) -> np.ndarray:
+        """Calculate Choppiness Index
+        
+        Measures market choppiness vs trending behavior.
+        Values > 61.8 indicate choppy/ranging market.
+        Values < 38.2 indicate trending market.
+        """
+        return self._base.calculate_indicator(
+            choppiness_index_numba,
+            self.high,
+            self.low,
+            self.close,
+            length,
+            required_length=length
+        )
+
+
 
 class VolumeIndicators(IndicatorCategory['VolumeIndicators']):
     def cci(self, length: int = 14, c: float = 0.015) -> np.ndarray:

@@ -211,3 +211,5 @@ class PositionExtractor:
         """
         valid_signals = {"BUY", "SELL", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
         return signal.upper() in valid_signals
+    
+

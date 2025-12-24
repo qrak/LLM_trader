@@ -29,7 +29,7 @@ class CategoryManager:
         
         # Initialize specialized components
         self.category_fetcher = CategoryFetcher(logger, cryptocompare_api)
-        self.category_processor = CategoryProcessor(logger)
+        self.category_processor = CategoryProcessor(logger, file_handler)
         self.ticker_manager = TickerManager(logger, file_handler, exchange_manager)
         self.news_analyzer = NewsCategoryAnalyzer(logger, self.category_processor)
     

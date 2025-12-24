@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple, Any, TYPE_CHECKING
+from typing import Dict, Optional, Set, Tuple, Any, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
 import aiohttp

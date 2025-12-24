@@ -89,11 +89,64 @@ class ConfidenceStats:
 
 
 @dataclass(slots=True)
+class FactorStats:
+    """Performance statistics per confluence factor bucket.
+    
+    Tracks win/loss ratios for specific factor score ranges
+    to learn which confluence factors correlate with winning trades.
+    """
+    factor_name: str                 # e.g., "volume_support"
+    bucket: str                      # LOW (0-30), MEDIUM (31-69), HIGH (70-100)
+    total_trades: int = 0
+    winning_trades: int = 0
+    avg_score: float = 0.0           # Average score when this bucket triggered
+    avg_pnl_pct: float = 0.0
+    win_rate: float = 0.0
+    
+    def update(self, is_win: bool, pnl_pct: float, score: float) -> None:
+        """Update stats with new trade result."""
+        self.total_trades += 1
+        if is_win:
+            self.winning_trades += 1
+        # Rolling averages
+        self.avg_score = ((self.avg_score * (self.total_trades - 1)) + score) / self.total_trades
+        self.avg_pnl_pct = ((self.avg_pnl_pct * (self.total_trades - 1)) + pnl_pct) / self.total_trades
+        self.win_rate = (self.winning_trades / self.total_trades) * 100
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "factor_name": self.factor_name,
+            "bucket": self.bucket,
+            "total_trades": self.total_trades,
+            "winning_trades": self.winning_trades,
+            "avg_score": self.avg_score,
+            "avg_pnl_pct": self.avg_pnl_pct,
+            "win_rate": self.win_rate,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'FactorStats':
+        """Create FactorStats from dictionary."""
+        stats = cls(
+            factor_name=data["factor_name"],
+            bucket=data["bucket"]
+        )
+        stats.total_trades = data.get("total_trades", 0)
+        stats.winning_trades = data.get("winning_trades", 0)
+        stats.avg_score = data.get("avg_score", 0.0)
+        stats.avg_pnl_pct = data.get("avg_pnl_pct", 0.0)
+        stats.win_rate = data.get("win_rate", 0.0)
+        return stats
+
+
+@dataclass(slots=True)
 class TradingBrain:
     """Bounded memory system for distilled trading insights.
     
     Stores learned trading wisdom from closed trades in a fixed-size structure.
     Uses FIFO eviction with category balancing to maintain diversity.
+    Now includes confluence factor performance tracking for adaptive learning.
     """
     insights: List[TradingInsight] = field(default_factory=list)
     confidence_stats: Dict[str, ConfidenceStats] = field(default_factory=lambda: {
@@ -101,9 +154,11 @@ class TradingBrain:
         'MEDIUM': ConfidenceStats('MEDIUM'),
         'LOW': ConfidenceStats('LOW')
     })
+    factor_performance: Dict[str, FactorStats] = field(default_factory=dict)  # key: "factor_bucket" e.g. "volume_support_HIGH"
     last_updated: datetime = field(default_factory=datetime.now)
     total_closed_trades: int = 0
     max_insights: int = 10           # Fixed size - FIFO eviction
+    min_sample_size: int = 5         # Minimum trades before insight is "Validated"
     
     # Category limits for diversity (class-level constant)
     MAX_PER_CATEGORY: Dict[str, int] = field(default_factory=lambda: {
@@ -179,9 +234,11 @@ class TradingBrain:
         return {
             "insights": [ins.to_dict() for ins in self.insights],
             "confidence_stats": {k: v.to_dict() for k, v in self.confidence_stats.items()},
+            "factor_performance": {k: v.to_dict() for k, v in self.factor_performance.items()},
             "last_updated": self.last_updated.isoformat(),
             "total_closed_trades": self.total_closed_trades,
             "max_insights": self.max_insights,
+            "min_sample_size": self.min_sample_size,
         }
     
     @classmethod
@@ -198,9 +255,16 @@ class TradingBrain:
             if level not in brain.confidence_stats:
                 brain.confidence_stats[level] = ConfidenceStats(level)
         
+        # Load factor performance stats
+        brain.factor_performance = {
+            k: FactorStats.from_dict(v)
+            for k, v in data.get("factor_performance", {}).items()
+        }
+        
         brain.last_updated = datetime.fromisoformat(data["last_updated"]) if "last_updated" in data else datetime.now()
         brain.total_closed_trades = data.get("total_closed_trades", 0)
         brain.max_insights = data.get("max_insights", 10)
+        brain.min_sample_size = data.get("min_sample_size", 5)
         return brain
 
 
@@ -208,7 +272,10 @@ class TradingBrain:
 
 @dataclass(frozen=True, slots=True)
 class Position:
-    """Represents an active trading position."""
+    """Represents an active trading position.
+    
+    Includes confluence_factors from entry for brain learning on close.
+    """
     entry_price: float
     stop_loss: float
     take_profit: float
@@ -217,6 +284,9 @@ class Position:
     confidence: str  # HIGH, MEDIUM, LOW
     direction: str   # LONG, SHORT
     symbol: str
+    # Confluence factors at entry time for factor performance learning
+    # Stored as tuple of (name, score) pairs for frozen dataclass compatibility
+    confluence_factors: tuple = field(default_factory=tuple)
     
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""

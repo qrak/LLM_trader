@@ -6,20 +6,26 @@ Handles building analysis context from news articles and search results.
 
 import re
 from datetime import datetime
+from collections import namedtuple
 from typing import List, Dict, Any, Optional, Tuple, Set
 from src.logger.logger import Logger
 from src.utils.token_counter import TokenCounter
+from src.utils.text_splitting import SentenceSplitter
 from ..processing.article_processor import ArticleProcessor
 
 
 class ContextBuilder:
     """Builds analysis context from various data sources."""
     
-    def __init__(self, logger: Logger, token_counter: TokenCounter, format_utils=None):
+    def __init__(self, logger: Logger, token_counter: TokenCounter, format_utils=None, sentence_splitter: Optional[SentenceSplitter] = None):
         self.logger = logger
+        self.config = None  # Will be set via setter or initialization update
         self.token_counter = token_counter
         self.article_processor = ArticleProcessor(logger, format_utils)
         self.latest_article_urls: Dict[str, str] = {}
+        
+        # Initialize shared sentence splitter
+        self.sentence_splitter = sentence_splitter
     
     async def keyword_search(self, query: str, news_database: List[Dict[str, Any]], 
                            symbol: Optional[str] = None, coin_index: Dict[str, List[int]] = None,
@@ -81,7 +87,6 @@ class ContextBuilder:
     
     def _extract_article_content(self, article: Dict[str, Any]):
         """Extract and normalize article content for scoring."""
-        from collections import namedtuple
         ArticleContent = namedtuple('ArticleContent', ['title', 'body', 'categories', 'tags', 'detected_coins'])
         
         return ArticleContent(
@@ -204,18 +209,42 @@ class ContextBuilder:
 
         body = article.get('body', '')
         if body:
-            # Extract first 2-3 COMPLETE sentences as key facts (no mid-sentence truncation)
+            # Extract sentences
             sentences = body.replace('\n\n', ' ').replace('\n', ' ').strip()
-            # Split by sentence endings
-            import re
-            sentence_list = re.split(r'(?<=[.!?])\s+', sentences)
-            # Take first 2-3 complete sentences that fit under ~400 chars total
+            
+            # Use wtpsplit for sentence segmentation if available, otherwise fallback to regex
+            # Use shared sentence splitter (handles fallback internally)
+            sentence_list = self.sentence_splitter.split_text(sentences)
+            
+            # Apply configured limits
+            max_sentences = 3
+            max_tokens = 200
+            
+            if self.config:
+                try:
+                    max_sentences = int(self.config.RAG_ARTICLE_MAX_SENTENCES)
+                    max_tokens = int(self.config.RAG_ARTICLE_MAX_TOKENS)
+                except (AttributeError, ValueError):
+                    pass # Use defaults
+            
             key_facts = ""
-            for i, sent in enumerate(sentence_list[:3]):
-                if len(key_facts) + len(sent) < 400:
-                    key_facts += sent + " "
-                else:
+            current_tokens = self.token_counter.count_tokens(article_text)
+            
+            for i, sent in enumerate(sentence_list):
+                if i >= max_sentences:
                     break
+                    
+                sent_tokens = self.token_counter.count_tokens(sent + " ")
+                
+                # Check if adding this sentence would exceed the article token limit
+                # We calculate total token impact on the article snippet
+                # Note: valid tokens are title + metadata + body so far
+                if current_tokens + sent_tokens > max_tokens:
+                    break
+                    
+                key_facts += sent + " "
+                current_tokens += sent_tokens
+                
             key_facts = key_facts.strip()
             if key_facts:
                 article_text += f"{key_facts}\n\n"

@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
+from src.utils.loader import config
+
 install_rich_traceback()
 
 
@@ -64,7 +66,6 @@ class Logger(logging.Logger):
         
         if log_dir is None:
             # Import config here to avoid circular imports
-            from src.utils.loader import config
             self.log_dir = config.LOG_DIR
         else:
             self.log_dir = log_dir
@@ -73,13 +74,6 @@ class Logger(logging.Logger):
 
         self._setup_logger()
         self.debug(f"Logger {sanitized_name} initialized with log directory: {self.log_dir}")
-
-    def custom_exception_hook(self, exctype, value, traceback):
-        if exctype == KeyboardInterrupt:
-            print("KeyboardInterrupt caught. Exiting gracefully.")
-        else:
-            self.error("Uncaught exception", exc_info=(exctype, value, traceback))
-            sys.exit(1)
 
     def _get_log_dir(self, current_date: str, is_error: bool = False) -> str:
         if is_error:

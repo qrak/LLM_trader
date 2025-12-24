@@ -1,6 +1,6 @@
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.logger.logger import Logger
@@ -17,6 +17,8 @@ from src.analyzer.data.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
 from src.trading import DataPersistence, TradingStrategy
 from src.discord_interface import DiscordNotifier
+from src.utils.keyboard_handler import KeyboardHandler
+from src.utils.text_splitting import SentenceSplitter
 
 
 class CryptoTradingBot:
@@ -32,12 +34,17 @@ class CryptoTradingBot:
         self.rag_engine = None
         self.symbol_manager = None
         self.token_counter = None
+        self.sentence_splitter = None
         self.format_utils = None
         self.data_processor = None
         self.model_manager = None
         self.tasks = []
         self.running = False
         self._active_tasks = set()
+        
+        # Keyboard handler
+        self.keyboard_handler: Optional[KeyboardHandler] = None
+        self._force_analysis = asyncio.Event()
         
         # Trading components
         self.data_persistence: Optional[DataPersistence] = None
@@ -56,6 +63,10 @@ class CryptoTradingBot:
         # Initialize TokenCounter early
         self.token_counter = TokenCounter()
         self.logger.debug("TokenCounter initialized")
+
+        # Initialize SentenceSplitter
+        self.sentence_splitter = SentenceSplitter()
+        self.logger.debug("SentenceSplitter initialized")
 
         # Initialize DataProcessor and FormatUtils
         self.data_processor = DataProcessor()
@@ -86,7 +97,8 @@ class CryptoTradingBot:
             self.config,
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
-            format_utils=self.format_utils
+            format_utils=self.format_utils,
+            sentence_splitter=self.sentence_splitter
         )
         await self.rag_engine.initialize()
         self.logger.debug("RagEngine initialized")
@@ -131,7 +143,23 @@ class CryptoTradingBot:
 
         await self.rag_engine.start_periodic_updates()
         
+        # Initialize keyboard handler
+        self.keyboard_handler = KeyboardHandler(logger=self.logger)
+        self.keyboard_handler.register_command('a', self._force_analysis_now, "Force immediate analysis")
+        self.keyboard_handler.register_command('h', self._show_help, "Show available keyboard commands")
+        self.keyboard_handler.register_command('q', self._request_shutdown, "Quit the application")
+        
+        # Start keyboard handler task
+        keyboard_task = asyncio.create_task(
+            self.keyboard_handler.start_listening(),
+            name="Keyboard-Handler"
+        )
+        self._active_tasks.add(keyboard_task)
+        keyboard_task.add_done_callback(self._active_tasks.discard)
+        self.tasks.append(keyboard_task)
+        
         self.logger.info("Crypto Trading Bot initialized successfully")
+        self.logger.info("Keyboard commands: 'a' = force analysis, 'h' = help, 'q' = quit")
 
     async def run(self, symbol: str, timeframe: str = None):
         """Run the trading bot in continuous mode.
@@ -249,13 +277,27 @@ class CryptoTradingBot:
         brain_context = self.data_persistence.get_brain_context()
         
         # Load previous response for AI continuity
-        previous_response = self.data_persistence.load_previous_response()
+        previous_data = self.data_persistence.load_previous_response()
+        previous_response = None
+        previous_indicators = None
+        
+        if previous_data:
+            previous_response = previous_data.get("response")
+            previous_indicators = previous_data.get("technical_indicators")
+        
+        # Get last analysis time for temporal context
+        last_analysis_time_obj = self.data_persistence.get_last_analysis_time()
+        last_analysis_time_str = None
+        if last_analysis_time_obj:
+            last_analysis_time_str = last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
         
         result = await self.market_analyzer.analyze_market(
             previous_response=previous_response,
+            previous_indicators=previous_indicators,
             position_context=position_context,
             performance_context=memory_context,
-            brain_context=brain_context
+            brain_context=brain_context,
+            last_analysis_time=last_analysis_time_str
         )
         
         if "error" in result:
@@ -282,10 +324,12 @@ class CryptoTradingBot:
                 channel_id=self.config.MAIN_CHANNEL_ID
             )
         
-        # Save the response for context
+        # Save the response and technical indicators for context
         raw_response = result.get("raw_response", "")
+        technical_data = result.get("technical_data")  # Get technical indicators from result
+        
         if raw_response:
-            self.data_persistence.save_previous_response(raw_response)
+            self.data_persistence.save_previous_response(raw_response, technical_data)
     
     async def _fetch_current_price(self) -> float:
         """Fetch current price from exchange."""
@@ -314,8 +358,8 @@ class CryptoTradingBot:
             delay_ms = next_candle_ms - current_time_ms + 5000  # Add 5 second buffer
             delay_seconds = delay_ms / 1000
             
-            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
-            self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)")
+            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
+            self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)")
             
             await self._interruptible_sleep(delay_seconds)
             
@@ -337,8 +381,7 @@ class CryptoTradingBot:
             except Exception:
                 current_time_ms = int(time.time() * 1000)
             
-            current_time = datetime.fromtimestamp(current_time_ms / 1000)
-            
+
             # Calculate interval
             interval_seconds = TimeframeValidator.to_minutes(self.current_timeframe) * 60
             interval_ms = interval_seconds * 1000
@@ -357,11 +400,11 @@ class CryptoTradingBot:
                 # Still in same candle - wait for next one
                 delay_ms = next_candle_ms - current_time_ms + 1000
                 delay_seconds = max(0, delay_ms / 1000)
-                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
                 
                 self.logger.info(
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
-                    f"Still in same candle - next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
+                    f"Still in same candle - next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)"
                 )
                 await self._interruptible_sleep(delay_seconds)
             elif current_time_ms >= next_candle_ms:
@@ -375,11 +418,11 @@ class CryptoTradingBot:
                 # In a different candle but not yet at next_candle_ms (edge case)
                 delay_ms = next_candle_ms - current_time_ms + 1000
                 delay_seconds = max(0, delay_ms / 1000)
-                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000)
+                next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
                 
                 self.logger.info(
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
-                    f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} (in {delay_seconds:.0f}s)"
+                    f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)"
                 )
                 await self._interruptible_sleep(delay_seconds)
             
@@ -389,18 +432,46 @@ class CryptoTradingBot:
             await self._interruptible_sleep(60)
     
     async def _interruptible_sleep(self, seconds: float):
-        """Sleep in small chunks to allow responsive shutdown."""
+        """Sleep in small chunks to allow responsive shutdown and force analysis."""
         chunk_size = 1.0  # Check every second
         elapsed = 0.0
         
+        # Clear force analysis flag before sleeping
+        self._force_analysis.clear()
+        
         try:
             while elapsed < seconds and self.running:
+                # Check for force analysis
+                if self._force_analysis.is_set():
+                    self._force_analysis.clear()
+                    self.logger.info("Force analysis triggered - interrupting wait")
+                    return
+                
                 sleep_time = min(chunk_size, seconds - elapsed)
                 await asyncio.sleep(sleep_time)
                 elapsed += sleep_time
         except asyncio.CancelledError:
             # Allow immediate cancellation
             raise
+    
+    async def _force_analysis_now(self):
+        """Force immediate analysis by interrupting the wait."""
+        self.logger.info("Forcing immediate analysis...")
+        self._force_analysis.set()
+    
+    async def _show_help(self):
+        """Show help information about available commands."""
+        self.logger.info("\n=== Available Keyboard Commands ===")
+        self.keyboard_handler.display_help()
+        self.logger.info("===================================")
+    
+    async def _request_shutdown(self):
+        """Request application shutdown via keyboard."""
+        self.logger.info("Shutdown requested via keyboard command")
+        self.running = False
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
     
     def _print_trading_decision(self, decision):
         """Print a trading decision to console."""
@@ -432,6 +503,9 @@ class CryptoTradingBot:
 
         # Cancel and wait for active tasks
         await self._shutdown_active_tasks()
+        
+        # Close keyboard handler
+        await self._shutdown_keyboard_handler()
         
         # Close Discord notifier
         await self._shutdown_discord_notifier()
@@ -555,9 +629,22 @@ class CryptoTradingBot:
             except Exception as e:
                 self.logger.warning(f"Error closing Discord notifier: {e}")
 
+    async def _shutdown_keyboard_handler(self):
+        """Close keyboard handler safely."""
+        if not self.keyboard_handler:
+            return
+        
+        try:
+            self.logger.info("Closing keyboard handler...")
+            await self.keyboard_handler.stop_listening()
+            self.keyboard_handler = None
+        except Exception as e:
+            self.logger.warning(f"Error closing keyboard handler: {e}")
+    
     def _cleanup_references(self):
         """Set all component references to None to help garbage collection."""
         self.alternative_me_api = None
         self.cryptocompare_api = None
         self.coingecko_api = None
         self.discord_notifier = None
+        self.keyboard_handler = None

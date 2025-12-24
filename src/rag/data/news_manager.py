@@ -13,11 +13,11 @@ from ..processing.article_processor import ArticleProcessor
 class NewsManager:
     """Manages cryptocurrency news articles and related operations."""
     
-    def __init__(self, logger: Logger, file_handler: RagFileHandler, cryptocompare_api=None, format_utils=None):
+    def __init__(self, logger: Logger, file_handler: RagFileHandler, cryptocompare_api=None, format_utils=None, sentence_splitter=None):
         self.logger = logger
         self.file_handler = file_handler
         self.cryptocompare_api = cryptocompare_api
-        self.article_processor = ArticleProcessor(logger, format_utils)
+        self.article_processor = ArticleProcessor(logger, format_utils, sentence_splitter)
         
         # News database
         self.news_database: List[Dict[str, Any]] = []

@@ -100,16 +100,9 @@ class UnifiedParser:
             return float(timestamp_field)
         
         if isinstance(timestamp_field, str):
-            return self._parse_timestamp_string(timestamp_field)
+            return self.format_utils.timestamp_from_iso(timestamp_field)
         
         return 0.0
-    
-    def _parse_timestamp_string(self, timestamp_str: str) -> float:
-        """Parse timestamp string to float timestamp.
-        
-        Uses centralized FormatUtils for consistency.
-        """
-        return self.format_utils.timestamp_from_iso(timestamp_str)
     
     # ============================================================================
     # CATEGORY PARSING (consolidates category-related parsing)
@@ -291,6 +284,25 @@ class UnifiedParser:
                 except ValueError:
                     # Use default value for invalid strings (fix at source)
                     analysis[field] = default_value
+        
+        # Normalize confluence_factors (new Chain-of-Thought scoring)
+        confluence_factors = analysis.get('confluence_factors', {})
+        if isinstance(confluence_factors, dict):
+            for factor_key in ['trend_alignment', 'momentum_strength', 'volume_support', 
+                              'pattern_quality', 'support_resistance_strength']:
+                if factor_key in confluence_factors:
+                    value = confluence_factors[factor_key]
+                    if isinstance(value, str):
+                        try:
+                            confluence_factors[factor_key] = float(value)
+                        except ValueError:
+                            # Invalid string, use neutral score of 50
+                            confluence_factors[factor_key] = 50.0
+                    elif isinstance(value, (int, float)):
+                        confluence_factors[factor_key] = float(value)
+                    else:
+                        # Unexpected type, default to neutral
+                        confluence_factors[factor_key] = 50.0
         
         # Normalize key_levels arrays (support/resistance)
         key_levels = analysis.get('key_levels', {})

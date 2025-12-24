@@ -325,6 +325,16 @@ class Config:
     def RAG_NEWS_LIMIT(self):
         """Maximum number of news articles to include in context (configurable via [rag] news_limit)."""
         return int(self.get_config('rag', 'news_limit', 3))
+
+    @property
+    def RAG_ARTICLE_MAX_SENTENCES(self):
+        """Maximum number of sentences per article (configurable via [rag] article_max_sentences)."""
+        return int(self.get_config('rag', 'article_max_sentences', 3))
+
+    @property
+    def RAG_ARTICLE_MAX_TOKENS(self):
+        """Maximum number of tokens per article (configurable via [rag] article_max_tokens)."""
+        return int(self.get_config('rag', 'article_max_tokens', 200))
     
     # Language Configuration
     @property

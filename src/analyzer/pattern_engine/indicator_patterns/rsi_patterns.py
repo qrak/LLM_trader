@@ -12,7 +12,7 @@ All functions use @njit for performance.
 
 import numpy as np
 from numba import njit
-from typing import Tuple, Optional
+from typing import Tuple
 
 
 @njit(cache=True)
@@ -54,7 +54,6 @@ def detect_rsi_oversold_numba(
     
     # Check if minimum period requirement met
     if periods_oversold >= min_periods:
-        periods_ago = len(rsi) - 1 - (len(rsi) - periods_oversold)
         return (True, 0, current_rsi)  # periods_ago = 0 means current
     
     return (False, -1, current_rsi)

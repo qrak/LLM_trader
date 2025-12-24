@@ -117,6 +117,12 @@ class ConfigProtocol(Protocol):
     
     @property
     def RAG_COINGECKO_GLOBAL_API_URL(self) -> str: ...
+
+    @property
+    def RAG_ARTICLE_MAX_SENTENCES(self) -> int: ...
+
+    @property
+    def RAG_ARTICLE_MAX_TOKENS(self) -> int: ...
     
     RAG_NEWS_API_URL: str
     RAG_CATEGORIES_API_URL: str

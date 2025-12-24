@@ -202,3 +202,52 @@ def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode='
             lower[i] = middle[i] - multiplier * atr_ema[i]
     
     return upper, middle, lower
+
+
+@njit(cache=True)
+def choppiness_index_numba(high, low, close, length=14):
+    """Calculate Choppiness Index (CI)
+    
+    The Choppiness Index measures market choppiness vs trending behavior.
+    - Values > 61.8: Market is choppy/ranging (low directional movement)
+    - Values < 38.2: Market is trending (strong directional movement)
+    - Values between: Transitional state
+    
+    Args:
+        high: High prices array
+        low: Low prices array
+        close: Close prices array
+        length: Period for calculation (default: 14)
+        
+    Returns:
+        Choppiness Index array (0-100 scale)
+    """
+    n = len(high)
+    ci = np.full(n, np.nan)
+    
+    for i in range(length, n):
+        # Calculate True Range for the period
+        true_range_sum = 0.0
+        for j in range(i - length + 1, i + 1):
+            if j > 0:
+                tr = max(
+                    high[j] - low[j],
+                    abs(high[j] - close[j - 1]),
+                    abs(low[j] - close[j - 1])
+                )
+                true_range_sum += tr
+        
+        # Calculate highest high and lowest low over the period
+        period_high = np.max(high[i - length + 1:i + 1])
+        period_low = np.min(low[i - length + 1:i + 1])
+        
+        # Calculate Choppiness Index
+        # CI = 100 * log10(sum(TR) / (highest_high - lowest_low)) / log10(length)
+        range_hl = period_high - period_low
+        
+        if range_hl > 0 and true_range_sum > 0:
+            ci[i] = 100.0 * np.log10(true_range_sum / range_hl) / np.log10(length)
+        else:
+            ci[i] = 50.0  # Neutral value when range is zero
+    
+    return ci

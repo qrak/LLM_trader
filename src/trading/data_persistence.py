@@ -1,12 +1,13 @@
 """Data persistence for trading decisions and positions."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
-from .dataclasses import Position, TradeDecision, TradingMemory, TradingBrain, TradingInsight, ConfidenceStats
+from src.utils.serialize import serialize_for_json
+from .dataclasses import Position, TradeDecision, TradingMemory, TradingBrain, TradingInsight, FactorStats
 
 
 class DataPersistence:
@@ -56,6 +57,8 @@ class DataPersistence:
                 "confidence": position.confidence,
                 "direction": position.direction,
                 "symbol": position.symbol,
+                # Store confluence_factors as list of [name, score] pairs
+                "confluence_factors": [[name, score] for name, score in position.confluence_factors],
             }
             
             with open(self.positions_file, 'w') as f:
@@ -73,6 +76,9 @@ class DataPersistence:
         try:
             with open(self.positions_file, 'r') as f:
                 data = json.load(f)
+                # Convert confluence_factors from list of [name, score] to tuple
+                cf_list = data.get("confluence_factors", [])
+                cf_tuple = tuple((name, score) for name, score in cf_list)
                 return Position(
                     entry_price=data["entry_price"],
                     stop_loss=data["stop_loss"],
@@ -82,6 +88,7 @@ class DataPersistence:
                     confidence=data.get("confidence", "MEDIUM"),
                     direction=data.get("direction", "LONG"),
                     symbol=data.get("symbol", "BTC/USDT"),
+                    confluence_factors=cf_tuple,
                 )
         except Exception as e:
             self.logger.error(f"Error loading position: {e}")
@@ -211,26 +218,69 @@ class DataPersistence:
     
     # ==================== Previous Response ====================
     
-    def save_previous_response(self, response: str) -> None:
-        """Save the previous AI response."""
+    def save_previous_response(self, response: str, technical_data: Optional[Dict[str, Any]] = None) -> None:
+        """Save the previous AI response and technical indicator values.
+        
+        Technical indicators are nested inside the response dict for a cleaner structure:
+        {
+            "response": {
+                "text_analysis": "...",
+                "rsi": 55.02,
+                "macd_line": -95.72,
+                // ... all other indicators
+            },
+            "timestamp": "..."
+        }
+        
+        Args:
+            response: The AI response text
+            technical_data: Dictionary of technical indicator values (RSI, MACD, ADX, etc.)
+        """
         try:
+            # Build response dict with text analysis and all technical indicators nested inside
+            response_dict = {"text_analysis": response}
+            
+            # Merge technical data into response dict if provided
+            if technical_data:
+                serialized_data = serialize_for_json(technical_data)
+                response_dict.update(serialized_data)
+            
+            data_to_save = {
+                "response": response_dict,
+                "timestamp": datetime.now().isoformat()
+            }
+            
             with open(self.previous_response_file, 'w') as f:
-                json.dump({
-                    "response": response,
-                    "timestamp": datetime.now().isoformat()
-                }, f, indent=2)
+                json.dump(data_to_save, f, indent=2)
+                
+            self.logger.debug(f"Saved previous response with {len(technical_data) if technical_data else 0} indicators")
         except Exception as e:
             self.logger.error(f"Error saving previous response: {e}")
     
-    def load_previous_response(self) -> Optional[str]:
-        """Load the previous AI response."""
+    def load_previous_response(self) -> Optional[Dict[str, Any]]:
+        """Load the previous AI response and technical indicators.
+        
+        Returns:
+            Dictionary with 'response' (str) and 'technical_indicators' (dict) keys,
+            or None if file doesn't exist
+        """
         if not self.previous_response_file.exists():
             return None
         
         try:
             with open(self.previous_response_file, 'r') as f:
                 data = json.load(f)
-                return data.get("response")
+                
+                response_data = data.get("response", {})
+                text_analysis = response_data.get("text_analysis", "")
+                # Extract technical indicators (everything except text_analysis)
+                technical_indicators = {k: v for k, v in response_data.items() if k != "text_analysis"}
+                
+                return {
+                    "response": text_analysis,
+                    "technical_indicators": technical_indicators if technical_indicators else None,
+                    "timestamp": data.get("timestamp")
+                }
         except Exception as e:
             self.logger.error(f"Error loading previous response: {e}")
             return None
@@ -340,6 +390,11 @@ class DataPersistence:
     def get_brain_context(self) -> str:
         """Generate formatted brain context for prompt injection.
         
+        Features:
+        - Time decay: Recent insights weighted higher (0.95 per week)
+        - Statistical significance: Only shows validated insights (min_sample_size trades)
+        - Factor performance: Shows which confluence factors correlate with wins
+        
         Returns:
             Formatted string with confidence calibration and distilled insights.
         """
@@ -368,28 +423,64 @@ class DataPersistence:
         if recommendation:
             lines.append(f"  → INSIGHT: {recommendation}")
         
-        # Add distilled insights by category
-        if self.brain.insights:
-            lines.extend(["", "DISTILLED INSIGHTS (Most Recent):"])
+        # Feature 1: Factor Performance Section
+        if self.brain.factor_performance:
+            lines.extend(["", "FACTOR PERFORMANCE (Confluence Learning):"])
             
-            # Group insights by category for better organization
-            categories_order = ['STOP_LOSS', 'ENTRY_TIMING', 'RISK_MANAGEMENT', 'MARKET_REGIME']
-            insight_count = 0
+            # Group by factor name and sort by win rate
+            factor_groups = {}
+            for key, stats in self.brain.factor_performance.items():
+                if stats.total_trades >= self.brain.min_sample_size:
+                    if stats.factor_name not in factor_groups:
+                        factor_groups[stats.factor_name] = []
+                    factor_groups[stats.factor_name].append(stats)
             
-            for category in categories_order:
-                category_insights = self.brain.get_insights_by_category(category)
-                for insight in category_insights[-2:]:  # Max 2 per category in context
-                    insight_count += 1
-                    days_ago = (datetime.now() - insight.last_validated).days
+            for factor_name, stats_list in factor_groups.items():
+                # Find the best performing bucket for this factor
+                best_stat = max(stats_list, key=lambda s: s.win_rate)
+                if best_stat.win_rate >= 60:  # Only show if meaningful
                     lines.append(
-                        f"{insight_count}. [{insight.category}] {insight.lesson} | "
-                        f"Validated: {insight.trade_count} trades | "
-                        f"Condition: {insight.condition}"
+                        f"- {factor_name}: {best_stat.bucket} scores → "
+                        f"{best_stat.win_rate:.0f}% win rate ({best_stat.total_trades} trades)"
                     )
+        
+        # Feature 2 & 3: Add distilled insights with time decay and sample filtering
+        if self.brain.insights:
+            now = datetime.now()
+            validated_insights = []
+            provisional_insights = []
+            
+            for insight in self.brain.insights:
+                # Calculate time decay weight (0.95 per week = ~0.77 per month)
+                weeks_old = (now - insight.last_validated).days / 7
+                decay_weight = 0.95 ** weeks_old
+                
+                # Categorize by sample size
+                if insight.trade_count >= self.brain.min_sample_size:
+                    validated_insights.append((insight, decay_weight))
+                else:
+                    provisional_insights.append((insight, decay_weight))
+            
+            # Sort by decay weight (most recent first)
+            validated_insights.sort(key=lambda x: x[1], reverse=True)
+            
+            if validated_insights:
+                lines.extend(["", "VALIDATED INSIGHTS (Statistically Significant):"])
+                for i, (insight, weight) in enumerate(validated_insights[:6]):  # Top 6
+                    status = "★" if weight > 0.9 else "○"
+                    lines.append(
+                        f"{status} [{insight.category}] {insight.lesson} "
+                        f"({insight.trade_count} trades)"
+                    )
+            
+            if provisional_insights and len(validated_insights) < 3:
+                lines.extend(["", "PROVISIONAL (Needs more data):"])
+                for insight, _ in provisional_insights[:2]:
+                    lines.append(f"  - {insight.lesson} ({insight.trade_count} trades)")
         
         lines.extend([
             "",
-            "APPLY THESE INSIGHTS: Avoid repeating documented mistakes. Adjust confidence based on calibration data.",
+            "APPLY THESE INSIGHTS: Prioritize factors with proven high win rates. Weight recent insights higher.",
             "=" * 60,
         ])
         
@@ -420,6 +511,9 @@ class DataPersistence:
         
         # Update confidence statistics
         self.brain.update_confidence_stats(position.confidence, is_win, pnl_pct)
+        
+        # Update factor performance stats (Feature 1: Confluence Factor Learning)
+        self._update_factor_performance(position.confluence_factors, is_win, pnl_pct)
         
         # Build market condition string
         conditions = market_conditions or {}
@@ -483,6 +577,51 @@ class DataPersistence:
             parts.append("Low Vol")
         
         return " + ".join(parts) if parts else "Unknown"
+    
+    def _update_factor_performance(
+        self, 
+        confluence_factors: tuple, 
+        is_win: bool, 
+        pnl_pct: float
+    ) -> None:
+        """Update factor performance statistics from closed trade.
+        
+        Buckets factor scores into LOW (0-30), MEDIUM (31-69), HIGH (70-100)
+        and tracks win rate per bucket for each factor.
+        
+        Args:
+            confluence_factors: Tuple of (factor_name, score) pairs from Position
+            is_win: Whether the trade was profitable
+            pnl_pct: P&L percentage
+        """
+        if not confluence_factors:
+            return
+        
+        for factor_name, score in confluence_factors:
+            # Determine bucket based on score
+            if score <= 30:
+                bucket = "LOW"
+            elif score <= 69:
+                bucket = "MEDIUM"
+            else:
+                bucket = "HIGH"
+            
+            # Create key for this factor+bucket combination
+            key = f"{factor_name}_{bucket}"
+            
+            # Get or create FactorStats for this key
+            if key not in self.brain.factor_performance:
+                self.brain.factor_performance[key] = FactorStats(
+                    factor_name=factor_name,
+                    bucket=bucket
+                )
+            
+            # Update stats
+            self.brain.factor_performance[key].update(is_win, pnl_pct, score)
+        
+        self.logger.debug(
+            f"Updated factor performance for {len(confluence_factors)} factors"
+        )
     
     def _extract_insights_from_trade(
         self,

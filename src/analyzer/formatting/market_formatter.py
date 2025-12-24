@@ -2,9 +2,10 @@
 Consolidated Market Analysis Formatter.
 Handles all market analysis formatting in a single comprehensive class.
 """
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+
 from src.logger.logger import Logger
-from src.utils.token_counter import TokenCounter
 from src.indicators.constants import INDICATOR_THRESHOLDS
 
 
@@ -14,7 +15,6 @@ class MarketFormatter:
     def __init__(self, logger: Optional[Logger] = None, format_utils=None):
         """Initialize the market formatter."""
         self.logger = logger
-        self.token_counter = TokenCounter()
         self.format_utils = format_utils
         # Reference the global indicator thresholds constant
         self.INDICATOR_THRESHOLDS = INDICATOR_THRESHOLDS
@@ -277,14 +277,13 @@ class MarketFormatter:
             ath = coin.get("ath", 0)
             ath_pct = coin.get("ath_change_percentage", 0)
             ath_date = coin.get("ath_date", "")
-            market_cap = coin.get("market_cap", 0)
+            ath_date = coin.get("ath_date", "")
             coin_volume = coin.get("total_volume", 0)
             
             # Parse ATH date if available
             ath_date_str = ""
             if ath_date:
                 try:
-                    from datetime import datetime
                     dt = datetime.fromisoformat(ath_date.replace('Z', '+00:00'))
                     ath_date_str = dt.strftime("%b %d, %Y")
                 except:
@@ -935,7 +934,6 @@ class MarketFormatter:
         lines = [f"## {symbol} Funding Rate (Futures):"]
         
         # Funding rate
-        rate = funding.get("funding_rate")
         rate_pct = funding.get("funding_rate_percent")
         if rate_pct is not None:
             lines.append(f"  • Current Funding Rate: {rate_pct:.4f}%")

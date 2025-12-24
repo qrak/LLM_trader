@@ -1,6 +1,5 @@
 import json
 import random
-import asyncio
 from typing import Optional, Dict, Any, List
 
 from src.logger.logger import Logger
@@ -46,7 +45,7 @@ class MockClient:
                             continue
         return None
 
-    def _synthesize_response(self, last_close: Optional[float] = None) -> str:
+    def _synthesize_response(self, last_close: Optional[float] = None, has_chart: bool = False) -> str:
         """Create a human-readable analysis + JSON block following the project's template."""
         if last_close is None:
             # Default safe response
@@ -76,15 +75,29 @@ class MockClient:
         pos_size = round(min(0.05, max(0.001, random.random() * 0.03)), 4)
         rr = round(abs((tp - entry) / (entry - sl)) if entry != sl else 0.0, 2)
 
-        analysis_text = (
-            "Technical indicators point to a clear short-to-medium term bias. "
-            "Volume and momentum signals have been considered in decision-making.\n\n"
-        )
+        if has_chart:
+            analysis_text = (
+                "Technical indicators point to a clear short-to-medium term bias. "
+                "Chart Pattern Analysis: specific patterns detected in the provided image support this view. "
+                "Volume and momentum signals have been considered in decision-making.\n\n"
+            )
+        else:
+            analysis_text = (
+                "Technical indicators point to a clear short-to-medium term bias. "
+                "Volume and momentum signals have been considered in decision-making.\n\n"
+            )
 
         payload = {
             "analysis": {
                 "signal": signal,
                 "confidence": confidence,
+                "confluence_factors": {
+                    "trend_alignment": random.randint(50, 95),
+                    "momentum_strength": random.randint(50, 90),
+                    "volume_support": random.randint(40, 85),
+                    "pattern_quality": random.randint(45, 90),
+                    "support_resistance_strength": random.randint(50, 95)
+                },
                 "entry_price": entry,
                 "stop_loss": sl,
                 "take_profit": tp,
@@ -117,8 +130,19 @@ class MockClient:
         }
 
     async def chat_completion_with_chart_analysis(self, model: str, messages: list, chart_image, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
-        # For testing, ignore the image and reuse chat_completion behavior
-        return await self.chat_completion(model, messages, model_config)
+        last_close = self._extract_last_close_hint(messages)
+        # Pass has_chart=True to include chart specific text in the response
+        content = self._synthesize_response(last_close, has_chart=True)
+
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": content
+                    }
+                }
+            ]
+        }
 
     async def console_stream(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
         # Simulate streaming by returning the full content immediately

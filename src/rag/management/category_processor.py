@@ -9,25 +9,64 @@ from src.utils.collision_resolver import CategoryCollisionResolver
 class CategoryProcessor:
     """Handles processing and normalization of cryptocurrency categories."""
     
-    def __init__(self, logger: Logger):
+    def __init__(self, logger: Logger, file_handler=None):
         self.logger = logger
+        self.file_handler = file_handler
         
         # Category data storage
         self.category_word_map: Dict[str, str] = {}
         self.general_categories: Set[str] = set()
         self.ticker_categories: Set[str] = set()
-        self.important_categories: Set[str] = {
-            'decentralized-finance-defi', 'smart-contracts', 'ethereum-ecosystem',
-            'binance-smart-chain', 'layer-1', 'layer-2', 'metaverse', 'gaming',
-            'nft', 'web3', 'meme-tokens', 'stablecoins', 'privacy-coins'
-        }
         
-        # Initialize collision resolver with category sets
+        # Load configurations from file
+        self.important_categories: Set[str] = self._load_important_categories()
+        self.generic_priorities: Dict[str, int] = self._load_generic_priorities()
+        
+        # Initialize collision resolver with category sets and priorities
         self.collision_resolver = CategoryCollisionResolver(
             important_categories=self.important_categories,
             ticker_categories=self.ticker_categories,
-            general_categories=self.general_categories
+            general_categories=self.general_categories,
+            generic_priorities=self.generic_priorities
         )
+    
+    def _load_important_categories(self) -> Set[str]:
+        """Load important categories from config file."""
+        if self.file_handler:
+            try:
+                config_data = self.file_handler.load_rag_priorities()
+                if config_data and 'important_categories' in config_data:
+                    categories = set(config_data['important_categories'])
+                    if categories:
+                        self.logger.debug(f"Loaded {len(categories)} important categories from config")
+                        return categories
+                    else:
+                        self.logger.warning("Config file has empty important_categories list")
+            except Exception as e:
+                self.logger.error(f"Failed to load important categories from config: {e}")
+        
+        # No hardcoded fallback - return empty set and log warning
+        self.logger.warning("No important categories loaded - using empty set. Check data/rag_priorities.json")
+        return set()
+    
+    def _load_generic_priorities(self) -> Dict[str, int]:
+        """Load generic category priorities from config file."""
+        if self.file_handler:
+            try:
+                config_data = self.file_handler.load_rag_priorities()
+                if config_data and 'generic_priorities' in config_data:
+                    priorities = config_data['generic_priorities']
+                    if priorities:
+                        self.logger.debug(f"Loaded {len(priorities)} generic priorities from config")
+                        return priorities
+                    else:
+                        self.logger.warning("Config file has empty generic_priorities dict")
+            except Exception as e:
+                self.logger.error(f"Failed to load generic priorities from config: {e}")
+        
+        # No hardcoded fallback - return empty dict and log warning
+        self.logger.warning("No generic priorities loaded - using empty dict. Check data/rag_priorities.json")
+        return {}
     
     def process_api_categories(self, api_categories: List[Dict[str, Any]]) -> None:
         """Process API categories and update internal indices."""

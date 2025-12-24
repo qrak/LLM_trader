@@ -7,7 +7,8 @@ and compatibility checking for various APIs and exchanges.
 Supported timeframe range: 1h (minimum) to 1d (maximum)
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
+import re
 
 
 class TimeframeValidator:
@@ -87,7 +88,6 @@ class TimeframeValidator:
         Raises:
             ValueError: If period format is invalid
         """
-        import re
         match = re.match(r'^(\d+)([hd])$', period.lower())
         if not match:
             raise ValueError(f"Invalid period format: {period}")

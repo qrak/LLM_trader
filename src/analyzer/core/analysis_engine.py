@@ -12,6 +12,7 @@ from ..data.market_data_collector import MarketDataCollector
 from ..calculations.market_metrics_calculator import MarketMetricsCalculator
 from ..prompts.prompt_builder import PromptBuilder
 from ..pattern_engine.chart_generator import ChartGenerator
+from ..data.data_fetcher import DataFetcher
 from src.logger.logger import Logger
 from src.rag import RagEngine
 
@@ -99,7 +100,7 @@ class AnalysisEngine:
         # Initialize specialized components
         self.model_manager = model_manager
         self.technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils)
-        self.pattern_analyzer = PatternAnalyzer(logger=logger, format_utils=format_utils)
+        self.pattern_analyzer = PatternAnalyzer(logger=logger)
         try:
             self.pattern_analyzer.warmup()
         except Exception as warmup_error:
@@ -176,7 +177,6 @@ class AnalysisEngine:
         self.context.timeframe = effective_timeframe
         
         # Create data fetcher and initialize data collector
-        from ..data.data_fetcher import DataFetcher
         data_fetcher = DataFetcher(exchange=exchange, logger=self.logger)
         
         self.data_collector.initialize(
@@ -221,9 +221,11 @@ class AnalysisEngine:
         model: Optional[str] = None,
         additional_context: Optional[str] = None,
         previous_response: Optional[str] = None,
+        previous_indicators: Optional[Dict[str, Any]] = None,
         position_context: Optional[str] = None,
         performance_context: Optional[str] = None,
-        brain_context: Optional[str] = None
+        brain_context: Optional[str] = None,
+        last_analysis_time: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
@@ -233,9 +235,11 @@ class AnalysisEngine:
             model: Optional AI model override (admin only)
             additional_context: Additional context to append to prompt (e.g., extra instructions)
             previous_response: Optional previous AI response for continuity
+            previous_indicators: Optional previous technical indicator values for trend comparison
             position_context: Current position details and unrealized P&L (goes to system prompt)
             performance_context: Recent trading history and performance (goes to system prompt)
             brain_context: Distilled trading insights from closed trades (goes to system prompt)
+            last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             
         Returns:
             Dictionary containing analysis results
@@ -252,7 +256,7 @@ class AnalysisEngine:
             await self._perform_technical_analysis()
             
             # Step 4: Generate AI analysis
-            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, position_context, performance_context, brain_context)
+            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, previous_indicators, position_context, performance_context, brain_context, last_analysis_time)
             
             # Store the result for later publication
             self.last_analysis_result = analysis_result
@@ -347,9 +351,11 @@ class AnalysisEngine:
         model: Optional[str],
         additional_context: Optional[str] = None,
         previous_response: Optional[str] = None,
+        previous_indicators: Optional[Dict[str, Any]] = None,
         position_context: Optional[str] = None,
         performance_context: Optional[str] = None,
-        brain_context: Optional[str] = None
+        brain_context: Optional[str] = None,
+        last_analysis_time: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         self.prompt_builder.language = self.language
@@ -370,12 +376,14 @@ class AnalysisEngine:
             previous_response,
             position_context,
             performance_context,
-            brain_context
+            brain_context,
+            last_analysis_time
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
             has_chart_analysis=has_chart_analysis,
-            additional_context=additional_context
+            additional_context=additional_context,
+            previous_indicators=previous_indicators
         )
         # Process analysis
         if self.config.TEST_ENVIRONMENT:
@@ -400,6 +408,10 @@ class AnalysisEngine:
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
         analysis_result["chart_analysis"] = has_chart_analysis
+        
+        # Add technical_data for persistence (will be saved to previous_response.json)
+        if hasattr(self.context, 'technical_data'):
+            analysis_result["technical_data"] = self.context.technical_data
         
         return analysis_result
 

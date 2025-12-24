@@ -148,6 +148,9 @@ class TradingStrategy:
             # Extract market conditions for brain learning
             market_conditions = self._extract_market_conditions(analysis_result)
             
+            # Extract confluence factors for brain learning (Feature 1)
+            confluence_factors = self._extract_confluence_factors(analysis_result)
+            
             # Handle existing position
             if self.current_position:
                 return await self._handle_existing_position(
@@ -159,7 +162,8 @@ class TradingStrategy:
             if signal in ("BUY", "SELL"):
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
-                    position_size, current_price, symbol, reasoning
+                    position_size, current_price, symbol, reasoning,
+                    confluence_factors
                 )
             
             # HOLD or no action
@@ -241,6 +245,7 @@ class TradingStrategy:
         current_price: float,
         symbol: str,
         reasoning: str,
+        confluence_factors: tuple = (),
     ) -> TradeDecision:
         """Open a new trading position.
         
@@ -253,6 +258,7 @@ class TradingStrategy:
             current_price: Entry price
             symbol: Trading symbol
             reasoning: AI reasoning
+            confluence_factors: Tuple of (factor_name, score) pairs for brain learning
             
         Returns:
             TradeDecision for the new position
@@ -287,7 +293,7 @@ class TradingStrategy:
                 self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using default")
                 final_tp = default_tp
         
-        # Create position (frozen dataclass, so we create new instance)
+        # Create position with confluence factors for brain learning
         self.current_position = Position(
             entry_price=current_price,
             stop_loss=final_sl,
@@ -297,6 +303,7 @@ class TradingStrategy:
             confidence=confidence,
             direction=direction,
             symbol=symbol,
+            confluence_factors=confluence_factors,
         )
         
         self.persistence.save_position(self.current_position)
@@ -419,9 +426,9 @@ class TradingStrategy:
                 tech_data = context.technical_data or {}
                 conditions["adx"] = tech_data.get("adx", 0)
                 conditions["rsi"] = tech_data.get("rsi", 50)
+                conditions["choppiness"] = tech_data.get("choppiness", None)
                 
                 # Determine volatility from ATR or other indicators
-                atr = tech_data.get("atr", 0)
                 atr_pct = tech_data.get("atr_percentage", 0)
                 if atr_pct > 3:
                     conditions["volatility"] = "HIGH"
@@ -444,6 +451,38 @@ class TradingStrategy:
             self.logger.warning(f"Could not extract market conditions: {e}")
         
         return conditions
+    
+    def _extract_confluence_factors(self, result: dict) -> tuple:
+        """Extract confluence factors from analysis result for brain learning.
+        
+        Args:
+            result: Analysis result dictionary
+            
+        Returns:
+            Tuple of (factor_name, score) pairs
+        """
+        factors = []
+        
+        try:
+            # Try to extract from parsed JSON analysis
+            parsed = result.get("parsed_json", {})
+            analysis = parsed.get("analysis", {})
+            confluence_factors = analysis.get("confluence_factors", {})
+            
+            if isinstance(confluence_factors, dict):
+                for factor_name, score in confluence_factors.items():
+                    try:
+                        # Ensure score is numeric and in valid range
+                        score_value = float(score)
+                        if 0 <= score_value <= 100:
+                            factors.append((factor_name, score_value))
+                    except (ValueError, TypeError):
+                        pass
+                        
+        except Exception as e:
+            self.logger.warning(f"Could not extract confluence factors: {e}")
+        
+        return tuple(factors)
     
     def get_position_context(self, current_price: Optional[float] = None) -> str:
         """Get formatted context about current position for prompts.

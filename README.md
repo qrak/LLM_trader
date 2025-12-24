@@ -1,183 +1,122 @@
-# Crypto Trading Bot
+# 🤖 AI Crypto Trader
 
-> **AI-powered cryptocurrency market analysis console application**
+> **Autonomous AI-powered trading bot that analyzes patterns, news, and market structure to execute trades.**
 
-A Python-based tool that analyzes cryptocurrency markets using advanced AI models (Google AI, OpenRouter, LM Studio), technical indicators, pattern detection, and market sentiment analysis. Results are displayed directly in your terminal.
+This tool leverages advanced LLMs (Gemini, OpenRouter, LM Studio) to analyze cryptocurrency markets. It combines **Technical Analysis** (50+ indicators), **Chart Pattern Recognition**, and **RAG-based News Analysis** to make distinct trading decisions (Buy/Sell/Hold).
 
-## 🚀 Features
+## ✨ Key Features
 
-- **Multi-Exchange Support**: Connects to Binance, KuCoin, and other major exchanges
-- **50+ Technical Indicators**: RSI, MACD, Bollinger Bands, Ichimoku, and more
-- **Pattern Detection**: Identifies chart patterns (head & shoulders, triangles, wedges) and indicator patterns
-- **AI-Powered Analysis**: Uses advanced AI models for market insights
-- **News & Sentiment**: Integrates cryptocurrency news and market sentiment via RAG system
-- **Console-First**: Simple, clean terminal output with no dependencies on external services
+- **🧠 Multi-Model AI**: Orchestrates Gemini, GPT-4, or Local LLMs for consensus-based analysis.
+- **👀 AI Vision Analysis**: Generates and feeds chart images to Vision models for visual pattern confirmation.
+- **📢 Discord Integration**: Real-time notifications for analysis, signals, and position management.
+- **⌨️ Interactive Console**: Real-time control (Force Analysis `a`, Help `h`, Quit `q`).
+- **🛡️ Risk Management**: Built-in support for customized Stop Loss, Take Profit, and Position Sizing.
+- **📡 Multi-Exchange**: Support for Binance, KuCoin, Gate.io, and others via `ccxt`.
 
-## 📋 Quick Start
+## 🏗️ System Architecture
 
-### Prerequisites
+```mermaid
+graph TD
+    A[Exchange Data] --> B(Data Collector)
+    C[News Sources] --> D(RAG Engine)
+    
+    B --> E[Technical Calculator]
+    B --> F[Pattern Analyzer]
+    B --> G[Chart Generator]
+    
+    E --> H[Context Builder]
+    F --> H
+    D --> H
+    G --> H
+    
+    H --> I{AI Model Manager}
+    I --> J[Gemini/OpenAI/Local]
+    
+    J --> K[Decision Engine]
+    K --> L[Trading Strategy]
+    L --> M[Exchange Execution]
+    L --> N[Discord Notifier]
+```
 
-- Python 3.11 or higher
-- pip (Python package manager)
-- Virtual environment (recommended)
+## � Quick Start
 
-### Installation
+### 1. Prerequisites
+- Python 3.11+
+
+### 2. Installation
 
 ```powershell
-# Clone the repository
-git clone <your-repo-url>
+# Clone repo
+git clone https://github.com/yourusername/LLM_trader.git
 cd LLM_trader
 
-# Create and activate virtual environment (Windows)
+# Setup Virtual Environment
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# Install dependencies
+# Install Dependencies
 pip install -r requirements.txt
-
-# Configure API keys
-cp keys.env.example keys.env
-# Edit keys.env and add your API keys
 ```
 
-### Configuration
+### 3. Configuration
 
-1. **API Keys** (`keys.env`):
-   - Add your AI provider keys (Google AI, OpenRouter, or LM Studio)
-   - Add CoinGecko API key (optional)
+1. **Credentials**: Copy `keys.env.example` to `keys.env` and fill in your keys.
+   ```ini
+   # keys.env
+   GOOGLE_API_KEY=...
+   OPENROUTER_API_KEY=...
+   DISCORD_BOT_TOKEN=...
+   DISCORD_CHANNEL_ID=...
+   ```
 
-2. **Settings** (`config/config.ini`):
-   - Choose AI provider
-   - Set default timeframe
-   - Configure exchanges
+2. **Bot Config**: Edit `config/config.ini` to set timeframe, AI provider, and risk parameters.
 
-### Usage
+## 🎮 Usage
+
+Run the bot for a specific pair:
 
 ```powershell
-# Analyze default symbol (BTC/USDT)
-python start.py
-
-# Analyze specific symbol
-python start.py ETH/USDT
-
-# Analyze with specific timeframe
-python start.py SOL/USDT 1h
+python start.py BTC/USDT    # Default timeframe (4h)
+python start.py ETH/USDT 1h # Custom timeframe
 ```
 
-## 📊 Example Output
+### ⌨️ Keyboard Shortcuts
+| Key | Action |
+| :--- | :--- |
+| **`a`** | **Force Analysis**: Run immediate market check |
+| **`h`** | **Help**: Show available commands |
+| **`q`** | **Quit**: Gracefully shutdown the bot |
 
-```
+## 📊 Example Console Output
+
+```log
 ================================================================================
-ANALYSIS RESULTS FOR BTC/USDT
+ANALYSIS RESULTS FOR BTC/USDT (4h)
 ================================================================================
+AI THINKING:
+"RSI is 67.3 (Bullish). MACD crossed upward. Chart shows Cup & Handle formation.
+News sentiment is positive (ETF inflows). I recommend a LONG position."
 
---------------------------------------------------------------------------------
-AI ANALYSIS:
---------------------------------------------------------------------------------
-## Market Analysis for BTC/USDT
-
-### Summary
-Bitcoin shows strong bullish momentum with RSI at 67.3 indicating healthy buying 
-pressure without being overbought. The MACD histogram has crossed positive, 
-confirming trend strength...
-
-[Detailed technical analysis with patterns, support/resistance levels, and recommendations]
-
---------------------------------------------------------------------------------
-METADATA:
---------------------------------------------------------------------------------
-Provider: googleai
-Model: gemini-2.0-flash-exp
-Timeframe: 4h
-Language: English
-
---------------------------------------------------------------------------------
-NEWS SOURCES:
---------------------------------------------------------------------------------
-  general: https://example.com/crypto-news/general
-  bitcoin: https://example.com/crypto-news/bitcoin
+TRADING DECISION:
+Action: BUY
+Confidence: HIGH (85%)
+Entry: $92,450
+Stop Loss: $90,500
+Take Profit: $98,000
+Reasoning: Strong momentum + structural breakout confirmed by Vision model.
 ================================================================================
 ```
 
-## 🏗️ Architecture
+## 🛠️ Project Structure
 
-```
-CryptoTradingBot
-├── ExchangeManager          # Multi-exchange connectivity
-├── RagEngine                # News & context enrichment
-├── ModelManager             # AI provider orchestration
-└── AnalysisEngine
-    ├── DataCollector        # Market data fetching
-    ├── TechnicalCalculator  # Indicator computation
-    ├── PatternAnalyzer      # Pattern detection
-    ├── PromptBuilder        # AI prompt generation
-    └── ResultProcessor      # AI response parsing
-```
-
-## 🔧 Configuration Options
-
-### Supported Timeframes
-`1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`
-
-### AI Providers
-- **Google AI**: Gemini models (fast, cost-effective)
-- **OpenRouter**: Access to multiple AI models
-- **LM Studio**: Local AI models (privacy-focused)
-
-### Exchanges
-- Binance
-- KuCoin
-- Gate.io
-- And more via ccxt library
-
-## 📚 Documentation
-
-- **[USAGE.md](USAGE.md)**: Detailed usage guide
-- **[AGENTS.md](AGENTS.md)**: Architecture and development guidelines
-- **[CONTRIBUTING.md](CONTRIBUTING.md)**: How to contribute
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-LLM_trader/
-├── src/
-│   ├── analyzer/          # Analysis engine
-│   ├── indicators/        # Technical indicators
-│   ├── platforms/         # Exchange & AI provider integrations
-│   ├── rag/              # News & context system
-│   ├── models/           # AI model management
-│   └── utils/            # Utilities
-├── config/               # Configuration files
-├── data/                 # Data storage
-└── logs/                 # Application logs
-```
-
-### Running Tests
-
-```powershell
-pytest
-```
+- `src/analyzer/`: Core logic for data collection and prompt engineering.
+- `src/trading/`: Position management and execution strategy.
+- `src/platforms/`: Integrations (Exchanges, AI Providers).
+- `src/rag/`: News fetching and vector store context.
+- `src/discord_interface/`: Remote monitoring and alerts.
 
 ## 🤝 Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## ⚠️ Disclaimer
-
-This tool is for educational and informational purposes only. It is not financial advice. Cryptocurrency trading involves substantial risk of loss. Always do your own research before making investment decisions.
-
-## 🙏 Acknowledgments
-
-- Built with [ccxt](https://github.com/ccxt/ccxt) for exchange connectivity
-- Uses [pandas-ta](https://github.com/twopirllc/pandas-ta) for technical indicators
-- Powered by various AI providers (Google AI, OpenRouter, LM Studio)
-
----
-
-**Made with ❤️ for crypto traders and developers**
+**USE AT YOUR OWN RISK.** This software is for educational purposes. Cryptocurrency trading involves significant risk of financial loss. The authors are not responsible for any financial damages.

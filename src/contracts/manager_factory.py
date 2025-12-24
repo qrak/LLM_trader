@@ -1,7 +1,7 @@
 """Protocol definition for ModelManager interface"""
 
 import io
-from typing import Protocol, Optional, Dict, Any, List, Union, Tuple, TYPE_CHECKING
+from typing import Protocol, Optional, Union, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.utils.token_counter import TokenCounter

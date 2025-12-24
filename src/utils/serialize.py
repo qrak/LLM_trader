@@ -5,7 +5,8 @@ This module provides utilities for recursively converting complex Python objects
 (particularly NumPy arrays and scalars) into JSON-serializable formats.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, List, Union
+import numpy as _np
 
 
 def serialize_for_json(obj: Any) -> Any:
@@ -35,10 +36,7 @@ def serialize_for_json(obj: Any) -> Any:
         >>> serialize_for_json({"nested": {"values": [np.int32(42)]}})
         {"nested": {"values": [42]}}
     """
-    try:
-        import numpy as _np
-    except Exception:
-        _np = None
+
 
     # Dict - recursively process values
     if isinstance(obj, dict):

@@ -1,5 +1,6 @@
 from typing import Dict, List
 import numpy as np
+from src.utils.timeframe_validator import TimeframeValidator
 
 from src.logger.logger import Logger
 
@@ -39,8 +40,8 @@ class MarketMetricsCalculator:
             hour = item['timestamp'].hour
             hourly_distribution[hour] = hourly_distribution.get(hour, 0) + 1
         
+        
         # Get timeframe from context to calculate correct candle counts
-        from src.utils.timeframe_validator import TimeframeValidator
         timeframe = context.timeframe if hasattr(context, 'timeframe') and context.timeframe else '1h'
         
         # Calculate period candle requirements based on actual timeframe

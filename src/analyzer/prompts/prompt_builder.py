@@ -42,7 +42,8 @@ class PromptBuilder:
         self, 
         context: AnalysisContext, 
         has_chart_analysis: bool = False,
-        additional_context: Optional[str] = None
+        additional_context: Optional[str] = None,
+        previous_indicators: Optional[dict] = None
     ) -> str:
         """Build the complete prompt using component managers.
         
@@ -50,6 +51,7 @@ class PromptBuilder:
             context: Analysis context containing all required data
             has_chart_analysis: Whether chart image analysis is available
             additional_context: Additional context to append (e.g., position info, memory)
+            previous_indicators: Previous technical indicator values for comparison
             
         Returns:
             str: Complete formatted prompt
@@ -114,6 +116,15 @@ class PromptBuilder:
             self.context_builder.build_market_period_metrics_section(context.market_metrics),
         ])
         
+        # Add previous indicators comparison section if available
+        if previous_indicators:
+            prev_section = self.context_builder.build_previous_indicators_section(
+                previous_indicators, 
+                context.technical_data
+            )
+            if prev_section:
+                sections.append(prev_section)
+        
         # Build long-term analysis section (daily + weekly)
         long_term_sections = []
         
@@ -161,7 +172,7 @@ class PromptBuilder:
 
         return final_prompt
     
-    def build_system_prompt(self, symbol: str, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build system prompt using template manager.
         
         Args:
@@ -171,11 +182,12 @@ class PromptBuilder:
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
+            last_analysis_time: Formatted timestamp of last analysis (e.g., \"2025-12-26 14:30:00\")
             
         Returns:
             str: Formatted system prompt
         """
-        return self.template_manager.build_system_prompt(symbol, self.timeframe, self.language, has_chart_image, previous_response, position_context, performance_context, brain_context)
+        return self.template_manager.build_system_prompt(symbol, self.timeframe, self.language, has_chart_image, previous_response, position_context, performance_context, brain_context, last_analysis_time)
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.

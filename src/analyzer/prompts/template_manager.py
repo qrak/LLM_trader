@@ -21,7 +21,7 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
@@ -33,6 +33,7 @@ class TemplateManager:
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
+            last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             
         Returns:
             str: Formatted system prompt
@@ -40,6 +41,17 @@ class TemplateManager:
         header_lines = [
             f"You are a professional automated trading system for {symbol} on {timeframe} timeframe and you will be called again in {timeframe} to analyze market again.",
             "",
+        ]
+        
+        # Add last analysis time context if available
+        if last_analysis_time:
+            header_lines.extend([
+                f"TEMPORAL CONTEXT:",
+                f"Last analysis was performed at: {last_analysis_time}",
+                "",
+            ])
+        
+        header_lines.extend([
             "CORE PRINCIPLES:",
             "- All data is based on CLOSED CANDLES ONLY (no incomplete candle data)",
             "- Trading decisions must be based on confirmed signals, not speculation",
@@ -52,7 +64,7 @@ class TemplateManager:
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
             "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
             "Include specific entry, stop loss, and take profit levels with your reasoning.",
-        ]
+        ])
 
         if has_chart_image:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
@@ -68,9 +80,9 @@ class TemplateManager:
         if position_context:
             header_lines.extend([
                 "",
-                "="*60,
+                "=",
                 "CURRENT POSITION & PERFORMANCE:",
-                "="*60,
+                "=",
                 position_context.strip(),
             ])
         
@@ -129,6 +141,13 @@ Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, mark
     "analysis": {
         "signal": "BUY|SELL|HOLD|CLOSE|UPDATE",
         "confidence": 0-100,
+        "confluence_factors": {
+            "trend_alignment": 0-100,
+            "momentum_strength": 0-100,
+            "volume_support": 0-100,
+            "pattern_quality": 0-100,
+            "support_resistance_strength": 0-100
+        },
         "entry_price": number,
         "stop_loss": number,
         "take_profit": number,
@@ -141,14 +160,62 @@ Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, mark
 }
 ```
 
+CONFLUENCE SCORING:
+Before finalizing your signal, rate each factor (0-100) based on how strongly it SUPPORTS your chosen signal:
+- 0 = Factor opposes the signal or is irrelevant
+- 50 = Neutral / Mixed signals
+- 100 = Factor strongly confirms the signal
+
+Factors to score:
+1. **trend_alignment**: Multi-timeframe trend confluence (short/medium/long align with signal direction)
+2. **momentum_strength**: RSI, MACD, momentum oscillators supporting the signal
+3. **volume_support**: Volume profile confirms the move (buying volume for BUY, selling for SELL)
+4. **pattern_quality**: Chart patterns, candlestick formations, swing structure quality
+5. **support_resistance_strength**: Proximity and strength of S/R levels supporting the trade setup
+
 CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL". Make only the immediate action decision.
 
+=== TREND STRENGTH GUIDELINES (Advisory - You Decide) ===
+These are GUIDELINES, not hard rules. Use your judgment based on overall confluence.
+
+ADX + CHOPPINESS ASSESSMENT:
+- ADX < 20 AND Choppiness > 50: ⚠️ CAUTION - Weak trend + choppy market. Requires 4+ strong confluences to trade.
+- ADX < 20 but Choppiness < 50: Potential trend emerging (ADX lags). Trade allowed with strong confirmation.
+- ADX 20-25: Developing trend. Standard 3+ confluences required.
+- ADX > 25: Strong trend environment. Full confidence range available.
+
+CHOPPINESS INDEX CONTEXT:
+- Choppiness > 61.8: Ranging market - trend-following strategies may underperform
+- Choppiness < 38.2: Trending market - breakouts/trend continuation favored
+- Choppiness 38-62: Transitional - exercise caution
+
+NOTE: You may OVERRIDE these guidelines if you have exceptionally strong conviction (e.g., major news catalyst, 5+ confluences, extreme oversold/overbought). When overriding, explicitly state your reasoning.
+
+POSITION SIZING FORMULA (calculate before finalizing):
+- Base size = confidence / 100 (e.g., 75 confidence = 0.75 base)
+- If timeframe_alignment = "MIXED": reduce by 0.20 (e.g., 0.75 - 0.20 = 0.55)
+- If timeframe_alignment = "DIVERGENT": reduce by 0.35 (e.g., 0.75 - 0.35 = 0.40)
+- In weak trend environments (ADX < 20): consider smaller sizes
+- Final position_size = max(0.10, calculated_value)
+
+MACRO TIMEFRAME CONFLICT:
+If the 365D macro trend CONTRADICTS the trade direction:
+- Exercise extra caution and require stronger confirmation
+- Consider waiting for better R/R setups
+If both 365D and Weekly macro conflict: HOLD is strongly recommended unless catalyst is exceptional.
+
 TRADING SIGNALS & CONFIDENCE:
-- BUY (70-100 confidence): Strong bullish trend (ADX >25, aligned SMAs) + 3+ indicator confluence + volume confirmation + clear SL below support, TP above resistance + minimum 2:1 R/R
-- SELL (70-100 confidence): Strong bearish trend + 3+ indicator confluence + volume confirmation + clear SL above resistance, TP below support + minimum 2:1 R/R  
-- HOLD (any confidence <70): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality. Patience over forced trades.
+- BUY (70-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum 2:1 R/R preferred
+- SELL (70-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum 2:1 R/R preferred
+- HOLD (any confidence <70): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality
 - CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
-- UPDATE: Adjust existing position SL/TP when market structure improves (e.g., move SL to breakeven after 2:1 R/R, trail stop on trend continuation, adjust TP for extended targets)
+- UPDATE: Adjust existing position SL/TP when market structure improves
+
+RISK/REWARD GUIDELINES:
+- R/R < 1.5: Very unfavorable - strongly consider HOLD
+- R/R 1.5-2.0: Borderline - only trade with exceptional confluence (4+)
+- R/R >= 2.0: Standard acceptable quality
+- R/R >= 2.5: Strong setup - preferred for counter-trend trades
 
 RISK MANAGEMENT (Stop Loss & Take Profit):
 LONG trades:
@@ -159,7 +226,7 @@ SHORT trades:
 - SL: Above swing high + 1x ATR buffer (max 2-3% from entry) | Example: Entry $100, Swing High $103, ATR $1 → SL $104
 - TP: Key support levels, Fibonacci (0.382/0.236/0.0), previous lows | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
 
-Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit. Minimum 1.5:1 R/R (prefer 2:1+). Scale out at multiple targets (50%/30%/20%).'''
+Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.'''
         
         return response_template
     
@@ -231,7 +298,17 @@ ANALYSIS STEPS (use findings to determine trading signal):
         
         analysis_steps += f"""
 
-{step_number}. SYNTHESIS:
+{step_number}. CONFLUENCE SCORING (Chain-of-Thought):
+   Before finalizing your decision, SCORE each factor (0-100) on how well it supports your intended signal:
+   - trend_alignment: Do multiple timeframes align with your signal direction? (0=opposite direction, 100=perfect alignment)
+   - momentum_strength: Do momentum indicators (RSI, MACD, etc.) confirm your signal? (0=contradicts, 100=strongly confirms)
+   - volume_support: Does volume profile support the move? (0=no volume support, 100=strong volume confirmation)
+   - pattern_quality: Quality of chart patterns and swing structure? (0=unclear/weak, 100=textbook/strong)
+   - support_resistance_strength: Are key S/R levels positioned to support your trade? (0=against you, 100=strongly favoring)
+   
+   Include these scores in your JSON response under "confluence_factors".
+
+{step_number + 1}. SYNTHESIS:
    Trend direction & strength? | Multiple indicator confluence? | Key SL/TP levels? | Risk/reward ratio? | Confidence level? | Trade invalidation triggers?
 
 IMPORTANT: ALL data uses CLOSED CANDLES ONLY (no incomplete data). Decisions based on confirmed price action, preventing premature entries on unconfirmed signals."""

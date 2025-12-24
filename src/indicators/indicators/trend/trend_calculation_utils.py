@@ -2,7 +2,7 @@
 Trend calculation utilities for trend indicators.
 Extracted to reduce complexity in trend_indicators.py
 """
-from typing import NamedTuple, Tuple
+from typing import Tuple
 import numpy as np
 from numba import njit
 

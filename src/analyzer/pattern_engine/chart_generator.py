@@ -12,7 +12,6 @@ from typing import Dict, List, Any, Optional, Union, Callable
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from src.logger.logger import Logger
 
@@ -188,7 +187,6 @@ class ChartGenerator:
                     if self.format_utils:
                         timestamp = self.format_utils.format_current_time("%Y%m%d_%H%M%S")
                     else:
-                        from datetime import datetime
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                     
                     chart_type = "simple" if simple_mode else "full"
@@ -211,7 +209,6 @@ class ChartGenerator:
                             first_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[0][0])
                             last_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[-1][0])
                         else:
-                            from datetime import datetime
                             first_time_dt = datetime.fromtimestamp(ohlcv[0][0] / 1000)
                             last_time_dt = datetime.fromtimestamp(ohlcv[-1][0] / 1000)
                         
