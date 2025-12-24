@@ -132,7 +132,9 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
             else:
                 in_zone = k_val > threshold or d_val > threshold
             
-            return True, i, k_val, d_val, in_zone
+            # periods_ago: crossover at idx+1, current bar is len-1
+            # periods_ago = (len-1) - (idx+1) = len - idx - 2 = i - 1
+            return True, i - 1, k_val, d_val, in_zone
     
     return False, 0, 0.0, 0.0, False
 

@@ -200,10 +200,10 @@ class TechnicalFormatter:
             fib_levels = td['fibonacci_retracement']
             if isinstance(fib_levels, list) and len(fib_levels) == 7:
                 fib_section = (
-                    f" | Fib50: 0.0={self.format_utils.format_number(fib_levels[0], 8)} "
-                    f"0.382={self.format_utils.format_number(fib_levels[2], 8)} "
-                    f"0.618={self.format_utils.format_number(fib_levels[4], 8)} "
-                    f"1.0={self.format_utils.format_number(fib_levels[6], 8)}"
+                    f" | Fib50: 0.0={self.format_utils.fmt(fib_levels[0], 8)} "
+                    f"0.382={self.format_utils.fmt(fib_levels[2], 8)} "
+                    f"0.618={self.format_utils.fmt(fib_levels[4], 8)} "
+                    f"1.0={self.format_utils.fmt(fib_levels[6], 8)}"
                 )
         
         return (
@@ -433,11 +433,11 @@ class TechnicalFormatter:
             # Build SMA line
             sma_parts = []
             if sma_20_val is not None:
-                sma_parts.append(f"20:{self.format_utils.format_number(sma_20_val, 8)}")
+                sma_parts.append(f"20:{self.format_utils.fmt(sma_20_val, 8)}")
             if sma_50_val is not None:
-                sma_parts.append(f"50:{self.format_utils.format_number(sma_50_val, 8)}")
+                sma_parts.append(f"50:{self.format_utils.fmt(sma_50_val, 8)}")
             if sma_200_val is not None:
-                sma_parts.append(f"200:{self.format_utils.format_number(sma_200_val, 8)}")
+                sma_parts.append(f"200:{self.format_utils.fmt(sma_200_val, 8)}")
             
             if not sma_parts:
                 return ""
