@@ -59,6 +59,7 @@ class CryptoTradingBot:
         # Discord notifier
         self.discord_notifier: Optional[DiscordNotifier] = None
         self._discord_task: Optional[asyncio.Task] = None
+        self._position_status_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         start_time = time.perf_counter()
@@ -222,6 +223,9 @@ class CryptoTradingBot:
         if self.trading_strategy.current_position:
             pos = self.trading_strategy.current_position
             self.logger.info(f"Existing position: {pos.direction} @ ${pos.entry_price:,.2f}")
+            # Start hourly position updates for existing position
+            if self.discord_notifier:
+                await self._start_position_status_updates()
         else:
             self.logger.info("No existing position")
         
@@ -271,20 +275,14 @@ class CryptoTradingBot:
                 close_reason = await self.trading_strategy.check_position(current_price)
                 if close_reason:
                     self.logger.info(f"Position closed: {close_reason}")
+                    # Stop hourly position updates
+                    await self._stop_position_status_updates()
                     # Send performance stats to Discord
                     if self.discord_notifier:
                         history = self.data_persistence.load_trade_history()
                         await self.discord_notifier.send_performance_stats(
                             trade_history=history,
                             symbol=self.current_symbol,
-                            channel_id=self.config.MAIN_CHANNEL_ID
-                        )
-                else:
-                    # Position still open - send status update
-                    if self.discord_notifier:
-                        await self.discord_notifier.send_position_status(
-                            position=self.trading_strategy.current_position,
-                            current_price=current_price,
                             channel_id=self.config.MAIN_CHANNEL_ID
                         )
             except Exception as e:
@@ -341,6 +339,21 @@ class CryptoTradingBot:
         
         if decision:
             self._print_trading_decision(decision)
+            # Send initial position status and start hourly updates if a new position was opened
+            if decision.action in ('BUY', 'SELL') and self.trading_strategy.current_position:
+                if self.discord_notifier:
+                    # Send initial position status
+                    try:
+                        current_price = await self._fetch_current_price()
+                        await self.discord_notifier.send_position_status(
+                            position=self.trading_strategy.current_position,
+                            current_price=current_price,
+                            channel_id=self.config.MAIN_CHANNEL_ID
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Error sending initial position status: {e}")
+                    # Start hourly updates
+                    await self._start_position_status_updates()
         else:
             self.logger.info("No trading action taken")
         
@@ -487,6 +500,63 @@ class CryptoTradingBot:
         """Force immediate analysis by interrupting the wait."""
         self.logger.info("Forcing immediate analysis...")
         self._force_analysis.set()
+    
+    async def _start_position_status_updates(self):
+        """Start periodic position status updates to Discord (every hour)."""
+        if self._position_status_task and not self._position_status_task.done():
+            return  # Already running
+        
+        self._position_status_task = asyncio.create_task(
+            self._position_status_loop(),
+            name="Position-Status-Updates"
+        )
+        self._active_tasks.add(self._position_status_task)
+        self._position_status_task.add_done_callback(self._active_tasks.discard)
+        self.logger.debug("Started hourly position status updates")
+    
+    async def _stop_position_status_updates(self):
+        """Stop periodic position status updates."""
+        if self._position_status_task and not self._position_status_task.done():
+            self._position_status_task.cancel()
+            try:
+                await self._position_status_task
+            except asyncio.CancelledError:
+                pass
+            self._position_status_task = None
+            self.logger.debug("Stopped position status updates")
+    
+    async def _position_status_loop(self):
+        """Send position status updates every hour while position is open."""
+        update_interval = 3600  # 1 hour in seconds
+        
+        try:
+            while self.running:
+                # Wait for 1 hour (in chunks for responsiveness)
+                await self._interruptible_sleep(update_interval)
+                
+                if not self.running:
+                    break
+                
+                # Check if position is still open
+                if not self.trading_strategy.current_position:
+                    self.logger.debug("Position closed, stopping status updates")
+                    break
+                
+                # Send position status update
+                if self.discord_notifier:
+                    try:
+                        current_price = await self._fetch_current_price()
+                        await self.discord_notifier.send_position_status(
+                            position=self.trading_strategy.current_position,
+                            current_price=current_price,
+                            channel_id=self.config.MAIN_CHANNEL_ID
+                        )
+                        self.logger.info("Sent hourly position status update to Discord")
+                    except Exception as e:
+                        self.logger.warning(f"Error sending position status update: {e}")
+        except asyncio.CancelledError:
+            self.logger.debug("Position status loop cancelled")
+            raise
     
     async def _show_help(self):
         """Show help information about available commands."""
