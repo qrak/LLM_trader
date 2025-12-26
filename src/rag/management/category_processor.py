@@ -3,7 +3,7 @@ Category processing and normalization operations.
 """
 from typing import Dict, Any, List, Set, Tuple
 from src.logger.logger import Logger
-from src.utils.collision_resolver import CategoryCollisionResolver
+from src.rag.management.collision_resolver import CategoryCollisionResolver
 
 
 class CategoryProcessor:

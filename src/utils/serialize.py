@@ -61,8 +61,15 @@ def serialize_for_json(obj: Any) -> Any:
         except Exception:
             return str(obj)
 
-    # Primitive types - return as-is
-    if isinstance(obj, (str, int, float, bool)) or obj is None:
+    # Primitive types
+    if isinstance(obj, (str, int, bool)) or obj is None:
+        return obj
+
+    # Float - handle NaN/Inf
+    if isinstance(obj, float):
+        import math
+        if math.isnan(obj) or math.isinf(obj):
+            return None
         return obj
 
     # Fallback to string representation for any other type

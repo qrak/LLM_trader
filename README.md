@@ -6,9 +6,9 @@ This tool leverages advanced LLMs (Gemini, OpenRouter, LM Studio) to analyze cry
 
 ## ✨ Key Features
 
-- **🧠 Multi-Model AI**: Orchestrates Gemini, GPT-4, or Local LLMs for consensus-based analysis.
+- **🧠 Adaptive Trading Brain**: Self-evolving knowledge system that learns from confluence factors and applies statistical significance to trading insights.
+- **📢 RAG Engine V2**: Advanced news analysis with `wtpsplit` segmentation and multi-factor relevance scoring.
 - **👀 AI Vision Analysis**: Generates and feeds chart images to Vision models for visual pattern confirmation.
-- **📢 Discord Integration**: Real-time notifications for analysis, signals, and position management.
 - **⌨️ Interactive Console**: Real-time control (Force Analysis `a`, Help `h`, Quit `q`).
 - **🛡️ Risk Management**: Built-in support for customized Stop Loss, Take Profit, and Position Sizing.
 - **📡 Multi-Exchange**: Support for Binance, KuCoin, Gate.io, and others via `ccxt`.

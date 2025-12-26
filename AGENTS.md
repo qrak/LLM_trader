@@ -28,6 +28,7 @@ This repository uses a **layered instruction system** for AI agents:
 - **Data**: pandas 2.3.2, numpy 2.2.3, ccxt 4.5.3 (multi-exchange)
 - **AI**: google-genai, OpenRouter API, LM Studio (local)
 - **APIs**: CoinGecko, CryptoCompare, Alternative.me (Fear & Greed)
+- **RAG Engine**: wtpsplit (sentence segmentation), keyword search with relevance scoring
 - **Storage**: JSON files (`data/`, `trading_data/`), SQLite cache (`cache/coingecko_cache.db`)
 - **Output**: Console only (no Discord, no HTML)
 
@@ -44,6 +45,7 @@ This repository uses a **layered instruction system** for AI agents:
 | `TradingMemory` | `dataclasses.py` | Rolling memory of last N decisions |
 | `TradingBrain` | `dataclasses.py` | Bounded memory system for distilled trading insights |
 | `TradingInsight` | `dataclasses.py` | Single distilled trading lesson from closed trades |
+| `FactorStats` | `dataclasses.py` | Win/loss statistics per confluence factor bucket |
 | `ConfidenceStats` | `dataclasses.py` | Win/loss statistics per confidence level (HIGH/MEDIUM/LOW) |
 | `DataPersistence` | `data_persistence.py` | Save/load positions, trade history, memory, brain |
 | `PositionExtractor` | `position_extractor.py` | Extract BUY/SELL/HOLD from AI response |
@@ -55,6 +57,9 @@ The Trading Brain is a bounded, self-updating knowledge structure that stores **
 
 **Key Features:**
 - Fixed-size insight storage (max 10 insights) with FIFO eviction and category balancing
+- **Confluence Factor Learning**: Tracks performance for specific factor score buckets (HIGH/MEDIUM/LOW)
+- **Time Decay**: Recent insights weighted higher (relevance decreases by 0.95/week)
+- **Statistical Significance**: Only shows validated insights after `min_sample_size` trades
 - Confidence calibration tracking (win rate per HIGH/MEDIUM/LOW confidence)
 - Rule-based insight extraction from closed trades (no AI calls needed)
 - Categories: STOP_LOSS, ENTRY_TIMING, RISK_MANAGEMENT, MARKET_REGIME
@@ -62,8 +67,9 @@ The Trading Brain is a bounded, self-updating knowledge structure that stores **
 **Brain Context in Prompts:**
 The brain context is injected into the system prompt (after performance_context, before previous_response) containing:
 1. Confidence calibration stats (win rate per confidence level)
-2. Distilled insights organized by category
-3. Recommendations based on performance patterns
+2. **Factor Performance**: Best performing factor buckets based on historical data
+3. **Validated Insights**: Statistically significant lessons with time-decay weights
+4. Recommendations based on performance patterns
 
 **Data Flow for Brain Updates:**
 1. Position closes (SL/TP hit or signal close)
@@ -79,6 +85,7 @@ The brain context is injected into the system prompt (after performance_context,
 | `TemplateManager` | `template_manager.py` | System prompts for trading decisions (JSON-only output) |
 | `PromptBuilder` | `prompt_builder.py` | Builds prompts with market data |
 | `ContextBuilder` | `context_builder.py` | Builds context sections (market data, sentiment) |
+| `SentenceSplitter` | `../../utils/text_splitting.py` | Singleton using `wtpsplit` (SaT model) for news segmentation |
 
 **NOTE**: Modify existing prompt engine files. Do NOT create new template files.
 

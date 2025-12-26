@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.contracts.config import ConfigProtocol
 from src.logger.logger import Logger
 from src.utils.decorators import retry_api_call
-from src.utils.collision_resolver import CategoryCollisionResolver
+from src.rag.management.collision_resolver import CategoryCollisionResolver
 from .cryptocompare_data_processor import CryptoCompareDataProcessor
 
 

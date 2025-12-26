@@ -38,6 +38,7 @@ class DataPersistence:
         # Load trading brain (bounded memory system)
         self.brain = self._load_brain()
     
+
     # ==================== Position Management ====================
     
     def save_position(self, position: Optional[Position]) -> None:
@@ -61,6 +62,9 @@ class DataPersistence:
                 "confluence_factors": [[name, score] for name, score in position.confluence_factors],
             }
             
+            # Sanitize data before saving
+            data = serialize_for_json(data)
+
             with open(self.positions_file, 'w') as f:
                 json.dump(data, f, indent=2)
                 
@@ -104,7 +108,10 @@ class DataPersistence:
             
             # Add to persistent history
             history = self.load_trade_history()
-            history.append(decision.to_dict())
+            
+            decision_dict = decision.to_dict()
+            sanitized_decision = serialize_for_json(decision_dict)
+            history.append(sanitized_decision)
             
             with open(self.history_file, 'w') as f:
                 json.dump(history, f, indent=2)
@@ -249,6 +256,9 @@ class DataPersistence:
                 "response": response_dict,
                 "timestamp": datetime.now().isoformat()
             }
+            
+            # Sanitize data before saving (handle NaN/Infinity)
+            data_to_save = serialize_for_json(data_to_save)
             
             with open(self.previous_response_file, 'w') as f:
                 json.dump(data_to_save, f, indent=2)

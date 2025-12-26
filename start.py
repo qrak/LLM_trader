@@ -5,9 +5,6 @@ Automated trading with AI-powered decisions.
 import asyncio
 import sys
 import argparse
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="google")
 from src.utils.loader import config
 from src.app import CryptoTradingBot
 from src.logger.logger import Logger
