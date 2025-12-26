@@ -2,10 +2,9 @@ import io
 from typing import Optional, Dict, Any, List, Union, cast, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 from src.logger.logger import Logger
-from src.parsing.unified_parser import UnifiedParser
 from src.parsing.response_formatter import ResponseFormatter
 from src.platforms.ai_providers.openrouter import ResponseDict
 from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
@@ -17,18 +16,21 @@ from src.factories import ProviderFactory
 class ModelManager(ModelManagerProtocol):
     """Manages interactions with AI models"""
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol") -> None:
+    def __init__(self, logger: Logger, config: "ConfigProtocol", unified_parser=None) -> None:
         """Initialize the ModelManager with its component parts.
         
         Args:
             logger: Logger instance for logging
             config: ConfigProtocol instance for configuration access
+            unified_parser: UnifiedParser instance (must be injected from app.py)
         
         Raises:
-            ValueError: If config is None
+            ValueError: If config or unified_parser is None
         """
         if config is None:
             raise ValueError("config is a required parameter and cannot be None")
+        if unified_parser is None:
+            raise ValueError("unified_parser is required - must be injected from app.py")
         
         self.logger = logger
         self.config = config
@@ -44,8 +46,8 @@ class ModelManager(ModelManagerProtocol):
         self.google_paid_client: Optional[GoogleAIClient] = clients['google_paid']
         self.lm_studio_client: Optional[LMStudioClient] = clients['lmstudio']
 
-        # Create helper components
-        self.unified_parser = UnifiedParser(logger)
+        # Create helper components - use injected parser
+        self.unified_parser = unified_parser
         self.token_counter = TokenCounter()
         self.response_formatter = ResponseFormatter()
 

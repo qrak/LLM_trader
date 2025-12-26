@@ -2,7 +2,7 @@
 from typing import Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
@@ -50,7 +50,7 @@ class ProviderFactory:
                 model=self.config.GOOGLE_STUDIO_MODEL,
                 logger=self.logger
             )
-            self.logger.info("Google AI client initialized")
+            self.logger.debug("Google AI client initialized")
             
             # Initialize paid client if paid API key is available
             if self.config.GOOGLE_STUDIO_PAID_API_KEY:
@@ -59,7 +59,7 @@ class ProviderFactory:
                     model=self.config.GOOGLE_STUDIO_MODEL,
                     logger=self.logger
                 )
-                self.logger.info("Google AI paid client initialized as fallback for overloaded free tier")
+                self.logger.debug("Google AI paid client initialized as fallback for overloaded free tier")
         
         return google_client, google_paid_client
     
@@ -78,7 +78,7 @@ class ProviderFactory:
             base_url=self.config.OPENROUTER_BASE_URL,
             logger=self.logger
         )
-        self.logger.info("OpenRouter client initialized")
+        self.logger.debug("OpenRouter client initialized")
         return client
     
     def create_lmstudio_client(self) -> Optional[LMStudioClient]:
@@ -95,7 +95,7 @@ class ProviderFactory:
             base_url=self.config.LM_STUDIO_BASE_URL,
             logger=self.logger
         )
-        self.logger.info(f"LM Studio client initialized for URL: {self.config.LM_STUDIO_BASE_URL}")
+        self.logger.debug(f"LM Studio client initialized for URL: {self.config.LM_STUDIO_BASE_URL}")
         return client
     
     def create_all_clients(self) -> dict:

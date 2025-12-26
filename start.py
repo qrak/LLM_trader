@@ -5,9 +5,14 @@ Automated trading with AI-powered decisions.
 import asyncio
 import sys
 import argparse
-from src.utils.loader import config
+from src.config.loader import config
 from src.app import CryptoTradingBot
 from src.logger.logger import Logger
+import warnings
+
+# Suppress SyntaxWarning from docopt libraries
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
+
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 
 

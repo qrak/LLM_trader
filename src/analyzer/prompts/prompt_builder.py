@@ -2,11 +2,11 @@ import numpy as np
 from typing import Optional, Any
 
 from src.logger.logger import Logger
-from ..core.analysis_context import AnalysisContext
-from ..calculations.technical_calculator import TechnicalCalculator
+from ..analysis_context import AnalysisContext
+from ..technical_calculator import TechnicalCalculator
 from .template_manager import TemplateManager
-from ..formatting.market_formatter import MarketFormatter
-from ..formatting.technical_formatter import TechnicalFormatter
+from ..market_formatter import MarketFormatter
+from ..technical_formatter import TechnicalFormatter
 from .context_builder import ContextBuilder
 
 
@@ -17,20 +17,19 @@ class PromptBuilder:
         Args:
             timeframe: The primary timeframe for analysis (e.g. "1h")
             logger: Optional logger instance for debugging
-            technical_calculator: Calculator for technical indicators
+            technical_calculator: Calculator for technical indicators (required - from app.py)
         """
+        if technical_calculator is None:
+            raise ValueError("technical_calculator is required - must be injected from app.py")
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
         self.language: Optional[str] = None
         self.context: Optional[AnalysisContext] = None
-        self.technical_calculator = technical_calculator or TechnicalCalculator(logger, format_utils)
+        self.technical_calculator = technical_calculator
         self.config = config
         self.format_utils = format_utils
         self.data_processor = data_processor
-        
-        # Access indicator thresholds from the calculator
-        self.INDICATOR_THRESHOLDS = self.technical_calculator.INDICATOR_THRESHOLDS
         
         # Initialize component managers
         self.template_manager = TemplateManager(config=self.config, logger=logger)

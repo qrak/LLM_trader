@@ -9,7 +9,7 @@ from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 
 class ExchangeManager:
@@ -42,7 +42,7 @@ class ExchangeManager:
     
     async def initialize(self) -> None:
         """Initialize the session for exchanges - no longer loads all exchanges upfront"""
-        self.logger.info("Initializing ExchangeManager with lazy loading")
+        self.logger.debug("Initializing ExchangeManager with lazy loading")
         # Create a single session for all exchanges to share
         self.session = aiohttp.ClientSession()
         self.exchange_config['session'] = self.session
@@ -97,7 +97,7 @@ class ExchangeManager:
     @retry_async()
     async def _load_exchange(self, exchange_id: str) -> Optional[ccxt.Exchange]:
         """Load a single exchange and its markets"""
-        self.logger.info(f"Loading {exchange_id} markets")
+        self.logger.debug(f"Loading {exchange_id} markets")
         try:
             # Create exchange instance with the shared session
             exchange_class = getattr(ccxt, exchange_id)
@@ -116,7 +116,7 @@ class ExchangeManager:
             self.exchanges[exchange_id] = exchange
             self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
             self.exchange_last_loaded[exchange_id] = datetime.now()
-            self.logger.info(f"Loaded {exchange_id} with {len(exchange.symbols)} symbols")
+            self.logger.debug(f"Loaded {exchange_id} with {len(exchange.symbols)} symbols")
             
             return exchange
         except Exception as e:
@@ -133,7 +133,7 @@ class ExchangeManager:
             
             # Check if refresh is needed (based on MARKET_REFRESH_HOURS)
             if last_loaded and (now - last_loaded).total_seconds() < self.config.MARKET_REFRESH_HOURS * 3600:
-                self.logger.debug(f"Using cached {exchange_id} markets")
+                # self.logger.debug(f"Using cached {exchange_id} markets")
                 return self.exchanges[exchange_id]
             else:
                 self.logger.info(f"Refreshing {exchange_id} markets (last loaded: {last_loaded})")
@@ -191,11 +191,12 @@ class ExchangeManager:
                     for exchange_id in loaded_exchanges:
                         await self._refresh_exchange_markets(exchange_id)
                 else:
-                    self.logger.debug("No exchanges loaded yet, skipping periodic refresh")
+                    pass
+                    # self.logger.debug("No exchanges loaded yet, skipping periodic refresh")
                 
                 # Wait for next update cycle
                 sleep_hours = self.config.MARKET_REFRESH_HOURS
-                self.logger.info(f"Next periodic update in {sleep_hours} hours")
+                self.logger.debug(f"Next periodic update in {sleep_hours} hours")
                 await asyncio.sleep(sleep_hours * 3600)
                 
             except asyncio.CancelledError:
@@ -206,7 +207,7 @@ class ExchangeManager:
     
     async def find_symbol_exchange(self, symbol: str) -> Tuple[Optional[ccxt.Exchange], Optional[str]]:
         """Find the first exchange that supports the given symbol using lazy loading"""
-        self.logger.debug(f"Looking for symbol {symbol} across exchanges")
+        # self.logger.debug(f"Looking for symbol {symbol} across exchanges")
         
         for exchange_id in self.exchange_names:
             try:
@@ -224,7 +225,8 @@ class ExchangeManager:
                         self.logger.info(f"Found {symbol} on {exchange_id}")
                         return exchange, exchange_id
                     else:
-                        self.logger.debug(f"Symbol {symbol} not found on {exchange_id}")
+                        # self.logger.debug(f"Symbol {symbol} not found on {exchange_id}")
+                        pass
                 
             except Exception as e:
                 self.logger.error(f"Error checking {exchange_id} for symbol {symbol}: {e}")

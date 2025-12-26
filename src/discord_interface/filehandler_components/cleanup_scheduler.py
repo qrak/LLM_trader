@@ -26,7 +26,7 @@ class CleanupScheduler:
             name="MessageCleanupTask"
         )
         self.is_running = True
-        self.logger.info(f"Started background message cleanup task (interval: {self.cleanup_interval}s)")
+        self.logger.debug(f"Started background message cleanup task (interval: {self.cleanup_interval}s)")
     
     async def _periodic_cleanup_loop(self, cleanup_callback):
         """Main periodic cleanup loop."""

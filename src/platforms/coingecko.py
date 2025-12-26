@@ -47,7 +47,7 @@ class CoinGeckoAPI:
             coins = await self._fetch_all_coins()
             if coins:
                 self._update_symbol_map(coins)
-                self.logger.info(f"Loaded {len(self.symbol_to_id_map)} unique symbols from coingecko.")
+                self.logger.debug(f"Loaded {len(self.symbol_to_id_map)} unique symbols from coingecko.")
                 self._log_cache_info()
         except Exception as e:
             self.logger.error(f"Error initializing coin mappings: {e}")
@@ -431,9 +431,9 @@ class CoinGeckoAPI:
         if exists(cache_file_path):
             cache_size = getsize(cache_file_path)
             cache_size_mb = cache_size / (1024 * 1024)
-            self.logger.info(f"Cache file size: {cache_size_mb:.2f} MB")
+            self.logger.debug(f"Cache file size: {cache_size_mb:.2f} MB")
         else:
-            self.logger.info("Cache file does not exist yet.")
+            self.logger.debug("Cache file does not exist yet.")
 
     async def close(self) -> None:
         if self.session:

@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
-from ..formatting.indicator_formatter import IndicatorFormatter
+from ..market_formatter import MarketFormatter
 
 
 class ContextBuilder:
@@ -25,7 +25,7 @@ class ContextBuilder:
         self.timeframe = timeframe
         self.logger = logger
         self.format_utils = format_utils
-        self.formatter = IndicatorFormatter(logger, format_utils, data_processor)
+        self.formatter = MarketFormatter(logger, format_utils)
     
     def build_trading_context(self, context) -> str:
         """Build trading context section with current market information.

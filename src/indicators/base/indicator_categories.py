@@ -3,15 +3,15 @@ from typing import TypeVar, Tuple
 import numpy as np
 
 from src.indicators.base import IndicatorCategory
-from src.indicators.indicators.momentum import *
-from src.indicators.indicators.overlap import *
-from src.indicators.indicators.price import *
-from src.indicators.indicators.sentiment import *
-from src.indicators.indicators.statistical import *
-from src.indicators.indicators.support_resistance import *
-from src.indicators.indicators.trend import *
-from src.indicators.indicators.volatility import *
-from src.indicators.indicators.volume import *
+from src.indicators.momentum import *
+from src.indicators.overlap import *
+from src.indicators.price import *
+from src.indicators.sentiment import *
+from src.indicators.statistical import *
+from src.indicators.support_resistance import *
+from src.indicators.trend import *
+from src.indicators.volatility import *
+from src.indicators.volume import *
 
 T = TypeVar('T')
 
@@ -164,16 +164,15 @@ class MomentumIndicators(IndicatorCategory['MomentumIndicators']):
         return rcma1 * 1 + rcma2 * 2 + rcma3 * 3 + rcma4 * 4
 
     def uo(self, fast=7, medium=14, slow=28, fast_w=4.0, medium_w=2.0, slow_w=1.0, drift=1) -> np.ndarray:
-        from ..indicators.momentum.momentum_indicators import UltimateOscillatorConfig
-        config = UltimateOscillatorConfig(
-            fast=fast,
-            medium=medium,
-            slow=slow,
-            fast_w=fast_w,
-            medium_w=medium_w,
-            slow_w=slow_w,
-            drift=drift
-        )
+        config = {
+            'fast': fast,
+            'medium': medium,
+            'slow': slow,
+            'fast_w': fast_w,
+            'medium_w': medium_w,
+            'slow_w': slow_w,
+            'drift': drift
+        }
         return self._base.calculate_indicator(
             uo_numba,
             self.high,
@@ -248,7 +247,7 @@ class SentimentIndicators(IndicatorCategory['SentimentIndicators']):
             mfi_length: int = 14,
             window_size: int = 60
     ) -> np.ndarray:
-        from ..indicators.sentiment.sentiment_indicators import FearGreedConfig
+        from ..sentiment.sentiment_indicators import FearGreedConfig
         config = FearGreedConfig(
             rsi_length=rsi_length,
             macd_fast_length=macd_fast_length,

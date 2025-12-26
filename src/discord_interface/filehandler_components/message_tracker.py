@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 
 class MessageTracker:

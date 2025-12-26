@@ -16,16 +16,24 @@ Key Components:
 """
 
 # Core analysis components
-from .core import AnalysisEngine, AnalysisContext, AnalysisResultProcessor
+# Core analysis components
+from .analysis_engine import AnalysisEngine
+from .analysis_context import AnalysisContext
+from .analysis_result_processor import AnalysisResultProcessor
 
 # Data components  
-from .data import MarketDataCollector, DataFetcher, DataProcessor
+from .market_data_collector import MarketDataCollector
+from .data_fetcher import DataFetcher
+from .data_processor import DataProcessor
 
 # Calculation components
-from .calculations import MarketMetricsCalculator, TechnicalCalculator, PatternAnalyzer
+from .market_metrics_calculator import MarketMetricsCalculator
+from .technical_calculator import TechnicalCalculator
+from .pattern_analyzer import PatternAnalyzer
 
 # Formatting components  
-from .formatting import TechnicalFormatter, MarketFormatter, IndicatorFormatter
+from .technical_formatter import TechnicalFormatter
+from .market_formatter import MarketFormatter
 
 # Prompt components
 from .prompts import PromptBuilder, ContextBuilder, TemplateManager
@@ -48,8 +56,7 @@ __all__ = [
     
     # Formatting
     'TechnicalFormatter',
-    'MarketFormatter', 
-    'IndicatorFormatter',
+    'MarketFormatter',
     
     # Prompts
     'PromptBuilder',

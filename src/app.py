@@ -8,17 +8,20 @@ from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.cryptocompare import CryptoCompareAPI
 from src.platforms.exchange_manager import ExchangeManager
-from src.analyzer.core.analysis_engine import AnalysisEngine
+from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter
 from src.utils.format_utils import FormatUtils
 from src.utils.timeframe_validator import TimeframeValidator
-from src.analyzer.data.data_processor import DataProcessor
+from src.analyzer.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
 from src.trading import DataPersistence, TradingStrategy
 from src.discord_interface import DiscordNotifier
 from src.utils.keyboard_handler import KeyboardHandler
-from src.utils.text_splitting import SentenceSplitter
+from src.rag.text_splitting import SentenceSplitter
+from src.parsing.unified_parser import UnifiedParser
+from src.factories import TechnicalIndicatorsFactory
+from src.rag.article_processor import ArticleProcessor
 
 
 class CryptoTradingBot:
@@ -58,6 +61,7 @@ class CryptoTradingBot:
         self._discord_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
+        start_time = time.perf_counter()
         self.logger.info("Initializing Crypto Trading Bot...")
 
         # Initialize TokenCounter early
@@ -72,6 +76,24 @@ class CryptoTradingBot:
         self.data_processor = DataProcessor()
         self.format_utils = FormatUtils(self.data_processor)
         self.logger.debug("DataProcessor and FormatUtils initialized")
+
+        # === COMPOSITION ROOT: Create shared utilities (no dependencies) ===
+        # UnifiedParser - single instance shared across all components
+        self.unified_parser = UnifiedParser(self.logger)
+        self.logger.debug("UnifiedParser initialized")
+        
+        # TechnicalIndicatorsFactory - creates fresh TI instances for each calculation
+        self.ti_factory = TechnicalIndicatorsFactory()
+        self.logger.debug("TechnicalIndicatorsFactory initialized")
+        
+        # ArticleProcessor - shared instance for article processing
+        self.article_processor = ArticleProcessor(
+            logger=self.logger,
+            format_utils=self.format_utils,
+            sentence_splitter=self.sentence_splitter,
+            unified_parser=self.unified_parser
+        )
+        self.logger.debug("ArticleProcessor initialized")
 
         self.symbol_manager = ExchangeManager(self.logger, self.config)
         await self.symbol_manager.initialize()
@@ -90,7 +112,7 @@ class CryptoTradingBot:
         await self.alternative_me_api.initialize()
         self.logger.debug("AlternativeMeAPI initialized")
 
-        # Pass token_counter and initialized API clients to RagEngine
+        # Pass token_counter, API clients, and shared utilities to RagEngine
         self.rag_engine = RagEngine(
             self.logger, 
             self.token_counter,
@@ -98,7 +120,9 @@ class CryptoTradingBot:
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
             format_utils=self.format_utils,
-            sentence_splitter=self.sentence_splitter
+            sentence_splitter=self.sentence_splitter,
+            article_processor=self.article_processor,
+            unified_parser=self.unified_parser
         )
         await self.rag_engine.initialize()
         self.logger.debug("RagEngine initialized")
@@ -106,10 +130,11 @@ class CryptoTradingBot:
         self.rag_engine.set_symbol_manager(self.symbol_manager)
         self.logger.debug("Passed SymbolManager to RagEngine")
 
-        # Initialize ModelManager before AnalysisEngine
-        self.model_manager = ModelManager(self.logger, self.config)
+        # Initialize ModelManager with unified_parser
+        self.model_manager = ModelManager(self.logger, self.config, unified_parser=self.unified_parser)
         self.logger.debug("ModelManager initialized")
 
+        # Initialize AnalysisEngine with all shared utilities
         self.market_analyzer = AnalysisEngine(
             logger=self.logger,
             rag_engine=self.rag_engine,
@@ -119,7 +144,9 @@ class CryptoTradingBot:
             cryptocompare_api=self.cryptocompare_api,
             format_utils=self.format_utils,
             data_processor=self.data_processor,
-            config=self.config
+            config=self.config,
+            ti_factory=self.ti_factory,
+            unified_parser=self.unified_parser
         )
         self.logger.debug("AnalysisEngine initialized")
 
@@ -134,12 +161,12 @@ class CryptoTradingBot:
                 self.discord_notifier = DiscordNotifier(self.logger, self.config)
                 self._discord_task = asyncio.create_task(self.discord_notifier.start())
                 await self.discord_notifier.wait_until_ready()
-                self.logger.info("Discord notifier initialized and ready")
+                self.logger.debug("Discord notifier initialized and ready")
             except Exception as e:
                 self.logger.warning(f"Discord initialization failed: {e}. Continuing without Discord.")
                 self.discord_notifier = None
         else:
-            self.logger.info("Discord not configured, notifications disabled")
+            self.logger.debug("Discord not configured, notifications disabled")
 
         await self.rag_engine.start_periodic_updates()
         
@@ -158,7 +185,9 @@ class CryptoTradingBot:
         keyboard_task.add_done_callback(self._active_tasks.discard)
         self.tasks.append(keyboard_task)
         
-        self.logger.info("Crypto Trading Bot initialized successfully")
+        end_time = time.perf_counter()
+        init_duration = end_time - start_time
+        self.logger.info(f"Crypto Trading Bot initialized successfully in {init_duration:.2f} seconds")
         self.logger.info("Keyboard commands: 'a' = force analysis, 'h' = help, 'q' = quit")
 
     async def run(self, symbol: str, timeframe: str = None):

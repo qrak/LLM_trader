@@ -56,11 +56,13 @@ class LMStudioClient(BaseApiClient):
             self.logger.debug(f"Sending streaming request to LM Studio API with model: {model}")
             complete_response = {"choices": [{"message": {"content": "", "role": "assistant"}}]}
             
+            # Use ClientTimeout for aiohttp requests
+            client_timeout = aiohttp.ClientTimeout(total=500)
             async with session.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=500
+                timeout=client_timeout
             ) as response:
                 if response.status != 200:
                     error_response = await self._handle_error_response(response, model)

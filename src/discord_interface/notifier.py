@@ -12,7 +12,7 @@ import discord
 from aiohttp import ClientSession
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 from .filehandler import DiscordFileHandler
 from src.utils.decorators import retry_async

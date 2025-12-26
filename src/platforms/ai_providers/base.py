@@ -121,7 +121,9 @@ class BaseApiClient:
             request_id = id(payload.get('messages', payload))
             self.logger.debug(f"Sending request #{request_id} to {self.__class__.__name__} with model: {model}")
 
-            async with session.post(url, headers=headers, json=payload, timeout=timeout) as response:
+            # Use ClientTimeout for aiohttp requests
+            client_timeout = aiohttp.ClientTimeout(total=timeout)
+            async with session.post(url, headers=headers, json=payload, timeout=client_timeout) as response:
                 if response.status != 200:
                     return await self._handle_error_response(response, model)
                 

@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
-from src.utils.loader import config
+from src.config.loader import config
 
 install_rich_traceback()
 

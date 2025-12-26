@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 from typing import Any
 
-from src.analyzer.data.data_processor import DataProcessor
+from src.analyzer.data_processor import DataProcessor
 
 
 class FormatUtils:

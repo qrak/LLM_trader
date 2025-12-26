@@ -11,7 +11,7 @@ from .filehandler_components.cleanup_scheduler import CleanupScheduler
 from .filehandler_components.message_deleter import MessageDeleter
 
 if TYPE_CHECKING:
-    from src.contracts.config import ConfigProtocol
+    from src.config.protocol import ConfigProtocol
 
 
 class DiscordFileHandler:
@@ -42,7 +42,7 @@ class DiscordFileHandler:
         """Initialize the file handler and start background tasks."""
         self.is_initialized = True
         self.scheduler.start_cleanup_task(self.bot, self.check_and_delete_expired_messages)
-        self.logger.info("DiscordFileHandler initialized with specialized components")
+        self.logger.debug("DiscordFileHandler initialized with specialized components")
     
     async def track_message(self, message_id: int, channel_id: int, user_id: int, 
                           message_type: str = "general", expire_after: Optional[int] = None) -> bool:
