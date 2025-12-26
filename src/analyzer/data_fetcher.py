@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.profiler import profile_performance
 
 
 class DataFetcher:
@@ -15,6 +16,7 @@ class DataFetcher:
         self.logger: Logger = logger
 
     @retry_async()
+    @profile_performance
     async def fetch_candlestick_data(self,
                                      pair: str,
                                      timeframe: str,

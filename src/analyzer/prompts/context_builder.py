@@ -251,6 +251,7 @@ class ContextBuilder:
         ]
         
         changes = []
+        significant_changes_found = False
         for key, label in key_indicators:
             prev_val = previous_indicators.get(key)
             curr_val = current_indicators.get(key)
@@ -276,23 +277,36 @@ class ContextBuilder:
                 if abs(prev_val) > 0.0001:  # Avoid division by tiny numbers
                     change_pct = ((curr_val - prev_val) / abs(prev_val)) * 100
                     
-                    # Format change with arrow and color indicator
-                    if abs(change_pct) >= 1.0:  # Only show significant changes (>1%)
+                    if abs(change_pct) >= 1.0:
                         arrow = "↑" if change_pct > 0 else "↓"
                         sign = "+" if change_pct > 0 else ""
                         
                         # Format values appropriately
+                        line = ""
                         if abs(curr_val) >= 1:
-                            changes.append(f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)")
+                            line = f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)"
                         else:
-                            changes.append(f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)")
+                            line = f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)"
+                        
+                        changes.append(line)
+                        significant_changes_found = True
+
             except (ValueError, TypeError):
                 continue
         
+        # If no significant changes were found, but we did process valid indicators
         if not changes:
-            return ""  # No significant changes
+            lines.append("No significant indicator changes (< 1.0%) observed since last analysis.")
+        else:
+            lines.extend(changes)
+            lines.append("")
+            lines.append("(Note: Indicators with < 1.0% change are omitted)")
+            
+        lines.append("")
+        lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
         
-        lines.extend(changes)
+        return "\n".join(lines)
+            
         lines.append("")
         lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
         

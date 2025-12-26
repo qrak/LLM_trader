@@ -9,6 +9,7 @@ from datetime import datetime
 from collections import namedtuple
 from typing import List, Dict, Any, Optional, Tuple, Set
 from src.logger.logger import Logger
+from src.utils.profiler import profile_performance
 from src.utils.token_counter import TokenCounter
 from .text_splitting import SentenceSplitter
 
@@ -28,6 +29,7 @@ class ContextBuilder:
         # Initialize shared sentence splitter
         self.sentence_splitter = sentence_splitter
     
+    @profile_performance
     async def keyword_search(self, query: str, news_database: List[Dict[str, Any]], 
                            symbol: Optional[str] = None, coin_index: Dict[str, List[int]] = None,
                            category_word_map: Dict[str, str] = None,
@@ -170,9 +172,18 @@ class ContextBuilder:
         """Extract base coin from trading pair symbol."""
         return self.article_processor.extract_base_coin(symbol)
     
+    @profile_performance
     def add_articles_to_context(self, indices: List[int], news_database: List[Dict[str, Any]],
-                               max_tokens: int, k: int) -> Tuple[str, int]:
-        """Add articles to context with token limiting."""
+                               max_tokens: int, k: int, keywords: Optional[Set[str]] = None) -> Tuple[str, int]:
+        """Add articles to context with token limiting.
+        
+        Args:
+            indices: List of article indices to consider
+            news_database: Full news database
+            max_tokens: Maximum tokens for the entire context
+            k: Maximum number of articles to include
+            keywords: Optional set of keywords for smart sentence selection
+        """
         context_parts = []
         total_tokens = 0
         articles_added = 0
@@ -183,7 +194,7 @@ class ContextBuilder:
                 break
 
             article = news_database[idx]
-            article_text, article_tokens = self._format_single_article(article)
+            article_text, article_tokens = self._format_single_article(article, keywords)
             
             if total_tokens + article_tokens <= max_tokens:
                 context_parts.append(article_text)
@@ -199,8 +210,13 @@ class ContextBuilder:
 
         return "".join(context_parts), total_tokens
     
-    def _format_single_article(self, article: Dict[str, Any]) -> Tuple[str, int]:
-        """Format a single article for context inclusion (compressed format for token efficiency)."""
+    def _format_single_article(self, article: Dict[str, Any], keywords: Optional[Set[str]] = None) -> Tuple[str, int]:
+        """Format a single article for context inclusion (compressed format for token efficiency).
+        
+        Args:
+            article: Article dictionary
+            keywords: Optional set of keywords for smart sentence selection
+        """
         published_date = self._format_article_date(article)
         title = article.get('title', 'No Title')
         source = article.get('source', 'Unknown Source')
@@ -210,12 +226,11 @@ class ContextBuilder:
 
         body = article.get('body', '')
         if body:
-            # Extract sentences
-            sentences = body.replace('\n\n', ' ').replace('\n', ' ').strip()
+            # Clean text
+            cleaned_body = body.replace('\n\n', ' ').replace('\n', ' ').strip()
             
-            # Use wtpsplit for sentence segmentation if available, otherwise fallback to regex
             # Use shared sentence splitter (handles fallback internally)
-            sentence_list = self.sentence_splitter.split_text(sentences)
+            sentence_list = self.sentence_splitter.split_text(cleaned_body)
             
             # Apply configured limits
             max_sentences = 3
@@ -226,20 +241,24 @@ class ContextBuilder:
                     max_sentences = int(self.config.RAG_ARTICLE_MAX_SENTENCES)
                     max_tokens = int(self.config.RAG_ARTICLE_MAX_TOKENS)
                 except (AttributeError, ValueError):
-                    pass # Use defaults
+                    pass  # Use defaults
+            
+            # Smart sentence selection: score by keyword matches if keywords provided
+            if keywords and sentence_list:
+                selected_sentences = self._select_relevant_sentences(
+                    sentence_list, keywords, max_sentences
+                )
+            else:
+                # Fallback: take first N sentences
+                selected_sentences = sentence_list[:max_sentences]
             
             key_facts = ""
             current_tokens = self.token_counter.count_tokens(article_text)
             
-            for i, sent in enumerate(sentence_list):
-                if i >= max_sentences:
-                    break
-                    
+            for sent in selected_sentences:
                 sent_tokens = self.token_counter.count_tokens(sent + " ")
                 
                 # Check if adding this sentence would exceed the article token limit
-                # We calculate total token impact on the article snippet
-                # Note: valid tokens are title + metadata + body so far
                 if current_tokens + sent_tokens > max_tokens:
                     break
                     
@@ -257,6 +276,64 @@ class ContextBuilder:
 
         article_tokens = self.token_counter.count_tokens(article_text)
         return article_text, article_tokens
+    
+    def _select_relevant_sentences(self, sentences: List[str], keywords: Set[str], max_count: int) -> List[str]:
+        """Select the most relevant sentences based on keyword matches.
+        
+        Returns sentences sorted by their original order to preserve narrative flow.
+        
+        Args:
+            sentences: List of sentences from the article
+            keywords: Set of keywords to match against
+            max_count: Maximum number of sentences to return
+        """
+        if not sentences or not keywords:
+            return sentences[:max_count]
+        
+        # Import re for detailed pattern matching
+        import re
+        
+        # Score each sentence: (original_index, score, sentence)
+        scored = []
+        for i, sent in enumerate(sentences):
+            sent_lower = sent.lower()
+            kw_count = sum(1 for kw in keywords if kw in sent_lower)
+            score = float(kw_count)
+            
+            # Boost for numbers (likely data points)
+            # Count distinct number groups (e.g. 49.34, 50, 2025)
+            number_groups = len(re.findall(r'\d+(?:\.\d+)?', sent))
+            if number_groups > 0:
+                score += (number_groups * 0.5)
+            
+            # Boost for percentage signs (key metrics)
+            percent_count = sent.count('%')
+            if percent_count > 0:
+                score += (percent_count * 2.0)
+            
+            # Boost for currency symbols (prices)
+            if '$' in sent:
+                score += 2.0
+
+            # Boost for "Key: Value" patterns (often used in data reporting)
+            if ':' in sent:
+                score += 1.5
+
+            # SYNERGY BOOST: If sentence has both a keyword match AND a number/currency, it is highly relevant
+            # This filters out random financial noise (like "Source: ...") that doesn't match the query
+            if kw_count > 0 and ('$' in sent or percent_count > 0):
+                score += 2.0
+                
+            scored.append((i, score, sent))
+        
+        # Sort by score descending, take top N
+        scored.sort(key=lambda x: x[1], reverse=True)
+        top_sentences = scored[:max_count]
+        
+        # Re-sort by original index to preserve narrative order
+        top_sentences.sort(key=lambda x: x[0])
+        
+        return [sent for _, _, sent in top_sentences]
 
     def _format_article_date(self, article: Dict[str, Any]) -> str:
         """Format article date in a consistent way."""

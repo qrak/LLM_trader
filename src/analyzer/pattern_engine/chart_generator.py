@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from src.logger.logger import Logger
+from src.utils.profiler import profile_performance
 
 
 class ChartGenerator:
@@ -144,6 +145,7 @@ class ChartGenerator:
         
         raise last_exception
     
+    @profile_performance
     def create_chart_image(
         self,
         ohlcv: np.ndarray,

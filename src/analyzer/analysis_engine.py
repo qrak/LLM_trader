@@ -4,6 +4,7 @@ import io
 from src.utils.timeframe_validator import TimeframeValidator
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.coingecko import CoinGeckoAPI
+from src.utils.profiler import profile_performance
 from .analysis_context import AnalysisContext
 from .analysis_result_processor import AnalysisResultProcessor
 from .technical_calculator import TechnicalCalculator
@@ -224,6 +225,7 @@ class AnalysisEngine:
         except Exception as e:
             self.logger.error(f"Error during MarketAnalyzer cleanup: {e}")
 
+    @profile_performance
     async def analyze_market(
         self, 
         provider: Optional[str] = None, 

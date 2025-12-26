@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     from src.factories import TechnicalIndicatorsFactory
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.logger.logger import Logger
+from src.utils.profiler import profile_performance
 from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
     detect_golden_cross_numba, detect_death_cross_numba
 )
@@ -21,6 +22,7 @@ class TechnicalCalculator:
         self.format_utils = format_utils
         self.ti_factory = ti_factory
         
+    @profile_performance
     def get_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, np.ndarray]:
         """Calculate all technical indicators - no caching, always fresh"""
         self.ti = self.ti_factory.create_for_current_timeframe(ohlcv_data)

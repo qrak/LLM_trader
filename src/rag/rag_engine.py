@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
+from src.utils.profiler import profile_performance
 from .file_handler import RagFileHandler
 from src.utils.token_counter import TokenCounter
 from .news_manager import NewsManager
@@ -202,6 +203,7 @@ class RagEngine:
                 # self.logger.debug("No new articles to add or only duplicates found")
                 pass
 
+    @profile_performance
     async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: int = 8096) -> str:
         """Retrieve relevant context for a query with token limiting.
 
@@ -227,6 +229,10 @@ class RagEngine:
             if not self.last_update or datetime.now() - self.last_update > timedelta(minutes=30):
                 await self.update_if_needed()
 
+            # Extract keywords from query for smart sentence selection
+            import re
+            keywords = set(re.findall(r'\b\w{3,15}\b', query.lower()))
+
             # Use context builder for keyword search
             scores = await self.context_builder.keyword_search(
                 query, self.news_manager.news_database, symbol,
@@ -246,9 +252,9 @@ class RagEngine:
                         if len(relevant_indices) >= k*2:
                             break
 
-            # Build context using context builder
+            # Build context using context builder (pass keywords for smart selection)
             context_text, total_tokens = self.context_builder.add_articles_to_context(
-                relevant_indices, self.news_manager.news_database, max_tokens, k
+                relevant_indices, self.news_manager.news_database, max_tokens, k, keywords
             )
 
             articles_added = len([idx for idx in relevant_indices 

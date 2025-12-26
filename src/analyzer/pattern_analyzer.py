@@ -5,6 +5,7 @@ from datetime import datetime
 from src.analyzer.pattern_engine import PatternEngine
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.logger.logger import Logger
+from src.utils.profiler import profile_performance
 
 
 class PatternAnalyzer:
@@ -15,6 +16,7 @@ class PatternAnalyzer:
         self.indicator_pattern_engine = IndicatorPatternEngine()
         self._warmed_up = False
     
+    @profile_performance
     def detect_patterns(
         self,
         ohlcv_data: np.ndarray,
