@@ -111,9 +111,16 @@ pip install -r requirements.txt
 
 1. **Credentials**: Copy `keys.env.example` to `keys.env`.
    ```ini
-   GOOGLE_STUDIO_API_KEY=...
-   OPENROUTER_API_KEY=...
-   CRYPTOCOMPARE_API_KEY=... # Required for News RAG
+   OPENROUTER_API_KEY=your_key_here
+   GOOGLE_STUDIO_API_KEY=your_key_here
+   # Optional but Recommended Keys
+   # -----------------------------
+   # CRYPTOCOMPARE_API_KEY: Increases rate limits and reliability.
+   # Free Tier available: https://min-api.cryptocompare.com/
+   CRYPTOCOMPARE_API_KEY=your_key_here
+   # COINGECKO_API_KEY: Increases rate limits (~30 req/min vs ~10 req/min public).
+   # Free Demo API Key available (header: x-cg-demo-api-key)
+   COINGECKO_API_KEY=your_key_here
    ```
 
 2. **Bot Config**: Edit `config/config.ini`.

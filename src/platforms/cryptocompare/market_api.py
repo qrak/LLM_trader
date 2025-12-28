@@ -25,7 +25,10 @@ class CryptoCompareMarketAPI:
         self.logger = logger
         self.config = config
         # Build URL template with API key
-        self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+        if self.config.CRYPTOCOMPARE_API_KEY:
+            self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+        else:
+            self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}"
     
     @retry_api_call(max_retries=3)
     async def get_multi_price_data(
@@ -52,9 +55,13 @@ class CryptoCompareMarketAPI:
         
         # Build URL: use canonical config URL when caller doesn't provide coins or currencies
         if coins is None and vs_currencies is None:
-            url = RAG_PRICE_API_URL
+            url = self.config.RAG_PRICE_API_URL
         else:
-            url = f"https://min-api.cryptocompare.com/data/pricemultifull?fsyms={','.join(fsyms)}&tsyms={','.join(tsyms)}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+            base_url = f"https://min-api.cryptocompare.com/data/pricemultifull?fsyms={','.join(fsyms)}&tsyms={','.join(tsyms)}"
+            if self.config.CRYPTOCOMPARE_API_KEY:
+                url = f"{base_url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+            else:
+                url = base_url
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -90,7 +97,10 @@ class CryptoCompareMarketAPI:
             - Taxonomy: Regulatory classifications (Access, FCA, FINMA, Industry, etc.)
             - Rating: Weiss ratings including overall, technology adoption, and market performance
         """
-        url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+        if self.config.CRYPTOCOMPARE_API_KEY:
+            url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+        else:
+            url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}"
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -158,14 +168,20 @@ class CryptoCompareMarketAPI:
             self.logger.error(f"Failed to convert timeframe {timeframe} for CryptoCompare API: {e}")
             raise
         
+        
         # Build aggregate parameter if multiplier > 1
         aggregate_param = f"&aggregate={multiplier}" if multiplier > 1 else ""
         
-        url = (
+        base_url = (
             f"https://min-api.cryptocompare.com/data/v2/histo{endpoint_type}"
             f"?fsym={base}&tsym={quote}&limit={limit}"
-            f"{aggregate_param}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+            f"{aggregate_param}"
         )
+        
+        if self.config.CRYPTOCOMPARE_API_KEY:
+            url = f"{base_url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+        else:
+            url = base_url
         
         self.logger.debug(
             f"Built CryptoCompare OHLCV URL: endpoint={endpoint_type}, "

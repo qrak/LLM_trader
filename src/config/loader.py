@@ -105,10 +105,21 @@ class Config:
     def _build_dynamic_urls(self):
         """Build dynamic URLs that depend on API keys."""
         cryptocompare_key = self.get_env('CRYPTOCOMPARE_API_KEY')
+        
+        # Build base URLs
+        news_url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=KurusDiscordCryptoBot"
+        categories_url = "https://min-api.cryptocompare.com/data/news/categories"
+        price_url = "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD"
+        
+        # Append API key if available
         if cryptocompare_key:
-            self.RAG_NEWS_API_URL = f"https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=KurusDiscordCryptoBot&api_key={cryptocompare_key}"
-            self.RAG_CATEGORIES_API_URL = f"https://min-api.cryptocompare.com/data/news/categories?api_key={cryptocompare_key}"
-            self.RAG_PRICE_API_URL = f"https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD&api_key={cryptocompare_key}"
+            self.RAG_NEWS_API_URL = f"{news_url}&api_key={cryptocompare_key}"
+            self.RAG_CATEGORIES_API_URL = f"{categories_url}?api_key={cryptocompare_key}"
+            self.RAG_PRICE_API_URL = f"{price_url}&api_key={cryptocompare_key}"
+        else:
+            self.RAG_NEWS_API_URL = news_url
+            self.RAG_CATEGORIES_API_URL = categories_url
+            self.RAG_PRICE_API_URL = price_url
     
     def _build_model_configs(self):
         """Build model configuration dictionaries as instance variables."""
@@ -180,6 +191,10 @@ class Config:
     @property
     def CRYPTOCOMPARE_API_KEY(self):
         return self.get_env('CRYPTOCOMPARE_API_KEY')
+
+    @property
+    def COINGECKO_API_KEY(self):
+        return self.get_env('COINGECKO_API_KEY')
     
     @property
     def ADMIN_USER_IDS(self):
@@ -294,13 +309,7 @@ class Config:
         return self.get_config('directories', 'data_dir', 'data')
     
     # Cooldown Configuration
-    @property
-    def ANALYSIS_COOLDOWN_COIN(self):
-        return self.get_config('cooldowns', 'analysis_cooldown_coin', 3600)
-    
-    @property
-    def ANALYSIS_COOLDOWN_USER(self):
-        return self.get_config('cooldowns', 'analysis_cooldown_user', 3600)
+
     
     @property
     def FILE_MESSAGE_EXPIRY(self):

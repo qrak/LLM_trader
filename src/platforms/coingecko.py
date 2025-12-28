@@ -23,7 +23,8 @@ class CoinGeckoAPI:
         logger: Logger,
         cache_name: str = 'cache/coingecko_cache.db',
         cache_dir: str = 'data/market_data',
-        expire_after: int = -1
+        expire_after: int = -1,
+        api_key: Optional[str] = None
     ) -> None:
         self.cache_backend = SQLiteBackend(cache_name=cache_name, expire_after=expire_after)
         self.session: Optional[CachedSession] = None
@@ -33,6 +34,7 @@ class CoinGeckoAPI:
         self.coingecko_cache_file = os.path.join(self.cache_dir, "coingecko_global.json")
         self.update_interval = timedelta(hours=4)  # Default update interval
         self.last_update: Optional[datetime] = None
+        self.api_key = api_key
 
         # Ensure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -44,6 +46,14 @@ class CoinGeckoAPI:
                 await self.session.close()
 
             self.session = CachedSession(cache=self.cache_backend)
+            
+            # Add API key to session headers if available
+            if self.api_key:
+                self.session.headers.update({
+                    "x-cg-demo-api-key": self.api_key
+                })
+                self.logger.debug("Added CoinGecko API key to session headers")
+                
             coins = await self._fetch_all_coins()
             if coins:
                 self._update_symbol_map(coins)
@@ -76,7 +86,9 @@ class CoinGeckoAPI:
 
             if not self.session:
                 self.session = CachedSession(cache=self.cache_backend)
-
+                if self.api_key:
+                    self.session.headers.update({"x-cg-demo-api-key": self.api_key})
+            
             for coin_data in coin_data_list:
                 coin_info = await self._fetch_coin_data(coin_data['id'])
                 if self._coin_traded_on_exchange(coin_info, exchange_name):

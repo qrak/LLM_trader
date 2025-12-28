@@ -101,7 +101,10 @@ class CryptoTradingBot:
         self.logger.debug("SymbolManager initialized")
 
         # Initialize API clients
-        self.coingecko_api = CoinGeckoAPI(logger=self.logger)
+        self.coingecko_api = CoinGeckoAPI(
+            logger=self.logger, 
+            api_key=self.config.COINGECKO_API_KEY
+        )
         await self.coingecko_api.initialize()
         self.logger.debug("CoinGeckoAPI initialized")
         
