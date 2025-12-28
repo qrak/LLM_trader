@@ -12,7 +12,7 @@ LLM_Trader v2 focuses on **continuous trading**, **risk-managed execution**, and
 ```mermaid
 graph TD
     subgraph Data Sources
-        Ex[Exchanges (CCXT)] --> |OHLCV/Trades| DC(Market Data Collector)
+        Ex["Exchanges (CCXT)"] --> |OHLCV/Trades| DC(Market Data Collector)
         News[CryptoCompare] --> |Articles| RAG(RAG Engine)
         Sent[Alternative.me] --> |Fear & Greed| DC
     end
@@ -31,8 +31,8 @@ graph TD
     end
 
     subgraph AI Processing
-        MM --> |Text/Image| P1[Google Gemini (Flash Latest)]
-        MM --> |Text| P2[Claude 4.5 / 3.5 (OpenRouter)]
+        MM --> |Text/Image| P1["Google Gemini (Flash Latest)"]
+        MM --> |Text| P2["Claude 4.5 / 3.5 (OpenRouter)"]
         MM --> |Text| P3[DeepSeek-R1 / Gemini 3.0]
         
         P1 --> |Response| ARP[Analysis Result Processor]
@@ -40,7 +40,7 @@ graph TD
         P3 --> |Response| ARP
     end
 
-    subgraph Execution (Paper Only)
+    subgraph Execution ["Execution (Paper Only)"]
         ARP --> |JSON Signal| TS[Trading Strategy]
         TS --> |Simulated Order| DP[Data Persistence]
         TS --> |Notification| DN[Discord Interface]
