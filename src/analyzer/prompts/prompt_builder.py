@@ -5,8 +5,7 @@ from src.logger.logger import Logger
 from ..analysis_context import AnalysisContext
 from ..technical_calculator import TechnicalCalculator
 from .template_manager import TemplateManager
-from ..market_formatter import MarketFormatter
-from ..technical_formatter import TechnicalFormatter
+from ..formatters import MarketFormatter, TechnicalFormatter
 from .context_builder import ContextBuilder
 
 

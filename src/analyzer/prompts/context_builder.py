@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
-from ..market_formatter import MarketFormatter
+from ..formatters import MarketFormatter
 
 
 class ContextBuilder:
