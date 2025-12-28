@@ -22,6 +22,12 @@ from src.rag.text_splitting import SentenceSplitter
 from src.parsing.unified_parser import UnifiedParser
 from src.factories import TechnicalIndicatorsFactory
 from src.rag.article_processor import ArticleProcessor
+from src.analyzer.formatters import (
+    MarketOverviewFormatter,
+    LongTermFormatter,
+    MarketFormatter,
+    MarketPeriodFormatter
+)
 
 
 class CryptoTradingBot:
@@ -136,8 +142,16 @@ class CryptoTradingBot:
         # Initialize ModelManager with unified_parser
         self.model_manager = ModelManager(self.logger, self.config, unified_parser=self.unified_parser)
         self.logger.debug("ModelManager initialized")
+        
+        # Create ALL formatters in composition root for dependency injection
+        self.overview_formatter = MarketOverviewFormatter(self.logger, self.format_utils)
+        self.long_term_formatter = LongTermFormatter(self.logger, self.format_utils)
+        self.market_formatter = MarketFormatter(self.logger, self.format_utils)
+        self.period_formatter = MarketPeriodFormatter(self.logger, self.format_utils)
+        # Note: TechnicalFormatter needs technical_calculator which is created in AnalysisEngine
+        # So we pass the factory and AnalysisEngine creates it
 
-        # Initialize AnalysisEngine with all shared utilities
+        # Initialize AnalysisEngine with all shared utilities and formatters
         self.market_analyzer = AnalysisEngine(
             logger=self.logger,
             rag_engine=self.rag_engine,
@@ -149,7 +163,11 @@ class CryptoTradingBot:
             data_processor=self.data_processor,
             config=self.config,
             ti_factory=self.ti_factory,
-            unified_parser=self.unified_parser
+            unified_parser=self.unified_parser,
+            overview_formatter=self.overview_formatter,
+            long_term_formatter=self.long_term_formatter,
+            market_formatter=self.market_formatter,
+            period_formatter=self.period_formatter
         )
         self.logger.debug("AnalysisEngine initialized")
 

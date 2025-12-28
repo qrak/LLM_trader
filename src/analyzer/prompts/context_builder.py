@@ -9,23 +9,41 @@ from typing import Any, Dict, Optional
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
-from ..formatters import MarketFormatter
+from ..formatters import MarketFormatter, MarketPeriodFormatter, LongTermFormatter
 
 
 class ContextBuilder:
     """Builds context sections for prompts including trading context, sentiment, and market data."""
     
-    def __init__(self, timeframe: str = "1h", logger: Optional[Logger] = None, format_utils=None, data_processor=None):
+    def __init__(
+        self,
+        timeframe: str = "1h",
+        logger: Optional[Logger] = None,
+        format_utils=None,
+        data_processor=None,
+        market_formatter: Optional[MarketFormatter] = None,
+        period_formatter: Optional[MarketPeriodFormatter] = None,
+        long_term_formatter: Optional[LongTermFormatter] = None
+    ):
         """Initialize the context builder.
         
         Args:
             timeframe: Primary timeframe for analysis
             logger: Optional logger instance for debugging
+            format_utils: Format utilities
+            data_processor: Data processing utilities
+            market_formatter: MarketFormatter instance (for coin details, ticker, etc.)
+            period_formatter: MarketPeriodFormatter instance (for period metrics)
+            long_term_formatter: LongTermFormatter instance (for long-term analysis)
         """
         self.timeframe = timeframe
         self.logger = logger
         self.format_utils = format_utils
-        self.formatter = MarketFormatter(logger, format_utils)
+        
+        # Use injected formatters or create fallback instances
+        self.market_formatter = market_formatter or MarketFormatter(logger, format_utils)
+        self.period_formatter = period_formatter or MarketPeriodFormatter(logger, format_utils)
+        self.long_term_formatter = long_term_formatter or LongTermFormatter(logger, format_utils)
     
     def build_trading_context(self, context) -> str:
         """Build trading context section with current market information.
@@ -179,7 +197,7 @@ class ContextBuilder:
         if not market_metrics:
             return ""
         
-        return self.formatter.format_market_period_metrics(market_metrics)
+        return self.period_formatter.format_market_period_metrics(market_metrics)
     
     def build_long_term_analysis_section(self, long_term_data: Optional[Dict[str, Any]], 
                                         current_price: Optional[float],
@@ -197,7 +215,7 @@ class ContextBuilder:
         if not long_term_data:
             return ""
         
-        return self.formatter.format_long_term_analysis(long_term_data, current_price)
+        return self.long_term_formatter.format_long_term_analysis(long_term_data, current_price)
     
     def build_coin_details_section(self, coin_details: Optional[Dict[str, Any]]) -> str:
         """Build cryptocurrency details section.
@@ -211,7 +229,7 @@ class ContextBuilder:
         if not coin_details:
             return ""
         
-        return self.formatter.format_coin_details_section(coin_details)
+        return self.market_formatter.format_coin_details_section(coin_details)
     
     def build_previous_indicators_section(self, previous_indicators: Dict[str, Any], current_indicators: Dict[str, Any]) -> str:
         """Build comparison section showing how key indicators changed since last analysis.

@@ -32,8 +32,8 @@ from .technical_calculator import TechnicalCalculator
 from .pattern_analyzer import PatternAnalyzer
 
 # Formatting components  
-from .technical_formatter import TechnicalFormatter
-from .market_formatter import MarketFormatter
+from .formatters.technical_formatter import TechnicalFormatter
+from .formatters.market_formatter import MarketFormatter
 
 # Prompt components
 from .prompts import PromptBuilder, ContextBuilder, TemplateManager

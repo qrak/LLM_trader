@@ -5,18 +5,45 @@ from src.logger.logger import Logger
 from ..analysis_context import AnalysisContext
 from ..technical_calculator import TechnicalCalculator
 from .template_manager import TemplateManager
-from ..formatters import MarketFormatter, TechnicalFormatter
+from ..formatters import (
+    MarketFormatter,
+    TechnicalFormatter,
+    LongTermFormatter,
+    MarketOverviewFormatter,
+    MarketPeriodFormatter
+)
 from .context_builder import ContextBuilder
 
 
 class PromptBuilder:
-    def __init__(self, timeframe: str = "1h", logger: Optional[Logger] = None, technical_calculator: Optional[TechnicalCalculator] = None, config: Any = None, format_utils=None, data_processor=None) -> None:
+    def __init__(
+        self,
+        timeframe: str = "1h",
+        logger: Optional[Logger] = None,
+        technical_calculator: Optional[TechnicalCalculator] = None,
+        config: Any = None,
+        format_utils=None,
+        data_processor=None,
+        overview_formatter: Optional[MarketOverviewFormatter] = None,
+        long_term_formatter: Optional[LongTermFormatter] = None,
+        technical_formatter: Optional[TechnicalFormatter] = None,
+        market_formatter: Optional[MarketFormatter] = None,
+        period_formatter: Optional[MarketPeriodFormatter] = None
+    ) -> None:
         """Initialize the PromptBuilder
         
         Args:
             timeframe: The primary timeframe for analysis (e.g. "1h")
             logger: Optional logger instance for debugging
             technical_calculator: Calculator for technical indicators (required - from app.py)
+            config: Configuration instance
+            format_utils: Format utilities
+            data_processor: Data processing utilities
+            overview_formatter: MarketOverviewFormatter instance (injected)
+            long_term_formatter: LongTermFormatter instance (injected)
+            technical_formatter: TechnicalFormatter instance (injected)
+            market_formatter: MarketFormatter instance (injected)
+            period_formatter: MarketPeriodFormatter instance (injected)
         """
         if technical_calculator is None:
             raise ValueError("technical_calculator is required - must be injected from app.py")
@@ -32,9 +59,27 @@ class PromptBuilder:
         
         # Initialize component managers
         self.template_manager = TemplateManager(config=self.config, logger=logger)
-        self.market_formatter = MarketFormatter(logger, format_utils)
-        self.technical_analysis_formatter = TechnicalFormatter(self.technical_calculator, logger, format_utils)
-        self.context_builder = ContextBuilder(timeframe, logger, format_utils, data_processor)
+        
+        # Use injected formatters (fallback to creating new instances if not provided for backward compatibility)
+        self.overview_formatter = overview_formatter or MarketOverviewFormatter(logger, format_utils)
+        self.long_term_formatter = long_term_formatter or LongTermFormatter(logger, format_utils)
+        self.technical_analysis_formatter = technical_formatter or TechnicalFormatter(self.technical_calculator, logger, format_utils)
+        market_fmt = market_formatter or MarketFormatter(logger, format_utils)
+        period_fmt = period_formatter or MarketPeriodFormatter(logger, format_utils)
+        
+        # Create ContextBuilder with injected formatters
+        self.context_builder = ContextBuilder(
+            timeframe,
+            logger,
+            format_utils,
+            data_processor,
+            market_formatter=market_fmt,
+            period_formatter=period_fmt,
+            long_term_formatter=self.long_term_formatter
+        )
+        
+        # Keep market_formatter reference for ticker/orderbook/trades/funding methods
+        self.market_formatter = market_fmt
 
     def build_prompt(
         self, 
@@ -63,7 +108,7 @@ class PromptBuilder:
 
         # Add market overview first before technical analysis to give it more prominence
         if context.market_overview:
-            sections.append(self.market_formatter.format_market_overview(
+            sections.append(self.overview_formatter.format_market_overview(
                 context.market_overview,
                 analyzed_symbol=context.symbol
             ))
@@ -128,7 +173,7 @@ class PromptBuilder:
         
         # Daily macro analysis
         if context.long_term_data:
-            daily_section = self.context_builder.build_long_term_analysis_section(
+            daily_section = self.long_term_formatter.format_long_term_analysis(
                 context.long_term_data, 
                 context.current_price
             )
@@ -137,7 +182,7 @@ class PromptBuilder:
         
         # Weekly macro analysis (200W SMA)
         if context.weekly_macro_indicators and 'weekly_macro_trend' in context.weekly_macro_indicators:
-            weekly_section = self.market_formatter._format_weekly_macro_section(
+            weekly_section = self.long_term_formatter._format_weekly_macro_section(
                 context.weekly_macro_indicators['weekly_macro_trend']
             )
             if weekly_section:

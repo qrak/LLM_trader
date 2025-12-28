@@ -14,6 +14,7 @@ from .market_metrics_calculator import MarketMetricsCalculator
 from .prompts.prompt_builder import PromptBuilder
 from .pattern_engine.chart_generator import ChartGenerator
 from .data_fetcher import DataFetcher
+from .formatters import MarketOverviewFormatter, LongTermFormatter, TechnicalFormatter
 from src.logger.logger import Logger
 
 
@@ -40,7 +41,11 @@ class AnalysisEngine:
         data_processor,
         config: "ConfigProtocol",
         ti_factory=None,
-        unified_parser=None
+        unified_parser=None,
+        overview_formatter=None,
+        long_term_formatter=None,
+        market_formatter=None,
+        period_formatter=None
     ) -> None:
         """
         Initialize AnalysisEngine with all required dependencies.
@@ -57,6 +62,10 @@ class AnalysisEngine:
             config: Configuration instance (Protocol-based)
             ti_factory: TechnicalIndicatorsFactory instance (required - from app.py)
             unified_parser: UnifiedParser instance (required - from app.py)
+            overview_formatter: MarketOverviewFormatter instance (injected from app.py)
+            long_term_formatter: LongTermFormatter instance (injected from app.py)
+            market_formatter: MarketFormatter instance (injected from app.py)
+            period_formatter: MarketPeriodFormatter instance (injected from app.py)
         """
         self.logger = logger
         
@@ -114,13 +123,22 @@ class AnalysisEngine:
             self.pattern_analyzer.warmup()
         except Exception as warmup_error:
             self.logger.warning(f"Pattern analyzer warm-up could not run: {warmup_error}")
+        
+        # Create TechnicalFormatter here since it needs technical_calculator
+        technical_formatter = TechnicalFormatter(self.technical_calculator, logger, format_utils)
+        
         self.prompt_builder = PromptBuilder(
             timeframe=self.timeframe, 
             logger=logger,
             technical_calculator=self.technical_calculator,
             config=config,
             format_utils=format_utils,
-            data_processor=data_processor
+            data_processor=data_processor,
+            overview_formatter=overview_formatter,
+            long_term_formatter=long_term_formatter,
+            technical_formatter=technical_formatter,
+            market_formatter=market_formatter,
+            period_formatter=period_formatter
         )
         
         # Create specialized components for separated concerns
