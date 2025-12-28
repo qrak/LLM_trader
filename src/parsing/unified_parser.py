@@ -84,6 +84,96 @@ class UnifiedParser:
                 "analysis" in response and 
                 isinstance(response["analysis"], dict))
     
+    def extract_json_block(self, text: str, unwrap_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Extract JSON block from markdown-formatted text.
+        
+        Reusable utility for extracting ```json ... ``` blocks from AI responses.
+        Used by notifiers, position extractors, and other components.
+        
+        Args:
+            text: Raw text containing JSON block
+            unwrap_key: If specified, unwrap this key from the result (e.g., 'analysis')
+            
+        Returns:
+            Parsed JSON dict or None if extraction fails
+        """
+        try:
+            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL | re.IGNORECASE)
+            if json_match:
+                json_str = json_match.group(1)
+                data = json.loads(json_str)
+                
+                if unwrap_key and unwrap_key in data and isinstance(data[unwrap_key], dict):
+                    return data[unwrap_key]
+                return data
+        except (json.JSONDecodeError, Exception) as e:
+            self.logger.debug(f"JSON block extraction failed: {e}")
+        return None
+    
+    def extract_text_before_json(self, text: str) -> str:
+        """Extract text content before a JSON block.
+        
+        Useful for separating reasoning/explanation from structured JSON data.
+        
+        Args:
+            text: Raw text potentially containing JSON block
+            
+        Returns:
+            Text before the JSON block, or full text if no JSON found
+        """
+        json_match = re.search(r'```json', text, re.IGNORECASE)
+        if json_match:
+            reasoning = text[:json_match.start()].strip()
+            return reasoning
+        return text.strip()
+    
+    # ============================================================================
+    # ERROR RESPONSE FORMATTING (consolidated from ResponseFormatter)
+    # ============================================================================
+    
+    @staticmethod
+    def format_error_response(error_message: str) -> str:
+        """Create a standardized error response in JSON format.
+        
+        Args:
+            error_message: Error message to include in the response
+            
+        Returns:
+            Formatted error response with JSON structure and markdown
+        """
+        json_fallback = {
+            "analysis": {
+                "summary": f"Analysis unavailable: {error_message}. Please try again later.",
+            }
+        }
+        return f"```json\n{json.dumps(json_fallback, indent=2)}\n```\n\nThe analysis failed due to a technical issue. Please try again later."
+    
+    @staticmethod
+    def format_provider_error(provider: str, error_detail: str) -> Dict[str, Any]:
+        """Create a standardized provider error dictionary.
+        
+        Args:
+            provider: Provider name that failed
+            error_detail: Details about the error
+            
+        Returns:
+            Error dictionary in ResponseDict format
+        """
+        return {"error": f"{provider} failed: {error_detail}"}
+    
+    @staticmethod
+    def format_final_fallback_error(provider: str, error_detail: str) -> Dict[str, Any]:
+        """Create error response for final fallback failure.
+        
+        Args:
+            provider: Last provider attempted
+            error_detail: Details about the error
+            
+        Returns:
+            Error dictionary indicating all providers failed
+        """
+        return {"error": f"All models failed. Last attempt ({provider}): {error_detail}"}
+    
     # ============================================================================
     # TIMESTAMP PARSING (consolidates multiple timestamp parsers)
     # ============================================================================

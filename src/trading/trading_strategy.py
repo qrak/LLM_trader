@@ -1,12 +1,15 @@
 """Trading strategy that wraps analysis with position management."""
 
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from .dataclasses import Position, TradeDecision
 from .data_persistence import DataPersistence
 from .position_extractor import PositionExtractor
+
+if TYPE_CHECKING:
+    from src.parsing.unified_parser import UnifiedParser
 
 
 class TradingStrategy:
@@ -17,6 +20,7 @@ class TradingStrategy:
         logger: Logger,
         data_persistence: DataPersistence,
         config: Any = None,
+        unified_parser: "UnifiedParser" = None,
     ):
         """Initialize the trading strategy.
         
@@ -24,11 +28,12 @@ class TradingStrategy:
             logger: Logger instance
             data_persistence: Data persistence for positions and history
             config: Configuration module
+            unified_parser: UnifiedParser for JSON extraction (DRY)
         """
         self.logger = logger
         self.persistence = data_persistence
         self.config = config
-        self.extractor = PositionExtractor(logger)
+        self.extractor = PositionExtractor(logger, unified_parser=unified_parser)
         
         # Load any existing position
         self.current_position: Optional[Position] = self.persistence.load_position()

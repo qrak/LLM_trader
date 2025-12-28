@@ -13,6 +13,7 @@ from aiohttp import ClientSession
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
+    from src.parsing.unified_parser import UnifiedParser
 
 from .filehandler import DiscordFileHandler
 from src.utils.decorators import retry_async
@@ -21,18 +22,20 @@ from src.utils.decorators import retry_async
 class DiscordNotifier:
     """Send-only Discord notifier with message expiration tracking."""
 
-    def __init__(self, logger, config: "ConfigProtocol") -> None:
+    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser") -> None:
         """Initialize DiscordNotifier.
         
         Args:
             logger: Logger instance
             config: ConfigProtocol instance for Discord settings
+            unified_parser: UnifiedParser for JSON extraction (DRY)
         """
         if config is None:
             raise ValueError("config is a required parameter and cannot be None")
         
         self.logger = logger
         self.config = config
+        self.unified_parser = unified_parser
         self.session: Optional[ClientSession] = None
         self.is_initialized = False
         self._ready_event = asyncio.Event()
@@ -170,6 +173,72 @@ class DiscordNotifier:
         return None
     
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    async def send_trading_decision(
+            self,
+            decision: Any,
+            channel_id: int
+    ) -> None:
+        """Send a trading decision as Discord embed.
+        
+        Args:
+            decision: TradingDecision dataclass
+            channel_id: Discord channel ID
+        """
+        try:
+            await self.wait_until_ready()
+            channel = self.bot.get_channel(channel_id)
+            if not channel:
+                self.logger.error(f"Channel with ID {channel_id} not found.")
+                return
+
+            # Determine color based on action
+            color_map = {
+                'BUY': discord.Color.green(),
+                'SELL': discord.Color.red(),
+                'HOLD': discord.Color.light_grey(),
+                'CLOSE': discord.Color.orange(),
+                'CLOSE_LONG': discord.Color.orange(),
+                'CLOSE_SHORT': discord.Color.orange(),
+                'UPDATE': discord.Color.blue(),
+            }
+            color = color_map.get(decision.action, discord.Color.light_grey())
+            
+            emoji_map = {
+                'BUY': '🟢',
+                'SELL': '🔴',
+                'HOLD': '⚪',
+                'CLOSE': '🟠',
+                'CLOSE_LONG': '🟠',
+                'CLOSE_SHORT': '🟠',
+                'UPDATE': '🔵',
+            }
+            emoji = emoji_map.get(decision.action, '📊')
+            
+            embed = discord.Embed(
+                title=f"{emoji} TRADING DECISION: {decision.action}",
+                description=decision.reasoning[:1024] if decision.reasoning else "No reasoning provided",
+                color=color
+            )
+            
+            embed.add_field(name="Symbol", value=decision.symbol, inline=True)
+            embed.add_field(name="Price", value=f"${decision.price:,.2f}", inline=True)
+            embed.add_field(name="Confidence", value=decision.confidence, inline=True)
+            
+            if decision.stop_loss:
+                embed.add_field(name="Stop Loss", value=f"${decision.stop_loss:,.2f}", inline=True)
+            if decision.take_profit:
+                embed.add_field(name="Take Profit", value=f"${decision.take_profit:,.2f}", inline=True)
+            if decision.position_size:
+                embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.1f}%", inline=True)
+            
+            embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+            
+        except Exception as e:
+            self.logger.error(f"Error sending trading decision: {e}")
+    
+    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_analysis_notification(
             self,
             result: dict,
@@ -190,11 +259,9 @@ class DiscordNotifier:
             if not raw_response:
                 return
             
-            # Extract reasoning (text before JSON block)
-            reasoning = self._extract_reasoning(raw_response)
-            
-            # Extract JSON analysis
-            analysis_json = self._extract_json_analysis(raw_response)
+            # Extract reasoning (text before JSON block) and JSON analysis using UnifiedParser
+            reasoning = self.unified_parser.extract_text_before_json(raw_response)
+            analysis_json = self.unified_parser.extract_json_block(raw_response, unwrap_key='analysis')
             
             # Send reasoning as regular message
             if reasoning:
@@ -364,26 +431,7 @@ class DiscordNotifier:
         except Exception as e:
             self.logger.error(f"Error sending performance stats: {e}")
     
-    def _extract_reasoning(self, text: str) -> str:
-        """Extract reasoning text before JSON block."""
-        json_match = re.search(r'```json', text, re.IGNORECASE)
-        if json_match:
-            reasoning = text[:json_match.start()].strip()
-            return reasoning
-        return text.strip()
-    
-    def _extract_json_analysis(self, text: str) -> Optional[dict]:
-        """Extract JSON analysis block from response."""
-        try:
-            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                data = json.loads(json_str)
-                # Return the analysis object
-                return data.get('analysis', data)
-        except Exception as e:
-            self.logger.debug(f"JSON extraction failed: {e}")
-        return None
+
     
     def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> Optional[discord.Embed]:
         """Create Discord embed from analysis JSON."""

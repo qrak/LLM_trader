@@ -16,7 +16,7 @@ from src.utils.timeframe_validator import TimeframeValidator
 from src.analyzer.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
 from src.trading import DataPersistence, TradingStrategy
-from src.discord_interface import DiscordNotifier
+from src.discord_interface import DiscordNotifier, ConsoleNotifier
 from src.utils.keyboard_handler import KeyboardHandler
 from src.rag.text_splitting import SentenceSplitter
 from src.parsing.unified_parser import UnifiedParser
@@ -56,8 +56,8 @@ class CryptoTradingBot:
         self.current_symbol: Optional[str] = None
         self.current_timeframe: Optional[str] = None
         
-        # Discord notifier
-        self.discord_notifier: Optional[DiscordNotifier] = None
+        # Notifier (Discord or Console fallback)
+        self.discord_notifier: Optional[DiscordNotifier | ConsoleNotifier] = None
         self._discord_task: Optional[asyncio.Task] = None
         self._position_status_task: Optional[asyncio.Task] = None
 
@@ -156,21 +156,23 @@ class CryptoTradingBot:
 
         # Initialize trading components
         self.data_persistence = DataPersistence(self.logger, data_dir="data/trading", max_memory=10)
-        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, self.config)
+        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, self.config, self.unified_parser)
         self.logger.debug("Trading components initialized")
 
-        # Initialize Discord notifier if configured and enabled
+        # Initialize notifier - Discord if enabled, otherwise Console fallback
         if self.config.DISCORD_BOT_ENABLED and hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
             try:
-                self.discord_notifier = DiscordNotifier(self.logger, self.config)
+                self.discord_notifier = DiscordNotifier(self.logger, self.config, self.unified_parser)
                 self._discord_task = asyncio.create_task(self.discord_notifier.start())
                 await self.discord_notifier.wait_until_ready()
                 self.logger.debug("Discord notifier initialized and ready")
             except Exception as e:
-                self.logger.warning(f"Discord initialization failed: {e}. Continuing without Discord.")
-                self.discord_notifier = None
+                self.logger.warning(f"Discord initialization failed: {e}. Falling back to console output.")
+                self.discord_notifier = ConsoleNotifier(self.logger, self.config, self.unified_parser)
         else:
-            self.logger.debug("Discord not configured, notifications disabled")
+            # Use ConsoleNotifier as fallback when Discord is disabled
+            self.discord_notifier = ConsoleNotifier(self.logger, self.config, self.unified_parser)
+            self.logger.info("Discord disabled, using console notifications")
 
         await self.rag_engine.start_periodic_updates()
         
@@ -341,7 +343,7 @@ class CryptoTradingBot:
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
         
         if decision:
-            self._print_trading_decision(decision)
+            await self.discord_notifier.send_trading_decision(decision, self.config.MAIN_CHANNEL_ID)
             # Send initial position status and start hourly updates if a new position was opened
             if decision.action in ('BUY', 'SELL') and self.trading_strategy.current_position:
                 if self.discord_notifier:
@@ -575,27 +577,6 @@ class CryptoTradingBot:
             if not task.done():
                 task.cancel()
     
-    def _print_trading_decision(self, decision):
-        """Print a trading decision to console."""
-        print("\n" + "=" * 60)
-        print("TRADING DECISION")
-        print("=" * 60)
-        print(f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Symbol: {decision.symbol}")
-        print(f"Action: {decision.action}")
-        print(f"Confidence: {decision.confidence}")
-        print(f"Price: ${decision.price:,.2f}")
-        
-        if decision.stop_loss:
-            print(f"Stop Loss: ${decision.stop_loss:,.2f}")
-        if decision.take_profit:
-            print(f"Take Profit: ${decision.take_profit:,.2f}")
-        if decision.position_size:
-            print(f"Position Size: {decision.position_size * 100:.1f}%")
-        
-        print(f"\nReasoning: {decision.reasoning}")
-        print("=" * 60 + "\n")
-
     async def shutdown(self):
         self.logger.info("Shutting down gracefully...")
         self.running = False

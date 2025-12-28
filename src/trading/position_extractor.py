@@ -1,9 +1,11 @@
 """Extract trading signals from AI responses."""
 
 import re
-import json
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, TYPE_CHECKING
 from re import Pattern
+
+if TYPE_CHECKING:
+    from src.parsing.unified_parser import UnifiedParser
 
 from src.logger.logger import Logger
 
@@ -11,13 +13,15 @@ from src.logger.logger import Logger
 class PositionExtractor:
     """Extracts trading signals, stop loss, take profit from AI responses."""
     
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(self, logger: Optional[Logger] = None, unified_parser: "UnifiedParser" = None):
         """Initialize the position extractor.
         
         Args:
             logger: Optional logger instance
+            unified_parser: UnifiedParser for JSON extraction (DRY)
         """
         self.logger = logger
+        self.unified_parser = unified_parser
         
         # Regex patterns for extracting trading information
         self.signal_pattern: Pattern = re.compile(
@@ -48,32 +52,36 @@ class PositionExtractor:
     def extract_from_json(self, text: str) -> Optional[Dict[str, Any]]:
         """Try to extract trading decision from JSON in response.
         
+        Uses UnifiedParser.extract_json_block() for JSON extraction (DRY).
+        
         Args:
             text: AI response text
             
         Returns:
             Extracted JSON trading decision or None
         """
-        try:
-            # Find JSON block in the response
-            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                data = json.loads(json_str)
-                
-                # Look for analysis wrapper (new format)
-                if "analysis" in data and isinstance(data["analysis"], dict):
-                    return data["analysis"]
-                # Look for trading_decision or decision key
-                elif "trading_decision" in data:
-                    return data["trading_decision"]
-                elif "decision" in data:
-                    return data["decision"]
-                return data
-        except (json.JSONDecodeError, Exception) as e:
+        if not self.unified_parser:
             if self.logger:
-                self.logger.debug(f"JSON extraction failed: {e}")
-        return None
+                self.logger.warning("No UnifiedParser provided, cannot extract JSON")
+            return None
+        
+        # Try unwrapping 'analysis' key first
+        result = self.unified_parser.extract_json_block(text, unwrap_key='analysis')
+        if result:
+            return result
+        
+        # Try 'trading_decision' key
+        result = self.unified_parser.extract_json_block(text, unwrap_key='trading_decision')
+        if result:
+            return result
+        
+        # Try 'decision' key
+        result = self.unified_parser.extract_json_block(text, unwrap_key='decision')
+        if result:
+            return result
+        
+        # Try raw extraction without unwrapping
+        return self.unified_parser.extract_json_block(text)
     
     def extract_trading_info(self, text: str) -> Tuple[str, str, Optional[float], Optional[float], Optional[float], str]:
         """Extract trading information from AI response.

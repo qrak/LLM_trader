@@ -5,7 +5,6 @@ if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
 
 from src.logger.logger import Logger
-from src.parsing.response_formatter import ResponseFormatter
 from src.platforms.ai_providers.openrouter import ResponseDict
 from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
 from src.utils.token_counter import TokenCounter
@@ -49,7 +48,6 @@ class ModelManager(ModelManagerProtocol):
         # Create helper components - use injected parser
         self.unified_parser = unified_parser
         self.token_counter = TokenCounter()
-        self.response_formatter = ResponseFormatter()
 
         # Cache model names from config (DRY - avoid repeated config lookups)
         self.google_model = self.config.GOOGLE_STUDIO_MODEL
@@ -298,9 +296,9 @@ class ModelManager(ModelManagerProtocol):
         error_detail = response_json.get("error", f"Unknown {provider_name} failure") if response_json else f"No response from {provider_name}"
         
         if is_final_fallback:
-            return cast(ResponseDict, self.response_formatter.format_final_fallback_error(provider_name, error_detail))
+            return cast(ResponseDict, self.unified_parser.format_final_fallback_error(provider_name, error_detail))
         else:
-            return cast(ResponseDict, self.response_formatter.format_provider_error(provider_name, error_detail))
+            return cast(ResponseDict, self.unified_parser.format_provider_error(provider_name, error_detail))
     
     def _provider_available(self, provider: str) -> bool:
         """Check if a provider's client is available."""
@@ -721,14 +719,14 @@ class ModelManager(ModelManagerProtocol):
         """Extract and process content from the response"""
         try:
             if response_json is None:
-                return self.response_formatter.format_error_response("Empty response from API")
+                return self.unified_parser.format_error_response("Empty response from API")
                 
             if "error" in response_json:
-                return self.response_formatter.format_error_response(response_json["error"])
+                return self.unified_parser.format_error_response(response_json["error"])
 
             if not self._is_valid_response(response_json):
                 self.logger.error(f"Missing 'choices' key or invalid choices in API response: {response_json}")
-                return self.response_formatter.format_error_response("Invalid API response format")
+                return self.unified_parser.format_error_response("Invalid API response format")
 
             # Extract content - validation already done by _is_valid_response
             content = response_json["choices"][0]["message"]["content"]
@@ -748,4 +746,4 @@ class ModelManager(ModelManagerProtocol):
         except Exception as e:
             self.logger.error(f"Error processing response: {e}")
             self.logger.debug(f"Response that caused error: {response_json}")
-            return self.response_formatter.format_error_response(f"Error processing response: {str(e)}")
+            return self.unified_parser.format_error_response(f"Error processing response: {str(e)}")
