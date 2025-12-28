@@ -1,5 +1,5 @@
 """
-Configuration loader for DiscordCryptoAnalyzer.
+Configuration loader for LLM_Trader v2.
 Loads private keys from keys.env and public configuration from config.ini.
 """
 
@@ -107,7 +107,7 @@ class Config:
         cryptocompare_key = self.get_env('CRYPTOCOMPARE_API_KEY')
         
         # Build base URLs
-        news_url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=KurusDiscordCryptoBot"
+        news_url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=LLM_Trader_v2"
         categories_url = "https://min-api.cryptocompare.com/data/news/categories"
         price_url = "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD"
         

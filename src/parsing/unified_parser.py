@@ -28,9 +28,8 @@ class UnifiedParser:
             'bearish_scenario': 0.0
         }
     
-    # ============================================================================
-    # AI RESPONSE PARSING
-    # ============================================================================
+    
+
     
     def parse_ai_response(self, raw_text: str) -> Dict[str, Any]:
         """
@@ -127,9 +126,8 @@ class UnifiedParser:
             return reasoning
         return text.strip()
     
-    # ============================================================================
-    # ERROR RESPONSE FORMATTING (consolidated from ResponseFormatter)
-    # ============================================================================
+    
+
     
     @staticmethod
     def format_error_response(error_message: str) -> str:
@@ -174,9 +172,8 @@ class UnifiedParser:
         """
         return {"error": f"All models failed. Last attempt ({provider}): {error_detail}"}
     
-    # ============================================================================
-    # TIMESTAMP PARSING (consolidates multiple timestamp parsers)
-    # ============================================================================
+    
+
     
     def parse_timestamp(self, timestamp_field: Union[int, float, str, None]) -> float:
         """
@@ -194,9 +191,8 @@ class UnifiedParser:
         
         return 0.0
     
-    # ============================================================================
-    # CATEGORY PARSING (consolidates category-related parsing)
-    # ============================================================================
+    
+
     
     def parse_article_categories(self, categories_string: str) -> Set[str]:
         """Parse categories from article category string."""
@@ -222,9 +218,8 @@ class UnifiedParser:
         
         return categories
     
-    # ============================================================================
-    # SYMBOL AND COIN PARSING
-    # ============================================================================
+    
+
     
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
@@ -272,9 +267,8 @@ class UnifiedParser:
             
         return coins_mentioned
     
-    # ============================================================================
-    # PRIVATE HELPER METHODS
-    # ============================================================================
+    
+
     
     def _clean_tool_response_tags(self, text: str) -> str:
         """Remove tool_response tags from AI responses."""

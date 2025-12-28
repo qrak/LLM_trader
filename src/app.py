@@ -78,7 +78,6 @@ class CryptoTradingBot:
         self.format_utils = FormatUtils(self.data_processor)
         self.logger.debug("DataProcessor and FormatUtils initialized")
 
-        # === COMPOSITION ROOT: Create shared utilities (no dependencies) ===
         # UnifiedParser - single instance shared across all components
         self.unified_parser = UnifiedParser(self.logger)
         self.logger.debug("UnifiedParser initialized")
@@ -565,9 +564,7 @@ class CryptoTradingBot:
     
     async def _show_help(self):
         """Show help information about available commands."""
-        self.logger.info("\n=== Available Keyboard Commands ===")
         self.keyboard_handler.display_help()
-        self.logger.info("===================================")
     
     async def _request_shutdown(self):
         """Request application shutdown via keyboard."""

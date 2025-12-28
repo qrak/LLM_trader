@@ -67,8 +67,7 @@ class RagEngine:
         )
         self.context_builder = ContextBuilder(logger, token_counter, article_processor=article_processor, sentence_splitter=sentence_splitter)
         self.context_builder.config = config # Inject config
-        
-        # API clients with dependency injection
+
         self.coingecko_api = coingecko_api
         self.cryptocompare_api = cryptocompare_api
         self.symbol_manager = symbol_manager

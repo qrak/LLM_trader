@@ -49,8 +49,6 @@ class TokenCounter:
             Number of tokens
         """
         token_count = self.count_tokens(text)
-        
-        # Update session counts
         if message_type in self.session_tokens:
             self.session_tokens[message_type] += token_count
         else:
@@ -89,7 +87,6 @@ class TokenCounter:
             Dictionary with cost estimates
         """
         if model_pricing is None:
-            # Default pricing (approximate for GPT-4 equivalent models)
             model_pricing = {
                 "input": 0.01,   # $0.01 per 1000 tokens
                 "output": 0.03   # $0.03 per 1000 tokens

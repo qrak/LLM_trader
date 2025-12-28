@@ -5,7 +5,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 
-# ==================== Trading Brain Dataclasses ====================
+
+
 
 @dataclass(slots=True)
 class TradingInsight:
@@ -268,7 +269,8 @@ class TradingBrain:
         return brain
 
 
-# ==================== Position Dataclasses ====================
+
+
 
 @dataclass(frozen=True, slots=True)
 class Position:

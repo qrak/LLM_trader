@@ -9,11 +9,6 @@ import ccxt
 import aiohttp
 import aiodns
 
-# -------------------------------------------------------------
-# Internal helper utilities (extracted to reduce cyclomatic
-# complexity of the decorator wrapper functions). Keeping
-# signatures small and pure simplifies testing and reuse.
-# -------------------------------------------------------------
 
 _RATE_LIMIT_PHRASES = {
     'too many requests', 'rate limit', '429', 'ratelimit',

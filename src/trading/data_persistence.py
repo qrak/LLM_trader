@@ -39,7 +39,8 @@ class DataPersistence:
         self.brain = self._load_brain()
     
 
-    # ==================== Position Management ====================
+    
+
     
     def save_position(self, position: Optional[Position]) -> None:
         """Save current position to disk."""
@@ -98,7 +99,8 @@ class DataPersistence:
             self.logger.error(f"Error loading position: {e}")
             return None
     
-    # ==================== Trade History ====================
+    
+
     
     def save_trade_decision(self, decision: TradeDecision) -> None:
         """Save a trade decision to history."""
@@ -150,7 +152,8 @@ class DataPersistence:
         
         return filtered[:n]
     
-    # ==================== Trading Memory ====================
+    
+
     
     def _load_memory(self) -> TradingMemory:
         """Load trading memory from disk."""
@@ -223,7 +226,8 @@ class DataPersistence:
             self.logger.warning(f"Could not get last analysis time: {e}")
             return None
     
-    # ==================== Previous Response ====================
+    
+
     
     def save_previous_response(self, response: str, technical_data: Optional[Dict[str, Any]] = None) -> None:
         """Save the previous AI response and technical indicator values.
@@ -295,7 +299,8 @@ class DataPersistence:
             self.logger.error(f"Error loading previous response: {e}")
             return None
     
-    # ==================== P&L Calculation ====================
+    
+
     
     def calculate_historical_pnl(self) -> Dict[str, float]:
         """Calculate historical P&L from trade history."""
@@ -344,7 +349,8 @@ class DataPersistence:
             "win_rate": win_rate,
         }
     
-    # ==================== Memory Management ====================
+    
+
     
     def _build_memory_from_history(self) -> TradingMemory:
         """Build TradingMemory from recent trade history.
@@ -371,7 +377,8 @@ class DataPersistence:
         self.logger.debug(f"Built memory with {len(memory.decisions)} decisions from history")
         return memory
 
-    # ==================== Trading Brain ====================
+    
+
     
     def _load_brain(self) -> TradingBrain:
         """Load trading brain from disk."""
@@ -670,7 +677,8 @@ class DataPersistence:
         
         rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0
         
-        # ========== STOP LOSS ANALYSIS ==========
+        
+
         if close_reason == 'stop_loss':
             # SL was hit - analyze if it was appropriate
             if sl_distance_pct < 1.5:
@@ -692,7 +700,8 @@ class DataPersistence:
                     confidence_impact=position.confidence
                 ))
         
-        # ========== TAKE PROFIT ANALYSIS ==========
+        
+
         elif close_reason == 'take_profit':
             # TP was hit - record successful setup
             if rr_ratio >= 2:
@@ -705,7 +714,8 @@ class DataPersistence:
                     confidence_impact=position.confidence
                 ))
         
-        # ========== SIGNAL CLOSE ANALYSIS ==========
+        
+
         elif close_reason == 'analysis_signal':
             if is_win:
                 insights.append(TradingInsight(
@@ -726,7 +736,8 @@ class DataPersistence:
                     confidence_impact=position.confidence
                 ))
         
-        # ========== CONFIDENCE CALIBRATION INSIGHTS ==========
+        
+
         # Check if confidence was miscalibrated
         confidence_stats = self.brain.confidence_stats.get(position.confidence)
         if confidence_stats and confidence_stats.total_trades >= 5:
@@ -740,7 +751,8 @@ class DataPersistence:
                     confidence_impact="HIGH"
                 ))
         
-        # ========== MARKET REGIME INSIGHTS ==========
+        
+
         # Detect regime-specific patterns
         if "Strong Trend" in condition_str:
             if position.direction == 'SHORT' and close_reason == 'stop_loss' and "Uptrend" in condition_str:

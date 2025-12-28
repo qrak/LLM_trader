@@ -1,9 +1,9 @@
-# Contributing to DiscordCryptoBot
+# Contributing to LLM_Trader v2
 
 Thank you for your interest in contributing!
 
 ## How to Contribute
-- Fork the repository on GitHub (https://github.com/qrak/DiscordCryptoAnalyzer)
+- Fork the repository on GitHub (https://github.com/qrak/LLM_trader)
 - Clone your fork and create a new branch for your changes
 - Make your changes and commit with clear messages
 - Push your branch and open a Pull Request

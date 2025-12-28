@@ -403,7 +403,8 @@ class ChartGenerator:
         except Exception:
             pass
 
-        # --- Highest/Lowest point annotations ---
+        
+
         idx_high = int(np.argmax(highs))
         idx_low = int(np.argmin(lows))
         fig.add_annotation(

@@ -116,7 +116,7 @@ class TechnicalCalculator:
         indicators["chandelier_long"] = long_exit
         indicators["chandelier_short"] = short_exit
         
-        # ATR Percentage
+
         current_price = ohlcv_data[-1, 4] if len(ohlcv_data) > 0 else 1
         atr_values = indicators["atr"]
         indicators["atr_percent"] = (atr_values / current_price) * 100 if current_price > 0 else np.full_like(atr_values, np.nan)
@@ -426,7 +426,8 @@ class TechnicalCalculator:
         
         return analysis
 
-    # ---------------- Helper Methods (extracted for clarity) ----------------
+    
+
     def _compute_sma_sets(self, ti: TechnicalIndicators, available_days: int):
         sma_periods = [20, 50, 100, 200]
         sma_values: Dict[int, float] = {}

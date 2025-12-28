@@ -38,41 +38,29 @@ def serialize_for_json(obj: Any) -> Any:
     """
 
 
-    # Dict - recursively process values
+
     if isinstance(obj, dict):
         return {k: serialize_for_json(v) for k, v in obj.items()}
-
-    # List/Tuple - recursively process elements
     if isinstance(obj, (list, tuple)):
         return [serialize_for_json(v) for v in obj]
-
-    # Numpy array - convert to list
     if _np is not None and isinstance(obj, _np.ndarray):
         try:
             return obj.tolist()
         except Exception:
             # Fallback: recursively process elements
             return [serialize_for_json(v) for v in obj]
-
-    # Numpy scalar - convert to Python primitive
     if _np is not None and isinstance(obj, _np.generic):
         try:
             return obj.item()
         except Exception:
             return str(obj)
-
-    # Primitive types
     if isinstance(obj, (str, int, bool)) or obj is None:
         return obj
-
-    # Float - handle NaN/Inf
     if isinstance(obj, float):
         import math
         if math.isnan(obj) or math.isinf(obj):
             return None
         return obj
-
-    # Fallback to string representation for any other type
     try:
         return str(obj)
     except Exception:

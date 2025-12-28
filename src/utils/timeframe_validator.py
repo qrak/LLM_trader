@@ -13,11 +13,7 @@ import re
 
 class TimeframeValidator:
     """Validates and manages timeframe configurations"""
-    
-    # Supported timeframes: 1h (minimum) to 1w (maximum, for macro analysis only)
     SUPPORTED_TIMEFRAMES = ['1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w']
-    
-    # Timeframe to minutes mapping
     TIMEFRAME_MINUTES = {
         '1h': 60,
         '2h': 120,
@@ -28,8 +24,6 @@ class TimeframeValidator:
         '1d': 1440,
         '1w': 10080
     }
-    
-    # CryptoCompare API format mapping
     CRYPTOCOMPARE_FORMAT = {
         '1h': 'hour',
         '2h': 'hour',
@@ -39,10 +33,8 @@ class TimeframeValidator:
         '12h': 'hour',
         '1d': 'day'
     }
-    
-    # CCXT-compatible timeframes (common across major exchanges)
     CCXT_STANDARD_TIMEFRAMES = ['1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w']
-    
+
     @classmethod
     def validate(cls, timeframe: str) -> bool:
         """

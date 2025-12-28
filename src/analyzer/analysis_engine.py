@@ -567,8 +567,6 @@ class AnalysisEngine:
             # Update the context with calculated metrics
             self.context.long_term_data.update(long_term_indicators)
             
-            # self.logger.debug(f"Long-term metrics calculated: price_change={self.context.long_term_data.get('price_change')}, "
-            #                  f"volatility={self.context.long_term_data.get('volatility')}")
         except Exception as e:
             self.logger.error(f"Error processing long-term data: {str(e)}")
         

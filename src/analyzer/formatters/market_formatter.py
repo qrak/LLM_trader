@@ -32,10 +32,6 @@ class MarketFormatter:
         self.period_formatter = MarketPeriodFormatter(logger, format_utils)
         self.long_term_formatter = LongTermFormatter(logger, format_utils)
     
-    # =========================================================================
-    # Delegation Methods - Maintain backward compatibility
-    # =========================================================================
-    
     def format_market_overview(self, market_overview: dict, analyzed_symbol: str = None) -> str:
         """Format market overview data (delegates to MarketOverviewFormatter)."""
         return self.overview_formatter.format_market_overview(market_overview, analyzed_symbol)
@@ -47,10 +43,6 @@ class MarketFormatter:
     def format_long_term_analysis(self, long_term_data: dict, current_price: float = None) -> str:
         """Format long-term analysis (delegates to LongTermFormatter)."""
         return self.long_term_formatter.format_long_term_analysis(long_term_data, current_price)
-    
-    # =========================================================================
-    # Market Microstructure Methods - Remain in coordinator
-    # =========================================================================
     
     def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256, include_description: bool = False) -> str:
         """Format coin details into a compressed section (removed low-trading-value data)

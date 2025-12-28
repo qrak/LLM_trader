@@ -225,9 +225,6 @@ class ModelManager(ModelManagerProtocol):
             # Let higher level handle logging - just propagate the error
             raise ValueError("Chart analysis failed - invalid response")
 
-    # ----------------------------
-    # Internal DRY helper methods
-    # ----------------------------
     def _resolve_model(self, provider: str, model_override: Optional[str] = None) -> str:
         """
         Resolve the effective model name for a provider.

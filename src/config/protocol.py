@@ -15,7 +15,8 @@ class ConfigProtocol(Protocol):
     Implementations must provide all these members to satisfy the Protocol.
     """
     
-    # ===== Environment Variables (Private Keys) =====
+    
+
     @property
     def BOT_TOKEN_DISCORD(self) -> str | None: ...
     
@@ -43,7 +44,8 @@ class ConfigProtocol(Protocol):
     @property
     def ADMIN_USER_IDS(self) -> list[int]: ...
     
-    # ===== AI Provider Configuration =====
+    
+
     @property
     def PROVIDER(self) -> str: ...
     
@@ -65,7 +67,8 @@ class ConfigProtocol(Protocol):
     @property
     def GOOGLE_STUDIO_MODEL(self) -> str: ...
     
-    # ===== General Configuration =====
+    
+
     @property
     def LOGGER_DEBUG(self) -> bool: ...
     
@@ -81,21 +84,24 @@ class ConfigProtocol(Protocol):
     @property
     def AI_CHART_CANDLE_LIMIT(self) -> int: ...
     
-    # ===== Debug Configuration =====
+    
+
     @property
     def DEBUG_SAVE_CHARTS(self) -> bool: ...
     
     @property
     def DEBUG_CHART_SAVE_PATH(self) -> str: ...
     
-    # ===== Directory Configuration =====
+    
+
     @property
     def LOG_DIR(self) -> str: ...
     
     @property
     def DATA_DIR(self) -> str: ...
     
-    # ===== Cooldown Configuration =====
+    
+
     @property
     def ANALYSIS_COOLDOWN_COIN(self) -> int: ...
     
@@ -105,7 +111,8 @@ class ConfigProtocol(Protocol):
     @property
     def FILE_MESSAGE_EXPIRY(self) -> int: ...
     
-    # ===== RAG Configuration =====
+    
+
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self) -> int: ...
     
@@ -129,14 +136,16 @@ class ConfigProtocol(Protocol):
     RAG_PRICE_API_URL: str
     
 
-    # ===== Exchange Configuration =====
+    
+
     @property
     def SUPPORTED_EXCHANGES(self) -> list[str]: ...
     
     @property
     def MARKET_REFRESH_HOURS(self) -> int: ...
     
-    # ===== Methods =====
+    
+
     def get_env(self, key: str, default: Any = None) -> Any: ...
     
     def get_config(self, section: str, key: str, default: Any = None) -> Any: ...

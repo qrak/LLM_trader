@@ -27,7 +27,7 @@ class FormatUtils:
         if isinstance(val, (int, float)) and not np.isnan(val):
             if 0 < abs(val) < 0.0000001:  # Only use scientific notation for extremely small values
                 return f"{val:.{precision}e}"  # Scientific notation for very small values
-            elif abs(val) < 0.00001:  # SHIB and similar small crypto coins (0.000001 - 0.00001)
+            elif abs(val) < 0.00001: 
                 return f"{val:.8f}"  # 8 decimal places for small crypto values
             elif abs(val) < 0.0001:
                 return f"{val:.7f}"  # 7 decimal places 
