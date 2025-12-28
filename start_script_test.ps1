@@ -1,6 +1,6 @@
 <#
 start_script_test.ps1
-Purpose: Prepare .venv, ensure on 'development' git branch (if repo), install requirements, and run start.py
+Purpose: Prepare .venv, ensure on 'dev' git branch (if repo), install requirements, and run start.py
 Usage: pwsh.exe -File .\start_script_test.ps1 [symbol] [-Timeframe <tf>]
 Examples:
   .\start_script_test.ps1                           # Run with default from config.ini
@@ -26,9 +26,9 @@ Write-Host "== start_script_test.ps1 (test) =="
 
 # Checkout branch if this is a git repo
 if (Test-Path .git) {
-    Write-Host "Switching to 'development' branch..."
+    Write-Host "Switching to 'dev' branch..."
     git fetch --all --prune
-    git checkout development
+    git checkout dev
 }
 else {
     Write-Host "No .git folder found; skipping branch checkout."

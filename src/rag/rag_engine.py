@@ -175,10 +175,8 @@ class RagEngine:
     async def refresh_market_data(self) -> None:
         """Refresh all market data from external sources"""
         await self.category_manager.ensure_categories_updated()
-
-        # self.logger.debug("Starting fetch of news data")
         
-        # Always fetch news
+        # Fetch news
         try:
             articles = await self.news_manager.fetch_fresh_news(
                 self.category_manager.get_known_tickers()
@@ -186,22 +184,19 @@ class RagEngine:
         except Exception as e:
             self.logger.error(f"Error fetching crypto news: {e}")
             articles = []
-    
+        
         # Update market overview if needed
         try:
             await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
         except Exception as e:
             self.logger.error(f"Error updating market overview: {e}")
-    
+        
         # Process articles
         if articles:
             updated = self.news_manager.update_news_database(articles)
             if updated:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
-            else:
-                # self.logger.debug("No new articles to add or only duplicates found")
-                pass
 
     @profile_performance
     async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: int = 8096) -> str:

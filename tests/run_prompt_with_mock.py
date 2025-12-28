@@ -24,21 +24,36 @@ from PIL import Image
 import io
 
 from src.logger.logger import Logger
-from src.utils.loader import config
+from src.config.loader import config
 from src.analyzer.prompts.prompt_builder import PromptBuilder
-from src.analyzer.core.analysis_context import AnalysisContext
-from src.analyzer.data.data_processor import DataProcessor
+from src.analyzer.analysis_context import AnalysisContext
+from src.analyzer.data_processor import DataProcessor
 from src.utils.format_utils import FormatUtils
 from src.platforms.ai_providers.mock import MockClient
 from src.contracts.manager import ModelManager
+from src.parsing.unified_parser import UnifiedParser
+from src.analyzer.technical_calculator import TechnicalCalculator
+from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
 
 
 async def main():
     logger = Logger("run_prompt_mock", logger_debug=True)
     data_processor = DataProcessor()
     format_utils = FormatUtils(data_processor)
+    unified_parser = UnifiedParser(logger=logger, format_utils=format_utils)
 
-    pb = PromptBuilder(timeframe=config.TIMEFRAME, logger=logger, format_utils=format_utils, config=config, data_processor=data_processor)
+    # TechnicalCalculator is required by PromptBuilder
+    ti_factory = TechnicalIndicatorsFactory()
+    technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils, ti_factory=ti_factory)
+
+    pb = PromptBuilder(
+        timeframe=config.TIMEFRAME, 
+        logger=logger, 
+        technical_calculator=technical_calculator,
+        format_utils=format_utils, 
+        config=config, 
+        data_processor=data_processor
+    )
 
     # Build synthetic OHLCV using cached coingecko base price
     N = 240
@@ -85,8 +100,12 @@ async def main():
         {"role": "user", "content": prompt + f"\n\nTEST_HINT: last_close={context.current_price}"}
     ]
 
-    manager = ModelManager(logger=logger, config=config)
+    manager = ModelManager(logger=logger, config=config, unified_parser=unified_parser)
     manager.openrouter_client = MockClient(logger=logger)
+    # CRITICAL: Must update PROVIDER_METADATA because it caches the client reference from __init__
+    if 'openrouter' in manager.PROVIDER_METADATA:
+        manager.PROVIDER_METADATA['openrouter']['client'] = manager.openrouter_client
+    
     manager.provider = 'openrouter'
 
     print("--- System Prompt ---")

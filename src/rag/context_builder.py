@@ -226,20 +226,18 @@ class ContextBuilder:
 
         body = article.get('body', '')
         if body:
-            # Clean text
+            # Clean text and split into sentences
             cleaned_body = body.replace('\n\n', ' ').replace('\n', ' ').strip()
-            
-            # Use shared sentence splitter (handles fallback internally)
             sentence_list = self.sentence_splitter.split_text(cleaned_body)
             
             # Apply configured limits
             max_sentences = 3
-            max_tokens = 200
+            max_article_tokens = 200
             
             if self.config:
                 try:
                     max_sentences = int(self.config.RAG_ARTICLE_MAX_SENTENCES)
-                    max_tokens = int(self.config.RAG_ARTICLE_MAX_TOKENS)
+                    max_article_tokens = int(self.config.RAG_ARTICLE_MAX_TOKENS)
                 except (AttributeError, ValueError):
                     pass  # Use defaults
             
@@ -258,14 +256,12 @@ class ContextBuilder:
             for sent in selected_sentences:
                 sent_tokens = self.token_counter.count_tokens(sent + " ")
                 
-                # Check if adding this sentence would exceed the article token limit
-                if current_tokens + sent_tokens > max_tokens:
+                if current_tokens + sent_tokens > max_article_tokens:
                     break
                     
                 key_facts += sent + " "
                 current_tokens += sent_tokens
                 
-            key_facts = key_facts.strip()
             if key_facts:
                 article_text += f"{key_facts}\n\n"
 
