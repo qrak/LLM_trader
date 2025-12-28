@@ -156,8 +156,8 @@ class CryptoTradingBot:
         self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, self.config)
         self.logger.debug("Trading components initialized")
 
-        # Initialize Discord notifier if configured
-        if hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
+        # Initialize Discord notifier if configured and enabled
+        if self.config.DISCORD_BOT_ENABLED and hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
             try:
                 self.discord_notifier = DiscordNotifier(self.logger, self.config)
                 self._discord_task = asyncio.create_task(self.discord_notifier.start())

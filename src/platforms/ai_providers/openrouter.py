@@ -1,6 +1,7 @@
 import io
 import base64
 from typing import Optional, Dict, Any, List, TypedDict, cast, Union
+import aiohttp
 from PIL import Image
 
 from src.platforms.ai_providers.base import BaseApiClient
@@ -72,9 +73,9 @@ class OpenRouterClient(BaseApiClient):
         }
         
         url = f"{self.base_url}/chat/completions"
-        # Use ClientTimeout for aiohttp requests
-        client_timeout = aiohttp.ClientTimeout(total=600)
-        response = await self._make_post_request(url, headers, payload, model, timeout=client_timeout)
+        
+        url = f"{self.base_url}/chat/completions"
+        response = await self._make_post_request(url, headers, payload, model, timeout=600)
         
         return cast(ResponseDict, response) if response else None
 
@@ -137,9 +138,9 @@ class OpenRouterClient(BaseApiClient):
             self.logger.debug(f"Sending chart analysis request to OpenRouter with chart image ({len(img_data)} bytes)")
             
             url = f"{self.base_url}/chat/completions"
-            # Use ClientTimeout for aiohttp requests
-            client_timeout = aiohttp.ClientTimeout(total=600)
-            response = await self._make_post_request(url, headers, payload, model, timeout=client_timeout)
+            
+            url = f"{self.base_url}/chat/completions"
+            response = await self._make_post_request(url, headers, payload, model, timeout=600)
             
             if response:
                 self.logger.debug("Received successful chart analysis response from OpenRouter")

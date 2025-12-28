@@ -257,6 +257,10 @@ class Config:
     @property
     def CRYPTO_PAIR(self):
         return self.get_config('general', 'crypto_pair', 'BTC/USDT')
+
+    @property
+    def DISCORD_BOT_ENABLED(self):
+        return self.get_config('general', 'discord_bot', False)
     
     @property
     def TIMEFRAME(self):
@@ -336,23 +340,7 @@ class Config:
         """Maximum number of tokens per article (configurable via [rag] article_max_tokens)."""
         return int(self.get_config('rag', 'article_max_tokens', 200))
     
-    # Language Configuration
-    @property
-    def SUPPORTED_LANGUAGES(self):
-        """Returns a dictionary mapping language names to codes."""
-        names = self.get_config('languages', 'supported', ['English'])
-        codes = self.get_config('languages', 'supported_codes', ['en'])
-        
-        if len(names) != len(codes):
-            logging.warning("Mismatch between language names and codes, using defaults")
-            return {"English": "en"}
-        
-        return dict(zip(names, codes))
-    
-    @property
-    def DEFAULT_LANGUAGE(self):
-        return self.get_config('languages', 'default', 'English')
-    
+
     # Exchange Configuration
     @property
     def SUPPORTED_EXCHANGES(self):

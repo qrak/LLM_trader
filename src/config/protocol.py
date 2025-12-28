@@ -128,13 +128,7 @@ class ConfigProtocol(Protocol):
     RAG_CATEGORIES_API_URL: str
     RAG_PRICE_API_URL: str
     
-    # ===== Language Configuration =====
-    @property
-    def SUPPORTED_LANGUAGES(self) -> Dict[str, str]: ...
-    
-    @property
-    def DEFAULT_LANGUAGE(self) -> str: ...
-    
+
     # ===== Exchange Configuration =====
     @property
     def SUPPORTED_EXCHANGES(self) -> list[str]: ...
