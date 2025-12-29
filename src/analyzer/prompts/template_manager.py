@@ -21,13 +21,12 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", language: Optional[str] = None, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
             symbol: Trading symbol (e.g., "BTC/USDT")
             timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
-            language: Optional language (unused - always English for trading)
             has_chart_image: Whether a chart image is being provided for visual analysis
             previous_response: Previous AI response for context continuity
             position_context: Current position details and unrealized P&L

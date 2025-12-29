@@ -176,7 +176,7 @@ class _ApiRetryContext:
     """Helper class to manage API retry logic."""
     
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
-        self.logger = getattr(instance, 'logger', None) or logging.getLogger(__name__)
+        self.logger = getattr(instance, 'logger', None) or logging.getLogger("Bot")
         self.model = kwargs.get('model', args[0] if args else 'unknown')
         self.func = func
         self.instance = instance

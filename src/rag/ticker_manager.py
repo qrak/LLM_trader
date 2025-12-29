@@ -138,8 +138,7 @@ class TickerManager:
         valid_exchange_symbols = set()
         if self.exchange_manager:
             try:
-                exchange_symbols = await self.exchange_manager.get_all_symbols()
-                valid_exchange_symbols = set(exchange_symbols)
+                valid_exchange_symbols = self.exchange_manager.get_all_symbols()
             except Exception as e:
                 self.logger.warning(f"Could not get exchange symbols for validation: {e}")
         

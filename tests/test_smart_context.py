@@ -51,7 +51,7 @@ class TestSmartSentenceSelection:
         mock_article_processor = MagicMock()
         
         # Create real sentence splitter
-        sentence_splitter = SentenceSplitter()
+        sentence_splitter = SentenceSplitter(mock_logger)
         
         # Create ContextBuilder
         builder = ContextBuilder(
@@ -87,7 +87,7 @@ class TestSmartSentenceSelection:
         mock_token_counter = MagicMock()
         mock_token_counter.count_tokens.return_value = 10
         mock_article_processor = MagicMock()
-        sentence_splitter = SentenceSplitter()
+        sentence_splitter = SentenceSplitter(mock_logger)
         
         builder = ContextBuilder(
             logger=mock_logger,
@@ -114,7 +114,7 @@ class TestSmartSentenceSelection:
         mock_token_counter = MagicMock()
         mock_token_counter.count_tokens.return_value = 10
         mock_article_processor = MagicMock()
-        sentence_splitter = SentenceSplitter()
+        sentence_splitter = SentenceSplitter(mock_logger)
         
         builder = ContextBuilder(
             logger=mock_logger,

@@ -10,10 +10,10 @@ from src.logger.logger import Logger
 class MarketDataFetcher:
     """Handles fetching market data from external APIs."""
     
-    def __init__(self, logger: Logger, coingecko_api=None, symbol_manager=None):
+    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None):
         self.logger = logger
         self.coingecko_api = coingecko_api
-        self.symbol_manager = symbol_manager
+        self.exchange_manager = exchange_manager
     
     async def fetch_global_market_data(self) -> Optional[Dict]:
         """Fetch global market data from CoinGecko."""
@@ -49,10 +49,10 @@ class MarketDataFetcher:
                 return None
             
             # Convert symbols to CoinGecko coin IDs if symbol manager available
-            if self.symbol_manager:
+            if self.exchange_manager:
                 coin_ids = []
                 for symbol in top_coins:
-                    coin_id = self.symbol_manager.get_coin_id_from_symbol(symbol)
+                    coin_id = self.exchange_manager.get_coin_id_from_symbol(symbol)
                     if coin_id:
                         coin_ids.append(coin_id)
                 

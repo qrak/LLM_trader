@@ -232,7 +232,7 @@ async def test_wtpsplit_processing(articles: list, logger: Logger):
     print("WTPSPLIT SENTENCE SPLITTING TEST")
     print("="*60)
     
-    splitter = SentenceSplitter()
+    splitter = SentenceSplitter(logger)
     token_counter = TokenCounter()
     data_processor = DataProcessor()
     format_utils = FormatUtils(data_processor)

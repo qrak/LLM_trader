@@ -4,6 +4,7 @@ Text Splitting Utilities
 Provides robust sentence splitting using wtpsplit with regex fallback.
 """
 import re
+import time
 import logging
 from typing import List, Optional
 
@@ -16,24 +17,29 @@ class SentenceSplitter:
     _model = None
     _initialized = False
     
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(SentenceSplitter, cls).__new__(cls)
         return cls._instance
     
-    def __init__(self):
+    def __init__(self, logger=None):
         if not self._initialized:
-            self.logger = logging.getLogger(__name__)
+            if logger is None:
+                raise ValueError("Logger must be provided to SentenceSplitter on first initialization")
+            self.logger = logger
             self._initialize_model()
             self.__class__._initialized = True
             
     def _initialize_model(self):
         """Initialize the SaT model."""
+        self.logger.info("Initializing SentenceSplitter (NLP model)...")
+        start_time = time.perf_counter()
         try:
             from wtpsplit import SaT
             # Use the newer SaT model
             self._model = SaT("sat-3l-sm")
-            self.logger.info("Initialized SaT sentence segmenter")
+            duration = time.perf_counter() - start_time
+            self.logger.info(f"SentenceSplitter initialized took {duration:.2f} seconds")
         except ImportError:
             self.logger.warning("wtpsplit or torch not available, utilizing regex fallback")
             self._model = None
@@ -41,13 +47,12 @@ class SentenceSplitter:
             self.logger.warning(f"Failed to initialize wtpsplit: {e}, utilizing regex fallback")
             self._model = None
 
-    def split_text(self, text: str, lang_code: str = "en") -> List[str]:
+    def split_text(self, text: str) -> List[str]:
         """
         Split text into sentences using wtpsplit if available, otherwise regex.
         
         Args:
             text: Input text to split
-            lang_code: Language code for the model (default: "en")
             
         Returns:
             List of sentence strings

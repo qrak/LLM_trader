@@ -26,7 +26,8 @@ class RagEngine:
         config: "ConfigProtocol",
         coingecko_api: Optional["CoinGeckoAPI"] = None,
         cryptocompare_api: Optional["CryptoCompareAPI"] = None,
-        symbol_manager=None,
+
+        exchange_manager=None,
         file_handler=None,
         news_manager=None,
         market_data_manager=None,
@@ -42,7 +43,7 @@ class RagEngine:
             config: ConfigProtocol instance for RAG update intervals
             coingecko_api: CoinGecko API client (optional)
             cryptocompare_api: CryptoCompare API client (optional)
-            symbol_manager: Exchange manager (optional)
+            exchange_manager: Exchange manager (optional)
             file_handler: RagFileHandler instance (injected from app.py)
             news_manager: NewsManager instance (injected from app.py)
             market_data_manager: MarketDataManager instance (injected from app.py)
@@ -77,7 +78,7 @@ class RagEngine:
 
         self.coingecko_api = coingecko_api
         self.cryptocompare_api = cryptocompare_api
-        self.symbol_manager = symbol_manager
+        self.exchange_manager = exchange_manager
 
         # Update timestamps
         self.last_update: Optional[datetime] = None

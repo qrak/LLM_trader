@@ -170,7 +170,7 @@ def analyze_article(article: Dict, logger: Logger) -> None:
     print(f"{'='*80}")
     
     # Split sentences
-    splitter = SentenceSplitter()
+    splitter = SentenceSplitter(logger)
     sentences = splitter.split_text(body.replace('\n', ' ').strip())
     
     print(f"\nTotal sentences: {len(sentences)}")

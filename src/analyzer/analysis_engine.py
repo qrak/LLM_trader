@@ -81,7 +81,6 @@ class AnalysisEngine:
         self.symbol = None
         self.base_symbol = None
         self.context = None
-        self.language = None
         self.article_urls = {}
         self.last_analysis_result = None
 
@@ -145,20 +144,18 @@ class AnalysisEngine:
         # Use the token counter from model_manager
         self.token_counter = self.model_manager.token_counter
 
-    def initialize_for_symbol(self, symbol: str, exchange, language=None, timeframe=None) -> None:
+    def initialize_for_symbol(self, symbol: str, exchange, timeframe=None) -> None:
         """
         Initialize the analyzer for a specific symbol and exchange.
         
         Args:
             symbol: Trading pair symbol (e.g., "BTC/USDT")
             exchange: Exchange instance
-            language: Optional language for analysis output
             timeframe: Optional timeframe override (uses config default if None)
         """
         self.symbol = symbol
         self.exchange = exchange
         self.base_symbol = symbol.split('/')[0] if '/' in symbol else symbol
-        self.language = language
         
         # Use provided timeframe or fall back to config
         effective_timeframe = timeframe if timeframe else self.timeframe
@@ -359,7 +356,6 @@ class AnalysisEngine:
         last_analysis_time: Optional[str] = None
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
-        self.prompt_builder.language = self.language
         
         # Check if chart analysis is supported by the current provider
         has_chart_analysis = self.model_manager.supports_image_analysis(provider)
@@ -392,7 +388,6 @@ class AnalysisEngine:
             analysis_result = self.result_processor.process_mock_analysis(
                 self.symbol,
                 self.context.current_price,
-                self.language,
                 self.article_urls,
                 technical_history=getattr(self.context, 'technical_history', None),
                 technical_data=getattr(self.context, 'technical_data', None)
@@ -444,7 +439,7 @@ class AnalysisEngine:
         
         # Pass chart image to result processor (it will use chart analysis if image provided)
         return await self.result_processor.process_analysis(
-            system_prompt, prompt, self.language, chart_image=chart_image, provider=provider, model=model
+            system_prompt, prompt, chart_image=chart_image, provider=provider, model=model
         )
     
     async def _generate_chart_image(self) -> Optional[io.BytesIO]:

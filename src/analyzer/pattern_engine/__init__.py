@@ -17,6 +17,7 @@ from src.analyzer.pattern_engine.pattern_matchers import (
     detect_multiple_tops_bottoms_numba
 )
 from src.analyzer.pattern_engine.pattern_engine import PatternEngine
+from src.analyzer.pattern_engine.chart_generator import ChartGenerator
 
 __all__ = [
     'detect_swing_highs_numba',
@@ -31,5 +32,6 @@ __all__ = [
     'detect_wedge_numba',
     'detect_channel_numba',
     'detect_multiple_tops_bottoms_numba',
-    'PatternEngine'
+    'PatternEngine',
+    'ChartGenerator'
 ]

@@ -374,7 +374,7 @@ class DataPersistence:
             except Exception as e:
                 self.logger.warning(f"Could not load decision from history: {e}")
         
-        self.logger.debug(f"Built memory with {len(memory.decisions)} decisions from history")
+        self.logger.info(f"Built memory with {len(memory.decisions)} decisions from history")
         return memory
 
     
@@ -389,7 +389,7 @@ class DataPersistence:
             with open(self.brain_file, 'r') as f:
                 data = json.load(f)
                 brain = TradingBrain.from_dict(data)
-                self.logger.debug(f"Loaded trading brain with {len(brain.insights)} insights, {brain.total_closed_trades} closed trades")
+                self.logger.info(f"Loaded trading brain with {len(brain.insights)} insights, {brain.total_closed_trades} closed trades")
                 return brain
         except Exception as e:
             self.logger.error(f"Error loading trading brain: {e}")

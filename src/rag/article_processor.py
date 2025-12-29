@@ -9,10 +9,10 @@ import logging
 class ArticleProcessor:
     """Utility class for common article processing operations."""
     
-    def __init__(self, logger: logging.Logger = None, format_utils=None, sentence_splitter=None, unified_parser=None):
+    def __init__(self, logger: logging.Logger, format_utils=None, sentence_splitter=None, unified_parser=None):
         if unified_parser is None:
             raise ValueError("unified_parser is required - must be injected from app.py")
-        self.logger = logger or logging.getLogger(__name__)
+        self.logger = logger
         self.parser = unified_parser
         self.format_utils = format_utils
         

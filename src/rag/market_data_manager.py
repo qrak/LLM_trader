@@ -21,7 +21,7 @@ class MarketDataManager:
     """Manages cryptocurrency market overview data and operations."""
     
     def __init__(self, logger: Logger, file_handler: RagFileHandler, 
-                 coingecko_api=None, cryptocompare_api=None, symbol_manager=None, unified_parser=None):
+                 coingecko_api=None, cryptocompare_api=None, exchange_manager=None, unified_parser=None):
         if unified_parser is None:
             raise ValueError("unified_parser is required - must be injected from app.py")
         self.logger = logger
@@ -29,14 +29,14 @@ class MarketDataManager:
         self.unified_parser = unified_parser
         
         # Initialize specialized components
-        self.fetcher = MarketDataFetcher(logger, coingecko_api, symbol_manager)
+        self.fetcher = MarketDataFetcher(logger, coingecko_api, exchange_manager)
         self.processor = MarketDataProcessor(logger, unified_parser=unified_parser)
         self.cache = MarketDataCache(logger, file_handler)
         self.overview_builder = MarketOverviewBuilder(logger, self.processor)
         
         self.coingecko_api = coingecko_api
         self.cryptocompare_api = cryptocompare_api
-        self.symbol_manager = symbol_manager
+        self.exchange_manager = exchange_manager
         
         # Market data storage
         self.current_market_overview: Optional[Dict[str, Any]] = None
@@ -84,7 +84,7 @@ class MarketDataManager:
     
     async def _try_ccxt_price_data(self, top_coins: List[str]) -> Optional[Dict]:
         """Try to fetch price data using CCXT exchange."""
-        if not (self.symbol_manager and self.symbol_manager.exchanges):
+        if not (self.exchange_manager and self.exchange_manager.exchanges):
             return None
         
         # Select best available exchange
@@ -107,12 +107,12 @@ class MarketDataManager:
     def _select_exchange(self):
         """Select the best available exchange for market data."""
         # Prefer Binance if available
-        if 'binance' in self.symbol_manager.exchanges:
+        if 'binance' in self.exchange_manager.exchanges:
             self.logger.debug("Using Binance exchange for market data")
-            return self.symbol_manager.exchanges['binance']
+            return self.exchange_manager.exchanges['binance']
         
         # Use first available exchange that supports fetch_tickers
-        for exchange_id, exch in self.symbol_manager.exchanges.items():
+        for exchange_id, exch in self.exchange_manager.exchanges.items():
             if exch.has.get('fetchTickers', False):
                 self.logger.debug(f"Using {exchange_id} exchange for market data")
                 return exch

@@ -22,7 +22,7 @@ class AnalysisResultProcessor:
         self.logger = logger
         self.unified_parser = unified_parser
         
-    async def process_analysis(self, system_prompt: str, prompt: str, language: Optional[str] = None, 
+    async def process_analysis(self, system_prompt: str, prompt: str, 
                               chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
                               provider: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -31,7 +31,6 @@ class AnalysisResultProcessor:
         Args:
             system_prompt: System instructions for the AI model
             prompt: User prompt for analysis
-            language: Optional language for output
             chart_image: Optional chart image for visual analysis
             provider: Optional provider override (admin only)
             model: Optional model override (admin only)
@@ -88,9 +87,9 @@ class AnalysisResultProcessor:
         self._log_analysis_result(parsed_response)
         
         # Format the final response
-        return self._format_analysis_response(parsed_response, cleaned_response, language)
+        return self._format_analysis_response(parsed_response, cleaned_response)
     
-    def process_mock_analysis(self, symbol: str, current_price: float, language: Optional[str] = None,
+    def process_mock_analysis(self, symbol: str, current_price: float,
                               article_urls: Optional[Dict[str, str]] = None,
                               technical_history: Optional[Dict[str, Any]] = None,
                               technical_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -167,7 +166,6 @@ class AnalysisResultProcessor:
         mock_analysis = {
             "analysis": analysis_obj, # Use the structured dict here (with indicators)
             "raw_response": f"```json\n{mock_json_string}\n```\n{mock_markdown_content}",
-            "language": language,
             "article_urls": mock_article_urls,
             "technical_history_included": technical_history is not None,
             "technical_data_included": technical_data is not None
@@ -224,11 +222,9 @@ class AnalysisResultProcessor:
             self.logger.warning("Analysis complete but response format may be incomplete")
             
     def _format_analysis_response(self, parsed_response: Dict[str, Any], 
-                                cleaned_response: str, 
-                                language: Optional[str] = None) -> Dict[str, Any]:
+                                cleaned_response: str) -> Dict[str, Any]:
         """Format the final analysis response"""
         parsed_response["raw_response"] = cleaned_response
-        parsed_response["language"] = language
         
         # Include current_price if available in context
         if hasattr(self, 'context') and hasattr(self.context, 'current_price'):

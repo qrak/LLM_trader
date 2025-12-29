@@ -41,7 +41,7 @@ class CryptoTradingBot:
         self.cryptocompare_api = None
         self.alternative_me_api = None
         self.rag_engine = None
-        self.symbol_manager = None
+        self.exchange_manager = None
         self.token_counter = None
         self.sentence_splitter = None
         self.format_utils = None
@@ -76,8 +76,7 @@ class CryptoTradingBot:
         self.logger.debug("TokenCounter initialized")
 
         # Initialize SentenceSplitter
-        self.sentence_splitter = SentenceSplitter()
-        self.logger.debug("SentenceSplitter initialized")
+        self.sentence_splitter = SentenceSplitter(self.logger)
 
         # Initialize DataProcessor and FormatUtils
         self.data_processor = DataProcessor()
@@ -101,9 +100,9 @@ class CryptoTradingBot:
         )
         self.logger.debug("ArticleProcessor initialized")
 
-        self.symbol_manager = ExchangeManager(self.logger, self.config)
-        await self.symbol_manager.initialize()
-        self.logger.debug("SymbolManager initialized")
+        self.exchange_manager = ExchangeManager(self.logger, self.config)
+        await self.exchange_manager.initialize()
+        self.logger.debug("ExchangeManager initialized")
 
         # Initialize API clients
         self.coingecko_api = CoinGeckoAPI(
@@ -145,7 +144,7 @@ class CryptoTradingBot:
             file_handler=self.rag_file_handler,
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
-            symbol_manager=self.symbol_manager,
+            exchange_manager=self.exchange_manager,
             unified_parser=self.unified_parser
         )
         
@@ -158,7 +157,7 @@ class CryptoTradingBot:
             logger=self.logger,
             file_handler=self.rag_file_handler,
             cryptocompare_api=self.cryptocompare_api,
-            symbol_manager=self.symbol_manager,
+            exchange_manager=self.exchange_manager,
             unified_parser=self.unified_parser
         )
         
@@ -179,7 +178,7 @@ class CryptoTradingBot:
             config=self.config,
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
-            symbol_manager=self.symbol_manager,
+            exchange_manager=self.exchange_manager,
             file_handler=self.rag_file_handler,
             news_manager=self.news_manager,
             market_data_manager=self.market_data_manager,
@@ -345,7 +344,7 @@ class CryptoTradingBot:
         self.current_timeframe = timeframe or self.config.TIMEFRAME
         
         # Find exchange that supports the symbol
-        exchange, exchange_id = await self.symbol_manager.find_symbol_exchange(symbol)
+        exchange, exchange_id = await self.exchange_manager.find_symbol_exchange(symbol)
         if not exchange:
             self.logger.error(f"Symbol {symbol} not found on any configured exchange")
             return
@@ -358,7 +357,6 @@ class CryptoTradingBot:
         self.market_analyzer.initialize_for_symbol(
             symbol=symbol,
             exchange=exchange,
-            language="English",
             timeframe=self.current_timeframe
         )
         
@@ -733,7 +731,7 @@ class CryptoTradingBot:
         await self._shutdown_market_analyzer()
         await self._shutdown_rag_engine()
         await self._shutdown_api_clients()
-        await self._shutdown_symbol_manager()
+        await self._shutdown_exchange_manager()
         
         self._cleanup_references()
         self.logger.info("Shutdown complete")
@@ -816,19 +814,19 @@ class CryptoTradingBot:
         except Exception as e:
             self.logger.warning(f"Error closing {client_name}: {e}")
 
-    async def _shutdown_symbol_manager(self):
+    async def _shutdown_exchange_manager(self):
         """Close symbol manager safely."""
-        if not self.symbol_manager:
+        if not self.exchange_manager:
             return
             
         try:
-            self.logger.info("Closing SymbolManager...")
-            await asyncio.wait_for(self.symbol_manager.shutdown(), timeout=3.0)
-            self.symbol_manager = None
+            self.logger.info("Closing ExchangeManager...")
+            await asyncio.wait_for(self.exchange_manager.shutdown(), timeout=3.0)
+            self.exchange_manager = None
         except asyncio.TimeoutError:
-            self.logger.warning("SymbolManager shutdown timed out")
+            self.logger.warning("ExchangeManager shutdown timed out")
         except Exception as e:
-            self.logger.warning(f"Error closing SymbolManager: {e}")
+            self.logger.warning(f"Error closing ExchangeManager: {e}")
     
     async def _shutdown_discord_notifier(self):
         """Close Discord notifier safely."""

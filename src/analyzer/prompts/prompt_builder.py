@@ -50,7 +50,6 @@ class PromptBuilder:
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
-        self.language: Optional[str] = None
         self.context: Optional[AnalysisContext] = None
         self.technical_calculator = technical_calculator
         self.config = config
@@ -230,7 +229,7 @@ class PromptBuilder:
         Returns:
             str: Formatted system prompt
         """
-        return self.template_manager.build_system_prompt(symbol, self.timeframe, self.language, has_chart_image, previous_response, position_context, performance_context, brain_context, last_analysis_time)
+        return self.template_manager.build_system_prompt(symbol, self.timeframe, has_chart_image, previous_response, position_context, performance_context, brain_context, last_analysis_time)
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.
