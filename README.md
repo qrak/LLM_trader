@@ -7,6 +7,8 @@
 This is the **v2 evolution** of the original LLM_Trader project.
 LLM_Trader v2 focuses on **continuous trading**, **risk-managed execution**, and **machine-readable (JSON) decisions** that can be reliably parsed and acted on.
 
+![LLM Trader Dashboard](img/1.png)
+
 ## 🏗️ Architecture
 
 ```mermaid
@@ -60,7 +62,7 @@ graph TD
 
 ### 📢 RAG Engine (News & Context)
 - **News Aggregator**: Requires a **CryptoCompare API Key**. The free tier typically offers ~150k lifetime requests, which is sufficient for continuous bot operation.
-- **Smart Relevance Scoring**: Uses keyword density, category matching, and coin-specific heuristics (not just vector search) to filter noise.
+- **Smart Relevance Scoring**: Uses **keyword density**, **category matching**, and **coin-specific heuristics** to filter noise and prioritize data-rich content.
 - **Segmentation**: Uses `wtpsplit` for precise sentence segmentation to extract key facts/numbers.
 - **Configurable Limits**: Adjustable token limits and article counts to manage context window.
 
