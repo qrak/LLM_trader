@@ -26,6 +26,7 @@ class KeyboardHandler:
         self.running = False
         self._commands: Dict[str, Tuple[Callable, str]] = {}
         self._listening_task = None
+        self._old_settings = None  # To store terminal settings on Linux/Mac
     
     def register_command(self, key: str, callback: Callable[[], Awaitable], description: str) -> None:
         """Register a keyboard command
@@ -48,6 +49,16 @@ class KeyboardHandler:
             
         self.running = True
         
+        # Linux/macOS: Switch to non-canonical mode
+        if sys.platform != "win32":
+            try:
+                fd = sys.stdin.fileno()
+                self._old_settings = termios.tcgetattr(fd)
+                tty.setcbreak(fd)  # cbreak allows handling keys immediately but keeps signals like Ctrl+C
+            except Exception as e:
+                if self.logger:
+                    self.logger.warning(f"Failed to set terminal mode: {e}")
+
         if self.logger:
             self.logger.debug("Keyboard handler started")
             
@@ -100,14 +111,10 @@ class KeyboardHandler:
                 return decoded if decoded else None
             else:
                 # Linux/Unix implementation
-                fd = sys.stdin.fileno()
-                old_settings = termios.tcgetattr(fd)
-                try:
-                    tty.setraw(sys.stdin.fileno())
-                    char = sys.stdin.read(1)
-                    return char if char else None
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                # We are already in cbreak mode, so just read
+                if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                    return sys.stdin.read(1)
+                return None
         except Exception:
             return None
 
@@ -136,6 +143,16 @@ class KeyboardHandler:
                 await self._listening_task
             except asyncio.CancelledError:
                 pass
+
+        # Linux/macOS: Restore terminal settings
+        if sys.platform != "win32" and self._old_settings:
+            try:
+                fd = sys.stdin.fileno()
+                termios.tcsetattr(fd, termios.TCSADRAIN, self._old_settings)
+                self._old_settings = None
+            except Exception as e:
+                if self.logger:
+                    self.logger.warning(f"Failed to restore terminal settings: {e}")
             
         if self.logger:
             self.logger.debug("Keyboard handler stopped")

@@ -227,3 +227,73 @@ class TimeframeValidator:
             )
         
         return normalized
+    
+    @classmethod
+    def calculate_next_candle_time(cls, current_time_ms: int, timeframe: str) -> int:
+        """
+        Calculate the start time of the next candle for a given timeframe.
+        
+        Args:
+            current_time_ms: Current timestamp in milliseconds
+            timeframe: Timeframe string (e.g., "1h", "4h", "1d")
+            
+        Returns:
+            int: Next candle start time in milliseconds
+            
+        Example:
+            >>> calculate_next_candle_time(1704067200000, "4h")
+            1704081600000  # Next 4h candle boundary
+        """
+        interval_minutes = cls.to_minutes(timeframe)
+        interval_ms = interval_minutes * 60 * 1000
+        
+        # Calculate next candle boundary
+        next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
+        return next_candle_ms
+    
+    @classmethod
+    def calculate_wait_duration(
+        cls, 
+        current_time_ms: int, 
+        timeframe: str, 
+        buffer_seconds: int = 5
+    ) -> float:
+        """
+        Calculate how many seconds to wait until the next candle starts.
+        
+        Args:
+            current_time_ms: Current timestamp in milliseconds
+            timeframe: Timeframe string (e.g., "1h", "4h", "1d")
+            buffer_seconds: Additional buffer to wait after candle start (default: 5)
+            
+        Returns:
+            float: Seconds to wait
+            
+        Example:
+            >>> calculate_wait_duration(1704067200000, "4h", buffer_seconds=5)
+            14405.0  # 4h + 5s in seconds
+        """
+        next_candle_ms = cls.calculate_next_candle_time(current_time_ms, timeframe)
+        delay_ms = next_candle_ms - current_time_ms + (buffer_seconds * 1000)
+        return max(0, delay_ms / 1000)
+    
+    @classmethod
+    def is_same_candle(cls, time1_ms: int, time2_ms: int, timeframe: str) -> bool:
+        """
+        Check if two timestamps fall within the same candle period.
+        
+        Args:
+            time1_ms: First timestamp in milliseconds
+            time2_ms: Second timestamp in milliseconds
+            timeframe: Timeframe string (e.g., "1h", "4h", "1d")
+            
+        Returns:
+            bool: True if both timestamps are in the same candle period
+        """
+        interval_minutes = cls.to_minutes(timeframe)
+        interval_ms = interval_minutes * 60 * 1000
+        
+        candle1 = time1_ms // interval_ms
+        candle2 = time2_ms // interval_ms
+        
+        return candle1 == candle2

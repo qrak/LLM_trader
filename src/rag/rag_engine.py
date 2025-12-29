@@ -27,12 +27,14 @@ class RagEngine:
         coingecko_api: Optional["CoinGeckoAPI"] = None,
         cryptocompare_api: Optional["CryptoCompareAPI"] = None,
         symbol_manager=None,
-        format_utils=None,
-        sentence_splitter=None,
-        article_processor=None,
-        unified_parser=None
+        file_handler=None,
+        news_manager=None,
+        market_data_manager=None,
+        index_manager=None,
+        category_manager=None,
+        context_builder=None,
     ):
-        """Initialize RagEngine with dependencies.
+        """Initialize RagEngine with injected dependencies (DI pattern).
         
         Args:
             logger: Logger instance
@@ -41,32 +43,37 @@ class RagEngine:
             coingecko_api: CoinGecko API client (optional)
             cryptocompare_api: CryptoCompare API client (optional)
             symbol_manager: Exchange manager (optional)
-            format_utils: Format utilities (optional)
-            sentence_splitter: Sentence splitter instance (optional)
-            article_processor: ArticleProcessor instance (required - injected from app.py)
-            unified_parser: UnifiedParser instance (required - injected from app.py)
+            file_handler: RagFileHandler instance (injected from app.py)
+            news_manager: NewsManager instance (injected from app.py)
+            market_data_manager: MarketDataManager instance (injected from app.py)
+            index_manager: IndexManager instance (injected from app.py)
+            category_manager: CategoryManager instance (injected from app.py)
+            context_builder: ContextBuilder instance (injected from app.py)
         """
-        if article_processor is None:
-            raise ValueError("article_processor is required - must be injected from app.py")
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+        if file_handler is None:
+            raise ValueError("file_handler is required - must be injected from app.py")
+        if news_manager is None:
+            raise ValueError("news_manager is required - must be injected from app.py")
+        if market_data_manager is None:
+            raise ValueError("market_data_manager is required - must be injected from app.py")
+        if index_manager is None:
+            raise ValueError("index_manager is required - must be injected from app.py")
+        if category_manager is None:
+            raise ValueError("category_manager is required - must be injected from app.py")
+        if context_builder is None:
+            raise ValueError("context_builder is required - must be injected from app.py")
         
         self.logger = logger
         self.config = config
         self.token_counter = token_counter
-        self.file_handler = RagFileHandler(logger=self.logger, config=config, unified_parser=unified_parser)
         
-        # Initialize component managers with injected dependencies
-        self.news_manager = NewsManager(logger, self.file_handler, cryptocompare_api, article_processor=article_processor)
-        self.market_data_manager = MarketDataManager(
-            logger, self.file_handler, coingecko_api, cryptocompare_api, symbol_manager, unified_parser=unified_parser
-        )
-        self.index_manager = IndexManager(logger, article_processor=article_processor)
-        self.category_manager = CategoryManager(
-            logger, self.file_handler, cryptocompare_api, symbol_manager, unified_parser=unified_parser
-        )
-        self.context_builder = ContextBuilder(logger, token_counter, article_processor=article_processor, sentence_splitter=sentence_splitter)
-        self.context_builder.config = config # Inject config
+        # Store injected components
+        self.file_handler = file_handler
+        self.news_manager = news_manager
+        self.market_data_manager = market_data_manager
+        self.index_manager = index_manager
+        self.category_manager = category_manager
+        self.context_builder = context_builder
 
         self.coingecko_api = coingecko_api
         self.cryptocompare_api = cryptocompare_api
@@ -377,11 +384,3 @@ class RagEngine:
                     self.logger.error(f"Error closing API client: {e}")
                     
         self.logger.info("RAG Engine resources released")
-
-    def set_symbol_manager(self, symbol_manager) -> None:
-        """Set the symbol manager reference"""
-        self.symbol_manager = symbol_manager
-        # Update managers with symbol manager
-        self.market_data_manager.symbol_manager = symbol_manager
-        self.category_manager.symbol_manager = symbol_manager
-        self.logger.debug("SymbolManager set in RagEngine and component managers")

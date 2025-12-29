@@ -72,47 +72,27 @@ async def main_async():
 
 
 def main() -> None:
-    """Main entry point with simplified cleanup"""
+    """Main entry point with clean shutdown delegation."""
     if sys.platform == 'win32':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    
     shutdown_manager = GracefulShutdownManager(loop)
     shutdown_manager.setup_signal_handlers()
     
-    bot = None
     try:
-        # Run the main async function - this will handle initialization and running
         loop.run_until_complete(main_async())
     except KeyboardInterrupt:
-        print("\nKeyboardInterrupt received - shutting down...")
+        print("\nKeyboardInterrupt received - initiating graceful shutdown...")
+        loop.run_until_complete(shutdown_manager.shutdown_gracefully())
     except Exception as e:
-        print(f"Unhandled exception in main: {e}")
+        print(f"Unhandled exception: {e}")
         import traceback
         traceback.print_exc()
+        loop.run_until_complete(shutdown_manager.shutdown_gracefully())
     finally:
-        # Cancel all pending tasks
-        pending_tasks = [t for t in asyncio.all_tasks(loop) if not t.done()]
-        if pending_tasks:
-            print(f"Cancelling {len(pending_tasks)} pending tasks...")
-            for task in pending_tasks:
-                task.cancel()
-            # Give tasks a chance to clean up (with timeout)
-            try:
-                loop.run_until_complete(asyncio.wait_for(
-                    asyncio.gather(*pending_tasks, return_exceptions=True),
-                    timeout=2.0
-                ))
-                print("All tasks cancelled successfully")
-            except asyncio.TimeoutError:
-                print("Warning: Some tasks did not cancel in time")
-        
-        # Shutdown async generators
-        try:
-            loop.run_until_complete(asyncio.wait_for(loop.shutdown_asyncgens(), timeout=3.0))
-        except (asyncio.TimeoutError, Exception) as e:
-            print(f"Error shutting down async generators: {e}")
-        
         loop.close()
 
 

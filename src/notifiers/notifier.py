@@ -164,6 +164,29 @@ class DiscordNotifier(BaseNotifier):
             'blue': discord.Color.blue(),
         }
         return color_map.get(color_key, discord.Color.light_grey())
+    
+    async def _send_embed(
+        self,
+        embed: discord.Embed,
+        channel_id: int,
+        expire_after: Optional[float] = None
+    ) -> None:
+        """Send a Discord embed to a channel with expiration.
+        
+        Args:
+            embed: Discord embed to send
+            channel_id: Discord channel ID
+            expire_after: Message expiry time in seconds (defaults to FILE_MESSAGE_EXPIRY)
+        """
+        if expire_after is None:
+            expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
+        
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            self.logger.error(f"Channel with ID {channel_id} not found.")
+            return
+        
+        await channel.send(embed=embed, delete_after=expire_after)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_trading_decision(self, decision: Any, channel_id: int) -> None:
@@ -204,7 +227,7 @@ class DiscordNotifier(BaseNotifier):
                     embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
 
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-            await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+            await self._send_embed(embed, channel_id)
         except Exception as e:
             self.logger.error(f"Error sending trading decision: {e}")
 
@@ -240,9 +263,7 @@ class DiscordNotifier(BaseNotifier):
             if analysis_json:
                 embed = self._create_analysis_embed(analysis_json, symbol, timeframe)
                 if embed:
-                    channel = self.bot.get_channel(channel_id)
-                    if channel:
-                        await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+                    await self._send_embed(embed, channel_id)
         except Exception as e:
             self.logger.error(f"Error sending analysis notification: {e}")
 
@@ -291,10 +312,7 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Entry Fee", value=f"${position.entry_fee:.4f}", inline=True)
             embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
             embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
-
-            channel = self.bot.get_channel(channel_id)
-            if channel:
-                await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+            await self._send_embed(embed, channel_id)
         except Exception as e:
             self.logger.error(f"Error sending position status: {e}")
 
@@ -331,10 +349,7 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Total Fees", value=f"${stats['total_fees']:.4f}", inline=True)
             embed.add_field(name=f"Net P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['net_pnl']:+,.2f}", inline=True)
             embed.set_footer(text=f"Symbol: {symbol}")
-
-            channel = self.bot.get_channel(channel_id)
-            if channel:
-                await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
+            await self._send_embed(embed, channel_id)
         except Exception as e:
             self.logger.error(f"Error sending performance stats: {e}")
 

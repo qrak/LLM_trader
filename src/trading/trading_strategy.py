@@ -20,20 +20,23 @@ class TradingStrategy:
         logger: Logger,
         data_persistence: DataPersistence,
         config: Any = None,
-        unified_parser: "UnifiedParser" = None,
+        position_extractor=None,
     ):
-        """Initialize the trading strategy.
+        """Initialize the trading strategy with DI pattern.
         
         Args:
             logger: Logger instance
             data_persistence: Data persistence for positions and history
             config: Configuration module
-            unified_parser: UnifiedParser for JSON extraction (DRY)
+            position_extractor: PositionExtractor instance (injected from app.py)
         """
+        if position_extractor is None:
+            raise ValueError("position_extractor is required - must be injected from app.py")
+        
         self.logger = logger
         self.persistence = data_persistence
         self.config = config
-        self.extractor = PositionExtractor(logger, unified_parser=unified_parser)
+        self.extractor = position_extractor
         
         # Load any existing position
         self.current_position: Optional[Position] = self.persistence.load_position()

@@ -40,15 +40,16 @@ class AnalysisEngine:
         format_utils,
         data_processor,
         config: "ConfigProtocol",
-        ti_factory=None,
-        unified_parser=None,
-        overview_formatter=None,
-        long_term_formatter=None,
-        market_formatter=None,
-        period_formatter=None
+        technical_calculator=None,
+        pattern_analyzer=None,
+        prompt_builder=None,
+        data_collector=None,
+        metrics_calculator=None,
+        result_processor=None,
+        chart_generator=None
     ) -> None:
         """
-        Initialize AnalysisEngine with all required dependencies.
+        Initialize AnalysisEngine with injected dependencies (DI pattern).
         
         Args:
             logger: Logger instance
@@ -60,12 +61,13 @@ class AnalysisEngine:
             format_utils: Formatting utilities
             data_processor: Data processing utilities
             config: Configuration instance (Protocol-based)
-            ti_factory: TechnicalIndicatorsFactory instance (required - from app.py)
-            unified_parser: UnifiedParser instance (required - from app.py)
-            overview_formatter: MarketOverviewFormatter instance (injected from app.py)
-            long_term_formatter: LongTermFormatter instance (injected from app.py)
-            market_formatter: MarketFormatter instance (injected from app.py)
-            period_formatter: MarketPeriodFormatter instance (injected from app.py)
+            technical_calculator: TechnicalCalculator instance (injected from app.py)
+            pattern_analyzer: PatternAnalyzer instance (injected from app.py)
+            prompt_builder: PromptBuilder instance (injected from app.py)
+            data_collector: MarketDataCollector instance (injected from app.py)
+            metrics_calculator: MarketMetricsCalculator instance (injected from app.py)
+            result_processor: AnalysisResultProcessor instance (injected from app.py)
+            chart_generator: ChartGenerator instance (injected from app.py)
         """
         self.logger = logger
         
@@ -110,61 +112,30 @@ class AnalysisEngine:
             raise ValueError("format_utils is a required parameter and cannot be None")
         if data_processor is None:
             raise ValueError("data_processor is a required parameter and cannot be None")
-        if ti_factory is None:
-            raise ValueError("ti_factory is required - must be injected from app.py")
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+        if technical_calculator is None:
+            raise ValueError("technical_calculator is required - must be injected from app.py")
+        if pattern_analyzer is None:
+            raise ValueError("pattern_analyzer is required - must be injected from app.py")
+        if prompt_builder is None:
+            raise ValueError("prompt_builder is required - must be injected from app.py")
+        if data_collector is None:
+            raise ValueError("data_collector is required - must be injected from app.py")
+        if metrics_calculator is None:
+            raise ValueError("metrics_calculator is required - must be injected from app.py")
+        if result_processor is None:
+            raise ValueError("result_processor is required - must be injected from app.py")
+        if chart_generator is None:
+            raise ValueError("chart_generator is required - must be injected from app.py")
 
-        # Initialize specialized components with injected dependencies
+        # Store injected components
         self.model_manager = model_manager
-        self.technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils, ti_factory=ti_factory)
-        self.pattern_analyzer = PatternAnalyzer(logger=logger)
-        try:
-            self.pattern_analyzer.warmup()
-        except Exception as warmup_error:
-            self.logger.warning(f"Pattern analyzer warm-up could not run: {warmup_error}")
-        
-        # Create TechnicalFormatter here since it needs technical_calculator
-        technical_formatter = TechnicalFormatter(self.technical_calculator, logger, format_utils)
-        
-        self.prompt_builder = PromptBuilder(
-            timeframe=self.timeframe, 
-            logger=logger,
-            technical_calculator=self.technical_calculator,
-            config=config,
-            format_utils=format_utils,
-            data_processor=data_processor,
-            overview_formatter=overview_formatter,
-            long_term_formatter=long_term_formatter,
-            technical_formatter=technical_formatter,
-            market_formatter=market_formatter,
-            period_formatter=period_formatter
-        )
-        
-        # Create specialized components for separated concerns
-        self.data_collector = MarketDataCollector(
-            logger=logger, 
-            rag_engine=rag_engine,
-            alternative_me_api=alternative_me_api
-        )
-        
-        # Pass indicator_calculator to metrics_calculator to reduce code duplication
-        self.metrics_calculator = MarketMetricsCalculator(
-            logger=logger
-        )
-        
-        self.result_processor = AnalysisResultProcessor(
-            model_manager=self.model_manager, 
-            logger=logger,
-            unified_parser=unified_parser
-        )
-        
-        # Initialize chart generator for AI visual analysis
-        self.chart_generator = ChartGenerator(
-            logger=logger,
-            config=config,
-            format_utils=format_utils
-        )
+        self.technical_calculator = technical_calculator
+        self.pattern_analyzer = pattern_analyzer
+        self.prompt_builder = prompt_builder
+        self.data_collector = data_collector
+        self.metrics_calculator = metrics_calculator
+        self.result_processor = result_processor
+        self.chart_generator = chart_generator
 
         # Store references to external services
         self.rag_engine = rag_engine

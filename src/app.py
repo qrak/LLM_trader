@@ -121,23 +121,74 @@ class CryptoTradingBot:
         await self.alternative_me_api.initialize()
         self.logger.debug("AlternativeMeAPI initialized")
 
-        # Pass token_counter, API clients, and shared utilities to RagEngine
-        self.rag_engine = RagEngine(
-            self.logger, 
-            self.token_counter,
-            self.config,
+        # Create RAG component managers (DI: moved from RagEngine.__init__)
+        from src.rag import (
+            RagFileHandler, NewsManager, MarketDataManager,
+            IndexManager, CategoryManager, ContextBuilder
+        )
+        
+        self.rag_file_handler = RagFileHandler(
+            logger=self.logger,
+            config=self.config,
+            unified_parser=self.unified_parser
+        )
+        
+        self.news_manager = NewsManager(
+            logger=self.logger,
+            file_handler=self.rag_file_handler,
+            cryptocompare_api=self.cryptocompare_api,
+            article_processor=self.article_processor
+        )
+        
+        self.market_data_manager = MarketDataManager(
+            logger=self.logger,
+            file_handler=self.rag_file_handler,
             coingecko_api=self.coingecko_api,
             cryptocompare_api=self.cryptocompare_api,
-            format_utils=self.format_utils,
-            sentence_splitter=self.sentence_splitter,
-            article_processor=self.article_processor,
+            symbol_manager=self.symbol_manager,
             unified_parser=self.unified_parser
+        )
+        
+        self.index_manager = IndexManager(
+            logger=self.logger,
+            article_processor=self.article_processor
+        )
+        
+        self.category_manager = CategoryManager(
+            logger=self.logger,
+            file_handler=self.rag_file_handler,
+            cryptocompare_api=self.cryptocompare_api,
+            symbol_manager=self.symbol_manager,
+            unified_parser=self.unified_parser
+        )
+        
+        self.context_builder = ContextBuilder(
+            logger=self.logger,
+            token_counter=self.token_counter,
+            article_processor=self.article_processor,
+            sentence_splitter=self.sentence_splitter
+        )
+        self.context_builder.config = self.config
+        
+        self.logger.debug("RAG components created")
+        
+        # Initialize RagEngine with all injected components
+        self.rag_engine = RagEngine(
+            logger=self.logger,
+            token_counter=self.token_counter,
+            config=self.config,
+            coingecko_api=self.coingecko_api,
+            cryptocompare_api=self.cryptocompare_api,
+            symbol_manager=self.symbol_manager,
+            file_handler=self.rag_file_handler,
+            news_manager=self.news_manager,
+            market_data_manager=self.market_data_manager,
+            index_manager=self.index_manager,
+            category_manager=self.category_manager,
+            context_builder=self.context_builder
         )
         await self.rag_engine.initialize()
         self.logger.debug("RagEngine initialized")
-        
-        self.rag_engine.set_symbol_manager(self.symbol_manager)
-        self.logger.debug("Passed SymbolManager to RagEngine")
 
         # Initialize ModelManager with unified_parser
         self.model_manager = ModelManager(self.logger, self.config, unified_parser=self.unified_parser)
@@ -148,10 +199,71 @@ class CryptoTradingBot:
         self.long_term_formatter = LongTermFormatter(self.logger, self.format_utils)
         self.market_formatter = MarketFormatter(self.logger, self.format_utils)
         self.period_formatter = MarketPeriodFormatter(self.logger, self.format_utils)
-        # Note: TechnicalFormatter needs technical_calculator which is created in AnalysisEngine
-        # So we pass the factory and AnalysisEngine creates it
+        
+        # Create Analyzer components (DI: moved from AnalysisEngine.__init__)
+        from src.analyzer import (
+            TechnicalCalculator, PatternAnalyzer, MarketDataCollector,
+            MarketMetricsCalculator, AnalysisResultProcessor,
+            TechnicalFormatter, DataFetcher
+        )
+        from src.analyzer.prompts import PromptBuilder
+        from src.analyzer.pattern_engine import ChartGenerator
+        
+        self.technical_calculator = TechnicalCalculator(
+            logger=self.logger,
+            format_utils=self.format_utils,
+            ti_factory=self.ti_factory
+        )
+        
+        self.pattern_analyzer = PatternAnalyzer(logger=self.logger)
+        try:
+            self.pattern_analyzer.warmup()
+        except Exception as warmup_error:
+            self.logger.warning(f"Pattern analyzer warm-up could not run: {warmup_error}")
+        
+        self.technical_formatter = TechnicalFormatter(
+            self.technical_calculator,
+            self.logger,
+            self.format_utils
+        )
+        
+        self.prompt_builder = PromptBuilder(
+            timeframe=self.config.TIMEFRAME,
+            logger=self.logger,
+            technical_calculator=self.technical_calculator,
+            config=self.config,
+            format_utils=self.format_utils,
+            data_processor=self.data_processor,
+            overview_formatter=self.overview_formatter,
+            long_term_formatter=self.long_term_formatter,
+            technical_formatter=self.technical_formatter,
+            market_formatter=self.market_formatter,
+            period_formatter=self.period_formatter
+        )
+        
+        self.market_data_collector = MarketDataCollector(
+            logger=self.logger,
+            rag_engine=self.rag_engine,
+            alternative_me_api=self.alternative_me_api
+        )
+        
+        self.metrics_calculator = MarketMetricsCalculator(logger=self.logger)
+        
+        self.result_processor = AnalysisResultProcessor(
+            model_manager=self.model_manager,
+            logger=self.logger,
+            unified_parser=self.unified_parser
+        )
+        
+        self.chart_generator = ChartGenerator(
+            logger=self.logger,
+            config=self.config,
+            format_utils=self.format_utils
+        )
+        
+        self.logger.debug("Analyzer components created")
 
-        # Initialize AnalysisEngine with all shared utilities and formatters
+        # Initialize AnalysisEngine with all injected components
         self.market_analyzer = AnalysisEngine(
             logger=self.logger,
             rag_engine=self.rag_engine,
@@ -162,18 +274,27 @@ class CryptoTradingBot:
             format_utils=self.format_utils,
             data_processor=self.data_processor,
             config=self.config,
-            ti_factory=self.ti_factory,
-            unified_parser=self.unified_parser,
-            overview_formatter=self.overview_formatter,
-            long_term_formatter=self.long_term_formatter,
-            market_formatter=self.market_formatter,
-            period_formatter=self.period_formatter
+            technical_calculator=self.technical_calculator,
+            pattern_analyzer=self.pattern_analyzer,
+            prompt_builder=self.prompt_builder,
+            data_collector=self.market_data_collector,
+            metrics_calculator=self.metrics_calculator,
+            result_processor=self.result_processor,
+            chart_generator=self.chart_generator
         )
         self.logger.debug("AnalysisEngine initialized")
 
-        # Initialize trading components
+        # Initialize trading components with DI
+        from src.trading import PositionExtractor
+        
+        self.position_extractor = PositionExtractor(self.logger, unified_parser=self.unified_parser)
         self.data_persistence = DataPersistence(self.logger, data_dir="data/trading", max_memory=10)
-        self.trading_strategy = TradingStrategy(self.logger, self.data_persistence, self.config, self.unified_parser)
+        self.trading_strategy = TradingStrategy(
+            self.logger,
+            self.data_persistence,
+            self.config,
+            position_extractor=self.position_extractor
+        )
         self.logger.debug("Trading components initialized")
 
         # Initialize notifier - Discord if enabled, otherwise Console fallback
