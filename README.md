@@ -82,14 +82,22 @@ graph TD
 - [x] **Local LLM Support** (LM Studio Integrated)
 - [x] **Vision Analysis** (Chart Image Generation & Processing)
 - [x] **RAG News Relevance Scoring**
+- [x] **Discord Integration** (Real-time signals, positions, and performance stats)
+- [x] **Interactive CLI** (Hotkeys for manual control)
+- [x] **Cross-Platform Compatibility** (Windows/Linux/macOS)
+- [x] **Graceful Shutdown** (Resource cleanup & state saving)
+- [ ] **Multiple Trading Agent Personalities** (Diverse trading strategies: conservative, aggressive, contrarian, trend-following)
+- [ ] **Multi-Model Consensus Decision-Making** (Aggregate predictions from multiple AI models to reach consensus on trading signals)
 - [ ] **Live Trading** (Execution Layer)
+- [ ] **Web Dashboard** (React/Next.js frontend)
+- [ ] **Database Persistence** (SQLite/Postgres for long-term history)
 - [ ] **HuggingFace Local Embeddings** (Upgrade from keyword scoring)
 - [ ] **Portfolio Management** (Multi-coin balancing)
 
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
-- Python 3.11+
+- Python 3.13+
 - [LM Studio](https://lmstudio.ai/) (Optional, for local inference)
 
 ### 2. Installation
