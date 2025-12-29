@@ -16,7 +16,7 @@ from src.utils.timeframe_validator import TimeframeValidator
 from src.analyzer.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
 from src.trading import DataPersistence, TradingStrategy
-from src.discord_interface import DiscordNotifier, ConsoleNotifier
+from src.notifiers import DiscordNotifier, ConsoleNotifier
 from src.utils.keyboard_handler import KeyboardHandler
 from src.rag.text_splitting import SentenceSplitter
 from src.parsing.unified_parser import UnifiedParser
