@@ -134,9 +134,16 @@ class ConfigProtocol(Protocol):
     RAG_NEWS_API_URL: str
     RAG_CATEGORIES_API_URL: str
     RAG_PRICE_API_URL: str
-    
 
-    
+    # Demo Trading
+    @property
+    def TRANSACTION_FEE_PERCENT(self) -> float: ...
+
+    @property
+    def QUOTE_CURRENCY(self) -> str: ...
+
+    @property
+    def CRYPTO_PAIR(self) -> str: ...
 
     @property
     def SUPPORTED_EXCHANGES(self) -> list[str]: ...

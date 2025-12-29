@@ -77,7 +77,6 @@ class DataPersistence:
         """Load current position from disk."""
         if not self.positions_file.exists():
             return None
-        
         try:
             with open(self.positions_file, 'r') as f:
                 data = json.load(f)
@@ -92,8 +91,9 @@ class DataPersistence:
                     entry_time=datetime.fromisoformat(data["entry_time"]),
                     confidence=data.get("confidence", "MEDIUM"),
                     direction=data.get("direction", "LONG"),
-                    symbol=data.get("symbol", "BTC/USDT"),
+                    symbol=data.get("symbol", "BTC/USDC"),
                     confluence_factors=cf_tuple,
+                    entry_fee=data.get("entry_fee", 0.0),
                 )
         except Exception as e:
             self.logger.error(f"Error loading position: {e}")

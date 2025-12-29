@@ -289,21 +289,35 @@ class Position:
     # Confluence factors at entry time for factor performance learning
     # Stored as tuple of (name, score) pairs for frozen dataclass compatibility
     confluence_factors: tuple = field(default_factory=tuple)
-    
+    # Transaction fee paid at entry (in USDT)
+    entry_fee: float = 0.0
+
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""
         if self.direction == 'LONG':
             return ((current_price - self.entry_price) / self.entry_price) * 100
         else:  # SHORT
             return ((self.entry_price - current_price) / self.entry_price) * 100
-    
+
+    def calculate_closing_fee(self, close_price: float, fee_percent: float = 0.00075) -> float:
+        """Calculate the transaction fee for closing this position.
+        
+        Args:
+            close_price: Price at which position is closed
+            fee_percent: Fee percentage (default 0.075% for limit orders)
+            
+        Returns:
+            Fee amount in USDT
+        """
+        return close_price * self.size * fee_percent
+
     def is_stop_hit(self, current_price: float) -> bool:
         """Check if stop loss is hit."""
         if self.direction == 'LONG':
             return current_price <= self.stop_loss
         else:
             return current_price >= self.stop_loss
-    
+
     def is_target_hit(self, current_price: float) -> bool:
         """Check if take profit is hit."""
         if self.direction == 'LONG':

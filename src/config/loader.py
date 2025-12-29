@@ -359,7 +359,21 @@ class Config:
     @property
     def MARKET_REFRESH_HOURS(self):
         return self.get_config('exchanges', 'market_refresh_hours', 24)
-    
+
+    # Demo Trading Configuration
+    @property
+    def TRANSACTION_FEE_PERCENT(self):
+        """Transaction fee percentage for limit orders (default 0.075%)."""
+        return float(self.get_config('demo_trading', 'transaction_fee_percent', 0.00075))
+
+    @property
+    def QUOTE_CURRENCY(self):
+        """Extract quote currency from CRYPTO_PAIR (e.g., 'USDC' from 'BTC/USDC')."""
+        pair = self.CRYPTO_PAIR
+        if '/' in pair:
+            return pair.split('/')[1]
+        return 'USDC'
+
     def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Get configuration parameters for a specific model.

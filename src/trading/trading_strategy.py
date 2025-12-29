@@ -298,6 +298,8 @@ class TradingStrategy:
                 self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using default")
                 final_tp = default_tp
         
+        # Calculate entry fee for limit order
+        entry_fee = current_price * final_size * self.config.TRANSACTION_FEE_PERCENT
         # Create position with confluence factors for brain learning
         self.current_position = Position(
             entry_price=current_price,
@@ -309,13 +311,12 @@ class TradingStrategy:
             direction=direction,
             symbol=symbol,
             confluence_factors=confluence_factors,
+            entry_fee=entry_fee,
         )
-        
         self.persistence.save_position(self.current_position)
-        
         self.logger.info(
             f"Opened {direction} position @ ${current_price:,.2f} "
-            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Size: {final_size*100:.1f}%)"
+            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Size: {final_size*100:.1f}%, Fee: ${entry_fee:.4f})"
         )
         
         # Create and save decision

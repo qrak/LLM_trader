@@ -230,9 +230,11 @@ class DiscordNotifier:
                 embed.add_field(name="Take Profit", value=f"${decision.take_profit:,.2f}", inline=True)
             if decision.position_size:
                 embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.1f}%", inline=True)
-            
+                # Calculate and display entry fee for BUY/SELL actions
+                if decision.action in ['BUY', 'SELL']:
+                    entry_fee = decision.price * decision.position_size * self.config.TRANSACTION_FEE_PERCENT
+                    embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-            
             await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
             
         except Exception as e:
@@ -332,13 +334,13 @@ class DiscordNotifier:
             
             # P&L
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
-            embed.add_field(name="P&L (USDT)", value=f"${pnl_usdt:+,.2f}", inline=True)
+            embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_usdt:+,.2f}", inline=True)
             embed.add_field(name="Confidence", value=position.confidence, inline=True)
             
             # Stop Loss and Take Profit
             embed.add_field(name="Stop Loss", value=f"${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)", inline=True)
             embed.add_field(name="Take Profit", value=f"${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)", inline=True)
-            
+            embed.add_field(name="Entry Fee", value=f"${position.entry_fee:.4f}", inline=True)
             # Entry time
             time_held = datetime.now() - position.entry_time
             hours_held = time_held.total_seconds() / 3600
@@ -370,64 +372,61 @@ class DiscordNotifier:
         try:
             if not trade_history:
                 return
-            
             # Calculate overall performance
             total_pnl_usdt = 0.0
             total_pnl_pct = 0.0
+            total_fees = 0.0
             closed_trades = 0
             winning_trades = 0
-            
             open_position = None
             for decision_dict in trade_history:
                 action = decision_dict.get('action', '')
                 price = decision_dict.get('price', 0)
                 position_size = decision_dict.get('position_size', 1.0)
-                
                 if action in ['BUY', 'SELL']:
                     open_position = decision_dict
                 elif action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
                     open_action = open_position.get('action', '')
                     open_price = open_position.get('price', 0)
-                    
+                    open_size = open_position.get('position_size', 1.0)
                     if open_action == 'BUY':
                         pnl_pct = ((price - open_price) / open_price) * 100
                         pnl_usdt = (price - open_price) * position_size
                     else:  # SELL
                         pnl_pct = ((open_price - price) / open_price) * 100
                         pnl_usdt = (open_price - price) * position_size
-                    
+                    # Calculate fees for this trade (entry + exit)
+                    entry_fee = open_price * open_size * self.config.TRANSACTION_FEE_PERCENT
+                    exit_fee = price * position_size * self.config.TRANSACTION_FEE_PERCENT
+                    total_fees += entry_fee + exit_fee
                     total_pnl_usdt += pnl_usdt
                     total_pnl_pct += pnl_pct
                     closed_trades += 1
                     if pnl_pct > 0:
                         winning_trades += 1
                     open_position = None
-            
             if closed_trades == 0:
                 return
-            
             avg_pnl_pct = total_pnl_pct / closed_trades
             win_rate = (winning_trades / closed_trades) * 100
-            
+            net_pnl = total_pnl_usdt - total_fees
             # Create performance embed
             embed = discord.Embed(
                 title="📈 Trading Performance Summary",
                 description=f"Overall performance after {closed_trades} closed trades",
-                color=discord.Color.blue() if total_pnl_pct > 0 else discord.Color.red()
+                color=discord.Color.blue() if net_pnl > 0 else discord.Color.red()
             )
-            
-            embed.add_field(name="Total P&L (USDT)", value=f"${total_pnl_usdt:+,.2f}", inline=True)
+            embed.add_field(name=f"Total P&L ({self.config.QUOTE_CURRENCY})", value=f"${total_pnl_usdt:+,.2f}", inline=True)
             embed.add_field(name="Total P&L (%)", value=f"{total_pnl_pct:+.2f}%", inline=True)
             embed.add_field(name="Avg P&L/Trade", value=f"{avg_pnl_pct:+.2f}%", inline=True)
             embed.add_field(name="Win Rate", value=f"{win_rate:.1f}% ({winning_trades}/{closed_trades})", inline=True)
             embed.add_field(name="Total Trades", value=str(closed_trades), inline=True)
-            
+            embed.add_field(name="Total Fees", value=f"${total_fees:.4f}", inline=True)
+            embed.add_field(name=f"Net P&L ({self.config.QUOTE_CURRENCY})", value=f"${net_pnl:+,.2f}", inline=True)
             embed.set_footer(text=f"Symbol: {symbol}")
-            
             channel = self.bot.get_channel(channel_id)
             if channel:
                 await channel.send(embed=embed, delete_after=float(self.config.FILE_MESSAGE_EXPIRY))
-                
         except Exception as e:
             self.logger.error(f"Error sending performance stats: {e}")
     

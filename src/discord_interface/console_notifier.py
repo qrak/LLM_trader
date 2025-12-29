@@ -74,14 +74,16 @@ class ConsoleNotifier:
         print(f"Action: {decision.action}")
         print(f"Confidence: {decision.confidence}")
         print(f"Price: ${decision.price:,.2f}")
-        
         if decision.stop_loss:
             print(f"Stop Loss: ${decision.stop_loss:,.2f}")
         if decision.take_profit:
             print(f"Take Profit: ${decision.take_profit:,.2f}")
         if decision.position_size:
             print(f"Position Size: {decision.position_size * 100:.1f}%")
-        
+            # Calculate and display entry fee for BUY/SELL actions
+            if decision.action in ['BUY', 'SELL']:
+                entry_fee = decision.price * decision.position_size * self.config.TRANSACTION_FEE_PERCENT
+                print(f"Entry Fee: ${entry_fee:.4f}")
         print(f"\nReasoning: {decision.reasoning}")
         print("=" * 60 + "\n")
 
@@ -173,11 +175,12 @@ class ConsoleNotifier:
             print(f"Position Size:   {position.size:.4f}")
             print("-" * 40)
             print(f"Unrealized P&L:  {pnl_pct:+.2f}%")
-            print(f"P&L (USDT):      ${pnl_usdt:+,.2f}")
+            print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_usdt:+,.2f}")
             print(f"Confidence:      {position.confidence}")
             print("-" * 40)
             print(f"Stop Loss:       ${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)")
             print(f"Take Profit:     ${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)")
+            print(f"Entry Fee:       ${position.entry_fee:.4f}")
             print(f"Time Held:       {hours_held:.1f}h")
             print(f"Entry Time:      {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 60)
@@ -205,6 +208,7 @@ class ConsoleNotifier:
             # Calculate overall performance (same logic as DiscordNotifier)
             total_pnl_usdt = 0.0
             total_pnl_pct = 0.0
+            total_fees = 0.0
             closed_trades = 0
             winning_trades = 0
             
@@ -213,45 +217,45 @@ class ConsoleNotifier:
                 action = decision_dict.get('action', '')
                 price = decision_dict.get('price', 0)
                 position_size = decision_dict.get('position_size', 1.0)
-                
                 if action in ['BUY', 'SELL']:
                     open_position = decision_dict
                 elif action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
                     open_action = open_position.get('action', '')
                     open_price = open_position.get('price', 0)
-                    
+                    open_size = open_position.get('position_size', 1.0)
                     if open_action == 'BUY':
                         pnl_pct = ((price - open_price) / open_price) * 100
                         pnl_usdt = (price - open_price) * position_size
                     else:  # SELL
                         pnl_pct = ((open_price - price) / open_price) * 100
                         pnl_usdt = (open_price - price) * position_size
-                    
+                    # Calculate fees for this trade (entry + exit)
+                    entry_fee = open_price * open_size * self.config.TRANSACTION_FEE_PERCENT
+                    exit_fee = price * position_size * self.config.TRANSACTION_FEE_PERCENT
+                    total_fees += entry_fee + exit_fee
                     total_pnl_usdt += pnl_usdt
                     total_pnl_pct += pnl_pct
                     closed_trades += 1
                     if pnl_pct > 0:
                         winning_trades += 1
                     open_position = None
-            
             if closed_trades == 0:
                 return
-            
             avg_pnl_pct = total_pnl_pct / closed_trades
             win_rate = (winning_trades / closed_trades) * 100
-            
             print("\n" + "=" * 60)
             print("📈 TRADING PERFORMANCE SUMMARY")
             print("=" * 60)
-            print(f"Symbol:          {symbol}")
-            print(f"Closed Trades:   {closed_trades}")
+            print(f"Symbol:           {symbol}")
+            print(f"Closed Trades:    {closed_trades}")
             print("-" * 40)
-            print(f"Total P&L (USDT): ${total_pnl_usdt:+,.2f}")
+            print(f"Total P&L ({self.config.QUOTE_CURRENCY}): ${total_pnl_usdt:+,.2f}")
             print(f"Total P&L (%):    {total_pnl_pct:+.2f}%")
             print(f"Avg P&L/Trade:    {avg_pnl_pct:+.2f}%")
             print(f"Win Rate:         {win_rate:.1f}% ({winning_trades}/{closed_trades})")
+            print(f"Total Fees:       ${total_fees:.4f}")
+            print(f"Net P&L (USDT):   ${total_pnl_usdt - total_fees:+,.2f}")
             print("=" * 60)
-                
         except Exception as e:
             self.logger.error(f"Error printing performance stats: {e}")
 
