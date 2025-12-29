@@ -339,20 +339,6 @@ class TechnicalCalculator:
             analysis['price_above_200w_sma'] = current_price > sma_200w
             distance = ((current_price - sma_200w) / sma_200w) * 100
             analysis['distance_from_200w_sma_pct'] = float(distance)
-            
-            # Cycle phase based on 200W distance
-            if distance < -10:
-                analysis['cycle_phase'] = 'Deep Bear Market'
-            elif distance < 0:
-                analysis['cycle_phase'] = 'Bear Market Bottom Zone'
-            elif distance < 50:
-                analysis['cycle_phase'] = 'Early Bull Market'
-            elif distance < 100:
-                analysis['cycle_phase'] = 'Mid Bull Market'
-            elif distance < 200:
-                analysis['cycle_phase'] = 'Late Bull Market'
-            else:
-                analysis['cycle_phase'] = 'Extreme Bull Market'
         
         # Golden/Death Cross with timestamps (use pre-calculated arrays if available)
         if 50 in weekly_sma_values and 200 in weekly_sma_values:
