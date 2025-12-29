@@ -20,7 +20,7 @@ Thank you for your interest in contributing!
 - Please provide clear steps to reproduce bugs
 
 ## Contact
-- For questions, reach out via GitHub Issues or join the Discord server: https://discord.gg/eq4xNRxwXR
+- For questions, reach out via GitHub Issues or join the Discord server: https://discord.gg/ZC48aTTqR2
 
 Happy coding!
 — qrak

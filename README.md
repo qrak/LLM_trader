@@ -157,5 +157,10 @@ python start.py ETH/USDT     # Specific pair
 | **`h`** | **Help**: Show available commands |
 | **`q`** | **Quit**: Gracefully shutdown the bot |
 
+
+## 💬 Community & Support
+- **Discord**: [Join our community](https://discord.gg/ZC48aTTqR2) for live signals, development chat, and support.
+- **GitHub Issues**: Report bugs or suggest new features.
+
 ## ⚠️ Disclaimer
 **EDUCATIONAL USE ONLY.** This software is currently in **BETA** and configured for **PAPER TRADING**. No real financial transactions are executed. The authors are not responsible for any financial decisions made based on this software.
