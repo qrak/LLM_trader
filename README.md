@@ -36,13 +36,14 @@ graph TD
     end
 
     subgraph AI Processing
-        MM --> |Text/Image| P1["Google Gemini (3.0 Flash Preview)"]
-        MM --> |Text| P2["OpenRouter (Gemini 2.0 Flash Exp)"]
-        MM --> |Text| P3["DeepSeek-R1 (Free)"]
+        %% Provider Selection Logic (Sequential / Fallback)
+        MM -.-> |Primary| Google["Google Gemini (Text + Vision)"]
+        MM -.-> |Fallback or Direct| OR["OpenRouter (Text + Vision)"]
+        MM -.-> |Local| Local["LM Studio (Text Only)"]
         
-        P1 --> |Response| ARP[Analysis Result Processor]
-        P2 --> |Response| ARP
-        P3 --> |Response| ARP
+        Google --> |Response| ARP[Analysis Result Processor]
+        OR --> |Response| ARP
+        Local --> |Response| ARP
     end
 
     subgraph Execution ["Execution (Paper Only)"]
