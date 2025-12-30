@@ -270,8 +270,6 @@ class CryptoTradingBot:
             model_manager=self.model_manager,
             alternative_me_api=self.alternative_me_api,
             cryptocompare_api=self.cryptocompare_api,
-            format_utils=self.format_utils,
-            data_processor=self.data_processor,
             config=self.config,
             technical_calculator=self.technical_calculator,
             pattern_analyzer=self.pattern_analyzer,
