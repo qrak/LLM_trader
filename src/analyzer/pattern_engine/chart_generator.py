@@ -325,7 +325,7 @@ class ChartGenerator:
         y_tickformat = f".{decimals}f"
         
         fig.update_layout(
-            title=f"{pair_symbol} Price Pattern - {timeframe} (Last {chosen_limit} Candles) - Current: {current_price_formatted}",
+            title=f"{pair_symbol} Price Pattern - {timeframe} (Last {chosen_limit} Complete Closed Candles) - Current completed closed candle price: {current_price_formatted}",
             xaxis_rangeslider_visible=False,
             template="plotly_dark",
             height=height,
@@ -399,43 +399,96 @@ class ChartGenerator:
         except Exception:
             pass
 
-        # LAST CANDLE SNAPSHOT (Calibration for AI)
-        last_ohlc_text = (
-            f"<b>LAST CANDLE ({timeframe}):</b><br>"
-            f"O: {self.formatter(opens[-1])} | H: {self.formatter(highs[-1])}<br>"
-            f"L: {self.formatter(lows[-1])} | C: {self.formatter(closes[-1])}"
-        )
-        fig.add_annotation(
-            xref='paper', yref='paper', x=0.99, y=0.01,
-            xanchor='right', yanchor='bottom',
-            text=last_ohlc_text,
-            showarrow=False,
-            font=dict(size=12, family='Courier New, monospace', color='#00ff00'),
-            bgcolor='rgba(0,0,0,0.7)',
-            bordercolor='#444444',
-            borderwidth=1,
-            align='right'
-        )
+        # 1. Vertical Day Separators (Anchors for Time)
+        day_changes = []
+        if len(timestamps_py) > 1:
+            for i in range(1, len(timestamps_py)):
+                if timestamps_py[i].day != timestamps_py[i-1].day:
+                    # Draw Line
+                    fig.add_vline(
+                        x=timestamps_py[i], 
+                        line=dict(color="rgba(80, 80, 80, 0.5)", width=1, dash="longdash")
+                    )
+                    # Add Label Separately (Avoids Plotly internal datetime sum error)
+                    fig.add_annotation(
+                        x=timestamps_py[i], y=1.0, yref="paper",
+                        text=timestamps_py[i].strftime("%a"),
+                        showarrow=False,
+                        font=dict(size=10, color="rgba(150, 150, 150, 0.8)"),
+                        xanchor="left", yanchor="top"
+                    )
 
-        
+        # 2. Local Swing Points (Pivot Highs/Lows)
+        # Simple window-based check
+        window = 8
+        if len(highs) > window * 2:
+            for i in range(window, len(highs) - window):
+                # Pivot High
+                if highs[i] == max(highs[i-window:i+window+1]):
+                    # Only mark if significant (e.g. > 0.5% move) - optional, keeping simple for now
+                    fig.add_annotation(
+                        x=timestamps_py[i], y=highs[i],
+                        text=self.formatter(highs[i]),
+                        showarrow=True, arrowhead=2, arrowsize=0.8, arrowwidth=1,
+                        ax=0, ay=-25,
+                        font=dict(size=10, color='#aaaaaa')
+                    )
+                # Pivot Low
+                if lows[i] == min(lows[i-window:i+window+1]):
+                    fig.add_annotation(
+                        x=timestamps_py[i], y=lows[i],
+                        text=self.formatter(lows[i]),
+                        showarrow=True, arrowhead=2, arrowsize=0.8, arrowwidth=1,
+                        ax=0, ay=25,
+                        font=dict(size=10, color='#aaaaaa')
+                    )
 
+        # 3. Global High/Low (Prominent)
         idx_high = int(np.argmax(highs))
         idx_low = int(np.argmin(lows))
         fig.add_annotation(
             x=timestamps_py[idx_high], y=float(highs[idx_high]),
-            text=f"Highest (high ohlcv): {self.formatter(float(highs[idx_high]))}",
+            text=f"MAX: {self.formatter(float(highs[idx_high]))}",
             showarrow=True, arrowhead=2, arrowsize=0.9, arrowwidth=1.0,
-            ax=0, ay=-30,
-            font=dict(size=12, color=self.ai_colors['text']),
-            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['grid'], borderwidth=1
+            ax=0, ay=-40,
+            font=dict(size=12, color=self.ai_colors['text'], weight='bold'),
+            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['candle_up'], borderwidth=1
         )
         fig.add_annotation(
             x=timestamps_py[idx_low], y=float(lows[idx_low]),
-            text=f"Lowest (low ohlcv): {self.formatter(float(lows[idx_low]))}",
+            text=f"MIN: {self.formatter(float(lows[idx_low]))}",
             showarrow=True, arrowhead=2, arrowsize=0.9, arrowwidth=1.0,
-            ax=0, ay=30,
-            font=dict(size=12, color=self.ai_colors['text']),
-            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['grid'], borderwidth=1
+            ax=0, ay=40,
+            font=dict(size=12, color=self.ai_colors['text'], weight='bold'),
+            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['candle_down'], borderwidth=1
+        )
+        
+        # 4. DATA PANEL (Ground Truth for AI)
+        # Lists the last 5 candles explicitly so AI can read text instead of guessing pixels
+        recent_data = []
+        count = min(5, len(closes))
+        for i in range(count):
+            idx = -1 * (count - i) # -5, -4, ... -1
+            ts_str = timestamps_py[idx].strftime('%m/%d %H:%M')
+            o = self.formatter(opens[idx])
+            h = self.formatter(highs[idx])
+            l = self.formatter(lows[idx])
+            c = self.formatter(closes[idx])
+            # Format: Date | O:.. H:.. L:.. C:..
+            recent_data.append(f"{ts_str}| O:{o} H:{h} L:{l} C:{c}")
+        
+        data_panel_text = "<b>RECENT DATA (Ground Truth):</b><br>" + "<br>".join(recent_data)
+        
+        fig.add_annotation(
+            xref='paper', yref='paper', x=0.01, y=0.01,
+            xanchor='left', yanchor='bottom',
+            text=data_panel_text,
+            showarrow=False,
+            font=dict(size=10, family='Courier New, monospace', color='#cccccc'),
+            bgcolor='rgba(0,0,0,0.85)',
+            bordercolor='#444444',
+            borderwidth=1,
+            align='left'
         )
         
         return fig

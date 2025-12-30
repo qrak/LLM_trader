@@ -6,15 +6,7 @@ from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.coingecko import CoinGeckoAPI
 from src.utils.profiler import profile_performance
 from .analysis_context import AnalysisContext
-from .analysis_result_processor import AnalysisResultProcessor
-from .technical_calculator import TechnicalCalculator
-from .pattern_analyzer import PatternAnalyzer
-from .market_data_collector import MarketDataCollector
-from .market_metrics_calculator import MarketMetricsCalculator
-from .prompts.prompt_builder import PromptBuilder
-from .pattern_engine.chart_generator import ChartGenerator
 from .data_fetcher import DataFetcher
-from .formatters import MarketOverviewFormatter, LongTermFormatter, TechnicalFormatter
 from src.logger.logger import Logger
 
 
@@ -37,8 +29,6 @@ class AnalysisEngine:
         model_manager: "ModelManagerProtocol",
         alternative_me_api: AlternativeMeAPI,
         cryptocompare_api,
-        format_utils,
-        data_processor,
         config: "ConfigProtocol",
         technical_calculator=None,
         pattern_analyzer=None,
@@ -107,10 +97,6 @@ class AnalysisEngine:
             raise ValueError("alternative_me_api is a required parameter and cannot be None")
         if cryptocompare_api is None:
             raise ValueError("cryptocompare_api is a required parameter and cannot be None")
-        if format_utils is None:
-            raise ValueError("format_utils is a required parameter and cannot be None")
-        if data_processor is None:
-            raise ValueError("data_processor is a required parameter and cannot be None")
         if technical_calculator is None:
             raise ValueError("technical_calculator is required - must be injected from app.py")
         if pattern_analyzer is None:
@@ -184,10 +170,9 @@ class AnalysisEngine:
         )
         
         # Update prompt builder and context builder with effective timeframe
-        if hasattr(self, 'prompt_builder'):
-            self.prompt_builder.timeframe = effective_timeframe
+        self.prompt_builder.timeframe = effective_timeframe
         
-        if hasattr(self.prompt_builder, 'context_builder'):
+        if self.prompt_builder.context_builder:
             self.prompt_builder.context_builder.timeframe = effective_timeframe
         
         # Reset analysis state
@@ -200,13 +185,13 @@ class AnalysisEngine:
     async def close(self) -> None:
         """Clean up resources with proper null checks"""
         try:
-            if hasattr(self, 'exchange') and self.exchange is not None:
+            if self.exchange is not None:
                 await self.exchange.close()
                 
-            if hasattr(self, 'model_manager') and self.model_manager is not None:
+            if self.model_manager is not None:
                 await self.model_manager.close()
                 
-            if hasattr(self, 'rag_engine') and self.rag_engine is not None:
+            if self.rag_engine is not None:
                 await self.rag_engine.close()
         except Exception as e:
             self.logger.error(f"Error during MarketAnalyzer cleanup: {e}")
@@ -222,7 +207,8 @@ class AnalysisEngine:
         position_context: Optional[str] = None,
         performance_context: Optional[str] = None,
         brain_context: Optional[str] = None,
-        last_analysis_time: Optional[str] = None
+        last_analysis_time: Optional[str] = None,
+        current_ticker: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
@@ -237,6 +223,7 @@ class AnalysisEngine:
             performance_context: Recent trading history and performance (goes to system prompt)
             brain_context: Distilled trading insights from closed trades (goes to system prompt)
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
+            current_ticker: Optional dict containing current ticker data to avoid redundant API calls
             
         Returns:
             Dictionary containing analysis results
@@ -247,7 +234,7 @@ class AnalysisEngine:
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
             
             # Step 2: Enrich context with external data
-            await self._enrich_market_context()
+            await self._enrich_market_context(current_ticker=current_ticker)
             
             # Step 3: Perform technical analysis
             await self._perform_technical_analysis()
@@ -286,22 +273,28 @@ class AnalysisEngine:
             
         return True
 
-    async def _enrich_market_context(self) -> None:
-        """Enrich market context with overview, microstructure, and coin details"""
+    async def _enrich_market_context(self, current_ticker: Optional[Dict[str, Any]] = None) -> None:
+        """
+        Enrich market context with overview, microstructure, and coin details
+        
+        Args:
+            current_ticker: Optional ticker data to reuse
+        """
         # Fetch market overview
         try:
             market_overview = await self.rag_engine.get_market_overview()
             self.context.market_overview = market_overview
-            # self.logger.debug("Market overview data fetched and added to context")
         except Exception as e:
             self.logger.warning(f"Failed to fetch market overview: {e}")
             self.context.market_overview = {}
         
         # Fetch market microstructure
         try:
-            microstructure = await self.data_collector.data_fetcher.fetch_market_microstructure(self.symbol)
+            microstructure = await self.data_collector.data_fetcher.fetch_market_microstructure(
+                self.symbol, 
+                cached_ticker=current_ticker
+            )
             self.context.market_microstructure = microstructure
-            # self.logger.debug(f"Market microstructure data fetched for {self.symbol}")
         except Exception as e:
             self.logger.warning(f"Failed to fetch market microstructure: {e}")
             self.context.market_microstructure = {}
@@ -336,7 +329,7 @@ class AnalysisEngine:
         technical_patterns = self.pattern_analyzer.detect_patterns(
             self.context.ohlcv_candles,
             self.context.technical_history,
-            self.context.long_term_data if hasattr(self.context, 'long_term_data') else None,
+            self.context.long_term_data,
             self.context.timestamps
         )
         
@@ -389,8 +382,8 @@ class AnalysisEngine:
                 self.symbol,
                 self.context.current_price,
                 self.article_urls,
-                technical_history=getattr(self.context, 'technical_history', None),
-                technical_data=getattr(self.context, 'technical_data', None)
+                technical_history=self.context.technical_history,
+                technical_data=self.context.technical_data
             )
         else:
             analysis_result = await self._execute_ai_request(
@@ -406,7 +399,7 @@ class AnalysisEngine:
         analysis_result["chart_analysis"] = has_chart_analysis
         
         # Add technical_data for persistence (will be saved to previous_response.json)
-        if hasattr(self.context, 'technical_data'):
+        if self.context.technical_data:
             analysis_result["technical_data"] = self.context.technical_data
         
         return analysis_result
@@ -455,10 +448,10 @@ class AnalysisEngine:
                 return None
             
             # Get timestamps if available
-            timestamps = getattr(self.context, 'timestamps', None)
+            timestamps = self.context.timestamps
             
             # Get technical history for RSI overlay (optional)
-            technical_history = getattr(self.context, 'technical_history', None)
+            technical_history = self.context.technical_history
             
             # Generate chart image using chart generator
             # The chart_generator will automatically limit candles based on AI_CHART_CANDLE_LIMIT
@@ -555,6 +548,7 @@ class AnalysisEngine:
             self.logger.error(f"Error processing long-term data: {str(e)}")
         
         # Calculate weekly macro (if available)
+        # Check for dynamic attribute attached in DataCollector (see MarketDataCollector.collect_data)
         if hasattr(self.context, 'weekly_ohlcv') and self.context.weekly_ohlcv is not None:
             try:
                 # self.logger.info("Calculating weekly macro indicators...")

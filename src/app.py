@@ -1,7 +1,7 @@
 import asyncio
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from src.logger.logger import Logger
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -409,10 +409,19 @@ class CryptoTradingBot:
         self.logger.info(f"Trading Check #{check_count} at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
         self.logger.info("=" * 60)
         
+        # Fetch current ticker exactly ONCE for this entire check cycle to avoid redundant API calls
+        current_ticker = None
+        current_price = None
+        try:
+            current_ticker = await self._fetch_current_ticker()
+            if current_ticker:
+                current_price = float(current_ticker.get('last', current_ticker.get('close', 0)))
+        except Exception as e:
+            self.logger.warning(f"Could not fetch current ticker: {e}")
+
         # Check if existing position hit stop/target
-        if self.trading_strategy.current_position:
+        if self.trading_strategy.current_position and current_price is not None:
             try:
-                current_price = await self._fetch_current_price()
                 close_reason = await self.trading_strategy.check_position(current_price)
                 if close_reason:
                     self.logger.info(f"Position closed: {close_reason}")
@@ -432,14 +441,8 @@ class CryptoTradingBot:
         # Run market analysis
         self.logger.info("Running market analysis...")
         
-        # Fetch current price for P&L calculation
-        try:
-            current_price = await self._fetch_current_price()
-        except Exception as e:
-            self.logger.warning(f"Could not fetch current price for P&L: {e}")
-            current_price = None
-        
         # Build trading context with P&L data (separate for system prompt)
+        # Use the SAME current_price fetched above
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
         brain_context = self.data_persistence.get_brain_context()
@@ -465,7 +468,8 @@ class CryptoTradingBot:
             position_context=position_context,
             performance_context=memory_context,
             brain_context=brain_context,
-            last_analysis_time=last_analysis_time_str
+            last_analysis_time=last_analysis_time_str,
+            current_ticker=current_ticker
         )
         
         if "error" in result:
@@ -485,7 +489,16 @@ class CryptoTradingBot:
                 if self.discord_notifier:
                     # Send initial position status
                     try:
-                        current_price = await self._fetch_current_price()
+                        # Use the SAME current_price fetched at start of cycle
+                        # NOTE: If order execution takes significant time, we might want a fresh price here,
+                        # but for notification purposes, the price from start of cycle is likely acceptable
+                        # and saves an API call.
+                        # If precise execution price is needed, it should come from the trade execution result.
+                        if current_price is None:
+                             # Fallback if initial fetch failed
+                             ticker = await self._fetch_current_ticker()
+                             current_price = float(ticker.get('last', ticker.get('close', 0))) if ticker else 0.0
+
                         await self.discord_notifier.send_position_status(
                             position=self.trading_strategy.current_position,
                             current_price=current_price,
@@ -514,14 +527,14 @@ class CryptoTradingBot:
         if raw_response:
             self.data_persistence.save_previous_response(raw_response, technical_data)
     
-    async def _fetch_current_price(self) -> float:
-        """Fetch current price from exchange."""
+    async def _fetch_current_ticker(self) -> Optional[Dict[str, Any]]:
+        """Fetch current ticker from exchange."""
         try:
             ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
-            return float(ticker.get('last', ticker.get('close', 0)))
+            return ticker
         except Exception as e:
-            self.logger.error(f"Error fetching current price: {e}")
-            return 0.0
+            self.logger.error(f"Error fetching current ticker: {e}")
+            return None
     
     async def _wait_for_next_timeframe(self):
         """Wait until the next timeframe candle starts."""

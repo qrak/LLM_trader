@@ -14,7 +14,6 @@ from .market_components import (
     MarketDataCache,
     MarketOverviewBuilder
 )
-from src.analyzer.data_fetcher import DataFetcher
 
 
 class MarketDataManager:
@@ -29,7 +28,7 @@ class MarketDataManager:
         self.unified_parser = unified_parser
         
         # Initialize specialized components
-        self.fetcher = MarketDataFetcher(logger, coingecko_api, exchange_manager)
+        self.fetcher = MarketDataFetcher(logger, coingecko_api, exchange_manager, cryptocompare_api)
         self.processor = MarketDataProcessor(logger, unified_parser=unified_parser)
         self.cache = MarketDataCache(logger, file_handler)
         self.overview_builder = MarketOverviewBuilder(logger, self.processor)
@@ -42,7 +41,6 @@ class MarketDataManager:
         self.current_market_overview: Optional[Dict[str, Any]] = None
         self.coingecko_last_update: Optional[datetime] = None
         
-
         
     async def fetch_market_overview(self) -> Optional[Dict[str, Any]]:
         """Fetch overall market data from various sources concurrently."""
@@ -68,56 +66,6 @@ class MarketDataManager:
     def _extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
         """Extract top coins by dominance, excluding stablecoins - delegates to processor."""
         return self.processor.extract_top_coins(coingecko_data)
-    
-    async def _fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
-        """Fetch price data using CCXT or fallback to CryptoCompare."""
-        # Try CCXT first if available
-        price_data = await self._try_ccxt_price_data(top_coins)
-        
-        # Fallback to CryptoCompare
-        if not price_data or not price_data.get("RAW"):
-            if self.cryptocompare_api:
-                self.logger.debug("Falling back to CryptoCompare API for price data")
-                price_data = await self.cryptocompare_api.get_multi_price_data(coins=top_coins)
-        
-        return price_data
-    
-    async def _try_ccxt_price_data(self, top_coins: List[str]) -> Optional[Dict]:
-        """Try to fetch price data using CCXT exchange."""
-        if not (self.exchange_manager and self.exchange_manager.exchanges):
-            return None
-        
-        # Select best available exchange
-        exchange = self._select_exchange()
-        if not exchange:
-            return None
-        
-        try:
-            data_fetcher = DataFetcher(exchange=exchange, logger=self.logger)
-            symbols = [f"{coin}/USDT" for coin in top_coins]
-            self.logger.debug(f"Fetching data for top coins: {symbols}")
-            
-            price_data = await data_fetcher.fetch_multiple_tickers(symbols)
-            self.logger.debug(f"Fetched price data for {len(symbols)} symbols using CCXT")
-            return price_data
-        except Exception as e:
-            self.logger.warning(f"Failed to fetch ticker data via CCXT: {e}")
-            return None
-    
-    def _select_exchange(self):
-        """Select the best available exchange for market data."""
-        # Prefer Binance if available
-        if 'binance' in self.exchange_manager.exchanges:
-            self.logger.debug("Using Binance exchange for market data")
-            return self.exchange_manager.exchanges['binance']
-        
-        # Use first available exchange that supports fetch_tickers
-        for exchange_id, exch in self.exchange_manager.exchanges.items():
-            if exch.has.get('fetchTickers', False):
-                self.logger.debug(f"Using {exchange_id} exchange for market data")
-                return exch
-        
-        return None
     
     def _build_overview_structure(self, overview: Dict, price_data: Optional[Dict], coingecko_data: Optional[Dict]):
         """Build the overview data structure from fetched data."""

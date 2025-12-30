@@ -58,17 +58,14 @@ class DataFetcher:
              return None
 
         closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
-        latest_close = float(closed_candles[-1, 4])  # Last closed candle close price
-        
-        # self.logger.debug(f"Processed {len(closed_candles)} closed candles (excluding current incomplete candle), latest close: {latest_close}")
-        
+        actual_current_price = float(ohlcv_array[-1, 4])  # Real-time price from the unclosed candle
         # Verify we have enough data
         if len(closed_candles) < min(720, limit - 1):
             self.logger.warning(f"Received fewer closed candles ({len(closed_candles)}) than expected ({min(720, limit - 1)})")
             self.logger.debug(f"First candle timestamp: {closed_candles[0][0] if len(closed_candles) > 0 else 'N/A'}")
             self.logger.debug(f"Last closed candle timestamp: {closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A'}")
 
-        return closed_candles, latest_close
+        return closed_candles, actual_current_price
 
     @retry_async()
     async def fetch_daily_historical_data(self,
@@ -571,7 +568,7 @@ class DataFetcher:
             self.logger.debug(f"Funding rate not available for {pair}: {e}")
             return None
 
-    async def fetch_market_microstructure(self, pair: str) -> Dict[str, Any]:
+    async def fetch_market_microstructure(self, pair: str, cached_ticker: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Fetch comprehensive market microstructure data for a trading pair.
         
@@ -582,6 +579,7 @@ class DataFetcher:
         
         Args:
             pair: Trading pair symbol (e.g., "BTC/USDT")
+            cached_ticker: Optional pre-fetched ticker data to avoid redundant API calls
             
         Returns:
             Dict containing:
@@ -606,15 +604,19 @@ class DataFetcher:
             'timestamp': int(time.time() * 1000)
         }
         
-        # Fetch ticker data
+        # Fetch ticker data (or use cached)
         try:
-            ticker_data = await self.fetch_multiple_tickers([pair])
-            if ticker_data and 'RAW' in ticker_data:
-                # Extract the ticker for this pair
-                base, quote = self._extract_currencies(pair)
-                if base and quote and base in ticker_data['RAW'] and quote in ticker_data['RAW'][base]:
-                    result['ticker'] = ticker_data['RAW'][base][quote]
-                    result['available_data'].append('ticker')
+            if cached_ticker:
+                result['ticker'] = cached_ticker
+                result['available_data'].append('ticker')
+            else:
+                ticker_data = await self.fetch_multiple_tickers([pair])
+                if ticker_data and 'RAW' in ticker_data:
+                    # Extract the ticker for this pair
+                    base, quote = self._extract_currencies(pair)
+                    if base and quote and base in ticker_data['RAW'] and quote in ticker_data['RAW'][base]:
+                        result['ticker'] = ticker_data['RAW'][base][quote]
+                        result['available_data'].append('ticker')
         except Exception as e:
             self.logger.warning(f"Could not fetch ticker for {pair}: {e}")
         
