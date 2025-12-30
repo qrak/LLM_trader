@@ -24,18 +24,21 @@ graph TD
         DC --> |Price History| PA[Pattern Analyzer]
         DC --> |Candles| CG[Chart Generator]
         
-        RAG --> |Context/Snippets| PB[Context Builder]
-        TC --> |Indicators| PB
+        RAG --> |News Context| CB[Context Builder]
+        
+        %% Orchestration / Assembly
+        TC --> |Indicators| PB[Prompt Builder]
         PA --> |Patterns| PB
+        CB --> |RAG Context| PB
         CG --> |Chart Image| PB
         
         PB --> |System & User Prompt| MM{Model Manager}
     end
 
     subgraph AI Processing
-        MM --> |Text/Image| P1["Google Gemini (Flash Latest)"]
-        MM --> |Text| P2["Claude 4.5 / 3.5 (OpenRouter)"]
-        MM --> |Text| P3[DeepSeek-R1 / Gemini 3.0]
+        MM --> |Text/Image| P1["Google Gemini (3.0 Flash Preview)"]
+        MM --> |Text| P2["OpenRouter (Gemini 2.0 Flash Exp)"]
+        MM --> |Text| P3["DeepSeek-R1 (Free)"]
         
         P1 --> |Response| ARP[Analysis Result Processor]
         P2 --> |Response| ARP
