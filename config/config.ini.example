@@ -72,6 +72,8 @@ supported = binance,kucoin,gateio,mexc,hyperliquid
 market_refresh_hours = 24
 
 [demo_trading]
+# Simulated capital in quote currency (e.g., USDC) for position size calculation
+demo_quote_capital = 10000
 # Transaction fee percentage for limit orders (0.00075 = 0.075%)
 transaction_fee_percent = 0.00075
 

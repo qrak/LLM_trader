@@ -221,10 +221,12 @@ class DiscordNotifier(BaseNotifier):
             if decision.take_profit:
                 embed.add_field(name="Take Profit", value=f"${decision.take_profit:,.2f}", inline=True)
             if decision.position_size:
-                embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.1f}%", inline=True)
-                if decision.action in ['BUY', 'SELL']:
-                    entry_fee = self.calculate_entry_fee(decision.price, decision.position_size)
-                    embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
+                embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.2f}%", inline=True)
+            if decision.quantity:
+                embed.add_field(name="Quantity", value=f"{decision.quantity:.6f}", inline=True)
+            if decision.action in ['BUY', 'SELL'] and decision.quantity:
+                entry_fee = decision.price * decision.quantity * self.config.TRANSACTION_FEE_PERCENT
+                embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
 
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)

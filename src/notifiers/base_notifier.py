@@ -197,24 +197,24 @@ class BaseNotifier(ABC):
         for decision_dict in trade_history:
             action = decision_dict.get('action', '')
             price = decision_dict.get('price', 0)
-            position_size = decision_dict.get('position_size', 1.0)
+            quantity = decision_dict.get('quantity', 0.0)
 
             if action in ['BUY', 'SELL']:
                 open_position = decision_dict
             elif action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
                 open_action = open_position.get('action', '')
                 open_price = open_position.get('price', 0)
-                open_size = open_position.get('position_size', 1.0)
+                open_quantity = open_position.get('quantity', 0.0)
 
                 if open_action == 'BUY':
                     pnl_pct = ((price - open_price) / open_price) * 100
-                    pnl_usdt = (price - open_price) * position_size
+                    pnl_usdt = (price - open_price) * open_quantity
                 else:
                     pnl_pct = ((open_price - price) / open_price) * 100
-                    pnl_usdt = (open_price - price) * position_size
+                    pnl_usdt = (open_price - price) * open_quantity
 
-                entry_fee = open_price * open_size * self.config.TRANSACTION_FEE_PERCENT
-                exit_fee = price * position_size * self.config.TRANSACTION_FEE_PERCENT
+                entry_fee = open_price * open_quantity * self.config.TRANSACTION_FEE_PERCENT
+                exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
                 total_fees += entry_fee + exit_fee
                 total_pnl_usdt += pnl_usdt
                 total_pnl_pct += pnl_pct
