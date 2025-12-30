@@ -324,8 +324,3 @@ class ContextBuilder:
         lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
         
         return "\n".join(lines)
-            
-        lines.append("")
-        lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
-        
-        return "\n".join(lines)
