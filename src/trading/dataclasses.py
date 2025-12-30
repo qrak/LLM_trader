@@ -275,13 +275,13 @@ class TradingBrain:
 @dataclass(frozen=True, slots=True)
 class Position:
     """Represents an active trading position.
-    
+
     Includes confluence_factors from entry for brain learning on close.
     """
     entry_price: float
     stop_loss: float
     take_profit: float
-    size: float
+    size: float  # Quantity in base currency (e.g., BTC)
     entry_time: datetime
     confidence: str  # HIGH, MEDIUM, LOW
     direction: str   # LONG, SHORT
@@ -291,6 +291,8 @@ class Position:
     confluence_factors: tuple = field(default_factory=tuple)
     # Transaction fee paid at entry (in USDT)
     entry_fee: float = 0.0
+    # AI's suggested position size as percentage of capital (0.0-1.0)
+    size_pct: float = 0.0
 
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""
@@ -336,9 +338,10 @@ class TradeDecision:
     price: float
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
-    position_size: float = 0.0  # Percentage of portfolio
+    position_size: float = 0.0  # AI's suggested percentage of capital (0.0-1.0)
+    quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
     reasoning: str = ""
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -350,9 +353,10 @@ class TradeDecision:
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
             "position_size": self.position_size,
+            "quantity": self.quantity,
             "reasoning": self.reasoning,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TradeDecision':
         """Create TradeDecision from dictionary."""
@@ -365,6 +369,7 @@ class TradeDecision:
             stop_loss=data.get("stop_loss"),
             take_profit=data.get("take_profit"),
             position_size=data.get("position_size", 0.0),
+            quantity=data.get("quantity", 0.0),
             reasoning=data.get("reasoning", ""),
         )
 
@@ -419,10 +424,10 @@ class TradingMemory:
                 # Calculate P&L for closed trade
                 if open_position.action == 'BUY':
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
-                    pnl_usdt = (decision.price - open_position.price) * open_position.position_size
+                    pnl_usdt = (decision.price - open_position.price) * open_position.quantity
                 else:  # SELL
                     pnl_pct = ((open_position.price - decision.price) / open_position.price) * 100
-                    pnl_usdt = (open_position.price - decision.price) * open_position.position_size
+                    pnl_usdt = (open_position.price - decision.price) * open_position.quantity
                 
                 total_pnl_usdt += pnl_usdt
                 total_pnl_pct += pnl_pct

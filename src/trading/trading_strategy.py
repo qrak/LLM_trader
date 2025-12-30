@@ -95,7 +95,8 @@ class TradingStrategy:
             price=current_price,
             stop_loss=self.current_position.stop_loss,
             take_profit=self.current_position.take_profit,
-            position_size=self.current_position.size,
+            position_size=self.current_position.size_pct,
+            quantity=self.current_position.size,
             reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%",
         )
         
@@ -256,23 +257,23 @@ class TradingStrategy:
         confluence_factors: tuple = (),
     ) -> TradeDecision:
         """Open a new trading position.
-        
+
         Args:
             signal: BUY or SELL
             confidence: Confidence level
             stop_loss: Stop loss price
             take_profit: Take profit price
-            position_size: Position size as decimal
+            position_size: Position size as decimal (e.g., 0.02 = 2% of capital)
             current_price: Entry price
             symbol: Trading symbol
             reasoning: AI reasoning
             confluence_factors: Tuple of (factor_name, score) pairs for brain learning
-            
+
         Returns:
             TradeDecision for the new position
         """
         direction = "LONG" if signal == "BUY" else "SHORT"
-        
+
         # Calculate default stop loss / take profit if not provided
         if direction == "LONG":
             default_sl = current_price * 0.98  # 2% below
@@ -280,11 +281,11 @@ class TradingStrategy:
         else:  # SHORT
             default_sl = current_price * 1.02  # 2% above
             default_tp = current_price * 0.96  # 4% below
-        
+
         final_sl = stop_loss if stop_loss and stop_loss > 0 else default_sl
         final_tp = take_profit if take_profit and take_profit > 0 else default_tp
-        final_size = position_size if position_size and position_size > 0 else 0.02  # Default 2%
-        
+        final_size_pct = position_size if position_size and position_size > 0 else 0.02  # Default 2%
+
         # Validate stop loss and take profit make sense
         if direction == "LONG":
             if final_sl >= current_price:
@@ -300,29 +301,41 @@ class TradingStrategy:
             if final_tp >= current_price:
                 self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using default")
                 final_tp = default_tp
-        
-        # Calculate entry fee for limit order
-        entry_fee = current_price * final_size * self.config.TRANSACTION_FEE_PERCENT
+
+        # Calculate quantity based on capital and size percentage
+        capital = self.config.DEMO_QUOTE_CAPITAL
+        allocation = capital * final_size_pct
+        quantity = allocation / current_price
+
+        # Calculate entry fee for limit order (based on allocated capital, not quantity)
+        entry_fee = allocation * self.config.TRANSACTION_FEE_PERCENT
+
+        self.logger.info(
+            f"Position sizing: Capital=${capital:,.2f}, Size={final_size_pct*100:.2f}%, "
+            f"Allocation=${allocation:,.2f}, Quantity={quantity:.6f}"
+        )
+
         # Create position with confluence factors for brain learning
         self.current_position = Position(
             entry_price=current_price,
             stop_loss=final_sl,
             take_profit=final_tp,
-            size=final_size,
+            size=quantity,
             entry_time=datetime.now(),
             confidence=confidence,
             direction=direction,
             symbol=symbol,
             confluence_factors=confluence_factors,
             entry_fee=entry_fee,
+            size_pct=final_size_pct,
         )
         self.persistence.save_position(self.current_position)
         self.logger.info(
             f"Opened {direction} position @ ${current_price:,.2f} "
-            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Size: {final_size*100:.1f}%, Fee: ${entry_fee:.4f})"
+            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Qty: {quantity:.6f}, Fee: ${entry_fee:.4f})"
         )
-        
-        # Create and save decision
+
+        # Create and save decision (store size_pct for history context)
         decision = TradeDecision(
             timestamp=datetime.now(),
             symbol=symbol,
@@ -331,12 +344,13 @@ class TradingStrategy:
             price=current_price,
             stop_loss=final_sl,
             take_profit=final_tp,
-            position_size=final_size,
+            position_size=final_size_pct,
+            quantity=quantity,
             reasoning=reasoning,
         )
-        
+
         self.persistence.save_trade_decision(decision)
-        
+
         return decision
     
     def _update_position_parameters(

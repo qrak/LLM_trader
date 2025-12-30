@@ -368,12 +368,38 @@ class Config:
         return float(self.get_config('demo_trading', 'transaction_fee_percent', 0.00075))
 
     @property
+    def DEMO_QUOTE_CAPITAL(self):
+        """Initial capital for demo trading (default 10000)."""
+        return float(self.get_config('demo_trading', 'demo_quote_capital', 10000.0))
+
+    # Risk Management Defaults
+    @property
+    def DEFAULT_POSITION_SIZE(self):
+        """Default position size as decimal (e.g. 0.02) if AI doesn't specify."""
+        return float(self.get_config('risk_management', 'default_position_size', 0.02))
+
+    @property
+    def DEFAULT_STOP_LOSS_PCT(self):
+        """Default stop loss percentage as decimal (e.g. 0.02) if AI doesn't specify."""
+        return float(self.get_config('risk_management', 'default_stop_loss_pct', 0.02))
+
+    @property
+    def DEFAULT_TAKE_PROFIT_PCT(self):
+        """Default take profit percentage as decimal (e.g. 0.04) if AI doesn't specify."""
+        return float(self.get_config('risk_management', 'default_take_profit_pct', 0.04))
+
+    @property
     def QUOTE_CURRENCY(self):
         """Extract quote currency from CRYPTO_PAIR (e.g., 'USDC' from 'BTC/USDC')."""
         pair = self.CRYPTO_PAIR
         if '/' in pair:
             return pair.split('/')[1]
         return 'USDC'
+
+    @property
+    def DEMO_QUOTE_CAPITAL(self):
+        """Simulated capital in quote currency for position size calculation."""
+        return float(self.get_config('demo_trading', 'demo_quote_capital', 10000))
 
     def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
         """
