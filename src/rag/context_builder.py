@@ -286,9 +286,6 @@ class ContextBuilder:
         if not sentences or not keywords:
             return sentences[:max_count]
         
-        # Import re for detailed pattern matching
-        import re
-        
         # Score each sentence: (original_index, score, sentence)
         scored = []
         for i, sent in enumerate(sentences):

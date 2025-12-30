@@ -174,8 +174,8 @@ class ContextBuilder:
                 if (candle_count + 1) <= available_candles:
                     period_start = float(ohlcv_candles[-(candle_count + 1), 4])
                     change_pct = ((last_close / period_start) - 1) * 100
-                    high = max([float(candle[2]) for candle in ohlcv_candles[-candle_count:]])
-                    low = min([float(candle[3]) for candle in ohlcv_candles[-candle_count:]])
+                    high = max(float(candle[2]) for candle in ohlcv_candles[-candle_count:])
+                    low = min(float(candle[3]) for candle in ohlcv_candles[-candle_count:])
                     
                     # Format very small numbers using the imported fmt function
                     high_formatted = self.format_utils.fmt(high)

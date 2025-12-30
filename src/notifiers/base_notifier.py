@@ -76,7 +76,8 @@ class BaseNotifier(ABC):
     ) -> None:
         """Send overall performance statistics."""
 
-    def get_action_styling(self, action: str) -> Tuple[str, str]:
+    @staticmethod
+    def get_action_styling(action: str) -> Tuple[str, str]:
         """Get color key and emoji for a trading action.
 
         Args:
@@ -160,7 +161,8 @@ class BaseNotifier(ABC):
             target_distance_pct = ((current_price - position.take_profit) / current_price) * 100
         return stop_distance_pct, target_distance_pct
 
-    def calculate_time_held(self, entry_time: datetime) -> float:
+    @staticmethod
+    def calculate_time_held(entry_time: datetime) -> float:
         """Calculate hours held since entry.
 
         Args:
@@ -238,7 +240,8 @@ class BaseNotifier(ABC):
             'net_pnl': total_pnl_usdt - total_fees,
         }
 
-    def extract_analysis_fields(self, analysis: dict) -> Dict[str, Any]:
+    @staticmethod
+    def extract_analysis_fields(analysis: dict) -> Dict[str, Any]:
         """Extract common fields from analysis JSON.
 
         Args:

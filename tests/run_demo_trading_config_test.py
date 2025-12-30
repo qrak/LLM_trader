@@ -2,6 +2,7 @@
 
 Usage:
     python tests/run_demo_trading_config_test.py
+    pytest tests/run_demo_trading_config_test.py -v
 
 This will:
 - Test that demo_quote_capital and transaction_fee_percent are correctly loaded
@@ -12,20 +13,37 @@ This will:
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from src.config.loader import config
 
 
-def test_config_values():
+@pytest.fixture
+def demo_capital():
+    """Fixture providing demo capital from config."""
+    return config.DEMO_QUOTE_CAPITAL
+
+
+@pytest.fixture
+def fee_percent():
+    """Fixture providing transaction fee percent from config."""
+    return config.TRANSACTION_FEE_PERCENT
+
+
+@pytest.fixture
+def current_price():
+    """Fixture providing default test price."""
+    return 100000.0
+
+
+def test_config_values(demo_capital, fee_percent):
     """Test that config values are correctly loaded."""
     print("\n" + "=" * 60)
     print("DEMO TRADING CONFIG VALUES")
     print("=" * 60)
-
-    demo_capital = config.DEMO_QUOTE_CAPITAL
-    fee_percent = config.TRANSACTION_FEE_PERCENT
 
     print(f"DEMO_QUOTE_CAPITAL: ${demo_capital:,.2f}")
     print(f"TRANSACTION_FEE_PERCENT: {fee_percent} ({fee_percent * 100:.4f}%)")
@@ -35,15 +53,14 @@ def test_config_values():
     assert fee_percent <= 0.01, "Fee percent seems too high (>1%)"
 
     print("\n✓ Config values loaded correctly")
-    return demo_capital, fee_percent
 
 
-def test_position_size_calculation(capital: float, current_price: float = 100000.0):
+def test_position_size_calculation(demo_capital, current_price):
     """Test position size calculation logic."""
     print("\n" + "=" * 60)
     print("POSITION SIZE CALCULATION")
     print("=" * 60)
-    print(f"Capital: ${capital:,.2f}")
+    print(f"Capital: ${demo_capital:,.2f}")
     print(f"Current Price: ${current_price:,.2f}")
 
     test_cases = [
@@ -59,33 +76,33 @@ def test_position_size_calculation(capital: float, current_price: float = 100000
     print("-" * 55)
 
     for size_pct, label in test_cases:
-        allocation = capital * size_pct
+        allocation = demo_capital * size_pct
         quantity = allocation / current_price
         value_usd = quantity * current_price
 
         print(f"{label:<10} ${allocation:>12,.2f}   {quantity:>12.8f}   ${value_usd:>12,.2f}")
 
-        assert abs(allocation - capital * size_pct) < 0.01, f"Allocation mismatch for {label}"
+        assert abs(allocation - demo_capital * size_pct) < 0.01, f"Allocation mismatch for {label}"
         assert abs(quantity - allocation / current_price) < 0.00000001, f"Quantity mismatch for {label}"
 
     print("\n✓ Position size calculations correct")
 
 
-def test_fee_calculation(capital: float, fee_percent: float, current_price: float = 100000.0):
+def test_fee_calculation(demo_capital, fee_percent, current_price):
     """Test fee calculation logic."""
     print("\n" + "=" * 60)
     print("FEE CALCULATION")
     print("=" * 60)
-    print(f"Capital: ${capital:,.2f}")
+    print(f"Capital: ${demo_capital:,.2f}")
     print(f"Fee Percent: {fee_percent * 100:.4f}%")
     print(f"Current Price: ${current_price:,.2f}")
 
-    size_pct = 0.02  # 2% position
-    allocation = capital * size_pct
+    size_pct = 0.02
+    allocation = demo_capital * size_pct
     quantity = allocation / current_price
 
     entry_fee = allocation * fee_percent
-    exit_price = current_price * 1.02  # 2% profit scenario
+    exit_price = current_price * 1.02
     exit_value = quantity * exit_price
     exit_fee = exit_value * fee_percent
     total_fees = entry_fee + exit_fee
@@ -111,15 +128,14 @@ def test_fee_calculation(capital: float, fee_percent: float, current_price: floa
     print("\n✓ Fee calculations correct")
 
 
-def test_pnl_scenarios(capital: float, fee_percent: float):
+def test_pnl_scenarios(demo_capital, fee_percent, current_price):
     """Test various P&L scenarios with fees."""
     print("\n" + "=" * 60)
     print("P&L SCENARIOS (with fees)")
     print("=" * 60)
 
-    current_price = 100000.0
     size_pct = 0.02
-    allocation = capital * size_pct
+    allocation = demo_capital * size_pct
     quantity = allocation / current_price
 
     scenarios = [
@@ -147,9 +163,6 @@ def test_pnl_scenarios(capital: float, fee_percent: float):
 
         net_pnl = gross_pnl - total_fees
 
-        pnl_color = "+" if net_pnl > 0 else ""
-        gross_color = "+" if gross_pnl > 0 else ""
-
         print(
             f"{label:<15} "
             f"{price_change_pct:>+6.1f}%         "
@@ -161,18 +174,16 @@ def test_pnl_scenarios(capital: float, fee_percent: float):
     print("\n✓ P&L scenarios calculated correctly")
 
 
-def test_edge_cases(capital: float, fee_percent: float):
+def test_edge_cases(demo_capital, fee_percent, current_price):
     """Test edge cases."""
     print("\n" + "=" * 60)
     print("EDGE CASES")
     print("=" * 60)
 
-    current_price = 100000.0
-
     # Very small position
     print("\n1. Very small position (0.1%):")
     size_pct = 0.001
-    allocation = capital * size_pct
+    allocation = demo_capital * size_pct
     quantity = allocation / current_price
     fee = allocation * fee_percent
     print(f"   Allocation: ${allocation:.2f}, Quantity: {quantity:.10f}, Fee: ${fee:.6f}")
@@ -181,7 +192,7 @@ def test_edge_cases(capital: float, fee_percent: float):
     # Full position
     print("\n2. Full position (100%):")
     size_pct = 1.0
-    allocation = capital * size_pct
+    allocation = demo_capital * size_pct
     quantity = allocation / current_price
     fee = allocation * fee_percent
     print(f"   Allocation: ${allocation:,.2f}, Quantity: {quantity:.8f}, Fee: ${fee:.4f}")
@@ -190,7 +201,7 @@ def test_edge_cases(capital: float, fee_percent: float):
     print("\n3. Low price asset ($0.10):")
     low_price = 0.10
     size_pct = 0.02
-    allocation = capital * size_pct
+    allocation = demo_capital * size_pct
     quantity = allocation / low_price
     print(f"   Allocation: ${allocation:.2f}, Quantity: {quantity:,.2f} tokens")
 
@@ -204,16 +215,20 @@ def test_edge_cases(capital: float, fee_percent: float):
 
 
 def main():
-    """Run all tests."""
+    """Run all tests as standalone script."""
     print("\n" + "=" * 60)
     print("DEMO TRADING CONFIG TEST")
     print("=" * 60)
 
-    capital, fee_percent = test_config_values()
-    test_position_size_calculation(capital)
-    test_fee_calculation(capital, fee_percent)
-    test_pnl_scenarios(capital, fee_percent)
-    test_edge_cases(capital, fee_percent)
+    capital = config.DEMO_QUOTE_CAPITAL
+    fee = config.TRANSACTION_FEE_PERCENT
+    price = 100000.0
+
+    test_config_values(capital, fee)
+    test_position_size_calculation(capital, price)
+    test_fee_calculation(capital, fee, price)
+    test_pnl_scenarios(capital, fee, price)
+    test_edge_cases(capital, fee, price)
 
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED ✓")
@@ -222,3 +237,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

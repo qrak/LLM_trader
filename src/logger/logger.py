@@ -73,7 +73,7 @@ class Logger(logging.Logger):
         self.date_format = "%d.%m.%Y %H:%M:%S"
 
         self._setup_logger()
-        self.debug(f"Logger {sanitized_name} initialized with log directory: {self.log_dir}")
+        self.debug("Logger %s initialized with log directory: %s", sanitized_name, self.log_dir)
 
     def _get_log_dir(self, current_date: str, is_error: bool = False) -> str:
         if is_error:
