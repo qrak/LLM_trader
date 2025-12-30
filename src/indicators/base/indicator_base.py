@@ -36,7 +36,7 @@ class IndicatorBase:
             raise TypeError("Data must be a Pandas DataFrame, NumPy array, or List")
 
     def calculate_indicator(self, func: Callable, *args: Any, required_length: int = 0, **kwargs: Any) -> Any:
-        if not len(self.close):
+        if self.close.size == 0:
             raise ValueError("Data not initialized. Call get_data() first.")
 
         if len(self.close) < required_length:

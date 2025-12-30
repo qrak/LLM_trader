@@ -252,5 +252,6 @@ class MarketOverviewFormatter:
             
             return "\n".join(lines)
         except (ValueError, TypeError) as e:
-            self.logger.warning(f"Error formatting DeFi summary: {e}") if self.logger else None
+            if self.logger:
+                self.logger.warning("Error formatting DeFi summary: %s", e)
             return ""

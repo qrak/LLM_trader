@@ -56,12 +56,12 @@ async def main_async():
         symbol = args.symbol or config.CRYPTO_PAIR
         timeframe = args.timeframe or config.TIMEFRAME
         
-        logger.info(f"\n{'='*60}")
+        logger.info("\n%s", "=" * 60)
         logger.info("CRYPTO TRADING BOT")
-        logger.info(f"Symbol: {symbol}")
-        logger.info(f"Timeframe: {timeframe}")
+        logger.info("Symbol: %s", symbol)
+        logger.info("Timeframe: %s", timeframe)
         logger.info("Press Ctrl+C to stop")
-        logger.info(f"{'='*60}\n")
+        logger.info("%s\n", "=" * 60)
         
         await bot.run(symbol, timeframe)
     except asyncio.CancelledError:

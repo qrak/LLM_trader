@@ -78,7 +78,7 @@ class RagFileHandler:
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
-                except:
+                except OSError:
                     pass
             self.logger.error(f"Error saving JSON file {file_path}: {e}")
     

@@ -76,30 +76,22 @@ class Config:
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}")
     
-    def _convert_value(self, value: str) -> Any:
+    @staticmethod
+    def _convert_value(value: str) -> Any:
         """Convert string values to appropriate Python types."""
-        # Boolean conversion
         if value.lower() in ('true', 'yes', 'on', '1'):
             return True
         elif value.lower() in ('false', 'no', 'off', '0'):
             return False
-        
-        # Integer conversion
         if value.isdigit():
             return int(value)
-        
-        # Float conversion
         try:
             if '.' in value:
                 return float(value)
         except ValueError:
             pass
-        
-        # List conversion (comma-separated)
         if ',' in value:
             return [item.strip() for item in value.split(',')]
-        
-        # Return as string
         return value
     
     def _build_dynamic_urls(self):
