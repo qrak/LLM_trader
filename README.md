@@ -57,7 +57,7 @@ graph TD
 
 ### 🧠 AI & LLM Support
 - **Multi-Provider Support**: 
-  - **Google Gemini (Flash Latest)**: Uses `gemini-flash-latest` for zero-maintenance updates.
+  - **Google Gemini**: Configurable model selection. Optimized for `gemini-3-flash-preview` (Temp 1.0, TopK 64) via `config.ini`.
   - **Claude 4.5 / Google Gemini 3 Pro **: Support for state-of-the-art reasoning models via OpenRouter.
   - **LM Studio**: Local LLM support verified via `lm_studio_base_url`.
 - **Fallback Logic**: Automatically switches providers if primary fails (Google AI -> OpenRouter -> Local).

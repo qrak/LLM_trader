@@ -96,7 +96,13 @@ top_k = 40
 max_tokens = 32768
 
 # Google configuration overrides (Google models often require specific settings)
+# Gemini 3 Flash Preview Specifics:
+# - Temperature: MUST be 1.0 (Default). Do not lower; use "Thinking Levels" for reasoning control.
+# - TopK: Fixed at 64 by the model.
+# - Thinking Level: Controls reasoning depth (minimal, low, medium, high). Default: high.
+#   Ignored for models that don't support it (e.g., Gemini 2.5).
 google_temperature = 1.0
-google_top_p = 0.9
-google_top_k = 40
+google_top_p = 0.95
+google_top_k = 64
 google_max_tokens = 32768
+google_thinking_level = high

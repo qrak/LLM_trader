@@ -333,75 +333,89 @@ class ChartGenerator:
             font=dict(family="Arial, sans-serif", size=16, color=self.ai_colors['text']),
             paper_bgcolor=self.ai_colors['background'],
             plot_bgcolor=self.ai_colors['background'],
-            margin=dict(l=60, r=60, t=80, b=60),
+            margin=dict(l=60, r=120, t=80, b=60),
             showlegend=False  # Hide legend for cleaner look
         )
         
-        # Simple Y-axis configuration - denser grid
+        # Simple Y-axis configuration - denser grid on the RIGHT side
         fig.update_yaxes(
+            side="right",
             title_text="Price",
             showgrid=True,
-            gridwidth=0.8,  # Thinner lines for denser appearance
+            gridwidth=0.8,
             gridcolor=self.ai_colors['grid'],
             zeroline=False,
             tickformat=y_tickformat,
             exponentformat='none',
             showexponent='none',
-            # Add more price levels for denser grid
-            nticks=15,  # More horizontal grid lines
-            # Add minor ticks for even denser grid
+            nticks=30,  # Denser price grid
+            tickfont=dict(size=9),  # Smaller font for dense labels
             minor=dict(
                 showgrid=True,
                 gridwidth=0.5,
-                gridcolor='rgba(64, 64, 64, 0.3)'  # Lighter color for minor grid
+                gridcolor='rgba(80, 80, 80, 0.4)'  # More visible minor grid
             )
         )
         
+        # Calculate X-axis range with padding (5 empty candles)
+        if len(timestamps_py) > 1:
+            delta = timestamps_py[-1] - timestamps_py[-2]
+            x_range = [timestamps_py[0], timestamps_py[-1] + (delta * 5)]
+        else:
+            x_range = None
+
         # Simple x-axis configuration for AI analysis - denser grid
         fig.update_xaxes(
             title_text="Date/Time",
             showgrid=True,
-            gridwidth=0.8,  # Thinner lines for denser appearance
+            gridwidth=0.8,
             gridcolor=self.ai_colors['grid'],
             zeroline=False,
-            tickformat='%m/%d %H:%M',  # Simple, readable format
-            tickangle=-45,  # Angle labels for readability
-            nticks=20,  # More ticks for denser grid (increased from 12)
+            tickformat='%m/%d %H:%M',
+            tickangle=-45,
+            nticks=40,  # Denser time grid
             type='date',
-            tickfont=dict(size=9),  # Smaller font to fit more labels
+            range=x_range,
+            tickfont=dict(size=8),  # Smaller font to fit more labels
             automargin=True,
             showline=True,
             linewidth=1,
             linecolor=self.ai_colors['grid'],
-            # Add minor ticks for even denser grid
             minor=dict(
                 showgrid=True,
                 gridwidth=0.5,
-                gridcolor='rgba(64, 64, 64, 0.3)'  # Lighter color for minor grid
+                gridcolor='rgba(80, 80, 80, 0.4)'  # More visible minor grid
             )
         )
 
-        # Replace the OHLC header with a short explanation for AI
-        info_text = (
-            "Chart contains OHLC candles; thinner wicks mark highs/lows. "
-        )
-        fig.add_annotation(
-            xref='paper', yref='paper', x=0.01, y=0.99,
-            xanchor='left', yanchor='top',
-            text=info_text,
-            showarrow=False,
-            font=dict(size=11, family='Arial, sans-serif', color=self.ai_colors['text']),
-            bgcolor='rgba(0,0,0,0.3)',
-            bordercolor=self.ai_colors['grid'],
-            borderwidth=1,
-            align='left'
-        )
 
-        # Optional: keep a subtle current price reference line (helps AI with context)
+        # Current Price Reference & Tag
         try:
-            fig.add_hline(y=float(closes[-1]), line=dict(color='#555555', width=1, dash='dot'))
+            is_bullish = closes[-1] >= opens[-1]
+            price_color = self.ai_colors['candle_up'] if is_bullish else self.ai_colors['candle_down']
+            
+            # Horizontal line
+            fig.add_hline(y=float(closes[-1]), line=dict(color='#666666', width=1, dash='dot'))
         except Exception:
             pass
+
+        # LAST CANDLE SNAPSHOT (Calibration for AI)
+        last_ohlc_text = (
+            f"<b>LAST CANDLE ({timeframe}):</b><br>"
+            f"O: {self.formatter(opens[-1])} | H: {self.formatter(highs[-1])}<br>"
+            f"L: {self.formatter(lows[-1])} | C: {self.formatter(closes[-1])}"
+        )
+        fig.add_annotation(
+            xref='paper', yref='paper', x=0.99, y=0.01,
+            xanchor='right', yanchor='bottom',
+            text=last_ohlc_text,
+            showarrow=False,
+            font=dict(size=12, family='Courier New, monospace', color='#00ff00'),
+            bgcolor='rgba(0,0,0,0.7)',
+            bordercolor='#444444',
+            borderwidth=1,
+            align='right'
+        )
 
         
 

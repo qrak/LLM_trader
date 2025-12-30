@@ -121,137 +121,155 @@ class GoogleAIClient:
             self.logger.error(f"Failed to extract text from Google AI response: {e}")
             return ""
     
-    def _create_generation_config(self, model_config: Dict[str, Any]) -> types.GenerateContentConfig:
+    def _create_generation_config(self, model_config: Dict[str, Any], include_thinking: bool = True) -> types.GenerateContentConfig:
         """
         Create a generation config from model configuration dictionary.
-        
+
         Args:
             model_config: Configuration parameters for the model
-            
+            include_thinking: Whether to include ThinkingConfig (set False for retry on unsupported models)
+
         Returns:
             GenerateContentConfig object
         """
+        thinking_config = None
+        if include_thinking:
+            thinking_level = model_config.get("thinking_level", "high")
+            if thinking_level and thinking_level in ("minimal", "low", "medium", "high"):
+                thinking_config = types.ThinkingConfig(thinking_level=thinking_level)
+
         return types.GenerateContentConfig(
             temperature=model_config.get("temperature", 0.7),
             top_p=model_config.get("top_p", 0.9),
             top_k=model_config.get("top_k", 40),
             max_output_tokens=model_config.get("max_tokens", 32768),
+            thinking_config=thinking_config,
         )
     
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(self, messages: List[Dict[str, Any]], model_config: Dict[str, Any], model: Optional[str] = None) -> Optional[ResponseDict]:
         """
         Send a chat completion request to the Google AI API using the official SDK.
-        
+
         Args:
             messages: List of OpenAI-style messages
             model_config: Configuration parameters for the model
             model: Optional model override (e.g., admin-specified model)
-            
+
         Returns:
             Response in OpenRouter-compatible format or None if failed
         """
-        try:
-            client = self._ensure_client()
-            
-            # Convert messages to simple text prompt
-            prompt = self._extract_text_from_messages(messages)
-            
-            generation_config = self._create_generation_config(model_config)
-            
-            effective_model = model if model else self.model
-            self.logger.debug(f"Sending request to Google AI with model: {effective_model}")
-            
-            response = await client.aio.models.generate_content(
-                model=effective_model,
-                contents=prompt,
-                config=generation_config
-            )
-            
-            content_text = self._extract_text_from_response(response)
-            
-            self.logger.debug("Received successful response from Google AI")
-            
-            return cast(ResponseDict, {
-                "choices": [{
-                    "message": {
-                        "content": content_text,
-                        "role": "assistant"
-                    }
-                }]
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error during Google AI request: {str(e)}")
-            return self._handle_exception(e)
+        client = self._ensure_client()
+        prompt = self._extract_text_from_messages(messages)
+        effective_model = model if model else self.model
+
+        # Try with thinking_config first, then fallback without it
+        for include_thinking in (True, False):
+            try:
+                generation_config = self._create_generation_config(model_config, include_thinking=include_thinking)
+                self.logger.debug(f"Sending request to Google AI with model: {effective_model} (thinking={include_thinking})")
+
+                response = await client.aio.models.generate_content(
+                    model=effective_model,
+                    contents=prompt,
+                    config=generation_config
+                )
+
+                content_text = self._extract_text_from_response(response)
+                self.logger.debug("Received successful response from Google AI")
+
+                return cast(ResponseDict, {
+                    "choices": [{
+                        "message": {
+                            "content": content_text,
+                            "role": "assistant"
+                        }
+                    }]
+                })
+
+            except Exception as e:
+                error_str = str(e).lower()
+                # If thinking_config caused the error and we haven't tried without it yet, retry
+                if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
+                    self.logger.warning(f"Model may not support thinking_config, retrying without it: {e}")
+                    continue
+                self.logger.error(f"Error during Google AI request: {str(e)}")
+                return self._handle_exception(e)
+
+        return None
     
-    async def chat_completion_with_chart_analysis(self, 
-                                                 messages: List[Dict[str, Any]], 
+    async def chat_completion_with_chart_analysis(self,
+                                                 messages: List[Dict[str, Any]],
                                                  chart_image: Union[io.BytesIO, bytes, str],
                                                  model_config: Dict[str, Any],
                                                  model: Optional[str] = None) -> Optional[ResponseDict]:
         """
         Send a chat completion request with a chart image for pattern analysis.
-        
+
         Args:
             messages: List of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
             model: Optional model override (e.g., admin-specified model)
-            
+
         Returns:
             Response in OpenRouter-compatible format or None if failed
         """
-        try:
-            client = self._ensure_client()
-            
-            # Extract text prompt
-            prompt = self._extract_text_from_messages(messages)
-            
-            if isinstance(chart_image, io.BytesIO):
-                chart_image.seek(0)
-                img_data = chart_image.read()
-                chart_image.seek(0)
-            elif isinstance(chart_image, str):
-                with open(chart_image, 'rb') as f:
-                    img_data = f.read()
-            else:
-                img_data = chart_image
-            
-            image_part = types.Part.from_bytes(
-                data=img_data,
-                mime_type='image/png'
-            )
-            
-            contents = [prompt, image_part]
-            
-            generation_config = self._create_generation_config(model_config)
-            
-            effective_model = model if model else self.model
-            self.logger.debug(f"Sending chart analysis request to Google AI with model: {effective_model} (chart image: {len(img_data)} bytes)")
-            
-            response = await client.aio.models.generate_content(
-                model=effective_model,
-                contents=contents,
-                config=generation_config
-            )
-            
-            content_text = self._extract_text_from_response(response)
-            
-            self.logger.debug("Received successful chart analysis response from Google AI")
-            
-            return cast(ResponseDict, {
-                "choices": [{
-                    "message": {
-                        "content": content_text,
-                        "role": "assistant"
-                    }
-                }]
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error during Google AI chart analysis request: {str(e)}")
-            return self._handle_exception(e)
+        client = self._ensure_client()
+        prompt = self._extract_text_from_messages(messages)
+        effective_model = model if model else self.model
+
+        # Prepare image data
+        if isinstance(chart_image, io.BytesIO):
+            chart_image.seek(0)
+            img_data = chart_image.read()
+            chart_image.seek(0)
+        elif isinstance(chart_image, str):
+            with open(chart_image, 'rb') as f:
+                img_data = f.read()
+        else:
+            img_data = chart_image
+
+        image_part = types.Part.from_bytes(
+            data=img_data,
+            mime_type='image/png'
+        )
+        contents = [prompt, image_part]
+
+        # Try with thinking_config first, then fallback without it
+        for include_thinking in (True, False):
+            try:
+                generation_config = self._create_generation_config(model_config, include_thinking=include_thinking)
+                self.logger.debug(f"Sending chart analysis request to Google AI with model: {effective_model} (thinking={include_thinking}, chart image: {len(img_data)} bytes)")
+
+                response = await client.aio.models.generate_content(
+                    model=effective_model,
+                    contents=contents,
+                    config=generation_config
+                )
+
+                content_text = self._extract_text_from_response(response)
+                self.logger.debug("Received successful chart analysis response from Google AI")
+
+                return cast(ResponseDict, {
+                    "choices": [{
+                        "message": {
+                            "content": content_text,
+                            "role": "assistant"
+                        }
+                    }]
+                })
+
+            except Exception as e:
+                error_str = str(e).lower()
+                # If thinking_config caused the error and we haven't tried without it yet, retry
+                if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
+                    self.logger.warning(f"Model may not support thinking_config for chart analysis, retrying without it: {e}")
+                    continue
+                self.logger.error(f"Error during Google AI chart analysis request: {str(e)}")
+                return self._handle_exception(e)
+
+        return None
     
 
     

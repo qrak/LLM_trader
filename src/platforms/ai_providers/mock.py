@@ -113,7 +113,7 @@ class MockClient:
         response = f"{analysis_text}\n```json\n{json.dumps(payload, indent=4)}\n```"
         return response
 
-    async def chat_completion(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
+    async def chat_completion(self, messages: list, model_config: Dict[str, Any], model: str = None) -> Optional[ResponseDict]:
         """Emulate chat completion; return a ResponseDict with choices/message/content."""
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close)
@@ -129,7 +129,7 @@ class MockClient:
             ]
         }
 
-    async def chat_completion_with_chart_analysis(self, model: str, messages: list, chart_image, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
+    async def chat_completion_with_chart_analysis(self, messages: list, chart_image, model_config: Dict[str, Any], model: str = None) -> Optional[ResponseDict]:
         last_close = self._extract_last_close_hint(messages)
         # Pass has_chart=True to include chart specific text in the response
         content = self._synthesize_response(last_close, has_chart=True)
