@@ -133,7 +133,7 @@ pip install -r requirements.txt
    COINGECKO_API_KEY=your_key_here
    ```
 
-2. **Bot Config**: Edit `config/config.ini`.
+2. **Bot Config**: Copy `config/config.ini.example` to `config/config.ini`. The default settings are "ready to go" for a standard setup, but you can edit it to customize your experience.
    ```ini
    [ai_providers]
    provider = googleai  # or "local", "openrouter", "all"

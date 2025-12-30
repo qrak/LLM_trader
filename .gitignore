@@ -49,6 +49,7 @@ htmlcov/
 /data/
 /cache/
 /logs/
+config/config.ini
 # Updated configuration file management
 # Private keys and sensitive data
 keys.env
