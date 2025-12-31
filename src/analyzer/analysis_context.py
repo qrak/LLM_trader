@@ -88,8 +88,8 @@ class AnalysisContext:
         if value is not None:
             try:
                 self._current_price = float(value)
-            except (ValueError, TypeError):
-                raise ValueError("Current price must be a valid number")
+            except (ValueError, TypeError) as e:
+                raise ValueError("Current price must be a valid number") from e
         else:
             self._current_price = None
     

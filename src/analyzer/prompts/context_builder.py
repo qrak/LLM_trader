@@ -39,11 +39,9 @@ class ContextBuilder:
         self.timeframe = timeframe
         self.logger = logger
         self.format_utils = format_utils
-        
-        # Use injected formatters or create fallback instances
-        self.market_formatter = market_formatter or MarketFormatter(logger, format_utils)
-        self.period_formatter = period_formatter or MarketPeriodFormatter(logger, format_utils)
-        self.long_term_formatter = long_term_formatter or LongTermFormatter(logger, format_utils)
+        self.market_formatter = market_formatter
+        self.period_formatter = period_formatter
+        self.long_term_formatter = long_term_formatter
     
     def build_trading_context(self, context) -> str:
         """Build trading context section with current market information.
@@ -268,8 +266,8 @@ class ContextBuilder:
             ('sma_200', '200 SMA'),
         ]
         
+
         changes = []
-        significant_changes_found = False
         for key, label in key_indicators:
             prev_val = previous_indicators.get(key)
             curr_val = current_indicators.get(key)
@@ -307,7 +305,6 @@ class ContextBuilder:
                             line = f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)"
                         
                         changes.append(line)
-                        significant_changes_found = True
 
             except (ValueError, TypeError):
                 continue

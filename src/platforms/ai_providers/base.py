@@ -64,7 +64,7 @@ class BaseApiClient:
             self.logger.debug(error_details[response.status])
             
         if response.status >= 500:
-            self.logger.debug(f"Server error. The service may be experiencing issues.")
+            self.logger.debug("Server error. The service may be experiencing issues.")
             
         if "Rate limit exceeded" in error_text:
             return {"error": "rate_limit", "details": error_text}

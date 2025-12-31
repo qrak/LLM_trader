@@ -28,7 +28,7 @@ class AnalysisEngine:
         coingecko_api: CoinGeckoAPI,
         model_manager: "ModelManagerProtocol",
         alternative_me_api: AlternativeMeAPI,
-        cryptocompare_api,
+        market_api,
         config: "ConfigProtocol",
         technical_calculator=None,
         pattern_analyzer=None,
@@ -47,7 +47,7 @@ class AnalysisEngine:
             coingecko_api: CoinGecko API client
             model_manager: AI model manager (Protocol-based)
             alternative_me_api: Alternative.me API for Fear & Greed Index
-            cryptocompare_api: CryptoCompare API client
+            market_api: CryptoCompare Market API client
             format_utils: Formatting utilities
             data_processor: Data processing utilities
             config: Configuration instance (Protocol-based)
@@ -95,8 +95,8 @@ class AnalysisEngine:
             raise ValueError("model_manager is a required parameter and cannot be None")
         if alternative_me_api is None:
             raise ValueError("alternative_me_api is a required parameter and cannot be None")
-        if cryptocompare_api is None:
-            raise ValueError("cryptocompare_api is a required parameter and cannot be None")
+        if market_api is None:
+            raise ValueError("market_api is a required parameter and cannot be None")
         if technical_calculator is None:
             raise ValueError("technical_calculator is required - must be injected from app.py")
         if pattern_analyzer is None:
@@ -125,7 +125,7 @@ class AnalysisEngine:
         # Store references to external services
         self.rag_engine = rag_engine
         self.coingecko_api = coingecko_api
-        self.cryptocompare_api = cryptocompare_api
+        self.market_api = market_api
         
         # Use the token counter from model_manager
         self.token_counter = self.model_manager.token_counter
@@ -300,9 +300,9 @@ class AnalysisEngine:
             self.context.market_microstructure = {}
         
         # Fetch cryptocurrency details
-        if self.cryptocompare_api:
+        if self.market_api:
             try:
-                coin_details = await self.cryptocompare_api.get_coin_details(self.base_symbol)
+                coin_details = await self.market_api.get_coin_details(self.base_symbol)
                 self.context.coin_details = coin_details
                 if coin_details:
                     # self.logger.debug(f"Coin details for {self.base_symbol} fetched and added to context")
@@ -377,7 +377,7 @@ class AnalysisEngine:
         )
         # Process analysis
         if self.config.TEST_ENVIRONMENT:
-            self.logger.debug(f"TEST_ENVIRONMENT is True - using mock analysis")
+            self.logger.debug("TEST_ENVIRONMENT is True - using mock analysis")
             analysis_result = self.result_processor.process_mock_analysis(
                 self.symbol,
                 self.context.current_price,

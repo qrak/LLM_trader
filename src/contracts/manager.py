@@ -445,7 +445,7 @@ class ModelManager(ModelManagerProtocol):
                               chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
                               model: Optional[str] = None, warn_on_fail: bool = True) -> Dict[str, Any]:
         """Try providers in order, returning the first valid response."""
-        for idx, provider in enumerate(providers):
+        for _, provider in enumerate(providers):
             if not self._provider_available(provider):
                 continue
             self._log_provider_action(provider, action="attempting", chart=chart, model=model)

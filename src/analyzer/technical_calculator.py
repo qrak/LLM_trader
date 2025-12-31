@@ -340,15 +340,10 @@ class TechnicalCalculator:
             distance = ((current_price - sma_200w) / sma_200w) * 100
             analysis['distance_from_200w_sma_pct'] = float(distance)
         
-        # Golden/Death Cross with timestamps (use pre-calculated arrays if available)
+        # Golden/Death Cross with timestamps
         if 50 in weekly_sma_values and 200 in weekly_sma_values:
-            # Use passed arrays or calculate if not provided (backward compatibility)
-            if sma_arrays and 'sma_50' in sma_arrays and 'sma_200' in sma_arrays:
-                sma_50w_array = sma_arrays['sma_50']
-                sma_200w_array = sma_arrays['sma_200']
-            else:
-                sma_50w_array = ti.overlap.sma(ti.close, 50)
-                sma_200w_array = ti.overlap.sma(ti.close, 200)
+            sma_50w_array = sma_arrays['sma_50']
+            sma_200w_array = sma_arrays['sma_200']
             
 
             

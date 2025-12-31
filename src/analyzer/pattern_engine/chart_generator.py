@@ -32,8 +32,7 @@ class ChartGenerator:
         self.config = config
         self.formatter = formatter
         self.format_utils = format_utils
-        self.logger = logger
-        self.config = config
+
         self.formatter = formatter or self._default_formatter
         
         # AI-optimized colors for better pattern recognition
@@ -392,7 +391,7 @@ class ChartGenerator:
         # Current Price Reference & Tag
         try:
             is_bullish = closes[-1] >= opens[-1]
-            price_color = self.ai_colors['candle_up'] if is_bullish else self.ai_colors['candle_down']
+
             
             # Horizontal line
             fig.add_hline(y=float(closes[-1]), line=dict(color='#666666', width=1, dash='dot'))

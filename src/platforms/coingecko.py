@@ -24,7 +24,8 @@ class CoinGeckoAPI:
         cache_name: str = 'cache/coingecko_cache.db',
         cache_dir: str = 'data/market_data',
         expire_after: int = -1,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        update_interval_hours: int = 4
     ) -> None:
         self.cache_backend = SQLiteBackend(cache_name=cache_name, expire_after=expire_after)
         self.session: Optional[CachedSession] = None
@@ -32,7 +33,7 @@ class CoinGeckoAPI:
         self.logger = logger
         self.cache_dir = cache_dir
         self.coingecko_cache_file = os.path.join(self.cache_dir, "coingecko_global.json")
-        self.update_interval = timedelta(hours=4)  # Default update interval
+        self.update_interval = timedelta(hours=update_interval_hours)
         self.last_update: Optional[datetime] = None
         self.api_key = api_key
 

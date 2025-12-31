@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List, Union, cast
 
 from google import genai
 from google.genai import types
-from PIL import Image
+
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.openrouter import ResponseDict

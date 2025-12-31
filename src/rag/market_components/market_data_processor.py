@@ -47,7 +47,7 @@ class MarketDataProcessor:
             stablecoins = {'usdt', 'usdc', 'busd', 'dai', 'tusd', 'usd', 'steth'}
             top_coins = []
             
-            for symbol, dominance in sorted_coins:
+            for symbol, _ in sorted_coins:
                 symbol_upper = symbol.upper()
                 if symbol.lower() not in stablecoins:
                     top_coins.append(symbol_upper)

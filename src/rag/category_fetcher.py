@@ -9,18 +9,18 @@ from src.logger.logger import Logger
 class CategoryFetcher:
     """Handles fetching cryptocurrency categories from external APIs."""
     
-    def __init__(self, logger: Logger, cryptocompare_api=None):
+    def __init__(self, logger: Logger, categories_api=None):
         self.logger = logger
-        self.cryptocompare_api = cryptocompare_api
+        self.categories_api = categories_api
         self.categories_last_update: Optional[datetime] = None
     
     async def fetch_cryptocompare_categories(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """Fetch cryptocurrency categories from CryptoCompare API."""
-        if self.cryptocompare_api is None:
-            self.logger.debug("CryptoCompare API client not initialized, using fallback categories")
+        if self.categories_api is None:
+            self.logger.debug("Categories API not initialized, using fallback categories")
             return []
             
-        response = await self.cryptocompare_api.get_categories(force_refresh=force_refresh)
+        response = await self.categories_api.get_categories(force_refresh=force_refresh)
         
         # Debug logging to inspect the returned data
         self.logger.debug(f"Categories response type: {type(response)}")

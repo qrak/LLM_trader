@@ -4,18 +4,12 @@ from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
-from .file_handler import RagFileHandler
 from src.utils.token_counter import TokenCounter
-from .news_manager import NewsManager
-from .market_data_manager import MarketDataManager
-from .category_manager import CategoryManager
-from .index_manager import IndexManager
-from .context_builder import ContextBuilder
+
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.platforms.coingecko import CoinGeckoAPI
-    from src.platforms.cryptocompare import CryptoCompareAPI
 
 
 class RagEngine:
@@ -25,8 +19,6 @@ class RagEngine:
         token_counter: TokenCounter,
         config: "ConfigProtocol",
         coingecko_api: Optional["CoinGeckoAPI"] = None,
-        cryptocompare_api: Optional["CryptoCompareAPI"] = None,
-
         exchange_manager=None,
         file_handler=None,
         news_manager=None,
@@ -42,7 +34,6 @@ class RagEngine:
             token_counter: TokenCounter instance
             config: ConfigProtocol instance for RAG update intervals
             coingecko_api: CoinGecko API client (optional)
-            cryptocompare_api: CryptoCompare API client (optional)
             exchange_manager: Exchange manager (optional)
             file_handler: RagFileHandler instance (injected from app.py)
             news_manager: NewsManager instance (injected from app.py)
@@ -77,7 +68,6 @@ class RagEngine:
         self.context_builder = context_builder
 
         self.coingecko_api = coingecko_api
-        self.cryptocompare_api = cryptocompare_api
         self.exchange_manager = exchange_manager
 
         # Update timestamps
@@ -105,15 +95,6 @@ class RagEngine:
                 # Update market data manager with the API
                 self.market_data_manager.coingecko_api = self.coingecko_api
                 
-            if self.cryptocompare_api is None:
-                self.cryptocompare_api = CryptoCompareAPI(logger=self.logger)
-                await self.cryptocompare_api.initialize()
-                # Update managers with the API
-                self.news_manager.cryptocompare_api = self.cryptocompare_api
-                self.market_data_manager.cryptocompare_api = self.cryptocompare_api
-                self.category_manager.cryptocompare_api = self.cryptocompare_api
-                
-
             
             # Load known tickers
             await self.category_manager.load_known_tickers()
@@ -377,11 +358,10 @@ class RagEngine:
                 pass
             
         # Close API clients if they have close methods
-        for client in [self.coingecko_api, self.cryptocompare_api]:
-            if client and hasattr(client, 'close') and callable(client.close):
-                try:
-                    await client.close()
-                except Exception as e:
-                    self.logger.error(f"Error closing API client: {e}")
+        if self.coingecko_api and hasattr(self.coingecko_api, 'close') and callable(self.coingecko_api.close):
+            try:
+                await self.coingecko_api.close()
+            except Exception as e:
+                self.logger.error(f"Error closing CoinGecko API client: {e}")
                     
         self.logger.info("RAG Engine resources released")

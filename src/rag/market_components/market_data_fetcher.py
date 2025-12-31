@@ -10,11 +10,11 @@ from src.logger.logger import Logger
 class MarketDataFetcher:
     """Handles fetching market data from external APIs."""
     
-    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, cryptocompare_api=None):
+    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None):
         self.logger = logger
         self.coingecko_api = coingecko_api
         self.exchange_manager = exchange_manager
-        self.cryptocompare_api = cryptocompare_api
+        self.market_api = market_api
     
     async def fetch_global_market_data(self) -> Optional[Dict]:
         """Fetch global market data from CoinGecko."""
@@ -38,12 +38,13 @@ class MarketDataFetcher:
             
         # Fallback to CryptoCompare
         if not price_data or not price_data.get("RAW"):
-            if self.cryptocompare_api:
+            if self.market_api:
                 self.logger.debug("Falling back to CryptoCompare API for price data")
                 try:
-                    price_data = await self.cryptocompare_api.get_multi_price_data(coins=top_coins)
+                    price_data = await self.market_api.get_multi_price_data(coins=top_coins)
                 except Exception as e:
                     self.logger.error(f"Error fetching CryptoCompare price data: {e}")
+
                     
         return price_data
     

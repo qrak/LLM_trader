@@ -72,7 +72,7 @@ class IndexManager:
             coins_mentioned = set(article['detected_coins'])
         else:
             # Fall back to detection
-            coins_mentioned = self._detect_coins_in_article(article, known_crypto_tickers)
+            coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
             if coins_mentioned:
                 # Store as list internally
                 article['detected_coins'] = list(coins_mentioned)
@@ -94,7 +94,7 @@ class IndexManager:
 
     def _index_category_words(self, title: str, body: str, index: int, category_word_map: Dict[str, str]) -> None:
         """Index words associated with categories with consistent lowercase normalization."""
-        for word, category in category_word_map.items():
+        for word, _ in category_word_map.items():
             # Ensure word is already lowercase (should be from the mapping)
             word_lower = word.lower()
             word_pattern = rf'\b{re.escape(word_lower)}\b'
@@ -115,9 +115,6 @@ class IndexManager:
                 if index not in self.keyword_index[word_lower]:
                     self.keyword_index[word_lower].append(index)
     
-    def _detect_coins_in_article(self, article: Dict[str, Any], known_crypto_tickers: Set[str]) -> Set[str]:
-        """Detect cryptocurrency mentions in article content - delegates to ArticleProcessor."""
-        return self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
     
     def search_by_coin(self, coin: str) -> List[int]:
         """Search for articles mentioning a specific coin."""

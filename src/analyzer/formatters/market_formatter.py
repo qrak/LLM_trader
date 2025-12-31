@@ -1,6 +1,6 @@
 """
 Consolidated Market Analysis Formatter - Main Coordinator.
-Delegates to specialized formatters while maintaining backward compatibility.
+Delegates to specialized formatters.
 """
 from typing import Dict, Any, Optional
 
@@ -11,11 +11,7 @@ from .long_term_formatter import LongTermFormatter
 
 
 class MarketFormatter:
-    """Main coordinator for market analysis formatting.
-    
-    Delegates to specialized formatters for different concerns while
-    maintaining backward compatibility with existing code.
-    """
+    """Main coordinator for market analysis formatting."""
     
     def __init__(self, logger: Optional[Logger] = None, format_utils=None):
         """Initialize the market formatter and its specialized components.
@@ -26,8 +22,6 @@ class MarketFormatter:
         """
         self.logger = logger
         self.format_utils = format_utils
-        
-        # Initialize specialized formatters (Dependency Injection)
         self.overview_formatter = MarketOverviewFormatter(logger, format_utils)
         self.period_formatter = MarketPeriodFormatter(logger, format_utils)
         self.long_term_formatter = LongTermFormatter(logger, format_utils)
@@ -100,7 +94,7 @@ class MarketFormatter:
                 # If even the first sentence is too long, truncate it directly
                 if not truncated:
                     words = sentence.split()
-                    for j, word in enumerate(words):
+                    for j, _ in enumerate(words):
                         test_word_text = ' '.join(words[:j+1]) + '...'
                         if self.token_counter.count_tokens(test_word_text) > max_tokens:
                             if j == 0:  # Even first word is too long
@@ -195,22 +189,27 @@ class MarketFormatter:
         if not order_book or "error" in order_book:
             return ""
         
+        base_currency = symbol.split('/')[0] if '/' in symbol else ""
+        quote_currency = symbol.split('/')[1] if '/' in symbol else ""
+        
         lines = [f"## {symbol} Order Book Depth:"]
         
         # Spread metrics
         spread = order_book.get("spread")
         spread_pct = order_book.get("spread_percent")
         if spread is not None and spread_pct is not None:
-            lines.append(f"  • Spread: ${spread:.2f} ({spread_pct:.3f}%)")
+            # Spread is in quote currency (price difference)
+            currency_symbol = "$" if quote_currency in ["USD", "USDT", "USDC"] else f"{quote_currency} "
+            lines.append(f"  • Spread: {currency_symbol}{spread:.2f} ({spread_pct:.3f}%)")
         
         # Liquidity depth
         bid_depth = order_book.get("bid_depth", 0)
         ask_depth = order_book.get("ask_depth", 0)
         total_depth = bid_depth + ask_depth
         if total_depth > 0:
-            lines.append(f"  • Total Liquidity (Top 20 levels): ${self.format_utils.fmt(total_depth)}")
-            lines.append(f"    - Bid Depth: ${self.format_utils.fmt(bid_depth)}")
-            lines.append(f"    - Ask Depth: ${self.format_utils.fmt(ask_depth)}")
+            lines.append(f"  • Total Liquidity (Top 20 levels): {self.format_utils.fmt(total_depth)} {base_currency}")
+            lines.append(f"    - Bid Depth: {self.format_utils.fmt(bid_depth)} {base_currency}")
+            lines.append(f"    - Ask Depth: {self.format_utils.fmt(ask_depth)} {base_currency}")
         
         # Imbalance (-1 to +1, positive = more bids)
         imbalance = order_book.get("imbalance")
@@ -244,6 +243,8 @@ class MarketFormatter:
         if not trades or "error" in trades:
             return ""
         
+        base_currency = symbol.split('/')[0] if '/' in symbol else ""
+        
         lines = [f"## {symbol} Recent Trade Flow:"]
         
         # Trade count and velocity
@@ -261,8 +262,8 @@ class MarketFormatter:
         buy_pressure = trades.get("buy_pressure_percent")
         
         if buy_volume and sell_volume:
-            lines.append(f"  • Buy Volume: ${self.format_utils.fmt(buy_volume)}")
-            lines.append(f"  • Sell Volume: ${self.format_utils.fmt(sell_volume)}")
+            lines.append(f"  • Buy Volume: {self.format_utils.fmt(buy_volume)} {base_currency}")
+            lines.append(f"  • Sell Volume: {self.format_utils.fmt(sell_volume)} {base_currency}")
         
         if buy_sell_ratio:
             lines.append(f"  • Buy/Sell Ratio: {buy_sell_ratio:.2f}")
@@ -283,7 +284,7 @@ class MarketFormatter:
         # Average trade size
         avg_trade_size = trades.get("avg_trade_size")
         if avg_trade_size:
-            lines.append(f"  • Average Trade Size: ${self.format_utils.fmt(avg_trade_size)}")
+            lines.append(f"  • Average Trade Size: {self.format_utils.fmt(avg_trade_size)} {base_currency}")
         
         return "\n".join(lines)
     
@@ -300,7 +301,7 @@ class MarketFormatter:
             Formatted funding rate string
         """
         if not funding or "error" in funding:
-            return ""
+            return f"## {symbol} Funding Rate (Futures):\n  • Status: Not Available (Spot Market or Data Unavailable)"
         
         lines = [f"## {symbol} Funding Rate (Futures):"]
         
@@ -321,10 +322,10 @@ class MarketFormatter:
         # Explanation
         if rate_pct is not None:
             if rate_pct > 0.01:
-                lines.append(f"  • Interpretation: Longs pay shorts (bullish positioning)")
+                lines.append("  • Interpretation: Longs pay shorts (bullish positioning)")
             elif rate_pct < -0.01:
-                lines.append(f"  • Interpretation: Shorts pay longs (bearish positioning)")
+                lines.append("  • Interpretation: Shorts pay longs (bearish positioning)")
             else:
-                lines.append(f"  • Interpretation: Neutral positioning")
+                lines.append("  • Interpretation: Neutral positioning")
         
         return "\n".join(lines)

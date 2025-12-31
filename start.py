@@ -43,12 +43,12 @@ Examples:
     return parser.parse_args()
 
 
-async def main_async():
+async def main_async(shutdown_manager: GracefulShutdownManager):
     """Async entry point for the application"""
     args = parse_args()
     
     logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG)
-    bot = CryptoTradingBot(logger, config)
+    bot = CryptoTradingBot(logger, config, shutdown_manager=shutdown_manager)
     
     try:
         await bot.initialize()
@@ -67,8 +67,8 @@ async def main_async():
     except asyncio.CancelledError:
         logger.info("Trading cancelled, shutting down...")
     finally:
-        # Clean shutdown
-        await bot.shutdown()
+        # Clean shutdown handled by manager callbacks
+        pass
 
 
 def main() -> None:
@@ -83,7 +83,7 @@ def main() -> None:
     shutdown_manager.setup_signal_handlers()
     
     try:
-        loop.run_until_complete(main_async())
+        loop.run_until_complete(main_async(shutdown_manager))
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received - initiating graceful shutdown...")
         loop.run_until_complete(shutdown_manager.shutdown_gracefully())
