@@ -47,32 +47,32 @@ class TechnicalCalculator:
     def _calculate_volume_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate volume-based indicators"""
         return {
-            "vwap": self.ti.vol.rolling_vwap(length=20),
-            "twap": self.ti.vol.twap(length=20),
-            "mfi": self.ti.vol.mfi(length=14),
-            "obv": self.ti.vol.obv(length=20),
-            "cmf": self.ti.vol.chaikin_money_flow(length=20),
-            "force_index": self.ti.vol.force_index(length=20),
-            "cci": self.ti.vol.cci(length=14),
+            "vwap": self.ti.rolling_vwap(length=20),
+            "twap": self.ti.twap(length=20),
+            "mfi": self.ti.mfi(length=14),
+            "obv": self.ti.obv(length=20),
+            "cmf": self.ti.chaikin_money_flow(length=20),
+            "force_index": self.ti.force_index(length=20),
+            "cci": self.ti.cci(length=14),
         }
 
     def _calculate_momentum_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate momentum indicators"""
         indicators = {
-            "rsi": self.ti.momentum.rsi(length=14),
-            "stoch_k": self.ti.momentum.stochastic(period_k=14, smooth_k=3, period_d=3)[0],
-            "stoch_d": self.ti.momentum.stochastic(period_k=14, smooth_k=3, period_d=3)[1],
-            "williams_r": self.ti.momentum.williams_r(length=14),
-            "uo": self.ti.momentum.uo(),
-            "tsi": self.ti.momentum.tsi(long_length=20, short_length=10),
-            "rmi": self.ti.momentum.rmi(length=20, momentum_length=5),
-            "ppo": self.ti.momentum.ppo(fast_length=12, slow_length=26),
-            "coppock": self.ti.momentum.coppock_curve(wl1=11, wl2=14, wma_length=10),
-            "kst": self.ti.momentum.kst(),
+            "rsi": self.ti.rsi(length=14),
+            "stoch_k": self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)[0],
+            "stoch_d": self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)[1],
+            "williams_r": self.ti.williams_r(length=14),
+            "uo": self.ti.uo(),
+            "tsi": self.ti.tsi(long_length=20, short_length=10),
+            "rmi": self.ti.rmi(length=20, momentum_length=5),
+            "ppo": self.ti.ppo(fast_length=12, slow_length=26),
+            "coppock": self.ti.coppock_curve(wl1=11, wl2=14, wma_length=10),
+            "kst": self.ti.kst(),
         }
         
         # Calculate MACD separately
-        macd_line, macd_signal, macd_hist = self.ti.momentum.macd(fast_length=12, slow_length=26, signal_length=9)
+        macd_line, macd_signal, macd_hist = self.ti.macd(fast_length=12, slow_length=26, signal_length=9)
         indicators["macd_line"] = macd_line
         indicators["macd_signal"] = macd_signal
         indicators["macd_hist"] = macd_hist
@@ -82,11 +82,11 @@ class TechnicalCalculator:
     def _calculate_volatility_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, np.ndarray]:
         """Calculate volatility indicators"""
         indicators = {
-            "atr": self.ti.volatility.atr(length=20),
+            "atr": self.ti.atr(length=20),
         }
         
         # Bollinger Bands
-        bb_upper, bb_middle, bb_lower = self.ti.volatility.bollinger_bands(length=20, num_std_dev=2)
+        bb_upper, bb_middle, bb_lower = self.ti.bollinger_bands(length=20, num_std_dev=2)
         indicators["bb_upper"] = bb_upper
         indicators["bb_middle"] = bb_middle
         indicators["bb_lower"] = bb_lower
@@ -101,18 +101,18 @@ class TechnicalCalculator:
         )
         
         # Keltner Channels
-        kc_upper, kc_middle, kc_lower = self.ti.volatility.keltner_channels(length=20, multiplier=2)
+        kc_upper, kc_middle, kc_lower = self.ti.keltner_channels(length=20, multiplier=2)
         indicators["kc_upper"] = kc_upper
         indicators["kc_middle"] = kc_middle
         indicators["kc_lower"] = kc_lower
         
         # Donchian Channels (only retain extremes for formatting/patterns)
-        donchian_upper, _, donchian_lower = self.ti.volatility.donchian_channels(length=20)
+        donchian_upper, _, donchian_lower = self.ti.donchian_channels(length=20)
         indicators["donchian_upper"] = donchian_upper
         indicators["donchian_lower"] = donchian_lower
         
         # Chandelier Exit
-        long_exit, short_exit = self.ti.volatility.chandelier_exit(length=20, multiplier=3.0)
+        long_exit, short_exit = self.ti.chandelier_exit(length=20, multiplier=3.0)
         indicators["chandelier_long"] = long_exit
         indicators["chandelier_short"] = short_exit
         
@@ -122,29 +122,29 @@ class TechnicalCalculator:
         indicators["atr_percent"] = (atr_values / current_price) * 100 if current_price > 0 else np.full_like(atr_values, np.nan)
         
         # Choppiness Index
-        indicators["choppiness"] = self.ti.volatility.choppiness_index(length=14)
+        indicators["choppiness"] = self.ti.choppiness_index(length=14)
         
         return indicators
 
     def _calculate_trend_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate trend indicators"""
         indicators = {
-            "adx": self.ti.trend.adx(length=14)[0],
-            "plus_di": self.ti.trend.adx(length=14)[1],
-            "minus_di": self.ti.trend.adx(length=14)[2],
-            "trix": self.ti.trend.trix(length=20),
-            "pfe": self.ti.trend.pfe(n=20, m=5),
-            "td_sequential": self.ti.trend.td_sequential(length=9),
-            "sar": self.ti.trend.parabolic_sar(step=0.02, max_step=0.2),
+            "adx": self.ti.adx(length=14)[0],
+            "plus_di": self.ti.adx(length=14)[1],
+            "minus_di": self.ti.adx(length=14)[2],
+            "trix": self.ti.trix(length=20),
+            "pfe": self.ti.pfe(n=20, m=5),
+            "td_sequential": self.ti.td_sequential(length=9),
+            "sar": self.ti.parabolic_sar(step=0.02, max_step=0.2),
         }
         
         # Supertrend
-        supertrend, supertrend_direction = self.ti.trend.supertrend(length=20, multiplier=3.0)
+        supertrend, supertrend_direction = self.ti.supertrend(length=20, multiplier=3.0)
         indicators["supertrend"] = supertrend
         indicators["supertrend_direction"] = supertrend_direction
 
         # Ichimoku Cloud
-        conversion, base, span_a, span_b = self.ti.trend.ichimoku_cloud(
+        conversion, base, span_a, span_b = self.ti.ichimoku_cloud(
             conversion_length=9,
             base_length=26,
             lagging_span2_length=52,
@@ -154,32 +154,32 @@ class TechnicalCalculator:
         indicators["ichimoku_span_b"] = span_b
         
         # Vortex
-        vortex_plus, vortex_minus = self.ti.trend.vortex_indicator(length=20)
+        vortex_plus, vortex_minus = self.ti.vortex_indicator(length=20)
         indicators["vortex_plus"] = vortex_plus
         indicators["vortex_minus"] = vortex_minus
         
         # SMAs
-        indicators["sma_20"] = self.ti.overlap.sma(self.ti.close, 20)
-        indicators["sma_50"] = self.ti.overlap.sma(self.ti.close, 50)
-        indicators["sma_200"] = self.ti.overlap.sma(self.ti.close, 200)
+        indicators["sma_20"] = self.ti.sma(self.ti.close, 20)
+        indicators["sma_50"] = self.ti.sma(self.ti.close, 50)
+        indicators["sma_200"] = self.ti.sma(self.ti.close, 200)
         
         return indicators
 
     def _calculate_support_resistance_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate support and resistance indicators"""
         indicators = {
-            "kurtosis": self.ti.statistical.kurtosis(length=20),
-            "zscore": self.ti.statistical.zscore(length=20),
-            "hurst": self.ti.statistical.hurst(max_lag=20),
+            "kurtosis": self.ti.kurtosis(length=20),
+            "zscore": self.ti.zscore(length=20),
+            "hurst": self.ti.hurst(max_lag=20),
         }
         
         # Basic Support/Resistance
-        support, resistance = self.ti.support_resistance.support_resistance(length=20)
+        support, resistance = self.ti.support_resistance(length=20)
         indicators["basic_support"] = support
         indicators["basic_resistance"] = resistance
         
         # Advanced Support/Resistance
-        adv_support, adv_resistance = self.ti.support_resistance.advanced_support_resistance(
+        adv_support, adv_resistance = self.ti.advanced_support_resistance(
             length=20,
             strength_threshold=1,
             persistence=1,
@@ -190,7 +190,7 @@ class TechnicalCalculator:
         indicators["advanced_resistance"] = adv_resistance
         
         # Pivot Points
-        pivot_point, r1, r2, r3, r4, s1, s2, s3, s4 = self.ti.support_resistance.pivot_points()
+        pivot_point, r1, r2, r3, r4, s1, s2, s3, s4 = self.ti.pivot_points()
         indicators["pivot_point"] = pivot_point
         indicators["pivot_r1"] = r1
         indicators["pivot_r2"] = r2
@@ -202,7 +202,7 @@ class TechnicalCalculator:
         indicators["pivot_s4"] = s4
         
         # Fibonacci Pivot Points
-        fib_pivot, fib_r1, fib_r2, fib_r3, fib_s1, fib_s2, fib_s3 = self.ti.support_resistance.fibonacci_pivot_points()
+        fib_pivot, fib_r1, fib_r2, fib_r3, fib_s1, fib_s2, fib_s3 = self.ti.fibonacci_pivot_points()
         indicators["fib_pivot_point"] = fib_pivot
         indicators["fib_pivot_r1"] = fib_r1
         indicators["fib_pivot_r2"] = fib_r2
@@ -258,9 +258,9 @@ class TechnicalCalculator:
         # Pre-calculate SMA arrays for crossover detection (avoid redundant calculation in macro analysis)
         sma_arrays = {}
         if available_weeks >= 50:
-            sma_arrays['sma_50'] = ti_weekly.overlap.sma(ti_weekly.close, 50)
+            sma_arrays['sma_50'] = ti_weekly.sma(ti_weekly.close, 50)
         if available_weeks >= 200:
-            sma_arrays['sma_200'] = ti_weekly.overlap.sma(ti_weekly.close, 200)
+            sma_arrays['sma_200'] = ti_weekly.sma(ti_weekly.close, 200)
 
         # NEW: Weekly-specific macro analysis (pass SMA arrays to avoid recalculation)
         weekly_macro_analysis = self._compute_weekly_macro_trend_analysis(
@@ -416,8 +416,8 @@ class TechnicalCalculator:
         for period in sma_periods:
             if available_days >= period:
                 # Use technical indicators directly instead of extracted arrays
-                sma = ti.overlap.sma(ti.close, period)
-                vol_sma = ti.overlap.sma(ti.volume, period)
+                sma = ti.sma(ti.close, period)
+                vol_sma = ti.sma(ti.volume, period)
                 if not np.isnan(sma[-1]):
                     sma_values[period] = float(sma[-1])
                 if not np.isnan(vol_sma[-1]):
@@ -489,16 +489,16 @@ class TechnicalCalculator:
                 analysis['sma_50_vs_200'] = 'Bullish'
                 # Check if this could be a golden cross scenario
                 if available_days >= 250:  # Need enough data to check trend
-                    sma_50_prev = ti.overlap.sma(ti.close, 50)[-10]  # 10 periods ago
-                    sma_200_prev = ti.overlap.sma(ti.close, 200)[-10]
+                    sma_50_prev = ti.sma(ti.close, 50)[-10]  # 10 periods ago
+                    sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev <= sma_200_prev and sma_50 > sma_200:
                         analysis['golden_cross'] = True
             elif sma_50 < sma_200:
                 analysis['sma_50_vs_200'] = 'Bearish'
                 # Check if this could be a death cross scenario
                 if available_days >= 250:
-                    sma_50_prev = ti.overlap.sma(ti.close, 50)[-10]
-                    sma_200_prev = ti.overlap.sma(ti.close, 200)[-10]
+                    sma_50_prev = ti.sma(ti.close, 50)[-10]
+                    sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev >= sma_200_prev and sma_50 < sma_200:
                         analysis['death_cross'] = True
         
@@ -601,17 +601,17 @@ class TechnicalCalculator:
     def _compute_14_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
         """Compute indicators that require 14 days of data."""
         # RSI
-        rsi_vals = ti.momentum.rsi(length=14)
+        rsi_vals = ti.rsi(length=14)
         if rsi_vals is not None and not np.isnan(rsi_vals[-1]):
             out['daily_rsi'] = float(rsi_vals[-1])
         
         # ATR
-        atr_vals = ti.volatility.atr(length=14)
+        atr_vals = ti.atr(length=14)
         if atr_vals is not None and not np.isnan(atr_vals[-1]):
             out['daily_atr'] = float(atr_vals[-1])
         
         # ADX and DI
-        adx_vals, plus_di_vals, minus_di_vals = ti.trend.adx(length=14)
+        adx_vals, plus_di_vals, minus_di_vals = ti.adx(length=14)
         if adx_vals is not None and not np.isnan(adx_vals[-1]):
             out['daily_adx'] = float(adx_vals[-1])
         if plus_di_vals is not None and not np.isnan(plus_di_vals[-1]):
@@ -620,13 +620,13 @@ class TechnicalCalculator:
             out['daily_minus_di'] = float(minus_di_vals[-1])
         
         # OBV
-        obv_vals = ti.vol.obv()
+        obv_vals = ti.obv()
         if obv_vals is not None and not np.isnan(obv_vals[-1]):
             out['daily_obv'] = float(obv_vals[-1])
     
     def _compute_26_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
         """Compute indicators that require 26 days of data."""
-        macd_line, macd_signal, macd_hist = ti.momentum.macd()
+        macd_line, macd_signal, macd_hist = ti.macd()
         
         if macd_line is not None and not np.isnan(macd_line[-1]):
             out['daily_macd_line'] = float(macd_line[-1])
@@ -637,7 +637,7 @@ class TechnicalCalculator:
     
     def _compute_52_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
         """Compute indicators that require 52 days of data."""
-        conversion, base, span_a, span_b = ti.trend.ichimoku_cloud()
+        conversion, base, span_a, span_b = ti.ichimoku_cloud()
         
         if conversion is not None and not np.isnan(conversion[-1]):
             out['daily_ichimoku_conversion'] = float(conversion[-1])

@@ -13,7 +13,6 @@ from .file_handler import RagFileHandler
 from .index_manager import IndexManager
 from .article_processor import ArticleProcessor
 from .news_category_analyzer import NewsCategoryAnalyzer
-from .category_manager import CategoryManager
 from .ticker_manager import TickerManager
 from .category_fetcher import CategoryFetcher
 from .category_processor import CategoryProcessor
@@ -32,5 +31,5 @@ __all__ = [
     'ArticleProcessor', 'NewsCategoryAnalyzer',
     
     # Management operations
-    'CategoryManager', 'TickerManager', 'CategoryFetcher', 'CategoryProcessor'
+    'TickerManager', 'CategoryFetcher', 'CategoryProcessor'
 ]

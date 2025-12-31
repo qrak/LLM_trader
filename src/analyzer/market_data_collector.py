@@ -344,12 +344,12 @@ class MarketDataCollector:
         """
         data = []
         
-        if not hasattr(context, 'ohlcv_candles') or context.ohlcv_candles is None:
+        if context.ohlcv_candles is None:
             self.logger.warning("No OHLCV data available for metrics calculation")
             return data
         
         # Use pre-computed timestamps if available
-        timestamps = context.timestamps if hasattr(context, 'timestamps') and context.timestamps else None
+        timestamps = context.timestamps
         
         for idx in range(len(context.ohlcv_candles)):
             # Use pre-computed timestamp or fallback to conversion
@@ -365,7 +365,7 @@ class MarketDataCollector:
                 low=float(context.ohlcv_candles[idx, 3]),
                 close=float(context.ohlcv_candles[idx, 4]),
                 volume=float(context.ohlcv_candles[idx, 5]),
-                sentiment=getattr(context, 'sentiment', None)
+                sentiment=context.sentiment
             )
             data.append(market_data)
         

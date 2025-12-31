@@ -95,7 +95,7 @@ class NewsManager:
             combined_articles = self.news_database + unique_articles
             
             # Sort by timestamp, newest first
-            combined_articles.sort(key=lambda x: self._get_article_timestamp(x), reverse=True)
+            combined_articles.sort(key=lambda x: self.article_processor.get_article_timestamp(x), reverse=True)
             
             # Filter to keep only recent articles
             self.news_database = self.file_handler.filter_articles_by_age(combined_articles, max_age_seconds=86400)
@@ -109,14 +109,7 @@ class NewsManager:
             self.logger.debug("No new articles to add or only duplicates found")
             return False
     
-    
-    def format_article_date(self, article: Dict[str, Any]) -> str:
-        """Format article date in a consistent way."""
-        return self.article_processor.format_article_date(article)
-    
-    def _get_article_timestamp(self, article: Dict[str, Any]) -> float:
-        """Extract timestamp from article in a consistent format."""
-        return self.article_processor.get_article_timestamp(article)
+
     
     def get_database_size(self) -> int:
         """Get the number of articles in the database."""

@@ -1,11 +1,9 @@
 import timeit
 from dataclasses import dataclass
-from typing import Union, Tuple, Optional, TypeVar, Generic, Callable, List, Any, Dict
+from typing import Union, Tuple, Optional, Callable, List, Any, Dict
 
 import numpy as np
 import pandas as pd
-
-T = TypeVar('T')
 
 
 @dataclass(kw_only=True)
@@ -164,27 +162,3 @@ class IndicatorBase:
         self.close = data[:, 3].reshape(-1)
         self.volume = data[:, 4].reshape(-1)
 
-
-class IndicatorCategory(Generic[T]):
-    def __init__(self, base: IndicatorBase) -> None:
-        self._base = base
-
-    @property
-    def open(self) -> np.ndarray:
-        return self._base.open
-
-    @property
-    def high(self) -> np.ndarray:
-        return self._base.high
-
-    @property
-    def low(self) -> np.ndarray:
-        return self._base.low
-
-    @property
-    def close(self) -> np.ndarray:
-        return self._base.close
-
-    @property
-    def volume(self) -> np.ndarray:
-        return self._base.volume

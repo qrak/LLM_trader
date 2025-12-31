@@ -87,6 +87,12 @@ class TradingStrategy:
         
         pnl = self.current_position.calculate_pnl(current_price)
         
+        # Calculate closing fee
+        closing_fee = self.current_position.calculate_closing_fee(
+            current_price, 
+            self.config.TRANSACTION_FEE_PERCENT
+        )
+        
         decision = TradeDecision(
             timestamp=datetime.now(),
             symbol=self.current_position.symbol,
@@ -97,12 +103,13 @@ class TradingStrategy:
             take_profit=self.current_position.take_profit,
             position_size=self.current_position.size_pct,
             quantity=self.current_position.size,
-            reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%",
+            fee=closing_fee,
+            reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%. Fee: ${closing_fee:.4f}",
         )
         
         self.logger.info(
             f"Closing {self.current_position.direction} position ({reason}) "
-            f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%"
+            f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%, Fee: ${closing_fee:.4f}"
         )
         
         # Update trading brain with closed trade insights
@@ -221,6 +228,7 @@ class TradingStrategy:
                 action="CLOSE",
                 confidence=confidence,
                 price=current_price,
+                fee=0.0, # Fee handled in close_position, this is just the signal return
                 reasoning=reasoning,
             )
         
@@ -236,6 +244,7 @@ class TradingStrategy:
                 price=current_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
+                fee=0.0, # No fee for updates
                 reasoning=f"Updated position parameters. {reasoning}",
             )
             self.persistence.save_trade_decision(decision)
@@ -346,6 +355,7 @@ class TradingStrategy:
             take_profit=final_tp,
             position_size=final_size_pct,
             quantity=quantity,
+            fee=entry_fee,
             reasoning=reasoning,
         )
 
@@ -413,7 +423,7 @@ class TradingStrategy:
         if "current_price" in result:
             return float(result["current_price"])
         
-        if "context" in result and hasattr(result["context"], "current_price"):
+        if "context" in result and result["context"] is not None:
             return float(result["context"].current_price)
         
         # Default fallback
@@ -445,8 +455,8 @@ class TradingStrategy:
             
             # Try to get context data for more details
             context = result.get("context")
-            if context and hasattr(context, "technical_data"):
-                tech_data = context.technical_data or {}
+            if context and context.technical_data:
+                tech_data = context.technical_data
                 conditions["adx"] = tech_data.get("adx", 0)
                 conditions["rsi"] = tech_data.get("rsi", 50)
                 conditions["choppiness"] = tech_data.get("choppiness", None)

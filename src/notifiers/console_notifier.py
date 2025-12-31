@@ -80,9 +80,8 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Position Size: {decision.position_size * 100:.2f}%")
         if decision.quantity:
             print(f"Quantity: {decision.quantity:.6f}")
-        if decision.action in ['BUY', 'SELL'] and decision.quantity:
-            entry_fee = decision.price * decision.quantity * self.config.TRANSACTION_FEE_PERCENT
-            print(f"Entry Fee: ${entry_fee:.4f}")
+        if decision.action in ['BUY', 'SELL', 'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and decision.fee:
+            print(f"Fee:       ${decision.fee:.4f}")
 
         print(f"\nReasoning: {decision.reasoning}")
         print("=" * 60 + "\n")

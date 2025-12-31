@@ -301,7 +301,7 @@ class Position:
         else:  # SHORT
             return ((self.entry_price - current_price) / self.entry_price) * 100
 
-    def calculate_closing_fee(self, close_price: float, fee_percent: float = 0.00075) -> float:
+    def calculate_closing_fee(self, close_price: float, fee_percent: float) -> float:
         """Calculate the transaction fee for closing this position.
         
         Args:
@@ -340,6 +340,7 @@ class TradeDecision:
     take_profit: Optional[float] = None
     position_size: float = 0.0  # AI's suggested percentage of capital (0.0-1.0)
     quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
+    fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
     reasoning: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
@@ -354,6 +355,7 @@ class TradeDecision:
             "take_profit": self.take_profit,
             "position_size": self.position_size,
             "quantity": self.quantity,
+            "fee": self.fee,
             "reasoning": self.reasoning,
         }
 
@@ -370,6 +372,7 @@ class TradeDecision:
             take_profit=data.get("take_profit"),
             position_size=data.get("position_size", 0.0),
             quantity=data.get("quantity", 0.0),
+            fee=data["fee"],  # Mandatory field
             reasoning=data.get("reasoning", ""),
         )
 

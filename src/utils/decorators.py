@@ -3,7 +3,8 @@ import functools
 import logging
 import traceback
 import socket
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from src.utils.protocols import HasLogger
 
 import ccxt
 import aiohttp
@@ -23,11 +24,15 @@ _NETWORK_EXCEPTIONS = (
 
 
 def _log(logger, level: str, message: str):
-    log_func = getattr(logger, level) if logger else getattr(logging, level)
-    if logger and hasattr(logger, 'findCaller'):
-        log_func(message, stacklevel=3)
+    """Log a message using the provided logger or fallback to logging module."""
+    if logger:
+        log_func = getattr(logger, level)
+        if hasattr(logger, 'findCaller'):
+            log_func(message, stacklevel=3)
+        else:
+            log_func(message)
     else:
-        log_func(message)
+        getattr(logging, level)(message)
 
 
 def _classify_retryable_error(e: Exception) -> str:
@@ -82,7 +87,7 @@ class _RetryContext:
     """Helper class to manage retry logic and reduce complexity."""
     
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
-        self.logger = getattr(instance, 'logger', None)
+        self.logger = instance.logger if isinstance(instance, HasLogger) else None
         self.pair = kwargs.get('pair') or (args[0] if args and isinstance(args[0], str) else None)
         self.class_name = instance.__class__.__name__
         self.func_name = func.__name__
@@ -176,7 +181,7 @@ class _ApiRetryContext:
     """Helper class to manage API retry logic."""
     
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
-        self.logger = getattr(instance, 'logger', None) or logging.getLogger("Bot")
+        self.logger = instance.logger if isinstance(instance, HasLogger) else logging.getLogger("Bot")
         self.model = kwargs.get('model', args[0] if args else 'unknown')
         self.func = func
         self.instance = instance

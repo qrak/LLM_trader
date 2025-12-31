@@ -153,9 +153,8 @@ class AnalysisEngine:
             self.logger.warning(f"Timeframe validation failed: {e}. Using config default: {self.timeframe}")
             effective_timeframe = self.timeframe
         
-        # Initialize analysis context with effective timeframe
         self.context = AnalysisContext(symbol)
-        self.context.exchange = exchange.name if hasattr(exchange, 'name') else str(exchange)
+        self.context.exchange = exchange.name if exchange.name else str(exchange)
         self.context.timeframe = effective_timeframe
         
         # Create data fetcher and initialize data collector
@@ -527,7 +526,7 @@ class AnalysisEngine:
 
     async def _process_long_term_data(self) -> None:
         """Process long-term historical data and calculate metrics"""
-        if not hasattr(self.context, 'long_term_data') or self.context.long_term_data is None:
+        if self.context.long_term_data is None:
             self.logger.debug("No long-term data available to process")
             return
             
@@ -549,7 +548,7 @@ class AnalysisEngine:
         
         # Calculate weekly macro (if available)
         # Check for dynamic attribute attached in DataCollector (see MarketDataCollector.collect_data)
-        if hasattr(self.context, 'weekly_ohlcv') and self.context.weekly_ohlcv is not None:
+        if self.context.weekly_ohlcv is not None:
             try:
                 # self.logger.info("Calculating weekly macro indicators...")
                 weekly_macro = self.technical_calculator.get_weekly_macro_indicators(self.context.weekly_ohlcv)

@@ -12,7 +12,6 @@ from src.utils.decorators import retry_api_call
 
 
 class CoinGeckoAPI:
-    GLOBAL_API_URL = "https://api.coingecko.com/api/v3/global"
     COINS_LIST_URL = "https://api.coingecko.com/api/v3/coins/list"
     COIN_DATA_URL_TEMPLATE = "https://api.coingecko.com/api/v3/coins/{coin_id}"
     COINS_MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
@@ -25,7 +24,8 @@ class CoinGeckoAPI:
         cache_dir: str = 'data/market_data',
         expire_after: int = -1,
         api_key: Optional[str] = None,
-        update_interval_hours: int = 4
+        update_interval_hours: int = 24,
+        global_api_url: str = 'https://api.coingecko.com/api/v3/global'
     ) -> None:
         self.cache_backend = SQLiteBackend(cache_name=cache_name, expire_after=expire_after)
         self.session: Optional[CachedSession] = None
@@ -36,6 +36,7 @@ class CoinGeckoAPI:
         self.update_interval = timedelta(hours=update_interval_hours)
         self.last_update: Optional[datetime] = None
         self.api_key = api_key
+        self.global_api_url = global_api_url
 
         # Ensure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -319,7 +320,7 @@ class CoinGeckoAPI:
     async def _fetch_global(self) -> Dict[str, Any]:
         """Fetch /global endpoint."""
         try:
-            async with self.session.get(self.GLOBAL_API_URL) as response:
+            async with self.session.get(self.global_api_url) as response:
                 if response.status == 200:
                     return await response.json()
                 else:
