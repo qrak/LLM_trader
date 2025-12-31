@@ -49,7 +49,7 @@ graph TD
     subgraph Execution ["Execution (Paper Only)"]
         ARP --> |JSON Signal| TS[Trading Strategy]
         TS --> |Simulated Order| DP[Data Persistence]
-        TS --> |Notification| DN[Discord Interface]
+        TS --> |Notification| DN[Discord Notifier]
     end
 ```
 
