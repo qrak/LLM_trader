@@ -106,17 +106,6 @@ class BaseNotifier(ABC):
         }
         return color_map.get(action, 'grey'), emoji_map.get(action, '📊')
 
-    def calculate_entry_fee(self, price: float, position_size: float) -> float:
-        """Calculate entry fee for a trade.
-
-        Args:
-            price: Entry price
-            position_size: Position size as decimal (e.g., 0.5 for 50%)
-
-        Returns:
-            Calculated fee amount
-        """
-        return price * position_size * self.config.TRANSACTION_FEE_PERCENT
 
     def calculate_position_pnl(
             self,
@@ -215,8 +204,15 @@ class BaseNotifier(ABC):
                     pnl_pct = ((open_price - price) / open_price) * 100
                     pnl_usdt = (open_price - price) * open_quantity
 
-                entry_fee = open_price * open_quantity * self.config.TRANSACTION_FEE_PERCENT
-                exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
+                entry_fee = open_position.get('fee', 0.0)
+                exit_fee = decision_dict.get('fee', 0.0)
+                
+                # Fallback for old history if fee is 0.0 (though migration should have fixed this)
+                if entry_fee == 0.0 and open_quantity > 0:
+                     entry_fee = open_price * open_quantity * self.config.TRANSACTION_FEE_PERCENT
+                if exit_fee == 0.0 and quantity > 0:
+                     exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
+                     
                 total_fees += entry_fee + exit_fee
                 total_pnl_usdt += pnl_usdt
                 total_pnl_pct += pnl_pct

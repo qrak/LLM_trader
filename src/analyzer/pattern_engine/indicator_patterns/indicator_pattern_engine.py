@@ -6,7 +6,10 @@ Complements chart pattern engine by providing momentum and confirmation signals.
 """
 
 import numpy as np
+from datetime import datetime
 from typing import Dict, List, Any, Optional
+from src.logger.logger import Logger
+from src.utils.format_utils import FormatUtils
 
 from .rsi_patterns import (
     detect_rsi_oversold_numba,
@@ -56,8 +59,8 @@ class IndicatorPatternEngine:
     Pure NumPy/Numba implementation - no heavy classes, fast execution.
     """
     
-    def __init__(self, logger=None, format_utils=None):
-        """Initialize indicator pattern engine"""
+    def __init__(self, logger: Optional[Logger] = None, format_utils: Optional[FormatUtils] = None):
+        """Initialize indicator pattern engine."""
         self.logger = logger
         self.format_utils = format_utils
     
@@ -75,7 +78,7 @@ class IndicatorPatternEngine:
         """
         if timestamps and 0 <= index < len(timestamps):
             timestamp = timestamps[index]
-            if hasattr(timestamp, 'strftime'):
+            if isinstance(timestamp, datetime):
                 timestamp_str = f" at {timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
             else:
                 timestamp_str = ""

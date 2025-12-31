@@ -24,7 +24,10 @@ class RagEngine:
         news_manager=None,
         market_data_manager=None,
         index_manager=None,
-        category_manager=None,
+        category_fetcher=None,
+        category_processor=None,
+        ticker_manager=None,
+        news_category_analyzer=None,
         context_builder=None,
     ):
         """Initialize RagEngine with injected dependencies (DI pattern).
@@ -39,7 +42,10 @@ class RagEngine:
             news_manager: NewsManager instance (injected from app.py)
             market_data_manager: MarketDataManager instance (injected from app.py)
             index_manager: IndexManager instance (injected from app.py)
-            category_manager: CategoryManager instance (injected from app.py)
+            category_fetcher: CategoryFetcher instance (injected from app.py)
+            category_processor: CategoryProcessor instance (injected from app.py)
+            ticker_manager: TickerManager instance (injected from app.py)
+            news_category_analyzer: NewsCategoryAnalyzer instance (injected from app.py)
             context_builder: ContextBuilder instance (injected from app.py)
         """
         if file_handler is None:
@@ -50,8 +56,14 @@ class RagEngine:
             raise ValueError("market_data_manager is required - must be injected from app.py")
         if index_manager is None:
             raise ValueError("index_manager is required - must be injected from app.py")
-        if category_manager is None:
-            raise ValueError("category_manager is required - must be injected from app.py")
+        if category_fetcher is None:
+            raise ValueError("category_fetcher is required - must be injected from app.py")
+        if category_processor is None:
+            raise ValueError("category_processor is required - must be injected from app.py")
+        if ticker_manager is None:
+            raise ValueError("ticker_manager is required - must be injected from app.py")
+        if news_category_analyzer is None:
+            raise ValueError("news_category_analyzer is required - must be injected from app.py")
         if context_builder is None:
             raise ValueError("context_builder is required - must be injected from app.py")
         
@@ -64,7 +76,10 @@ class RagEngine:
         self.news_manager = news_manager
         self.market_data_manager = market_data_manager
         self.index_manager = index_manager
-        self.category_manager = category_manager
+        self.category_fetcher = category_fetcher
+        self.category_processor = category_processor
+        self.ticker_manager = ticker_manager
+        self.news_category_analyzer = news_category_analyzer
         self.context_builder = context_builder
 
         self.coingecko_api = coingecko_api
@@ -97,10 +112,10 @@ class RagEngine:
                 
             
             # Load known tickers
-            await self.category_manager.load_known_tickers()
+            await self.ticker_manager.load_known_tickers()
 
             # Ensure categories are up to date
-            await self.category_manager.ensure_categories_updated()
+            await self._ensure_categories_updated()
 
             # Load news database
             await self.news_manager.load_cached_news()
@@ -110,7 +125,7 @@ class RagEngine:
                 self._build_indices()
                 self.logger.debug(f"Loaded {self.news_manager.get_database_size()} recent news articles")
 
-            await self.update_known_tickers()
+            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
 
             if self.news_manager.get_database_size() < 10:
                 await self.refresh_market_data()
@@ -123,8 +138,8 @@ class RagEngine:
         """Build search indices from news database"""
         self.index_manager.build_indices(
             self.news_manager.news_database,
-            self.category_manager.get_known_tickers(),
-            self.category_manager.get_category_word_map()
+            self.ticker_manager.get_known_tickers(),
+            self.category_processor.category_word_map
         )
 
     async def update_if_needed(self) -> bool:
@@ -152,7 +167,7 @@ class RagEngine:
                     return False
 
             try:
-                categories_updated = await self.category_manager.ensure_categories_updated()
+                categories_updated = await self._ensure_categories_updated()
                 if categories_updated:
                     self._build_indices()
             except Exception as e:
@@ -162,12 +177,12 @@ class RagEngine:
 
     async def refresh_market_data(self) -> None:
         """Refresh all market data from external sources"""
-        await self.category_manager.ensure_categories_updated()
+        await self._ensure_categories_updated()
         
         # Fetch news
         try:
             articles = await self.news_manager.fetch_fresh_news(
-                self.category_manager.get_known_tickers()
+                self.ticker_manager.get_known_tickers()
             )
         except Exception as e:
             self.logger.error(f"Error fetching crypto news: {e}")
@@ -205,7 +220,7 @@ class RagEngine:
             return ""
 
         try:
-            rebuild_indices = await self.category_manager.ensure_categories_updated()
+            rebuild_indices = await self._ensure_categories_updated()
             if rebuild_indices:
                 self._build_indices()
 
@@ -220,14 +235,14 @@ class RagEngine:
             scores = await self.context_builder.keyword_search(
                 query, self.news_manager.news_database, symbol,
                 self.index_manager.get_coin_indices(),
-                self.category_manager.get_category_word_map(),
-                self.category_manager.get_important_categories()
+                self.category_processor.category_word_map,
+                self.category_processor.important_categories
             )
             relevant_indices = [idx for idx, _ in scores[:k*2]]
 
             # Add coin-specific articles if needed
             if symbol and len(relevant_indices) < k:
-                coin = self.category_manager.extract_base_coin(symbol)
+                coin = self.category_processor.extract_base_coin(symbol)
                 coin_indices = self.index_manager.search_by_coin(coin)
                 for idx in coin_indices:
                     if idx not in relevant_indices:
@@ -297,18 +312,10 @@ class RagEngine:
             self.logger.error(f"Error getting market overview: {e}")
             return None
 
-    def extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol"""
-        return self.category_manager.extract_base_coin(symbol)
-
-    async def get_coin_categories(self, symbol: str) -> List[str]:
-        """Get categories associated with a coin symbol"""
-        return self.category_manager.get_coin_categories(symbol, self.news_manager.news_database)
-
     async def update_known_tickers(self) -> None:
         """Update known cryptocurrency ticker symbols"""
         try:
-            await self.category_manager.update_known_tickers(self.news_manager.news_database)
+            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
         except Exception as e:
             self.logger.error(f"Error updating known tickers: {e}")
 
@@ -341,6 +348,7 @@ class RagEngine:
             self._periodic_update_task = None
             self.logger.debug("Stopped periodic news updates")
 
+
     async def close(self) -> None:
         """Close resources and mark as closed"""
         if self._is_closed:
@@ -358,10 +366,26 @@ class RagEngine:
                 pass
             
         # Close API clients if they have close methods
-        if self.coingecko_api and hasattr(self.coingecko_api, 'close') and callable(self.coingecko_api.close):
+        if self.coingecko_api:
             try:
                 await self.coingecko_api.close()
             except Exception as e:
                 self.logger.error(f"Error closing CoinGecko API client: {e}")
                     
         self.logger.info("RAG Engine resources released")
+    
+    async def _ensure_categories_updated(self, force_refresh: bool = False) -> bool:
+        """Ensure categories are loaded and up to date.
+        
+        Returns:
+            True if categories were updated, False otherwise
+        """
+        try:
+            categories = await self.category_fetcher.fetch_cryptocompare_categories(force_refresh)
+            if categories:
+                self.category_processor.process_api_categories(categories)
+                return True
+            return False
+        except Exception as e:
+            self.logger.exception(f"Error ensuring categories updated: {e}")
+            return False

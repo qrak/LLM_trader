@@ -3,6 +3,7 @@ import functools
 import asyncio
 from typing import Callable, Any
 from src.config.loader import config
+from src.utils.protocols import HasLogger
 
 def profile_performance(func: Callable) -> Callable:
     """
@@ -16,8 +17,8 @@ def profile_performance(func: Callable) -> Callable:
             return await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) \
                 else func(*args, **kwargs)
 
-        # Get logger from instance if available (first arg is self)
-        logger = getattr(args[0], 'logger', None) if args else None
+        instance = args[0] if args else None
+        logger = instance.logger if isinstance(instance, HasLogger) else None
         
         start_time = time.perf_counter()
         class_name = args[0].__class__.__name__ if args else ''
@@ -48,7 +49,8 @@ def profile_performance(func: Callable) -> Callable:
         if not config.LOGGER_DEBUG:
             return func(*args, **kwargs)
 
-        logger = getattr(args[0], 'logger', None) if args else None
+        instance = args[0] if args else None
+        logger = instance.logger if isinstance(instance, HasLogger) else None
         
         start_time = time.perf_counter()
         class_name = args[0].__class__.__name__ if args else ''

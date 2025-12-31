@@ -130,7 +130,9 @@ class CryptoTradingBot:
         self.coingecko_api = CoinGeckoAPI(
             logger=self.logger, 
             api_key=self.config.COINGECKO_API_KEY, 
-            cache_dir='cache'
+            cache_dir='cache',
+            update_interval_hours=self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS,
+            global_api_url=self.config.RAG_COINGECKO_GLOBAL_API_URL
         )
         await self.coingecko_api.initialize()
         self.logger.debug("CoinGeckoAPI initialized")
@@ -165,7 +167,8 @@ class CryptoTradingBot:
         # Create RAG component managers (DI: moved from RagEngine.__init__)
         from src.rag import (
             RagFileHandler, NewsManager, MarketDataManager,
-            IndexManager, CategoryManager, ContextBuilder
+            IndexManager, ContextBuilder, CategoryFetcher,
+            CategoryProcessor, TickerManager, NewsCategoryAnalyzer
         )
         
         self.rag_file_handler = RagFileHandler(
@@ -197,11 +200,25 @@ class CryptoTradingBot:
             article_processor=self.article_processor
         )
         
-        self.category_manager = CategoryManager(
+        self.category_fetcher = CategoryFetcher(
+            logger=self.logger,
+            categories_api=self.categories_api
+        )
+        
+        self.category_processor = CategoryProcessor(
+            logger=self.logger,
+            file_handler=self.rag_file_handler
+        )
+        
+        self.ticker_manager = TickerManager(
             logger=self.logger,
             file_handler=self.rag_file_handler,
-            categories_api=self.categories_api,
-            exchange_manager=self.exchange_manager,
+            exchange_manager=self.exchange_manager
+        )
+        
+        self.news_category_analyzer = NewsCategoryAnalyzer(
+            logger=self.logger,
+            category_processor=self.category_processor,
             unified_parser=self.unified_parser
         )
         
@@ -226,7 +243,10 @@ class CryptoTradingBot:
             news_manager=self.news_manager,
             market_data_manager=self.market_data_manager,
             index_manager=self.index_manager,
-            category_manager=self.category_manager,
+            category_fetcher=self.category_fetcher,
+            category_processor=self.category_processor,
+            ticker_manager=self.ticker_manager,
+            news_category_analyzer=self.news_category_analyzer,
             context_builder=self.context_builder
         )
         await self.rag_engine.initialize()
@@ -530,11 +550,7 @@ class CryptoTradingBot:
                 if self.discord_notifier:
                     # Send initial position status
                     try:
-                        # Use the SAME current_price fetched at start of cycle
-                        # NOTE: If order execution takes significant time, we might want a fresh price here,
-                        # but for notification purposes, the price from start of cycle is likely acceptable
-                        # and saves an API call.
-                        # If precise execution price is needed, it should come from the trade execution result.
+
                         if current_price is None:
                              # Fallback if initial fetch failed
                              ticker = await self._fetch_current_ticker()

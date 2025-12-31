@@ -45,7 +45,8 @@ class ContextBuilder:
 
         coin = None
         if symbol:
-            coin = self._extract_base_coin(symbol).upper()
+            coin = self.article_processor.extract_base_coin(symbol).upper()
+
 
         scores: List[Tuple[int, float]] = []
         current_time = datetime.now().timestamp()
@@ -76,7 +77,7 @@ class ContextBuilder:
         importance_score = self._calculate_importance_score(content.categories, important_categories)
         
         # Apply recency weighting
-        pub_time = self._get_article_timestamp(article)
+        pub_time = self.article_processor.get_article_timestamp(article)
         recency = self._calculate_recency_factor(current_time, pub_time)
         
         base_score = keyword_score + category_score + coin_score + importance_score
@@ -163,14 +164,6 @@ class ContextBuilder:
         """Calculate recency weighting factor."""
         time_diff = current_time - pub_time
         return max(0.0, 1.0 - (time_diff / (24 * 3600)))
-
-    def _get_article_timestamp(self, article: Dict[str, Any]) -> float:
-        """Extract timestamp from article in a consistent format."""
-        return self.article_processor.get_article_timestamp(article)
-    
-    def _extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol."""
-        return self.article_processor.extract_base_coin(symbol)
     
     @profile_performance
     def add_articles_to_context(self, indices: List[int], news_database: List[Dict[str, Any]],
@@ -217,7 +210,7 @@ class ContextBuilder:
             article: Article dictionary
             keywords: Optional set of keywords for smart sentence selection
         """
-        published_date = self._format_article_date(article)
+        published_date = self.article_processor.format_article_date(article)
         title = article.get('title', 'No Title')
         source = article.get('source', 'Unknown Source')
 
@@ -327,11 +320,8 @@ class ContextBuilder:
         top_sentences.sort(key=lambda x: x[0])
         
         return [sent for _, _, sent in top_sentences]
-
-    def _format_article_date(self, article: Dict[str, Any]) -> str:
-        """Format article date in a consistent way."""
-        return self.article_processor.format_article_date(article)
     
     def get_latest_article_urls(self) -> Dict[str, str]:
         """Get the latest article URLs from the last context build."""
         return self.latest_article_urls.copy()
+

@@ -31,8 +31,11 @@ class AnalysisContext:
         self._sentiment = None
         self._long_term_data = None
         self._weekly_macro_indicators = None
-        self._market_overview = {}  # Initialize as an empty dictionary
-        self._market_microstructure = {}  # Order book, trades, funding rate data
+        self._market_overview = {}
+        self._market_microstructure = {}
+        self._weekly_ohlcv: Optional[np.ndarray] = None
+        self._available_weeks: int = 0
+        self._meets_200w_threshold: bool = False
         
         # News and articles
         self._news_articles = []
@@ -234,3 +237,35 @@ class AnalysisContext:
         if not isinstance(value, dict):
             raise TypeError("Coin details must be a dictionary")
         self._coin_details = value
+
+    @property
+    def weekly_ohlcv(self) -> Optional[np.ndarray]:
+        """Get weekly OHLCV data for macro analysis"""
+        return self._weekly_ohlcv
+
+    @weekly_ohlcv.setter
+    def weekly_ohlcv(self, value: Optional[np.ndarray]):
+        """Set weekly OHLCV data"""
+        if value is not None and not isinstance(value, np.ndarray):
+            raise TypeError("Weekly OHLCV data must be a numpy array")
+        self._weekly_ohlcv = value
+
+    @property
+    def available_weeks(self) -> int:
+        """Get number of available weeks of data"""
+        return self._available_weeks
+
+    @available_weeks.setter
+    def available_weeks(self, value: int):
+        """Set number of available weeks"""
+        self._available_weeks = int(value) if value is not None else 0
+
+    @property
+    def meets_200w_threshold(self) -> bool:
+        """Get whether data meets 200W SMA threshold"""
+        return self._meets_200w_threshold
+
+    @meets_200w_threshold.setter
+    def meets_200w_threshold(self, value: bool):
+        """Set 200W threshold flag"""
+        self._meets_200w_threshold = bool(value) if value is not None else False
