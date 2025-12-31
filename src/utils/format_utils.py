@@ -6,7 +6,7 @@ This module has NO dependencies on analyzer module to avoid circular imports.
 """
 import numpy as np
 from datetime import datetime
-from typing import Any
+
 
 from src.analyzer.data_processor import DataProcessor
 

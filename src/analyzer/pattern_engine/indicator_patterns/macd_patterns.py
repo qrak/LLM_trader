@@ -17,19 +17,15 @@ from typing import Tuple
 @njit(cache=True)
 def detect_macd_crossover_numba(
     macd_line: np.ndarray,
-    signal_line: np.ndarray,
-    lookback: int = 5
+    signal_line: np.ndarray
 ) -> Tuple[bool, bool, int, float, float]:
     """
     Detect MACD line crossing signal line.
-    
     Scans ENTIRE array for the most recent crossover event.
-    Note: lookback parameter kept for backward compatibility but ignored.
     
     Args:
         macd_line: MACD line values (most recent last)
         signal_line: Signal line values (most recent last)
-        lookback: Deprecated - scans entire array
         
     Returns:
         (crossover_found, is_bullish, periods_ago, macd_value, signal_value)
@@ -71,14 +67,11 @@ def detect_macd_crossover_numba(
 
 @njit(cache=True)
 def detect_macd_zero_cross_numba(
-    macd_line: np.ndarray,
-    lookback: int = 5
+    macd_line: np.ndarray
 ) -> Tuple[bool, bool, int, float]:
     """
     Detect MACD line crossing zero line.
-    
     Scans ENTIRE array for the most recent zero-line crossover.
-    Note: lookback parameter kept for backward compatibility but ignored.
     
     Zero-line cross indicates momentum shift:
     - Crossing above zero = bullish momentum
@@ -86,7 +79,6 @@ def detect_macd_zero_cross_numba(
     
     Args:
         macd_line: MACD line values (most recent last)
-        lookback: Deprecated - scans entire array
         
     Returns:
         (crossover_found, is_bullish, periods_ago, macd_value)

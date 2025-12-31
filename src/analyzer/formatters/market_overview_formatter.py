@@ -2,7 +2,7 @@
 Market Overview Formatter - Formats global market overview data.
 Handles market overview, top coins, and DeFi statistics.
 """
-from typing import Dict, Any, Optional
+from typing import Optional
 from datetime import datetime
 
 from src.logger.logger import Logger
@@ -187,7 +187,7 @@ class MarketOverviewFormatter:
                 try:
                     dt = datetime.fromisoformat(ath_date.replace('Z', '+00:00'))
                     ath_date_str = dt.strftime("%b %d, %Y")
-                except:
+                except (ValueError, TypeError):
                     pass
             
             # Format: Rank #X Symbol (Name): $price (momentum data) | volume | ATH context

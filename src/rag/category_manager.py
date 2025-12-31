@@ -21,16 +21,16 @@ class CategoryManager:
     """
     
     def __init__(self, logger: Logger, file_handler: RagFileHandler, 
-                 cryptocompare_api=None, exchange_manager=None, unified_parser=None):
+                 categories_api=None, exchange_manager=None, unified_parser=None):
         if unified_parser is None:
             raise ValueError("unified_parser is required - must be injected from app.py")
         self.logger = logger
         self.file_handler = file_handler
-        self.cryptocompare_api = cryptocompare_api
+        self.categories_api = categories_api
         self.exchange_manager = exchange_manager
         
         # Initialize specialized components with injected dependencies
-        self.category_fetcher = CategoryFetcher(logger, cryptocompare_api)
+        self.category_fetcher = CategoryFetcher(logger, categories_api)
         self.category_processor = CategoryProcessor(logger, file_handler)
         self.ticker_manager = TickerManager(logger, file_handler, exchange_manager)
         self.news_analyzer = NewsCategoryAnalyzer(logger, self.category_processor, unified_parser=unified_parser)

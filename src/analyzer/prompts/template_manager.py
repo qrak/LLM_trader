@@ -45,7 +45,7 @@ class TemplateManager:
         # Add last analysis time context if available
         if last_analysis_time:
             header_lines.extend([
-                f"TEMPORAL CONTEXT:",
+                "TEMPORAL CONTEXT:",
                 f"Last analysis was performed at: {last_analysis_time}",
                 "",
             ])
@@ -69,7 +69,7 @@ class TemplateManager:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
             header_lines.extend([
                 "",
-                f"CHART ANALYSIS:",
+                "CHART ANALYSIS:",
                 f"A chart image (~{cfg_limit} candlesticks) is provided for OHLCV data and visual pattern recognition.",
                 "Integrate OHLCV chart, patterns with numerical indicators. Only report clear, well-formed patterns.",
                 "Identify swing structure: Higher Highs (HH), Higher Lows (HL), Lower Highs (LH), Lower Lows (LL) to determine trend.",

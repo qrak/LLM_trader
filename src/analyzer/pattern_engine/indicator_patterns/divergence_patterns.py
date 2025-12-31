@@ -108,7 +108,6 @@ def _find_matching_indicator_extrema(
 def detect_bullish_divergence_numba(
     prices: np.ndarray,
     indicator: np.ndarray,
-    lookback: int = 20,
     min_spacing: int = 5
 ) -> Tuple[bool, int, int, float, float, float, float]:
     """
@@ -116,14 +115,11 @@ def detect_bullish_divergence_numba(
     
     Bullish divergence = Price making lower low, indicator making higher low
     This suggests weakening bearish momentum and potential reversal up.
-    
     Scans ENTIRE array for the most recent divergence pattern.
-    Note: lookback parameter kept for backward compatibility but now scans full array.
     
     Args:
         prices: Price values (most recent last)
         indicator: Indicator values (RSI, MACD, Stoch, etc.)
-        lookback: (Ignored - kept for backward compatibility, now scans entire array)
         min_spacing: Minimum periods between the two lows
         
     Returns:
@@ -198,7 +194,6 @@ def detect_bullish_divergence_numba(
 def detect_bearish_divergence_numba(
     prices: np.ndarray,
     indicator: np.ndarray,
-    lookback: int = 20,
     min_spacing: int = 5
 ) -> Tuple[bool, int, int, float, float, float, float]:
     """
@@ -206,14 +201,11 @@ def detect_bearish_divergence_numba(
     
     Bearish divergence = Price making higher high, indicator making lower high
     This suggests weakening bullish momentum and potential reversal down.
-    
     Scans ENTIRE array for the most recent divergence pattern.
-    Note: lookback parameter kept for backward compatibility but now scans full array.
     
     Args:
         prices: Price values (most recent last)
         indicator: Indicator values (RSI, MACD, Stoch, etc.)
-        lookback: (Ignored - kept for backward compatibility, now scans entire array)
         min_spacing: Minimum periods between the two highs
         
     Returns:

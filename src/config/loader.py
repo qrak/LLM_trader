@@ -6,11 +6,8 @@ Loads private keys from keys.env and public configuration from config.ini.
 import configparser
 import logging
 from pathlib import Path
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, Dict
 from dotenv import dotenv_values
-
-if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
 
 # Get the root directory (where keys.env is located) and config directory (where config.ini is located)
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
@@ -53,7 +50,7 @@ class Config:
                     self._env_vars[key] = value
                     
         except Exception as e:
-            raise RuntimeError(f"Error loading environment file {KEYS_ENV_PATH}: {e}")
+            raise RuntimeError(f"Error loading environment file {KEYS_ENV_PATH}: {e}") from e
     
     def _load_ini_config(self):
         """Load configuration from config.ini file."""
@@ -74,7 +71,7 @@ class Config:
                     section_data[key] = self._convert_value(value)
                 self._config_data[section_name] = section_data
         except Exception as e:
-            raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}")
+            raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
     
     @staticmethod
     def _convert_value(value: str) -> Any:
@@ -341,9 +338,6 @@ class Config:
     def RAG_ARTICLE_MAX_TOKENS(self):
         """Maximum number of tokens per article (configurable via [rag] article_max_tokens)."""
         return int(self.get_config('rag', 'article_max_tokens', 200))
-    
-
-    # Exchange Configuration
     @property
     def SUPPORTED_EXCHANGES(self):
         """Returns list of supported exchanges in priority order."""
@@ -388,10 +382,6 @@ class Config:
             return pair.split('/')[1]
         return 'USDC'
 
-    @property
-    def DEMO_QUOTE_CAPITAL(self):
-        """Simulated capital in quote currency for position size calculation."""
-        return float(self.get_config('demo_trading', 'demo_quote_capital', 10000))
 
     def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
         """

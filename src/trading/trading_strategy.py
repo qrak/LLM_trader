@@ -6,7 +6,7 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 from src.logger.logger import Logger
 from .dataclasses import Position, TradeDecision
 from .data_persistence import DataPersistence
-from .position_extractor import PositionExtractor
+
 
 if TYPE_CHECKING:
     from src.parsing.unified_parser import UnifiedParser

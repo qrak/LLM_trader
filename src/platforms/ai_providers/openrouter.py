@@ -1,7 +1,7 @@
 import io
 import base64
 from typing import Optional, Dict, Any, List, TypedDict, cast, Union
-import aiohttp
+
 from PIL import Image
 
 from src.platforms.ai_providers.base import BaseApiClient

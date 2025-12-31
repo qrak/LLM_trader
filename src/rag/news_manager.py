@@ -12,12 +12,15 @@ from .file_handler import RagFileHandler
 class NewsManager:
     """Manages cryptocurrency news articles and related operations."""
     
-    def __init__(self, logger: Logger, file_handler: RagFileHandler, cryptocompare_api=None, article_processor=None):
+    def __init__(self, logger: Logger, file_handler: RagFileHandler, 
+                 news_api=None, categories_api=None, session=None, article_processor=None):
         if article_processor is None:
             raise ValueError("article_processor is required - must be injected from app.py")
         self.logger = logger
         self.file_handler = file_handler
-        self.cryptocompare_api = cryptocompare_api
+        self.news_api = news_api
+        self.categories_api = categories_api
+        self.session = session
         self.article_processor = article_processor
         
         # News database
@@ -36,13 +39,18 @@ class NewsManager:
     
     async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> List[Dict[str, Any]]:
         """Fetch fresh news articles from external API."""
-        if self.cryptocompare_api is None:
-            self.logger.error("CryptoCompare API client not initialized")
+        if self.news_api is None:
+            self.logger.error("News API client not initialized")
             return []
             
         try:
-            # Use the CryptoCompare API client to fetch news
-            articles = await self.cryptocompare_api.get_latest_news(limit=50, max_age_hours=24)
+            # Use the news API directly
+            articles = await self.news_api.get_latest_news(
+                limit=50, 
+                max_age_hours=24, 
+                session=self.session,
+                api_categories=self.categories_api.get_api_categories() if self.categories_api else None
+            )
             
             if articles:
                 # Detect coins in articles using centralized method
@@ -101,9 +109,6 @@ class NewsManager:
             self.logger.debug("No new articles to add or only duplicates found")
             return False
     
-    def detect_coins_in_article(self, article: Dict[str, Any], known_crypto_tickers: Set[str]) -> Set[str]:
-        """Detect cryptocurrency mentions in article content - delegates to ArticleProcessor."""
-        return self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
     
     def format_article_date(self, article: Dict[str, Any]) -> str:
         """Format article date in a consistent way."""

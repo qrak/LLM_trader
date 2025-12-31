@@ -1,12 +1,15 @@
 import asyncio
 import time
+import os
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from src.logger.logger import Logger
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.coingecko import CoinGeckoAPI
-from src.platforms.cryptocompare import CryptoCompareAPI
+from src.platforms.cryptocompare.news_api import CryptoCompareNewsAPI
+from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
+from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
@@ -33,12 +36,16 @@ from src.analyzer.formatters import (
 class CryptoTradingBot:
     """Automated crypto trading bot - TRADING MODE ONLY."""
     
-    def __init__(self, logger: Logger, config):
+    def __init__(self, logger: Logger, config, shutdown_manager: Optional[Any] = None):
         self.logger = logger
         self.config = config
+        self.shutdown_manager = shutdown_manager
         self.market_analyzer = None
         self.coingecko_api = None
-        self.cryptocompare_api = None
+        self.news_api = None
+        self.market_api = None
+        self.categories_api = None
+        self.cryptocompare_session = None
         self.alternative_me_api = None
         self.rag_engine = None
         self.exchange_manager = None
@@ -68,53 +75,88 @@ class CryptoTradingBot:
         self._position_status_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
+        """Initialize all components."""
         start_time = time.perf_counter()
+        
+        if self.shutdown_manager:
+            self.shutdown_manager.register_shutdown_callback(self.shutdown)
+
+        # Initialize data directory
+        data_dir = self.config.DATA_DIR
+        os.makedirs(data_dir, exist_ok=True)
+        # Ensure subdirectories exist
+        os.makedirs(os.path.join(data_dir, "news_cache"), exist_ok=True)
+        os.makedirs(os.path.join(data_dir, "trading"), exist_ok=True)
+        os.makedirs(os.path.join(data_dir, "charts"), exist_ok=True)
+
         self.logger.info("Initializing Crypto Trading Bot...")
-
-        # Initialize TokenCounter early
-        self.token_counter = TokenCounter()
-        self.logger.debug("TokenCounter initialized")
-
-        # Initialize SentenceSplitter
-        self.sentence_splitter = SentenceSplitter(self.logger)
-
-        # Initialize DataProcessor and FormatUtils
-        self.data_processor = DataProcessor()
-        self.format_utils = FormatUtils(self.data_processor)
-        self.logger.debug("DataProcessor and FormatUtils initialized")
-
-        # UnifiedParser - single instance shared across all components
-        self.unified_parser = UnifiedParser(self.logger)
-        self.logger.debug("UnifiedParser initialized")
         
-        # TechnicalIndicatorsFactory - creates fresh TI instances for each calculation
-        self.ti_factory = TechnicalIndicatorsFactory()
-        self.logger.debug("TechnicalIndicatorsFactory initialized")
-        
-        # ArticleProcessor - shared instance for article processing
-        self.article_processor = ArticleProcessor(
-            logger=self.logger,
-            format_utils=self.format_utils,
-            sentence_splitter=self.sentence_splitter,
-            unified_parser=self.unified_parser
-        )
-        self.logger.debug("ArticleProcessor initialized")
-
-        self.exchange_manager = ExchangeManager(self.logger, self.config)
+        # Create and initialize components using DI pattern
+        # Initialize ExchangeManager first
+        self.exchange_manager = ExchangeManager(logger=self.logger, config=self.config)
         await self.exchange_manager.initialize()
         self.logger.debug("ExchangeManager initialized")
-
-        # Initialize API clients
+        
+        # Initialize token counter and splitters
+        # Initialize token counter and splitters
+        self.token_counter = TokenCounter()
+        
+        # Initialize DataProcessor first (dependency for FormatUtils)
+        self.data_processor = DataProcessor()
+        
+        # Initialize FormatUtils with DataProcessor dependency
+        self.format_utils = FormatUtils(data_processor=self.data_processor)
+        
+        # Initialize SentenceSplitter with logger
+        self.sentence_splitter = SentenceSplitter(logger=self.logger)
+        
+        # Initialize technical indicators factory
+        self.ti_factory = TechnicalIndicatorsFactory()
+        
+        # Initialize UnifiedParser
+        from src.parsing.unified_parser import UnifiedParser
+        self.unified_parser = UnifiedParser(self.logger)
+        
+        # Initialize ArticleProcessor with unified_parser dependency
+        self.article_processor = ArticleProcessor(
+            logger=self.logger, 
+            unified_parser=self.unified_parser,
+            format_utils=self.format_utils,
+            sentence_splitter=self.sentence_splitter
+        )
+        
+        # Initialize API Clients
+        # CoinGecko API
         self.coingecko_api = CoinGeckoAPI(
             logger=self.logger, 
-            api_key=self.config.COINGECKO_API_KEY
+            api_key=self.config.COINGECKO_API_KEY, 
+            cache_dir='cache'
         )
         await self.coingecko_api.initialize()
         self.logger.debug("CoinGeckoAPI initialized")
         
-        self.cryptocompare_api = CryptoCompareAPI(logger=self.logger, config=self.config)
-        await self.cryptocompare_api.initialize()
-        self.logger.debug("CryptoCompareAPI initialized")
+        # Initialize CryptoCompare components directly
+        import aiohttp
+        self.cryptocompare_session = aiohttp.ClientSession()
+        
+        self.news_api = CryptoCompareNewsAPI(
+            logger=self.logger, 
+            config=self.config, 
+            cache_dir='data/news_cache', 
+            update_interval_hours=self.config.RAG_UPDATE_INTERVAL_HOURS
+        )
+        await self.news_api.initialize()
+        
+        self.categories_api = CryptoCompareCategoriesAPI(
+            logger=self.logger, 
+            config=self.config, 
+            data_dir='data',
+            categories_update_interval_hours=self.config.RAG_CATEGORIES_UPDATE_INTERVAL_HOURS
+        )
+        await self.categories_api.initialize()
+        
+        self.market_api = CryptoCompareMarketAPI(logger=self.logger, config=self.config)
+        self.logger.debug("CryptoCompare components initialized")
         
         self.alternative_me_api = AlternativeMeAPI(logger=self.logger)
         await self.alternative_me_api.initialize()
@@ -135,7 +177,9 @@ class CryptoTradingBot:
         self.news_manager = NewsManager(
             logger=self.logger,
             file_handler=self.rag_file_handler,
-            cryptocompare_api=self.cryptocompare_api,
+            news_api=self.news_api,
+            categories_api=self.categories_api,
+            session=self.cryptocompare_session,
             article_processor=self.article_processor
         )
         
@@ -143,7 +187,7 @@ class CryptoTradingBot:
             logger=self.logger,
             file_handler=self.rag_file_handler,
             coingecko_api=self.coingecko_api,
-            cryptocompare_api=self.cryptocompare_api,
+            market_api=self.market_api,
             exchange_manager=self.exchange_manager,
             unified_parser=self.unified_parser
         )
@@ -156,7 +200,7 @@ class CryptoTradingBot:
         self.category_manager = CategoryManager(
             logger=self.logger,
             file_handler=self.rag_file_handler,
-            cryptocompare_api=self.cryptocompare_api,
+            categories_api=self.categories_api,
             exchange_manager=self.exchange_manager,
             unified_parser=self.unified_parser
         )
@@ -177,7 +221,6 @@ class CryptoTradingBot:
             token_counter=self.token_counter,
             config=self.config,
             coingecko_api=self.coingecko_api,
-            cryptocompare_api=self.cryptocompare_api,
             exchange_manager=self.exchange_manager,
             file_handler=self.rag_file_handler,
             news_manager=self.news_manager,
@@ -203,7 +246,7 @@ class CryptoTradingBot:
         from src.analyzer import (
             TechnicalCalculator, PatternAnalyzer, MarketDataCollector,
             MarketMetricsCalculator, AnalysisResultProcessor,
-            TechnicalFormatter, DataFetcher
+            TechnicalFormatter
         )
         from src.analyzer.prompts import PromptBuilder
         from src.analyzer.pattern_engine import ChartGenerator
@@ -269,7 +312,7 @@ class CryptoTradingBot:
             coingecko_api=self.coingecko_api,
             model_manager=self.model_manager,
             alternative_me_api=self.alternative_me_api,
-            cryptocompare_api=self.cryptocompare_api,
+            market_api=self.market_api,
             config=self.config,
             technical_calculator=self.technical_calculator,
             pattern_analyzer=self.pattern_analyzer,
@@ -697,7 +740,9 @@ class CryptoTradingBot:
                 # Send position status update
                 if self.discord_notifier:
                     try:
-                        current_price = await self._fetch_current_price()
+                        ticker = await self._fetch_current_ticker()
+                        current_price = float(ticker.get('last', ticker.get('close', 0))) if ticker else 0.0
+                        
                         await self.discord_notifier.send_position_status(
                             position=self.trading_strategy.current_position,
                             current_price=current_price,
@@ -717,10 +762,13 @@ class CryptoTradingBot:
     async def _request_shutdown(self):
         """Request application shutdown via keyboard."""
         self.logger.info("Shutdown requested via keyboard command")
-        self.running = False
-        for task in self.tasks:
-            if not task.done():
-                task.cancel()
+        if self.shutdown_manager:
+            await self.shutdown_manager.shutdown_gracefully()
+        else:
+            self.running = False
+            for task in self.tasks:
+                if not task.done():
+                    task.cancel()
     
     async def shutdown(self):
         self.logger.info("Shutting down gracefully...")
@@ -729,150 +777,8 @@ class CryptoTradingBot:
         # Give a moment for loops to see running=False
         await asyncio.sleep(0.1)
 
-        # Cancel and wait for active tasks
-        await self._shutdown_active_tasks()
+        if self.shutdown_manager:
+            await self.shutdown_manager.cleanup_bot_resources(self)
         
-        # Close keyboard handler
-        await self._shutdown_keyboard_handler()
-        
-        # Close Discord notifier
-        await self._shutdown_discord_notifier()
-        
-        # Close components in reverse initialization order
-        await self._shutdown_market_analyzer()
-        await self._shutdown_rag_engine()
-        await self._shutdown_api_clients()
-        await self._shutdown_exchange_manager()
-        
-        self._cleanup_references()
         self.logger.info("Shutdown complete")
-
-    async def _shutdown_active_tasks(self):
-        """Cancel and wait for active tasks to complete."""
-        pending_tasks = list(self._active_tasks)
-        if not pending_tasks:
-            return
-            
-        self.logger.info(f"Cancelling {len(pending_tasks)} active tasks...")
-        for task in pending_tasks:
-            if not task.done():
-                task.cancel()
-
-        try:
-            await asyncio.wait(pending_tasks, timeout=3.0)
-        except asyncio.TimeoutError:
-            self.logger.warning("Some tasks didn't complete in time")
-
-    async def _shutdown_market_analyzer(self):
-        """Close market analyzer and model manager safely."""
-        if hasattr(self, 'model_manager') and self.model_manager:
-            try:
-                self.logger.info("Closing ModelManager...")
-                await asyncio.wait_for(self.model_manager.close(), timeout=3.0)
-                self.model_manager = None
-            except asyncio.TimeoutError:
-                self.logger.warning("ModelManager shutdown timed out")
-            except Exception as e:
-                self.logger.warning(f"Error closing ModelManager: {e}")
         
-        if not self.market_analyzer:
-            return
-            
-        try:
-            self.logger.info("Closing market analyzer...")
-            await asyncio.wait_for(self.market_analyzer.close(), timeout=3.0)
-            self.market_analyzer = None
-        except asyncio.TimeoutError:
-            self.logger.warning("Market analyzer shutdown timed out")
-        except Exception as e:
-            self.logger.warning(f"Error closing market analyzer: {e}")
-
-    async def _shutdown_rag_engine(self):
-        """Close RAG engine safely."""
-        if not hasattr(self, 'rag_engine') or not self.rag_engine:
-            return
-            
-        try:
-            self.logger.info("Closing RAG engine...")
-            await asyncio.wait_for(self.rag_engine.close(), timeout=3.0)
-            self.rag_engine = None
-        except asyncio.TimeoutError:
-            self.logger.warning("RAG engine shutdown timed out")
-        except Exception as e:
-            self.logger.warning(f"Error closing RAG engine: {e}")
-
-    async def _shutdown_api_clients(self):
-        """Close all API clients safely."""
-        api_clients = [
-            ("AlternativeMeAPI", self.alternative_me_api),
-            ("CryptoCompareAPI", self.cryptocompare_api),
-            ("CoinGeckoAPI", self.coingecko_api)
-        ]
-
-        for client_name, client in api_clients:
-            await self._shutdown_single_api_client(client_name, client)
-
-    async def _shutdown_single_api_client(self, client_name: str, client):
-        """Close a single API client safely."""
-        if not client or not hasattr(client, 'close'):
-            return
-            
-        try:
-            self.logger.info(f"Closing {client_name}...")
-            await asyncio.wait_for(client.close(), timeout=3.0)
-        except asyncio.TimeoutError:
-            self.logger.warning(f"{client_name} shutdown timed out")
-        except Exception as e:
-            self.logger.warning(f"Error closing {client_name}: {e}")
-
-    async def _shutdown_exchange_manager(self):
-        """Close symbol manager safely."""
-        if not self.exchange_manager:
-            return
-            
-        try:
-            self.logger.info("Closing ExchangeManager...")
-            await asyncio.wait_for(self.exchange_manager.shutdown(), timeout=3.0)
-            self.exchange_manager = None
-        except asyncio.TimeoutError:
-            self.logger.warning("ExchangeManager shutdown timed out")
-        except Exception as e:
-            self.logger.warning(f"Error closing ExchangeManager: {e}")
-    
-    async def _shutdown_discord_notifier(self):
-        """Close Discord notifier safely."""
-        if self._discord_task and not self._discord_task.done():
-            self._discord_task.cancel()
-            try:
-                await asyncio.wait_for(self._discord_task, timeout=1.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
-        
-        if self.discord_notifier:
-            try:
-                self.logger.info("Closing Discord notifier...")
-                async with self.discord_notifier:
-                    pass  # __aexit__ handles cleanup
-                self.discord_notifier = None
-            except Exception as e:
-                self.logger.warning(f"Error closing Discord notifier: {e}")
-
-    async def _shutdown_keyboard_handler(self):
-        """Close keyboard handler safely."""
-        if not self.keyboard_handler:
-            return
-        
-        try:
-            self.logger.info("Closing keyboard handler...")
-            await self.keyboard_handler.stop_listening()
-            self.keyboard_handler = None
-        except Exception as e:
-            self.logger.warning(f"Error closing keyboard handler: {e}")
-    
-    def _cleanup_references(self):
-        """Set all component references to None to help garbage collection."""
-        self.alternative_me_api = None
-        self.cryptocompare_api = None
-        self.coingecko_api = None
-        self.discord_notifier = None
-        self.keyboard_handler = None

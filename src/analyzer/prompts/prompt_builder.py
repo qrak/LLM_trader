@@ -58,13 +58,9 @@ class PromptBuilder:
         
         # Initialize component managers
         self.template_manager = TemplateManager(config=self.config, logger=logger)
-        
-        # Use injected formatters (fallback to creating new instances if not provided for backward compatibility)
-        self.overview_formatter = overview_formatter or MarketOverviewFormatter(logger, format_utils)
-        self.long_term_formatter = long_term_formatter or LongTermFormatter(logger, format_utils)
-        self.technical_analysis_formatter = technical_formatter or TechnicalFormatter(self.technical_calculator, logger, format_utils)
-        market_fmt = market_formatter or MarketFormatter(logger, format_utils)
-        period_fmt = period_formatter or MarketPeriodFormatter(logger, format_utils)
+        self.overview_formatter = overview_formatter
+        self.long_term_formatter = long_term_formatter
+        self.technical_analysis_formatter = technical_formatter
         
         # Create ContextBuilder with injected formatters
         self.context_builder = ContextBuilder(
@@ -72,13 +68,11 @@ class PromptBuilder:
             logger,
             format_utils,
             data_processor,
-            market_formatter=market_fmt,
-            period_formatter=period_fmt,
+            market_formatter=market_formatter,
+            period_formatter=period_formatter,
             long_term_formatter=self.long_term_formatter
         )
-        
-        # Keep market_formatter reference for ticker/orderbook/trades/funding methods
-        self.market_formatter = market_fmt
+        self.market_formatter = market_formatter
 
     def build_prompt(
         self, 

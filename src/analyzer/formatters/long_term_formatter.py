@@ -2,7 +2,7 @@
 Long-Term Formatter - Formats long-term analysis and macro trends.
 Handles daily/weekly indicators, SMAs, and macro trend analysis.
 """
-from typing import Dict, Optional
+from typing import Optional
 
 from src.logger.logger import Logger
 

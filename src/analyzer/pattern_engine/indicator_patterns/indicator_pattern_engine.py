@@ -250,7 +250,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append({
                     'type': 'rsi_w_bottom',
-                    'description': f'RSI W-Bottom detected (bullish reversal confirmation)',
+                    'description': 'RSI W-Bottom detected (bullish reversal confirmation)',
                     'index': len(rsi) - 1,
                     'details': {
                         'first_rsi': float(first_rsi),
@@ -268,7 +268,7 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append({
                     'type': 'rsi_m_top',
-                    'description': f'RSI M-Top detected (bearish reversal confirmation)',
+                    'description': 'RSI M-Top detected (bearish reversal confirmation)',
                     'index': len(rsi) - 1,
                     'details': {
                         'first_rsi': float(first_rsi),

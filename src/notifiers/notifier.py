@@ -3,7 +3,7 @@ Discord Notifier - Send-only notification service with message expiration.
 Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
-from datetime import datetime
+
 from typing import Optional, TYPE_CHECKING, List, Dict, Any
 
 import discord

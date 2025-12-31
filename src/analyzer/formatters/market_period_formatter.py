@@ -2,7 +2,7 @@
 Market Period Formatter - Formats period-based market metrics.
 Handles 1h, 4h, 24h, 7d, 30d period metrics and indicator changes.
 """
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from src.logger.logger import Logger
 
