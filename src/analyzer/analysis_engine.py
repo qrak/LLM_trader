@@ -207,7 +207,8 @@ class AnalysisEngine:
         performance_context: Optional[str] = None,
         brain_context: Optional[str] = None,
         last_analysis_time: Optional[str] = None,
-        current_ticker: Optional[Dict[str, Any]] = None
+        current_ticker: Optional[Dict[str, Any]] = None,
+        dynamic_thresholds: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
@@ -223,6 +224,7 @@ class AnalysisEngine:
             brain_context: Distilled trading insights from closed trades (goes to system prompt)
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             current_ticker: Optional dict containing current ticker data to avoid redundant API calls
+            dynamic_thresholds: Optional dict containing brain-learned thresholds for response template
             
         Returns:
             Dictionary containing analysis results
@@ -239,7 +241,7 @@ class AnalysisEngine:
             await self._perform_technical_analysis()
             
             # Step 4: Generate AI analysis
-            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, previous_indicators, position_context, performance_context, brain_context, last_analysis_time)
+            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, previous_indicators, position_context, performance_context, brain_context, last_analysis_time, dynamic_thresholds)
             
             # Store the result for later publication
             self.last_analysis_result = analysis_result
@@ -345,7 +347,8 @@ class AnalysisEngine:
         position_context: Optional[str] = None,
         performance_context: Optional[str] = None,
         brain_context: Optional[str] = None,
-        last_analysis_time: Optional[str] = None
+        last_analysis_time: Optional[str] = None,
+        dynamic_thresholds: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         
@@ -360,8 +363,7 @@ class AnalysisEngine:
                 self.logger.warning("Chart generation failed, proceeding without chart analysis")
         
         system_prompt = self.prompt_builder.build_system_prompt(
-            self.symbol, 
-            has_chart_analysis, 
+            self.symbol,
             previous_response,
             position_context,
             performance_context,
@@ -372,7 +374,8 @@ class AnalysisEngine:
             context=self.context,
             has_chart_analysis=has_chart_analysis,
             additional_context=additional_context,
-            previous_indicators=previous_indicators
+            previous_indicators=previous_indicators,
+            dynamic_thresholds=dynamic_thresholds
         )
         # Process analysis
         if self.config.TEST_ENVIRONMENT:

@@ -42,6 +42,13 @@ from src.contracts.manager import ModelManager
 from src.parsing.unified_parser import UnifiedParser
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
+from src.analyzer.formatters import (
+    MarketOverviewFormatter,
+    LongTermFormatter,
+    MarketFormatter,
+    MarketPeriodFormatter,
+    TechnicalFormatter
+)
 
 
 # ============================================================================
@@ -302,13 +309,25 @@ async def main():
     ti_factory = TechnicalIndicatorsFactory()
     technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils, ti_factory=ti_factory)
 
+    # Initialize formatters for dependency injection
+    overview_formatter = MarketOverviewFormatter(logger, format_utils)
+    long_term_formatter = LongTermFormatter(logger, format_utils)
+    market_formatter = MarketFormatter(logger, format_utils)
+    period_formatter = MarketPeriodFormatter(logger, format_utils)
+    technical_formatter = TechnicalFormatter(technical_calculator, logger, format_utils)
+
     pb = PromptBuilder(
         timeframe=config.TIMEFRAME, 
         logger=logger, 
         technical_calculator=technical_calculator,
         format_utils=format_utils, 
         config=config, 
-        data_processor=data_processor
+        data_processor=data_processor,
+        overview_formatter=overview_formatter,
+        long_term_formatter=long_term_formatter,
+        market_formatter=market_formatter,
+        period_formatter=period_formatter,
+        technical_formatter=technical_formatter
     )
 
     # Build synthetic OHLCV using cached coingecko base price

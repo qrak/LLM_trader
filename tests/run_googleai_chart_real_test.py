@@ -52,19 +52,44 @@ from src.platforms.exchange_manager import ExchangeManager
 
 
 def create_chart_analysis_prompt(pair: str, timeframe: str, current_price: float) -> str:
-    """Create a simplified chart-focused prompt for testing AI interpretation."""
-    return f"""Analyze this candlestick chart for {pair} on the {timeframe} timeframe.
+    """Create a comprehensive chart analysis prompt to test AI interpretation of all indicators."""
+    return f"""Analyze this multi-panel candlestick chart for {pair} on the {timeframe} timeframe.
+Current price: ${current_price:.2f}
 
-The current price is approximately ${current_price:.2f}.
+The chart has 4 panels. Please extract and describe what you see in EACH panel:
 
-Please describe what you see in the chart:
-1. What is the overall trend (bullish, bearish, or sideways)?
-2. Identify any notable price levels (support/resistance) visible on the chart
-3. What was the approximate price at the beginning vs end of the chart?
-4. Are there any notable candlestick patterns visible?
-5. Based ONLY on what you see in this chart, what might be the short-term outlook?
+**PANEL 1 - PRICE CHART (Top, largest panel):**
+1. Overall trend direction (bullish/bearish/sideways) based on candlestick sequence
+2. SMA 50 (orange line) position relative to price - is price above or below?
+3. SMA 200 (purple line) position relative to price and SMA 50
+4. Is there a Golden Cross (SMA50 above SMA200) or Death Cross (SMA50 below SMA200)?
+5. Key price levels visible: MIN annotation value, MAX annotation value
+6. Any notable candlestick patterns (doji, hammer, engulfing, etc.)
+7. Support/resistance levels where price has reacted multiple times
 
-Keep your response concise and focused on what is visually observable in the chart."""
+**PANEL 2 - RSI (Second panel, yellow line):**
+1. Current RSI value (read from the annotation or estimate from line position)
+2. Is RSI in overbought zone (>70), oversold zone (<30), or neutral?
+3. Any divergence between RSI and price? (price making new highs while RSI making lower highs = bearish divergence)
+
+**PANEL 3 - VOLUME (Third panel, green/red bars):**
+1. Recent volume trend (increasing/decreasing)
+2. Are volume spikes aligned with price movements?
+3. Volume bar colors: green = bullish candle, red = bearish candle
+
+**PANEL 4 - CMF & OBV (Bottom panel):**
+1. CMF value (cyan area chart, left y-axis): positive = buying pressure, negative = selling pressure
+2. Is CMF above or below the zero line?
+3. OBV trend (magenta line, right y-axis): rising = accumulation, falling = distribution
+4. Do CMF and OBV confirm or contradict the price trend?
+
+**SYNTHESIS:**
+Based on ALL indicators visible in the chart:
+- What is the overall market bias? (Bullish/Bearish/Neutral)
+- Are indicators aligned (confirming) or divergent (conflicting)?
+- What would be a reasonable short-term outlook?
+
+Be specific with numbers you can read from the chart (prices, RSI value, etc.)."""
 
 
 async def main():
@@ -144,8 +169,33 @@ async def main():
     context.current_price = float(ohlcv[-1, 4])
     context.market_overview = {'coin_data': {pair.split('/')[0]: {'price': context.current_price}}}
 
-    # Generate chart image with real data
-    print(f"\nGenerating chart image...")
+    # Calculate technical indicators for chart visualization
+    print(f"\nCalculating technical indicators...")
+    indicators = technical_calculator.get_indicators(ohlcv)
+    print(f"Indicators calculated: {len(indicators)} total")
+    
+    # Print key indicator values for comparison with AI response
+    print("\n--- GROUND TRUTH VALUES (for comparison) ---")
+    if 'rsi' in indicators and len(indicators['rsi']) > 0:
+        rsi_val = indicators['rsi'][-1]
+        print(f"RSI (14): {rsi_val:.1f}")
+    if 'sma_50' in indicators and len(indicators['sma_50']) > 0:
+        sma50_val = indicators['sma_50'][-1]
+        print(f"SMA 50: {sma50_val:.2f}")
+    if 'sma_200' in indicators and len(indicators['sma_200']) > 0:
+        sma200_val = indicators['sma_200'][-1]
+        print(f"SMA 200: {sma200_val:.2f}")
+    if 'cmf' in indicators and len(indicators['cmf']) > 0:
+        cmf_val = indicators['cmf'][-1]
+        print(f"CMF (20): {cmf_val:.3f} ({'Buying Pressure' if cmf_val > 0 else 'Selling Pressure'})")
+    print(f"Current Price: {context.current_price:.2f}")
+    print(f"Price vs SMA50: {'Above' if context.current_price > sma50_val else 'Below'}")
+    print(f"Price vs SMA200: {'Above' if context.current_price > sma200_val else 'Below'}")
+    print(f"SMA50 vs SMA200: {'Golden Cross (Bullish)' if sma50_val > sma200_val else 'Death Cross (Bearish)'}")
+    print("-------------------------------------------\n")
+
+    # Generate chart image with real data and indicators
+    print(f"Generating chart image with indicators...")
     chart_generator = ChartGenerator(
         logger=logger, 
         config=config, 
@@ -155,6 +205,7 @@ async def main():
     
     chart_result = chart_generator.create_chart_image(
         ohlcv=ohlcv,
+        technical_history=indicators,  # Pass indicators for visualization
         pair_symbol=pair,
         timeframe=timeframe,
         save_to_disk=True  # Save to chart_images/ directory

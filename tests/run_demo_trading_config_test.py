@@ -52,7 +52,7 @@ def test_config_values(demo_capital, fee_percent):
     assert fee_percent >= 0, "Fee percent must be non-negative"
     assert fee_percent <= 0.01, "Fee percent seems too high (>1%)"
 
-    print("\n✓ Config values loaded correctly")
+    print("\n[OK] Config values loaded correctly")
 
 
 def test_position_size_calculation(demo_capital, current_price):
@@ -85,7 +85,7 @@ def test_position_size_calculation(demo_capital, current_price):
         assert abs(allocation - demo_capital * size_pct) < 0.01, f"Allocation mismatch for {label}"
         assert abs(quantity - allocation / current_price) < 0.00000001, f"Quantity mismatch for {label}"
 
-    print("\n✓ Position size calculations correct")
+    print("\n[OK] Position size calculations correct")
 
 
 def test_fee_calculation(demo_capital, fee_percent, current_price):
@@ -125,7 +125,7 @@ def test_fee_calculation(demo_capital, fee_percent, current_price):
     assert exit_fee > 0, "Exit fee should be positive"
     assert net_pnl < gross_pnl, "Net P&L should be less than gross P&L"
 
-    print("\n✓ Fee calculations correct")
+    print("\n[OK] Fee calculations correct")
 
 
 def test_pnl_scenarios(demo_capital, fee_percent, current_price):
@@ -171,7 +171,7 @@ def test_pnl_scenarios(demo_capital, fee_percent, current_price):
             f"${net_pnl:>+10.2f}"
         )
 
-    print("\n✓ P&L scenarios calculated correctly")
+    print("\n[OK] P&L scenarios calculated correctly")
 
 
 def test_edge_cases(demo_capital, fee_percent, current_price):
@@ -211,7 +211,7 @@ def test_edge_cases(demo_capital, fee_percent, current_price):
     quantity = allocation / high_price
     print(f"   Allocation: ${allocation:.2f}, Quantity: {quantity:.8f} tokens")
 
-    print("\n✓ Edge cases handled correctly")
+    print("\n[OK] Edge cases handled correctly")
 
 
 def main():
@@ -231,7 +231,7 @@ def main():
     test_edge_cases(capital, fee, price)
 
     print("\n" + "=" * 60)
-    print("ALL TESTS PASSED ✓")
+    print("ALL TESTS PASSED [OK]")
     print("=" * 60 + "\n")
 
 

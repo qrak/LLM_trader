@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 from src.logger.logger import Logger
 from ..analysis_context import AnalysisContext
@@ -79,7 +79,8 @@ class PromptBuilder:
         context: AnalysisContext, 
         has_chart_analysis: bool = False,
         additional_context: Optional[str] = None,
-        previous_indicators: Optional[dict] = None
+        previous_indicators: Optional[dict] = None,
+        dynamic_thresholds: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build the complete prompt using component managers.
         
@@ -88,6 +89,7 @@ class PromptBuilder:
             has_chart_analysis: Whether chart image analysis is available
             additional_context: Additional context to append (e.g., position info, memory)
             previous_indicators: Previous technical indicator values for comparison
+            dynamic_thresholds: Brain-learned thresholds for response template
             
         Returns:
             str: Complete formatted prompt
@@ -202,18 +204,17 @@ class PromptBuilder:
         sections.append(self.template_manager.build_analysis_steps(context.symbol, advanced_support_resistance_detected, has_chart_analysis, available_periods))
 
         # Response template should always be last
-        sections.append(self.template_manager.build_response_template(has_chart_analysis))
+        sections.append(self.template_manager.build_response_template(has_chart_analysis, dynamic_thresholds=dynamic_thresholds))
 
         final_prompt = "\n\n".join(filter(None, sections))
 
         return final_prompt
     
-    def build_system_prompt(self, symbol: str, has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build system prompt using template manager.
         
         Args:
             symbol: Trading symbol
-            has_chart_image: Whether a chart image is being provided
             previous_response: Optional previous AI response for continuity
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
@@ -223,7 +224,7 @@ class PromptBuilder:
         Returns:
             str: Formatted system prompt
         """
-        return self.template_manager.build_system_prompt(symbol, self.timeframe, has_chart_image, previous_response, position_context, performance_context, brain_context, last_analysis_time)
+        return self.template_manager.build_system_prompt(symbol, self.timeframe, previous_response, position_context, performance_context, brain_context, last_analysis_time)
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.
