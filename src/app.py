@@ -507,22 +507,25 @@ class CryptoTradingBot:
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
         brain_context = self.data_persistence.get_brain_context()
-        
+
         # Load previous response for AI continuity
         previous_data = self.data_persistence.load_previous_response()
         previous_response = None
         previous_indicators = None
-        
+
         if previous_data:
             previous_response = previous_data.get("response")
             previous_indicators = previous_data.get("technical_indicators")
-        
+
         # Get last analysis time for temporal context
         last_analysis_time_obj = self.data_persistence.get_last_analysis_time()
         last_analysis_time_str = None
         if last_analysis_time_obj:
             last_analysis_time_str = last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
-        
+
+        # Get dynamic thresholds for prompt template
+        dynamic_thresholds = self.data_persistence.get_dynamic_thresholds()
+
         result = await self.market_analyzer.analyze_market(
             previous_response=previous_response,
             previous_indicators=previous_indicators,
@@ -530,7 +533,8 @@ class CryptoTradingBot:
             performance_context=memory_context,
             brain_context=brain_context,
             last_analysis_time=last_analysis_time_str,
-            current_ticker=current_ticker
+            current_ticker=current_ticker,
+            dynamic_thresholds=dynamic_thresholds
         )
         
         if "error" in result:

@@ -61,6 +61,14 @@ class DataPersistence:
                 "symbol": position.symbol,
                 # Store confluence_factors as list of [name, score] pairs
                 "confluence_factors": [[name, score] for name, score in position.confluence_factors],
+                "entry_fee": position.entry_fee,
+                "size_pct": position.size_pct,
+                # Market conditions for Brain learning
+                "atr_at_entry": position.atr_at_entry,
+                "volatility_level": position.volatility_level,
+                "sl_distance_pct": position.sl_distance_pct,
+                "tp_distance_pct": position.tp_distance_pct,
+                "rr_ratio_at_entry": position.rr_ratio_at_entry,
             }
             
             # Sanitize data before saving
@@ -94,6 +102,12 @@ class DataPersistence:
                     symbol=data.get("symbol", "BTC/USDC"),
                     confluence_factors=cf_tuple,
                     entry_fee=data.get("entry_fee", 0.0),
+                    size_pct=data.get("size_pct", 0.0),
+                    atr_at_entry=data.get("atr_at_entry", 0.0),
+                    volatility_level=data.get("volatility_level", "MEDIUM"),
+                    sl_distance_pct=data.get("sl_distance_pct", 0.0),
+                    tp_distance_pct=data.get("tp_distance_pct", 0.0),
+                    rr_ratio_at_entry=data.get("rr_ratio_at_entry", 0.0),
                 )
         except Exception as e:
             self.logger.error(f"Error loading position: {e}")
@@ -404,7 +418,12 @@ class DataPersistence:
         except Exception as e:
             self.logger.error(f"Error saving trading brain: {e}")
     
-    def get_brain_context(self) -> str:
+    def get_brain_context(
+        self,
+        volatility_level: str = "MEDIUM",
+        confidence: str = "MEDIUM",
+        current_atr_pct: float = 2.0
+    ) -> str:
         """Generate formatted brain context for prompt injection.
         
         Features:
@@ -495,14 +514,72 @@ class DataPersistence:
                 for insight, _ in provisional_insights[:2]:
                     lines.append(f"  - {insight.lesson} ({insight.trade_count} trades)")
         
+        # Append parameter recommendations if we have enough data
+        if self.brain.total_closed_trades >= self.brain.min_sample_size:
+            recs = self.brain.suggest_parameters(volatility_level, confidence, current_atr_pct)
+            if recs["source"] != "atr_fallback":
+                lines.extend([
+                    "",
+                    "DYNAMIC PARAMETER RECOMMENDATIONS:",
+                    f"- Suggested SL: {recs['sl_pct']*100:.2f}% | TP: {recs['tp_pct']*100:.2f}%",
+                    f"- Suggested position size: {recs['size_pct']*100:.1f}%",
+                    f"- Minimum R/R ratio: {recs['min_rr']:.1f}:1",
+                ])
         lines.extend([
             "",
             "APPLY THESE INSIGHTS: Prioritize factors with proven high win rates. Weight recent insights higher.",
             "=" * 60,
         ])
-        
         return "\n".join(lines)
-    
+
+    def get_parameter_suggestions(
+        self,
+        volatility_level: str = "MEDIUM",
+        confidence: str = "MEDIUM",
+        current_atr_pct: float = 2.0
+    ) -> Dict[str, float]:
+        """Get SL/TP/size suggestions from trading brain.
+
+        Wrapper for TradingBrain.suggest_parameters().
+
+        Args:
+            volatility_level: Current market volatility (HIGH/MEDIUM/LOW)
+            confidence: Current signal confidence level
+            current_atr_pct: Current ATR as percentage of price
+
+        Returns:
+            Dict with sl_pct, tp_pct, size_pct, min_rr, and source
+        """
+        return self.brain.suggest_parameters(
+            volatility_level=volatility_level,
+            confidence=confidence,
+            current_atr_pct=current_atr_pct
+        )
+
+    def get_dynamic_thresholds(self) -> Dict[str, Any]:
+        """Get Brain-learned thresholds for response template injection.
+
+        These thresholds adapt based on actual trading performance to
+        replace static values in the prompt template.
+
+        Returns:
+            Dict with keys:
+                - adx_strong_threshold: Optimal ADX for strong trend (default 25)
+                - avg_sl_pct: Average winning SL distance as percentage (default 2.5)
+                - min_rr_recommended: Minimum recommended R/R ratio (default 2.0)
+                - confidence_threshold: Minimum confidence for trading (default 70)
+                - safe_mae_pct: 75th percentile MAE of winning trades (for safe drawdown)
+        """
+        thresholds = self.brain.get_optimal_thresholds()
+        return {
+            "adx_strong_threshold": thresholds.get("adx_strong", 25),
+            "avg_sl_pct": thresholds.get("avg_sl_pct", 2.5),
+            "min_rr_recommended": thresholds.get("min_rr", 2.0),
+            "confidence_threshold": thresholds.get("confidence_threshold", 70),
+            "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
+        }
+
+
     def update_brain_from_closed_trade(
         self,
         position: Position,
@@ -525,17 +602,43 @@ class DataPersistence:
         # Calculate P&L
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
-        
         # Update confidence statistics
         self.brain.update_confidence_stats(position.confidence, is_win, pnl_pct)
-        
         # Update factor performance stats (Feature 1: Confluence Factor Learning)
         self._update_factor_performance(position.confluence_factors, is_win, pnl_pct)
+        # Track ADX range performance (for dynamic thresholds)
+        # Prioritize ADX at entry if available (more relevant), otherwise use exit ADX
+        adx = position.adx_at_entry if position.adx_at_entry > 0 else 0
+        if adx == 0 and market_conditions:
+            adx = market_conditions.get("adx", 0)
+            
+        if adx > 0:
+            if adx < 20:
+                self.brain.adx_performance["LOW"].update(is_win, pnl_pct)
+            elif adx < 25:
+                self.brain.adx_performance["MEDIUM"].update(is_win, pnl_pct)
+            else:
+                self.brain.adx_performance["HIGH"].update(is_win, pnl_pct)
+        # Track R/R ratio performance (for dynamic thresholds)
+        if position.rr_ratio_at_entry > 0:
+            if position.rr_ratio_at_entry < 1.5:
+                self.brain.rr_performance["LOW"].update(is_win, pnl_pct)
+            elif position.rr_ratio_at_entry < 2.0:
+                self.brain.rr_performance["MEDIUM"].update(is_win, pnl_pct)
+            else:
+                self.brain.rr_performance["HIGH"].update(is_win, pnl_pct)
         
+        # Track MAE of winning trades to find "safe breath"
+        if is_win and position.max_drawdown_pct < 0:
+            self.brain.winning_mae.append(abs(position.max_drawdown_pct))
+            
+        # Track SL distance if it was a winning trade
+        if is_win and position.sl_distance_pct > 0:
+            self.brain.winning_sl_distances.append(position.sl_distance_pct)
+            self.brain.winning_sl_distances = self.brain.winning_sl_distances[-20:]
         # Build market condition string
         conditions = market_conditions or {}
         condition_str = self._build_condition_string(conditions)
-        
         # Extract insights based on trade outcome
         insights = self._extract_insights_from_trade(
             position=position,
@@ -546,14 +649,11 @@ class DataPersistence:
             condition_str=condition_str,
             entry_decision=entry_decision
         )
-        
         # Add new insights to brain
         for insight in insights:
             self.brain.add_insight(insight)
-        
         # Save updated brain
         self.save_brain()
-        
         self.logger.info(
             f"Updated brain: {len(insights)} insight(s) added from "
             f"{position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"

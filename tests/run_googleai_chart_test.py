@@ -49,6 +49,13 @@ from src.analyzer.technical_calculator import TechnicalCalculator
 from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
 from src.analyzer.pattern_engine.chart_generator import ChartGenerator
 from src.platforms.exchange_manager import ExchangeManager
+from src.analyzer.formatters import (
+    MarketOverviewFormatter,
+    LongTermFormatter,
+    MarketFormatter,
+    MarketPeriodFormatter,
+    TechnicalFormatter
+)
 
 
 async def main():
@@ -118,16 +125,29 @@ async def main():
         print(f"WARNING: Only {len(ohlcv)} candles available, chart may look sparse")
     
     print(f"Fetched {len(ohlcv)} candles, latest close: {latest_close}")
+    import datetime
+    if len(ohlcv) > 0:
+        last_ts = ohlcv[-1][0]
+        last_time_str = datetime.datetime.fromtimestamp(last_ts / 1000).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"DEBUG: Last candle timestamp: {last_ts} ({last_time_str})")
+    
+    current_time_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"DEBUG: Current System Time: {current_time_str}")
 
     # Build analysis context with real data
     context = AnalysisContext(pair)
     context.timeframe = timeframe
     context.ohlcv_candles = ohlcv
-    context.current_price = float(ohlcv[-1, 4])
+    context.current_price = float(latest_close)
     context.market_overview = {'coin_data': {pair.split('/')[0]: {'price': context.current_price}}}
 
-    # Generate chart image with real data
-    print(f"\nGenerating chart image...")
+    # Calculate technical indicators for chart visualization
+    print(f"\nCalculating technical indicators...")
+    indicators = technical_calculator.get_indicators(ohlcv)
+    print(f"Indicators calculated: {list(indicators.keys())[:10]}... ({len(indicators)} total)")
+
+    # Generate chart image with real data and indicators
+    print(f"\nGenerating chart image with indicators (RSI, SMA 50/200, Volume, CMF, OBV)...")
     chart_generator = ChartGenerator(
         logger=logger, 
         config=config, 
@@ -137,6 +157,7 @@ async def main():
     
     chart_result = chart_generator.create_chart_image(
         ohlcv=ohlcv,
+        technical_history=indicators,  # Pass indicators for visualization
         pair_symbol=pair,
         timeframe=timeframe,
         save_to_disk=True  # Save to chart_images/ directory
@@ -154,6 +175,13 @@ async def main():
         chart_buffer = chart_result
         print("Chart generated in memory")
 
+    # Initialize formatters for dependency injection
+    overview_formatter = MarketOverviewFormatter(logger, format_utils)
+    long_term_formatter = LongTermFormatter(logger, format_utils)
+    market_formatter = MarketFormatter(logger, format_utils)
+    period_formatter = MarketPeriodFormatter(logger, format_utils)
+    technical_formatter = TechnicalFormatter(technical_calculator, logger, format_utils)
+
     # Build prompt
     pb = PromptBuilder(
         timeframe=timeframe,
@@ -161,7 +189,12 @@ async def main():
         technical_calculator=technical_calculator,
         format_utils=format_utils,
         config=config,
-        data_processor=data_processor
+        data_processor=data_processor,
+        overview_formatter=overview_formatter,
+        long_term_formatter=long_term_formatter,
+        market_formatter=market_formatter,
+        period_formatter=period_formatter,
+        technical_formatter=technical_formatter
     )
     
     prompt = pb.build_prompt(context)

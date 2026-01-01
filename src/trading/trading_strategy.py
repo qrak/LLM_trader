@@ -59,6 +59,10 @@ class TradingStrategy:
         if not self.current_position:
             return None
         
+        # Update live performance metrics (MAE/MFE)
+        self.current_position.update_metrics(current_price)
+        self.persistence.save_position(self.current_position)
+        
         if self.current_position.is_stop_hit(current_price):
             await self.close_position("stop_loss", current_price)
             return "stop_loss"
@@ -179,7 +183,7 @@ class TradingStrategy:
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,
-                    confluence_factors
+                    confluence_factors, market_conditions
                 )
             
             # HOLD or no action
@@ -264,52 +268,115 @@ class TradingStrategy:
         symbol: str,
         reasoning: str,
         confluence_factors: tuple = (),
+        market_conditions: Optional[Dict[str, Any]] = None,
     ) -> TradeDecision:
-        """Open a new trading position.
+        """Open a new trading position with dynamic parameter calculation.
 
         Args:
             signal: BUY or SELL
             confidence: Confidence level
-            stop_loss: Stop loss price
-            take_profit: Take profit price
+            stop_loss: Stop loss price (from AI)
+            take_profit: Take profit price (from AI)
             position_size: Position size as decimal (e.g., 0.02 = 2% of capital)
             current_price: Entry price
             symbol: Trading symbol
             reasoning: AI reasoning
             confluence_factors: Tuple of (factor_name, score) pairs for brain learning
+            market_conditions: Market state dict with ATR, volatility_level, etc.
 
         Returns:
             TradeDecision for the new position
         """
         direction = "LONG" if signal == "BUY" else "SHORT"
+        market_conditions = market_conditions or {}
 
-        # Calculate default stop loss / take profit if not provided
+        # Extract ATR for dynamic calculation (fallback to 2% of price)
+        atr = market_conditions.get("atr", current_price * 0.02)
+        atr_pct = market_conditions.get("atr_percentage", (atr / current_price) * 100)
+        adx = market_conditions.get("adx", 0.0)
+
+        # Determine volatility level for Brain learning
+        if atr_pct > 3:
+            volatility_level = "HIGH"
+        elif atr_pct < 1.5:
+            volatility_level = "LOW"
+        else:
+            volatility_level = "MEDIUM"
+
+        # Dynamic default calculation based on ATR (not hardcoded 2%/4%)
+        # Use 2x ATR for SL, 4x ATR for TP (2:1 R/R default)
+        dynamic_sl_distance = atr * 2
+        dynamic_tp_distance = atr * 4
+
         if direction == "LONG":
-            default_sl = current_price * 0.98  # 2% below
-            default_tp = current_price * 1.04  # 4% above
+            dynamic_sl = current_price - dynamic_sl_distance
+            dynamic_tp = current_price + dynamic_tp_distance
         else:  # SHORT
-            default_sl = current_price * 1.02  # 2% above
-            default_tp = current_price * 0.96  # 4% below
+            dynamic_sl = current_price + dynamic_sl_distance
+            dynamic_tp = current_price - dynamic_tp_distance
 
-        final_sl = stop_loss if stop_loss and stop_loss > 0 else default_sl
-        final_tp = take_profit if take_profit and take_profit > 0 else default_tp
-        final_size_pct = position_size if position_size and position_size > 0 else 0.02  # Default 2%
+        # Use AI-provided values if valid, otherwise use dynamic defaults
+        if stop_loss and stop_loss > 0:
+            final_sl = stop_loss
+            self.logger.debug(f"Using AI-provided SL: ${final_sl:,.2f}")
+        else:
+            final_sl = dynamic_sl
+            self.logger.info(f"Using dynamic SL (2x ATR): ${final_sl:,.2f}")
 
-        # Validate stop loss and take profit make sense
+        if take_profit and take_profit > 0:
+            final_tp = take_profit
+            self.logger.debug(f"Using AI-provided TP: ${final_tp:,.2f}")
+        else:
+            final_tp = dynamic_tp
+            self.logger.info(f"Using dynamic TP (4x ATR): ${final_tp:,.2f}")
+
+        # Circuit Breaker: Validate and clamp extreme values
+        sl_distance_raw = abs(current_price - final_sl) / current_price
+        tp_distance_raw = abs(final_tp - current_price) / current_price
+
+        # Clamp SL: min 0.5%, max 10%
+        if sl_distance_raw > 0.10:
+            self.logger.warning(f"SL distance {sl_distance_raw:.1%} exceeds 10% max, clamping")
+            if direction == "LONG":
+                final_sl = current_price * 0.90
+            else:
+                final_sl = current_price * 1.10
+        elif sl_distance_raw < 0.005:
+            self.logger.warning(f"SL distance {sl_distance_raw:.1%} below 0.5% min, expanding")
+            if direction == "LONG":
+                final_sl = current_price * 0.995
+            else:
+                final_sl = current_price * 1.005
+
+        # Validate SL/TP direction makes sense
         if direction == "LONG":
             if final_sl >= current_price:
-                self.logger.warning(f"Invalid SL for LONG ({final_sl} >= {current_price}), using default")
-                final_sl = default_sl
+                self.logger.warning(f"Invalid SL for LONG ({final_sl} >= {current_price}), using dynamic")
+                final_sl = dynamic_sl
             if final_tp <= current_price:
-                self.logger.warning(f"Invalid TP for LONG ({final_tp} <= {current_price}), using default")
-                final_tp = default_tp
+                self.logger.warning(f"Invalid TP for LONG ({final_tp} <= {current_price}), using dynamic")
+                final_tp = dynamic_tp
         else:  # SHORT
             if final_sl <= current_price:
-                self.logger.warning(f"Invalid SL for SHORT ({final_sl} <= {current_price}), using default")
-                final_sl = default_sl
+                self.logger.warning(f"Invalid SL for SHORT ({final_sl} <= {current_price}), using dynamic")
+                final_sl = dynamic_sl
             if final_tp >= current_price:
-                self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using default")
-                final_tp = default_tp
+                self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using dynamic")
+                final_tp = dynamic_tp
+
+        # Calculate final distances for Brain learning
+        sl_distance_pct = abs(current_price - final_sl) / current_price
+        tp_distance_pct = abs(final_tp - current_price) / current_price
+        rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0
+
+        # Position sizing (use AI value or confidence-based default)
+        if position_size and position_size > 0:
+            final_size_pct = position_size
+        else:
+            # Dynamic sizing based on confidence
+            confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
+            final_size_pct = confidence_map.get(confidence.upper(), 0.02)
+            self.logger.info(f"Using confidence-based size: {final_size_pct*100:.1f}%")
 
         # Calculate quantity based on capital and size percentage
         capital = self.config.DEMO_QUOTE_CAPITAL
@@ -323,8 +390,11 @@ class TradingStrategy:
             f"Position sizing: Capital=${capital:,.2f}, Size={final_size_pct*100:.2f}%, "
             f"Allocation=${allocation:,.2f}, Quantity={quantity:.6f}"
         )
+        self.logger.info(
+            f"Risk metrics: SL={sl_distance_pct*100:.2f}%, TP={tp_distance_pct*100:.2f}%, R/R={rr_ratio:.2f}"
+        )
 
-        # Create position with confluence factors for brain learning
+        # Create position with confluence factors and market conditions for brain learning
         self.current_position = Position(
             entry_price=current_price,
             stop_loss=final_sl,
@@ -337,6 +407,12 @@ class TradingStrategy:
             confluence_factors=confluence_factors,
             entry_fee=entry_fee,
             size_pct=final_size_pct,
+            atr_at_entry=atr,
+            volatility_level=volatility_level,
+            sl_distance_pct=sl_distance_pct,
+            tp_distance_pct=tp_distance_pct,
+            rr_ratio_at_entry=rr_ratio,
+            adx_at_entry=adx,
         )
         self.persistence.save_position(self.current_position)
         self.logger.info(
@@ -405,6 +481,9 @@ class TradingStrategy:
                 confidence=self.current_position.confidence,
                 direction=self.current_position.direction,
                 symbol=self.current_position.symbol,
+                adx_at_entry=self.current_position.adx_at_entry,
+                max_drawdown_pct=self.current_position.max_drawdown_pct,
+                max_profit_pct=self.current_position.max_profit_pct,
             )
             self.persistence.save_position(self.current_position)
         
@@ -460,9 +539,13 @@ class TradingStrategy:
                 conditions["adx"] = tech_data.get("adx", 0)
                 conditions["rsi"] = tech_data.get("rsi", 50)
                 conditions["choppiness"] = tech_data.get("choppiness", None)
-                
-                # Determine volatility from ATR or other indicators
+
+                # Extract ATR for dynamic SL/TP calculation
+                conditions["atr"] = tech_data.get("atr", 0)
                 atr_pct = tech_data.get("atr_percentage", 0)
+                conditions["atr_percentage"] = atr_pct
+
+                # Determine volatility from ATR or other indicators
                 if atr_pct > 3:
                     conditions["volatility"] = "HIGH"
                 elif atr_pct < 1.5:

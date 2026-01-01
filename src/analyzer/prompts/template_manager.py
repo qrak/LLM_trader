@@ -3,7 +3,7 @@ Template management for prompt building system.
 Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 from src.logger.logger import Logger
 
@@ -21,13 +21,12 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", has_chart_image: bool = False, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
             symbol: Trading symbol (e.g., "BTC/USDT")
             timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
-            has_chart_image: Whether a chart image is being provided for visual analysis
             previous_response: Previous AI response for context continuity
             position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
@@ -64,24 +63,12 @@ class TemplateManager:
             "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
             "Include specific entry, stop loss, and take profit levels with your reasoning.",
         ])
-
-        if has_chart_image:
-            cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)
-            header_lines.extend([
-                "",
-                "CHART ANALYSIS:",
-                f"A chart image (~{cfg_limit} candlesticks) is provided for OHLCV data and visual pattern recognition.",
-                "Integrate OHLCV chart, patterns with numerical indicators. Only report clear, well-formed patterns.",
-                "Identify swing structure: Higher Highs (HH), Higher Lows (HL), Lower Highs (LH), Lower Lows (LL) to determine trend.",
-            ])
         
         # Add current position context if available
         if position_context:
             header_lines.extend([
                 "",
-                "=",
                 "CURRENT POSITION & PERFORMANCE:",
-                "=",
                 position_context.strip(),
             ])
         
@@ -102,7 +89,6 @@ class TemplateManager:
                 "="*60,
             ])
         
-        # Add brain context (distilled trading wisdom) if available
         if brain_context:
             header_lines.extend([
                 "",
@@ -122,41 +108,54 @@ class TemplateManager:
 
         return "\n".join(header_lines)
     
-    def build_response_template(self, has_chart_analysis: bool = False) -> str:
+    def build_response_template(self, has_chart_analysis: bool = False, dynamic_thresholds: Optional[Dict[str, Any]] = None) -> str:
         """Build the response template for trading decision output.
         
         Args:
             has_chart_analysis: Whether chart image analysis is available
+            dynamic_thresholds: Brain-learned thresholds for dynamic values
             
         Returns:
             str: Formatted response template
         """
-        response_template = '''RESPONSE FORMAT:
+        thresholds = dynamic_thresholds or {}
+        adx_strong = thresholds.get("adx_strong_threshold", 25)
+        avg_sl = thresholds.get("avg_sl_pct", 2.5)
+        min_rr = thresholds.get("min_rr_recommended", 2.0)
+        conf_threshold = thresholds.get("confidence_threshold", 70)
+        
+        # Prepare safe MAE line
+        safe_mae_pct = thresholds.get("safe_mae_pct", 0)
+        safe_mae_line = ""
+        if safe_mae_pct > 0:
+            safe_mae_line = f"\n- **Safe Drawdown**: Historical winning trades survived up to {safe_mae_pct*100:.2f}% drawdown. Ensure stop isn't too tight."
+            
+        response_template = f'''RESPONSE FORMAT:
 
-Provide analysis reasoning (2-4 paragraphs: technical indicators, patterns, market context), then output JSON:
+Provide analysis reasoning (4-6 paragraphs: technical indicators, patterns, market context, visual analysis, and any other important information you find relevant to describe for the user), then output JSON:
 
 ```json
-{
-    "analysis": {
+{{
+    "analysis": {{
         "signal": "BUY|SELL|HOLD|CLOSE|UPDATE",
         "confidence": 0-100,
-        "confluence_factors": {
+        "confluence_factors": {{
             "trend_alignment": 0-100,
             "momentum_strength": 0-100,
             "volume_support": 0-100,
             "pattern_quality": 0-100,
             "support_resistance_strength": 0-100
-        },
+        }},
         "entry_price": number,
         "stop_loss": number,
         "take_profit": number,
         "position_size": 0.0-1.0,
         "reasoning": "1-2 sentence summary",
-        "key_levels": {"support": [level1, level2], "resistance": [level1, level2]},
-        "trend": {"direction": "BULLISH|BEARISH|NEUTRAL", "strength": 0-100, "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"},
+        "key_levels": {{"support": [level1, level2], "resistance": [level1, level2]}},
+        "trend": {{"direction": "BULLISH|BEARISH|NEUTRAL", "strength": 0-100, "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"}},
         "risk_reward_ratio": number
-    }
-}
+    }}
+}}
 ```
 
 CONFLUENCE SCORING:
@@ -180,8 +179,8 @@ These are GUIDELINES, not hard rules. Use your judgment based on overall conflue
 ADX + CHOPPINESS ASSESSMENT:
 - ADX < 20 AND Choppiness > 50: ⚠️ CAUTION - Weak trend + choppy market. Requires 4+ strong confluences to trade.
 - ADX < 20 but Choppiness < 50: Potential trend emerging (ADX lags). Trade allowed with strong confirmation.
-- ADX 20-25: Developing trend. Standard 3+ confluences required.
-- ADX > 25: Strong trend environment. Full confidence range available.
+- ADX 20-{adx_strong}: Developing trend. Standard 3+ confluences required.
+- ADX >= {adx_strong}: Strong trend environment. Full confidence range available.
 
 CHOPPINESS INDEX CONTEXT:
 - Choppiness > 61.8: Ranging market - trend-following strategies may underperform
@@ -204,29 +203,29 @@ If the 365D macro trend CONTRADICTS the trade direction:
 If both 365D and Weekly macro conflict: HOLD is strongly recommended unless catalyst is exceptional.
 
 TRADING SIGNALS & CONFIDENCE:
-- BUY (70-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum 2:1 R/R preferred
-- SELL (70-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum 2:1 R/R preferred
-- HOLD (any confidence <70): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality
+- BUY ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
+- SELL ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
+- HOLD (any confidence <{conf_threshold}): Mixed signals, weak trend, conflicting indicators, low volume, or insufficient setup quality
 - CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
 - UPDATE: Adjust existing position SL/TP when market structure improves
 
 RISK/REWARD GUIDELINES:
 - R/R < 1.5: Very unfavorable - strongly consider HOLD
-- R/R 1.5-2.0: Borderline - only trade with exceptional confluence (4+)
-- R/R >= 2.0: Standard acceptable quality
+- R/R 1.5-{min_rr:.1f}: Borderline - only trade with exceptional confluence (4+)
+- R/R >= {min_rr:.1f}: Standard acceptable quality
 - R/R >= 2.5: Strong setup - preferred for counter-trend trades
 
-RISK MANAGEMENT (Stop Loss & Take Profit):
+RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
 LONG trades:
-- SL: Below swing low + 1x ATR buffer (max 2-3% from entry) | Example: Entry $100, Swing Low $97, ATR $1 → SL $96
+- SL: Below swing low + 1x ATR buffer (max {avg_sl:.1f}% from entry) | Example: Entry $100, Swing Low $97, ATR $1 → SL $96
 - TP: Key resistance levels, Fibonacci (0.618/0.786/1.0), previous highs | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
 
 SHORT trades:  
-- SL: Above swing high + 1x ATR buffer (max 2-3% from entry) | Example: Entry $100, Swing High $103, ATR $1 → SL $104
+- SL: Above swing high + 1x ATR buffer (max {avg_sl:.1f}% from entry) | Example: Entry $100, Swing High $103, ATR $1 → SL $104
 - TP: Key support levels, Fibonacci (0.382/0.236/0.0), previous lows | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
 
+
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.'''
-        
         return response_template
     
     def build_analysis_steps(self, symbol: str, has_advanced_support_resistance: bool = False, has_chart_analysis: bool = False, available_periods: dict = None) -> str:
@@ -255,16 +254,16 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 ANALYSIS STEPS (use findings to determine trading signal):
 
 1. MULTI-TIMEFRAME ASSESSMENT:
-   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Review weekly macro (200-week SMA, institutions) | Identify alignment (strong signal) vs divergence (caution)
+   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA) | Alignment (strong) vs divergence (caution)
 
 2. TECHNICAL INDICATORS:
-   Momentum: RSI (<30/>70), MACD (crosses, histogram) | Trend: ADX (>25), DI+/DI- | Volatility: ATR, Bollinger Bands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses | Advanced: TSI, Vortex, PFE, RMI, Ultimate, Supertrend | Assess confluence (strong) vs divergence (weak)
+   Momentum: RSI (<30/>70), MACD crosses | Trend: ADX (>25), DI+/DI- | Volatility: ATR, BBands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses | Advanced: TSI, Supertrend | Confluence vs divergence
 
-3. PATTERN RECOGNITION:
-   Chart patterns (wedges, triangles, H&S, double tops/bottoms) | Divergences (price vs RSI/MACD) | Candlesticks (engulfing, doji, hammer, shooting star) | Fibonacci levels (50-period, pullback/extension zones) | Overbought/oversold extremes | Prioritize RECENT patterns
+3. PATTERN RECOGNITION (Conservative Approach):
+   **Swing Structure:** HH/HL sequence = uptrend, LH/LL = downtrend | **Classic Patterns:** H&S, double tops/bottoms, wedges, triangles, flags (require 3-5% range, 20+ candles for major patterns) | **Advanced:** Elliott waves, harmonic patterns (Gartley/Bat/Crab), Gann angles (only if clearly visible) | **Candlesticks:** doji, hammer, shooting star, engulfing at key S/R | **Divergences:** Price vs RSI/MACD/OBV | **Validation:** Patterns must align with ADX>25, volume spikes, indicator confirmation | **IMPORTANT:** If pattern is ambiguous or unclear, state "No clear pattern detected" - do NOT force conclusions
 
 4. SUPPORT/RESISTANCE:
-   Map key levels across timeframes | Historical reaction zones (multiple touches) | Technical confluences (S/R + Fib + SMA) | Volume profile (high nodes) | Calculate risk/reward for SL/TP placement
+   Key levels across timeframes | Historical reaction zones (3+ touches) | Confluences (S/R + Fib + SMA) | Volume nodes | Risk/reward for SL/TP
 
 5. MARKET CONTEXT:
    Market Overview (global cap, dominance)"""
@@ -279,10 +278,10 @@ ANALYSIS STEPS (use findings to determine trading signal):
  | Fear & Greed Index (extremes) | Asset alignment with market | Relevant events and impact | Assess if context supports or contradicts technicals
 
 6. NEWS & SENTIMENT:
-   Recent asset news | Market-moving events/announcements | Sentiment evaluation | News-to-price action correlation | Institutional/corporate developments | Regulatory impacts | Identify news that could override technical signals
+   Asset news | Market events | Sentiment | Institutional activity | Regulatory impacts | News that could override technicals
 
 7. STATISTICAL ANALYSIS:
-   Z-Score (extremes may revert) | Kurtosis (fat tails = extreme move risk) | Hurst Exponent (>0.5 trending, <0.5 mean-reverting) | Distribution anomalies | Volatility cycles | Assess continuation vs reversal probability"""
+   Z-Score (extremes revert) | Kurtosis (tail risk) | Hurst (>0.5 trending, <0.5 reverting) | Volatility cycles"""
         
         # Add chart analysis steps only if chart images are available
         step_number = 8
@@ -291,30 +290,27 @@ ANALYSIS STEPS (use findings to determine trading signal):
 
             analysis_steps += f"""
 
-{step_number}. CHART PATTERN ANALYSIS (~{cfg_limit} candles):
-   Swing structure: Identify HH/HL (uptrend) vs LH/LL (downtrend) sequence from price peaks/troughs | Visual patterns: H&S, double tops/bottoms, wedges, triangles, flags/pennants, S/R breakouts | Report only clear, well-formed patterns (3-5% range, 20-30+ candles for major patterns) | If ambiguous, state "No clear patterns detected" | Candlestick formations: doji, hammer, shooting star, engulfing | S/R levels: horizontal zones, trend lines, channels | Validate patterns against ADX (>25), volume spikes, RSI/MACD alignment"""
+{step_number}. CHART IMAGE ANALYSIS (~{cfg_limit} candles, 4 panels):
+   **P1-PRICE:** SMA50 (orange), SMA200 (purple) - Golden/Death Cross? | Read MIN/MAX labels | Apply patterns from Step 3 to visual data
+   **P2-RSI:** Read value from annotation | Zone (>70 overbought, <30 oversold) | Check divergence vs price
+   **P3-VOLUME:** Trend direction | Spikes align with price moves? | Green/red bar ratio
+   **P4-CMF/OBV:** CMF (cyan, left axis): >0 buying, <0 selling | OBV (magenta, right): rising=accumulation
+   **VALIDATE:** Cross-check visuals with numerical indicators - flag discrepancies"""
             step_number += 1
         
         analysis_steps += f"""
 
-{step_number}. CONFLUENCE SCORING (Chain-of-Thought):
-   Before finalizing your decision, SCORE each factor (0-100) on how well it supports your intended signal:
-   - trend_alignment: Do multiple timeframes align with your signal direction? (0=opposite direction, 100=perfect alignment)
-   - momentum_strength: Do momentum indicators (RSI, MACD, etc.) confirm your signal? (0=contradicts, 100=strongly confirms)
-   - volume_support: Does volume profile support the move? (0=no volume support, 100=strong volume confirmation)
-   - pattern_quality: Quality of chart patterns and swing structure? (0=unclear/weak, 100=textbook/strong)
-   - support_resistance_strength: Are key S/R levels positioned to support your trade? (0=against you, 100=strongly favoring)
-   
-   Include these scores in your JSON response under "confluence_factors".
+{step_number}. CONFLUENCE SCORING:
+   Score 0-100 for each factor supporting your signal:
+   trend_alignment (timeframe agreement) | momentum_strength (RSI/MACD confirm) | volume_support (volume confirms move) | pattern_quality (clear patterns, 0=unclear) | support_resistance_strength (S/R favors trade)
 
 {step_number + 1}. SYNTHESIS:
-   Trend direction & strength? | Multiple indicator confluence? | Key SL/TP levels? | Risk/reward ratio? | Confidence level? | Trade invalidation triggers?
+   Trend direction/strength | Indicator confluence | SL/TP levels | R/R ratio | Confidence | Invalidation triggers
 
-IMPORTANT: ALL data uses CLOSED CANDLES ONLY (no incomplete data). Decisions based on confirmed price action, preventing premature entries on unconfirmed signals."""
+NOTE: CLOSED CANDLES ONLY. No pattern = state "No clear pattern detected"."""
         
         if has_advanced_support_resistance:
             analysis_steps += """
-
-ADVANCED S/R: Volume-weighted pivots [Pivot=(H+L+C)/3, S1=2P-H, R1=2P-L] with consecutive touches, above-average volume filters. Only strong levels provided."""
+ADVANCED S/R: Volume-weighted pivots with 3+ touches, above-average volume. Only strong levels provided."""
 
         return analysis_steps

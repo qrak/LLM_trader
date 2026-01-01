@@ -113,12 +113,31 @@ class MockClient:
         response = f"{analysis_text}\n```json\n{json.dumps(payload, indent=4)}\n```"
         return response
 
-    async def chat_completion(self, messages: list, model_config: Dict[str, Any], model: str = None) -> Optional[ResponseDict]:
-        """Emulate chat completion; return a ResponseDict with choices/message/content."""
+    async def chat_completion(self, *args, **kwargs) -> Optional[ResponseDict]:
+        """
+        Emulate chat completion supporting both GoogleAI and OpenRouter signatures.
+        
+        Signatures:
+        1. OpenRouter/Local: (model: str, messages: list, model_config: Dict)
+        2. GoogleAI: (messages: list, model_config: Dict, model: str = None)
+        """
+        messages = []
+        
+        # Determine signature based on first argument type
+        if len(args) > 0:
+            if isinstance(args[0], str): # Signature 1: model is first
+                if len(args) > 1:
+                    messages = args[1]
+            elif isinstance(args[0], list): # Signature 2: messages is first
+                messages = args[0]
+        
+        # Fallback to kwargs if explicitly passed
+        if not messages and "messages" in kwargs:
+            messages = kwargs["messages"]
+            
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close)
 
-        # Return matching structure used by ModelManager._process_response
         return {
             "choices": [
                 {
@@ -129,7 +148,28 @@ class MockClient:
             ]
         }
 
-    async def chat_completion_with_chart_analysis(self, messages: list, chart_image, model_config: Dict[str, Any], model: str = None) -> Optional[ResponseDict]:
+    async def chat_completion_with_chart_analysis(self, *args, **kwargs) -> Optional[ResponseDict]:
+        """
+        Emulate chart analysis supporting both GoogleAI and OpenRouter signatures.
+        
+        Signatures:
+        1. OpenRouter: (model: str, messages: list, chart_image, model_config)
+        2. GoogleAI: (messages: list, chart_image, model_config, model=...)
+        """
+        messages = []
+        
+        # Determine signature based on first argument type
+        if len(args) > 0:
+            if isinstance(args[0], str): # Signature 1: model is first
+                if len(args) > 1:
+                    messages = args[1]
+            elif isinstance(args[0], list): # Signature 2: messages is first
+                messages = args[0]
+                
+        # Fallback to kwargs if explicitly passed
+        if not messages and "messages" in kwargs:
+            messages = kwargs["messages"]
+
         last_close = self._extract_last_close_hint(messages)
         # Pass has_chart=True to include chart specific text in the response
         content = self._synthesize_response(last_close, has_chart=True)
