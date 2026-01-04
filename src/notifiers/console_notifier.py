@@ -138,7 +138,7 @@ class ConsoleNotifier(BaseNotifier):
             channel_id: Ignored for console output
         """
         try:
-            pnl_pct, pnl_usdt = self.calculate_position_pnl(position, current_price)
+            pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
             hours_held = self.calculate_time_held(position.entry_time)
 
@@ -159,7 +159,7 @@ class ConsoleNotifier(BaseNotifier):
                 print(f"Invested:        ${position.quote_amount:,.2f}")
             print("-" * 40)
             print(f"Unrealized P&L:  {pnl_pct:+.2f}%")
-            print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_usdt:+,.2f}")
+            print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_quote:+,.2f}")
             print(f"Confidence:      {position.confidence}")
             print(f"Position Size %: {position.size_pct * 100:.2f}%")
             print("-" * 40)
@@ -196,7 +196,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Symbol:           {symbol}")
             print(f"Closed Trades:    {stats['closed_trades']}")
             print("-" * 40)
-            print(f"Total P&L ({self.config.QUOTE_CURRENCY}): ${stats['total_pnl_usdt']:+,.2f}")
+            print(f"Total P&L ({self.config.QUOTE_CURRENCY}): ${stats['total_pnl_quote']:+,.2f}")
             print(f"Total P&L (%):    {stats['total_pnl_pct']:+.2f}%")
             print(f"Avg P&L/Trade:    {stats['avg_pnl_pct']:+.2f}%")
             print(f"Win Rate:         {stats['win_rate']:.1f}% ({stats['winning_trades']}/{stats['closed_trades']})")
