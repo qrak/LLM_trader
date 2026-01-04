@@ -205,7 +205,7 @@ class AnalysisEngine:
         previous_indicators: Optional[Dict[str, Any]] = None,
         position_context: Optional[str] = None,
         performance_context: Optional[str] = None,
-        brain_context: Optional[str] = None,
+        brain_service = None,
         last_analysis_time: Optional[str] = None,
         current_ticker: Optional[Dict[str, Any]] = None,
         dynamic_thresholds: Optional[Dict[str, Any]] = None
@@ -221,7 +221,7 @@ class AnalysisEngine:
             previous_indicators: Optional previous technical indicator values for trend comparison
             position_context: Current position details and unrealized P&L (goes to system prompt)
             performance_context: Recent trading history and performance (goes to system prompt)
-            brain_context: Distilled trading insights from closed trades (goes to system prompt)
+            brain_service: TradingBrainService instance to generate context from CURRENT indicators
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             current_ticker: Optional dict containing current ticker data to avoid redundant API calls
             dynamic_thresholds: Optional dict containing brain-learned thresholds for response template
@@ -239,6 +239,13 @@ class AnalysisEngine:
             
             # Step 3: Perform technical analysis
             await self._perform_technical_analysis()
+            
+            # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
+            brain_context = None
+            if brain_service and self.context.technical_data:
+                brain_context = self._generate_brain_context_from_current_indicators(
+                    brain_service, self.context.technical_data
+                )
             
             # Step 4: Generate AI analysis
             analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, previous_indicators, position_context, performance_context, brain_context, last_analysis_time, dynamic_thresholds)
@@ -567,4 +574,103 @@ class AnalysisEngine:
                 self.context.weekly_macro_indicators = None
         else:
             self.context.weekly_macro_indicators = None
+
+    def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: Dict[str, Any]) -> str:
+        """Generate brain context using CURRENT technical indicators.
+        
+        Args:
+            brain_service: TradingBrainService instance
+            technical_data: Dict of current technical indicators
+            
+        Returns:
+            Formatted brain context string
+        """
+        # Extract trend direction
+        trend_direction = "NEUTRAL"
+        di_plus = technical_data.get("di_plus", 0)
+        di_minus = technical_data.get("di_minus", 0)
+        if isinstance(di_plus, list):
+            di_plus = di_plus[0] if di_plus else 0
+        if isinstance(di_minus, list):
+            di_minus = di_minus[0] if di_minus else 0
+        
+        if di_plus > di_minus + 5:
+            trend_direction = "BULLISH"
+        elif di_minus > di_plus + 5:
+            trend_direction = "BEARISH"
+        
+        # Extract ADX
+        adx_value = technical_data.get("adx", 0.0)
+        if isinstance(adx_value, list):
+            adx_value = adx_value[0] if adx_value else 0.0
+        
+        # Extract volatility
+        volatility_level = "MEDIUM"
+        atr_pct = technical_data.get("atr_percent", 2.0)
+        if isinstance(atr_pct, list):
+            atr_pct = atr_pct[0] if atr_pct else 2.0
+        if atr_pct > 3.0:
+            volatility_level = "HIGH"
+        elif atr_pct < 1.5:
+            volatility_level = "LOW"
+        
+        # Extract RSI
+        rsi_level = "NEUTRAL"
+        rsi = technical_data.get("rsi", 50.0)
+        if isinstance(rsi, list):
+            rsi = rsi[0] if rsi else 50.0
+        if rsi >= 70:
+            rsi_level = "OVERBOUGHT"
+        elif rsi >= 60:
+            rsi_level = "STRONG"
+        elif rsi <= 30:
+            rsi_level = "OVERSOLD"
+        elif rsi <= 40:
+            rsi_level = "WEAK"
+        
+        # Extract MACD signal
+        macd_signal = "NEUTRAL"
+        macd = technical_data.get("macd", [0, 0, 0])
+        if isinstance(macd, list) and len(macd) >= 2:
+            macd_line = macd[0]
+            signal_line = macd[1]
+            if macd_line > signal_line:
+                macd_signal = "BULLISH"
+            elif macd_line < signal_line:
+                macd_signal = "BEARISH"
+        
+        # Extract volume state
+        volume_state = "NORMAL"
+        obv_slope = technical_data.get("obv_slope", 0.0)
+        if isinstance(obv_slope, list):
+            obv_slope = obv_slope[0] if obv_slope else 0.0
+        if obv_slope > 0.5:
+            volume_state = "ACCUMULATION"
+        elif obv_slope < -0.5:
+            volume_state = "DISTRIBUTION"
+        
+        # Extract BB position
+        bb_position = "MIDDLE"
+        bb = technical_data.get("bb_bands", [0, 0, 0])
+        if isinstance(bb, list) and len(bb) >= 3 and self.context.current_price:
+            bb_upper = bb[0]
+            bb_middle = bb[1]
+            bb_lower = bb[2]
+            current_price = self.context.current_price
+            
+            if current_price >= bb_upper * 0.99:  # Within 1% of upper band
+                bb_position = "UPPER"
+            elif current_price <= bb_lower * 1.01:  # Within 1% of lower band
+                bb_position = "LOWER"
+        
+        # Generate context with CURRENT indicators
+        return brain_service.get_context(
+            trend_direction=trend_direction,
+            adx=adx_value,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position
+        )
 

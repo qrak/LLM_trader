@@ -18,3 +18,5 @@ python-dotenv>=1.0.0
 kaleido==1.1.0
 wtpsplit>=2.0.0
 torch>=2.0.0
+chromadb>=1.0.0
+sentence-transformers>=3.0.0
