@@ -212,7 +212,6 @@ class CryptoTradingBot:
         # Use the SAME current_price fetched above
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.memory_service.get_context_summary(current_price)
-        brain_context = self.brain_service.get_context()
         statistics_context = self.statistics_service.get_context()
         # Combine position context with statistics for unified trading context
         if statistics_context:
@@ -241,7 +240,7 @@ class CryptoTradingBot:
             previous_indicators=previous_indicators,
             position_context=position_context,
             performance_context=memory_context,
-            brain_context=brain_context,
+            brain_service=self.brain_service,  # Pass service, not context
             last_analysis_time=last_analysis_time_str,
             current_ticker=current_ticker,
             dynamic_thresholds=dynamic_thresholds

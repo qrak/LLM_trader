@@ -166,7 +166,7 @@ class TradingPersistence:
         try:
             with open(self.brain_file, 'w') as f:
                 json.dump(brain.to_dict(), f, indent=2)
-            self.logger.debug(f"Saved trading brain with {len(brain.insights)} insights")
+            self.logger.debug(f"Saved trading brain ({brain.total_closed_trades} trades)")
         except Exception as e:
             self.logger.error(f"Error saving trading brain: {e}")
     
@@ -179,7 +179,7 @@ class TradingPersistence:
             with open(self.brain_file, 'r') as f:
                 data = json.load(f)
                 brain = TradingBrain.from_dict(data)
-                self.logger.info(f"Loaded trading brain with {len(brain.insights)} insights, {brain.total_closed_trades} closed trades")
+                self.logger.info(f"Loaded trading brain ({brain.total_closed_trades} closed trades)")
                 return brain
         except Exception as e:
             self.logger.error(f"Error loading trading brain: {e}")

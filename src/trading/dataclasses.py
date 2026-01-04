@@ -143,13 +143,11 @@ class FactorStats:
 
 @dataclass(slots=True)
 class TradingBrain:
-    """Bounded memory system for distilled trading insights.
+    """Trading brain for aggregate performance statistics.
     
-    Stores learned trading wisdom from closed trades in a fixed-size structure.
-    Uses FIFO eviction with category balancing to maintain diversity.
-    Now includes confluence factor performance tracking for adaptive learning.
+    Stores confidence calibration and factor performance tracking.
+    Detailed trade experiences are stored in VectorMemoryService.
     """
-    insights: List[TradingInsight] = field(default_factory=list)
     confidence_stats: Dict[str, ConfidenceStats] = field(default_factory=lambda: {
         'HIGH': ConfidenceStats('HIGH'),
         'MEDIUM': ConfidenceStats('MEDIUM'),
@@ -158,62 +156,17 @@ class TradingBrain:
     factor_performance: Dict[str, FactorStats] = field(default_factory=dict)
     last_updated: datetime = field(default_factory=datetime.now)
     total_closed_trades: int = 0
-    max_insights: int = 10
     min_sample_size: int = 5
-    # Performance tracking by ADX range
     adx_performance: Dict[str, ConfidenceStats] = field(default_factory=lambda: {
         "LOW": ConfidenceStats("ADX<20"),
         "MEDIUM": ConfidenceStats("ADX20-25"),
         "HIGH": ConfidenceStats("ADX>25"),
     })
-    # Performance tracking by R/R ratio range
     rr_performance: Dict[str, ConfidenceStats] = field(default_factory=lambda: {
         "LOW": ConfidenceStats("RR<1.5"),
         "MEDIUM": ConfidenceStats("RR1.5-2"),
         "HIGH": ConfidenceStats("RR>=2"),
     })
-    # SL distances from winning trades (for average calculation)
-    winning_sl_distances: List[float] = field(default_factory=list)
-    # MAE (Max Adverse Excursion) from winning trades to find "safe breath"
-    winning_mae: List[float] = field(default_factory=list)
-    # MFE (Max Favorable Excursion) from winning trades for optimal TP
-    winning_mfe: List[float] = field(default_factory=list)
-    # Category limits for diversity (class-level constant)
-    MAX_PER_CATEGORY: Dict[str, int] = field(default_factory=lambda: {
-        'STOP_LOSS': 3,
-        'ENTRY_TIMING': 3,
-        'RISK_MANAGEMENT': 2,
-        'MARKET_REGIME': 2
-    })
-    
-    def add_insight(self, insight: TradingInsight) -> None:
-        """Add insight with FIFO eviction and category balancing."""
-        # Count insights per category
-        category_counts = {}
-        for ins in self.insights:
-            category_counts[ins.category] = category_counts.get(ins.category, 0) + 1
-        
-        # Check if category limit reached
-        category_limit = self.MAX_PER_CATEGORY.get(insight.category, 2)
-        if category_counts.get(insight.category, 0) >= category_limit:
-            # Evict oldest insight in this category
-            for i, ins in enumerate(self.insights):
-                if ins.category == insight.category:
-                    self.insights.pop(i)
-                    break
-        elif len(self.insights) >= self.max_insights:
-            # Evict oldest insight from most-represented category
-            max_category = max(category_counts, key=category_counts.get) if category_counts else None
-            if max_category:
-                for i, ins in enumerate(self.insights):
-                    if ins.category == max_category:
-                        self.insights.pop(i)
-                        break
-            else:
-                self.insights.pop(0)
-        
-        self.insights.append(insight)
-        self.last_updated = datetime.now()
     
     def update_confidence_stats(self, confidence: str, is_win: bool, pnl_pct: float) -> None:
         """Update confidence level statistics with new trade result."""
@@ -225,10 +178,6 @@ class TradingBrain:
         self.confidence_stats[level].update(is_win, pnl_pct)
         self.total_closed_trades += 1
         self.last_updated = datetime.now()
-    
-    def get_insights_by_category(self, category: str) -> List[TradingInsight]:
-        """Get all insights for a specific category."""
-        return [ins for ins in self.insights if ins.category == category]
     
     def get_confidence_recommendation(self) -> Optional[str]:
         """Generate recommendation based on confidence calibration."""
@@ -260,22 +209,6 @@ class TradingBrain:
                     thresholds["adx_strong"] = 25
                 elif adx_med.win_rate > 55:
                     thresholds["adx_strong"] = 20
-        # Calculate average winning SL distance
-        if self.winning_sl_distances:
-            thresholds["avg_sl_pct"] = sum(self.winning_sl_distances) / len(self.winning_sl_distances)
-            
-        # Calculate "Safe Drawdown" (MAE) - 75th percentile of winning trades
-        # Meaning: 75% of winning trades survived this drawdown
-        if len(self.winning_mae) >= 3:
-            sorted_mae = sorted(self.winning_mae)
-            index = int(len(sorted_mae) * 0.75)
-            thresholds["safe_mae_pct"] = sorted_mae[index]
-        # Calculate "Safe Profit Peak" (MFE) - 75th percentile of winning trades
-        # Meaning: 75% of winning trades peaked at or below this level
-        if len(self.winning_mfe) >= 3:
-            sorted_mfe = sorted(self.winning_mfe)
-            index = int(len(sorted_mfe) * 0.75)
-            thresholds["safe_mfe_pct"] = sorted_mfe[index]
         # Find optimal R/R threshold based on win rates
         rr_high = self.rr_performance.get("HIGH")
         rr_med = self.rr_performance.get("MEDIUM")
@@ -344,12 +277,6 @@ class TradingBrain:
 
             recommendations["source"] = "confidence_stats"
 
-        # Use MFE data for TP optimization (empirical profit peaks)
-        if len(self.winning_mfe) >= 3:
-            safe_mfe_pct = sorted(self.winning_mfe)[int(len(self.winning_mfe) * 0.75)] / 100
-            recommendations["tp_pct"] = safe_mfe_pct * 0.85  # Capture 85% of typical peak
-            recommendations["source"] = "mfe_analysis"
-
         # Use factor performance to refine (if we have volatility-specific data)
         vol_key_prefix = f"trend_alignment_{volatility_level}"
         matching_factors = [
@@ -376,17 +303,12 @@ class TradingBrain:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            "insights": [ins.to_dict() for ins in self.insights],
             "confidence_stats": {k: v.to_dict() for k, v in self.confidence_stats.items()},
             "factor_performance": {k: v.to_dict() for k, v in self.factor_performance.items()},
             "adx_performance": {k: v.to_dict() for k, v in self.adx_performance.items()},
             "rr_performance": {k: v.to_dict() for k, v in self.rr_performance.items()},
-            "winning_sl_distances": self.winning_sl_distances,
-            "winning_mae": self.winning_mae,
-            "winning_mfe": self.winning_mfe,
             "last_updated": self.last_updated.isoformat(),
             "total_closed_trades": self.total_closed_trades,
-            "max_insights": self.max_insights,
             "min_sample_size": self.min_sample_size,
         }
     
@@ -394,7 +316,6 @@ class TradingBrain:
     def from_dict(cls, data: Dict[str, Any]) -> 'TradingBrain':
         """Create TradingBrain from dictionary."""
         brain = cls()
-        brain.insights = [TradingInsight.from_dict(ins) for ins in data.get("insights", [])]
         brain.confidence_stats = {
             k: ConfidenceStats.from_dict(v) 
             for k, v in data.get("confidence_stats", {}).items()
@@ -406,27 +327,18 @@ class TradingBrain:
             k: FactorStats.from_dict(v)
             for k, v in data.get("factor_performance", {}).items()
         }
-        # Load ADX performance stats
         if "adx_performance" in data:
             brain.adx_performance = {
                 k: ConfidenceStats.from_dict(v)
                 for k, v in data["adx_performance"].items()
             }
-        # Load R/R performance stats
         if "rr_performance" in data:
             brain.rr_performance = {
                 k: ConfidenceStats.from_dict(v)
                 for k, v in data["rr_performance"].items()
             }
-
-        # Load winning stats
-        brain.winning_sl_distances = data.get("winning_sl_distances", [])
-        brain.winning_mae = data.get("winning_mae", [])
-        brain.winning_mfe = data.get("winning_mfe", [])
-        
         brain.last_updated = datetime.fromisoformat(data["last_updated"]) if "last_updated" in data else datetime.now()
         brain.total_closed_trades = data.get("total_closed_trades", 0)
-        brain.max_insights = data.get("max_insights", 10)
         brain.min_sample_size = data.get("min_sample_size", 5)
         return brain
 

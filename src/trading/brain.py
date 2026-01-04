@@ -8,7 +8,8 @@ from typing import Optional, Dict, Any, List
 
 from src.logger.logger import Logger
 from .persistence import TradingPersistence
-from .dataclasses import Position, TradeDecision, TradingBrain, TradingInsight, FactorStats
+from .vector_memory import VectorMemoryService
+from .dataclasses import Position, TradeDecision, TradingBrain, FactorStats
 
 
 class TradingBrainService:
@@ -31,6 +32,10 @@ class TradingBrainService:
         self.logger = logger
         self.persistence = persistence
         self.brain = persistence.load_brain()
+        self.vector_memory = VectorMemoryService(
+            logger=logger,
+            data_dir=str(persistence.data_dir / "brain_vector_db")
+        )
     
     def update_from_closed_trade(
         self,
@@ -75,144 +80,101 @@ class TradingBrainService:
                 self.brain.rr_performance["MEDIUM"].update(is_win, pnl_pct)
             else:
                 self.brain.rr_performance["HIGH"].update(is_win, pnl_pct)
-        
-        if is_win and position.max_drawdown_pct < 0:
-            self.brain.winning_mae.append(abs(position.max_drawdown_pct))
-        
-        if is_win and position.max_profit_pct > 0:
-            self.brain.winning_mfe.append(position.max_profit_pct)
-            
-        if is_win and position.sl_distance_pct > 0:
-            self.brain.winning_sl_distances.append(position.sl_distance_pct)
-            self.brain.winning_sl_distances = self.brain.winning_sl_distances[-20:]
-        
         conditions = market_conditions or {}
         condition_str = self._build_condition_string(conditions)
         
-        insights = self._extract_insights_from_trade(
-            position=position,
-            close_price=close_price,
-            close_reason=close_reason,
-            pnl_pct=pnl_pct,
-            is_win=is_win,
-            condition_str=condition_str,
-            entry_decision=entry_decision
-        )
-        
-        for insight in insights:
-            self.brain.add_insight(insight)
-        
         self.persistence.save_brain(self.brain)
         
+        trade_id = f"trade_{position.entry_time.isoformat()}"
+        reasoning = entry_decision.reasoning if entry_decision else "N/A"
+        self.vector_memory.store_experience(
+            trade_id=trade_id,
+            market_context=condition_str,
+            outcome="WIN" if is_win else "LOSS",
+            pnl_pct=pnl_pct,
+            direction=position.direction,
+            confidence=position.confidence,
+            reasoning=reasoning,
+            metadata={
+                "close_reason": close_reason,
+                "adx": adx,
+                "rr_ratio": position.rr_ratio_at_entry,
+            }
+        )
+        
         self.logger.info(
-            f"Updated brain: {len(insights)} insight(s) added from "
-            f"{position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"
+            f"Updated brain from {position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"
         )
     
     def get_context(
         self,
+        trend_direction: str = "NEUTRAL",
+        adx: float = 0,
         volatility_level: str = "MEDIUM",
-        confidence: str = "MEDIUM",
-        current_atr_pct: float = 2.0
+        rsi_level: str = "NEUTRAL",
+        macd_signal: str = "NEUTRAL",
+        volume_state: str = "NORMAL",
+        bb_position: str = "MIDDLE"
     ) -> str:
-        """Generate formatted brain context for prompt injection.
+        """Generate formatted brain context for prompt injection using vector retrieval.
+        
+        Args:
+            trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
+            adx: Current ADX value
+            volatility_level: Current volatility (HIGH/MEDIUM/LOW)
+            rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
+            macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
+            volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
+            bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
         
         Returns:
-            Formatted string with confidence calibration and distilled insights.
+            Formatted string with vector-retrieved experiences and confidence calibration.
         """
-        if self.brain.total_closed_trades == 0:
-            return ""
+        lines = []
         
-        lines = [
-            "=" * 60,
-            f"LEARNED TRADING WISDOM (Distilled from {self.brain.total_closed_trades} closed trades):",
-            "=" * 60,
-            "",
-            "CONFIDENCE CALIBRATION:",
-        ]
-        
-        for level in ['HIGH', 'MEDIUM', 'LOW']:
-            stats = self.brain.confidence_stats.get(level)
-            if stats and stats.total_trades > 0:
-                lines.append(
-                    f"- {level} Confidence: Win Rate {stats.win_rate:.0f}% "
-                    f"({stats.winning_trades}/{stats.total_trades} trades) | Avg P&L: {stats.avg_pnl_pct:+.2f}%"
-                )
-        
-        recommendation = self.brain.get_confidence_recommendation()
-        if recommendation:
-            lines.append(f"  → INSIGHT: {recommendation}")
-        
-        if self.brain.factor_performance:
-            lines.extend(["", "FACTOR PERFORMANCE (Confluence Learning):"])
+        # Section 1: Confidence Calibration (lightweight, always available)
+        if self.brain.total_closed_trades > 0:
+            lines.extend([
+                "=",
+                f"TRADING BRAIN ({self.brain.total_closed_trades} closed trades):",
+                "=",
+                "",
+                "CONFIDENCE CALIBRATION:",
+            ])
             
-            factor_groups = {}
-            for key, stats in self.brain.factor_performance.items():
-                if stats.total_trades >= self.brain.min_sample_size:
-                    if stats.factor_name not in factor_groups:
-                        factor_groups[stats.factor_name] = []
-                    factor_groups[stats.factor_name].append(stats)
-            
-            for factor_name, stats_list in factor_groups.items():
-                best_stat = max(stats_list, key=lambda s: s.win_rate)
-                if best_stat.win_rate >= 60:
+            for level in ['HIGH', 'MEDIUM', 'LOW']:
+                stats = self.brain.confidence_stats.get(level)
+                if stats and stats.total_trades > 0:
                     lines.append(
-                        f"- {factor_name}: {best_stat.bucket} scores → "
-                        f"{best_stat.win_rate:.0f}% win rate ({best_stat.total_trades} trades)"
-                    )
-        
-        if self.brain.insights:
-            now = datetime.now()
-            validated_insights = []
-            provisional_insights = []
-            
-            for insight in self.brain.insights:
-                weeks_old = (now - insight.last_validated).days / 7
-                decay_weight = 0.95 ** weeks_old
-                
-                if insight.trade_count >= self.brain.min_sample_size:
-                    validated_insights.append((insight, decay_weight))
-                else:
-                    provisional_insights.append((insight, decay_weight))
-            
-            validated_insights.sort(key=lambda x: x[1], reverse=True)
-            
-            if validated_insights:
-                lines.extend(["", "VALIDATED INSIGHTS (Statistically Significant):"])
-                for i, (insight, weight) in enumerate(validated_insights[:6]):
-                    status = "★" if weight > 0.9 else "○"
-                    lines.append(
-                        f"{status} [{insight.category}] {insight.lesson} "
-                        f"({insight.trade_count} trades)"
+                        f"- {level} Confidence: Win Rate {stats.win_rate:.0f}% "
+                        f"({stats.winning_trades}/{stats.total_trades} trades) | Avg P&L: {stats.avg_pnl_pct:+.2f}%"
                     )
             
-            if provisional_insights and len(validated_insights) < 3:
-                lines.extend(["", "PROVISIONAL (Needs more data):"])
-                for insight, _ in provisional_insights[:2]:
-                    lines.append(f"  - {insight.lesson} ({insight.trade_count} trades)")
+            recommendation = self.brain.get_confidence_recommendation()
+            if recommendation:
+                lines.append(f"  → INSIGHT: {recommendation}")
         
-        if self.brain.total_closed_trades >= self.brain.min_sample_size:
-            recs = self.brain.suggest_parameters(volatility_level, confidence, current_atr_pct)
-            if recs["source"] != "atr_fallback":
-                lines.extend([
-                    "",
-                    "DYNAMIC PARAMETER RECOMMENDATIONS:",
-                    f"- Suggested SL: {recs['sl_pct']*100:.2f}% | TP: {recs['tp_pct']*100:.2f}%",
-                    f"- Suggested position size: {recs['size_pct']*100:.1f}%",
-                    f"- Minimum R/R ratio: {recs['min_rr']:.1f}:1",
-                ])
-                if len(self.brain.winning_mae) >= 3:
-                    safe_mae = sorted(self.brain.winning_mae)[int(len(self.brain.winning_mae) * 0.75)]
-                    lines.append(f"- Safe MAE: {safe_mae:.2f}% (based on {len(self.brain.winning_mae)} winning trades)")
-                if len(self.brain.winning_mfe) >= 3:
-                    safe_mfe = sorted(self.brain.winning_mfe)[int(len(self.brain.winning_mfe) * 0.75)]
-                    lines.append(f"- Safe MFE: {safe_mfe:.2f}% (based on {len(self.brain.winning_mfe)} winning trades)")
+        # Section 2: Vector-Retrieved Past Experiences (context-aware)
+        vector_context = self.get_vector_context(
+            trend_direction=trend_direction,
+            adx=adx,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position,
+            k=5
+        )
         
-        lines.extend([
-            "",
-            "APPLY THESE INSIGHTS: Prioritize factors with proven high win rates. Weight recent insights higher.",
-            "=" * 60,
-        ])
+        if vector_context:
+            lines.extend(["", vector_context])
+        
+        if lines:
+            lines.extend([
+                "",
+                "APPLY THESE INSIGHTS: Learn from similar past trades. Weight recent wins higher.",
+                "=" * 60,
+            ])
         
         return "\n".join(lines)
     
@@ -252,6 +214,74 @@ class TradingBrainService:
             "confidence_threshold": thresholds.get("confidence_threshold", 70),
             "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
         }
+    
+    def get_vector_context(
+        self,
+        trend_direction: str = "NEUTRAL",
+        adx: float = 0,
+        volatility_level: str = "MEDIUM",
+        rsi_level: str = "NEUTRAL",
+        macd_signal: str = "NEUTRAL",
+        volume_state: str = "NORMAL",
+        bb_position: str = "MIDDLE",
+        k: int = 5
+    ) -> str:
+        """Get context from similar past experiences via vector retrieval.
+        
+        Uses semantic search to find trades in similar market conditions.
+        
+        Args:
+            trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
+            adx: Current ADX value
+            volatility_level: Current volatility (HIGH/MEDIUM/LOW)
+            rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
+            macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
+            volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
+            bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
+            k: Number of experiences to retrieve
+            
+        Returns:
+            Formatted string with similar past trades for prompt injection.
+        """
+        # Build rich semantic context string
+        adx_label = "High ADX" if adx >= 25 else "Low ADX" if adx < 20 else "Medium ADX"
+        
+        # Build comprehensive context description
+        context_parts = [
+            trend_direction,
+            adx_label,
+            f"{volatility_level} Volatility"
+        ]
+        
+        # Add momentum indicators
+        if rsi_level != "NEUTRAL":
+            context_parts.append(f"RSI {rsi_level}")
+        if macd_signal != "NEUTRAL":
+            context_parts.append(f"MACD {macd_signal}")
+        
+        # Add volume and price position
+        if volume_state != "NORMAL":
+            context_parts.append(f"Volume {volume_state}")
+        if bb_position != "MIDDLE":
+            context_parts.append(f"Price at BB {bb_position}")
+        
+        context_query = " + ".join(context_parts)
+        
+        vector_context = self.vector_memory.get_context_for_prompt(context_query, k)
+        
+        if not vector_context:
+            return ""
+        
+        stats = self.vector_memory.get_stats_for_context(context_query, k=20)
+        if stats["total_trades"] > 0:
+            vector_context += (
+                f"\nLEARNED STATS FOR THIS CONTEXT:\n"
+                f"- Win Rate in similar conditions: {stats['win_rate']:.0f}% "
+                f"({stats['total_trades']} trades)\n"
+                f"- Avg P&L: {stats['avg_pnl']:+.2f}%\n"
+            )
+        
+        return vector_context
     
     def _build_condition_string(self, conditions: Dict[str, Any]) -> str:
         """Build human-readable market condition string."""
