@@ -258,6 +258,111 @@ class TestEdgeCases:
 
         fee = allocation * config.TRANSACTION_FEE_PERCENT
         assert fee == 5.0
+class TestDynamicCapital:
+    """Test dynamic capital calculation."""
+
+    def test_current_capital_after_loss(self):
+        """Current capital = initial + pnl_quote (should decrease after loss)."""
+        from src.trading.statistics_calculator import TradingStatistics
+        
+        stats = TradingStatistics(
+            total_trades=1,
+            total_pnl_quote=-200.0,
+            initial_capital=10000.0,
+            current_capital=9800.0
+        )
+        
+        assert stats.current_capital == 9800.0
+        assert stats.current_capital == stats.initial_capital + stats.total_pnl_quote
+
+    def test_current_capital_after_wins(self):
+        """Current capital = initial + pnl_quote (should increase after wins)."""
+        from src.trading.statistics_calculator import TradingStatistics
+        
+        stats = TradingStatistics(
+            total_trades=3,
+            total_pnl_quote=500.0,
+            initial_capital=10000.0,
+            current_capital=10500.0
+        )
+        
+        assert stats.current_capital == 10500.0
+        assert stats.current_capital == stats.initial_capital + stats.total_pnl_quote
+
+    def test_statistics_from_dict_backward_compatibility(self):
+        """Test from_dict handles missing capital fields gracefully."""
+        from src.trading.statistics_calculator import TradingStatistics
+        
+        old_data = {
+            "total_trades": 2,
+            "winning_trades": 1,
+            "losing_trades": 1,
+            "win_rate": 50.0,
+            "total_pnl_pct": -1.5,
+            "total_pnl_quote": -150.0,
+            "avg_trade_pct": -0.75,
+            "best_trade_pct": 2.0,
+            "worst_trade_pct": -3.5,
+            "max_drawdown_pct": -3.5,
+            "avg_drawdown_pct": -2.0,
+            "sharpe_ratio": 0.5,
+            "sortino_ratio": 0.6,
+            "profit_factor": 0.8,
+            "last_updated": "2026-01-04T12:00:00"
+        }
+        
+        stats = TradingStatistics.from_dict(old_data)
+        
+        assert stats.initial_capital == 10000.0
+        assert stats.current_capital == 10000.0 + (-150.0)
+        assert stats.current_capital == 9850.0
+
+    def test_statistics_to_dict_includes_capital(self):
+        """Test to_dict includes capital fields."""
+        from src.trading.statistics_calculator import TradingStatistics
+        
+        stats = TradingStatistics(
+            total_trades=1,
+            initial_capital=10000.0,
+            current_capital=9800.0
+        )
+        
+        data = stats.to_dict()
+        
+        assert "initial_capital" in data
+        assert "current_capital" in data
+        assert data["initial_capital"] == 10000.0
+        assert data["current_capital"] == 9800.0
+
+    def test_calculate_from_history_sets_capital(self):
+        """Test calculate_from_history computes current_capital correctly."""
+        from src.trading.statistics_calculator import StatisticsCalculator
+        
+        trade_history = [
+            {
+                "timestamp": "2026-01-01T10:00:00",
+                "symbol": "BTC/USDC",
+                "action": "BUY",
+                "price": 100000.0,
+                "quantity": 0.001,
+                "confidence": "HIGH",
+            },
+            {
+                "timestamp": "2026-01-01T12:00:00",
+                "symbol": "BTC/USDC",
+                "action": "CLOSE_LONG",
+                "price": 98000.0,
+                "quantity": 0.001,
+                "confidence": "HIGH",
+            }
+        ]
+        
+        initial_capital = 10000.0
+        stats = StatisticsCalculator.calculate_from_history(trade_history, initial_capital)
+        
+        assert stats.initial_capital == initial_capital
+        assert stats.current_capital == pytest.approx(initial_capital + stats.total_pnl_quote)
+        assert stats.current_capital < initial_capital
 
 
 if __name__ == "__main__":

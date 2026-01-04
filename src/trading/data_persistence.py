@@ -637,6 +637,21 @@ class DataPersistence:
             f"Sharpe: {self.statistics.sharpe_ratio:.2f}"
         )
 
+    def get_current_capital(self, initial_capital: float) -> float:
+        """Get current capital (initial + realized P&L).
+        
+        Falls back to initial_capital if no statistics available.
+        
+        Args:
+            initial_capital: The starting capital from config (DEMO_QUOTE_CAPITAL)
+            
+        Returns:
+            Current capital accounting for all closed trade P&L
+        """
+        if self.statistics.total_trades == 0:
+            return initial_capital
+        return self.statistics.current_capital
+
     def get_statistics_context(self) -> str:
         """Get formatted statistics context for AI prompt injection.
         

@@ -23,6 +23,8 @@ class TradingStatistics:
     win_rate: float = 0.0
     total_pnl_pct: float = 0.0
     total_pnl_quote: float = 0.0
+    initial_capital: float = 10000.0
+    current_capital: float = 10000.0
     avg_trade_pct: float = 0.0
     best_trade_pct: float = 0.0
     worst_trade_pct: float = 0.0
@@ -42,6 +44,8 @@ class TradingStatistics:
             "win_rate": self.win_rate,
             "total_pnl_pct": self.total_pnl_pct,
             "total_pnl_quote": self.total_pnl_quote,
+            "initial_capital": self.initial_capital,
+            "current_capital": self.current_capital,
             "avg_trade_pct": self.avg_trade_pct,
             "best_trade_pct": self.best_trade_pct,
             "worst_trade_pct": self.worst_trade_pct,
@@ -56,13 +60,18 @@ class TradingStatistics:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TradingStatistics':
         """Create TradingStatistics from dictionary."""
+        initial_cap = data.get("initial_capital", 10000.0)
+        total_pnl = data.get("total_pnl_quote", 0.0)
+        current_cap = data.get("current_capital", initial_cap + total_pnl)
         return cls(
             total_trades=data.get("total_trades", 0),
             winning_trades=data.get("winning_trades", 0),
             losing_trades=data.get("losing_trades", 0),
             win_rate=data.get("win_rate", 0.0),
             total_pnl_pct=data.get("total_pnl_pct", 0.0),
-            total_pnl_quote=data.get("total_pnl_quote", 0.0),
+            total_pnl_quote=total_pnl,
+            initial_capital=initial_cap,
+            current_capital=current_cap,
             avg_trade_pct=data.get("avg_trade_pct", 0.0),
             best_trade_pct=data.get("best_trade_pct", 0.0),
             worst_trade_pct=data.get("worst_trade_pct", 0.0),
@@ -113,6 +122,7 @@ class StatisticsCalculator:
         sharpe = StatisticsCalculator._calculate_sharpe_ratio(pnl_percentages)
         sortino = StatisticsCalculator._calculate_sortino_ratio(pnl_percentages)
         profit_factor = StatisticsCalculator._calculate_profit_factor(pnl_amounts)
+        current_capital = initial_capital + total_pnl_quote
         return TradingStatistics(
             total_trades=total_trades,
             winning_trades=winning_trades,
@@ -120,6 +130,8 @@ class StatisticsCalculator:
             win_rate=win_rate,
             total_pnl_pct=total_pnl_pct,
             total_pnl_quote=total_pnl_quote,
+            initial_capital=initial_capital,
+            current_capital=current_capital,
             avg_trade_pct=avg_trade_pct,
             best_trade_pct=best_trade_pct,
             worst_trade_pct=worst_trade_pct,
