@@ -18,21 +18,23 @@ from .filehandler import DiscordFileHandler
 from src.utils.decorators import retry_async
 
 
+
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser") -> None:
+    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
         """Initialize DiscordNotifier.
 
         Args:
             logger: Logger instance
             config: ConfigProtocol instance for Discord settings
             unified_parser: UnifiedParser for JSON extraction (DRY)
+            formatter: FormatUtils instance for value formatting
         """
         if config is None:
             raise ValueError("config is a required parameter and cannot be None")
 
-        super().__init__(logger, config, unified_parser)
+        super().__init__(logger, config, unified_parser, formatter)
         self.session: Optional[ClientSession] = None
         self._ready_event = asyncio.Event()
 
@@ -46,6 +48,7 @@ class DiscordNotifier(BaseNotifier):
         self.bot.discord_notifier = self
         self.bot.event(self.on_ready)
         self.file_handler = DiscordFileHandler(self.bot, self.logger, self.config)
+
 
     async def on_ready(self):
         """Called when bot is ready."""
@@ -134,19 +137,29 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
-            delete_after = float(expire_after) if expire_after is not None else None
-            sent_message = await channel.send(
-                content=message[:2000],
-                delete_after=delete_after
-            )
-            await self.file_handler.track_message(
-                message_id=sent_message.id,
-                channel_id=channel_id,
-                user_id=None,
-                message_type="message",
-                expire_after=expire_after
-            )
-            self.logger.debug(f"Sent and tracking message (ID: {sent_message.id})")
+            # Hard limit at 4000 characters (2 chunks max)
+            content = message[:4000]
+            chunks = [content[i:i+2000] for i in range(0, len(content), 2000)]
+
+            sent_message = None
+            for i, chunk in enumerate(chunks):
+                if i > 0:
+                    await asyncio.sleep(1)
+                
+                delete_after = float(expire_after) if expire_after is not None else None
+                sent_message = await channel.send(
+                    content=chunk,
+                    delete_after=delete_after
+                )
+                await self.file_handler.track_message(
+                    message_id=sent_message.id,
+                    channel_id=channel_id,
+                    user_id=None,
+                    message_type="message",
+                    expire_after=expire_after
+                )
+            
+            self.logger.debug(f"Sent {len(chunks)} message chunk(s) (Last ID: {sent_message.id if sent_message else 'None'})")
             return sent_message
         except discord.HTTPException as e:
             self.logger.error(f"Discord HTTPException when sending message: {e}", exc_info=True)
@@ -208,7 +221,7 @@ class DiscordNotifier(BaseNotifier):
 
             embed = discord.Embed(
                 title=f"{emoji} TRADING DECISION: {decision.action}",
-                description=decision.reasoning[:1024] if decision.reasoning else "No reasoning provided",
+                description=decision.reasoning[:4096] if decision.reasoning else "No reasoning provided",
                 color=color
             )
 
@@ -222,8 +235,10 @@ class DiscordNotifier(BaseNotifier):
                 embed.add_field(name="Take Profit", value=f"${decision.take_profit:,.2f}", inline=True)
             if decision.position_size:
                 embed.add_field(name="Position Size", value=f"{decision.position_size * 100:.2f}%", inline=True)
+            if decision.quote_amount:
+                embed.add_field(name="Invested", value=f"${decision.quote_amount:,.2f}", inline=True)
             if decision.quantity:
-                embed.add_field(name="Quantity", value=f"{decision.quantity:.6f}", inline=True)
+                embed.add_field(name="Quantity", value=self.formatter.fmt(decision.quantity), inline=True)
             if decision.action in ['BUY', 'SELL'] and decision.quantity:
                 entry_fee = decision.price * decision.quantity * self.config.TRANSACTION_FEE_PERCENT
                 embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
@@ -305,10 +320,14 @@ class DiscordNotifier(BaseNotifier):
 
             embed.add_field(name="Entry Price", value=f"${position.entry_price:,.2f}", inline=True)
             embed.add_field(name="Current Price", value=f"${current_price:,.2f}", inline=True)
-            embed.add_field(name="Position Size", value=f"{position.size:.4f}", inline=True)
+            embed.add_field(name="Quantity", value=self.formatter.fmt(position.size), inline=True)
+            if hasattr(position, 'quote_amount') and position.quote_amount > 0:
+                 embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
+            
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
             embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_usdt:+,.2f}", inline=True)
             embed.add_field(name="Confidence", value=position.confidence, inline=True)
+            embed.add_field(name="Position Size %", value=f"{position.size_pct * 100:.2f}%", inline=True)
             embed.add_field(name="Stop Loss", value=f"${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)", inline=True)
             embed.add_field(name="Take Profit", value=f"${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)", inline=True)
             embed.add_field(name="Entry Fee", value=f"${position.entry_fee:.4f}", inline=True)
@@ -364,7 +383,7 @@ class DiscordNotifier(BaseNotifier):
 
             embed = discord.Embed(
                 title=f"📊 {symbol} - {fields['signal']}",
-                description=fields['reasoning'][:1024],
+                description=fields['reasoning'][:4096],
                 color=color
             )
 
