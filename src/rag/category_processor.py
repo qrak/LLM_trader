@@ -18,9 +18,12 @@ class CategoryProcessor:
         self.general_categories: Set[str] = set()
         self.ticker_categories: Set[str] = set()
         
-        # Load configurations from file
-        self.important_categories: Set[str] = self._load_important_categories()
-        self.generic_priorities: Dict[str, int] = self._load_generic_priorities()
+        # Load RAG priorities config once
+        rag_config = self._load_rag_config()
+        
+        # Load configurations from cached config
+        self.important_categories: Set[str] = self._load_important_categories(rag_config)
+        self.generic_priorities: Dict[str, int] = self._load_generic_priorities(rag_config)
         
         # Initialize collision resolver with category sets and priorities
         self.collision_resolver = CategoryCollisionResolver(
@@ -30,49 +33,40 @@ class CategoryProcessor:
             generic_priorities=self.generic_priorities
         )
     
-    def _load_important_categories(self) -> Set[str]:
-        """Load important categories from config file."""
+    def _load_rag_config(self) -> Dict:
+        """Load RAG priorities config once for reuse."""
         if self.file_handler:
             try:
-                config_data = self.file_handler.load_rag_priorities()
-                if config_data and 'important_categories' in config_data:
-                    categories = set(config_data['important_categories'])
-                    if categories:
-                        return categories
-                    else:
-                        self.logger.warning("Config file has empty important_categories list")
-                else:
-                    self.logger.warning(f"Config data structure issue: {config_data}")
+                return self.file_handler.load_rag_priorities() or {}
             except Exception as e:
-                self.logger.error(f"Failed to load important categories from config: {e}", exc_info=True)
+                self.logger.error(f"Failed to load RAG config: {e}")
+        return {}
+
+    
+    def _load_important_categories(self, config_data: Dict) -> Set[str]:
+        """Load important categories from pre-loaded config."""
+        if config_data and 'important_categories' in config_data:
+            categories = set(config_data['important_categories'])
+            if categories:
+                return categories
+            else:
+                self.logger.warning("Config file has empty important_categories list")
         else:
-            self.logger.warning("file_handler is None, cannot load config")
-        
-        # No hardcoded fallback - return empty set and log warning
-        self.logger.warning("No important categories loaded - using empty set. Check config/rag_priorities.json")
+            self.logger.warning("No important_categories in config data")
         return set()
     
-    def _load_generic_priorities(self) -> Dict[str, int]:
-        """Load generic category priorities from config file."""
-        if self.file_handler:
-            try:
-                config_data = self.file_handler.load_rag_priorities()
-                if config_data and 'generic_priorities' in config_data:
-                    priorities = config_data['generic_priorities']
-                    if priorities:
-                        return priorities
-                    else:
-                        self.logger.warning("Config file has empty generic_priorities dict")
-                else:
-                    self.logger.warning(f"Config data structure issue (generic_priorities): {config_data}")
-            except Exception as e:
-                self.logger.error(f"Failed to load generic priorities from config: {e}", exc_info=True)
+    def _load_generic_priorities(self, config_data: Dict) -> Dict[str, int]:
+        """Load generic category priorities from pre-loaded config."""
+        if config_data and 'generic_priorities' in config_data:
+            priorities = config_data['generic_priorities']
+            if priorities:
+                return priorities
+            else:
+                self.logger.warning("Config file has empty generic_priorities dict")
         else:
-            self.logger.warning("file_handler is None, cannot load generic priorities")
-        
-        # No hardcoded fallback - return empty dict and log warning
-        self.logger.warning("No generic priorities loaded - using empty dict. Check config/rag_priorities.json")
+            self.logger.warning("No generic_priorities in config data")
         return {}
+
     
     def process_api_categories(self, api_categories: List[Dict[str, Any]]) -> None:
         """Process API categories and update internal indices."""
