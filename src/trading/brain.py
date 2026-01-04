@@ -22,20 +22,25 @@ class TradingBrainService:
     - Get dynamic thresholds
     """
     
-    def __init__(self, logger: Logger, persistence: TradingPersistence):
+    def __init__(self, logger: Logger, persistence: TradingPersistence, vector_memory: Optional[VectorMemoryService] = None):
         """Initialize trading brain service.
         
         Args:
             logger: Logger instance
             persistence: Persistence service for loading/saving brain state
+            vector_memory: Optional injected vector memory (for testing)
         """
         self.logger = logger
         self.persistence = persistence
         self.brain = persistence.load_brain()
-        self.vector_memory = VectorMemoryService(
-            logger=logger,
-            data_dir=str(persistence.data_dir / "brain_vector_db")
-        )
+        
+        if vector_memory:
+            self.vector_memory = vector_memory
+        else:
+            self.vector_memory = VectorMemoryService(
+                logger=logger,
+                data_dir=str(persistence.data_dir / "brain_vector_db")
+            )
     
     def update_from_closed_trade(
         self,
@@ -173,7 +178,7 @@ class TradingBrainService:
             lines.extend([
                 "",
                 "APPLY THESE INSIGHTS: Learn from similar past trades. Weight recent wins higher.",
-                "=" * 60,
+                "",
             ])
         
         return "\n".join(lines)
