@@ -5,7 +5,10 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from .dataclasses import Position, TradeDecision
-from .data_persistence import DataPersistence
+from .persistence import TradingPersistence
+from .brain import TradingBrainService
+from .statistics import TradingStatisticsService
+from .memory import TradingMemoryService
 
 
 if TYPE_CHECKING:
@@ -18,7 +21,10 @@ class TradingStrategy:
     def __init__(
         self,
         logger: Logger,
-        data_persistence: DataPersistence,
+        persistence: TradingPersistence,
+        brain_service: TradingBrainService,
+        statistics_service: TradingStatisticsService,
+        memory_service: TradingMemoryService,
         config: Any = None,
         position_extractor=None,
     ):
@@ -26,7 +32,10 @@ class TradingStrategy:
         
         Args:
             logger: Logger instance
-            data_persistence: Data persistence for positions and history
+            persistence: Persistence service for loading/saving data
+            brain_service: Brain service for learning and insights
+            statistics_service: Statistics service for performance metrics
+            memory_service: Memory service for recent decision context
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
         """
@@ -34,7 +43,10 @@ class TradingStrategy:
             raise ValueError("position_extractor is required - must be injected from app.py")
         
         self.logger = logger
-        self.persistence = data_persistence
+        self.persistence = persistence
+        self.brain_service = brain_service
+        self.statistics_service = statistics_service
+        self.memory_service = memory_service
         self.config = config
         self.extractor = position_extractor
         
@@ -119,7 +131,7 @@ class TradingStrategy:
         
         # Update trading brain with closed trade insights
         try:
-            self.persistence.update_brain_from_closed_trade(
+            self.brain_service.update_from_closed_trade(
                 position=self.current_position,
                 close_price=current_price,
                 close_reason=reason,
@@ -130,7 +142,7 @@ class TradingStrategy:
             self.logger.error(f"Error updating trading brain: {e}")
         # Recalculate performance statistics (Sharpe, Sortino, drawdown, etc.)
         try:
-            self.persistence.recalculate_statistics(self.config.DEMO_QUOTE_CAPITAL)
+            self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
         except Exception as e:
             self.logger.error(f"Error recalculating statistics: {e}")
         
@@ -385,7 +397,7 @@ class TradingStrategy:
             self.logger.info(f"Using confidence-based size: {final_size_pct*100:.1f}%")
 
         # Calculate quantity based on CURRENT capital (not initial)
-        capital = self.persistence.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
+        capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         allocation = capital * final_size_pct
         quantity = allocation / current_price
 
@@ -618,7 +630,7 @@ class TradingStrategy:
         Returns:
             Formatted position context string with capital status
         """
-        capital = self.persistence.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
+        capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         currency = self.config.QUOTE_CURRENCY
         if not self.current_position:
             return (
