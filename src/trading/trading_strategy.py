@@ -128,6 +128,11 @@ class TradingStrategy:
             )
         except Exception as e:
             self.logger.error(f"Error updating trading brain: {e}")
+        # Recalculate performance statistics (Sharpe, Sortino, drawdown, etc.)
+        try:
+            self.persistence.recalculate_statistics(self.config.DEMO_QUOTE_CAPITAL)
+        except Exception as e:
+            self.logger.error(f"Error recalculating statistics: {e}")
         
         self.persistence.save_trade_decision(decision)
         self.persistence.save_position(None)
@@ -611,30 +616,48 @@ class TradingStrategy:
             current_price: Current market price for P&L calculation
             
         Returns:
-            Formatted position context string
+            Formatted position context string with capital status
         """
+        capital = self.config.DEMO_QUOTE_CAPITAL
+        currency = self.config.QUOTE_CURRENCY
         if not self.current_position:
-            return "CURRENT POSITION: None"
-        
+            return (
+                f"CAPITAL STATUS:\n"
+                f"- Total Capital: ${capital:,.2f} {currency}\n"
+                f"- Available: ${capital:,.2f} (100%)\n\n"
+                f"CURRENT POSITION: None"
+            )
         pos = self.current_position
         duration = datetime.now() - pos.entry_time
         hours = duration.total_seconds() / 3600
-        
+        allocated = pos.quote_amount
+        available = capital - allocated
+        allocation_pct = (allocated / capital) * 100 if capital > 0 else 0
         context_lines = [
+            "CAPITAL STATUS:",
+            f"- Total Capital: ${capital:,.2f} {currency}",
+            f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
+            f"- Available: ${available:,.2f} ({100 - allocation_pct:.1f}%)",
+            "",
             "CURRENT POSITION:",
             f"- Direction: {pos.direction}",
             f"- Symbol: {pos.symbol}",
             f"- Entry Price: ${pos.entry_price:,.2f}",
+        ]
+        if current_price and current_price > 0:
+            context_lines.append(f"- Current Price: ${current_price:,.2f}")
+        context_lines.extend([
             f"- Stop Loss: ${pos.stop_loss:,.2f}",
             f"- Take Profit: ${pos.take_profit:,.2f}",
-            f"- Size: {pos.size * 100:.1f}%",
+            f"- Position Size: {pos.size_pct * 100:.2f}%",
+            f"- Quantity: {pos.size:.6f}",
+            f"- Entry Fee: ${pos.entry_fee:.4f}",
             f"- Duration: {hours:.1f} hours",
             f"- Confidence: {pos.confidence}",
-        ]
-        
+        ])
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
             pnl_usdt = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
-            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_usdt:+,.2f} USDT)")
-        
+            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_usdt:+,.2f} {currency})")
         return "\n".join(context_lines)
+

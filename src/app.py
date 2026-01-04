@@ -522,6 +522,10 @@ class CryptoTradingBot:
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.data_persistence.get_memory_context(current_price)
         brain_context = self.data_persistence.get_brain_context()
+        statistics_context = self.data_persistence.get_statistics_context()
+        # Combine position context with statistics for unified trading context
+        if statistics_context:
+            position_context = f"{position_context}\n\n{statistics_context}"
 
         # Load previous response for AI continuity
         previous_data = self.data_persistence.load_previous_response()
