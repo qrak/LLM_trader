@@ -8,6 +8,7 @@ from typing import Optional, List, Dict, Any
 from src.logger.logger import Logger
 from src.utils.serialize import serialize_for_json
 from .dataclasses import Position, TradeDecision, TradingMemory, TradingBrain, TradingInsight, FactorStats
+from .statistics_calculator import TradingStatistics, StatisticsCalculator
 
 
 class DataPersistence:
@@ -30,6 +31,7 @@ class DataPersistence:
         self.previous_response_file = self.data_dir / "previous_response.json"
         self.brain_file = self.data_dir / "trading_brain.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
+        self.statistics_file = self.data_dir / "statistics.json"
         
         self.max_memory = max_memory
         # Memory is kept in RAM only, built from recent history
@@ -37,6 +39,9 @@ class DataPersistence:
         
         # Load trading brain (bounded memory system)
         self.brain = self._load_brain()
+        
+        # Load trading statistics
+        self.statistics = self._load_statistics()
     
 
     
@@ -63,12 +68,16 @@ class DataPersistence:
                 "confluence_factors": [[name, score] for name, score in position.confluence_factors],
                 "entry_fee": position.entry_fee,
                 "size_pct": position.size_pct,
+                "quote_amount": position.quote_amount,
                 # Market conditions for Brain learning
                 "atr_at_entry": position.atr_at_entry,
                 "volatility_level": position.volatility_level,
                 "sl_distance_pct": position.sl_distance_pct,
                 "tp_distance_pct": position.tp_distance_pct,
                 "rr_ratio_at_entry": position.rr_ratio_at_entry,
+                "adx_at_entry": position.adx_at_entry,
+                "max_drawdown_pct": position.max_drawdown_pct,
+                "max_profit_pct": position.max_profit_pct,
             }
             
             # Sanitize data before saving
@@ -102,12 +111,16 @@ class DataPersistence:
                     symbol=data.get("symbol", "BTC/USDC"),
                     confluence_factors=cf_tuple,
                     entry_fee=data.get("entry_fee", 0.0),
+                    quote_amount=data.get("quote_amount", 0.0),
                     size_pct=data.get("size_pct", 0.0),
                     atr_at_entry=data.get("atr_at_entry", 0.0),
                     volatility_level=data.get("volatility_level", "MEDIUM"),
                     sl_distance_pct=data.get("sl_distance_pct", 0.0),
                     tp_distance_pct=data.get("tp_distance_pct", 0.0),
                     rr_ratio_at_entry=data.get("rr_ratio_at_entry", 0.0),
+                    adx_at_entry=data.get("adx_at_entry", 0.0),
+                    max_drawdown_pct=data.get("max_drawdown_pct", 0.0),
+                    max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
         except Exception as e:
             self.logger.error(f"Error loading position: {e}")
@@ -579,6 +592,64 @@ class DataPersistence:
             "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
         }
 
+    def _load_statistics(self) -> TradingStatistics:
+        """Load trading statistics from disk."""
+        if not self.statistics_file.exists():
+            return TradingStatistics()
+        try:
+            with open(self.statistics_file, 'r') as f:
+                data = json.load(f)
+                return TradingStatistics.from_dict(data)
+        except Exception as e:
+            self.logger.error(f"Error loading statistics: {e}")
+            return TradingStatistics()
+
+    def save_statistics(self) -> None:
+        """Save trading statistics to disk."""
+        try:
+            with open(self.statistics_file, 'w') as f:
+                json.dump(self.statistics.to_dict(), f, indent=2)
+            self.logger.debug(f"Saved statistics: {self.statistics.total_trades} trades")
+        except Exception as e:
+            self.logger.error(f"Error saving statistics: {e}")
+
+    def recalculate_statistics(self, initial_capital: float = 10000.0) -> None:
+        """Recalculate all statistics from trade history.
+        
+        Should be called after every closed trade.
+        
+        Args:
+            initial_capital: Starting capital for equity curve calculation
+        """
+        history = self.load_trade_history()
+        self.statistics = StatisticsCalculator.calculate_from_history(history, initial_capital)
+        self.save_statistics()
+        self.logger.info(
+            f"Recalculated statistics: {self.statistics.total_trades} trades, "
+            f"Win Rate: {self.statistics.win_rate:.1f}%, "
+            f"Sharpe: {self.statistics.sharpe_ratio:.2f}"
+        )
+
+    def get_statistics_context(self) -> str:
+        """Get formatted statistics context for AI prompt injection.
+        
+        Returns:
+            Formatted string with performance statistics
+        """
+        stats = self.statistics
+        if stats.total_trades == 0:
+            return ""
+        lines = [
+            "PERFORMANCE STATISTICS:",
+            f"- Total Trades: {stats.total_trades} (Win Rate: {stats.win_rate:.1f}%)",
+            f"- Avg Trade: {stats.avg_trade_pct:+.2f}% | Best: {stats.best_trade_pct:+.2f}% | Worst: {stats.worst_trade_pct:+.2f}%",
+            f"- Total P&L: ${stats.total_pnl_usdt:+,.2f} ({stats.total_pnl_pct:+.2f}%)",
+            f"- Max Drawdown: {stats.max_drawdown_pct:.2f}%",
+            f"- Sharpe Ratio: {stats.sharpe_ratio:.2f} | Sortino: {stats.sortino_ratio:.2f}",
+        ]
+        if stats.profit_factor > 0 and stats.profit_factor != float('inf'):
+            lines.append(f"- Profit Factor: {stats.profit_factor:.2f}")
+        return "\n".join(lines)
 
     def update_brain_from_closed_trade(
         self,
