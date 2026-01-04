@@ -384,8 +384,8 @@ class TradingStrategy:
             final_size_pct = confidence_map.get(confidence.upper(), 0.02)
             self.logger.info(f"Using confidence-based size: {final_size_pct*100:.1f}%")
 
-        # Calculate quantity based on capital and size percentage
-        capital = self.config.DEMO_QUOTE_CAPITAL
+        # Calculate quantity based on CURRENT capital (not initial)
+        capital = self.persistence.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         allocation = capital * final_size_pct
         quantity = allocation / current_price
 
@@ -618,7 +618,7 @@ class TradingStrategy:
         Returns:
             Formatted position context string with capital status
         """
-        capital = self.config.DEMO_QUOTE_CAPITAL
+        capital = self.persistence.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         currency = self.config.QUOTE_CURRENCY
         if not self.current_position:
             return (
