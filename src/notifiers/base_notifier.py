@@ -122,14 +122,14 @@ class BaseNotifier(ABC):
             current_price: Current market price
 
         Returns:
-            Tuple of (pnl_percent, pnl_usdt)
+            Tuple of (pnl_percent, pnl_quote)
         """
         pnl_pct = position.calculate_pnl(current_price)
         if position.direction == 'LONG':
-            pnl_usdt = (current_price - position.entry_price) * position.size
+            pnl_quote = (current_price - position.entry_price) * position.size
         else:
-            pnl_usdt = (position.entry_price - current_price) * position.size
-        return pnl_pct, pnl_usdt
+            pnl_quote = (position.entry_price - current_price) * position.size
+        return pnl_pct, pnl_quote
 
     def calculate_stop_target_distances(
             self,
@@ -181,7 +181,7 @@ class BaseNotifier(ABC):
         if not trade_history:
             return None
 
-        total_pnl_usdt = 0.0
+        total_pnl_quote = 0.0
         total_pnl_pct = 0.0
         total_fees = 0.0
         closed_trades = 0
@@ -202,10 +202,10 @@ class BaseNotifier(ABC):
 
                 if open_action == 'BUY':
                     pnl_pct = ((price - open_price) / open_price) * 100
-                    pnl_usdt = (price - open_price) * open_quantity
+                    pnl_quote = (price - open_price) * open_quantity
                 else:
                     pnl_pct = ((open_price - price) / open_price) * 100
-                    pnl_usdt = (open_price - price) * open_quantity
+                    pnl_quote = (open_price - price) * open_quantity
 
                 entry_fee = open_position.get('fee', 0.0)
                 exit_fee = decision_dict.get('fee', 0.0)
@@ -217,7 +217,7 @@ class BaseNotifier(ABC):
                      exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
                      
                 total_fees += entry_fee + exit_fee
-                total_pnl_usdt += pnl_usdt
+                total_pnl_quote += pnl_quote
                 total_pnl_pct += pnl_pct
                 closed_trades += 1
 
@@ -229,14 +229,14 @@ class BaseNotifier(ABC):
             return None
 
         return {
-            'total_pnl_usdt': total_pnl_usdt,
+            'total_pnl_quote': total_pnl_quote,
             'total_pnl_pct': total_pnl_pct,
             'total_fees': total_fees,
             'closed_trades': closed_trades,
             'winning_trades': winning_trades,
             'avg_pnl_pct': total_pnl_pct / closed_trades,
             'win_rate': (winning_trades / closed_trades) * 100,
-            'net_pnl': total_pnl_usdt - total_fees,
+            'net_pnl': total_pnl_quote - total_fees,
         }
 
     @staticmethod

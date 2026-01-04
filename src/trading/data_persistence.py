@@ -650,7 +650,7 @@ class DataPersistence:
             "PERFORMANCE STATISTICS:",
             f"- Total Trades: {stats.total_trades} (Win Rate: {stats.win_rate:.1f}%)",
             f"- Avg Trade: {stats.avg_trade_pct:+.2f}% | Best: {stats.best_trade_pct:+.2f}% | Worst: {stats.worst_trade_pct:+.2f}%",
-            f"- Total P&L: ${stats.total_pnl_usdt:+,.2f} ({stats.total_pnl_pct:+.2f}%)",
+            f"- Total P&L: ${stats.total_pnl_quote:+,.2f} ({stats.total_pnl_pct:+.2f}%)",
             f"- Max Drawdown: {stats.max_drawdown_pct:.2f}%",
             f"- Sharpe Ratio: {stats.sharpe_ratio:.2f} | Sortino: {stats.sortino_ratio:.2f}",
         ]

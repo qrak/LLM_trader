@@ -298,7 +298,7 @@ class DiscordNotifier(BaseNotifier):
             channel_id: Discord channel ID
         """
         try:
-            pnl_pct, pnl_usdt = self.calculate_position_pnl(position, current_price)
+            pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
             hours_held = self.calculate_time_held(position.entry_time)
 
@@ -325,7 +325,7 @@ class DiscordNotifier(BaseNotifier):
                  embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
             
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
-            embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_usdt:+,.2f}", inline=True)
+            embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_quote:+,.2f}", inline=True)
             embed.add_field(name="Confidence", value=position.confidence, inline=True)
             embed.add_field(name="Position Size %", value=f"{position.size_pct * 100:.2f}%", inline=True)
             embed.add_field(name="Stop Loss", value=f"${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)", inline=True)
@@ -362,7 +362,7 @@ class DiscordNotifier(BaseNotifier):
                 color=discord.Color.blue() if stats['net_pnl'] > 0 else discord.Color.red()
             )
 
-            embed.add_field(name=f"Total P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['total_pnl_usdt']:+,.2f}", inline=True)
+            embed.add_field(name=f"Total P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['total_pnl_quote']:+,.2f}", inline=True)
             embed.add_field(name="Total P&L (%)", value=f"{stats['total_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Avg P&L/Trade", value=f"{stats['avg_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Win Rate", value=f"{stats['win_rate']:.1f}% ({stats['winning_trades']}/{stats['closed_trades']})", inline=True)

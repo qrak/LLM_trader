@@ -22,7 +22,7 @@ class TradingStatistics:
     losing_trades: int = 0
     win_rate: float = 0.0
     total_pnl_pct: float = 0.0
-    total_pnl_usdt: float = 0.0
+    total_pnl_quote: float = 0.0
     avg_trade_pct: float = 0.0
     best_trade_pct: float = 0.0
     worst_trade_pct: float = 0.0
@@ -41,7 +41,7 @@ class TradingStatistics:
             "losing_trades": self.losing_trades,
             "win_rate": self.win_rate,
             "total_pnl_pct": self.total_pnl_pct,
-            "total_pnl_usdt": self.total_pnl_usdt,
+            "total_pnl_quote": self.total_pnl_quote,
             "avg_trade_pct": self.avg_trade_pct,
             "best_trade_pct": self.best_trade_pct,
             "worst_trade_pct": self.worst_trade_pct,
@@ -62,7 +62,7 @@ class TradingStatistics:
             losing_trades=data.get("losing_trades", 0),
             win_rate=data.get("win_rate", 0.0),
             total_pnl_pct=data.get("total_pnl_pct", 0.0),
-            total_pnl_usdt=data.get("total_pnl_usdt", 0.0),
+            total_pnl_quote=data.get("total_pnl_quote", 0.0),
             avg_trade_pct=data.get("avg_trade_pct", 0.0),
             best_trade_pct=data.get("best_trade_pct", 0.0),
             worst_trade_pct=data.get("worst_trade_pct", 0.0),
@@ -98,13 +98,13 @@ class StatisticsCalculator:
         if not trades:
             return TradingStatistics()
         pnl_percentages = [t["pnl_pct"] for t in trades]
-        pnl_amounts = [t["pnl_usdt"] for t in trades]
+        pnl_amounts = [t["pnl_quote"] for t in trades]
         total_trades = len(trades)
         winning_trades = sum(1 for pnl in pnl_percentages if pnl > 0)
         losing_trades = sum(1 for pnl in pnl_percentages if pnl < 0)
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
         total_pnl_pct = sum(pnl_percentages)
-        total_pnl_usdt = sum(pnl_amounts)
+        total_pnl_quote = sum(pnl_amounts)
         avg_trade_pct = total_pnl_pct / total_trades if total_trades > 0 else 0.0
         best_trade_pct = max(pnl_percentages) if pnl_percentages else 0.0
         worst_trade_pct = min(pnl_percentages) if pnl_percentages else 0.0
@@ -119,7 +119,7 @@ class StatisticsCalculator:
             losing_trades=losing_trades,
             win_rate=win_rate,
             total_pnl_pct=total_pnl_pct,
-            total_pnl_usdt=total_pnl_usdt,
+            total_pnl_quote=total_pnl_quote,
             avg_trade_pct=avg_trade_pct,
             best_trade_pct=best_trade_pct,
             worst_trade_pct=worst_trade_pct,
@@ -149,15 +149,15 @@ class StatisticsCalculator:
                 quantity = open_position.get("quantity", 0)
                 if open_position["action"].upper() == "BUY":
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
-                    pnl_usdt = (exit_price - entry_price) * quantity
+                    pnl_quote = (exit_price - entry_price) * quantity
                 else:
                     pnl_pct = ((entry_price - exit_price) / entry_price) * 100 if entry_price > 0 else 0
-                    pnl_usdt = (entry_price - exit_price) * quantity
+                    pnl_quote = (entry_price - exit_price) * quantity
                 closed_trades.append({
                     "entry_price": entry_price,
                     "exit_price": exit_price,
                     "pnl_pct": pnl_pct,
-                    "pnl_usdt": pnl_usdt,
+                    "pnl_quote": pnl_quote,
                     "quantity": quantity,
                     "direction": "LONG" if open_position["action"].upper() == "BUY" else "SHORT",
                 })
@@ -173,7 +173,7 @@ class StatisticsCalculator:
         equity = [initial_capital]
         current = initial_capital
         for trade in trades:
-            current += trade["pnl_usdt"]
+            current += trade["pnl_quote"]
             equity.append(current)
         return equity
 

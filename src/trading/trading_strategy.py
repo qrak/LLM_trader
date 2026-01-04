@@ -657,7 +657,7 @@ class TradingStrategy:
         ])
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
-            pnl_usdt = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
-            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_usdt:+,.2f} {currency})")
+            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
+            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
         return "\n".join(context_lines)
 

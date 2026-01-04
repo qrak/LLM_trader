@@ -601,7 +601,7 @@ class TradingMemory:
         history_to_analyze = full_history if full_history else self.decisions
         # Ensure chronological order for P&L calculation
         history_to_analyze = sorted(history_to_analyze, key=lambda x: x.timestamp)
-        total_pnl_usdt = 0.0
+        total_pnl_quote = 0.0
         total_pnl_pct = 0.0
         closed_trades = 0
         winning_trades = 0
@@ -615,12 +615,12 @@ class TradingMemory:
                 # Calculate P&L for closed trade
                 if open_position.action == 'BUY':
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
-                    pnl_usdt = (decision.price - open_position.price) * open_position.quantity
+                    pnl_quote = (decision.price - open_position.price) * open_position.quantity
                 else:  # SELL
                     pnl_pct = ((open_position.price - decision.price) / open_position.price) * 100
-                    pnl_usdt = (open_position.price - decision.price) * open_position.quantity
+                    pnl_quote = (open_position.price - decision.price) * open_position.quantity
                 
-                total_pnl_usdt += pnl_usdt
+                total_pnl_quote += pnl_quote
                 total_pnl_pct += pnl_pct
                 closed_trades += 1
                 if pnl_pct > 0:
@@ -642,7 +642,7 @@ class TradingMemory:
             win_rate = (winning_trades / closed_trades) * 100
             lines.append("")
             lines.append(f"OVERALL PERFORMANCE ({closed_trades} Total Closed Trades):")
-            lines.append(f"- Total P&L: ${total_pnl_usdt:+,.2f} USDT ({total_pnl_pct:+.2f}%)")
+            lines.append(f"- Total P&L: ${total_pnl_quote:+,.2f} ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
             lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")
         
