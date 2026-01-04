@@ -121,6 +121,7 @@ class VectorMemoryService:
                 "direction": direction,
                 "confidence": confidence,
                 "market_context": market_context,
+                "reasoning": reasoning,
             }
             if metadata:
                 trade_metadata.update(metadata)
@@ -224,6 +225,8 @@ class VectorMemoryService:
             )
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
             lines.append(f"   - Context: {meta.get('market_context', 'N/A')}")
+            if meta.get("reasoning"):
+                lines.append(f"   - Key Insight: \"{meta.get('reasoning')}\"")
             lines.append("")
         
         return "\n".join(lines)
