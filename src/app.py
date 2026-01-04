@@ -360,16 +360,31 @@ class CryptoTradingBot:
         # Initialize notifier - Discord if enabled, otherwise Console fallback
         if self.config.DISCORD_BOT_ENABLED and hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
             try:
-                self.discord_notifier = DiscordNotifier(self.logger, self.config, self.unified_parser)
+                self.discord_notifier = DiscordNotifier(
+                    logger=self.logger, 
+                    config=self.config, 
+                    unified_parser=self.unified_parser,
+                    formatter=self.format_utils
+                )
                 self._discord_task = asyncio.create_task(self.discord_notifier.start())
                 await self.discord_notifier.wait_until_ready()
                 self.logger.debug("Discord notifier initialized and ready")
             except Exception as e:
                 self.logger.warning(f"Discord initialization failed: {e}. Falling back to console output.")
-                self.discord_notifier = ConsoleNotifier(self.logger, self.config, self.unified_parser)
+                self.discord_notifier = ConsoleNotifier(
+                    logger=self.logger, 
+                    config=self.config, 
+                    unified_parser=self.unified_parser,
+                    formatter=self.format_utils
+                )
         else:
             # Use ConsoleNotifier as fallback when Discord is disabled
-            self.discord_notifier = ConsoleNotifier(self.logger, self.config, self.unified_parser)
+            self.discord_notifier = ConsoleNotifier(
+                logger=self.logger, 
+                config=self.config, 
+                unified_parser=self.unified_parser,
+                formatter=self.format_utils
+            )
             self.logger.info("Discord disabled, using console notifications")
 
         await self.rag_engine.start_periodic_updates()
