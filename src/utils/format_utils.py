@@ -8,7 +8,9 @@ import numpy as np
 from datetime import datetime
 
 
-from src.analyzer.data_processor import DataProcessor
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.analyzer.data_processor import DataProcessor
 
 
 class FormatUtils:
@@ -18,7 +20,7 @@ class FormatUtils:
     circular import dependencies. It has no imports from the analyzer module.
     """
     
-    def __init__(self, data_processor: DataProcessor):
+    def __init__(self, data_processor: "DataProcessor"):
         """Initialize the formatting utilities with a data processor instance."""
         self.data_processor = data_processor
     
