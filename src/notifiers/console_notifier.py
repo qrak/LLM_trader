@@ -11,18 +11,20 @@ if TYPE_CHECKING:
 from .base_notifier import BaseNotifier
 
 
+
 class ConsoleNotifier(BaseNotifier):
     """Console-based notifier as fallback when Discord is disabled."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser") -> None:
+    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
         """Initialize ConsoleNotifier.
 
         Args:
             logger: Logger instance
             config: ConfigProtocol instance
             unified_parser: UnifiedParser for JSON extraction (DRY)
+            formatter: FormatUtils instance for value formatting
         """
-        super().__init__(logger, config, unified_parser)
+        super().__init__(logger, config, unified_parser, formatter)
         self.is_initialized = True
 
     async def __aenter__(self):
@@ -78,8 +80,10 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Take Profit: ${decision.take_profit:,.2f}")
         if decision.position_size:
             print(f"Position Size: {decision.position_size * 100:.2f}%")
+        if decision.quote_amount:
+            print(f"Invested:      ${decision.quote_amount:,.2f}")
         if decision.quantity:
-            print(f"Quantity: {decision.quantity:.6f}")
+            print(f"Quantity:      {self.formatter.fmt(decision.quantity)}")
         if decision.action in ['BUY', 'SELL', 'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and decision.fee:
             print(f"Fee:       ${decision.fee:.4f}")
 
@@ -150,11 +154,14 @@ class ConsoleNotifier(BaseNotifier):
             print("=" * 60)
             print(f"Entry Price:     ${position.entry_price:,.2f}")
             print(f"Current Price:   ${current_price:,.2f}")
-            print(f"Position Size:   {position.size:.4f}")
+            print(f"Quantity:        {self.formatter.fmt(position.size)}")
+            if hasattr(position, 'quote_amount') and position.quote_amount > 0:
+                print(f"Invested:        ${position.quote_amount:,.2f}")
             print("-" * 40)
             print(f"Unrealized P&L:  {pnl_pct:+.2f}%")
             print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_usdt:+,.2f}")
             print(f"Confidence:      {position.confidence}")
+            print(f"Position Size %: {position.size_pct * 100:.2f}%")
             print("-" * 40)
             print(f"Stop Loss:       ${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)")
             print(f"Take Profit:     ${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)")
