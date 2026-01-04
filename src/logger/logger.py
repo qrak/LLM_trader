@@ -24,12 +24,14 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
     def emit(self, record):
         current_date = datetime.now().strftime("%Y_%m_%d")
         
+        # Always use the main logger directory, even for errors
+        current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
+        
         if self.is_error_handler:
-            current_log_dir = os.path.join(self.log_dir, "errors", current_date)
+            # Force filename to be errors.log for error handler
+            current_filename = os.path.join(current_log_dir, "errors.log")
         else:
-            current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
-            
-        current_filename = os.path.join(current_log_dir, f"{self.log_filename_prefix}{self.logger_name}.log")
+            current_filename = os.path.join(current_log_dir, f"{self.log_filename_prefix}{self.logger_name}.log")
 
         # Normalize paths for consistent comparison across platforms
         current_filename_norm = os.path.normpath(current_filename)
@@ -75,11 +77,9 @@ class Logger(logging.Logger):
         self._setup_logger()
         self.debug("Logger %s initialized with log directory: %s", sanitized_name, self.log_dir)
 
-    def _get_log_dir(self, current_date: str, is_error: bool = False) -> str:
-        if is_error:
-            log_dir = os.path.join(self.log_dir, 'errors', current_date)
-        else:
-            log_dir = os.path.join(self.log_dir, self.name, current_date)
+    def _get_log_dir(self, current_date: str) -> str:
+        # Simplified: no separate error directory logic needed
+        log_dir = os.path.join(self.log_dir, self.name, current_date)
         os.makedirs(log_dir, exist_ok=True)
         return log_dir
 
@@ -96,7 +96,8 @@ class Logger(logging.Logger):
     def _setup_logger(self) -> None:
         current_date = datetime.now().strftime("%Y_%m_%d")
         log_dir = self._get_log_dir(current_date)
-        error_log_dir = self._get_log_dir(current_date, is_error=True)
+        # Error log now lives in the same directory, so we reuse log_dir
+        error_log_dir = log_dir
 
         if not self.handlers:
             self._add_console_handler()
@@ -129,7 +130,8 @@ class Logger(logging.Logger):
         self.addHandler(file_handler)
 
     def _add_error_file_handler(self, error_log_dir):
-        error_log_filename = self._get_log_filename(error_log_dir)
+        # We manually specify errors.log here, though the handler logic also enforces it
+        error_log_filename = os.path.join(error_log_dir, "errors.log")
         error_file_handler = DailyRotatingFileHandler(
             error_log_filename,
             self.log_dir,
@@ -149,6 +151,7 @@ class Logger(logging.Logger):
 
     def _log_rotator(self, source, is_error=False):
         new_date = datetime.now().strftime("%Y_%m_%d")
-        new_dir = self._get_log_dir(new_date, is_error=is_error)
+        # _get_log_dir no longer accepts is_error, it returns the main directory
+        new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
         open(new_file, 'a').close()
