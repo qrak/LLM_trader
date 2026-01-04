@@ -538,6 +538,13 @@ class DataPersistence:
                     f"- Suggested position size: {recs['size_pct']*100:.1f}%",
                     f"- Minimum R/R ratio: {recs['min_rr']:.1f}:1",
                 ])
+                # Show MAE/MFE context when available
+                if len(self.brain.winning_mae) >= 3:
+                    safe_mae = sorted(self.brain.winning_mae)[int(len(self.brain.winning_mae) * 0.75)]
+                    lines.append(f"- Safe MAE: {safe_mae:.2f}% (based on {len(self.brain.winning_mae)} winning trades)")
+                if len(self.brain.winning_mfe) >= 3:
+                    safe_mfe = sorted(self.brain.winning_mfe)[int(len(self.brain.winning_mfe) * 0.75)]
+                    lines.append(f"- Safe MFE: {safe_mfe:.2f}% (based on {len(self.brain.winning_mfe)} winning trades)")
         lines.extend([
             "",
             "APPLY THESE INSIGHTS: Prioritize factors with proven high win rates. Weight recent insights higher.",
@@ -702,6 +709,9 @@ class DataPersistence:
         # Track MAE of winning trades to find "safe breath"
         if is_win and position.max_drawdown_pct < 0:
             self.brain.winning_mae.append(abs(position.max_drawdown_pct))
+        # Track MFE of winning trades to find optimal TP
+        if is_win and position.max_profit_pct > 0:
+            self.brain.winning_mfe.append(position.max_profit_pct)
             
         # Track SL distance if it was a winning trade
         if is_win and position.sl_distance_pct > 0:

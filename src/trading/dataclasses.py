@@ -176,6 +176,8 @@ class TradingBrain:
     winning_sl_distances: List[float] = field(default_factory=list)
     # MAE (Max Adverse Excursion) from winning trades to find "safe breath"
     winning_mae: List[float] = field(default_factory=list)
+    # MFE (Max Favorable Excursion) from winning trades for optimal TP
+    winning_mfe: List[float] = field(default_factory=list)
     # Category limits for diversity (class-level constant)
     MAX_PER_CATEGORY: Dict[str, int] = field(default_factory=lambda: {
         'STOP_LOSS': 3,
@@ -268,6 +270,12 @@ class TradingBrain:
             sorted_mae = sorted(self.winning_mae)
             index = int(len(sorted_mae) * 0.75)
             thresholds["safe_mae_pct"] = sorted_mae[index]
+        # Calculate "Safe Profit Peak" (MFE) - 75th percentile of winning trades
+        # Meaning: 75% of winning trades peaked at or below this level
+        if len(self.winning_mfe) >= 3:
+            sorted_mfe = sorted(self.winning_mfe)
+            index = int(len(sorted_mfe) * 0.75)
+            thresholds["safe_mfe_pct"] = sorted_mfe[index]
         # Find optimal R/R threshold based on win rates
         rr_high = self.rr_performance.get("HIGH")
         rr_med = self.rr_performance.get("MEDIUM")
@@ -336,6 +344,12 @@ class TradingBrain:
 
             recommendations["source"] = "confidence_stats"
 
+        # Use MFE data for TP optimization (empirical profit peaks)
+        if len(self.winning_mfe) >= 3:
+            safe_mfe_pct = sorted(self.winning_mfe)[int(len(self.winning_mfe) * 0.75)] / 100
+            recommendations["tp_pct"] = safe_mfe_pct * 0.85  # Capture 85% of typical peak
+            recommendations["source"] = "mfe_analysis"
+
         # Use factor performance to refine (if we have volatility-specific data)
         vol_key_prefix = f"trend_alignment_{volatility_level}"
         matching_factors = [
@@ -369,6 +383,7 @@ class TradingBrain:
             "rr_performance": {k: v.to_dict() for k, v in self.rr_performance.items()},
             "winning_sl_distances": self.winning_sl_distances,
             "winning_mae": self.winning_mae,
+            "winning_mfe": self.winning_mfe,
             "last_updated": self.last_updated.isoformat(),
             "total_closed_trades": self.total_closed_trades,
             "max_insights": self.max_insights,
@@ -407,6 +422,7 @@ class TradingBrain:
         # Load winning stats
         brain.winning_sl_distances = data.get("winning_sl_distances", [])
         brain.winning_mae = data.get("winning_mae", [])
+        brain.winning_mfe = data.get("winning_mfe", [])
         
         brain.last_updated = datetime.fromisoformat(data["last_updated"]) if "last_updated" in data else datetime.now()
         brain.total_closed_trades = data.get("total_closed_trades", 0)
