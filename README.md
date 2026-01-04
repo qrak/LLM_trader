@@ -55,14 +55,19 @@ graph TD
 
 ## ✨ Verified Features
 
-### 🧠 AI & LLM Support
+### 🧠 Vector RAG Trading Brain (Memory)
+- **Vector Database**: Uses **ChromaDB** to store detailed trade experiences as vector embeddings.
+- **Semantic Search**: Retrieves past trades based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands).
+- **Adaptive Learning**: The bot "remembers" what worked (or failed) in specific market regimes and injects this context into the AI prompt.
+- **Context-Aware**: Instead of generic rules, the AI sees: *"In similar conditions (High ADX + Bullish), we won 80% of trades with this strategy."*
+
+### 🤖 AI & LLM Support
 - **Multi-Provider Support**: 
   - **Google Gemini**: Configurable model selection. Optimized for `gemini-3-flash-preview` (Temp 1.0, TopK 64) via `config.ini`.
-  - **Claude 4.5 / Google Gemini 3 Pro **: Support for state-of-the-art reasoning models via OpenRouter.
+  - **Claude 4.5 / Google Gemini 3 Pro**: Support for state-of-the-art reasoning models via OpenRouter.
   - **LM Studio**: Local LLM support verified via `lm_studio_base_url`.
 - **Fallback Logic**: Automatically switches providers if primary fails (Google AI -> OpenRouter -> Local).
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
-
 
 ### 📢 RAG Engine (News & Context)
 - **News Aggregator**: Requires a **CryptoCompare API Key**. The free tier typically offers ~150k lifetime requests, which is sufficient for continuous bot operation.
@@ -88,16 +93,13 @@ graph TD
 - [x] **Local LLM Support** (LM Studio Integrated)
 - [x] **Vision Analysis** (Chart Image Generation & Processing)
 - [x] **RAG News Relevance Scoring**
+- [x] **Vector Memory System** (ChromaDB + Semantic Search)
 - [x] **Discord Integration** (Real-time signals, positions, and performance stats)
 - [x] **Interactive CLI** (Hotkeys for manual control)
-- [x] **Cross-Platform Compatibility** (Windows/Linux/macOS)
-- [x] **Graceful Shutdown** (Resource cleanup & state saving)
 - [ ] **Multiple Trading Agent Personalities** (Diverse trading strategies: conservative, aggressive, contrarian, trend-following)
 - [ ] **Multi-Model Consensus Decision-Making** (Aggregate predictions from multiple AI models to reach consensus on trading signals)
 - [ ] **Live Trading** (Execution Layer)
 - [ ] **Web Dashboard** (React/Next.js frontend)
-- [ ] **Database Persistence** (SQLite/Postgres for long-term history)
-- [ ] **HuggingFace Local Embeddings** (Upgrade from keyword scoring)
 - [ ] **Portfolio Management** (Multi-coin balancing)
 
 ## 🚀 Quick Start
