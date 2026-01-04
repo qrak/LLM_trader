@@ -437,6 +437,7 @@ class Position:
     confluence_factors: tuple = field(default_factory=tuple)
     # Transaction fee paid at entry (in USDT)
     entry_fee: float = 0.0
+    quote_amount: float = 0.0   # Invested annual quote currency (e.g. USDT)
     # AI's suggested position size as percentage of capital (0.0-1.0)
     size_pct: float = 0.0
     # Market conditions at entry for Brain learning
@@ -507,6 +508,7 @@ class TradeDecision:
     stop_loss: Optional[float] = None
     take_profit: Optional[float] = None
     position_size: float = 0.0  # AI's suggested percentage of capital (0.0-1.0)
+    quote_amount: float = 0.0   # Invested quote currency amount (e.g. USDT)
     quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
     fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
     reasoning: str = ""
@@ -522,6 +524,7 @@ class TradeDecision:
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
             "position_size": self.position_size,
+            "quote_amount": self.quote_amount,
             "quantity": self.quantity,
             "fee": self.fee,
             "reasoning": self.reasoning,
@@ -539,6 +542,7 @@ class TradeDecision:
             stop_loss=data.get("stop_loss"),
             take_profit=data.get("take_profit"),
             position_size=data.get("position_size", 0.0),
+            quote_amount=data.get("quote_amount", 0.0),
             quantity=data.get("quantity", 0.0),
             fee=data["fee"],  # Mandatory field
             reasoning=data.get("reasoning", ""),
