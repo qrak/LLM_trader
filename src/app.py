@@ -18,7 +18,10 @@ from src.utils.format_utils import FormatUtils
 from src.utils.timeframe_validator import TimeframeValidator
 from src.analyzer.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
-from src.trading import DataPersistence, TradingStrategy
+from src.trading import (
+    TradingStrategy, TradingPersistence, TradingBrainService,
+    TradingStatisticsService, TradingMemoryService
+)
 from src.notifiers import DiscordNotifier, ConsoleNotifier
 from src.utils.keyboard_handler import KeyboardHandler
 from src.rag.text_splitting import SentenceSplitter
@@ -63,7 +66,11 @@ class CryptoTradingBot:
         self._force_analysis = asyncio.Event()
         
         # Trading components
-        self.data_persistence: Optional[DataPersistence] = None
+        # Trading services (will be initialized later)
+        self.persistence: Optional[TradingPersistence] = None
+        self.brain_service: Optional[TradingBrainService] = None
+        self.statistics_service: Optional[TradingStatisticsService] = None
+        self.memory_service: Optional[TradingMemoryService] = None
         self.trading_strategy: Optional[TradingStrategy] = None
         self.current_exchange = None
         self.current_symbol: Optional[str] = None
@@ -344,15 +351,24 @@ class CryptoTradingBot:
         )
         self.logger.debug("AnalysisEngine initialized")
 
-        # Initialize trading components with DI
+        # Initialize trading services with DI
         from src.trading import PositionExtractor
         
         self.position_extractor = PositionExtractor(self.logger, unified_parser=self.unified_parser)
-        self.data_persistence = DataPersistence(self.logger, data_dir="data/trading", max_memory=10)
+        
+        # Instantiate new trading services
+        self.persistence = TradingPersistence(self.logger, data_dir="data/trading")
+        self.brain_service = TradingBrainService(self.logger, self.persistence)
+        self.memory_service = TradingMemoryService(self.logger, self.persistence, max_memory=10)
+        self.statistics_service = TradingStatisticsService(self.logger, self.persistence)
+        
         self.trading_strategy = TradingStrategy(
             self.logger,
-            self.data_persistence,
-            self.config,
+            persistence=self.persistence,
+            brain_service=self.brain_service,
+            statistics_service=self.statistics_service,
+            memory_service=self.memory_service,
+            config=self.config,
             position_extractor=self.position_extractor
         )
         self.logger.debug("Trading components initialized")
@@ -451,7 +467,7 @@ class CryptoTradingBot:
         check_count = 0
         
         # Check if resuming from previous session (regardless of position status)
-        last_analysis_time = self.data_persistence.get_last_analysis_time()
+        last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
             self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._wait_until_next_timeframe_after(last_analysis_time)
@@ -505,7 +521,7 @@ class CryptoTradingBot:
                     await self._stop_position_status_updates()
                     # Send performance stats to Discord
                     if self.discord_notifier:
-                        history = self.data_persistence.load_trade_history()
+                        history = self.persistence.load_trade_history()
                         await self.discord_notifier.send_performance_stats(
                             trade_history=history,
                             symbol=self.current_symbol,
@@ -520,15 +536,15 @@ class CryptoTradingBot:
         # Build trading context with P&L data (separate for system prompt)
         # Use the SAME current_price fetched above
         position_context = self.trading_strategy.get_position_context(current_price)
-        memory_context = self.data_persistence.get_memory_context(current_price)
-        brain_context = self.data_persistence.get_brain_context()
-        statistics_context = self.data_persistence.get_statistics_context()
+        memory_context = self.memory_service.get_context_summary(current_price)
+        brain_context = self.brain_service.get_context()
+        statistics_context = self.statistics_service.get_context()
         # Combine position context with statistics for unified trading context
         if statistics_context:
             position_context = f"{position_context}\n\n{statistics_context}"
 
         # Load previous response for AI continuity
-        previous_data = self.data_persistence.load_previous_response()
+        previous_data = self.persistence.load_previous_response()
         previous_response = None
         previous_indicators = None
 
@@ -537,13 +553,13 @@ class CryptoTradingBot:
             previous_indicators = previous_data.get("technical_indicators")
 
         # Get last analysis time for temporal context
-        last_analysis_time_obj = self.data_persistence.get_last_analysis_time()
+        last_analysis_time_obj = self.persistence.get_last_analysis_time()
         last_analysis_time_str = None
         if last_analysis_time_obj:
             last_analysis_time_str = last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
 
         # Get dynamic thresholds for prompt template
-        dynamic_thresholds = self.data_persistence.get_dynamic_thresholds()
+        dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
 
         result = await self.market_analyzer.analyze_market(
             previous_response=previous_response,
@@ -561,7 +577,7 @@ class CryptoTradingBot:
             return
         
         # Save the timestamp of successful analysis
-        self.data_persistence.save_last_analysis_time()
+        self.persistence.save_last_analysis_time()
         
         # Process the analysis for trading decision
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
@@ -605,7 +621,7 @@ class CryptoTradingBot:
         technical_data = result.get("technical_data")  # Get technical indicators from result
         
         if raw_response:
-            self.data_persistence.save_previous_response(raw_response, technical_data)
+            self.persistence.save_previous_response(raw_response, technical_data)
     
     async def _fetch_current_ticker(self) -> Optional[Dict[str, Any]]:
         """Fetch current ticker from exchange."""
