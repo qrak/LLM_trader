@@ -1,412 +1,88 @@
 import asyncio
-import time
-import os
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from src.logger.logger import Logger
-from src.platforms.alternative_me import AlternativeMeAPI
-from src.platforms.coingecko import CoinGeckoAPI
-from src.platforms.cryptocompare.news_api import CryptoCompareNewsAPI
-from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
-from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
-from src.platforms.exchange_manager import ExchangeManager
-from src.analyzer.analysis_engine import AnalysisEngine
-from src.rag import RagEngine
-from src.utils.token_counter import TokenCounter
-from src.utils.format_utils import FormatUtils
 from src.utils.timeframe_validator import TimeframeValidator
-from src.analyzer.data_processor import DataProcessor
-from src.contracts.manager import ModelManager
-from src.trading import (
-    TradingStrategy, TradingPersistence, TradingBrainService,
-    TradingStatisticsService, TradingMemoryService
-)
-from src.notifiers import DiscordNotifier, ConsoleNotifier
-from src.utils.keyboard_handler import KeyboardHandler
-from src.rag.text_splitting import SentenceSplitter
-from src.parsing.unified_parser import UnifiedParser
-from src.factories import TechnicalIndicatorsFactory
-from src.rag.article_processor import ArticleProcessor
-from src.analyzer.formatters import (
-    MarketOverviewFormatter,
-    LongTermFormatter,
-    MarketFormatter,
-    MarketPeriodFormatter
-)
+
 
 
 class CryptoTradingBot:
     """Automated crypto trading bot - TRADING MODE ONLY."""
     
-    def __init__(self, logger: Logger, config, shutdown_manager: Optional[Any] = None):
+    def __init__(
+        self,
+        logger: Logger,
+        config,
+        shutdown_manager: Optional[Any],
+        exchange_manager,
+        market_analyzer,
+        trading_strategy,
+        discord_notifier,
+        keyboard_handler,
+        rag_engine,
+        coingecko_api,
+        news_api,
+        market_api,
+        categories_api,
+        alternative_me_api,
+        cryptocompare_session,
+        persistence,
+        brain_service,
+        statistics_service,
+        memory_service,
+        discord_task: Optional[asyncio.Task] = None
+    ):
+        """Initialize bot with all dependencies injected.
+        
+        All components are injected via constructor following the Dependency
+        Injection pattern, with start.py acting as the composition root.
+        """
         self.logger = logger
         self.config = config
         self.shutdown_manager = shutdown_manager
-        self.market_analyzer = None
-        self.coingecko_api = None
-        self.news_api = None
-        self.market_api = None
-        self.categories_api = None
-        self.cryptocompare_session = None
-        self.alternative_me_api = None
-        self.rag_engine = None
-        self.exchange_manager = None
-        self.token_counter = None
-        self.sentence_splitter = None
-        self.format_utils = None
-        self.data_processor = None
-        self.model_manager = None
+        
+        # Injected core components
+        self.exchange_manager = exchange_manager
+        self.market_analyzer = market_analyzer
+        self.trading_strategy = trading_strategy
+        self.discord_notifier = discord_notifier
+        self.keyboard_handler = keyboard_handler
+        self.rag_engine = rag_engine
+        
+        # Injected API clients
+        self.coingecko_api = coingecko_api
+        self.news_api = news_api
+        self.market_api = market_api
+        self.categories_api = categories_api
+        self.alternative_me_api = alternative_me_api
+        self.cryptocompare_session = cryptocompare_session
+        
+        # Injected trading services
+        self.persistence = persistence
+        self.brain_service = brain_service
+        self.statistics_service = statistics_service
+        self.memory_service = memory_service
+        
+        # Runtime state
         self.tasks = []
         self.running = False
         self._active_tasks = set()
-        
-        # Keyboard handler
-        self.keyboard_handler: Optional[KeyboardHandler] = None
         self._force_analysis = asyncio.Event()
+        self._discord_task = discord_task
+        self._position_status_task: Optional[asyncio.Task] = None
         
-        # Trading components
-        # Trading services (will be initialized later)
-        self.persistence: Optional[TradingPersistence] = None
-        self.brain_service: Optional[TradingBrainService] = None
-        self.statistics_service: Optional[TradingStatisticsService] = None
-        self.memory_service: Optional[TradingMemoryService] = None
-        self.trading_strategy: Optional[TradingStrategy] = None
+        # Trading state
         self.current_exchange = None
         self.current_symbol: Optional[str] = None
         self.current_timeframe: Optional[str] = None
-        
-        # Notifier (Discord or Console fallback)
-        self.discord_notifier: Optional[DiscordNotifier | ConsoleNotifier] = None
-        self._discord_task: Optional[asyncio.Task] = None
-        self._position_status_task: Optional[asyncio.Task] = None
 
     async def initialize(self):
         """Initialize all components."""
-        start_time = time.perf_counter()
-        
         if self.shutdown_manager:
             self.shutdown_manager.register_shutdown_callback(self.shutdown)
-
-        # Initialize data directory
-        data_dir = self.config.DATA_DIR
-        os.makedirs(data_dir, exist_ok=True)
-        # Ensure subdirectories exist
-        os.makedirs(os.path.join(data_dir, "news_cache"), exist_ok=True)
-        os.makedirs(os.path.join(data_dir, "trading"), exist_ok=True)
-        os.makedirs(os.path.join(data_dir, "charts"), exist_ok=True)
-
-        self.logger.info("Initializing Crypto Trading Bot...")
         
-        # Create and initialize components using DI pattern
-        # Initialize ExchangeManager first
-        self.exchange_manager = ExchangeManager(logger=self.logger, config=self.config)
-        await self.exchange_manager.initialize()
-        self.logger.debug("ExchangeManager initialized")
-        
-        # Initialize token counter and splitters
-        # Initialize token counter and splitters
-        self.token_counter = TokenCounter()
-        
-        # Initialize DataProcessor first (dependency for FormatUtils)
-        self.data_processor = DataProcessor()
-        
-        # Initialize FormatUtils with DataProcessor dependency
-        self.format_utils = FormatUtils(data_processor=self.data_processor)
-        
-        # Initialize SentenceSplitter with logger
-        self.sentence_splitter = SentenceSplitter(logger=self.logger)
-        
-        # Initialize technical indicators factory
-        self.ti_factory = TechnicalIndicatorsFactory()
-        
-        # Initialize UnifiedParser
-        from src.parsing.unified_parser import UnifiedParser
-        self.unified_parser = UnifiedParser(self.logger)
-        
-        # Initialize ArticleProcessor with unified_parser dependency
-        self.article_processor = ArticleProcessor(
-            logger=self.logger, 
-            unified_parser=self.unified_parser,
-            format_utils=self.format_utils,
-            sentence_splitter=self.sentence_splitter
-        )
-        
-        # Initialize API Clients
-        # CoinGecko API
-        self.coingecko_api = CoinGeckoAPI(
-            logger=self.logger, 
-            api_key=self.config.COINGECKO_API_KEY, 
-            cache_dir='cache',
-            update_interval_hours=self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS,
-            global_api_url=self.config.RAG_COINGECKO_GLOBAL_API_URL
-        )
-        await self.coingecko_api.initialize()
-        self.logger.debug("CoinGeckoAPI initialized")
-        
-        # Initialize CryptoCompare components directly
-        import aiohttp
-        self.cryptocompare_session = aiohttp.ClientSession()
-        
-        self.news_api = CryptoCompareNewsAPI(
-            logger=self.logger, 
-            config=self.config, 
-            cache_dir='data/news_cache', 
-            update_interval_hours=self.config.RAG_UPDATE_INTERVAL_HOURS
-        )
-        await self.news_api.initialize()
-        
-        self.categories_api = CryptoCompareCategoriesAPI(
-            logger=self.logger, 
-            config=self.config, 
-            data_dir='data',
-            categories_update_interval_hours=self.config.RAG_CATEGORIES_UPDATE_INTERVAL_HOURS
-        )
-        await self.categories_api.initialize()
-        
-        self.market_api = CryptoCompareMarketAPI(logger=self.logger, config=self.config)
-        self.logger.debug("CryptoCompare components initialized")
-        
-        self.alternative_me_api = AlternativeMeAPI(logger=self.logger)
-        await self.alternative_me_api.initialize()
-        self.logger.debug("AlternativeMeAPI initialized")
-
-        # Create RAG component managers (DI: moved from RagEngine.__init__)
-        from src.rag import (
-            RagFileHandler, NewsManager, MarketDataManager,
-            IndexManager, ContextBuilder, CategoryFetcher,
-            CategoryProcessor, TickerManager, NewsCategoryAnalyzer
-        )
-        
-        self.rag_file_handler = RagFileHandler(
-            logger=self.logger,
-            config=self.config,
-            unified_parser=self.unified_parser
-        )
-        
-        self.news_manager = NewsManager(
-            logger=self.logger,
-            file_handler=self.rag_file_handler,
-            news_api=self.news_api,
-            categories_api=self.categories_api,
-            session=self.cryptocompare_session,
-            article_processor=self.article_processor
-        )
-        
-        self.market_data_manager = MarketDataManager(
-            logger=self.logger,
-            file_handler=self.rag_file_handler,
-            coingecko_api=self.coingecko_api,
-            market_api=self.market_api,
-            exchange_manager=self.exchange_manager,
-            unified_parser=self.unified_parser
-        )
-        
-        self.index_manager = IndexManager(
-            logger=self.logger,
-            article_processor=self.article_processor
-        )
-        
-        self.category_fetcher = CategoryFetcher(
-            logger=self.logger,
-            categories_api=self.categories_api
-        )
-        
-        self.category_processor = CategoryProcessor(
-            logger=self.logger,
-            file_handler=self.rag_file_handler
-        )
-        
-        self.ticker_manager = TickerManager(
-            logger=self.logger,
-            file_handler=self.rag_file_handler,
-            exchange_manager=self.exchange_manager
-        )
-        
-        self.news_category_analyzer = NewsCategoryAnalyzer(
-            logger=self.logger,
-            category_processor=self.category_processor,
-            unified_parser=self.unified_parser
-        )
-        
-        self.context_builder = ContextBuilder(
-            logger=self.logger,
-            token_counter=self.token_counter,
-            article_processor=self.article_processor,
-            sentence_splitter=self.sentence_splitter
-        )
-        self.context_builder.config = self.config
-        
-        self.logger.debug("RAG components created")
-        
-        # Initialize RagEngine with all injected components
-        self.rag_engine = RagEngine(
-            logger=self.logger,
-            token_counter=self.token_counter,
-            config=self.config,
-            coingecko_api=self.coingecko_api,
-            exchange_manager=self.exchange_manager,
-            file_handler=self.rag_file_handler,
-            news_manager=self.news_manager,
-            market_data_manager=self.market_data_manager,
-            index_manager=self.index_manager,
-            category_fetcher=self.category_fetcher,
-            category_processor=self.category_processor,
-            ticker_manager=self.ticker_manager,
-            news_category_analyzer=self.news_category_analyzer,
-            context_builder=self.context_builder
-        )
-        await self.rag_engine.initialize()
-        self.logger.debug("RagEngine initialized")
-
-        # Initialize ModelManager with unified_parser
-        self.model_manager = ModelManager(self.logger, self.config, unified_parser=self.unified_parser)
-        self.logger.debug("ModelManager initialized")
-        
-        # Create ALL formatters in composition root for dependency injection
-        self.overview_formatter = MarketOverviewFormatter(self.logger, self.format_utils)
-        self.long_term_formatter = LongTermFormatter(self.logger, self.format_utils)
-        self.market_formatter = MarketFormatter(self.logger, self.format_utils)
-        self.period_formatter = MarketPeriodFormatter(self.logger, self.format_utils)
-        
-        # Create Analyzer components (DI: moved from AnalysisEngine.__init__)
-        from src.analyzer import (
-            TechnicalCalculator, PatternAnalyzer, MarketDataCollector,
-            MarketMetricsCalculator, AnalysisResultProcessor,
-            TechnicalFormatter
-        )
-        from src.analyzer.prompts import PromptBuilder
-        from src.analyzer.pattern_engine import ChartGenerator
-        
-        self.technical_calculator = TechnicalCalculator(
-            logger=self.logger,
-            format_utils=self.format_utils,
-            ti_factory=self.ti_factory
-        )
-        
-        self.pattern_analyzer = PatternAnalyzer(logger=self.logger)
-        try:
-            self.pattern_analyzer.warmup()
-        except Exception as warmup_error:
-            self.logger.warning(f"Pattern analyzer warm-up could not run: {warmup_error}")
-        
-        self.technical_formatter = TechnicalFormatter(
-            self.technical_calculator,
-            self.logger,
-            self.format_utils
-        )
-        
-        self.prompt_builder = PromptBuilder(
-            timeframe=self.config.TIMEFRAME,
-            logger=self.logger,
-            technical_calculator=self.technical_calculator,
-            config=self.config,
-            format_utils=self.format_utils,
-            data_processor=self.data_processor,
-            overview_formatter=self.overview_formatter,
-            long_term_formatter=self.long_term_formatter,
-            technical_formatter=self.technical_formatter,
-            market_formatter=self.market_formatter,
-            period_formatter=self.period_formatter
-        )
-        
-        self.market_data_collector = MarketDataCollector(
-            logger=self.logger,
-            rag_engine=self.rag_engine,
-            alternative_me_api=self.alternative_me_api
-        )
-        
-        self.metrics_calculator = MarketMetricsCalculator(logger=self.logger)
-        
-        self.result_processor = AnalysisResultProcessor(
-            model_manager=self.model_manager,
-            logger=self.logger,
-            unified_parser=self.unified_parser
-        )
-        
-        self.chart_generator = ChartGenerator(
-            logger=self.logger,
-            config=self.config,
-            format_utils=self.format_utils
-        )
-        
-        self.logger.debug("Analyzer components created")
-
-        # Initialize AnalysisEngine with all injected components
-        self.market_analyzer = AnalysisEngine(
-            logger=self.logger,
-            rag_engine=self.rag_engine,
-            coingecko_api=self.coingecko_api,
-            model_manager=self.model_manager,
-            alternative_me_api=self.alternative_me_api,
-            market_api=self.market_api,
-            config=self.config,
-            technical_calculator=self.technical_calculator,
-            pattern_analyzer=self.pattern_analyzer,
-            prompt_builder=self.prompt_builder,
-            data_collector=self.market_data_collector,
-            metrics_calculator=self.metrics_calculator,
-            result_processor=self.result_processor,
-            chart_generator=self.chart_generator
-        )
-        self.logger.debug("AnalysisEngine initialized")
-
-        # Initialize trading services with DI
-        from src.trading import PositionExtractor
-        
-        self.position_extractor = PositionExtractor(self.logger, unified_parser=self.unified_parser)
-        
-        # Instantiate new trading services
-        self.persistence = TradingPersistence(self.logger, data_dir="data/trading")
-        self.brain_service = TradingBrainService(self.logger, self.persistence)
-        self.memory_service = TradingMemoryService(self.logger, self.persistence, max_memory=10)
-        self.statistics_service = TradingStatisticsService(self.logger, self.persistence)
-        
-        self.trading_strategy = TradingStrategy(
-            self.logger,
-            persistence=self.persistence,
-            brain_service=self.brain_service,
-            statistics_service=self.statistics_service,
-            memory_service=self.memory_service,
-            config=self.config,
-            position_extractor=self.position_extractor
-        )
-        self.logger.debug("Trading components initialized")
-
-        # Initialize notifier - Discord if enabled, otherwise Console fallback
-        if self.config.DISCORD_BOT_ENABLED and hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
-            try:
-                self.discord_notifier = DiscordNotifier(
-                    logger=self.logger, 
-                    config=self.config, 
-                    unified_parser=self.unified_parser,
-                    formatter=self.format_utils
-                )
-                self._discord_task = asyncio.create_task(self.discord_notifier.start())
-                await self.discord_notifier.wait_until_ready()
-                self.logger.debug("Discord notifier initialized and ready")
-            except Exception as e:
-                self.logger.warning(f"Discord initialization failed: {e}. Falling back to console output.")
-                self.discord_notifier = ConsoleNotifier(
-                    logger=self.logger, 
-                    config=self.config, 
-                    unified_parser=self.unified_parser,
-                    formatter=self.format_utils
-                )
-        else:
-            # Use ConsoleNotifier as fallback when Discord is disabled
-            self.discord_notifier = ConsoleNotifier(
-                logger=self.logger, 
-                config=self.config, 
-                unified_parser=self.unified_parser,
-                formatter=self.format_utils
-            )
-            self.logger.info("Discord disabled, using console notifications")
-
-        await self.rag_engine.start_periodic_updates()
-        
-        # Initialize keyboard handler
-        self.keyboard_handler = KeyboardHandler(logger=self.logger)
+        # Register keyboard commands
         self.keyboard_handler.register_command('a', self._force_analysis_now, "Force immediate analysis")
         self.keyboard_handler.register_command('h', self._show_help, "Show available keyboard commands")
         self.keyboard_handler.register_command('q', self._request_shutdown, "Quit the application")
@@ -420,10 +96,9 @@ class CryptoTradingBot:
         keyboard_task.add_done_callback(self._active_tasks.discard)
         self.tasks.append(keyboard_task)
         
-        end_time = time.perf_counter()
-        init_duration = end_time - start_time
-        self.logger.info(f"Crypto Trading Bot initialized successfully in {init_duration:.2f} seconds")
+        self.logger.info("Crypto Trading Bot ready")
         self.logger.info("Keyboard commands: 'a' = force analysis, 'h' = help, 'q' = quit")
+
 
     async def run(self, symbol: str, timeframe: str = None):
         """Run the trading bot in continuous mode.
