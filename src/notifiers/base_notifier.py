@@ -9,22 +9,25 @@ from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.parsing.unified_parser import UnifiedParser
+    from src.utils.format_utils import FormatUtils
 
 
 class BaseNotifier(ABC):
     """Abstract base class for notifiers with shared calculation logic."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser") -> None:
+    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
         """Initialize BaseNotifier.
 
         Args:
             logger: Logger instance
             config: ConfigProtocol instance
             unified_parser: UnifiedParser for JSON extraction (DRY)
+            formatter: FormatUtils instance for value formatting
         """
         self.logger = logger
         self.config = config
         self.unified_parser = unified_parser
+        self.formatter = formatter
         self.is_initialized = False
 
     @abstractmethod
