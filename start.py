@@ -8,6 +8,13 @@ import warnings
 import time
 import os
 import aiohttp
+import signal
+import atexit
+from pathlib import Path
+from typing import Optional
+
+if sys.platform != "win32":
+    import fcntl
 
 from src.config.loader import config
 from src.app import CryptoTradingBot
@@ -55,6 +62,72 @@ from src.analyzer.prompts import PromptBuilder
 from src.analyzer.pattern_engine import ChartGenerator
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
+
+try:
+    from PyQt6.QtWidgets import QApplication, QMessageBox
+    from PyQt6.QtCore import Qt
+    PYQT_AVAILABLE = True
+except ImportError:
+    PYQT_AVAILABLE = False
+
+lock_file_handle: Optional[int] = None
+
+
+def check_single_instance() -> bool:
+    """
+    Check if another instance is already running using a lock file.
+    Works cross-platform (Windows, Linux, macOS).
+    
+    Returns:
+        True if this is the only instance, False if another instance is running.
+    """
+    global lock_file_handle
+    
+    lock_file_path = Path.home() / ".llm_trader.lock"
+    
+    try:
+        lock_file_handle = os.open(str(lock_file_path), os.O_CREAT | os.O_RDWR)
+        
+        if sys.platform == "win32":
+            import msvcrt
+            try:
+                msvcrt.locking(lock_file_handle, msvcrt.LK_NBLCK, 1)
+            except OSError:
+                return False
+        else:
+            try:
+                fcntl.flock(lock_file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return False
+        
+        atexit.register(_cleanup_lock_file)
+        return True
+        
+    except Exception as e:
+        print(f"Warning: Could not create lock file: {e}")
+        return True
+
+
+def _cleanup_lock_file() -> None:
+    """Release the lock file on exit."""
+    global lock_file_handle
+    
+    if lock_file_handle is not None:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(lock_file_handle, msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(lock_file_handle, fcntl.LOCK_UN)
+            os.close(lock_file_handle)
+        except Exception:
+            pass
+        
+        lock_file_path = Path.home() / ".llm_trader.lock"
+        try:
+            lock_file_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 class CompositionRoot:
@@ -414,13 +487,35 @@ class CompositionRoot:
     
     def start(self):
         """Main entry point with clean shutdown delegation."""
+        if not check_single_instance():
+            if PYQT_AVAILABLE:
+                app = QApplication.instance()
+                if app is None:
+                    app = QApplication(sys.argv)
+                    QApplication.setHighDpiScaleFactorRoundingPolicy(
+                        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+                    )
+                QMessageBox.critical(
+                    None,
+                    "Crypto Trading Bot",
+                    "Another instance of Crypto Trading Bot is already running.",
+                    QMessageBox.StandardButton.Ok
+                )
+            else:
+                print("Another instance of Crypto Trading Bot is already running.")
+            sys.exit(1)
+        
         if sys.platform == 'win32':
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         
-        self.shutdown_manager = GracefulShutdownManager(self.loop)
+        self.shutdown_manager = GracefulShutdownManager(
+            self.loop,
+            logger=self.logger,
+            confirmation_callback=GracefulShutdownManager.show_exit_confirmation
+        )
         self.shutdown_manager.setup_signal_handlers()
         
         try:
