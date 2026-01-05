@@ -140,9 +140,8 @@ class TradingBrainService:
         # Section 1: Confidence Calibration (lightweight, always available)
         if self.brain.total_closed_trades > 0:
             lines.extend([
-                "=",
-                f"TRADING BRAIN ({self.brain.total_closed_trades} closed trades):",
-                "=",
+                "",
+                f"## TRADING BRAIN ({self.brain.total_closed_trades} closed trades)",
                 "",
                 "CONFIDENCE CALIBRATION:",
             ])

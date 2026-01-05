@@ -372,17 +372,18 @@ class AnalysisEngine:
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
             previous_response,
-            position_context,
             performance_context,
             brain_context,
-            last_analysis_time
+            last_analysis_time,
+            has_chart_analysis,
+            dynamic_thresholds
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
             has_chart_analysis=has_chart_analysis,
             additional_context=additional_context,
             previous_indicators=previous_indicators,
-            dynamic_thresholds=dynamic_thresholds
+            position_context=position_context
         )
         # Process analysis
         if self.config.TEST_ENVIRONMENT:
