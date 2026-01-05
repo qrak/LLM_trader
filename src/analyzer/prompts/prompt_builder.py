@@ -205,7 +205,8 @@ class PromptBuilder:
     
     def build_system_prompt(
         self, 
-        symbol: str, 
+        symbol: str,
+        context: AnalysisContext,
         previous_response: Optional[str] = None, 
         performance_context: Optional[str] = None, 
         brain_context: Optional[str] = None, 
@@ -217,6 +218,7 @@ class PromptBuilder:
         
         Args:
             symbol: Trading symbol
+            context: Analysis context containing technical data
             previous_response: Optional previous AI response for continuity
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
@@ -227,6 +229,9 @@ class PromptBuilder:
         Returns:
             str: Formatted system prompt with instructions
         """
+        # Set context so _has_advanced_support_resistance can access it
+        self.context = context
+        
         # Build base system prompt
         base_prompt = self.template_manager.build_system_prompt(
             symbol, 
