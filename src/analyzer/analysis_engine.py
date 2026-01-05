@@ -371,6 +371,7 @@ class AnalysisEngine:
         
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
+            self.context,
             previous_response,
             performance_context,
             brain_context,
