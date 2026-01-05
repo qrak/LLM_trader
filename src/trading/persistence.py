@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
 from src.utils.serialize import serialize_for_json
-from .dataclasses import Position, TradeDecision, TradingBrain
+from .dataclasses import Position, TradeDecision
 from .statistics_calculator import TradingStatistics
 
 
@@ -37,7 +37,6 @@ class TradingPersistence:
         self.positions_file = self.data_dir / "positions.json"
         self.history_file = self.data_dir / "trade_history.json"
         self.previous_response_file = self.data_dir / "previous_response.json"
-        self.brain_file = self.data_dir / "trading_brain.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
     
@@ -68,6 +67,7 @@ class TradingPersistence:
                 "tp_distance_pct": position.tp_distance_pct,
                 "rr_ratio_at_entry": position.rr_ratio_at_entry,
                 "adx_at_entry": position.adx_at_entry,
+                "rsi_at_entry": position.rsi_at_entry,
                 "max_drawdown_pct": position.max_drawdown_pct,
                 "max_profit_pct": position.max_profit_pct,
             }
@@ -109,6 +109,7 @@ class TradingPersistence:
                     tp_distance_pct=data.get("tp_distance_pct", 0.0),
                     rr_ratio_at_entry=data.get("rr_ratio_at_entry", 0.0),
                     adx_at_entry=data.get("adx_at_entry", 0.0),
+                    rsi_at_entry=data.get("rsi_at_entry", 50.0),
                     max_drawdown_pct=data.get("max_drawdown_pct", 0.0),
                     max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
@@ -160,30 +161,6 @@ class TradingPersistence:
         )
         
         return filtered[:n]
-    
-    def save_brain(self, brain: TradingBrain) -> None:
-        """Save trading brain to disk."""
-        try:
-            with open(self.brain_file, 'w') as f:
-                json.dump(brain.to_dict(), f, indent=2)
-            self.logger.debug(f"Saved trading brain ({brain.total_closed_trades} trades)")
-        except Exception as e:
-            self.logger.error(f"Error saving trading brain: {e}")
-    
-    def load_brain(self) -> TradingBrain:
-        """Load trading brain from disk."""
-        if not self.brain_file.exists():
-            return TradingBrain()
-        
-        try:
-            with open(self.brain_file, 'r') as f:
-                data = json.load(f)
-                brain = TradingBrain.from_dict(data)
-                self.logger.info(f"Loaded trading brain ({brain.total_closed_trades} closed trades)")
-                return brain
-        except Exception as e:
-            self.logger.error(f"Error loading trading brain: {e}")
-            return TradingBrain()
     
     def save_statistics(self, stats: TradingStatistics) -> None:
         """Save trading statistics to disk."""

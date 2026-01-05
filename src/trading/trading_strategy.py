@@ -313,6 +313,7 @@ class TradingStrategy:
         atr = market_conditions.get("atr", current_price * 0.02)
         atr_pct = market_conditions.get("atr_percentage", (atr / current_price) * 100)
         adx = market_conditions.get("adx", 0.0)
+        rsi = market_conditions.get("rsi", 50.0)
 
         # Determine volatility level for Brain learning
         if atr_pct > 3:
@@ -433,6 +434,7 @@ class TradingStrategy:
             tp_distance_pct=tp_distance_pct,
             rr_ratio_at_entry=rr_ratio,
             adx_at_entry=adx,
+            rsi_at_entry=rsi,
         )
         self.persistence.save_position(self.current_position)
         self.logger.info(
@@ -512,6 +514,7 @@ class TradingStrategy:
                 tp_distance_pct=self.current_position.tp_distance_pct,
                 rr_ratio_at_entry=self.current_position.rr_ratio_at_entry,
                 adx_at_entry=self.current_position.adx_at_entry,
+                rsi_at_entry=self.current_position.rsi_at_entry,
                 max_drawdown_pct=self.current_position.max_drawdown_pct,
                 max_profit_pct=self.current_position.max_profit_pct,
             )

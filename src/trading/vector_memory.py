@@ -265,3 +265,262 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return 0
         return self._collection.count()
+
+    def compute_confidence_stats(self) -> Dict[str, Dict[str, Any]]:
+        """Compute confidence level statistics from all stored experiences.
+
+        Returns:
+            Dict with HIGH/MEDIUM/LOW keys containing win rates, trade counts, avg P&L.
+        """
+        if not self._ensure_initialized():
+            return {}
+
+        all_experiences = self._collection.get()
+        if not all_experiences or not all_experiences["ids"]:
+            return {}
+
+        stats = {
+            "HIGH": {"total_trades": 0, "winning_trades": 0, "pnl_sum": 0.0},
+            "MEDIUM": {"total_trades": 0, "winning_trades": 0, "pnl_sum": 0.0},
+            "LOW": {"total_trades": 0, "winning_trades": 0, "pnl_sum": 0.0},
+        }
+
+        for meta in all_experiences["metadatas"]:
+            confidence = meta.get("confidence", "MEDIUM").upper()
+            if confidence not in stats:
+                confidence = "MEDIUM"
+
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            stats[confidence]["total_trades"] += 1
+            if is_win:
+                stats[confidence]["winning_trades"] += 1
+            stats[confidence]["pnl_sum"] += pnl
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for level, data in stats.items():
+            total = data["total_trades"]
+            result[level] = {
+                "total_trades": total,
+                "winning_trades": data["winning_trades"],
+                "win_rate": (data["winning_trades"] / total * 100) if total > 0 else 0.0,
+                "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else 0.0,
+            }
+
+        return result
+
+    def compute_adx_performance(self) -> Dict[str, Dict[str, Any]]:
+        """Compute ADX bucket performance from all stored experiences.
+
+        Returns:
+            Dict with LOW/MEDIUM/HIGH keys for ADX buckets.
+        """
+        if not self._ensure_initialized():
+            return {}
+
+        all_experiences = self._collection.get()
+        if not all_experiences or not all_experiences["ids"]:
+            return {}
+
+        buckets = {
+            "LOW": {"level": "ADX<20", "trades": []},
+            "MEDIUM": {"level": "ADX20-25", "trades": []},
+            "HIGH": {"level": "ADX>25", "trades": []},
+        }
+
+        for meta in all_experiences["metadatas"]:
+            adx = meta.get("adx_at_entry", meta.get("adx", 0))
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            if adx < 20:
+                bucket = "LOW"
+            elif adx < 25:
+                bucket = "MEDIUM"
+            else:
+                bucket = "HIGH"
+
+            buckets[bucket]["trades"].append({"pnl": pnl, "is_win": is_win})
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for key, data in buckets.items():
+            trades = data["trades"]
+            total = len(trades)
+            wins = sum(1 for t in trades if t["is_win"])
+            pnl_sum = sum(t["pnl"] for t in trades)
+
+            result[key] = {
+                "level": data["level"],
+                "total_trades": total,
+                "winning_trades": wins,
+                "win_rate": (wins / total * 100) if total > 0 else 0.0,
+                "avg_pnl_pct": (pnl_sum / total) if total > 0 else 0.0,
+            }
+
+        return result
+
+    def compute_factor_performance(self) -> Dict[str, Dict[str, Any]]:
+        """Compute confluence factor performance from all stored experiences.
+
+        Returns:
+            Dict with factor_bucket keys (e.g., trend_alignment_HIGH).
+        """
+        if not self._ensure_initialized():
+            return {}
+
+        all_experiences = self._collection.get()
+        if not all_experiences or not all_experiences["ids"]:
+            return {}
+
+        factor_names = [
+            "trend_alignment",
+            "momentum_strength",
+            "volume_support",
+            "pattern_quality",
+            "support_resistance",
+        ]
+
+        factors: Dict[str, Dict[str, Any]] = {}
+        for name in factor_names:
+            for bucket in ["LOW", "MEDIUM", "HIGH"]:
+                key = f"{name}_{bucket}"
+                factors[key] = {
+                    "factor_name": name,
+                    "bucket": bucket,
+                    "trades": [],
+                    "scores": [],
+                }
+
+        for meta in all_experiences["metadatas"]:
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            for name in factor_names:
+                score_key = f"{name}_score"
+                score = meta.get(score_key, 0)
+
+                if score <= 0:
+                    continue
+
+                if score <= 30:
+                    bucket = "LOW"
+                elif score <= 69:
+                    bucket = "MEDIUM"
+                else:
+                    bucket = "HIGH"
+
+                key = f"{name}_{bucket}"
+                factors[key]["trades"].append({"pnl": pnl, "is_win": is_win})
+                factors[key]["scores"].append(score)
+
+        result: Dict[str, Dict[str, Any]] = {}
+        for key, data in factors.items():
+            trades = data["trades"]
+            scores = data["scores"]
+            total = len(trades)
+
+            if total == 0:
+                continue
+
+            wins = sum(1 for t in trades if t["is_win"])
+            pnl_sum = sum(t["pnl"] for t in trades)
+
+            result[key] = {
+                "factor_name": data["factor_name"],
+                "bucket": data["bucket"],
+                "total_trades": total,
+                "winning_trades": wins,
+                "avg_score": sum(scores) / len(scores) if scores else 0.0,
+                "win_rate": (wins / total * 100) if total > 0 else 0.0,
+                "avg_pnl_pct": (pnl_sum / total) if total > 0 else 0.0,
+            }
+
+        return result
+
+    def compute_optimal_thresholds(self, min_sample_size: int = 5) -> Dict[str, Any]:
+        """Compute optimal thresholds from vector store data.
+
+        Args:
+            min_sample_size: Minimum trades needed for reliable threshold.
+
+        Returns:
+            Dict with adx_strong_threshold, min_rr_recommended, avg_sl_pct, confidence_threshold.
+        """
+        if not self._ensure_initialized():
+            return {}
+
+        thresholds: Dict[str, Any] = {}
+
+        adx_perf = self.compute_adx_performance()
+
+        adx_high = adx_perf.get("HIGH", {})
+        adx_med = adx_perf.get("MEDIUM", {})
+
+        if adx_high.get("total_trades", 0) >= min_sample_size:
+            if adx_med.get("total_trades", 0) >= min_sample_size:
+                if adx_high.get("win_rate", 0) > adx_med.get("win_rate", 0) + 10:
+                    thresholds["adx_strong_threshold"] = 25
+                elif adx_med.get("win_rate", 0) > 55:
+                    thresholds["adx_strong_threshold"] = 20
+
+        all_experiences = self._collection.get()
+        if all_experiences and all_experiences["metadatas"]:
+            rr_wins = []
+            rr_losses = []
+            sl_distances = []
+
+            for meta in all_experiences["metadatas"]:
+                rr = meta.get("rr_ratio", 0)
+                if rr > 0:
+                    if meta.get("outcome") == "WIN":
+                        rr_wins.append(rr)
+                    else:
+                        rr_losses.append(rr)
+
+                if meta.get("outcome") == "WIN" and meta.get("sl_distance_pct", 0) > 0:
+                    sl_distances.append(meta["sl_distance_pct"] * 100)
+
+            if rr_wins:
+                avg_winning_rr = sum(rr_wins) / len(rr_wins)
+                thresholds["min_rr_recommended"] = round(avg_winning_rr * 0.8, 1)
+
+            if sl_distances:
+                thresholds["avg_sl_pct"] = round(sum(sl_distances) / len(sl_distances), 2)
+
+        conf_stats = self.compute_confidence_stats()
+        high_stats = conf_stats.get("HIGH", {})
+        if high_stats.get("total_trades", 0) >= min_sample_size:
+            if high_stats.get("win_rate", 0) < 55:
+                thresholds["confidence_threshold"] = 75
+            elif high_stats.get("win_rate", 0) > 70:
+                thresholds["confidence_threshold"] = 65
+
+        return thresholds
+
+    def get_confidence_recommendation(self, min_sample_size: int = 5) -> Optional[str]:
+        """Generate recommendation based on confidence calibration.
+
+        Args:
+            min_sample_size: Minimum trades for analysis.
+
+        Returns:
+            Insight string or None.
+        """
+        conf_stats = self.compute_confidence_stats()
+
+        high_stats = conf_stats.get("HIGH", {})
+        medium_stats = conf_stats.get("MEDIUM", {})
+
+        if high_stats.get("total_trades", 0) >= min_sample_size:
+            high_win_rate = high_stats.get("win_rate", 0)
+
+            if high_win_rate < 60:
+                return f"HIGH confidence win rate is only {high_win_rate:.0f}% - increase entry criteria"
+
+            if medium_stats.get("total_trades", 0) >= min_sample_size:
+                medium_win_rate = medium_stats.get("win_rate", 0)
+                if medium_win_rate > high_win_rate:
+                    return "MEDIUM confidence outperforming HIGH - current HIGH standards may be too loose"
+
+        return None

@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 from src.logger.logger import Logger
 from .persistence import TradingPersistence
 from .vector_memory import VectorMemoryService
-from .dataclasses import Position, TradeDecision, TradingBrain, FactorStats
+from .dataclasses import Position, TradeDecision
 
 
 class TradingBrainService:
@@ -23,17 +23,16 @@ class TradingBrainService:
     """
     
     def __init__(self, logger: Logger, persistence: TradingPersistence, vector_memory: Optional[VectorMemoryService] = None):
-        """Initialize trading brain service.
-        
+        """Initialize trading brain service (vector-only mode).
+
         Args:
             logger: Logger instance
-            persistence: Persistence service for loading/saving brain state
+            persistence: Persistence service (used for data_dir path)
             vector_memory: Optional injected vector memory (for testing)
         """
         self.logger = logger
         self.persistence = persistence
-        self.brain = persistence.load_brain()
-        
+
         if vector_memory:
             self.vector_memory = vector_memory
         else:
@@ -41,6 +40,10 @@ class TradingBrainService:
                 logger=logger,
                 data_dir=str(persistence.data_dir / "brain_vector_db")
             )
+
+        # Cache for computed stats (invalidated when new trades arrive)
+        self._stats_cache: Dict[str, Any] = {}
+        self._cache_trade_count: int = 0
     
     def update_from_closed_trade(
         self,
@@ -61,34 +64,12 @@ class TradingBrainService:
         """
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
-        
-        self.brain.update_confidence_stats(position.confidence, is_win, pnl_pct)
-        
-        self._update_factor_performance(position.confluence_factors, is_win, pnl_pct)
-        
-        adx = position.adx_at_entry if position.adx_at_entry > 0 else 0
-        if adx == 0 and market_conditions:
-            adx = market_conditions.get("adx", 0)
-            
-        if adx > 0:
-            if adx < 20:
-                self.brain.adx_performance["LOW"].update(is_win, pnl_pct)
-            elif adx < 25:
-                self.brain.adx_performance["MEDIUM"].update(is_win, pnl_pct)
-            else:
-                self.brain.adx_performance["HIGH"].update(is_win, pnl_pct)
-        
-        if position.rr_ratio_at_entry > 0:
-            if position.rr_ratio_at_entry < 1.5:
-                self.brain.rr_performance["LOW"].update(is_win, pnl_pct)
-            elif position.rr_ratio_at_entry < 2.0:
-                self.brain.rr_performance["MEDIUM"].update(is_win, pnl_pct)
-            else:
-                self.brain.rr_performance["HIGH"].update(is_win, pnl_pct)
+
         conditions = market_conditions or {}
         condition_str = self._build_condition_string(conditions)
-        
-        self.persistence.save_brain(self.brain)
+
+        # Invalidate stats cache (new trade added)
+        self._stats_cache = {}
         
         trade_id = f"trade_{position.entry_time.isoformat()}"
         reasoning = entry_decision.reasoning if entry_decision else "N/A"
@@ -102,8 +83,16 @@ class TradingBrainService:
             reasoning=reasoning,
             metadata={
                 "close_reason": close_reason,
-                "adx": adx,
+                "adx_at_entry": position.adx_at_entry,
+                "rsi_at_entry": position.rsi_at_entry,
+                "atr_at_entry": position.atr_at_entry,
+                "volatility_level": position.volatility_level,
+                "sl_distance_pct": position.sl_distance_pct,
+                "tp_distance_pct": position.tp_distance_pct,
                 "rr_ratio": position.rr_ratio_at_entry,
+                "max_drawdown_pct": position.max_drawdown_pct,
+                "max_profit_pct": position.max_profit_pct,
+                **self._extract_factor_scores(position.confluence_factors),
             }
         )
         
@@ -136,25 +125,28 @@ class TradingBrainService:
             Formatted string with vector-retrieved experiences and confidence calibration.
         """
         lines = []
-        
-        # Section 1: Confidence Calibration (lightweight, always available)
-        if self.brain.total_closed_trades > 0:
+
+        exp_count = self.vector_memory.experience_count
+        if exp_count > 0:
             lines.extend([
                 "",
-                f"## TRADING BRAIN ({self.brain.total_closed_trades} closed trades)",
+                f"## TRADING BRAIN ({exp_count} closed trades)",
                 "",
                 "CONFIDENCE CALIBRATION:",
             ])
-            
+
+            conf_stats = self._get_cached_stats(
+                "confidence", self.vector_memory.compute_confidence_stats
+            )
             for level in ['HIGH', 'MEDIUM', 'LOW']:
-                stats = self.brain.confidence_stats.get(level)
-                if stats and stats.total_trades > 0:
+                stats = conf_stats.get(level, {})
+                if stats.get("total_trades", 0) > 0:
                     lines.append(
-                        f"- {level} Confidence: Win Rate {stats.win_rate:.0f}% "
-                        f"({stats.winning_trades}/{stats.total_trades} trades) | Avg P&L: {stats.avg_pnl_pct:+.2f}%"
+                        f"- {level} Confidence: Win Rate {stats['win_rate']:.0f}% "
+                        f"({stats['winning_trades']}/{stats['total_trades']} trades) | Avg P&L: {stats['avg_pnl_pct']:+.2f}%"
                     )
-            
-            recommendation = self.brain.get_confidence_recommendation()
+
+            recommendation = self.vector_memory.get_confidence_recommendation()
             if recommendation:
                 lines.append(f"  → INSIGHT: {recommendation}")
         
@@ -198,23 +190,34 @@ class TradingBrainService:
         Returns:
             Dict with sl_pct, tp_pct, size_pct, min_rr, and source
         """
-        return self.brain.suggest_parameters(
-            volatility_level=volatility_level,
-            confidence=confidence,
-            current_atr_pct=current_atr_pct
-        )
-    
+        # Use ATR-based defaults with confidence adjustments
+        recommendations = {
+            "sl_pct": current_atr_pct * 2 / 100,
+            "tp_pct": current_atr_pct * 4 / 100,
+            "size_pct": 0.02,
+            "min_rr": 2.0,
+            "source": "atr_fallback"
+        }
+
+        # Adjust based on confidence
+        confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
+        recommendations["size_pct"] = confidence_map.get(confidence.upper(), 0.02)
+
+        return recommendations
+
     def get_dynamic_thresholds(self) -> Dict[str, Any]:
-        """Get Brain-learned thresholds for response template injection.
-        
+        """Get Brain-learned thresholds from vector store.
+
         Returns:
-            Dict with ADX threshold, avg SL%, min R/R, confidence threshold, safe MAE%
+            Dict with ADX threshold, avg SL%, min R/R, confidence threshold, safe MAE%.
         """
-        thresholds = self.brain.get_optimal_thresholds()
+        thresholds = self._get_cached_stats(
+            "thresholds", self.vector_memory.compute_optimal_thresholds
+        )
         return {
-            "adx_strong_threshold": thresholds.get("adx_strong", 25),
+            "adx_strong_threshold": thresholds.get("adx_strong_threshold", 25),
             "avg_sl_pct": thresholds.get("avg_sl_pct", 2.5),
-            "min_rr_recommended": thresholds.get("min_rr", 2.0),
+            "min_rr_recommended": thresholds.get("min_rr_recommended", 2.0),
             "confidence_threshold": thresholds.get("confidence_threshold", 70),
             "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
         }
@@ -312,37 +315,33 @@ class TradingBrainService:
             parts.append("Low Vol")
         
         return " + ".join(parts) if parts else "Unknown"
-    
-    def _update_factor_performance(
-        self, 
-        confluence_factors: tuple, 
-        is_win: bool, 
-        pnl_pct: float
-    ) -> None:
-        """Update factor performance statistics from closed trade."""
-        if not confluence_factors:
-            return
-        
-        for factor_name, score in confluence_factors:
-            if score <= 30:
-                bucket = "LOW"
-            elif score <= 69:
-                bucket = "MEDIUM"
-            else:
-                bucket = "HIGH"
-            
-            key = f"{factor_name}_{bucket}"
-            
-            if key not in self.brain.factor_performance:
-                self.brain.factor_performance[key] = FactorStats(
-                    factor_name=factor_name,
-                    bucket=bucket
-                )
-            
-            self.brain.factor_performance[key].update(is_win, pnl_pct, score)
-        
-        self.logger.debug(
-            f"Updated factor performance for {len(confluence_factors)} factors"
-        )
-    
 
+    def _get_cached_stats(self, key: str, compute_fn) -> Dict[str, Any]:
+        """Get stats from cache or compute and cache them.
+
+        Args:
+            key: Cache key for the stats type.
+            compute_fn: Function to call if cache miss.
+
+        Returns:
+            Computed or cached statistics.
+        """
+        current_count = self.vector_memory.experience_count
+        if current_count != self._cache_trade_count:
+            self._stats_cache = {}
+            self._cache_trade_count = current_count
+
+        if key not in self._stats_cache:
+            self._stats_cache[key] = compute_fn()
+
+        return self._stats_cache[key]
+
+    def _extract_factor_scores(self, confluence_factors: tuple) -> Dict[str, float]:
+        """Extract factor scores into flat dict for vector metadata."""
+        scores: Dict[str, float] = {}
+        if not confluence_factors:
+            return scores
+        for factor_name, score in confluence_factors:
+            clean_name = factor_name.replace(" ", "_").lower()
+            scores[f"{clean_name}_score"] = float(score)
+        return scores
