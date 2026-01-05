@@ -20,3 +20,4 @@ wtpsplit>=2.0.0
 torch>=2.0.0
 chromadb>=1.0.0
 sentence-transformers>=3.0.0
+PyQt6==6.9.1

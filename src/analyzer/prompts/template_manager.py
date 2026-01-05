@@ -51,7 +51,8 @@ class TemplateManager:
         
         header_lines.extend([
             "CORE PRINCIPLES:",
-            "- All data is based on CLOSED CANDLES ONLY (no incomplete candle data)",
+            "- Technical indicators are calculated using CLOSED CANDLES ONLY (no incomplete candle data)",
+            "- Current price reflects real-time market price from the incomplete candle (accurate position tracking)",
             "- Trading decisions must be based on confirmed signals, not speculation",
             "- Risk management is paramount: every trade requires proper stop loss and take profit",
             "- Confidence must match signal strength: only high-confidence trades in strong setups",
@@ -307,7 +308,7 @@ ANALYSIS STEPS (use findings to determine trading signal):
 {step_number + 1}. SYNTHESIS:
    Trend direction/strength | Indicator confluence | SL/TP levels | R/R ratio | Confidence | Invalidation triggers
 
-NOTE: CLOSED CANDLES ONLY. No pattern = state "No clear pattern detected"."""
+NOTE: Indicators calculated from CLOSED CANDLES ONLY. No pattern = state "No clear pattern detected"."""
         
         if has_advanced_support_resistance:
             analysis_steps += """
