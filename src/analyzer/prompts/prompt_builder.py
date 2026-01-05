@@ -80,16 +80,16 @@ class PromptBuilder:
         has_chart_analysis: bool = False,
         additional_context: Optional[str] = None,
         previous_indicators: Optional[dict] = None,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None
+        position_context: Optional[str] = None
     ) -> str:
         """Build the complete prompt using component managers.
         
         Args:
             context: Analysis context containing all required data
             has_chart_analysis: Whether chart image analysis is available
-            additional_context: Additional context to append (e.g., position info, memory)
+            additional_context: Additional context to append (e.g., news, memory)
             previous_indicators: Previous technical indicator values for comparison
-            dynamic_thresholds: Brain-learned thresholds for response template
+            position_context: Current position details and unrealized P&L (moved from system prompt)
             
         Returns:
             str: Complete formatted prompt
@@ -98,8 +98,13 @@ class PromptBuilder:
 
         sections = [
             self.context_builder.build_trading_context(context),
-            self.context_builder.build_sentiment_section(context.sentiment),
         ]
+        
+        # Add position context early in user query (adjacent to current price for context)
+        if position_context:
+            sections.append(f"## CURRENT POSITION & PERFORMANCE\n{position_context.strip()}")
+        
+        sections.append(self.context_builder.build_sentiment_section(context.sentiment))
 
         # Add market overview first before technical analysis to give it more prominence
         if context.market_overview:
@@ -194,37 +199,65 @@ class PromptBuilder:
         if self.custom_instructions:
             sections.append("\n".join(self.custom_instructions))
 
-        # Check if we have advanced support/resistance detected
-        advanced_support_resistance_detected = self._has_advanced_support_resistance()
-
-        # Get available periods from context builder for dynamic prompt generation
-        available_periods = self.context_builder._calculate_period_candles()
-
-        # Add analysis steps right before response template
-        sections.append(self.template_manager.build_analysis_steps(context.symbol, advanced_support_resistance_detected, has_chart_analysis, available_periods))
-
-        # Response template should always be last
-        sections.append(self.template_manager.build_response_template(has_chart_analysis, dynamic_thresholds=dynamic_thresholds))
-
         final_prompt = "\n\n".join(filter(None, sections))
 
         return final_prompt
     
-    def build_system_prompt(self, symbol: str, previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
+    def build_system_prompt(
+        self, 
+        symbol: str, 
+        previous_response: Optional[str] = None, 
+        performance_context: Optional[str] = None, 
+        brain_context: Optional[str] = None, 
+        last_analysis_time: Optional[str] = None,
+        has_chart_analysis: bool = False,
+        dynamic_thresholds: Optional[Dict[str, Any]] = None
+    ) -> str:
         """Build system prompt using template manager.
         
         Args:
             symbol: Trading symbol
             previous_response: Optional previous AI response for continuity
-            position_context: Current position details and unrealized P&L
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
-            last_analysis_time: Formatted timestamp of last analysis (e.g., \"2025-12-26 14:30:00\")
+            last_analysis_time: Formatted timestamp of last analysis
+            has_chart_analysis: Whether chart image analysis is available
+            dynamic_thresholds: Brain-learned thresholds for response template
             
         Returns:
-            str: Formatted system prompt
+            str: Formatted system prompt with instructions
         """
-        return self.template_manager.build_system_prompt(symbol, self.timeframe, previous_response, position_context, performance_context, brain_context, last_analysis_time)
+        # Build base system prompt
+        base_prompt = self.template_manager.build_system_prompt(
+            symbol, 
+            self.timeframe, 
+            previous_response, 
+            performance_context, 
+            brain_context, 
+            last_analysis_time
+        )
+        
+        # Check if we have advanced support/resistance detected
+        advanced_support_resistance_detected = self._has_advanced_support_resistance()
+        
+        # Get available periods from context builder for dynamic prompt generation
+        available_periods = self.context_builder._calculate_period_candles()
+        
+        # Add analysis steps (instructions go in system prompt)
+        analysis_steps = self.template_manager.build_analysis_steps(
+            symbol, 
+            advanced_support_resistance_detected, 
+            has_chart_analysis, 
+            available_periods
+        )
+        
+        # Add response template (instructions go in system prompt)
+        response_template = self.template_manager.build_response_template(
+            has_chart_analysis, 
+            dynamic_thresholds=dynamic_thresholds
+        )
+        
+        return f"{base_prompt}\n\n{analysis_steps}\n\n{response_template}"
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.

@@ -3,6 +3,7 @@ Template management for prompt building system.
 Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
+import re
 from typing import Optional, Any, Dict
 
 from src.logger.logger import Logger
@@ -21,14 +22,13 @@ class TemplateManager:
         self.logger = logger
         self.config = config
     
-    def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None, position_context: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
+    def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
         
         Args:
             symbol: Trading symbol (e.g., "BTC/USDT")
             timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
-            previous_response: Previous AI response for context continuity
-            position_context: Current position details and unrealized P&L
+            previous_response: Previous AI response for context continuity (JSON stripped)
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
@@ -65,14 +65,6 @@ class TemplateManager:
             "Include specific entry, stop loss, and take profit levels with your reasoning.",
         ])
         
-        # Add current position context if available
-        if position_context:
-            header_lines.extend([
-                "",
-                "CURRENT POSITION & PERFORMANCE:",
-                position_context.strip(),
-            ])
-        
         # Add performance context if available
         if performance_context:
             header_lines.extend([
@@ -87,7 +79,6 @@ class TemplateManager:
                 "- UPDATE positions actively: Move SL to breakeven after 1:1 or 1.5:1 gain, trail stops on strong trends, adjust TP if momentum extends",
                 "- CLOSE proactively: Don't wait for SL if market structure breaks, trend reverses, or thesis invalidates",
                 "- ADAPT to performance: If win rate is low, increase entry standards and risk/reward requirements",
-                "="*60,
             ])
         
         if brain_context:
@@ -96,16 +87,19 @@ class TemplateManager:
                 brain_context.strip(),
             ])
         
-        # Add previous response context if available
+        # Add previous response context if available (strip JSON to save tokens)
         if previous_response:
-            header_lines.extend([
-                "",
-                "PREVIOUS ANALYSIS CONTEXT:",
-                "Your last analysis reasoning (for continuity):",
-                previous_response,
-                "",
-                "Use this context to maintain consistency in your analysis approach.",
-            ])
+            # Extract only text reasoning, exclude JSON block
+            text_reasoning = re.split(r'```json', previous_response, flags=re.IGNORECASE)[0].strip()
+            if text_reasoning:
+                header_lines.extend([
+                    "",
+                    "## PREVIOUS ANALYSIS CONTEXT",
+                    "Your last analysis reasoning (for continuity):",
+                    text_reasoning,
+                    "",
+                    "Use this context to maintain consistency in your analysis approach.",
+                ])
 
         return "\n".join(header_lines)
     
