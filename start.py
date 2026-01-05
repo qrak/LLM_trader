@@ -2,6 +2,7 @@
 Crypto Trading Bot - Entry Point
 Automated trading with AI-powered decisions.
 """
+import torch
 import asyncio
 import sys
 import warnings
