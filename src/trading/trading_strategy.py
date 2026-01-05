@@ -140,13 +140,14 @@ class TradingStrategy:
             )
         except Exception as e:
             self.logger.error(f"Error updating trading brain: {e}")
+        # Save close decision FIRST so statistics include this trade
+        self.persistence.save_trade_decision(decision)
+        
         # Recalculate performance statistics (Sharpe, Sortino, drawdown, etc.)
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
         except Exception as e:
             self.logger.error(f"Error recalculating statistics: {e}")
-        
-        self.persistence.save_trade_decision(decision)
         self.persistence.save_position(None)
         self.current_position = None
     
