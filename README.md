@@ -55,11 +55,13 @@ graph TD
 
 ## ✨ Verified Features
 
-### 🧠 Vector RAG Trading Brain (Memory)
-- **Vector Database**: Uses **ChromaDB** to store detailed trade experiences as vector embeddings.
-- **Semantic Search**: Retrieves past trades based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands).
-- **Adaptive Learning**: The bot "remembers" what worked (or failed) in specific market regimes and injects this context into the AI prompt.
-- **Context-Aware**: Instead of generic rules, the AI sees: *"In similar conditions (High ADX + Bullish), we won 80% of trades with this strategy."*
+### 🧠 Vector-Only Trading Brain (Pure Vector Database)
+- **ChromaDB Vector Store**: All trade statistics computed on-demand from rich metadata stored in the vector database—no JSON files needed.
+- **Semantic Trade Retrieval**: Past trades are retrieved based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands).
+- **Real-Time Aggregation**: Statistics (confidence calibration, ADX performance, confluence factors) are computed directly from the vector store when needed, with smart caching to maintain performance.
+- **Rich Per-Trade Metadata**: Each trade stores 12+ fields including RSI, ADX, ATR, SL/TP distances, R/R ratio, MAE/MFE, and confluence factor scores.
+- **Context-Aware AI**: The AI sees: *"In similar conditions (High ADX + Bullish), we won 80% of trades with avg P&L +4.2%"* derived from semantic vector search.
+- **Adaptive Learning**: The system continuously learns optimal thresholds (ADX, R/R, confidence) from historical vector data without manual tuning.
 
 ### 🤖 AI & LLM Support
 - **Multi-Provider Support**: 
@@ -86,7 +88,8 @@ graph TD
 
 ### ⚙️ Core Capabilities
 - **Paper Trading Only**: Zero real-money risk. All orders are simulated (`create_order` is not connected to live exchange execution).
-- **Continuity**: Tracks "Trading Brain" stats (confidence calibration, factor performance) to improve over time.
+- **Continuous Learning**: Pure vector-based memory system tracks all trades with rich metadata, enabling adaptive strategy refinement over time.
+
 
 ## 🗺️ Roadmap
 
