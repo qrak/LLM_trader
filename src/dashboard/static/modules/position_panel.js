@@ -1,0 +1,129 @@
+/**
+ * Position panel module - Displays current open position with live P&L.
+ */
+
+let lastPosition = null;
+
+/**
+ * Initialize position panel.
+ */
+export function initPositionPanel() {
+    const container = document.getElementById('position-content');
+    if (!container) return;
+    updatePositionData();
+}
+
+/**
+ * Format time duration to human readable string (e.g., "2h 35m" or "3d 5h").
+ */
+function formatDuration(seconds) {
+    if (seconds < 0) seconds = 0;
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m`;
+    return `${Math.floor(seconds)}s`;
+}
+
+/**
+ * Calculate unrealized P&L percentage.
+ */
+function calculatePnL(entryPrice, currentPrice, direction) {
+    if (!entryPrice || !currentPrice) return 0;
+    const diff = direction === 'LONG' 
+        ? (currentPrice - entryPrice) / entryPrice 
+        : (entryPrice - currentPrice) / entryPrice;
+    return diff * 100;
+}
+
+/**
+ * Update position panel with latest data.
+ */
+export async function updatePositionData(currentPrice = null) {
+    const container = document.getElementById('position-content');
+    if (!container) return;
+    try {
+        const response = await fetch('/api/brain/position');
+        const data = await response.json();
+        lastPosition = data;
+        if (!data.has_position) {
+            container.innerHTML = `
+                <div class="no-position">
+                    <span class="no-position-icon">📭</span>
+                    <span>No active position</span>
+                </div>
+            `;
+            return;
+        }
+        const entryTime = new Date(data.entry_time);
+        const timeInPosition = (Date.now() - entryTime.getTime()) / 1000;
+        const pnl = currentPrice ? calculatePnL(data.entry_price, currentPrice, data.direction) : null;
+        const isProfit = pnl !== null && pnl >= 0;
+        const directionClass = data.direction === 'LONG' ? 'long' : 'short';
+        container.innerHTML = `
+            <div class="position-grid">
+                <div class="position-badge ${directionClass}">
+                    ${data.direction === 'LONG' ? '📈' : '📉'} ${data.direction}
+                </div>
+                <div class="position-symbol">${data.symbol}</div>
+                <div class="position-stat">
+                    <span class="label">Entry</span>
+                    <span class="value">$${data.entry_price.toLocaleString()}</span>
+                </div>
+                <div class="position-stat">
+                    <span class="label">Current</span>
+                    <span class="value" id="current-price">${currentPrice ? '$' + currentPrice.toLocaleString() : '--'}</span>
+                </div>
+                <div class="position-pnl ${isProfit ? 'profit' : 'loss'}">
+                    ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
+                </div>
+                <div class="position-sl-tp">
+                    <div class="sl">SL: $${data.stop_loss.toLocaleString()} <span class="pct">(-${data.sl_distance_pct.toFixed(1)}%)</span></div>
+                    <div class="tp">TP: $${data.take_profit.toLocaleString()} <span class="pct">(+${data.tp_distance_pct.toFixed(1)}%)</span></div>
+                </div>
+                <div class="position-meta">
+                    <span title="Time in position">⏱️ ${formatDuration(timeInPosition)}</span>
+                    <span title="Risk/Reward ratio">R:R ${data.rr_ratio.toFixed(1)}</span>
+                    <span title="Confidence">${data.confidence}</span>
+                </div>
+                <div class="position-gauge">
+                    <div class="gauge-track">
+                        <div class="gauge-sl" style="left: 0;"></div>
+                        <div class="gauge-entry" style="left: 50%;"></div>
+                        <div class="gauge-tp" style="right: 0;"></div>
+                        ${currentPrice ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, currentPrice)}%;"></div>` : ''}
+                    </div>
+                    <div class="gauge-labels">
+                        <span>SL</span>
+                        <span>Entry</span>
+                        <span>TP</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = '<div class="error">Error loading position data</div>';
+    }
+}
+
+/**
+ * Calculate gauge position (0-100) for current price between SL and TP.
+ */
+function calculateGaugePosition(position, currentPrice) {
+    const sl = position.stop_loss;
+    const tp = position.take_profit;
+    const entry = position.entry_price;
+    const range = tp - sl;
+    if (range === 0) return 50;
+    const pos = ((currentPrice - sl) / range) * 100;
+    return Math.max(0, Math.min(100, pos));
+}
+
+/**
+ * Get last known position data.
+ */
+export function getLastPosition() {
+    return lastPosition;
+}

@@ -90,6 +90,7 @@ export function initPerformanceChart() {
 
     chart = new ApexCharts(document.querySelector("#performance-chart"), options);
     chart.render();
+    window.performanceChart = chart;
 }
 
 export async function updatePerformanceData() {

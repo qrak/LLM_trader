@@ -51,7 +51,7 @@
     <div id="main-content">
         <!-- Top Row: Performance & Synapses -->
         <div class="row">
-            <div class="panel">
+            <div class="panel" id="panel-performance">
                 <div class="panel-header">
                     <h3>Performance</h3>
                     <button onclick="updatePerformance()">Refresh</button>
@@ -62,7 +62,7 @@
                 <div id="performance-chart"></div>
             </div>
             
-            <div class="panel">
+            <div class="panel" id="panel-synapses">
                 <div class="panel-header">
                     <h3>Memory Synapses</h3>
                     <div style="font-size: 0.7em; color: #8b949e;">
@@ -77,7 +77,7 @@
 
         <!-- Middle Row: Monitor & Visuals -->
         <div class="row">
-            <div class="panel">
+            <div class="panel" id="panel-thoughts">
                 <div class="panel-header">
                     <h3>Thought Stream</h3>
                     <select id="log-type" onchange="updateLogView()">
@@ -88,7 +88,7 @@
                 <div id="log-viewer">Waiting for data...</div>
             </div>
             
-            <div class="panel">
+            <div class="panel" id="panel-visuals">
                 <div class="panel-header">
                     <h3>Visual Cortex</h3>
                     <button onclick="updateVisuals()">Latest</button>
@@ -100,9 +100,25 @@
             </div>
         </div>
 
+        <!-- Row 3: Position Details -->
+        <div class="row full-width">
+            <div class="panel" id="panel-position">
+                <div class="panel-header">
+                    <h3>📍 Position Details</h3>
+                    <button onclick="updatePosition()">Refresh</button>
+                </div>
+                <div id="position-content">
+                    <div class="no-position">
+                        <span class="no-position-icon">📭</span>
+                        <span>Loading position data...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Bottom Row: Vector Memory Database -->
         <div class="row full-width">
-            <div class="panel">
+            <div class="panel" id="panel-vectors">
                 <div class="panel-header">
                     <h3>📊 Vector Memory Database</h3>
                     <button onclick="updateVectors()">Refresh</button>
