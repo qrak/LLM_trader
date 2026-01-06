@@ -9,7 +9,7 @@ LLM_Trader v2 focuses on **continuous trading**, **risk-managed execution**, and
 
 ![LLM Trader Dashboard](img/1.png)
 
-![LLM Trader Brain Dashboard](img/dashboard.png)
+![LLM Trader Brain Dashboard](img/dashboard_v21.png)
 
 ## 🏗️ Architecture
 
@@ -108,13 +108,19 @@ graph TD
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 
 ### 🖥️ Real-Time Web Dashboard
-- **Brain Visualization**: Interactive network graph showing trade sequences (BUY → UPDATE → CLOSE) using Vis.js with physics-based layout.
+- **Brain Visualization**: Interactive network graph showing trade sequences (BUY → UPDATE → CLOSE) using Vis.js with physics-based layout and automatic stabilization.
 - **Performance Chart**: Equity curve with zoom/pan controls, trade markers (BUY/CLOSE annotations), and ApexCharts integration.
 - **Live Statistics**: Real-time stats display (Win Rate, P&L%, Capital, Trades) pulled from trading history.
 - **Vector Memory Database**: Full ChromaDB visualization with experience table, confidence/ADX win rate breakdowns, and semantic similarity scores.
 - **Thought Stream**: View last AI prompt and response with markdown rendering and copy-to-clipboard.
 - **Visual Cortex**: Displays generated technical charts with lightbox for full-screen viewing.
 - **Neural State Panel**: Shows current trend sentiment, confidence level, and recommended action.
+- **Position Details**: Real-time position monitoring with entry price, duration, P&L gauges, and confluence factors.
+- **Interactive Panel System**:
+  - **Fullscreen Mode**: Expand any panel to fullscreen with proper chart/network resizing.
+  - **Collapsible Panels**: Minimize panels to save screen space with responsive sibling expansion.
+  - **WebSocket Real-Time Updates**: Live connection status indicator and auto-reconnection.
+
 
 
 ## 🗺️ Roadmap
