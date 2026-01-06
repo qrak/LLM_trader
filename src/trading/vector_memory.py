@@ -6,7 +6,7 @@ for recency-weighted retrieval.
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -132,7 +132,7 @@ class VectorMemoryService:
                 "confidence": confidence,
                 "market_context": market_context,
                 "reasoning": reasoning,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
             if metadata:
                 market_regime = metadata.pop("market_regime", "NEUTRAL")
@@ -171,7 +171,10 @@ class VectorMemoryService:
         """
         try:
             trade_dt = datetime.fromisoformat(trade_timestamp)
-            age_days = (datetime.utcnow() - trade_dt).days
+            if trade_dt.tzinfo is None:
+                trade_dt = trade_dt.replace(tzinfo=timezone.utc)
+            
+            age_days = (datetime.now(timezone.utc) - trade_dt).days
             decay_rate = math.log(2) / half_life_days
             return math.exp(-decay_rate * age_days)
         except (ValueError, TypeError):
@@ -345,7 +348,7 @@ class VectorMemoryService:
         try:
             embedding = self._embedding_model.encode(rule_text).tolist()
             rule_meta = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "active": True,
             }
             if metadata:

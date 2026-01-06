@@ -40,8 +40,7 @@ save_chart_images = false
 chart_save_path = chart_images
 # Enable detailed logic (DEBUG level) logging
 logger_debug = false
-# Flag to indicate if running in a test environment (affects some behaviors)
-test_environment = false
+
 
 [directories]
 # Directory to store log files

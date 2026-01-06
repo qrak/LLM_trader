@@ -387,19 +387,9 @@ class AnalysisEngine:
             position_context=position_context
         )
         # Process analysis
-        if self.config.TEST_ENVIRONMENT:
-            self.logger.debug("TEST_ENVIRONMENT is True - using mock analysis")
-            analysis_result = self.result_processor.process_mock_analysis(
-                self.symbol,
-                self.context.current_price,
-                self.article_urls,
-                technical_history=self.context.technical_history,
-                technical_data=self.context.technical_data
-            )
-        else:
-            analysis_result = await self._execute_ai_request(
-                system_prompt, prompt, provider, model, chart_image
-            )
+        analysis_result = await self._execute_ai_request(
+            system_prompt, prompt, provider, model, chart_image
+        )
             
         # Add metadata to result
         analysis_result["article_urls"] = self.article_urls
