@@ -44,6 +44,8 @@ class TradingBrainService:
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}
         self._cache_trade_count: int = 0
+        self._trade_count: int = 0
+        self._reflection_interval: int = 10
     
     def update_from_closed_trade(
         self,
@@ -99,6 +101,10 @@ class TradingBrainService:
         self.logger.info(
             f"Updated brain from {position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"
         )
+
+        self._trade_count += 1
+        if self._trade_count % self._reflection_interval == 0:
+            self._trigger_reflection()
     
     def get_context(
         self,
@@ -171,7 +177,16 @@ class TradingBrainService:
                 "APPLY THESE INSIGHTS: Learn from similar past trades. Weight recent wins higher.",
                 "",
             ])
-        
+
+        semantic_rules = self.vector_memory.get_active_rules(n_results=3)
+        if semantic_rules:
+            lines.extend([
+                "LEARNED TRADING RULES (from reflection on past trades):",
+            ])
+            for rule in semantic_rules:
+                lines.append(f"- {rule['text']}")
+            lines.append("")
+
         return "\n".join(lines)
     
     def get_parameter_suggestions(
@@ -345,3 +360,64 @@ class TradingBrainService:
             clean_name = factor_name.replace(" ", "_").lower()
             scores[f"{clean_name}_score"] = float(score)
         return scores
+
+    def _trigger_reflection(self) -> None:
+        """Reflect on recent trades and synthesize semantic rules.
+
+        Called automatically every N trades. Analyzes winning trade patterns
+        and stores insights as reusable rules.
+        """
+        try:
+            experiences = self.vector_memory.retrieve_similar_experiences(
+                "WIN trade analysis", k=20, use_decay=True
+            )
+
+            wins = [e for e in experiences if e["metadata"].get("outcome") == "WIN"]
+            if len(wins) < 5:
+                self.logger.debug("Not enough winning trades for reflection")
+                return
+
+            pattern_counts: Dict[str, int] = {}
+            for win in wins:
+                meta = win["metadata"]
+                regime = meta.get("market_regime", "NEUTRAL")
+                adx = meta.get("adx_at_entry", 0)
+                direction = meta.get("direction", "UNKNOWN")
+
+                adx_label = "HIGH_ADX" if adx >= 25 else "LOW_ADX" if adx < 20 else "MED_ADX"
+                pattern_key = f"{direction}_{regime}_{adx_label}"
+                pattern_counts[pattern_key] = pattern_counts.get(pattern_key, 0) + 1
+
+            if not pattern_counts:
+                return
+
+            best_pattern = max(pattern_counts.items(), key=lambda x: x[1])
+            pattern_key, count = best_pattern
+            if count < 3:
+                return
+
+            parts = pattern_key.split("_")
+            direction = parts[0]
+            regime = parts[1]
+            adx_level = parts[2].replace("_", " ").title()
+
+            rule_text = (
+                f"{direction} trades perform well in {regime} market with {adx_level}. "
+                f"({count} recent wins follow this pattern)"
+            )
+
+            rule_id = f"rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            self.vector_memory.store_semantic_rule(
+                rule_id=rule_id,
+                rule_text=rule_text,
+                metadata={
+                    "source_pattern": pattern_key,
+                    "source_win_count": count,
+                    "total_analyzed": len(wins),
+                }
+            )
+
+            self.logger.info(f"Reflection complete: stored rule '{rule_text}'")
+
+        except Exception as e:
+            self.logger.warning(f"Reflection failed: {e}")

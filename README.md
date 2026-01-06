@@ -58,10 +58,18 @@ graph TD
 ### 🧠 Vector-Only Trading Brain (Pure Vector Database)
 - **ChromaDB Vector Store**: All trade statistics computed on-demand from rich metadata stored in the vector database—no JSON files needed.
 - **Semantic Trade Retrieval**: Past trades are retrieved based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands).
-- **Real-Time Aggregation**: Statistics (confidence calibration, ADX performance, confluence factors) are computed directly from the vector store when needed, with smart caching to maintain performance.
-- **Rich Per-Trade Metadata**: Each trade stores 12+ fields including RSI, ADX, ATR, SL/TP distances, R/R ratio, MAE/MFE, and confluence factor scores.
+- **Adaptive Thresholds**: The system continuously learns optimal thresholds (ADX, R/R, confidence) from historical vector data without manual tuning.
+- **Performance Bucketing**: Granular analysis of performance by ADX levels (LOW/MED/HIGH) and confluence factors (Trend Alignment, Momentum, Volume Support).
+- **Real-Time Aggregation**: Statistics (confidence calibration, ADX performance, confluence factors) are computed directly from the vector store when needed, with smart caching.
+- **Rich Per-Trade Metadata**: Each trade stores 15+ fields including RSI, ADX, ATR, SL/TP distances, R/R ratio, MAE/MFE, and confluence factor scores.
 - **Context-Aware AI**: The AI sees: *"In similar conditions (High ADX + Bullish), we won 80% of trades with avg P&L +4.2%"* derived from semantic vector search.
-- **Adaptive Learning**: The system continuously learns optimal thresholds (ADX, R/R, confidence) from historical vector data without manual tuning.
+
+### 🕐 Adaptive Memory System
+- **Temporal Awareness**: Every trade stores `timestamp` and `market_regime` metadata, enabling time-windowed queries like "What worked in the last Bull Run?"
+- **Decay Engine**: Recency-weighted retrieval using exponential decay (90-day half-life). Recent trades are prioritized over ancient history.
+- **Hybrid Scoring**: Results ranked by `similarity * 0.7 + recency * 0.3` for optimal context relevance.
+- **Automated Reflection Loop**: Every 10 trades, the brain synthesizes patterns from recent wins into persistent "Semantic Rules" (e.g., "LONG trades perform well in BULLISH market with High ADX").
+- **Self-Learning Rules**: Semantic rules are stored persistently in a dedicated ChromaDB collection and injected into AI prompts.
 
 ### 🤖 AI & LLM Support
 - **Multi-Provider Support**: 
@@ -86,9 +94,16 @@ graph TD
   - Recent Trade Flow (Buyer/Seller Pressure)
   - Funding Rates (for Perpetual Futures)
 
-### ⚙️ Core Capabilities
-- **Paper Trading Only**: Zero real-money risk. All orders are simulated (`create_order` is not connected to live exchange execution).
-- **Continuous Learning**: Pure vector-based memory system tracks all trades with rich metadata, enabling adaptive strategy refinement over time.
+### 🔒 Application Safeguards
+- **Cross-Platform Single-Instance Locking**: Prevents multiple instances from running concurrently, protecting against API rate limit bans and state corruption.
+- **Graceful Shutdown Management**: Dedicated manager handles SIGINT (Ctrl+C) and SIGTERM, ensuring all trade data is persisted before exit.
+- **Safety Confirmation**: Optional GUI confirmation (via PyQt6) or console prompts when attempting to shut down.
+
+### 📈 Trading Intelligence
+- **Realistic Capital Tracking**: Dynamic compounding of trading capital based on realized P&L. No static initial capital assumptions.
+- **Advanced Performance Metrics**: Real-time calculation of **Sharpe Ratio**, **Sortino Ratio**, **Max Drawdown**, and **Profit Factor**.
+- **Currency-Agnostic P&L**: Tracks profits and losses accurately in the relevant quote currency (e.g., USDT, ETH, BTC).
+- **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 
 
 ## 🗺️ Roadmap
