@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Trader Brain</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script> 
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <header>
+        <h1>LLM TRADER <span style="font-size: 0.6em; color: gray;">BRAIN LINK</span></h1>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <div id="next-analysis" style="font-size: 0.8em; color: #8b949e;">Next analysis: --</div>
+            <div id="connection-status">🟢 Connected</div>
+        </div>
+    </header>
+
+    <div id="status-panel">
+        <div class="panel-header">
+            <h3>Neural State</h3>
+            <span id="brain-state-indicator">ACTIVE</span>
+        </div>
+        <div id="status-content">
+            <div class="stat-row">
+                <span>Trend:</span> <strong id="trend-val">--</strong>
+            </div>
+            <div class="stat-row">
+                <span>Confidence:</span> <strong id="conf-val">--</strong>
+            </div>
+            <div class="stat-row">
+                <span>Action:</span> <strong id="action-val">--</strong>
+            </div>
+        </div>
+        
+        <div class="panel-header" style="margin-top: 20px;">
+            <h3>Active Rules</h3>
+        </div>
+        <ul id="rules-list">
+            <li>Loading rules...</li>
+        </ul>
+        
+        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #30363d;">
+            <div id="experience-count" style="font-size: 0.8em; color: #8b949e;">-- learned experiences</div>
+            <div id="last-updated" style="font-size: 0.7em; color: #58a6ff; margin-top: 5px;">Updated: --</div>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <!-- Top Row: Performance & Synapses -->
+        <div class="row">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Performance</h3>
+                    <button onclick="updatePerformance()">Refresh</button>
+                </div>
+                <div id="stats-summary" style="font-size: 0.8em; color: #8b949e; margin-bottom: 8px; display: flex; gap: 15px; flex-wrap: wrap;">
+                    <span>Loading stats...</span>
+                </div>
+                <div id="performance-chart"></div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Memory Synapses</h3>
+                    <div style="font-size: 0.7em; color: #8b949e;">
+                        <span style="color: #238636;">● BUY</span>
+                        <span style="color: #00e396;">● CLOSE</span>
+                        <span style="color: #8b949e;">● UPDATE</span>
+                    </div>
+                </div>
+                <div id="synapse-network"></div>
+            </div>
+        </div>
+
+        <!-- Middle Row: Monitor & Visuals -->
+        <div class="row">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Thought Stream</h3>
+                    <select id="log-type" onchange="updateLogView()">
+                        <option value="prompt">Last Prompt</option>
+                        <option value="response">Last Response</option>
+                    </select>
+                </div>
+                <div id="log-viewer">Waiting for data...</div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Visual Cortex</h3>
+                    <button onclick="updateVisuals()">Latest</button>
+                </div>
+                <div id="visual-container">
+                    <img id="analysis-chart" src="" alt="No chart generated" style="display: none;">
+                    <span id="no-chart-msg">No visual data - waiting for analysis</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Row: Vector Memory Database -->
+        <div class="row full-width">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>📊 Vector Memory Database</h3>
+                    <button onclick="updateVectors()">Refresh</button>
+                </div>
+                <div id="vector-content">
+                    <div class="empty-state">Loading vector database...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

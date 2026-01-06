@@ -183,12 +183,18 @@ class TradingPersistence:
             self.logger.error(f"Error loading statistics: {e}")
             return TradingStatistics()
     
-    def save_previous_response(self, response: str, technical_data: Optional[Dict[str, Any]] = None) -> None:
-        """Save the previous AI response and technical indicator values.
+    def save_previous_response(
+        self, 
+        response: str, 
+        technical_data: Optional[Dict[str, Any]] = None,
+        prompt: Optional[str] = None
+    ) -> None:
+        """Save the previous AI response, technical indicator values, and prompt.
         
         Args:
             response: The AI response text
             technical_data: Dictionary of technical indicator values (RSI, MACD, ADX, etc.)
+            prompt: The prompt that was sent to the AI
         """
         try:
             response_dict = {"text_analysis": response}
@@ -201,6 +207,10 @@ class TradingPersistence:
                 "response": response_dict,
                 "timestamp": datetime.now().isoformat()
             }
+            
+            # Add prompt if provided
+            if prompt:
+                data_to_save["prompt"] = prompt
             
             data_to_save = serialize_for_json(data_to_save)
             

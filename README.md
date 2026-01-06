@@ -9,6 +9,8 @@ LLM_Trader v2 focuses on **continuous trading**, **risk-managed execution**, and
 
 ![LLM Trader Dashboard](img/1.png)
 
+![LLM Trader Brain Dashboard](img/dashboard.png)
+
 ## 🏗️ Architecture
 
 ```mermaid
@@ -105,6 +107,15 @@ graph TD
 - **Currency-Agnostic P&L**: Tracks profits and losses accurately in the relevant quote currency (e.g., USDT, ETH, BTC).
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 
+### 🖥️ Real-Time Web Dashboard
+- **Brain Visualization**: Interactive network graph showing trade sequences (BUY → UPDATE → CLOSE) using Vis.js with physics-based layout.
+- **Performance Chart**: Equity curve with zoom/pan controls, trade markers (BUY/CLOSE annotations), and ApexCharts integration.
+- **Live Statistics**: Real-time stats display (Win Rate, P&L%, Capital, Trades) pulled from trading history.
+- **Vector Memory Database**: Full ChromaDB visualization with experience table, confidence/ADX win rate breakdowns, and semantic similarity scores.
+- **Thought Stream**: View last AI prompt and response with markdown rendering and copy-to-clipboard.
+- **Visual Cortex**: Displays generated technical charts with lightbox for full-screen viewing.
+- **Neural State Panel**: Shows current trend sentiment, confidence level, and recommended action.
+
 
 ## 🗺️ Roadmap
 
@@ -117,7 +128,7 @@ graph TD
 - [ ] **Multiple Trading Agent Personalities** (Diverse trading strategies: conservative, aggressive, contrarian, trend-following)
 - [ ] **Multi-Model Consensus Decision-Making** (Aggregate predictions from multiple AI models to reach consensus on trading signals)
 - [ ] **Live Trading** (Execution Layer)
-- [ ] **Web Dashboard** (React/Next.js frontend)
+- [x] **Web Dashboard** (FastAPI + Vis.js brain visualization)
 - [ ] **Portfolio Management** (Multi-coin balancing)
 
 ## 🚀 Quick Start

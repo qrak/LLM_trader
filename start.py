@@ -37,6 +37,7 @@ from src.trading import (
     TradingStrategy, TradingPersistence, TradingBrainService,
     TradingStatisticsService, TradingMemoryService, PositionExtractor
 )
+from src.dashboard.server import DashboardServer
 from src.notifiers import DiscordNotifier, ConsoleNotifier
 from src.utils.keyboard_handler import KeyboardHandler
 from src.rag.text_splitting import SentenceSplitter
@@ -445,7 +446,7 @@ class CompositionRoot:
         init_duration = end_time - start_time
         self.logger.info(f"All dependencies initialized successfully in {init_duration:.2f} seconds")
         
-        return {
+        deps = {
             'exchange_manager': exchange_manager,
             'market_analyzer': market_analyzer,
             'trading_strategy': trading_strategy,
@@ -464,10 +465,26 @@ class CompositionRoot:
             'statistics_service': statistics_service,
             'memory_service': memory_service,
         }
+        
+        # Initialize Dashboard Server
+        dashboard_server = DashboardServer(
+            brain_service=brain_service,
+            vector_memory=brain_service.vector_memory if brain_service and hasattr(brain_service, 'vector_memory') else None,
+            analysis_engine=market_analyzer,
+            config=self.config
+        )
+        
+        # Add dashboard to dependencies
+        deps['dashboard_server'] = dashboard_server
+        
+        return deps
     
     async def run_async(self):
         """Async entry point for the application."""
         dependencies = await self.build_dependencies()
+        
+        # Extract dashboard_server before passing to bot (bot doesn't accept it)
+        dashboard_server = dependencies.pop('dashboard_server', None)
         
         bot = CryptoTradingBot(
             logger=self.logger,
@@ -480,11 +497,23 @@ class CompositionRoot:
             await bot.initialize()
             symbol = self.config.CRYPTO_PAIR
             timeframe = self.config.TIMEFRAME
-            await bot.run(symbol, timeframe)
+            
+            # Create tasks
+            bot_task = asyncio.create_task(bot.run(symbol, timeframe))
+            
+            # Start dashboard if available
+            if dashboard_server:
+                dashboard_task = await dashboard_server.start()
+                await asyncio.gather(bot_task, dashboard_task, return_exceptions=True)
+            else:
+                await bot_task
+                
         except asyncio.CancelledError:
             self.logger.info("Trading cancelled, shutting down...")
         finally:
-            pass
+            # Clean up dashboard server
+            if dashboard_server:
+                await dashboard_server.stop()
     
     def start(self):
         """Main entry point with clean shutdown delegation."""

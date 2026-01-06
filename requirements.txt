@@ -21,3 +21,6 @@ torch>=2.0.0
 chromadb>=1.0.0
 sentence-transformers>=3.0.0
 PyQt6==6.9.1
+fastapi==0.128.0
+uvicorn==0.40.0
+jinja2>=3.1.2
