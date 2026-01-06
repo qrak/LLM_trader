@@ -1,9 +1,12 @@
 """Vector memory service for trading experiences using ChromaDB.
 
 Provides semantic search over historical trades to find relevant past experiences
-for context-aware decision making.
+for context-aware decision making. Implements Temporal Awareness and Decay Engine
+for recency-weighted retrieval.
 """
 
+import math
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -18,7 +21,9 @@ class VectorMemoryService:
     """
     
     COLLECTION_NAME = "trading_experiences"
+    SEMANTIC_RULES_COLLECTION = "semantic_rules"
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    DEFAULT_DECAY_HALF_LIFE_DAYS = 90
     
     def __init__(self, logger: Logger, data_dir: str = "data/brain_vector_db"):
         """Initialize vector memory service.
@@ -33,6 +38,7 @@ class VectorMemoryService:
         
         self._client: Optional[Any] = None
         self._collection: Optional[Any] = None
+        self._semantic_rules_collection: Optional[Any] = None
         self._embedding_model: Optional[Any] = None
         self._initialized = False
     
@@ -54,6 +60,10 @@ class VectorMemoryService:
             self._client = chromadb.PersistentClient(path=str(self.data_dir))
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"}
+            )
+            self._semantic_rules_collection = self._client.get_or_create_collection(
+                name=self.SEMANTIC_RULES_COLLECTION,
                 metadata={"hnsw:space": "cosine"}
             )
             
@@ -122,8 +132,11 @@ class VectorMemoryService:
                 "confidence": confidence,
                 "market_context": market_context,
                 "reasoning": reasoning,
+                "timestamp": datetime.utcnow().isoformat(),
             }
             if metadata:
+                market_regime = metadata.pop("market_regime", "NEUTRAL")
+                trade_metadata["market_regime"] = market_regime
                 trade_metadata.update(metadata)
             
             self._collection.add(
@@ -142,19 +155,47 @@ class VectorMemoryService:
             self.logger.error(f"Failed to store experience: {e}")
             return False
     
+    def _calculate_recency_score(
+        self,
+        trade_timestamp: str,
+        half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS
+    ) -> float:
+        """Calculate recency weight using exponential decay.
+
+        Args:
+            trade_timestamp: ISO format timestamp of the trade.
+            half_life_days: Days until weight decays to 0.5.
+
+        Returns:
+            Recency weight between 0 and 1.
+        """
+        try:
+            trade_dt = datetime.fromisoformat(trade_timestamp)
+            age_days = (datetime.utcnow() - trade_dt).days
+            decay_rate = math.log(2) / half_life_days
+            return math.exp(-decay_rate * age_days)
+        except (ValueError, TypeError):
+            return 0.5
+
     def retrieve_similar_experiences(
         self,
         current_context: str,
-        k: int = 5
+        k: int = 5,
+        use_decay: bool = True,
+        decay_half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS
     ) -> List[Dict[str, Any]]:
         """Retrieve past experiences similar to the current market context.
-        
+
+        Uses hybrid scoring: similarity * recency_weight for temporal awareness.
+
         Args:
             current_context: Description of current market conditions
             k: Number of similar experiences to retrieve
-            
+            use_decay: Whether to apply recency decay weighting
+            decay_half_life_days: Half-life for recency decay
+
         Returns:
-            List of dicts with keys: id, document, similarity, metadata
+            List of dicts with keys: id, document, similarity, hybrid_score, metadata
         """
         if not self._ensure_initialized():
             return []
@@ -174,15 +215,31 @@ class VectorMemoryService:
             if results and results["ids"] and results["ids"][0]:
                 for i, doc_id in enumerate(results["ids"][0]):
                     similarity = 1 - results["distances"][0][i] if results["distances"] else 0
+                    meta = results["metadatas"][0][i] if results["metadatas"] else {}
+
+                    if use_decay:
+                        timestamp = meta.get("timestamp", "")
+                        recency = self._calculate_recency_score(timestamp, decay_half_life_days)
+                        hybrid_score = similarity * 0.7 + recency * 0.3
+                    else:
+                        recency = 1.0
+                        hybrid_score = similarity
+
                     experiences.append({
                         "id": doc_id,
                         "document": results["documents"][0][i] if results["documents"] else "",
                         "similarity": round(similarity * 100, 1),
-                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {}
+                        "recency": round(recency * 100, 1),
+                        "hybrid_score": round(hybrid_score * 100, 1),
+                        "metadata": meta
                     })
-            
+
+            if use_decay:
+                experiences.sort(key=lambda x: x["hybrid_score"], reverse=True)
+                experiences = experiences[:k]
+
             self.logger.debug(
-                f"Retrieved {len(experiences)} similar experiences for context"
+                f"Retrieved {len(experiences)} similar experiences (decay={use_decay})"
             )
             return experiences
             
@@ -265,6 +322,92 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return 0
         return self._collection.count()
+
+    def store_semantic_rule(
+        self,
+        rule_id: str,
+        rule_text: str,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Store a semantic trading rule learned from trade clusters.
+
+        Args:
+            rule_id: Unique identifier for the rule (e.g., "rule_2026-01-06")
+            rule_text: Human readable rule text
+            metadata: Optional metadata (source_trades, win_rate, etc.)
+
+        Returns:
+            True if stored successfully
+        """
+        if not self._ensure_initialized():
+            return False
+
+        try:
+            embedding = self._embedding_model.encode(rule_text).tolist()
+            rule_meta = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "active": True,
+            }
+            if metadata:
+                rule_meta.update(metadata)
+
+            self._semantic_rules_collection.upsert(
+                ids=[rule_id],
+                embeddings=[embedding],
+                documents=[rule_text],
+                metadatas=[rule_meta]
+            )
+
+            self.logger.info(f"Stored semantic rule: {rule_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to store semantic rule: {e}")
+            return False
+
+    def get_active_rules(self, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Retrieve active semantic rules for prompt injection.
+
+        Args:
+            n_results: Maximum number of rules to return
+
+        Returns:
+            List of dicts with rule_id, text, metadata
+        """
+        if not self._ensure_initialized():
+            return []
+
+        try:
+            count = self._semantic_rules_collection.count()
+            if count == 0:
+                return []
+
+            all_rules = self._semantic_rules_collection.get(
+                where={"active": True},
+                limit=n_results
+            )
+
+            rules = []
+            if all_rules and all_rules["ids"]:
+                for i, rule_id in enumerate(all_rules["ids"]):
+                    rules.append({
+                        "rule_id": rule_id,
+                        "text": all_rules["documents"][i] if all_rules["documents"] else "",
+                        "metadata": all_rules["metadatas"][i] if all_rules["metadatas"] else {}
+                    })
+
+            return rules
+
+        except Exception as e:
+            self.logger.error(f"Failed to get active rules: {e}")
+            return []
+
+    @property
+    def semantic_rule_count(self) -> int:
+        """Get total number of stored semantic rules."""
+        if not self._ensure_initialized():
+            return 0
+        return self._semantic_rules_collection.count()
 
     def compute_confidence_stats(self) -> Dict[str, Dict[str, Any]]:
         """Compute confidence level statistics from all stored experiences.
