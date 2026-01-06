@@ -7,24 +7,29 @@ import uvicorn
 import webbrowser
 from typing import Optional
 
-# Import routers (we will create these next)
-from .routers import brain, monitor, visuals, performance
+from .routers import brain, monitor, visuals, performance, ws_router
+from .dashboard_state import dashboard_state
 
 class DashboardServer:
     def __init__(self, 
                  brain_service, 
                  vector_memory, 
                  analysis_engine, 
-                 config, 
+                 config,
+                 unified_parser=None,
+                 persistence=None,
                  host="0.0.0.0", 
                  port=8000):
         self.brain_service = brain_service
         self.vector_memory = vector_memory
         self.analysis_engine = analysis_engine
         self.config = config
+        self.unified_parser = unified_parser
+        self.persistence = persistence
         self.host = host
         self.port = port
         self.server_task = None
+        self.dashboard_state = dashboard_state
         self.app = self._create_app()
 
     def _create_app(self) -> FastAPI:
@@ -49,18 +54,19 @@ class DashboardServer:
             allow_headers=["*"],
         )
 
-        # Dependency Injection via State for Routers
-        # This is a simple way to pass our live objects to the routers
         app.state.brain_service = self.brain_service
         app.state.vector_memory = self.vector_memory
         app.state.analysis_engine = self.analysis_engine
         app.state.config = self.config
+        app.state.unified_parser = self.unified_parser
+        app.state.persistence = self.persistence
+        app.state.dashboard_state = self.dashboard_state
 
-        # Register Routers
         app.include_router(brain.router)
         app.include_router(monitor.router)
         app.include_router(visuals.router)
         app.include_router(performance.router)
+        app.include_router(ws_router.router)
 
         # Mount Static Files (Frontend)
         # We assume the static folder is in the same directory as this file
@@ -81,7 +87,7 @@ class DashboardServer:
             port=self.port, 
             log_level="warning",
             loop="asyncio",
-            ws="none",  # Disable websockets to avoid deprecation warning
+            ws="wsproto",
         )
         self._server = uvicorn.Server(config)
         

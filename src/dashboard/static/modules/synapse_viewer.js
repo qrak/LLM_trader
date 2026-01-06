@@ -29,13 +29,25 @@ export function initSynapseNetwork() {
             arrows: { to: { enabled: true, scaleFactor: 0.5 } }
         },
         physics: {
-            stabilization: { iterations: 100, fit: true },
+            enabled: true,
+            stabilization: { 
+                enabled: true,
+                iterations: 200,
+                fit: true,
+                updateInterval: 25
+            },
             barnesHut: {
-                gravitationalConstant: -3000,
-                springConstant: 0.04,
-                springLength: 120,
-                damping: 0.3
+                gravitationalConstant: -4000,
+                centralGravity: 0.5,
+                springConstant: 0.08,
+                springLength: 100,
+                damping: 0.4,
+                avoidOverlap: 0.3
             }
+        },
+        layout: {
+            improvedLayout: true,
+            hierarchical: false
         },
         interaction: {
             tooltipDelay: 100,
@@ -45,15 +57,12 @@ export function initSynapseNetwork() {
             dragView: true
         }
     };
-    
     network = new vis.Network(container, data, options);
-    
-    // Stabilize physics after 3 seconds
-    setTimeout(() => {
-        if (network) {
-            network.setOptions({ physics: { enabled: false } });
-        }
-    }, 3000);
+    window.synapseNetwork = network;
+    network.once('stabilizationIterationsDone', () => {
+        network.setOptions({ physics: { enabled: false } });
+        network.fit({ animation: false });
+    });
 }
 
 export async function updateSynapses() {

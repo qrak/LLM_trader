@@ -471,7 +471,9 @@ class CompositionRoot:
             brain_service=brain_service,
             vector_memory=brain_service.vector_memory if brain_service and hasattr(brain_service, 'vector_memory') else None,
             analysis_engine=market_analyzer,
-            config=self.config
+            config=self.config,
+            unified_parser=unified_parser,
+            persistence=persistence
         )
         
         # Add dashboard to dependencies

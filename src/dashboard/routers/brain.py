@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from typing import Dict, Any, List
 import json
 from pathlib import Path
@@ -6,16 +6,14 @@ from pathlib import Path
 router = APIRouter(prefix="/api/brain", tags=["brain"])
 
 @router.get("/status")
-async def get_brain_status(request: Request):
+async def get_brain_status(request: Request) -> Dict[str, Any]:
     """Get the current thought process/status of the brain."""
     brain_service = request.app.state.brain_service
     config = request.app.state.config
+    unified_parser = getattr(request.app.state, "unified_parser", None)
     data_dir = getattr(config, "DATA_DIR", "data")
-    
-    # Load last analysis for current state
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
     stats_file = Path(data_dir) / "trading" / "statistics.json"
-    
     status = {
         "status": "active",
         "trend": "--",
@@ -24,45 +22,27 @@ async def get_brain_status(request: Request):
         "adx": None,
         "rsi": None
     }
-    
-    # Extract from previous_response.json
     if prev_response_file.exists():
         try:
             with open(prev_response_file, "r") as f:
                 data = json.load(f)
                 response = data.get("response", {})
                 text = response.get("text_analysis", "")
-                
-                # Parse trend from text
                 if "BULLISH" in text.upper():
                     status["trend"] = "BULLISH"
                 elif "BEARISH" in text.upper():
                     status["trend"] = "BEARISH"
                 else:
                     status["trend"] = "NEUTRAL"
-                
-                # Get key indicators
                 status["adx"] = response.get("adx")
                 status["rsi"] = response.get("rsi")
-                
-                # Parse action from JSON block in text
-                if '"signal":' in text:
-                    try:
-                        json_start = text.find('```json')
-                        json_end = text.find('```', json_start + 7)
-                        if json_start != -1 and json_end != -1:
-                            json_str = text[json_start + 7:json_end].strip()
-                            analysis_json = json.loads(json_str)
-                            analysis = analysis_json.get("analysis", {})
-                            status["action"] = analysis.get("signal", "--")
-                            status["confidence"] = analysis.get("confidence", "--")
-                    except Exception:
-                        pass
-                        
+                if unified_parser:
+                    analysis = unified_parser.extract_json_block(text, unwrap_key='analysis')
+                    if analysis:
+                        status["action"] = analysis.get("signal", "--")
+                        status["confidence"] = analysis.get("confidence", "--")
         except Exception:
             pass
-    
-    # Add trading stats
     if stats_file.exists():
         try:
             with open(stats_file, "r") as f:
@@ -72,11 +52,11 @@ async def get_brain_status(request: Request):
                 status["current_capital"] = stats.get("current_capital", 0)
         except Exception:
             pass
-    
     return status
 
+
 @router.get("/memory")
-async def get_vector_memory(request: Request, limit: int = 100):
+async def get_vector_memory(request: Request, limit: int = 100) -> Dict[str, Any]:
     """Get recent vector memories (synapses)."""
     vector_memory = request.app.state.vector_memory
     config = request.app.state.config
@@ -117,7 +97,7 @@ async def get_vector_memory(request: Request, limit: int = 100):
     return result
 
 @router.get("/rules")
-async def get_active_rules(request: Request):
+async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
     """Get currently active semantic rules."""
     vector_memory = request.app.state.vector_memory
     if not vector_memory:
@@ -130,7 +110,7 @@ async def get_active_rules(request: Request):
         return []
 
 @router.get("/vectors")
-async def get_vector_details(request: Request, query: str = None, limit: int = 50):
+async def get_vector_details(request: Request, query: str = None, limit: int = 50) -> Dict[str, Any]:
     """Get detailed vector memory contents from ChromaDB."""
     vector_memory = request.app.state.vector_memory
     
@@ -170,5 +150,35 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
             
     except Exception as e:
         result["error"] = str(e)
-    
     return result
+
+
+@router.get("/position")
+async def get_current_position(request: Request) -> Dict[str, Any]:
+    """Get current open position details for the position panel."""
+    persistence = request.app.state.persistence
+    if not persistence:
+        return {"has_position": False, "error": "Persistence not available"}
+    position = persistence.load_position()
+    if not position:
+        return {"has_position": False}
+    return {
+        "has_position": True,
+        "direction": position.direction,
+        "symbol": position.symbol,
+        "entry_price": position.entry_price,
+        "stop_loss": position.stop_loss,
+        "take_profit": position.take_profit,
+        "entry_time": position.entry_time.isoformat(),
+        "sl_distance_pct": position.sl_distance_pct,
+        "tp_distance_pct": position.tp_distance_pct,
+        "rr_ratio": position.rr_ratio_at_entry,
+        "confidence": position.confidence,
+        "size": position.size,
+        "size_pct": position.size_pct,
+        "quote_amount": position.quote_amount,
+        "adx_at_entry": position.adx_at_entry,
+        "rsi_at_entry": position.rsi_at_entry,
+        "max_drawdown_pct": position.max_drawdown_pct,
+        "max_profit_pct": position.max_profit_pct
+    }
