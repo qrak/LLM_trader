@@ -255,9 +255,7 @@ class Config:
     def LOGGER_DEBUG(self):
         return self.get_config('debug', 'logger_debug', False)
     
-    @property
-    def TEST_ENVIRONMENT(self):
-        return self.get_config('debug', 'test_environment', False)
+
     
     @property
     def CRYPTO_PAIR(self):
