@@ -294,9 +294,10 @@ class CryptoTradingBot:
         # Save the response and technical indicators for context
         raw_response = result.get("raw_response", "")
         technical_data = result.get("technical_data")  # Get technical indicators from result
+        generated_prompt = result.get("generated_prompt")  # Get prompt for dashboard
         
         if raw_response:
-            self.persistence.save_previous_response(raw_response, technical_data)
+            self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
     
     async def _fetch_current_ticker(self) -> Optional[Dict[str, Any]]:
         """Fetch current ticker from exchange."""

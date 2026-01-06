@@ -1,0 +1,292 @@
+/* src/dashboard/static/style.css */
+:root {
+    --bg-color: #0d1117;
+    --text-color: #c9d1d9;
+    --accent-color: #58a6ff;
+    --border-color: #30363d;
+    --panel-bg: #161b22;
+    --success-color: #238636;
+    --danger-color: #f85149;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 15px;
+    padding: 15px;
+    height: 100vh;
+    max-height: 100vh;
+}
+
+h1, h2, h3 {
+    margin: 0;
+    color: var(--accent-color);
+}
+
+header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+#status-panel {
+    grid-row: 2;
+    grid-column: 1;
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+#main-content {
+    grid-row: 2;
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    flex-shrink: 0;
+    height: 300px;
+}
+
+.row.full-width {
+    grid-template-columns: 1fr;
+    height: 250px;
+}
+
+.panel {
+    background-color: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.panel-header h3 {
+    font-size: 0.95em;
+}
+
+/* Specific Modules - all with fixed heights */
+#synapse-network {
+    flex: 1;
+    background: #000;
+    min-height: 0;
+    max-height: 100%;
+}
+
+#performance-chart {
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+}
+
+#log-viewer {
+    flex: 1;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    background-color: #0d1117;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    min-height: 0;
+}
+
+#visual-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#visual-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+/* Stat rows in status panel */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.stat-row:last-child {
+    border-bottom: none;
+}
+
+#rules-list {
+    padding-left: 20px;
+    font-size: 0.85em;
+    color: #8b949e;
+    margin: 10px 0;
+}
+
+#rules-list li {
+    margin: 5px 0;
+}
+
+button {
+    background: var(--accent-color);
+    color: #fff;
+    border: none;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8em;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+select {
+    background: var(--bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+/* Vector Memory Panel Styles */
+#vector-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.vector-stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.stat-card {
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    min-width: 120px;
+    flex: 1;
+}
+
+.stat-card .stat-label {
+    font-size: 0.7em;
+    color: #8b949e;
+    margin-bottom: 3px;
+}
+
+.stat-card .stat-value {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
+.stat-card .stat-breakdown {
+    font-size: 0.75em;
+    display: flex;
+    gap: 8px;
+}
+
+.stat-breakdown .high { color: var(--success-color); }
+.stat-breakdown .med { color: #d29922; }
+.stat-breakdown .low { color: var(--danger-color); }
+
+.vector-table {
+    overflow-x: auto;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.vector-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8em;
+}
+
+.vector-table th,
+.vector-table td {
+    padding: 5px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.vector-table th {
+    background: var(--bg-color);
+    color: var(--accent-color);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.vector-table tr:hover {
+    background: rgba(88, 166, 255, 0.1);
+}
+
+.vector-table .context {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.vector-table .win { color: var(--success-color); font-weight: bold; }
+.vector-table .loss { color: var(--danger-color); font-weight: bold; }
+.vector-table .positive { color: var(--success-color); }
+.vector-table .negative { color: var(--danger-color); }
+
+.empty-state {
+    text-align: center;
+    padding: 20px;
+    color: #8b949e;
+}
+
+.empty-state p {
+    margin: 5px 0;
+}
