@@ -555,9 +555,8 @@ class TradingStrategy:
         conditions = {}
         
         try:
-            # Try to extract from parsed JSON analysis
-            parsed = result.get("parsed_json", {})
-            analysis = parsed.get("analysis", {})
+            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
+            analysis = result.get("analysis", {})
             
             # Get trend info
             trend = analysis.get("trend", {})
@@ -565,19 +564,16 @@ class TradingStrategy:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
                 conditions["trend_strength"] = trend.get("strength", 50)
             
-            # Try to get context data for more details
-            context = result.get("context")
-            if context and context.technical_data:
-                tech_data = context.technical_data
+            # Get technical data (result has 'technical_data' at top level, not under 'context')
+            tech_data = result.get("technical_data", {})
+            if tech_data:
                 conditions["adx"] = tech_data.get("adx", 0)
                 conditions["rsi"] = tech_data.get("rsi", 50)
                 conditions["choppiness"] = tech_data.get("choppiness", None)
-
                 # Extract ATR for dynamic SL/TP calculation
                 conditions["atr"] = tech_data.get("atr", 0)
                 atr_pct = tech_data.get("atr_percentage", 0)
                 conditions["atr_percentage"] = atr_pct
-
                 # Determine volatility from ATR or other indicators
                 if atr_pct > 3:
                     conditions["volatility"] = "HIGH"
@@ -585,7 +581,6 @@ class TradingStrategy:
                     conditions["volatility"] = "LOW"
                 else:
                     conditions["volatility"] = "MEDIUM"
-            
             # Fallback: try to extract from raw response keywords
             raw_response = result.get("raw_response", "").lower()
             if not conditions.get("trend_direction"):
@@ -595,10 +590,8 @@ class TradingStrategy:
                     conditions["trend_direction"] = "BEARISH"
                 else:
                     conditions["trend_direction"] = "NEUTRAL"
-                    
         except Exception as e:
             self.logger.warning(f"Could not extract market conditions: {e}")
-        
         return conditions
     
     def _extract_confluence_factors(self, result: dict) -> tuple:
@@ -613,11 +606,9 @@ class TradingStrategy:
         factors = []
         
         try:
-            # Try to extract from parsed JSON analysis
-            parsed = result.get("parsed_json", {})
-            analysis = parsed.get("analysis", {})
+            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
+            analysis = result.get("analysis", {})
             confluence_factors = analysis.get("confluence_factors", {})
-            
             if isinstance(confluence_factors, dict):
                 for factor_name, score in confluence_factors.items():
                     try:
@@ -627,10 +618,8 @@ class TradingStrategy:
                             factors.append((factor_name, score_value))
                     except (ValueError, TypeError):
                         pass
-                        
         except Exception as e:
             self.logger.warning(f"Could not extract confluence factors: {e}")
-        
         return tuple(factors)
     
     def get_position_context(self, current_price: Optional[float] = None) -> str:

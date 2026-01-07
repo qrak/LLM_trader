@@ -88,6 +88,28 @@ export async function updatePositionData(currentPrice = null) {
                     <span title="Risk/Reward ratio">R:R ${data.rr_ratio.toFixed(1)}</span>
                     <span title="Confidence">${data.confidence}</span>
                 </div>
+                
+                <div class="position-indicators" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px;">
+                        <span title="ADX at Entry">ADX: ${data.adx_at_entry ? data.adx_at_entry.toFixed(1) : '--'}</span>
+                        <span title="RSI at Entry">RSI: ${data.rsi_at_entry ? data.rsi_at_entry.toFixed(1) : '--'}</span>
+                    </div>
+                </div>
+
+                ${data.confluence_factors && data.confluence_factors.length > 0 ? `
+                <div class="confluence-factors" style="margin-top: 5px; font-size: 0.85em;">
+                    <div style="opacity: 0.7; margin-bottom: 3px;">Confluence Factors:</div>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        ${data.confluence_factors.map(f => `
+                            <li style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="text-transform: capitalize;">${f[0].replace(/_/g, ' ')}</span>
+                                <span style="color: var(--accent-color);">${f[1]}%</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+
                 <div class="position-gauge">
                     <div class="gauge-track">
                         <div class="gauge-sl" style="left: 0;"></div>
