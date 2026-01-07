@@ -180,5 +180,6 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
         "adx_at_entry": position.adx_at_entry,
         "rsi_at_entry": position.rsi_at_entry,
         "max_drawdown_pct": position.max_drawdown_pct,
-        "max_profit_pct": position.max_profit_pct
+        "max_profit_pct": position.max_profit_pct,
+        "confluence_factors": position.confluence_factors
     }
