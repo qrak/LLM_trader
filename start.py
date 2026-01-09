@@ -478,6 +478,7 @@ class CompositionRoot:
         
         # Add dashboard to dependencies
         deps['dashboard_server'] = dashboard_server
+        deps['dashboard_state'] = dashboard_server.dashboard_state
         
         return deps
     

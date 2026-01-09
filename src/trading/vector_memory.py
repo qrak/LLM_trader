@@ -241,9 +241,6 @@ class VectorMemoryService:
                 experiences.sort(key=lambda x: x["hybrid_score"], reverse=True)
                 experiences = experiences[:k]
 
-            self.logger.debug(
-                f"Retrieved {len(experiences)} similar experiences (decay={use_decay})"
-            )
             return experiences
             
         except Exception as e:

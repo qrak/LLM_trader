@@ -156,14 +156,32 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
 @router.get("/position")
 async def get_current_position(request: Request) -> Dict[str, Any]:
     """Get current open position details for the position panel."""
+    import re
     persistence = request.app.state.persistence
+    config = request.app.state.config
+    dashboard_state = getattr(request.app.state, 'dashboard_state', None)
+    current_price = dashboard_state.current_price if dashboard_state else None
+    if current_price is None:
+        data_dir = getattr(config, "DATA_DIR", "data")
+        prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
+        if prev_response_file.exists():
+            try:
+                with open(prev_response_file, "r") as f:
+                    data = json.load(f)
+                    prompt = data.get("prompt", "")
+                    match = re.search(r"Current Price:\s*\$?([\d,]+\.?\d*)", prompt)
+                    if match:
+                        current_price = float(match.group(1).replace(",", ""))
+            except Exception:
+                pass
     if not persistence:
         return {"has_position": False, "error": "Persistence not available"}
     position = persistence.load_position()
     if not position:
-        return {"has_position": False}
+        return {"has_position": False, "current_price": current_price}
     return {
         "has_position": True,
+        "current_price": current_price,
         "direction": position.direction,
         "symbol": position.symbol,
         "entry_price": position.entry_price,

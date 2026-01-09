@@ -550,3 +550,37 @@ select {
     font-size: 0.7em;
     color: #8b949e;
 }
+
+/* Fullscreen position gauge - larger and more readable */
+#fullscreen-body .position-gauge {
+    padding: 30px 0;
+}
+#fullscreen-body .gauge-track {
+    height: 24px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+}
+#fullscreen-body .gauge-entry {
+    width: 6px;
+    height: 36px;
+    top: -6px;
+    border-radius: 3px;
+}
+#fullscreen-body .gauge-sl,
+#fullscreen-body .gauge-tp {
+    width: 24px;
+    border-radius: 12px;
+}
+#fullscreen-body .gauge-current {
+    width: 28px;
+    height: 28px;
+    top: -2px;
+    border-width: 3px;
+}
+#fullscreen-body .gauge-labels {
+    font-size: 1em;
+    font-weight: 600;
+    padding: 0 5px;
+}
+#fullscreen-body .gauge-labels span:first-child { color: #f85149; }
+#fullscreen-body .gauge-labels span:last-child { color: #238636; }

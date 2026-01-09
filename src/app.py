@@ -32,6 +32,7 @@ class CryptoTradingBot:
         brain_service,
         statistics_service,
         memory_service,
+        dashboard_state = None,
         discord_task: Optional[asyncio.Task] = None
     ):
         """Initialize bot with all dependencies injected.
@@ -64,6 +65,7 @@ class CryptoTradingBot:
         self.brain_service = brain_service
         self.statistics_service = statistics_service
         self.memory_service = memory_service
+        self.dashboard_state = dashboard_state
         
         # Runtime state
         self.tasks = []
@@ -137,6 +139,9 @@ class CryptoTradingBot:
                 await self._start_position_status_updates()
         else:
             self.logger.info("No existing position")
+
+        # Fetch initial price for dashboard (one-time startup call)
+        await self._fetch_current_ticker()
         
         # Start the periodic trading loop
         self.running = True
@@ -303,6 +308,10 @@ class CryptoTradingBot:
         """Fetch current ticker from exchange."""
         try:
             ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
+            if ticker and self.dashboard_state:
+                price = float(ticker.get('last', ticker.get('close', 0)))
+                if price > 0:
+                    await self.dashboard_state.update_price(price)
             return ticker
         except Exception as e:
             self.logger.error(f"Error fetching current ticker: {e}")
