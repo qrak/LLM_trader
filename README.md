@@ -207,3 +207,6 @@ python start.py ETH/USDT     # Specific pair
 
 ## ⚠️ Disclaimer
 **EDUCATIONAL USE ONLY.** This software is currently in **BETA** and configured for **PAPER TRADING**. No real financial transactions are executed. The authors are not responsible for any financial decisions made based on this software.
+
+## Contributors
+- **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
