@@ -101,20 +101,20 @@ class ProviderFactory:
 
     def create_blockrun_client(self) -> Optional[BlockRunClient]:
         """
-        Create BlockRun.AI client if API key is configured.
+        Create BlockRun.AI client if wallet private key is configured.
 
         Returns:
-            BlockRunClient instance or None if API key not configured.
+            BlockRunClient instance or None if private key not configured.
         """
-        if not self.config.BLOCKRUN_API_KEY:
+        if not self.config.BLOCKRUN_WALLET_KEY:
             return None
 
         client = BlockRunClient(
-            api_key=self.config.BLOCKRUN_API_KEY,
-            base_url=self.config.BLOCKRUN_BASE_URL,
+            private_key=self.config.BLOCKRUN_WALLET_KEY,
+            api_url=self.config.BLOCKRUN_BASE_URL,
             logger=self.logger
         )
-        self.logger.debug("BlockRun.AI client initialized")
+        self.logger.debug("BlockRun.AI SDK client initialized")
         return client
 
     def create_all_clients(self) -> dict:

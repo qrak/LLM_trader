@@ -1,107 +1,179 @@
+"""
+BlockRun.AI provider using the official BlockRun LLM SDK.
+
+BlockRun.AI is a pay-as-you-go AI gateway providing ChatGPT and all major LLMs
+(OpenAI, Anthropic, Google, DeepSeek, xAI) via x402 micropayments on Base.
+
+Website: https://blockrun.ai
+Docs: https://blockrun.ai/docs
+
+Requirements:
+    pip install blockrun-llm
+
+Configuration:
+    Set BLOCKRUN_WALLET_KEY environment variable with your Base chain wallet private key.
+    Your private key never leaves your machine - it's only used for local payment signing.
+"""
 import io
 import base64
-from typing import Optional, Dict, Any, List, TypedDict, cast, Union
+from typing import Optional, Dict, Any, List, Union
 
 from PIL import Image
 
-from src.platforms.ai_providers.base import BaseApiClient
-from src.utils.decorators import retry_api_call
+try:
+    from blockrun_llm import AsyncLLMClient, APIError, PaymentError
+except ImportError:
+    raise ImportError(
+        "blockrun-llm SDK not installed. Install with: pip install blockrun-llm"
+    )
+
+from src.logger.logger import Logger
 
 
-class ResponseDict(TypedDict, total=False):
-    """Type for API responses."""
-    error: str
-
-
-class BlockRunClient(BaseApiClient):
+class BlockRunClient:
     """
-    Client for handling BlockRun.AI API requests.
+    Client for BlockRun.AI using the official SDK.
 
-    BlockRun.AI is a pay-as-you-go AI gateway providing ChatGPT and all major LLMs
-    (OpenAI, Anthropic, Google, DeepSeek, xAI) via x402 on Base.
-
-    Website: https://blockrun.ai
-    Docs: https://blockrun.ai/docs
+    The SDK automatically handles x402 micropayments on Base chain.
+    Your private key is used for local signing only - it never leaves your machine.
     """
 
-    def _extract_user_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
-        """Extract text content from the last user message."""
-        for message in reversed(messages):
-            if message["role"] == "user":
-                return message["content"]
-        return ""
-
-    def _prepare_multimodal_messages(self,
-                                     messages: List[Dict[str, Any]],
-                                     user_text: str,
-                                     multimodal_content: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def __init__(self, private_key: str, api_url: str, logger: Logger) -> None:
         """
-        Convert messages to multimodal format compatible with BlockRun.AI.
+        Initialize BlockRun client with the official SDK.
 
         Args:
-            messages: Original messages
-            user_text: Extracted user text
-            multimodal_content: Content parts for multimodal message (text + images)
+            private_key: Base chain wallet private key (used for LOCAL signing only)
+            api_url: API endpoint URL (default: https://blockrun.ai/api)
+            logger: Logger instance for logging
+
+        Security:
+            Your private key NEVER leaves your machine. It is only used to sign
+            EIP-712 typed data locally. Only the signature is sent to the server.
+        """
+        self.private_key = private_key
+        self.api_url = api_url
+        self.logger = logger
+        self._client: Optional[AsyncLLMClient] = None
+
+    async def __aenter__(self):
+        """Initialize async SDK client."""
+        self._client = AsyncLLMClient(
+            private_key=self.private_key,
+            api_url=self.api_url,
+            timeout=600.0  # 10 minute timeout for long-running requests
+        )
+        return self
+
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+        await self.close()
+
+    async def close(self) -> None:
+        """Close the SDK client."""
+        if self._client:
+            try:
+                self.logger.debug("Closing BlockRun.AI SDK client")
+                await self._client.close()
+                self._client = None
+            except Exception as e:
+                self.logger.error(f"Error closing BlockRun.AI SDK client: {e}")
+
+    def _ensure_client(self) -> AsyncLLMClient:
+        """Ensure client is initialized."""
+        if not self._client:
+            self._client = AsyncLLMClient(
+                private_key=self.private_key,
+                api_url=self.api_url,
+                timeout=600.0
+            )
+        return self._client
+
+    async def chat_completion(
+        self,
+        model: str,
+        messages: List[Dict[str, Any]],
+        model_config: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Send a chat completion request using the BlockRun SDK.
+
+        Args:
+            model: Model name (e.g., "gpt-4o", "claude-sonnet-4", "gemini-2.5-pro")
+            messages: OpenAI-style messages
+            model_config: Configuration parameters (max_tokens, temperature, top_p, etc.)
 
         Returns:
-            Converted messages with system messages as user messages
+            Response in OpenAI-compatible format or None if failed
         """
-        multimodal_messages = []
+        try:
+            client = self._ensure_client()
 
-        for message in messages:
-            if message["role"] == "system":
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": f"System instructions: {message['content']}"
-                })
-            elif message["role"] == "user" and message == messages[-1]:
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": multimodal_content
-                })
-            else:
-                multimodal_messages.append(message)
+            # Add provider prefix if not present (SDK expects "provider/model" format)
+            if "/" not in model:
+                # Default to openai for models without prefix
+                model = f"openai/{model}"
 
-        return multimodal_messages
+            self.logger.debug(f"Sending BlockRun.AI SDK request with model: {model}")
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
-        """
-        Send a chat completion request to the BlockRun.AI API.
+            # Extract parameters from config
+            max_tokens = model_config.get("max_tokens")
+            temperature = model_config.get("temperature")
+            top_p = model_config.get("top_p")
 
-        BlockRun.AI provides OpenAI-compatible API with x402 micropayments.
-        """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "X-Client": "LLM-Trader-v2"
-        }
+            # Use SDK's chat_completion method
+            response = await client.chat_completion(
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p
+            )
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            **model_config
-        }
+            self.logger.debug("Received successful response from BlockRun.AI SDK")
 
-        url = f"{self.base_url}/chat/completions"
-        response = await self._make_post_request(url, headers, payload, model, timeout=600)
+            # Convert SDK response to dict format expected by the application
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": response.choices[0].message.role,
+                            "content": response.choices[0].message.content
+                        },
+                        "finish_reason": response.choices[0].finish_reason
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                    "total_tokens": response.usage.total_tokens if response.usage else 0
+                }
+            }
 
-        return cast(ResponseDict, response) if response else None
+        except PaymentError as e:
+            self.logger.error(f"BlockRun.AI payment error: {str(e)}")
+            return {"error": "payment_failed", "details": str(e)}
+        except APIError as e:
+            self.logger.error(f"BlockRun.AI API error ({e.status_code}): {str(e)}")
+            return {"error": f"api_error_{e.status_code}", "details": str(e)}
+        except Exception as e:
+            self.logger.error(f"Unexpected error with BlockRun.AI SDK: {str(e)}")
+            return {"error": "unknown_error", "details": str(e)}
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(self,
-                                                 model: str,
-                                                 messages: List[Dict[str, Any]],
-                                                 chart_image: Union[io.BytesIO, bytes, str],
-                                                 model_config: Dict[str, Any]) -> Optional[ResponseDict]:
+    async def chat_completion_with_chart_analysis(
+        self,
+        model: str,
+        messages: List[Dict[str, Any]],
+        chart_image: Union[io.BytesIO, bytes, str],
+        model_config: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
         Args:
-            model: Model name to use (e.g., "gpt-4o", "claude-sonnet-4")
-            messages: List of OpenAI-style messages
+            model: Model name (must support vision, e.g., "gpt-4o", "claude-sonnet-4")
+            messages: OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters for the model
+            model_config: Configuration parameters
 
         Returns:
             Response in OpenAI-compatible format or None if failed
@@ -111,53 +183,51 @@ class BlockRunClient(BaseApiClient):
             img_data = self._process_chart_image(chart_image)
             base64_image = base64.b64encode(img_data).decode('utf-8')
 
-            user_text = self._extract_user_text_from_messages(messages)
+            # Extract user text from last message
+            user_text = ""
+            for message in reversed(messages):
+                if message["role"] == "user":
+                    user_text = message["content"]
+                    break
 
-            # Create multimodal content with image
-            multimodal_content = [
-                {
-                    "type": "text",
-                    "text": user_text
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{base64_image}"
-                    }
-                }
-            ]
+            # Convert messages to multimodal format
+            multimodal_messages = []
+            for message in messages:
+                if message["role"] == "system":
+                    # Keep system messages as-is
+                    multimodal_messages.append(message)
+                elif message["role"] == "user" and message == messages[-1]:
+                    # Replace last user message with multimodal content
+                    multimodal_messages.append({
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": user_text
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                }
+                            }
+                        ]
+                    })
+                else:
+                    # Keep other messages as-is
+                    multimodal_messages.append(message)
 
-            multimodal_messages = self._prepare_multimodal_messages(
-                messages, user_text, multimodal_content
+            self.logger.debug(
+                f"Sending chart analysis request to BlockRun.AI SDK "
+                f"with chart image ({len(img_data)} bytes)"
             )
 
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "X-Client": "LLM-Trader-v2"
-            }
-
-            payload = {
-                "model": model,
-                "messages": multimodal_messages,
-                **model_config
-            }
-
-            self.logger.debug(f"Sending chart analysis request to BlockRun.AI with chart image ({len(img_data)} bytes)")
-
-            url = f"{self.base_url}/chat/completions"
-            response = await self._make_post_request(url, headers, payload, model, timeout=600)
-
-            if response:
-                self.logger.debug("Received successful chart analysis response from BlockRun.AI")
-
-            return cast(ResponseDict, response) if response else None
+            # Use regular chat_completion with multimodal messages
+            return await self.chat_completion(model, multimodal_messages, model_config)
 
         except Exception as e:
-            self.logger.error(f"Error during BlockRun.AI chart analysis request: {str(e)}")
-            return self._handle_exception(e)
-
-
+            self.logger.error(f"Error during BlockRun.AI chart analysis: {str(e)}")
+            return {"error": "chart_analysis_failed", "details": str(e)}
 
     def _process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
         """
@@ -170,65 +240,12 @@ class BlockRunClient(BaseApiClient):
             Image data as bytes
         """
         if isinstance(chart_image, io.BytesIO):
-            # Read from BytesIO
             chart_image.seek(0)
             img_data = chart_image.read()
-            chart_image.seek(0)  # Reset for potential reuse
+            chart_image.seek(0)
             return img_data
         elif isinstance(chart_image, str):
-            # File path - read the file
             with open(chart_image, 'rb') as f:
                 return f.read()
         else:
-            # Assume it's already bytes
             return chart_image
-
-    def _process_image(self, image: Union[Image.Image, bytes, str]) -> bytes:
-        """
-        Process image and return as bytes.
-
-        Args:
-            image: Image as PIL Image, bytes, or file path string
-
-        Returns:
-            Image data as bytes
-        """
-        if isinstance(image, Image.Image):
-            # PIL Image - convert to bytes
-            img_buffer = io.BytesIO()
-            image.save(img_buffer, format='PNG')
-            return img_buffer.getvalue()
-        elif isinstance(image, bytes):
-            # Raw bytes
-            return image
-        elif isinstance(image, str):
-            # File path - read the file
-            with open(image, 'rb') as f:
-                return f.read()
-        else:
-            raise ValueError(f"Unsupported image type: {type(image)}")
-
-    def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
-        """
-        Handle exceptions from BlockRun.AI API.
-
-        Args:
-            exception: The exception that occurred
-
-        Returns:
-            Error response dictionary or None
-        """
-        error_message = str(exception)
-
-        if "quota" in error_message.lower() or "rate limit" in error_message.lower():
-            self.logger.error(f"Rate limit or quota exceeded: {error_message}")
-            return cast(ResponseDict, {"error": "rate_limit", "details": error_message})
-        elif "authentication" in error_message.lower() or "api key" in error_message.lower():
-            self.logger.error(f"Authentication error: {error_message}")
-            return cast(ResponseDict, {"error": "authentication", "details": error_message})
-        elif "timeout" in error_message.lower():
-            self.logger.error(f"Timeout error: {error_message}")
-            return cast(ResponseDict, {"error": "timeout", "details": error_message})
-        else:
-            self.logger.error(f"Unexpected error: {error_message}")
-            return None

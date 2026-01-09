@@ -349,7 +349,7 @@ class ModelManager(ModelManagerProtocol):
             elif provider == "googleai":
                 self.logger.error(f"{provider_name} client not initialized. Check that GOOGLE_STUDIO_API_KEY is set in keys.env")
             elif provider == "blockrun":
-                self.logger.error(f"{provider_name} client not initialized. Check that BLOCKRUN_API_KEY is set in keys.env")
+                self.logger.error(f"{provider_name} client not initialized. Check that BLOCKRUN_WALLET_KEY is set in keys.env")
             elif provider == "local":
                 self.logger.error(f"{provider_name} client not initialized. Check that LM_STUDIO_BASE_URL is set in config.ini and server is running")
         elif provider == "local" and not metadata.get('supports_chart'):

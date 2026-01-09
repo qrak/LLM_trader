@@ -187,8 +187,8 @@ class Config:
         return self.get_env('COINGECKO_API_KEY')
 
     @property
-    def BLOCKRUN_API_KEY(self):
-        return self.get_env('BLOCKRUN_API_KEY')
+    def BLOCKRUN_WALLET_KEY(self):
+        return self.get_env('BLOCKRUN_WALLET_KEY')
     
     @property
     def ADMIN_USER_IDS(self):
@@ -256,11 +256,11 @@ class Config:
 
     @property
     def BLOCKRUN_BASE_URL(self):
-        return self.get_config('ai_providers', 'blockrun_base_url', 'https://api.blockrun.ai/v1')
+        return self.get_config('ai_providers', 'blockrun_base_url', 'https://blockrun.ai/api')
 
     @property
     def BLOCKRUN_MODEL(self):
-        return self.get_config('ai_providers', 'blockrun_model', 'gpt-4o')
+        return self.get_config('ai_providers', 'blockrun_model', 'openai/gpt-4o')
 
     # General Configuration
     @property
