@@ -5,21 +5,22 @@ if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
+from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
 
 
 class ProviderFactory:
     """
     Factory for creating AI provider client instances based on configuration.
-    
+
     Centralizes provider instantiation logic and handles API key validation.
-    Supports multiple providers: Google AI Studio (free/paid), OpenRouter, LM Studio (local).
-    
+    Supports multiple providers: Google AI Studio (free/paid), OpenRouter, LM Studio (local), BlockRun.
+
     Usage:
         factory = ProviderFactory(logger, config)
         google_client, google_paid_client = factory.create_google_clients()
         openrouter_client = factory.create_openrouter_client()
         lmstudio_client = factory.create_lmstudio_client()
+        blockrun_client = factory.create_blockrun_client()
     """
     
     def __init__(self, logger: Logger, config: "ConfigProtocol"):
@@ -97,20 +98,39 @@ class ProviderFactory:
         )
         self.logger.debug(f"LM Studio client initialized for URL: {self.config.LM_STUDIO_BASE_URL}")
         return client
-    
+
+    def create_blockrun_client(self) -> Optional[BlockRunClient]:
+        """
+        Create BlockRun.AI client if API key is configured.
+
+        Returns:
+            BlockRunClient instance or None if API key not configured.
+        """
+        if not self.config.BLOCKRUN_API_KEY:
+            return None
+
+        client = BlockRunClient(
+            api_key=self.config.BLOCKRUN_API_KEY,
+            base_url=self.config.BLOCKRUN_BASE_URL,
+            logger=self.logger
+        )
+        self.logger.debug("BlockRun.AI client initialized")
+        return client
+
     def create_all_clients(self) -> dict:
         """
         Create all available AI provider clients based on configuration.
-        
+
         Returns:
-            Dictionary with keys: 'google', 'google_paid', 'openrouter', 'lmstudio'.
+            Dictionary with keys: 'google', 'google_paid', 'openrouter', 'lmstudio', 'blockrun'.
             Values are client instances or None if not configured.
         """
         google_client, google_paid_client = self.create_google_clients()
-        
+
         return {
             'google': google_client,
             'google_paid': google_paid_client,
             'openrouter': self.create_openrouter_client(),
-            'lmstudio': self.create_lmstudio_client()
+            'lmstudio': self.create_lmstudio_client(),
+            'blockrun': self.create_blockrun_client()
         }

@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.openrouter import ResponseDict
-from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
+from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
 from src.utils.token_counter import TokenCounter
 from src.contracts.manager_factory import ModelManagerProtocol
 from src.factories import ProviderFactory
@@ -44,6 +44,7 @@ class ModelManager(ModelManagerProtocol):
         self.google_client: Optional[GoogleAIClient] = clients['google']
         self.google_paid_client: Optional[GoogleAIClient] = clients['google_paid']
         self.lm_studio_client: Optional[LMStudioClient] = clients['lmstudio']
+        self.blockrun_client: Optional[BlockRunClient] = clients['blockrun']
 
         # Create helper components - use injected parser
         self.unified_parser = unified_parser
@@ -53,11 +54,13 @@ class ModelManager(ModelManagerProtocol):
         self.google_model = self.config.GOOGLE_STUDIO_MODEL
         self.openrouter_model = self.config.OPENROUTER_BASE_MODEL
         self.lmstudio_model = self.config.LM_STUDIO_MODEL
+        self.blockrun_model = self.config.BLOCKRUN_MODEL
 
         # Create model configurations as instance variables
         self.model_config = self.config.get_model_config(self.lmstudio_model)
         self.google_config = self.config.get_model_config(self.google_model)
         self.openrouter_config = self.config.get_model_config(self.openrouter_model)
+        self.blockrun_config = self.config.get_model_config(self.blockrun_model)
 
         # Provider metadata - single source of truth for provider information
         # This eliminates duplicate provider name mappings and model lookups throughout the class
@@ -86,6 +89,14 @@ class ModelManager(ModelManagerProtocol):
                 'config': self.model_config,
                 'supports_chart': False,
                 'has_rate_limits': False
+            },
+            'blockrun': {
+                'name': 'BlockRun.AI',
+                'client': self.blockrun_client,
+                'default_model': self.blockrun_model,
+                'config': self.blockrun_config,
+                'supports_chart': True,
+                'has_rate_limits': False  # Pay-per-use, no rate limits
             }
         }
 
@@ -104,6 +115,8 @@ class ModelManager(ModelManagerProtocol):
             await self.google_paid_client.__aenter__()
         if self.lm_studio_client:
             await self.lm_studio_client.__aenter__()
+        if self.blockrun_client:
+            await self.blockrun_client.__aenter__()
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
@@ -117,12 +130,15 @@ class ModelManager(ModelManagerProtocol):
 
             if self.google_client:
                 await self.google_client.close()
-            
+
             if self.google_paid_client:
                 await self.google_paid_client.close()
 
             if self.lm_studio_client:
                 await self.lm_studio_client.close()
+
+            if self.blockrun_client:
+                await self.blockrun_client.close()
 
             self.logger.debug("All model clients closed successfully")
         except Exception as e:
@@ -210,6 +226,8 @@ class ModelManager(ModelManagerProtocol):
             response_json = await self._try_single_provider_chart("googleai", messages, chart_image, model)
         elif effective_provider == "openrouter" and self.openrouter_client:
             response_json = await self._try_single_provider_chart("openrouter", messages, chart_image, model)
+        elif effective_provider == "blockrun" and self.blockrun_client:
+            response_json = await self._try_single_provider_chart("blockrun", messages, chart_image, model)
         elif effective_provider == "local" and self.lm_studio_client:
             # Local models typically don't support images - fall back to text-only
             self.logger.warning("Chart analysis requested but local provider doesn't support images. Falling back to text-only analysis.")
@@ -324,12 +342,14 @@ class ModelManager(ModelManagerProtocol):
         """Log helpful guidance when a provider is unavailable."""
         provider_name = self._get_provider_name(provider)
         metadata = self.PROVIDER_METADATA.get(provider)
-        
+
         if not metadata or not metadata['client']:
             if provider == "openrouter":
                 self.logger.error(f"{provider_name} client not initialized. Check that OPENROUTER_API_KEY is set in keys.env")
             elif provider == "googleai":
                 self.logger.error(f"{provider_name} client not initialized. Check that GOOGLE_STUDIO_API_KEY is set in keys.env")
+            elif provider == "blockrun":
+                self.logger.error(f"{provider_name} client not initialized. Check that BLOCKRUN_API_KEY is set in keys.env")
             elif provider == "local":
                 self.logger.error(f"{provider_name} client not initialized. Check that LM_STUDIO_BASE_URL is set in config.ini and server is running")
         elif provider == "local" and not metadata.get('supports_chart'):
@@ -381,7 +401,15 @@ class ModelManager(ModelManagerProtocol):
                     effective_model, messages, cast(Any, chart_image), config
                 )
             return await client.chat_completion(effective_model, messages, config)
-        
+
+        # BlockRun.AI standard flow (OpenAI-compatible)
+        if provider == "blockrun":
+            if chart:
+                return await client.chat_completion_with_chart_analysis(
+                    effective_model, messages, cast(Any, chart_image), config
+                )
+            return await client.chat_completion(effective_model, messages, config)
+
         return cast(ResponseDict, {"error": f"Provider '{provider}' is not available"})
     
     async def _invoke_google_provider(self, client, messages: List[Dict[str, str]], config: Dict[str, Any],

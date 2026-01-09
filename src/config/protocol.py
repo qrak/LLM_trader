@@ -40,7 +40,10 @@ class ConfigProtocol(Protocol):
     
     @property
     def CRYPTOCOMPARE_API_KEY(self) -> str | None: ...
-    
+
+    @property
+    def BLOCKRUN_API_KEY(self) -> str | None: ...
+
     @property
     def ADMIN_USER_IDS(self) -> list[int]: ...
     
@@ -66,8 +69,14 @@ class ConfigProtocol(Protocol):
     
     @property
     def GOOGLE_STUDIO_MODEL(self) -> str: ...
-    
-    
+
+    @property
+    def BLOCKRUN_BASE_URL(self) -> str: ...
+
+    @property
+    def BLOCKRUN_MODEL(self) -> str: ...
+
+
 
     @property
     def LOGGER_DEBUG(self) -> bool: ...

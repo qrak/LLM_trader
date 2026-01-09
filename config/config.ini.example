@@ -1,8 +1,9 @@
 [ai_providers]
-# Options: "local", "googleai", "openrouter", "all"
+# Options: "local", "googleai", "openrouter", "blockrun", "all"
 # - "local": Use LM Studio only
-# - "googleai": Use Google AI Studio only  
+# - "googleai": Use Google AI Studio only
 # - "openrouter": Use OpenRouter only
+# - "blockrun": Use BlockRun.AI only
 # - "all": Use fallback system (tries primary providers first, then falls back)
 provider = googleai
 
@@ -20,6 +21,12 @@ openrouter_fallback_model = deepseek/deepseek-r1:free
 
 # Model identifier for Google AI Studio (e.g., gemini-flash-latest, gemini-2.5-flash)
 google_studio_model = gemini-3-flash-preview
+
+# BlockRun.AI configuration (pay-as-you-go AI gateway)
+# Base URL for BlockRun.AI API (OpenAI-compatible)
+blockrun_base_url = https://api.blockrun.ai/v1
+# Model to use with BlockRun.AI (e.g., gpt-4o, claude-sonnet-4, gemini-2.0-flash-exp)
+blockrun_model = gpt-4o
 
 [general]
 # Default cryptocurrency pair to analyze if none specified
