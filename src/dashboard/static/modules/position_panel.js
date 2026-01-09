@@ -59,7 +59,8 @@ export async function updatePositionData(currentPrice = null) {
         }
         const entryTime = new Date(data.entry_time);
         const timeInPosition = (Date.now() - entryTime.getTime()) / 1000;
-        const pnl = currentPrice ? calculatePnL(data.entry_price, currentPrice, data.direction) : null;
+        const priceToUse = currentPrice || data.current_price;
+        const pnl = priceToUse ? calculatePnL(data.entry_price, priceToUse, data.direction) : null;
         const isProfit = pnl !== null && pnl >= 0;
         const directionClass = data.direction === 'LONG' ? 'long' : 'short';
         container.innerHTML = `
@@ -74,7 +75,7 @@ export async function updatePositionData(currentPrice = null) {
                 </div>
                 <div class="position-stat">
                     <span class="label">Current</span>
-                    <span class="value" id="current-price">${currentPrice ? '$' + currentPrice.toLocaleString() : '--'}</span>
+                <span class="value" id="current-price">${priceToUse ? '$' + priceToUse.toLocaleString() : '--'}</span>
                 </div>
                 <div class="position-pnl ${isProfit ? 'profit' : 'loss'}">
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
@@ -112,15 +113,15 @@ export async function updatePositionData(currentPrice = null) {
 
                 <div class="position-gauge">
                     <div class="gauge-track">
-                        <div class="gauge-sl" style="left: 0;"></div>
-                        <div class="gauge-entry" style="left: 50%;"></div>
-                        <div class="gauge-tp" style="right: 0;"></div>
-                        ${currentPrice ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, currentPrice)}%;"></div>` : ''}
+                        <div class="gauge-sl" style="left: 0;" title="Stop Loss: $${data.stop_loss.toLocaleString()}"></div>
+                        <div class="gauge-entry" style="left: 50%;" title="Entry: $${data.entry_price.toLocaleString()}"></div>
+                        <div class="gauge-tp" style="right: 0;" title="Take Profit: $${data.take_profit.toLocaleString()}"></div>
+                        ${priceToUse ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, priceToUse)}%;" title="Current: $${priceToUse.toLocaleString()} (${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%)"></div>` : ''}
                     </div>
                     <div class="gauge-labels">
-                        <span>SL</span>
-                        <span>Entry</span>
-                        <span>TP</span>
+                        <span title="Stop Loss: $${data.stop_loss.toLocaleString()}">SL</span>
+                        <span title="Entry: $${data.entry_price.toLocaleString()}">Entry</span>
+                        <span title="Take Profit: $${data.take_profit.toLocaleString()}">TP</span>
                     </div>
                 </div>
             </div>

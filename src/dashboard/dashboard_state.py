@@ -16,7 +16,13 @@ class DashboardState:
     bot_status: str = "running"
     last_analysis_time: Optional[datetime] = None
     current_position: Optional[Dict[str, Any]] = None
+    current_price: Optional[float] = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+
+    async def update_price(self, price: float) -> None:
+        """Update current price (no broadcast to avoid spam)."""
+        async with self._lock:
+            self.current_price = price
 
     async def update_next_check(self, next_time: datetime) -> None:
         """Update next check time and broadcast to clients."""
