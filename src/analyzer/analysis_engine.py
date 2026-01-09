@@ -132,6 +132,7 @@ class AnalysisEngine:
         
         # Dashboard Monitoring Data
         self.last_generated_prompt: Optional[str] = None
+        self.last_system_prompt: Optional[str] = None
         self.last_llm_response: Optional[str] = None
         self.last_chart_buffer: Optional[io.BytesIO] = None
 
@@ -439,11 +440,12 @@ class AnalysisEngine:
         
         # Give result processor access to context for current_price
         self.result_processor.context = self.context
-        
+
         # Pass chart image to result processor (it will use chart analysis if image provided)
-        
-        # Dashboard: Store prompt
+
+        # Dashboard: Store both prompts for monitoring
         self.last_generated_prompt = prompt
+        self.last_system_prompt = system_prompt
         if chart_image:
            self.last_chart_buffer = io.BytesIO(chart_image.getvalue())
 

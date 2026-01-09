@@ -201,3 +201,27 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
         "max_profit_pct": position.max_profit_pct,
         "confluence_factors": position.confluence_factors
     }
+
+
+@router.get("/refresh-price")
+async def refresh_current_price(request: Request) -> Dict[str, Any]:
+    """Fetch fresh price from exchange and update dashboard state."""
+    exchange_manager = getattr(request.app.state, 'exchange_manager', None)
+    dashboard_state = getattr(request.app.state, 'dashboard_state', None)
+    config = request.app.state.config
+    if not exchange_manager:
+        return {"success": False, "error": "Exchange manager not available"}
+    try:
+        symbol = getattr(config, 'CRYPTO_PAIR', 'BTC/USDC')
+        exchange, _ = await exchange_manager.find_symbol_exchange(symbol)
+        if not exchange:
+            return {"success": False, "error": f"No exchange found for {symbol}"}
+        ticker = await exchange.fetch_ticker(symbol)
+        if not ticker:
+            return {"success": False, "error": "Failed to fetch ticker"}
+        price = float(ticker.get('last', ticker.get('close', 0)))
+        if price > 0 and dashboard_state:
+            await dashboard_state.update_price(price)
+        return {"success": True, "current_price": price, "symbol": symbol}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

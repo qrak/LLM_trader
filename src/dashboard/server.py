@@ -18,6 +18,7 @@ class DashboardServer:
                  config,
                  unified_parser=None,
                  persistence=None,
+                 exchange_manager=None,
                  host="0.0.0.0", 
                  port=8000):
         self.brain_service = brain_service
@@ -26,6 +27,7 @@ class DashboardServer:
         self.config = config
         self.unified_parser = unified_parser
         self.persistence = persistence
+        self.exchange_manager = exchange_manager
         self.host = host
         self.port = port
         self.server_task = None
@@ -60,6 +62,7 @@ class DashboardServer:
         app.state.config = self.config
         app.state.unified_parser = self.unified_parser
         app.state.persistence = self.persistence
+        app.state.exchange_manager = self.exchange_manager
         app.state.dashboard_state = self.dashboard_state
 
         app.include_router(brain.router)

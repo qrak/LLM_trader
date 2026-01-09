@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.updateVisuals = () => updateVisuals();
     window.updateLogView = () => updateLogs();
     window.updateVectors = () => updateVectorData();
-    window.updatePosition = () => updatePositionData();
+    window.updatePosition = () => updatePositionData(null, true);
     document.addEventListener('analysis-complete', () => {
         console.log('Analysis complete, refreshing...');
         updateAll();

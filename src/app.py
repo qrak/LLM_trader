@@ -129,7 +129,11 @@ class CryptoTradingBot:
             exchange=exchange,
             timeframe=self.current_timeframe
         )
-        
+
+        # Enable running state before starting any async loops
+        self.running = True
+        check_count = 0
+
         # Log current position if any
         if self.trading_strategy.current_position:
             pos = self.trading_strategy.current_position
@@ -142,10 +146,6 @@ class CryptoTradingBot:
 
         # Fetch initial price for dashboard (one-time startup call)
         await self._fetch_current_ticker()
-        
-        # Start the periodic trading loop
-        self.running = True
-        check_count = 0
         
         # Check if resuming from previous session (regardless of position status)
         last_analysis_time = self.persistence.get_last_analysis_time()
