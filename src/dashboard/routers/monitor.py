@@ -55,3 +55,18 @@ async def get_last_response(request: Request) -> Dict[str, Any]:
             return {"response": f"Error reading previous response: {str(e)}"}
     return {"response": "No response received yet."}
 
+
+@router.get("/system_prompt")
+async def get_system_prompt(request: Request) -> Dict[str, Any]:
+    """Get the last system prompt (contains brain context and trading rules)."""
+    analysis_engine = request.app.state.analysis_engine
+    system_prompt = getattr(analysis_engine, "last_system_prompt", None)
+    if system_prompt:
+        has_brain = "TRADING BRAIN" in system_prompt
+        return {
+            "system_prompt": system_prompt,
+            "source": "memory",
+            "has_brain_context": has_brain
+        }
+    return {"system_prompt": "No system prompt generated yet.", "source": None, "has_brain_context": False}
+

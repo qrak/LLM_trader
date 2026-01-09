@@ -40,11 +40,25 @@ function calculatePnL(entryPrice, currentPrice, direction) {
 
 /**
  * Update position panel with latest data.
+ * @param {number|null} currentPrice - Optional price to use
+ * @param {boolean} fetchFresh - If true, fetch fresh price from exchange
  */
-export async function updatePositionData(currentPrice = null) {
+export async function updatePositionData(currentPrice = null, fetchFresh = false) {
     const container = document.getElementById('position-content');
     if (!container) return;
     try {
+        // Optionally fetch fresh price from exchange
+        if (fetchFresh) {
+            try {
+                const priceResponse = await fetch('/api/brain/refresh-price');
+                const priceData = await priceResponse.json();
+                if (priceData.success && priceData.current_price) {
+                    currentPrice = priceData.current_price;
+                }
+            } catch (e) {
+                console.warn('Failed to refresh price:', e);
+            }
+        }
         const response = await fetch('/api/brain/position');
         const data = await response.json();
         lastPosition = data;

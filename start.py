@@ -473,7 +473,8 @@ class CompositionRoot:
             analysis_engine=market_analyzer,
             config=self.config,
             unified_parser=unified_parser,
-            persistence=persistence
+            persistence=persistence,
+            exchange_manager=exchange_manager
         )
         
         # Add dashboard to dependencies
