@@ -488,7 +488,7 @@ class CryptoTradingBot:
                             current_price=current_price,
                             channel_id=self.config.MAIN_CHANNEL_ID
                         )
-                        self.logger.info("Sent hourly position status update to Discord")
+                        self.logger.debug("Sent hourly position status update to Discord")
                     except Exception as e:
                         self.logger.warning(f"Error sending position status update: {e}")
         except asyncio.CancelledError:

@@ -185,7 +185,8 @@ class VectorMemoryService:
         current_context: str,
         k: int = 5,
         use_decay: bool = True,
-        decay_half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS
+        decay_half_life_days: int = DEFAULT_DECAY_HALF_LIFE_DAYS,
+        where: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """Retrieve past experiences similar to the current market context.
 
@@ -196,6 +197,7 @@ class VectorMemoryService:
             k: Number of similar experiences to retrieve
             use_decay: Whether to apply recency decay weighting
             decay_half_life_days: Half-life for recency decay
+            where: Optional metadata filter dict (e.g., {"outcome": "WIN"})
 
         Returns:
             List of dicts with keys: id, document, similarity, hybrid_score, metadata
@@ -209,10 +211,13 @@ class VectorMemoryService:
             
             query_embedding = self._embedding_model.encode(current_context).tolist()
             
-            results = self._collection.query(
-                query_embeddings=[query_embedding],
-                n_results=min(k, self._collection.count())
-            )
+            query_kwargs = {
+                "query_embeddings": [query_embedding],
+                "n_results": min(k, self._collection.count())
+            }
+            if where:
+                query_kwargs["where"] = where
+            results = self._collection.query(**query_kwargs)
             
             experiences = []
             if results and results["ids"] and results["ids"][0]:
@@ -418,7 +423,7 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return {}
 
-        all_experiences = self._collection.get()
+        all_experiences = self._collection.get(include=["metadatas"])
         if not all_experiences or not all_experiences["ids"]:
             return {}
 
@@ -462,7 +467,7 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return {}
 
-        all_experiences = self._collection.get()
+        all_experiences = self._collection.get(include=["metadatas"])
         if not all_experiences or not all_experiences["ids"]:
             return {}
 
@@ -512,7 +517,7 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return {}
 
-        all_experiences = self._collection.get()
+        all_experiences = self._collection.get(include=["metadatas"])
         if not all_experiences or not all_experiences["ids"]:
             return {}
 

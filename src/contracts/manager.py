@@ -21,7 +21,7 @@ class ModelManager(ModelManagerProtocol):
         Args:
             logger: Logger instance for logging
             config: ConfigProtocol instance for configuration access
-            unified_parser: UnifiedParser instance (must be injected from app.py)
+            unified_parser:  instance (must be injected from app.py)
         
         Raises:
             ValueError: If config or unified_parser is None

@@ -74,12 +74,18 @@ class ContextBuilder:
         # Get analysis timeframes description
         analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"
         
+        # Determine day of week and add weekend warning if applicable
+        day_of_week = current_time.strftime("%A")
+        weekend_note = ""
+        if day_of_week in ["Saturday", "Sunday"]:
+             weekend_note = "\n        - WEEKEND MODE: Trading volume/liquidity is typically lower. Be cautious of fakeouts/manipulation."
+
         trading_context = f"""
         TRADING CONTEXT:
         - Symbol: {context.symbol if hasattr(context, 'symbol') else 'BTC/USDT'}
-        - Current Day: {self.format_utils.format_current_time("%A")}
+        - Current Day: {day_of_week} (UTC)
         - Current Price: {context.current_price}
-        - Analysis Time: {self.format_utils.format_current_time('%Y-%m-%d %H:%M:%S')}{candle_status}
+        - Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}
         - Primary Timeframe: {self.timeframe}
         - Analysis Includes: {analysis_timeframes}"""
         

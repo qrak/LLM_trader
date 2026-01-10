@@ -10,8 +10,11 @@ from typing import Dict, Any, List, Optional
 import math
 
 
+from src.utils.dataclass_utils import SerializableMixin
+
+
 @dataclass(slots=True)
-class TradingStatistics:
+class TradingStatistics(SerializableMixin):
     """All-time cumulative trading statistics.
     
     Updated after every closed trade to provide the AI with
@@ -34,54 +37,6 @@ class TradingStatistics:
     sortino_ratio: float = 0.0
     profit_factor: float = 0.0
     last_updated: datetime = field(default_factory=datetime.now)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "total_trades": self.total_trades,
-            "winning_trades": self.winning_trades,
-            "losing_trades": self.losing_trades,
-            "win_rate": self.win_rate,
-            "total_pnl_pct": self.total_pnl_pct,
-            "total_pnl_quote": self.total_pnl_quote,
-            "initial_capital": self.initial_capital,
-            "current_capital": self.current_capital,
-            "avg_trade_pct": self.avg_trade_pct,
-            "best_trade_pct": self.best_trade_pct,
-            "worst_trade_pct": self.worst_trade_pct,
-            "max_drawdown_pct": self.max_drawdown_pct,
-            "avg_drawdown_pct": self.avg_drawdown_pct,
-            "sharpe_ratio": self.sharpe_ratio,
-            "sortino_ratio": self.sortino_ratio,
-            "profit_factor": self.profit_factor,
-            "last_updated": self.last_updated.isoformat(),
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TradingStatistics':
-        """Create TradingStatistics from dictionary."""
-        initial_cap = data.get("initial_capital", 10000.0)
-        total_pnl = data.get("total_pnl_quote", 0.0)
-        current_cap = data.get("current_capital", initial_cap + total_pnl)
-        return cls(
-            total_trades=data.get("total_trades", 0),
-            winning_trades=data.get("winning_trades", 0),
-            losing_trades=data.get("losing_trades", 0),
-            win_rate=data.get("win_rate", 0.0),
-            total_pnl_pct=data.get("total_pnl_pct", 0.0),
-            total_pnl_quote=total_pnl,
-            initial_capital=initial_cap,
-            current_capital=current_cap,
-            avg_trade_pct=data.get("avg_trade_pct", 0.0),
-            best_trade_pct=data.get("best_trade_pct", 0.0),
-            worst_trade_pct=data.get("worst_trade_pct", 0.0),
-            max_drawdown_pct=data.get("max_drawdown_pct", 0.0),
-            avg_drawdown_pct=data.get("avg_drawdown_pct", 0.0),
-            sharpe_ratio=data.get("sharpe_ratio", 0.0),
-            sortino_ratio=data.get("sortino_ratio", 0.0),
-            profit_factor=data.get("profit_factor", 0.0),
-            last_updated=datetime.fromisoformat(data["last_updated"]) if "last_updated" in data else datetime.now(),
-        )
 
 
 class StatisticsCalculator:
