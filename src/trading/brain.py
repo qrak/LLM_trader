@@ -114,7 +114,10 @@ class TradingBrainService:
         rsi_level: str = "NEUTRAL",
         macd_signal: str = "NEUTRAL",
         volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE"
+        bb_position: str = "MIDDLE",
+        is_weekend: bool = False,
+        market_sentiment: str = "NEUTRAL",
+        order_book_bias: str = "BALANCED"
     ) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval.
         
@@ -126,6 +129,9 @@ class TradingBrainService:
             macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
             volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
             bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
+            is_weekend: Whether current day is Saturday or Sunday
+            market_sentiment: Fear & Greed state (EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED)
+            order_book_bias: Order book pressure (BUY_PRESSURE/SELL_PRESSURE/BALANCED)
         
         Returns:
             Formatted string with vector-retrieved experiences and confidence calibration.
@@ -165,6 +171,9 @@ class TradingBrainService:
             macd_signal=macd_signal,
             volume_state=volume_state,
             bb_position=bb_position,
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
             k=5
         )
         
@@ -246,6 +255,9 @@ class TradingBrainService:
         macd_signal: str = "NEUTRAL",
         volume_state: str = "NORMAL",
         bb_position: str = "MIDDLE",
+        is_weekend: bool = False,
+        market_sentiment: str = "NEUTRAL",
+        order_book_bias: str = "BALANCED",
         k: int = 5
     ) -> str:
         """Get context from similar past experiences via vector retrieval.
@@ -260,6 +272,9 @@ class TradingBrainService:
             macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
             volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
             bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
+            is_weekend: Whether current day is Saturday or Sunday
+            market_sentiment: Fear & Greed state
+            order_book_bias: Order book pressure
             k: Number of experiences to retrieve
             
         Returns:
@@ -286,6 +301,14 @@ class TradingBrainService:
             context_parts.append(f"Volume {volume_state}")
         if bb_position != "MIDDLE":
             context_parts.append(f"Price at BB {bb_position}")
+        
+        # Add new enriched context fields
+        if is_weekend:
+            context_parts.append("Weekend Low Volume")
+        if market_sentiment not in ("NEUTRAL", ""):
+            context_parts.append(f"Sentiment {market_sentiment}")
+        if order_book_bias not in ("BALANCED", ""):
+            context_parts.append(f"OrderBook {order_book_bias}")
         
         context_query = " + ".join(context_parts)
         
@@ -369,10 +392,10 @@ class TradingBrainService:
         """
         try:
             experiences = self.vector_memory.retrieve_similar_experiences(
-                "WIN trade analysis", k=20, use_decay=True
+                "recent trading experiences", k=20, use_decay=True, where={"outcome": "WIN"}
             )
 
-            wins = [e for e in experiences if e["metadata"].get("outcome") == "WIN"]
+            wins = experiences  # Already filtered by DB
             if len(wins) < 5:
                 self.logger.debug("Not enough winning trades for reflection")
                 return

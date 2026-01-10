@@ -183,13 +183,16 @@ class DiscordNotifier(BaseNotifier):
         embed: discord.Embed,
         channel_id: int,
         expire_after: Optional[float] = None
-    ) -> None:
+    ) -> Optional[discord.Message]:
         """Send a Discord embed to a channel with expiration.
         
         Args:
             embed: Discord embed to send
             channel_id: Discord channel ID
             expire_after: Message expiry time in seconds (defaults to FILE_MESSAGE_EXPIRY)
+        
+        Returns:
+            The sent message or None on failure
         """
         if expire_after is None:
             expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
@@ -197,9 +200,24 @@ class DiscordNotifier(BaseNotifier):
         channel = self.bot.get_channel(channel_id)
         if not channel:
             self.logger.error(f"Channel with ID {channel_id} not found.")
-            return
+            return None
         
-        await channel.send(embed=embed, delete_after=expire_after)
+        try:
+            sent_message = await channel.send(embed=embed, delete_after=expire_after)
+            
+            # Track message for persistent deletion
+            await self.file_handler.track_message(
+                message_id=sent_message.id,
+                channel_id=channel_id,
+                user_id=None,
+                message_type="embed",
+                expire_after=int(expire_after)
+            )
+            
+            return sent_message
+        except Exception as e:
+            self.logger.error(f"Error sending embed: {e}")
+            return None
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_trading_decision(self, decision: Any, channel_id: int) -> None:

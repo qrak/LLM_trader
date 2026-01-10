@@ -5,8 +5,11 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 
+from src.utils.dataclass_utils import SerializableMixin
+
+
 @dataclass(slots=True)
-class Position:
+class Position(SerializableMixin):
 
     """Represents an active trading position.
 
@@ -87,7 +90,7 @@ class Position:
 
 
 @dataclass(slots=True)
-class TradeDecision:
+class TradeDecision(SerializableMixin):
     """Represents a trading decision from the AI."""
     timestamp: datetime
     symbol: str
@@ -102,44 +105,9 @@ class TradeDecision:
     fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
     reasoning: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "timestamp": self.timestamp.isoformat(),
-            "symbol": self.symbol,
-            "action": self.action,
-            "confidence": self.confidence,
-            "price": self.price,
-            "stop_loss": self.stop_loss,
-            "take_profit": self.take_profit,
-            "position_size": self.position_size,
-            "quote_amount": self.quote_amount,
-            "quantity": self.quantity,
-            "fee": self.fee,
-            "reasoning": self.reasoning,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TradeDecision':
-        """Create TradeDecision from dictionary."""
-        return cls(
-            timestamp=datetime.fromisoformat(data["timestamp"]),
-            symbol=data["symbol"],
-            action=data["action"],
-            confidence=data["confidence"],
-            price=data["price"],
-            stop_loss=data.get("stop_loss"),
-            take_profit=data.get("take_profit"),
-            position_size=data.get("position_size", 0.0),
-            quote_amount=data.get("quote_amount", 0.0),
-            quantity=data.get("quantity", 0.0),
-            fee=data["fee"],  # Mandatory field
-            reasoning=data.get("reasoning", ""),
-        )
-
 
 @dataclass(slots=True)
-class TradingMemory:
+class TradingMemory(SerializableMixin):
     """Rolling memory of recent trading decisions for context."""
     decisions: List[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10

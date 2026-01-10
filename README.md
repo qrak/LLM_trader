@@ -59,7 +59,7 @@ graph TD
 
 ### 🧠 Vector-Only Trading Brain (Pure Vector Database)
 - **ChromaDB Vector Store**: All trade statistics computed on-demand from rich metadata stored in the vector database—no JSON files needed.
-- **Semantic Trade Retrieval**: Past trades are retrieved based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands).
+- **Semantic Trade Retrieval**: Past trades are retrieved based on *semantic similarity* to current market conditions (Trend, ADX, Volatility, RSI, MACD, Volume, Bollinger Bands, Weekend/Weekday, Fear & Greed Sentiment, Order Book Pressure).
 - **Adaptive Thresholds**: The system continuously learns optimal thresholds (ADX, R/R, confidence) from historical vector data without manual tuning.
 - **Performance Bucketing**: Granular analysis of performance by ADX levels (LOW/MED/HIGH) and confluence factors (Trend Alignment, Momentum, Volume Support).
 - **Real-Time Aggregation**: Statistics (confidence calibration, ADX performance, confluence factors) are computed directly from the vector store when needed, with smart caching.
@@ -106,6 +106,7 @@ graph TD
 - **Advanced Performance Metrics**: Real-time calculation of **Sharpe Ratio**, **Sortino Ratio**, **Max Drawdown**, and **Profit Factor**.
 - **Currency-Agnostic P&L**: Tracks profits and losses accurately in the relevant quote currency (e.g., USDT, ETH, BTC).
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
+- **Weekend Awareness**: Automatic detection of weekend trading with explicit warnings about lower volume/liquidity and manipulation risks.
 
 ### 🖥️ Real-Time Web Dashboard
 - **Brain Visualization**: Interactive network graph showing trade sequences (BUY → UPDATE → CLOSE) using Vis.js with physics-based layout and automatic stabilization.

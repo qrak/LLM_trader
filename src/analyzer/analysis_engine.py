@@ -686,6 +686,34 @@ class AnalysisEngine:
             elif current_price <= bb_lower * 1.01:  # Within 1% of lower band
                 bb_position = "LOWER"
         
+        # Extract weekend status (Saturday=5, Sunday=6)
+        from datetime import datetime
+        is_weekend = datetime.now().weekday() >= 5
+        
+        # Extract market sentiment from Fear & Greed data
+        market_sentiment = "NEUTRAL"
+        if self.context.sentiment:
+            fear_greed = self.context.sentiment.get("fear_greed_index", 50)
+            if isinstance(fear_greed, (int, float)):
+                if fear_greed <= 25:
+                    market_sentiment = "EXTREME_FEAR"
+                elif fear_greed <= 45:
+                    market_sentiment = "FEAR"
+                elif fear_greed >= 75:
+                    market_sentiment = "EXTREME_GREED"
+                elif fear_greed >= 55:
+                    market_sentiment = "GREED"
+        
+        # Extract order book bias from microstructure (thresholds from market_formatter.py)
+        order_book_bias = "BALANCED"
+        if self.context.market_microstructure:
+            order_book = self.context.market_microstructure.get("order_book", {})
+            imbalance = order_book.get("imbalance", 0) if isinstance(order_book, dict) else 0
+            if imbalance > 0.1:
+                order_book_bias = "BUY_PRESSURE"
+            elif imbalance < -0.1:
+                order_book_bias = "SELL_PRESSURE"
+        
         # Generate context with CURRENT indicators
         return brain_service.get_context(
             trend_direction=trend_direction,
@@ -694,6 +722,9 @@ class AnalysisEngine:
             rsi_level=rsi_level,
             macd_signal=macd_signal,
             volume_state=volume_state,
-            bb_position=bb_position
+            bb_position=bb_position,
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias
         )
 
