@@ -251,14 +251,31 @@ class TradingStrategy:
                 action="CLOSE",
                 confidence=confidence,
                 price=current_price,
-                fee=0.0, # Fee handled in close_position, this is just the signal return
+                fee=0.0,
                 reasoning=reasoning,
             )
-        
-        # Update stop loss / take profit if provided
+
+        old_sl = self.current_position.stop_loss
+        old_tp = self.current_position.take_profit
+
         updated = self._update_position_parameters(stop_loss, take_profit)
-        
+
         if updated:
+            try:
+                current_pnl = self.current_position.calculate_pnl(current_price)
+                self.brain_service.track_position_update(
+                    position=self.current_position,
+                    old_sl=old_sl,
+                    old_tp=old_tp,
+                    new_sl=stop_loss if stop_loss else old_sl,
+                    new_tp=take_profit if take_profit else old_tp,
+                    current_price=current_price,
+                    current_pnl_pct=current_pnl,
+                    market_conditions=market_conditions
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to track position update: {e}")
+
             decision = TradeDecision(
                 timestamp=datetime.now(),
                 symbol=symbol,
@@ -267,13 +284,13 @@ class TradingStrategy:
                 price=current_price,
                 stop_loss=stop_loss,
                 take_profit=take_profit,
-                fee=0.0, # No fee for updates
+                fee=0.0,
                 reasoning=f"Updated position parameters. {reasoning}",
             )
             self.persistence.save_trade_decision(decision)
             self.logger.info(f"Position updated: New SL=${stop_loss:,.2f}, TP=${take_profit:,.2f}")
             return decision
-        
+
         return None
     
     async def _open_new_position(
@@ -563,6 +580,7 @@ class TradingStrategy:
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
                 conditions["trend_strength"] = trend.get("strength", 50)
+                conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
             
             # Get technical data (result has 'technical_data' at top level, not under 'context')
             tech_data = result.get("technical_data", {})

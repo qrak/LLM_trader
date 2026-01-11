@@ -166,8 +166,15 @@ class ContextBuilder:
         return max(0.0, 1.0 - (time_diff / (24 * 3600)))
     
     @profile_performance
-    def add_articles_to_context(self, indices: List[int], news_database: List[Dict[str, Any]],
-                               max_tokens: int, k: int, keywords: Optional[Set[str]] = None) -> Tuple[str, int]:
+    def add_articles_to_context(
+        self,
+        indices: List[int],
+        news_database: List[Dict[str, Any]],
+        max_tokens: int,
+        k: int,
+        keywords: Optional[Set[str]] = None,
+        scores: Optional[Dict[int, float]] = None
+    ) -> Tuple[str, int]:
         """Add articles to context with token limiting.
         
         Args:
@@ -176,25 +183,27 @@ class ContextBuilder:
             max_tokens: Maximum tokens for the entire context
             k: Maximum number of articles to include
             keywords: Optional set of keywords for smart sentence selection
+            scores: Optional dict mapping index -> importance score for relevance indicators
         """
         context_parts = []
         total_tokens = 0
         articles_added = 0
         self.latest_article_urls = {}
+        scores = scores or {}
         
         for idx in indices:
             if idx >= len(news_database) or articles_added >= k:
                 break
 
             article = news_database[idx]
-            article_text, article_tokens = self._format_single_article(article, keywords)
+            importance = scores.get(idx, 0.0)
+            article_text, article_tokens = self._format_single_article(article, keywords, importance)
             
             if total_tokens + article_tokens <= max_tokens:
                 context_parts.append(article_text)
                 total_tokens += article_tokens
                 articles_added += 1
                 
-                # Store URL for reference
                 if 'url' in article:
                     title = article.get('title', 'No Title')
                     self.latest_article_urls[title] = article['url']
@@ -203,19 +212,30 @@ class ContextBuilder:
 
         return "".join(context_parts), total_tokens
     
-    def _format_single_article(self, article: Dict[str, Any], keywords: Optional[Set[str]] = None) -> Tuple[str, int]:
+    def _format_single_article(
+        self,
+        article: Dict[str, Any],
+        keywords: Optional[Set[str]] = None,
+        importance_score: float = 0.0
+    ) -> Tuple[str, int]:
         """Format a single article for context inclusion (compressed format for token efficiency).
         
         Args:
             article: Article dictionary
             keywords: Optional set of keywords for smart sentence selection
+            importance_score: Relevance score for displaying importance indicator
         """
         published_date = self.article_processor.format_article_date(article)
         title = article.get('title', 'No Title')
         source = article.get('source', 'Unknown Source')
 
-        # Compressed format: headline (source, date) - key facts
-        article_text = f"## {title}\n**Source:** {source} | **Date:** {published_date}\n\n"
+        relevance_tag = ""
+        if importance_score >= 15:
+            relevance_tag = "⚠️ ACTIONABLE | "
+        elif importance_score >= 8:
+            relevance_tag = "📰 RELEVANT | "
+
+        article_text = f"## {title}\n**{relevance_tag}Source:** {source} | **Date:** {published_date}\n\n"
 
         body = article.get('body', '')
         if body:

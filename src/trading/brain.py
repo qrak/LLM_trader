@@ -94,6 +94,12 @@ class TradingBrainService:
                 "rr_ratio": position.rr_ratio_at_entry,
                 "max_drawdown_pct": position.max_drawdown_pct,
                 "max_profit_pct": position.max_profit_pct,
+                "fear_greed_index": conditions.get("fear_greed_index", 50),
+                "market_regime": conditions.get("trend_direction", "NEUTRAL"),
+                "is_weekend": conditions.get("is_weekend", False),
+                "position_size_pct": position.size_pct,
+                "confluence_count": self._count_strong_confluences(position.confluence_factors),
+                "timeframe_alignment": conditions.get("timeframe_alignment"),
                 **self._extract_factor_scores(position.confluence_factors),
             }
         )
@@ -105,6 +111,7 @@ class TradingBrainService:
         self._trade_count += 1
         if self._trade_count % self._reflection_interval == 0:
             self._trigger_reflection()
+            self._trigger_loss_reflection()
     
     def get_context(
         self,
@@ -183,7 +190,8 @@ class TradingBrainService:
         if lines:
             lines.extend([
                 "",
-                "APPLY THESE INSIGHTS: Learn from similar past trades. Weight recent wins higher.",
+                "APPLY INSIGHTS (CoT Step 6 - Historical Evidence):",
+                "- Weight recent wins higher. Check if AVOID PATTERNS match current conditions.",
                 "",
             ])
 
@@ -233,17 +241,27 @@ class TradingBrainService:
         """Get Brain-learned thresholds from vector store.
 
         Returns:
-            Dict with ADX threshold, avg SL%, min R/R, confidence threshold, safe MAE%.
+            Dict with learned thresholds. Defaults used when insufficient data.
         """
         thresholds = self._get_cached_stats(
             "thresholds", self.vector_memory.compute_optimal_thresholds
         )
         return {
+            # Core thresholds (existing)
             "adx_strong_threshold": thresholds.get("adx_strong_threshold", 25),
             "avg_sl_pct": thresholds.get("avg_sl_pct", 2.5),
             "min_rr_recommended": thresholds.get("min_rr_recommended", 2.0),
             "confidence_threshold": thresholds.get("confidence_threshold", 70),
             "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
+            # Extended thresholds (new - defaults are industry standard)
+            "adx_weak_threshold": thresholds.get("adx_weak_threshold", 20),
+            "min_confluences_weak": thresholds.get("min_confluences_weak", 4),
+            "min_confluences_standard": thresholds.get("min_confluences_standard", 3),
+            "position_reduce_mixed": thresholds.get("position_reduce_mixed", 0.20),
+            "position_reduce_divergent": thresholds.get("position_reduce_divergent", 0.35),
+            "min_position_size": thresholds.get("min_position_size", 0.10),
+            "rr_borderline_min": thresholds.get("rr_borderline_min", 1.5),
+            "rr_strong_setup": thresholds.get("rr_strong_setup", 2.5),
         }
     
     def get_vector_context(
@@ -384,6 +402,12 @@ class TradingBrainService:
             scores[f"{clean_name}_score"] = float(score)
         return scores
 
+    def _count_strong_confluences(self, confluence_factors: tuple) -> int:
+        """Count factors with score > 50 (supporting the trade)."""
+        if not confluence_factors:
+            return 0
+        return sum(1 for _, score in confluence_factors if score > 50)
+
     def _trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize semantic rules.
 
@@ -444,3 +468,126 @@ class TradingBrainService:
 
         except Exception as e:
             self.logger.warning(f"Reflection failed: {e}")
+
+    def _trigger_loss_reflection(self) -> None:
+        """Reflect on losing trades and synthesize anti-patterns.
+
+        Called automatically every N trades. Analyzes LOSS trades to identify
+        conditions that consistently lead to losses so they can be avoided.
+        """
+        try:
+            experiences = self.vector_memory.retrieve_similar_experiences(
+                "recent trading experiences", k=20, use_decay=True, where={"outcome": "LOSS"}
+            )
+
+            losses = experiences
+            if len(losses) < 3:
+                self.logger.debug("Not enough losing trades for anti-pattern reflection")
+                return
+
+            pattern_counts: Dict[str, int] = {}
+            for loss in losses:
+                meta = loss["metadata"]
+                regime = meta.get("market_regime", "NEUTRAL")
+                close_reason = meta.get("close_reason", "unknown")
+                direction = meta.get("direction", "UNKNOWN")
+
+                pattern_key = f"{direction}_{regime}_{close_reason}"
+                pattern_counts[pattern_key] = pattern_counts.get(pattern_key, 0) + 1
+
+            if not pattern_counts:
+                return
+
+            worst_pattern = max(pattern_counts.items(), key=lambda x: x[1])
+            pattern_key, count = worst_pattern
+            if count < 2:
+                return
+
+            parts = pattern_key.split("_")
+            direction = parts[0]
+            regime = parts[1]
+            close_reason = "_".join(parts[2:])
+
+            rule_text = (
+                f"⚠️ AVOID: {direction} trades in {regime} market often hit {close_reason}. "
+                f"({count} recent losses follow this pattern)"
+            )
+
+            rule_id = f"anti_rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            self.vector_memory.store_semantic_rule(
+                rule_id=rule_id,
+                rule_text=rule_text,
+                metadata={
+                    "rule_type": "anti_pattern",
+                    "source_pattern": pattern_key,
+                    "source_loss_count": count,
+                }
+            )
+
+            self.logger.info(f"Anti-pattern reflection complete: stored rule '{rule_text}'")
+
+        except Exception as e:
+            self.logger.warning(f"Loss reflection failed: {e}")
+
+    def track_position_update(
+        self,
+        position: Position,
+        old_sl: float,
+        old_tp: float,
+        new_sl: float,
+        new_tp: float,
+        current_price: float,
+        current_pnl_pct: float,
+        market_conditions: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Track position update decisions for learning.
+
+        Stores UPDATE events to learn when trailing stops or TP adjustments are effective.
+
+        Args:
+            position: Current position being updated
+            old_sl: Previous stop loss price
+            old_tp: Previous take profit price
+            new_sl: New stop loss price
+            new_tp: New take profit price
+            current_price: Current market price
+            current_pnl_pct: Current unrealized P&L percentage
+            market_conditions: Market state at time of update
+        """
+        conditions = market_conditions or {}
+
+        sl_moved = new_sl != old_sl
+        tp_moved = new_tp != old_tp
+
+        if sl_moved and not tp_moved:
+            update_type = "SL_TRAIL"
+        elif tp_moved and not sl_moved:
+            update_type = "TP_EXTEND"
+        else:
+            update_type = "BOTH"
+
+        update_id = f"update_{datetime.now().isoformat()}"
+
+        condition_str = self._build_condition_string(conditions)
+        update_context = f"{update_type} at {current_pnl_pct:+.1f}% PnL | {condition_str}"
+
+        self.vector_memory.store_experience(
+            trade_id=update_id,
+            market_context=update_context,
+            outcome="UPDATE",
+            pnl_pct=current_pnl_pct,
+            direction=position.direction,
+            confidence=position.confidence,
+            reasoning=f"Moved {update_type}: SL {old_sl:.2f}→{new_sl:.2f}, TP {old_tp:.2f}→{new_tp:.2f}",
+            metadata={
+                "update_type": update_type,
+                "sl_change": new_sl - old_sl,
+                "tp_change": new_tp - old_tp,
+                "pnl_at_update": current_pnl_pct,
+                "adx_at_update": conditions.get("adx", 0),
+                "volatility": conditions.get("volatility", "MEDIUM"),
+            }
+        )
+
+        self.logger.debug(f"Tracked position update: {update_type} at {current_pnl_pct:+.1f}% PnL")
+
