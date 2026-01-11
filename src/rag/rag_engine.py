@@ -239,6 +239,7 @@ class RagEngine:
                 self.category_processor.important_categories
             )
             relevant_indices = [idx for idx, _ in scores[:k*2]]
+            scores_dict = {idx: score for idx, score in scores}
 
             # Add coin-specific articles if needed
             if symbol and len(relevant_indices) < k:
@@ -250,9 +251,9 @@ class RagEngine:
                         if len(relevant_indices) >= k*2:
                             break
 
-            # Build context using context builder (pass keywords for smart selection)
+            # Build context using context builder (pass keywords and scores for smart selection)
             context_text, total_tokens = self.context_builder.add_articles_to_context(
-                relevant_indices, self.news_manager.news_database, max_tokens, k, keywords
+                relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
 
             articles_added = len([idx for idx in relevant_indices 

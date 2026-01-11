@@ -37,11 +37,15 @@ class TemplateManager:
             str: Formatted system prompt
         """
         header_lines = [
-            f"You are a professional automated trading system for {symbol} on {timeframe} timeframe and you will be called again in {timeframe} to analyze market again.",
+            f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
+            f"You combine technical analysis, market microstructure, and macro context using a structured analytical framework.",
+            "",
+            "ANALYTICAL FRAMEWORK (Chain of Thought):",
+            "Before deciding, mentally work through: (1) Market Structure phase, (2) Timeframe alignment,",
+            "(3) Momentum/volatility state, (4) Microstructure bias, (5) Risk/reward assessment.",
             "",
         ]
         
-        # Add last analysis time context if available
         if last_analysis_time:
             header_lines.extend([
                 "TEMPORAL CONTEXT:",
@@ -57,7 +61,7 @@ class TemplateManager:
             "- Risk management is paramount: every trade requires proper stop loss and take profit",
             "- Confidence must match signal strength: only high-confidence trades in strong setups",
             "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate",
-            "- ONE DECISION PER RESPONSE: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE). Never combine decisions like 'CLOSE then HOLD' - make only the immediate action.",
+            "- ONE DECISION PER RESPONSE: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE).",
             "",
             "YOUR TASK:",
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
@@ -114,12 +118,21 @@ class TemplateManager:
             str: Formatted response template
         """
         thresholds = dynamic_thresholds or {}
+        # Core thresholds
         adx_strong = thresholds.get("adx_strong_threshold", 25)
         avg_sl = thresholds.get("avg_sl_pct", 2.5)
         min_rr = thresholds.get("min_rr_recommended", 2.0)
         conf_threshold = thresholds.get("confidence_threshold", 70)
-        
-        # Prepare safe MAE line
+        # Extended thresholds
+        adx_weak = thresholds.get("adx_weak_threshold", 20)
+        conf_weak = thresholds.get("min_confluences_weak", 4)
+        conf_std = thresholds.get("min_confluences_standard", 3)
+        pos_reduce_mixed = thresholds.get("position_reduce_mixed", 0.20)
+        pos_reduce_div = thresholds.get("position_reduce_divergent", 0.35)
+        min_pos_size = thresholds.get("min_position_size", 0.10)
+        rr_borderline = thresholds.get("rr_borderline_min", 1.5)
+        rr_strong = thresholds.get("rr_strong_setup", 2.5)
+        # Safe MAE line
         safe_mae_pct = thresholds.get("safe_mae_pct", 0)
         safe_mae_line = ""
         if safe_mae_pct > 0:
@@ -127,7 +140,14 @@ class TemplateManager:
             
         response_template = f'''RESPONSE FORMAT:
 
-Provide analysis reasoning (4-6 paragraphs: technical indicators, patterns, market context, visual analysis, and any other important information you find relevant to describe for the user), then output JSON:
+Structure your analysis before JSON:
+1. **MARKET STRUCTURE**: Current phase and trend state
+2. **INDICATOR ASSESSMENT**: Key technical signals and confluence
+3. **CONTEXT & CATALYST**: Macro alignment, news, microstructure (if relevant)
+4. **RISK/REWARD**: Invalidation point, targets, R/R ratio
+5. **DECISION**: Signal with confidence justification
+
+Then output JSON:
 
 ```json
 {{
@@ -172,9 +192,9 @@ CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY follow
 These are GUIDELINES, not hard rules. Use your judgment based on overall confluence.
 
 ADX + CHOPPINESS ASSESSMENT:
-- ADX < 20 AND Choppiness > 50: ⚠️ CAUTION - Weak trend + choppy market. Requires 4+ strong confluences to trade.
-- ADX < 20 but Choppiness < 50: Potential trend emerging (ADX lags). Trade allowed with strong confirmation.
-- ADX 20-{adx_strong}: Developing trend. Standard 3+ confluences required.
+- ADX < {adx_weak} AND Choppiness > 50: ⚠️ CAUTION - Weak trend + choppy market. Requires {conf_weak}+ strong confluences to trade.
+- ADX < {adx_weak} but Choppiness < 50: Potential trend emerging (ADX lags). Trade allowed with strong confirmation.
+- ADX {adx_weak}-{adx_strong}: Developing trend. Standard {conf_std}+ confluences required.
 - ADX >= {adx_strong}: Strong trend environment. Full confidence range available.
 
 CHOPPINESS INDEX CONTEXT:
@@ -182,14 +202,14 @@ CHOPPINESS INDEX CONTEXT:
 - Choppiness < 38.2: Trending market - breakouts/trend continuation favored
 - Choppiness 38-62: Transitional - exercise caution
 
-NOTE: You may OVERRIDE these guidelines if you have exceptionally strong conviction (e.g., major news catalyst, 5+ confluences, extreme oversold/overbought). When overriding, explicitly state your reasoning.
+NOTE: You may OVERRIDE these guidelines if you have exceptionally strong conviction (e.g., major news catalyst, {conf_weak + 1}+ confluences, extreme oversold/overbought). When overriding, explicitly state your reasoning.
 
 POSITION SIZING FORMULA (calculate before finalizing):
 - Base size = confidence / 100 (e.g., 75 confidence = 0.75 base)
-- If timeframe_alignment = "MIXED": reduce by 0.20 (e.g., 0.75 - 0.20 = 0.55)
-- If timeframe_alignment = "DIVERGENT": reduce by 0.35 (e.g., 0.75 - 0.35 = 0.40)
-- In weak trend environments (ADX < 20): consider smaller sizes
-- Final position_size = max(0.10, calculated_value)
+- If timeframe_alignment = "MIXED": reduce by {pos_reduce_mixed:.2f} (e.g., 0.75 - {pos_reduce_mixed:.2f} = {0.75 - pos_reduce_mixed:.2f})
+- If timeframe_alignment = "DIVERGENT": reduce by {pos_reduce_div:.2f} (e.g., 0.75 - {pos_reduce_div:.2f} = {0.75 - pos_reduce_div:.2f})
+- In weak trend environments (ADX < {adx_weak}): consider smaller sizes
+- Final position_size = max({min_pos_size:.2f}, calculated_value)
 
 MACRO TIMEFRAME CONFLICT:
 If the 365D macro trend CONTRADICTS the trade direction:
@@ -205,10 +225,10 @@ TRADING SIGNALS & CONFIDENCE:
 - UPDATE: Adjust existing position SL/TP when market structure improves
 
 RISK/REWARD GUIDELINES:
-- R/R < 1.5: Very unfavorable - strongly consider HOLD
-- R/R 1.5-{min_rr:.1f}: Borderline - only trade with exceptional confluence (4+)
+- R/R < {rr_borderline:.1f}: Very unfavorable - strongly consider HOLD
+- R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline - only trade with exceptional confluence ({conf_weak}+)
 - R/R >= {min_rr:.1f}: Standard acceptable quality
-- R/R >= 2.5: Strong setup - preferred for counter-trend trades
+- R/R >= {rr_strong:.1f}: Strong setup - preferred for counter-trend trades
 
 RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
 LONG trades:
@@ -249,16 +269,20 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 ANALYSIS STEPS (use findings to determine trading signal):
 
 1. MULTI-TIMEFRAME ASSESSMENT:
-   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA) | Alignment (strong) vs divergence (caution)
+   {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA)
+   🧠 Are timeframes aligned or divergent? Which dominates?
 
 2. TECHNICAL INDICATORS:
-   Momentum: RSI (<30/>70), MACD crosses | Trend: ADX (>25), DI+/DI- | Volatility: ATR, BBands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses | Advanced: TSI, Supertrend | Confluence vs divergence
+   Momentum: RSI (<30/>70), MACD crosses | Trend: ADX (>25), DI+/DI- | Volatility: ATR, BBands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses
+   🧠 Do indicators confirm each other or show divergence?
 
 3. PATTERN RECOGNITION (Conservative Approach):
-   **Swing Structure:** HH/HL sequence = uptrend, LH/LL = downtrend | **Classic Patterns:** H&S, double tops/bottoms, wedges, triangles, flags (require 3-5% range, 20+ candles for major patterns) | **Advanced:** Elliott waves, harmonic patterns (Gartley/Bat/Crab), Gann angles (only if clearly visible) | **Candlesticks:** doji, hammer, shooting star, engulfing at key S/R | **Divergences:** Price vs RSI/MACD/OBV | **Validation:** Patterns must align with ADX>25, volume spikes, indicator confirmation | **IMPORTANT:** If pattern is ambiguous or unclear, state "No clear pattern detected" - do NOT force conclusions
+   **Swing Structure:** HH/HL = uptrend, LH/LL = downtrend | **Classic:** H&S, double tops/bottoms, wedges, flags | **Candlesticks:** doji, hammer, engulfing at key S/R | **Divergences:** Price vs RSI/MACD/OBV | **IMPORTANT:** If unclear, state "No clear pattern" - do NOT force conclusions
+   🧠 Is pattern complete or forming? Could this be a fakeout?
 
 4. SUPPORT/RESISTANCE:
    Key levels across timeframes | Historical reaction zones (3+ touches) | Confluences (S/R + Fib + SMA) | Volume nodes | Risk/reward for SL/TP
+   🧠 How did price react last time at this level?
 
 5. MARKET CONTEXT:
    Market Overview (global cap, dominance)"""
@@ -270,7 +294,7 @@ ANALYSIS STEPS (use findings to determine trading signal):
             analysis_steps += "\n   - Compare performance relative to ETH if relevant"
         
         analysis_steps += """
- | Fear & Greed Index (extremes) | Asset alignment with market | Relevant events and impact | Assess if context supports or contradicts technicals
+ | Fear & Greed Index (extremes) | Asset alignment with market | Relevant events
 
 6. NEWS & SENTIMENT:
    Asset news | Market events | Sentiment | Institutional activity | Regulatory impacts | News that could override technicals

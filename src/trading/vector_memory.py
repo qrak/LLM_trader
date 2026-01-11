@@ -271,10 +271,19 @@ class VectorMemoryService:
         if not experiences:
             return ""
         
-        lines = [
-            f"RELEVANT PAST EXPERIENCES (Context: {current_context}):",
-            ""
-        ]
+        max_similarity = max(exp["similarity"] for exp in experiences)
+        if len(experiences) <= 2 and max_similarity < 50:
+            lines = [
+                f"RELEVANT PAST EXPERIENCES (Context: {current_context}):",
+                "",
+                f"⚠️ LIMITED DATA: Only {len(experiences)} trade(s) with <50% similarity. Standard analysis recommended.",
+                "",
+            ]
+        else:
+            lines = [
+                f"RELEVANT PAST EXPERIENCES (Context: {current_context}):",
+                "",
+            ]
         
         for i, exp in enumerate(experiences, 1):
             meta = exp.get("metadata", {})
@@ -287,12 +296,42 @@ class VectorMemoryService:
             )
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
             lines.append(f"   - Context: {meta.get('market_context', 'N/A')}")
-            if meta.get("reasoning"):
-                lines.append(f"   - Key Insight: \"{meta.get('reasoning')}\"")
+            reasoning = meta.get("reasoning", "")
+            if reasoning and reasoning != "N/A":
+                lines.append(f'   - Key Insight: "{reasoning}"')
+            else:
+                lines.append(f'   - Key Insight: "{self._generate_synthetic_insight(meta)}"')
             lines.append("")
-        
+
+        anti_patterns = self.get_anti_patterns_for_prompt(k=2)
+        if anti_patterns:
+            lines.append("")
+            lines.append(anti_patterns)
+
         return "\n".join(lines)
-    
+
+    def _generate_synthetic_insight(self, meta: Dict[str, Any]) -> str:
+        """Generate synthetic insight from trade metadata when reasoning is unavailable.
+        
+        Args:
+            meta: Trade metadata containing market_context, close_reason, adx_at_entry, etc.
+            
+        Returns:
+            Contextual insight string describing the trade conditions.
+        """
+        context = meta.get("market_context", "Unknown conditions")
+        close_reason = meta.get("close_reason", "unknown")
+        adx = meta.get("adx_at_entry", 0)
+        
+        if adx >= 25:
+            adx_label = "strong trend (ADX > 25)"
+        elif adx < 20:
+            adx_label = "weak trend (ADX < 20)"
+        else:
+            adx_label = "developing trend"
+        
+        return f"Entry during {context}. Exit via {close_reason}. Trend: {adx_label}."
+
     def get_stats_for_context(
         self,
         current_context: str,
@@ -413,6 +452,31 @@ class VectorMemoryService:
         if not self._ensure_initialized():
             return 0
         return self._semantic_rules_collection.count()
+
+    def get_anti_patterns_for_prompt(self, k: int = 3) -> str:
+        """Get anti-pattern rules for prompt injection.
+
+        Retrieves rules marked as anti_pattern type to warn the AI about
+        conditions that historically led to losses.
+
+        Args:
+            k: Maximum number of anti-patterns to return
+
+        Returns:
+            Formatted string with anti-patterns to avoid, or empty string if none.
+        """
+        rules = self.get_active_rules(n_results=k * 2)
+
+        anti_rules = [r for r in rules if r.get("metadata", {}).get("rule_type") == "anti_pattern"]
+
+        if not anti_rules:
+            return ""
+
+        lines = ["⚠️ AVOID PATTERNS (learned from losses):"]
+        for rule in anti_rules[:k]:
+            lines.append(f"  - {rule['text']}")
+
+        return "\n".join(lines)
 
     def compute_confidence_stats(self) -> Dict[str, Dict[str, Any]]:
         """Compute confidence level statistics from all stored experiences.
@@ -604,6 +668,7 @@ class VectorMemoryService:
 
         adx_high = adx_perf.get("HIGH", {})
         adx_med = adx_perf.get("MEDIUM", {})
+        adx_low = adx_perf.get("LOW", {})
 
         if adx_high.get("total_trades", 0) >= min_sample_size:
             if adx_med.get("total_trades", 0) >= min_sample_size:
@@ -611,6 +676,16 @@ class VectorMemoryService:
                     thresholds["adx_strong_threshold"] = 25
                 elif adx_med.get("win_rate", 0) > 55:
                     thresholds["adx_strong_threshold"] = 20
+
+        # Learn adx_weak_threshold from LOW bucket performance
+        if adx_low.get("total_trades", 0) >= min_sample_size:
+            low_win_rate = adx_low.get("win_rate", 50)
+            if low_win_rate < 40:
+                # LOW ADX trades losing badly - raise weak threshold to be more cautious
+                thresholds["adx_weak_threshold"] = 22
+            elif low_win_rate > 55:
+                # LOW ADX trades still winning - can be more aggressive
+                thresholds["adx_weak_threshold"] = 18
 
         all_experiences = self._collection.get()
         if all_experiences and all_experiences["metadatas"]:
@@ -633,6 +708,25 @@ class VectorMemoryService:
                 avg_winning_rr = sum(rr_wins) / len(rr_wins)
                 thresholds["min_rr_recommended"] = round(avg_winning_rr * 0.8, 1)
 
+                # Learn rr_strong_setup - find 75th percentile of winning R/R
+                sorted_rr = sorted(rr_wins)
+                p75_idx = int(len(sorted_rr) * 0.75)
+                if p75_idx < len(sorted_rr):
+                    thresholds["rr_strong_setup"] = round(sorted_rr[p75_idx], 1)
+
+            # Learn rr_borderline_min - find R/R where win rate drops significantly
+            if rr_wins and rr_losses:
+                all_rr = [(rr, "WIN") for rr in rr_wins] + [(rr, "LOSS") for rr in rr_losses]
+                # Count wins/losses below 1.5, 1.8, 2.0 R/R
+                for test_rr in [1.3, 1.5, 1.8]:
+                    below = [o for rr, o in all_rr if rr < test_rr]
+                    if len(below) >= 3:
+                        below_win_rate = sum(1 for o in below if o == "WIN") / len(below)
+                        if below_win_rate < 0.40:
+                            # Trades with R/R below this fail often - set as borderline
+                            thresholds["rr_borderline_min"] = test_rr
+                            break
+
             if sl_distances:
                 thresholds["avg_sl_pct"] = round(sum(sl_distances) / len(sl_distances), 2)
 
@@ -644,7 +738,94 @@ class VectorMemoryService:
             elif high_stats.get("win_rate", 0) > 70:
                 thresholds["confidence_threshold"] = 65
 
+        self._learn_position_size_threshold(all_experiences, min_sample_size, thresholds)
+        self._learn_confluence_thresholds(all_experiences, min_sample_size, thresholds)
+        self._learn_alignment_thresholds(all_experiences, min_sample_size, thresholds)
+
         return thresholds
+
+    def _learn_position_size_threshold(
+        self,
+        all_experiences: Dict[str, Any],
+        min_sample_size: int,
+        thresholds: Dict[str, Any]
+    ) -> None:
+        """Learn min_position_size from small position performance."""
+        if not all_experiences or not all_experiences.get("metadatas"):
+            return
+        small_positions: List[bool] = []
+        for meta in all_experiences["metadatas"]:
+            size_pct = meta.get("position_size_pct")
+            if size_pct is not None and size_pct < 0.15:
+                small_positions.append(meta.get("outcome") == "WIN")
+        if len(small_positions) >= min_sample_size:
+            small_win_rate = sum(small_positions) / len(small_positions)
+            if small_win_rate >= 0.55:
+                thresholds["min_position_size"] = 0.08
+            elif small_win_rate < 0.40:
+                thresholds["min_position_size"] = 0.15
+
+    def _learn_confluence_thresholds(
+        self,
+        all_experiences: Dict[str, Any],
+        min_sample_size: int,
+        thresholds: Dict[str, Any]
+    ) -> None:
+        """Learn min_confluences_weak and min_confluences_standard from confluence count performance."""
+        if not all_experiences or not all_experiences.get("metadatas"):
+            return
+        confluence_buckets: Dict[tuple, List[bool]] = {}
+        for meta in all_experiences["metadatas"]:
+            count = meta.get("confluence_count")
+            adx = meta.get("adx_at_entry", 25)
+            if count is not None:
+                is_weak_adx = adx < 20
+                key = (count, is_weak_adx)
+                if key not in confluence_buckets:
+                    confluence_buckets[key] = []
+                confluence_buckets[key].append(meta.get("outcome") == "WIN")
+        for count in range(5, 1, -1):
+            key = (count, True)
+            if key in confluence_buckets and len(confluence_buckets[key]) >= min_sample_size:
+                win_rate = sum(confluence_buckets[key]) / len(confluence_buckets[key])
+                if win_rate >= 0.55:
+                    thresholds["min_confluences_weak"] = count
+                    break
+        for count in range(4, 1, -1):
+            key = (count, False)
+            if key in confluence_buckets and len(confluence_buckets[key]) >= min_sample_size:
+                win_rate = sum(confluence_buckets[key]) / len(confluence_buckets[key])
+                if win_rate >= 0.55:
+                    thresholds["min_confluences_standard"] = count
+                    break
+
+    def _learn_alignment_thresholds(
+        self,
+        all_experiences: Dict[str, Any],
+        min_sample_size: int,
+        thresholds: Dict[str, Any]
+    ) -> None:
+        """Learn position_reduce_mixed and position_reduce_divergent from timeframe alignment performance."""
+        if not all_experiences or not all_experiences.get("metadatas"):
+            return
+        alignment_pnl: Dict[str, List[float]] = {"ALIGNED": [], "MIXED": [], "DIVERGENT": []}
+        for meta in all_experiences["metadatas"]:
+            alignment = meta.get("timeframe_alignment")
+            pnl = meta.get("pnl_pct", 0)
+            if alignment in alignment_pnl:
+                alignment_pnl[alignment].append(pnl)
+        aligned_avg = (sum(alignment_pnl["ALIGNED"]) / len(alignment_pnl["ALIGNED"])
+                       if alignment_pnl["ALIGNED"] else 0)
+        if len(alignment_pnl["MIXED"]) >= min_sample_size and aligned_avg > 0:
+            mixed_avg = sum(alignment_pnl["MIXED"]) / len(alignment_pnl["MIXED"])
+            if mixed_avg < aligned_avg:
+                reduction = min(0.40, max(0.10, 1 - (mixed_avg / aligned_avg)))
+                thresholds["position_reduce_mixed"] = round(reduction, 2)
+        if len(alignment_pnl["DIVERGENT"]) >= min_sample_size and aligned_avg > 0:
+            divergent_avg = sum(alignment_pnl["DIVERGENT"]) / len(alignment_pnl["DIVERGENT"])
+            if divergent_avg < aligned_avg:
+                reduction = min(0.50, max(0.20, 1 - (divergent_avg / aligned_avg)))
+                thresholds["position_reduce_divergent"] = round(reduction, 2)
 
     def get_confidence_recommendation(self, min_sample_size: int = 5) -> Optional[str]:
         """Generate recommendation based on confidence calibration.

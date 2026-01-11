@@ -165,5 +165,130 @@ class TestBrainIntegration:
         
         assert "New logic" in context
 
+    def test_synthetic_insight_for_na_reasoning(self, brain_service, vector_memory):
+        """Verify that synthetic insights are generated when reasoning is N/A."""
+        vector_memory.store_experience(
+            trade_id="trade_na_reasoning",
+            market_context="Downtrend + Strong Trend + Low Vol",
+            outcome="LOSS",
+            pnl_pct=-2.5,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="N/A",
+            metadata={
+                "timestamp": "2026-01-06T12:00:00",
+                "close_reason": "stop_loss",
+                "adx_at_entry": 28
+            }
+        )
+        
+        context = vector_memory.get_context_for_prompt(
+            "Downtrend + Strong Trend + Low Vol", k=5
+        )
+        
+        assert "Downtrend + Strong Trend + Low Vol" in context
+        assert "stop_loss" in context
+        assert "ADX > 25" in context
+        assert "N/A" not in context
+
+    def test_insufficient_data_warning(self, brain_service, vector_memory):
+        """Verify that insufficient data warning appears for low-quality matches."""
+        vector_memory.store_experience(
+            trade_id="trade_different_context",
+            market_context="BULLISH + High ADX + High Vol",
+            outcome="WIN",
+            pnl_pct=5.0,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="Strong momentum",
+            metadata={"timestamp": "2026-01-06T12:00:00"}
+        )
+        
+        context = vector_memory.get_context_for_prompt(
+            "BEARISH + Low ADX + Low Vol", k=5
+        )
+        
+        assert "LIMITED DATA" in context or "Strong momentum" in context
+
+    def test_anti_pattern_learning(self, brain_service, vector_memory):
+        """Verify that anti-patterns are generated from LOSS trades."""
+        for i in range(3):
+            vector_memory.store_experience(
+                trade_id=f"loss_trade_{i}",
+                market_context="NEUTRAL market with choppy conditions",
+                outcome="LOSS",
+                pnl_pct=-2.0,
+                direction="LONG",
+                confidence="MEDIUM",
+                reasoning="Failed breakout",
+                metadata={
+                    "timestamp": f"2026-01-0{i+1}T12:00:00",
+                    "market_regime": "NEUTRAL",
+                    "close_reason": "stop_loss"
+                }
+            )
+
+        brain_service._trigger_loss_reflection()
+
+        anti_patterns = vector_memory.get_anti_patterns_for_prompt(k=3)
+
+        assert "AVOID" in anti_patterns or anti_patterns == ""
+
+    def test_update_tracking(self, brain_service, vector_memory):
+        """Verify that position updates are tracked for learning."""
+        from src.trading.dataclasses import Position
+        from datetime import datetime
+
+        position = Position(
+            entry_price=50000.0,
+            stop_loss=48000.0,
+            take_profit=54000.0,
+            size=0.01,
+            quote_amount=500.0,
+            entry_time=datetime.now(),
+            confidence="HIGH",
+            direction="LONG",
+            symbol="BTC/USDT"
+        )
+
+        brain_service.track_position_update(
+            position=position,
+            old_sl=48000.0,
+            old_tp=54000.0,
+            new_sl=49000.0,
+            new_tp=54000.0,
+            current_price=51000.0,
+            current_pnl_pct=2.0
+        )
+
+        assert vector_memory.experience_count >= 1
+
+    def test_regime_metadata_storage(self, brain_service, vector_memory):
+        """Verify that regime metadata (fear_greed, weekend) is stored correctly."""
+        vector_memory.store_experience(
+            trade_id="regime_test_trade",
+            market_context="BULLISH + High ADX",
+            outcome="WIN",
+            pnl_pct=3.5,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="Strong trend",
+            metadata={
+                "timestamp": "2026-01-06T12:00:00",
+                "fear_greed_index": 25,
+                "market_regime": "BULLISH",
+                "is_weekend": True
+            }
+        )
+
+        experiences = vector_memory.retrieve_similar_experiences("BULLISH + High ADX", k=1)
+
+        assert len(experiences) >= 1
+        meta = experiences[0]["metadata"]
+        assert meta.get("fear_greed_index") == 25
+        assert meta.get("market_regime") == "BULLISH"
+        assert meta.get("is_weekend") == True
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
