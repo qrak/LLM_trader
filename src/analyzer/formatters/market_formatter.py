@@ -247,11 +247,13 @@ class MarketFormatter:
         
         lines = [f"## {symbol} Recent Trade Flow:"]
         
-        # Trade count and velocity
+        # Trade count and velocity (real-time data, independent of analysis timeframe)
         total_trades = trades.get("total_trades", 0)
         velocity = trades.get("trade_velocity")
+        time_span = trades.get("time_span_minutes")
         if total_trades:
-            lines.append(f"  • Total Recent Trades: {total_trades}")
+            time_context = f" (last {time_span:.1f} min)" if time_span else ""
+            lines.append(f"  • Total Recent Trades: {total_trades}{time_context}")
         if velocity:
             lines.append(f"  • Trade Velocity: {velocity:.2f} trades/minute")
         

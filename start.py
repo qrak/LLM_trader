@@ -389,7 +389,12 @@ class CompositionRoot:
         # Initialize trading services
         position_extractor = PositionExtractor(self.logger, unified_parser=unified_parser)
         persistence = TradingPersistence(self.logger, data_dir="data/trading")
-        brain_service = TradingBrainService(self.logger, persistence)
+        brain_service = TradingBrainService(
+            self.logger,
+            persistence,
+            symbol=self.config.CRYPTO_PAIR,
+            timeframe=self.config.TIMEFRAME
+        )
         memory_service = TradingMemoryService(self.logger, persistence, max_memory=10)
         statistics_service = TradingStatisticsService(self.logger, persistence)
         
