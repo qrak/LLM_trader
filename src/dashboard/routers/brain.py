@@ -127,8 +127,8 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         return result
     
     try:
-        # Get counts
-        result["experience_count"] = vector_memory.experience_count
+        # Get counts (trade_count excludes UPDATE entries)
+        result["experience_count"] = vector_memory.trade_count
         result["rule_count"] = vector_memory.semantic_rule_count
         
         # Get stats breakdowns
@@ -136,15 +136,17 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         result["adx_stats"] = vector_memory.compute_adx_performance()
         result["factor_stats"] = vector_memory.compute_factor_performance()
         
+        # Exclude UPDATE entries from results using WHERE filter
+        where_filter = {"outcome": {"$ne": "UPDATE"}}
+        
         # If query provided, retrieve similar experiences
         if query:
-            experiences = vector_memory.retrieve_similar_experiences(query, k=limit)
+            experiences = vector_memory.retrieve_similar_experiences(query, k=limit, where=where_filter)
             result["experiences"] = experiences
         else:
-            # Get all experiences (if method available) or most recent
-            # For now, use a generic query to get stored experiences
+            # Get all experiences (excluding UPDATE)
             experiences = vector_memory.retrieve_similar_experiences(
-                "trading market conditions", k=limit, use_decay=False
+                "trading market conditions", k=limit, use_decay=False, where=where_filter
             )
             result["experiences"] = experiences
             

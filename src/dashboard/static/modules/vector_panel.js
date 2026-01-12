@@ -87,6 +87,7 @@ function renderExperienceTable(experiences) {
         `;
     }
     
+    // UPDATE entries are now filtered at backend query level
     const rows = experiences.map(exp => {
         const meta = exp.metadata || {};
         const outcome = meta.outcome || '--';

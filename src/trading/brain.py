@@ -22,12 +22,21 @@ class TradingBrainService:
     - Get dynamic thresholds
     """
     
-    def __init__(self, logger: Logger, persistence: TradingPersistence, vector_memory: Optional[VectorMemoryService] = None):
+    def __init__(
+        self,
+        logger: Logger,
+        persistence: TradingPersistence,
+        symbol: str = "BTC/USDC",
+        timeframe: str = "4h",
+        vector_memory: Optional[VectorMemoryService] = None
+    ):
         """Initialize trading brain service (vector-only mode).
 
         Args:
             logger: Logger instance
             persistence: Persistence service (used for data_dir path)
+            symbol: Trading symbol (e.g., "BTC/USDC") for symbol-specific learning
+            timeframe: Timeframe (e.g., "4h") for timeframe-specific learning
             vector_memory: Optional injected vector memory (for testing)
         """
         self.logger = logger
@@ -36,9 +45,12 @@ class TradingBrainService:
         if vector_memory:
             self.vector_memory = vector_memory
         else:
+            # Generate symbol-specific brain directory: BTC/USDC + 4h -> brain_BTC_USDC_4h
+            safe_symbol = symbol.replace("/", "_").replace("-", "_")
+            brain_path = persistence.data_dir / f"brain_{safe_symbol}_{timeframe}"
             self.vector_memory = VectorMemoryService(
                 logger=logger,
-                data_dir=str(persistence.data_dir / "brain_vector_db")
+                data_dir=str(brain_path)
             )
 
         # Cache for computed stats (invalidated when new trades arrive)
@@ -145,7 +157,7 @@ class TradingBrainService:
         """
         lines = []
 
-        exp_count = self.vector_memory.experience_count
+        exp_count = self.vector_memory.trade_count  # Excludes UPDATE entries
         if exp_count > 0:
             lines.extend([
                 "",

@@ -87,6 +87,14 @@ class VectorMemoryService:
             self.logger.error(f"Failed to initialize VectorMemoryService: {e}")
             return False
     
+    def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove None values from metadata dict.
+        
+        ChromaDB rejects NoneType values in metadata. This filters them out
+        while preserving all valid primitive values (str, int, float, bool).
+        """
+        return {k: v for k, v in metadata.items() if v is not None}
+    
     def store_experience(
         self,
         trade_id: str,
@@ -139,7 +147,10 @@ class VectorMemoryService:
                 trade_metadata["market_regime"] = market_regime
                 trade_metadata.update(metadata)
             
-            self._collection.add(
+            # Sanitize metadata - ChromaDB rejects None values
+            trade_metadata = self._sanitize_metadata(trade_metadata)
+            
+            self._collection.upsert(
                 ids=[trade_id],
                 embeddings=[embedding],
                 documents=[document],
@@ -266,7 +277,10 @@ class VectorMemoryService:
         Returns:
             Formatted string ready for prompt injection
         """
-        experiences = self.retrieve_similar_experiences(current_context, k)
+        # Exclude UPDATE entries - only get actual trades (WIN/LOSS)
+        experiences = self.retrieve_similar_experiences(
+            current_context, k, where={"outcome": {"$ne": "UPDATE"}}
+        )
         
         if not experiences:
             return ""
@@ -317,20 +331,53 @@ class VectorMemoryService:
             meta: Trade metadata containing market_context, close_reason, adx_at_entry, etc.
             
         Returns:
-            Contextual insight string describing the trade conditions.
+            Contextual insight string describing the trade conditions and outcome.
         """
-        context = meta.get("market_context", "Unknown conditions")
-        close_reason = meta.get("close_reason", "unknown")
-        adx = meta.get("adx_at_entry", 0)
+        parts = []
         
-        if adx >= 25:
-            adx_label = "strong trend (ADX > 25)"
-        elif adx < 20:
-            adx_label = "weak trend (ADX < 20)"
-        else:
-            adx_label = "developing trend"
+        # Market context
+        context = meta.get("market_context", "")
+        if context:
+            parts.append(f"Entry: {context}")
         
-        return f"Entry during {context}. Exit via {close_reason}. Trend: {adx_label}."
+        # Close reason
+        close_reason = meta.get("close_reason", "")
+        if close_reason:
+            parts.append(f"Exit: {close_reason}")
+        
+        # SL/TP distances (critical for learning)
+        sl_dist = meta.get("sl_distance_pct")
+        tp_dist = meta.get("tp_distance_pct")
+        if sl_dist is not None:
+            parts.append(f"SL: {sl_dist:.2f}%")
+        if tp_dist is not None:
+            parts.append(f"TP: {tp_dist:.2f}%")
+        
+        # R/R ratio
+        rr = meta.get("rr_ratio")
+        if rr is not None:
+            parts.append(f"R/R: {rr:.1f}")
+        
+        # Max profit/drawdown (shows how trade evolved)
+        max_profit = meta.get("max_profit_pct")
+        max_dd = meta.get("max_drawdown_pct")
+        if max_profit is not None and max_profit > 0:
+            parts.append(f"MaxProfit: +{max_profit:.1f}%")
+        if max_dd is not None and max_dd > 0:
+            parts.append(f"MaxDD: -{max_dd:.1f}%")
+        
+        # Technical context
+        adx = meta.get("adx_at_entry")
+        rsi = meta.get("rsi_at_entry")
+        vol = meta.get("volatility_level")
+        if adx is not None:
+            parts.append(f"ADX: {adx:.0f}")
+        if rsi is not None:
+            parts.append(f"RSI: {rsi:.0f}")
+        if vol:
+            parts.append(f"Vol: {vol}")
+        
+        return " | ".join(parts) if parts else "No additional data"
 
     def get_stats_for_context(
         self,
@@ -346,7 +393,9 @@ class VectorMemoryService:
         Returns:
             Dict with win_rate, avg_pnl, total_trades for similar contexts
         """
-        experiences = self.retrieve_similar_experiences(current_context, k)
+        experiences = self.retrieve_similar_experiences(
+            current_context, k, where={"outcome": {"$ne": "UPDATE"}}
+        )
         
         if not experiences:
             return {"win_rate": 0, "avg_pnl": 0, "total_trades": 0}
@@ -362,10 +411,22 @@ class VectorMemoryService:
     
     @property
     def experience_count(self) -> int:
-        """Get total number of stored experiences."""
+        """Get total number of stored entries (includes UPDATE)."""
         if not self._ensure_initialized():
             return 0
         return self._collection.count()
+    
+    @property
+    def trade_count(self) -> int:
+        """Get count of actual trades (excludes UPDATE entries)."""
+        if not self._ensure_initialized():
+            return 0
+        try:
+            # Count only WIN and LOSS outcomes
+            results = self._collection.get(where={"outcome": {"$ne": "UPDATE"}})
+            return len(results["ids"]) if results and results["ids"] else 0
+        except Exception:
+            return self._collection.count()
 
     def store_semantic_rule(
         self,
@@ -498,6 +559,10 @@ class VectorMemoryService:
         }
 
         for meta in all_experiences["metadatas"]:
+            # Skip UPDATE entries - they are intermediate states, not final outcomes
+            if meta.get("outcome") == "UPDATE":
+                continue
+            
             confidence = meta.get("confidence", "MEDIUM").upper()
             if confidence not in stats:
                 confidence = "MEDIUM"
@@ -542,6 +607,10 @@ class VectorMemoryService:
         }
 
         for meta in all_experiences["metadatas"]:
+            # Skip UPDATE entries - intermediate states, not final outcomes
+            if meta.get("outcome") == "UPDATE":
+                continue
+            
             adx = meta.get("adx_at_entry", meta.get("adx", 0))
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
