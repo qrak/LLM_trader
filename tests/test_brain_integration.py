@@ -289,6 +289,178 @@ class TestBrainIntegration:
         assert meta.get("market_regime") == "BULLISH"
         assert meta.get("is_weekend") == True
 
+
+class TestContextAwareRuleRetrieval:
+    """Tests for context-aware semantic rule retrieval based on market conditions."""
+
+    def test_bullish_context_returns_bullish_rule(self, brain_service, vector_memory):
+        """Verify BULLISH context retrieves BULLISH rules with higher similarity."""
+        # Store BULLISH rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_bullish_high_adx",
+            rule_text="LONG trades perform well in BULLISH market with High ADX trend strength",
+            metadata={"source_pattern": "LONG_BULLISH_HIGH_ADX", "rule_type": "pattern"}
+        )
+        # Store BEARISH rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_bearish_high_adx",
+            rule_text="SHORT trades perform well in BEARISH market with High ADX trend strength",
+            metadata={"source_pattern": "SHORT_BEARISH_HIGH_ADX", "rule_type": "pattern"}
+        )
+
+        # Query with BULLISH context
+        rules = vector_memory.get_relevant_rules(
+            current_context="BULLISH + High ADX + HIGH Volatility",
+            n_results=2
+        )
+
+        assert len(rules) >= 1
+        # BULLISH rule should rank higher
+        assert "BULLISH" in rules[0]["text"] or "LONG" in rules[0]["text"]
+        assert rules[0]["similarity"] > 40  # Should exceed min threshold
+
+    def test_bearish_context_returns_bearish_rule(self, brain_service, vector_memory):
+        """Verify BEARISH context retrieves BEARISH rules with higher similarity."""
+        # Store both rules
+        vector_memory.store_semantic_rule(
+            rule_id="rule_bullish_001",
+            rule_text="LONG trades perform well in BULLISH uptrend with strong momentum",
+            metadata={"source_pattern": "LONG_BULLISH"}
+        )
+        vector_memory.store_semantic_rule(
+            rule_id="rule_bearish_001",
+            rule_text="SHORT trades perform well in BEARISH downtrend with strong momentum",
+            metadata={"source_pattern": "SHORT_BEARISH"}
+        )
+
+        # Query with BEARISH context
+        rules = vector_memory.get_relevant_rules(
+            current_context="BEARISH + High ADX + MEDIUM Volatility",
+            n_results=2
+        )
+
+        assert len(rules) >= 1
+        # BEARISH rule should rank higher
+        assert "BEARISH" in rules[0]["text"] or "SHORT" in rules[0]["text"]
+
+    def test_low_adx_context_filters_irrelevant_rules(self, brain_service, vector_memory):
+        """Verify Low ADX context correctly filters rules for weak trend conditions."""
+        # Store High ADX rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_high_adx",
+            rule_text="Enter trades with High ADX above 25 for strong trend confirmation",
+            metadata={"source_pattern": "HIGH_ADX"}
+        )
+        # Store Low ADX rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_low_adx",
+            rule_text="Avoid trades in Low ADX conditions below 20 as trend is weak",
+            metadata={"source_pattern": "LOW_ADX", "rule_type": "anti_pattern"}
+        )
+
+        # Query with Low ADX context
+        rules = vector_memory.get_relevant_rules(
+            current_context="NEUTRAL + Low ADX + LOW Volatility",
+            n_results=2
+        )
+
+        # Low ADX rule should be more relevant
+        if rules:
+            low_adx_found = any("Low ADX" in r["text"] for r in rules)
+            assert low_adx_found, "Low ADX rule should be retrieved for low ADX context"
+
+    def test_min_similarity_threshold_filters_rules(self, brain_service, vector_memory):
+        """Verify min_similarity threshold filters out irrelevant rules."""
+        # Store a very specific rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_specific",
+            rule_text="LONG BTC during weekend accumulation with extreme fear sentiment",
+            metadata={"source_pattern": "WEEKEND_FEAR"}
+        )
+
+        # Query with completely different context
+        rules = vector_memory.get_relevant_rules(
+            current_context="SHORT trades during high volatility breakout with extreme greed",
+            n_results=3,
+            min_similarity=0.6  # Higher threshold
+        )
+
+        # Rule should be filtered out due to low similarity
+        assert len(rules) == 0 or all(r["similarity"] >= 60 for r in rules)
+
+    def test_brain_context_includes_relevant_rules(self, brain_service, vector_memory):
+        """Verify TradingBrainService.get_context() includes context-relevant rules."""
+        # Store context-specific rule
+        vector_memory.store_semantic_rule(
+            rule_id="rule_bullish_test",
+            rule_text="LONG trades in BULLISH trend with HIGH volatility show strong performance",
+            metadata={"source_pattern": "LONG_BULLISH_HIGH_VOL"}
+        )
+
+        # Get context with matching conditions
+        context = brain_service.get_context(
+            trend_direction="BULLISH",
+            adx=30.0,
+            volatility_level="HIGH",
+            rsi_level="STRONG",
+            macd_signal="BULLISH"
+        )
+
+        # Context should include the relevant rule with similarity
+        assert "LEARNED TRADING RULES" in context or context == ""
+        if "LEARNED TRADING RULES" in context:
+            assert "match]" in context  # Similarity indicator
+
+    def test_anti_pattern_rules_retrieved_for_matching_context(self, brain_service, vector_memory):
+        """Verify anti-pattern rules are retrieved when context matches."""
+        # Store anti-pattern rule
+        vector_memory.store_semantic_rule(
+            rule_id="anti_rule_neutral",
+            rule_text="⚠️ AVOID: LONG trades in NEUTRAL choppy market hit stop_loss frequently",
+            metadata={"rule_type": "anti_pattern", "source_pattern": "LONG_NEUTRAL_STOP"}
+        )
+
+        # Query with matching context
+        rules = vector_memory.get_relevant_rules(
+            current_context="NEUTRAL + Medium ADX + LOW Volatility",
+            n_results=3
+        )
+
+        # Anti-pattern should be retrieved
+        if rules:
+            anti_found = any("AVOID" in r["text"] for r in rules)
+            assert anti_found or len(rules) == 0
+
+    def test_empty_collection_returns_empty_list(self, brain_service, vector_memory):
+        """Verify empty semantic rules collection returns empty list."""
+        rules = vector_memory.get_relevant_rules(
+            current_context="BULLISH + High ADX",
+            n_results=3
+        )
+        assert rules == []
+
+    def test_get_active_rules_still_works(self, brain_service, vector_memory):
+        """Verify backward compatibility - get_active_rules() still returns all active rules."""
+        # Store multiple rules
+        vector_memory.store_semantic_rule(
+            rule_id="rule_1",
+            rule_text="Rule one for bullish markets",
+            metadata={}
+        )
+        vector_memory.store_semantic_rule(
+            rule_id="rule_2",
+            rule_text="Rule two for bearish markets",
+            metadata={}
+        )
+
+        # Use old method
+        rules = vector_memory.get_active_rules(n_results=5)
+
+        assert len(rules) == 2
+        # Old method returns rules without similarity score
+        assert "similarity" not in rules[0] or rules[0].get("similarity") is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 

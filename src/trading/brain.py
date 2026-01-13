@@ -222,13 +222,21 @@ class TradingBrainService:
                 "",
             ])
 
-        semantic_rules = self.vector_memory.get_active_rules(n_results=3)
+        # Build context for semantic rule matching
+        adx_label = "High ADX" if adx >= 25 else "Low ADX" if adx < 20 else "Medium ADX"
+        rule_context = f"{trend_direction} + {adx_label} + {volatility_level} Volatility"
+
+        semantic_rules = self.vector_memory.get_relevant_rules(
+            current_context=rule_context,
+            n_results=3
+        )
         if semantic_rules:
             lines.extend([
-                "LEARNED TRADING RULES (from reflection on past trades):",
+                "LEARNED TRADING RULES (relevant to current conditions):",
             ])
             for rule in semantic_rules:
-                lines.append(f"- {rule['text']}")
+                similarity = rule.get("similarity", 0)
+                lines.append(f"- [{similarity:.0f}% match] {rule['text']}")
             lines.append("")
 
         return "\n".join(lines)
