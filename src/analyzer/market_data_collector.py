@@ -88,23 +88,8 @@ class MarketDataCollector:
                 result["errors"].append("Failed to fetch OHLCV data")
                 result["success"] = False
             
-            # Fetch news context via RAG engine
-            market_context = await self.rag_engine.retrieve_context(
-                "current market news analysis trends",
-                self.symbol,
-                k=self.rag_engine.config.RAG_NEWS_LIMIT
-            )
-            result["market_context"] = market_context
-            
-            # Store article URLs from RAG engine
-            try:
-                self.article_urls = self.rag_engine.context_builder.get_latest_article_urls()
-                # self.logger.debug(f"Retrieved {len(self.article_urls)} article URLs from RAG engine")
-            except Exception as e:
-                self.logger.warning(f"Could not retrieve article URLs from RAG engine: {e}")
-                self.article_urls = {}
-                
-            result["article_urls"] = self.article_urls
+            result["market_context"] = ""
+            result["article_urls"] = {}
                 
         except Exception as e:
             self.logger.exception(f"Error collecting market data: {e}")
