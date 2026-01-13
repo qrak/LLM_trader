@@ -35,14 +35,23 @@ export async function updateVectorData() {
 function renderVectorPanel(data) {
     const container = document.getElementById('vector-content');
     if (!container) return;
-    
+
+    // Build context indicator
+    const contextHtml = data.current_context
+        ? `<div class="context-indicator">
+             <span class="context-label">Similarity vs Current:</span>
+             <span class="context-value">${data.current_context}</span>
+           </div>`
+        : '';
+
     // Build stats cards
     const statsHtml = renderStatsCards(data);
-    
+
     // Build experience table
     const tableHtml = renderExperienceTable(data.experiences || []);
-    
+
     container.innerHTML = `
+        ${contextHtml}
         <div class="vector-stats">${statsHtml}</div>
         <div class="vector-table">${tableHtml}</div>
     `;

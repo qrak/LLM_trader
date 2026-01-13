@@ -5,6 +5,57 @@ from pathlib import Path
 
 router = APIRouter(prefix="/api/brain", tags=["brain"])
 
+
+def _build_current_market_context(config) -> str:
+    """Build context query string from current market conditions.
+
+    Reads previous_response.json to extract trend, ADX, and other indicators.
+
+    Returns:
+        Context string like "BULLISH + High ADX + HIGH Volatility" or empty string if unavailable.
+    """
+    data_dir = getattr(config, "DATA_DIR", "data")
+    prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
+
+    if not prev_response_file.exists():
+        return ""
+
+    try:
+        with open(prev_response_file, "r") as f:
+            data = json.load(f)
+            response = data.get("response", {})
+
+            # Extract trend from text analysis
+            text = response.get("text_analysis", "")
+            if "BULLISH" in text.upper():
+                trend = "BULLISH"
+            elif "BEARISH" in text.upper():
+                trend = "BEARISH"
+            else:
+                trend = "NEUTRAL"
+
+            # Extract ADX
+            adx = response.get("adx", 0) or 0
+            if adx >= 25:
+                adx_label = "High ADX"
+            elif adx < 20:
+                adx_label = "Low ADX"
+            else:
+                adx_label = "Medium ADX"
+
+            # Extract volatility from prompt if available
+            prompt = data.get("prompt", "")
+            if "HIGH" in prompt.upper() and "VOLATILITY" in prompt.upper():
+                vol = "HIGH Volatility"
+            elif "LOW" in prompt.upper() and "VOLATILITY" in prompt.upper():
+                vol = "LOW Volatility"
+            else:
+                vol = "MEDIUM Volatility"
+
+            return f"{trend} + {adx_label} + {vol}"
+    except Exception:
+        return ""
+
 @router.get("/status")
 async def get_brain_status(request: Request) -> Dict[str, Any]:
     """Get the current thought process/status of the brain."""
@@ -113,37 +164,48 @@ async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
 async def get_vector_details(request: Request, query: str = None, limit: int = 50) -> Dict[str, Any]:
     """Get detailed vector memory contents from ChromaDB."""
     vector_memory = request.app.state.vector_memory
-    
+    config = request.app.state.config
+
     result = {
         "experience_count": 0,
         "experiences": [],
         "confidence_stats": {},
         "adx_stats": {},
         "factor_stats": {},
-        "rule_count": 0
+        "rule_count": 0,
+        "current_context": None
     }
-    
+
     if not vector_memory:
         return result
-    
+
     try:
         # Get counts (trade_count excludes UPDATE entries)
         result["experience_count"] = vector_memory.trade_count
         result["rule_count"] = vector_memory.semantic_rule_count
-        
+
         # Get stats breakdowns
         result["confidence_stats"] = vector_memory.compute_confidence_stats()
         result["adx_stats"] = vector_memory.compute_adx_performance()
         result["factor_stats"] = vector_memory.compute_factor_performance()
-        
+
         # Exclude UPDATE entries from results using WHERE filter
         where_filter = {"outcome": {"$ne": "UPDATE"}}
-        
-        # If query provided, retrieve similar experiences
-        if query:
-            experiences = vector_memory.retrieve_similar_experiences(query, k=limit, where=where_filter)
+
+        # Build context query - use provided query or auto-generate from current market
+        context_query = query
+        if not context_query:
+            context_query = _build_current_market_context(config)
+            if context_query:
+                result["current_context"] = context_query
+
+        # Retrieve experiences with similarity if we have a context
+        if context_query:
+            experiences = vector_memory.retrieve_similar_experiences(
+                context_query, k=limit, where=where_filter
+            )
         else:
-            # Get all experiences (excluding UPDATE) using the new method
+            # Fallback to get all if no context available
             experiences = vector_memory.get_all_experiences(limit=limit, where=where_filter)
 
         # Apply sorting
