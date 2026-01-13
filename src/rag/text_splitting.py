@@ -6,7 +6,9 @@ Provides robust sentence splitting using wtpsplit with regex fallback.
 import re
 import time
 import logging
+import logging
 from typing import List, Optional
+from functools import lru_cache
 
 class SentenceSplitter:
     """
@@ -47,6 +49,7 @@ class SentenceSplitter:
             self.logger.warning(f"Failed to initialize wtpsplit: {e}, utilizing regex fallback")
             self._model = None
 
+    @lru_cache(maxsize=1024)
     def split_text(self, text: str) -> List[str]:
         """
         Split text into sentences using wtpsplit if available, otherwise regex.

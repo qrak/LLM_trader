@@ -59,8 +59,4 @@ class ArticleProcessor:
 
         return self.parser.extract_base_coin(symbol)
 
-    def split_into_sentences(self, text: str) -> List[str]:
-        """Split text into sentences using shared splitter."""
-        if not text:
-            return []
-        return self.sentence_splitter.split_text(text)
+
