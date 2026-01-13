@@ -1,11 +1,11 @@
 from typing import Dict, Any, List, Optional
 import numpy as np
-from datetime import datetime
 
 from src.analyzer.pattern_engine import PatternEngine
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
+from src.utils.format_utils import timestamps_from_ms_array
 
 
 class PatternAnalyzer:
@@ -35,7 +35,7 @@ class PatternAnalyzer:
         # Use provided timestamps or extract from OHLCV data as fallback
         if timestamps is None and ohlcv_data is not None and len(ohlcv_data) > 0:
             try:
-                timestamps = [datetime.fromtimestamp(ts / 1000) for ts in ohlcv_data[:, 0]]
+                timestamps = timestamps_from_ms_array(ohlcv_data[:, 0])
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Could not extract timestamps from OHLCV data: {e}")
