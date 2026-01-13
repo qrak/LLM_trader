@@ -233,6 +233,10 @@ class Config:
     @property
     def LM_STUDIO_MODEL(self):
         return self.get_config('ai_providers', 'lm_studio_model', 'local-model')
+
+    @property
+    def LM_STUDIO_STREAMING(self):
+        return self.get_config('ai_providers', 'lm_studio_streaming', True)
     
     @property
     def OPENROUTER_BASE_URL(self):

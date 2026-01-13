@@ -13,6 +13,44 @@ const state = {
     lastUpdateTime: null
 };
 
+function formatCost(cost) {
+    if (cost === 0 || cost === null || cost === undefined) return '$0.00';
+    if (cost < 0.0001) return `$${cost.toFixed(8)}`;
+    if (cost < 0.01) return `$${cost.toFixed(6)}`;
+    if (cost < 1) return `$${cost.toFixed(4)}`;
+    return `$${cost.toFixed(2)}`;
+}
+
+async function fetchCosts() {
+    try {
+        const response = await fetch('/api/monitor/costs');
+        const data = await response.json();
+        updateCostDisplay(data);
+    } catch (e) {
+        console.error("Failed to fetch costs", e);
+    }
+}
+
+function updateCostDisplay(data) {
+    const costs = data.costs_by_provider || {};
+    const total = data.total_session_cost || 0;
+    const orCost = costs.openrouter || 0;
+    document.getElementById('cost-openrouter').textContent = formatCost(orCost);
+    if (orCost > 0) {
+        document.getElementById('cost-openrouter').style.color = '#f0883e';
+    }
+    document.getElementById('cost-total').textContent = formatCost(total);
+}
+
+async function resetCosts() {
+    try {
+        await fetch('/api/monitor/costs/reset', { method: 'POST' });
+        await fetchCosts();
+    } catch (e) {
+        console.error("Failed to reset costs", e);
+    }
+}
+
 async function fetchBrainStatus() {
     try {
         const response = await fetch('/api/brain/status');
@@ -82,6 +120,7 @@ function updateLastUpdated() {
 async function updateAll() {
     await fetchBrainStatus();
     await fetchRules();
+    await fetchCosts();
     await updatePerformanceData();
     await updateSynapses();
     await updateLogs();
@@ -105,8 +144,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.updateLogView = () => updateLogs();
     window.updateVectors = () => updateVectorData();
     window.updatePosition = () => updatePositionData(null, true);
+    window.resetCosts = resetCosts;
     document.addEventListener('analysis-complete', () => {
         console.log('Analysis complete, refreshing...');
         updateAll();
     });
 });
+

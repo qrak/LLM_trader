@@ -54,6 +54,9 @@ class ConfigProtocol(Protocol):
     
     @property
     def LM_STUDIO_MODEL(self) -> str: ...
+
+    @property
+    def LM_STUDIO_STREAMING(self) -> bool: ...
     
     @property
     def OPENROUTER_BASE_URL(self) -> str: ...

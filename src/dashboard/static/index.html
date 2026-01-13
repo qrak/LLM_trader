@@ -42,6 +42,25 @@
             <li>Loading rules...</li>
         </ul>
         
+        <div class="panel-header" style="margin-top: 20px;">
+            <h3>💰 API Costs</h3>
+            <button onclick="resetCosts()" style="font-size: 0.7em; padding: 2px 6px;">Reset</button>
+        </div>
+        <div id="costs-content">
+            <div class="stat-row">
+                <span>OpenRouter:</span> <strong id="cost-openrouter">$0.00</strong>
+            </div>
+            <div class="stat-row">
+                <span>Google AI:</span> <strong id="cost-google" style="color: #8b949e;">Free tier</strong>
+            </div>
+            <div class="stat-row">
+                <span>LM Studio:</span> <strong id="cost-lmstudio" style="color: #8b949e;">Local</strong>
+            </div>
+            <div class="stat-row" style="margin-top: 8px; border-top: 1px solid #30363d; padding-top: 8px;">
+                <span>Session Total:</span> <strong id="cost-total" style="color: #58a6ff;">$0.00</strong>
+            </div>
+        </div>
+        
         <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #30363d;">
             <div id="experience-count" style="font-size: 0.8em; color: #8b949e;">-- learned experiences</div>
             <div id="last-updated" style="font-size: 0.7em; color: #58a6ff; margin-top: 5px;">Updated: --</div>

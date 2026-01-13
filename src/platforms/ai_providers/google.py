@@ -120,7 +120,27 @@ class GoogleAIClient:
         except Exception as e:
             self.logger.error(f"Failed to extract text from Google AI response: {e}")
             return ""
-    
+    def _extract_usage_metadata(self, response) -> Optional[Dict[str, int]]:
+        """
+        Extract token usage metadata from Google AI response.
+
+        Args:
+            response: Response object from Google AI SDK
+
+        Returns:
+            Dictionary with prompt_tokens, completion_tokens, total_tokens or None
+        """
+        try:
+            if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                metadata = response.usage_metadata
+                return {
+                    'prompt_tokens': getattr(metadata, 'prompt_token_count', 0),
+                    'completion_tokens': getattr(metadata, 'candidates_token_count', 0),
+                    'total_tokens': getattr(metadata, 'total_token_count', 0),
+                }
+        except Exception as e:
+            self.logger.debug(f"Failed to extract usage metadata: {e}")
+        return None
     def _create_generation_config(self, model_config: Dict[str, Any], include_thinking: bool = True) -> types.GenerateContentConfig:
         """
         Create a generation config from model configuration dictionary.
@@ -174,18 +194,20 @@ class GoogleAIClient:
                     contents=prompt,
                     config=generation_config
                 )
-
                 content_text = self._extract_text_from_response(response)
+                usage = self._extract_usage_metadata(response)
                 self.logger.debug("Received successful response from Google AI")
-
-                return cast(ResponseDict, {
+                result: ResponseDict = {
                     "choices": [{
                         "message": {
                             "content": content_text,
                             "role": "assistant"
                         }
                     }]
-                })
+                }
+                if usage:
+                    result["usage"] = usage
+                return cast(ResponseDict, result)
 
             except Exception as e:
                 error_str = str(e).lower()
@@ -247,18 +269,20 @@ class GoogleAIClient:
                     contents=contents,
                     config=generation_config
                 )
-
                 content_text = self._extract_text_from_response(response)
+                usage = self._extract_usage_metadata(response)
                 self.logger.debug("Received successful chart analysis response from Google AI")
-
-                return cast(ResponseDict, {
+                result: ResponseDict = {
                     "choices": [{
                         "message": {
                             "content": content_text,
                             "role": "assistant"
                         }
                     }]
-                })
+                }
+                if usage:
+                    result["usage"] = usage
+                return cast(ResponseDict, result)
 
             except Exception as e:
                 error_str = str(e).lower()

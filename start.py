@@ -63,6 +63,9 @@ from src.analyzer.prompts import PromptBuilder
 from src.analyzer.pattern_engine import ChartGenerator
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
+# Suppress library deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord.http")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai._api_client")
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox

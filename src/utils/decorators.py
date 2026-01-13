@@ -218,17 +218,20 @@ class _ApiRetryContext:
         # Exhausted retries (only reached on retryable error path)
         return last_response
     
-    def _is_retryable_response(self, response: Dict[str, Any]) -> bool:
-        """Check if the response indicates a retryable error."""
-        if not isinstance(response, dict):
+    def _is_retryable_response(self, response: Any) -> bool:
+        """Check if the response indicates a retryable error. Supports both dict and SDK Pydantic objects."""
+        if response is None:
             return False
-        
-        # Check top-level error
+        # Handle dict responses (legacy HTTP-based clients)
+        if isinstance(response, dict):
+            return self._check_dict_response(response)
+        # Handle SDK Pydantic response objects (duck-typing)
+        return self._check_sdk_response(response)
+    def _check_dict_response(self, response: Dict[str, Any]) -> bool:
+        """Check dict-based response for retryable errors."""
         if response.get('error') and _should_retry_api_error(response['error']):
             self.logger.warning(f"Retryable top-level error for model {self.model}: {response['error']}")
             return True
-        
-        # Check for errors embedded in choices array (OpenRouter format)
         choices = response.get('choices', [])
         if choices and isinstance(choices, list):
             first_choice = choices[0]
@@ -243,7 +246,31 @@ class _ApiRetryContext:
                         f"[{error_code}] {error_msg}"
                     )
                     return True
-        
+        return False
+    def _check_sdk_response(self, response: Any) -> bool:
+        """Check SDK Pydantic response object for retryable errors using duck-typing."""
+        error = getattr(response, 'error', None)
+        if error:
+            error_dict = error.model_dump() if hasattr(error, 'model_dump') else {'message': str(error)}
+            if _should_retry_api_error(error_dict):
+                self.logger.warning(f"Retryable SDK error for model {self.model}: {error}")
+                return True
+        choices = getattr(response, 'choices', None)
+        if choices and isinstance(choices, (list, tuple)) and len(choices) > 0:
+            first_choice = choices[0]
+            choice_error = getattr(first_choice, 'error', None)
+            if choice_error:
+                error_dict = choice_error.model_dump() if hasattr(choice_error, 'model_dump') else {}
+                if _should_retry_api_error(error_dict):
+                    error_code = getattr(choice_error, 'code', 'unknown')
+                    error_msg = getattr(choice_error, 'message', 'unknown')
+                    metadata = getattr(choice_error, 'metadata', None)
+                    provider = getattr(metadata, 'provider_name', 'unknown') if metadata else 'unknown'
+                    self.logger.warning(
+                        f"Retryable SDK error from {provider} in choices for model {self.model}: "
+                        f"[{error_code}] {error_msg}"
+                    )
+                    return True
         return False
     
     def _should_retry(self, attempt: int) -> bool:
