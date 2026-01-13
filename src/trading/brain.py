@@ -203,13 +203,22 @@ class TradingBrainService:
         if vector_context:
             lines.extend(["", vector_context])
         
-        if lines:
+        # Check for limited data warning in the proper way
+        has_limited_data = "⚠️ LIMITED DATA" in vector_context if vector_context else False
+
+        if lines and not has_limited_data:
             lines.extend([
                 "",
                 "APPLY INSIGHTS (CoT Step 6 - Historical Evidence):",
                 "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
                 "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
                 "- Weight recent wins higher. Check for pattern repetition that led to losses.",
+                "",
+            ])
+        elif lines and has_limited_data:
+             lines.extend([
+                "",
+                "NOTE: Limited historical data available. Rely on standard technical analysis for this decision.",
                 "",
             ])
 
