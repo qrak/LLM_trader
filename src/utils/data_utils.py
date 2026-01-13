@@ -4,44 +4,36 @@ from datetime import datetime
 from typing import Any, Dict, Type, TypeVar, get_args, get_origin, List, Union, Optional
 from numpy.typing import NDArray
 
-T = TypeVar("T", bound="SerializableMixin")
+T = TypeVar("T")
 
 
 def get_last_valid_value(
-    arr: Union[NDArray, float, int, None],
+    arr: NDArray,
     default: Optional[float] = None
 ) -> Optional[float]:
-    """Extract the last non-NaN value from an array or return scalar directly.
+    """Extract the last non-NaN value from a numpy array.
 
     Args:
-        arr: Numpy array, scalar value, or None.
+        arr: Numpy array (float or object dtype).
         default: Value to return if no valid value found.
 
     Returns:
         Last valid (non-NaN) float value, or default if none found.
     """
-    if arr is None:
-        return default
-
-    if not hasattr(arr, '__iter__') or isinstance(arr, str):
-        if isinstance(arr, (int, float)) and not np.isnan(arr):
-            return float(arr)
-        return default
-
     if len(arr) == 0:
         return default
 
-    try:
-        if isinstance(arr, list):
-            arr = np.array(arr, dtype=float)
-        elif hasattr(arr, 'dtype') and arr.dtype == object:
+    # If it's an object array, ensure we try to convert to float
+    if arr.dtype == object:
+        try:
             arr = arr.astype(float)
-    except (ValueError, TypeError):
-        return default
+        except (ValueError, TypeError):
+            return default
 
     valid_indices = np.where(~np.isnan(arr))[0]
     if len(valid_indices) > 0:
         return float(arr[valid_indices[-1]])
+    
     return default
 
 
@@ -55,59 +47,120 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
     Returns:
         Array containing up to n valid values from the end.
     """
-    if arr is None or len(arr) == 0:
+    if len(arr) == 0:
         return np.array([])
 
-    try:
-        if isinstance(arr, list):
-            arr = np.array(arr, dtype=float)
-        elif hasattr(arr, 'dtype') and arr.dtype == object:
+    if arr.dtype == object:
+        try:
             arr = arr.astype(float)
-    except (ValueError, TypeError):
-        return np.array([])
+        except (ValueError, TypeError):
+            return np.array([])
 
     valid_mask = ~np.isnan(arr)
     valid_data = arr[valid_mask]
+    
     return valid_data[-n:] if len(valid_data) >= n else valid_data
 
 
 def safe_array_to_scalar(
-    arr: Union[NDArray, float, int, None],
+    arr: NDArray,
     index: int = -1,
     default: Optional[float] = None
 ) -> Optional[float]:
     """Safely extract a scalar value from an array at given index.
 
     Args:
-        arr: Numpy array, scalar value, or None.
+        arr: Numpy array.
         index: Index to extract from array (default: -1 for last element).
         default: Value to return if extraction fails.
 
     Returns:
-        Float value at index, or default if invalid.
+        Float value at index, or default if invalid/NaN.
     """
-    if arr is None:
-        return default
-
-    if not hasattr(arr, '__iter__') or isinstance(arr, str):
-        if isinstance(arr, (int, float)) and not np.isnan(arr):
-            return float(arr)
-        return default
-
     if len(arr) == 0:
         return default
 
     try:
-        value = arr[index]
-        if value is None:
-            return default
+        val = arr[index]
+        val_float = float(val)
         
-        val_float = float(value)
         if np.isnan(val_float):
             return default
+            
         return val_float
     except (IndexError, TypeError, ValueError):
         return default
+
+
+def get_indicator_value(td: dict, key: str) -> Union[float, str]:
+    """Get indicator value with proper type checking and error handling.
+    
+    Args:
+        td: Technical data dictionary
+        key: Indicator key to retrieve
+        
+    Returns:
+        float or str: Indicator value or 'N/A' if invalid
+    """
+    try:
+        value = td[key]
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, (list, tuple)) and len(value) == 1:
+            return float(value[0])
+        if isinstance(value, (list, tuple)) and len(value) > 1:
+            return float(value[-1])
+        return 'N/A'
+    except (KeyError, TypeError, ValueError, IndexError):
+        return 'N/A'
+
+
+def serialize_for_json(obj: Any) -> Any:
+    """Recursively convert NumPy objects to JSON-serializable types."""
+    if isinstance(obj, dict):
+        return {k: serialize_for_json(v) for k, v in obj.items()}
+    
+    if isinstance(obj, (list, tuple)):
+        return [serialize_for_json(v) for v in obj]
+    
+    if isinstance(obj, np.ndarray):
+        try:
+            return obj.tolist()
+        except Exception:
+            # Fallback for complex/mixed arrays
+            return [serialize_for_json(v) for v in obj]
+            
+    if isinstance(obj, np.generic):
+        try:
+            return obj.item()
+        except Exception:
+            return str(obj)
+            
+    # Handle NaN/Inf float values which are standard in NumPy but invalid in JSON
+    if isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return None
+        return obj
+
+    # Primitive types pass through
+    if isinstance(obj, (str, int, bool)) or obj is None:
+        return obj
+        
+    # Last resort fallback
+    try:
+        return str(obj)
+    except Exception:
+        return None
+
+
+def safe_tolist(obj: Any) -> Union[List, Any]:
+    """Safely convert an object to a list if it has a .tolist() method."""
+    if hasattr(obj, 'tolist'):
+        try:
+            return obj.tolist()
+        except Exception:
+            pass
+    return obj
 
 
 class SerializableMixin:

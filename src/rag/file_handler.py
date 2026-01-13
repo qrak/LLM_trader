@@ -89,7 +89,7 @@ class RagFileHandler:
         
         filtered_articles = []
         for art in articles:
-            article_timestamp = self.unified_parser.parse_timestamp(art.get('published_on', 0))
+            article_timestamp = self.unified_parser.format_utils.parse_timestamp(art.get('published_on', 0))
             if article_timestamp > cutoff_time:
                 filtered_articles.append(art)
         
@@ -114,7 +114,7 @@ class RagFileHandler:
             return
 
         try:
-            recent_articles.sort(key=lambda x: self.unified_parser.parse_timestamp(x.get('published_on', 0)), reverse=True)
+            recent_articles.sort(key=lambda x: self.unified_parser.format_utils.parse_timestamp(x.get('published_on', 0)), reverse=True)
             
             news_data = {
                 'last_updated': datetime.now().isoformat(),

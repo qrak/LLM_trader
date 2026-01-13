@@ -37,9 +37,6 @@ class TechnicalCalculator:
         indicators.update(self._calculate_trend_indicators())
         indicators.update(self._calculate_support_resistance_indicators())
         
-        # Add signal interpretations
-        self._add_signal_interpretations(indicators, ohlcv_data)
-        
         if self.logger:
             pass # self.logger.debug("Calculated technical indicators")
         
@@ -656,68 +653,3 @@ class TechnicalCalculator:
         value = get_last_valid_value(span_data)
         if value is not None:
             out[key] = value
-
-    def _add_signal_interpretations(self, indicators: dict, ohlcv_data: np.ndarray) -> None:
-        """Add signal interpretations for various indicators.
-        
-        Args:
-            indicators: Dictionary to add signal interpretations to
-            ohlcv_data: OHLCV data array for current price
-        """
-        if ohlcv_data is None or len(ohlcv_data) == 0:
-            return
-            
-        current_price = float(ohlcv_data[-1, 4])  # Close price
-        
-        # Ichimoku Signal
-        if all(key in indicators for key in ['ichimoku_span_a', 'ichimoku_span_b']):
-            span_a = indicators.get('ichimoku_span_a')
-            span_b = indicators.get('ichimoku_span_b')
-            
-            # Handle numpy arrays by taking the last value using shared utility
-            span_a = safe_array_to_scalar(span_a, -1)
-            span_b = safe_array_to_scalar(span_b, -1)
-            
-            if span_a is not None and span_b is not None:
-                cloud_top = max(span_a, span_b)
-                cloud_bottom = min(span_a, span_b)
-                
-                if current_price > cloud_top:
-                    indicators["ichimoku_signal"] = 1  # Bullish
-                elif current_price < cloud_bottom:
-                    indicators["ichimoku_signal"] = -1  # Bearish
-                else:
-                    indicators["ichimoku_signal"] = 0  # In cloud
-            else:
-                indicators["ichimoku_signal"] = 0
-        else:
-            indicators["ichimoku_signal"] = 0
-            
-        # Bollinger Bands Signal
-        if all(key in indicators for key in ['bb_upper', 'bb_middle', 'bb_lower']):
-            bb_upper = indicators.get('bb_upper')
-            bb_middle = indicators.get('bb_middle')
-            bb_lower = indicators.get('bb_lower')
-            
-            # Handle numpy arrays by taking the last value using shared utility
-            bb_upper = safe_array_to_scalar(bb_upper, -1)
-            bb_middle = safe_array_to_scalar(bb_middle, -1)
-            bb_lower = safe_array_to_scalar(bb_lower, -1)
-            
-            if all(val is not None for val in [bb_upper, bb_middle, bb_lower]):
-                # Calculate distance to each band as percentage
-                upper_dist = abs(current_price - bb_upper) / bb_upper
-                lower_dist = abs(current_price - bb_lower) / bb_lower
-                
-                # Find closest band (threshold of 2% to determine "near")
-                threshold = 0.02
-                if upper_dist < threshold:
-                    indicators["bb_signal"] = 1  # Near upper band
-                elif lower_dist < threshold:
-                    indicators["bb_signal"] = -1  # Near lower band
-                else:
-                    indicators["bb_signal"] = 0  # Near middle or between bands
-            else:
-                indicators["bb_signal"] = 0
-        else:
-            indicators["bb_signal"] = 0

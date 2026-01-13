@@ -23,7 +23,6 @@ class PromptBuilder:
         technical_calculator: Optional[TechnicalCalculator] = None,
         config: Any = None,
         format_utils=None,
-        data_processor=None,
         overview_formatter: Optional[MarketOverviewFormatter] = None,
         long_term_formatter: Optional[LongTermFormatter] = None,
         technical_formatter: Optional[TechnicalFormatter] = None,
@@ -38,7 +37,6 @@ class PromptBuilder:
             technical_calculator: Calculator for technical indicators (required - from app.py)
             config: Configuration instance
             format_utils: Format utilities
-            data_processor: Data processing utilities
             overview_formatter: MarketOverviewFormatter instance (injected)
             long_term_formatter: LongTermFormatter instance (injected)
             technical_formatter: TechnicalFormatter instance (injected)
@@ -54,7 +52,6 @@ class PromptBuilder:
         self.technical_calculator = technical_calculator
         self.config = config
         self.format_utils = format_utils
-        self.data_processor = data_processor
         
         # Initialize component managers
         self.template_manager = TemplateManager(config=self.config, logger=logger)
@@ -67,7 +64,6 @@ class PromptBuilder:
             timeframe,
             logger,
             format_utils,
-            data_processor,
             market_formatter=market_formatter,
             period_formatter=period_formatter,
             long_term_formatter=self.long_term_formatter

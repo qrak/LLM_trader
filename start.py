@@ -31,7 +31,6 @@ from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter
 from src.utils.format_utils import FormatUtils
-from src.analyzer.data_processor import DataProcessor
 from src.contracts.manager import ModelManager
 from src.trading import (
     TradingStrategy, TradingPersistence, TradingBrainService,
@@ -169,8 +168,7 @@ class CompositionRoot:
         
         # Initialize utilities
         token_counter = TokenCounter()
-        data_processor = DataProcessor()
-        format_utils = FormatUtils(data_processor=data_processor)
+        format_utils = FormatUtils()
         sentence_splitter = SentenceSplitter(logger=self.logger)
         ti_factory = TechnicalIndicatorsFactory()
         unified_parser = UnifiedParser(self.logger)
@@ -337,7 +335,6 @@ class CompositionRoot:
             technical_calculator=technical_calculator,
             config=self.config,
             format_utils=format_utils,
-            data_processor=data_processor,
             overview_formatter=overview_formatter,
             long_term_formatter=long_term_formatter,
             technical_formatter=technical_formatter,

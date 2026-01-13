@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from src.utils.serialize import serialize_for_json, safe_tolist
+from src.utils.data_utils import serialize_for_json, safe_tolist
 
 if TYPE_CHECKING:
     from src.contracts.manager_factory import ModelManagerProtocol

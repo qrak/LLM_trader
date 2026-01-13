@@ -134,7 +134,7 @@ class MarketDataManager:
             # Check if market overview is older than max_age_hours
             timestamp_field = self.current_market_overview.get('published_on', 
                                                              self.current_market_overview.get('timestamp', 0))
-            timestamp = self.unified_parser.parse_timestamp(timestamp_field)
+            timestamp = self.unified_parser.format_utils.parse_timestamp(timestamp_field)
             
             if timestamp:
                 data_time = datetime.fromtimestamp(timestamp)
@@ -172,7 +172,7 @@ class MarketDataManager:
             
         timestamp_field = self.current_market_overview.get('published_on',
                                                            self.current_market_overview.get('timestamp', 0))
-        timestamp = self.unified_parser.parse_timestamp(timestamp_field)
+        timestamp = self.unified_parser.format_utils.parse_timestamp(timestamp_field)
 
         if timestamp:
             data_time = datetime.fromtimestamp(timestamp)

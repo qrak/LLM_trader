@@ -16,23 +16,19 @@ class TestRefactoring(unittest.TestCase):
         self.mock_logger = MagicMock()
 
     def test_array_utils(self):
-        # ... (unchanged)
-        # Test get_last_valid_value
-        arr_with_none = [1, 2, None, 4, None]
-        self.assertEqual(get_last_valid_value(arr_with_none), 4)
-        self.assertIsNone(get_last_valid_value([None, None]))
-        self.assertIsNone(get_last_valid_value([]))
-        
+        """Test array utility functions with proper numpy arrays."""
+        # Test get_last_valid_value with numpy arrays (as per function signature)
+        arr_with_nan = np.array([1.0, 2.0, np.nan, 4.0, np.nan])
+        self.assertEqual(get_last_valid_value(arr_with_nan), 4.0)
+        self.assertIsNone(get_last_valid_value(np.array([np.nan, np.nan])))
+        self.assertIsNone(get_last_valid_value(np.array([])))
         # Test get_last_n_valid
-        # Convert numpy array to list for comparison to avoid ValueError
-        self.assertEqual(get_last_n_valid(arr_with_none, 2).tolist(), [2.0, 4.0])
-        self.assertEqual(get_last_n_valid(arr_with_none, 5).tolist(), [1.0, 2.0, 4.0])
-        
+        self.assertEqual(get_last_n_valid(arr_with_nan, 2).tolist(), [2.0, 4.0])
+        self.assertEqual(get_last_n_valid(arr_with_nan, 5).tolist(), [1.0, 2.0, 4.0])
         # Test safe_array_to_scalar
         np_arr = np.array([10, 20, 30])
         self.assertEqual(safe_array_to_scalar(np_arr, -1), 30)
-        self.assertIsNone(safe_array_to_scalar(None, -1))
-        self.assertIsNone(safe_array_to_scalar([], -1))
+        self.assertIsNone(safe_array_to_scalar(np.array([]), -1))
 
     def test_statistics_calculator_numpy(self):
         # Create mock trade history

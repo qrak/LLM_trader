@@ -7,10 +7,9 @@ This module has NO dependencies on analyzer module to avoid circular imports.
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from typing import List, TYPE_CHECKING
+from typing import List
 
-if TYPE_CHECKING:
-    from src.analyzer.data_processor import DataProcessor
+from src.utils.data_utils import get_indicator_value
 
 
 def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> List[datetime]:
@@ -34,9 +33,9 @@ class FormatUtils:
     circular import dependencies. It has no imports from the analyzer module.
     """
     
-    def __init__(self, data_processor: "DataProcessor"):
-        """Initialize the formatting utilities with a data processor instance."""
-        self.data_processor = data_processor
+    def __init__(self):
+        """Initialize the formatting utilities."""
+        pass
     
     def fmt(self, val, precision=8):
         """Format a value with appropriate precision based on its magnitude"""
@@ -62,22 +61,13 @@ class FormatUtils:
     def fmt_ta(self, td: dict, key: str, precision: int = 8, default: str = 'N/A') -> str:
         """Format technical-analysis indicator values.
         
-        Centralizes the logic used across all formatter classes.
-        
         Args:
             td: Technical data dictionary
             key: Indicator key to retrieve
             precision: Number of decimal places
             default: Default value if indicator not found
-            
-        Returns:
-            Formatted indicator value string
         """
-        try:
-            val = self.data_processor.get_indicator_value(td, key)
-        except Exception:
-            return default
-
+        val = get_indicator_value(td, key)
         if isinstance(val, (int, float)) and not np.isnan(val):
             return self.fmt(val, precision)
         return default
@@ -145,12 +135,30 @@ class FormatUtils:
             Unix timestamp in seconds, or 0.0 if conversion fails
         """
         try:
-            # Handle ISO format with Z suffix
             if iso_str.endswith('Z'):
                 iso_str = iso_str[:-1] + '+00:00'
             return datetime.fromisoformat(iso_str).timestamp()
         except (ValueError, TypeError, AttributeError):
             return 0.0
+    
+    def parse_timestamp(self, timestamp_field) -> float:
+        """Universal timestamp parser supporting int/float/str formats.
+        
+        Args:
+            timestamp_field: Timestamp as int, float, or ISO string
+            
+        Returns:
+            Unix timestamp in seconds as float, or 0.0 if conversion fails
+        """
+        if timestamp_field is None:
+            return 0.0
+        if isinstance(timestamp_field, (int, float)):
+            return float(timestamp_field)
+        if isinstance(timestamp_field, str):
+            if timestamp_field.isdigit():
+                return float(timestamp_field)
+            return self.timestamp_from_iso(timestamp_field)
+        return 0.0
     
     def parse_timestamp_ms(self, timestamp_ms: float) -> datetime:
         """Parse timestamp in milliseconds to datetime object.
@@ -166,19 +174,7 @@ class FormatUtils:
         except (ValueError, TypeError, OSError):
             return None
 
-    def format_value(self, value, precision: int = 8) -> str:
-        """Format a value with specified precision.
-        
-        Args:
-            value: Value to format
-            precision: Number of decimal places
-            
-        Returns:
-            str: Formatted value or 'N/A' if invalid
-        """
-        if isinstance(value, (int, float)) and not np.isnan(value):
-            return self.fmt(value, precision)
-        return 'N/A'
+
 
     def get_supertrend_direction_string(self, direction) -> str:
         """Get supertrend direction as string."""
@@ -191,30 +187,24 @@ class FormatUtils:
 
     def format_bollinger_interpretation(self, td: dict) -> str:
         """Format Bollinger Bands interpretation."""
-        try:
-            bb_position = self.data_processor.get_indicator_value(td, 'bb_position')
-            if bb_position is not None:
-                if bb_position > 0.8:
-                    return " [Near upper band - possible overbought]"
-                elif bb_position < 0.2:
-                    return " [Near lower band - possible oversold]"
-                else:
-                    return " [Within normal range]"
-        except Exception:
-            pass
+        bb_position = get_indicator_value(td, 'bb_position')
+        if isinstance(bb_position, (int, float)):
+            if bb_position > 0.8:
+                return " [Near upper band - possible overbought]"
+            elif bb_position < 0.2:
+                return " [Near lower band - possible oversold]"
+            else:
+                return " [Within normal range]"
         return ""
 
     def format_cmf_interpretation(self, td: dict) -> str:
         """Format Chaikin Money Flow interpretation."""
-        try:
-            cmf_val = self.data_processor.get_indicator_value(td, 'cmf')
-            if cmf_val is not None:
-                if cmf_val > 0.1:
-                    return " [Accumulation phase]"
-                elif cmf_val < -0.1:
-                    return " [Distribution phase]"
-                else:
-                    return " [Neutral]"
-        except Exception:
-            pass
+        cmf_val = get_indicator_value(td, 'cmf')
+        if isinstance(cmf_val, (int, float)):
+            if cmf_val > 0.1:
+                return " [Accumulation phase]"
+            elif cmf_val < -0.1:
+                return " [Distribution phase]"
+            else:
+                return " [Neutral]"
         return ""

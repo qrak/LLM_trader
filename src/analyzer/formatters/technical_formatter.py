@@ -6,7 +6,7 @@ from typing import Optional
 import re
 import numpy as np
 from src.logger.logger import Logger
-from src.utils.data_utils import get_last_valid_value
+from src.utils.data_utils import get_last_valid_value, get_last_n_valid
 
 
 class TechnicalFormatter:
@@ -361,45 +361,22 @@ class TechnicalFormatter:
     def _format_td_sequential(self, td: dict) -> str:
         """Format TD Sequential indicator (trend exhaustion detector).
         
-        Returns empty string if no valid TD Sequential data.
-        TD Sequential counts consecutive candles (up to 9) where close > close[4] (bullish) or close < close[4] (bearish).
-        Count of 8-9 signals potential trend exhaustion and reversal zone.
+        TD Sequential counts consecutive candles (up to 9) where close > close[4] (bullish)
+        or close < close[4] (bearish). Count of 8-9 signals potential trend exhaustion.
         """
-        try:
-            td_seq = td.get('td_sequential')
-            if td_seq is None:
-                return ""
-            
-            # Get the last value
-            if hasattr(td_seq, '__iter__') and not isinstance(td_seq, str):
-                # Find last non-NaN value
-                valid_indices = np.where(~np.isnan(td_seq))[0]
-                if len(valid_indices) > 0:
-                    td_val = float(td_seq[valid_indices[-1]])
-                else:
-                    return ""
-            else:
-                td_val = float(td_seq)
-            
-            # Format: positive = bullish count, negative = bearish count
-            if td_val > 0:
-                count = int(abs(td_val))
-                if count >= 8:  # Exhaustion warning
-                    return f" | TD:{count}↑⚠️"
-                elif count >= 1:
-                    return f" | TD:{count}↑"
-            elif td_val < 0:
-                count = int(abs(td_val))
-                if count >= 8:  # Exhaustion warning
-                    return f" | TD:{count}↓⚠️"
-                elif count >= 1:
-                    return f" | TD:{count}↓"
-            
+        td_seq = td.get('td_sequential')
+        if td_seq is None:
             return ""
-        except Exception as e:
-            if self.logger:
-                self.logger.debug(f"Error formatting TD Sequential: {e}")
+        td_val = get_last_valid_value(td_seq)
+        if td_val is None:
             return ""
+        if td_val > 0:
+            count = int(abs(td_val))
+            return f" | TD:{count}↑⚠️" if count >= 8 else f" | TD:{count}↑" if count >= 1 else ""
+        elif td_val < 0:
+            count = int(abs(td_val))
+            return f" | TD:{count}↓⚠️" if count >= 8 else f" | TD:{count}↓" if count >= 1 else ""
+        return ""
     
     def _format_sma_structure(self, td: dict) -> str:
         """Format SMA structure with crossover detection and dynamic S/R levels.
@@ -446,141 +423,103 @@ class TechnicalFormatter:
             return ""
     
     def _format_ichimoku_signal(self, td: dict) -> str:
-        """Format Ichimoku cloud position signal for regular timeframe.
+        """Format Ichimoku cloud position signal.
         
         Shows whether price is above cloud (bullish), below cloud (bearish), or in cloud (neutral).
+        Calculates signal on-demand from raw span data.
         """
         try:
-            ichimoku_signal = td.get('ichimoku_signal')
-            if ichimoku_signal is None:
+            # Get ichimoku spans
+            span_a = td.get('ichimoku_span_a')
+            span_b = td.get('ichimoku_span_b')
+            
+            if span_a is None or span_b is None:
                 return ""
             
-            # Get last value if array
-            if hasattr(ichimoku_signal, '__iter__') and not isinstance(ichimoku_signal, str):
-                valid_idx = np.where(~np.isnan(ichimoku_signal))[0]
-                if len(valid_idx) > 0:
-                    signal_val = int(ichimoku_signal[valid_idx[-1]])
-                else:
-                    return ""
-            else:
-                signal_val = int(ichimoku_signal)
+            # Extract last values
+            span_a_val = get_last_valid_value(span_a)
+            span_b_val = get_last_valid_value(span_b)
             
-            # Format signal
-            if signal_val == 1:
+            if span_a_val is None or span_b_val is None:
+                return ""
+            
+            # Get current price - try multiple sources
+            current_price = None
+            
+            # Method 1: Try from close prices in technical data
+            close_data = td.get('close')
+            if close_data is not None:
+                from src.utils.data_utils import safe_array_to_scalar
+                current_price = safe_array_to_scalar(close_data, -1)
+            
+            if current_price is None:
+                return ""
+            
+            # Calculate cloud boundaries
+            cloud_top = max(span_a_val, span_b_val)
+            cloud_bottom = min(span_a_val, span_b_val)
+            
+            # Determine signal based on price position relative to cloud
+            if current_price > cloud_top:
                 return " | Ichi:☁️↑"
-            elif signal_val == -1:
+            elif current_price < cloud_bottom:
                 return " | Ichi:☁️↓"
-            elif signal_val == 0:
+            else:
                 return " | Ichi:☁️="
-            
-            return ""
         except Exception as e:
             if self.logger:
-                self.logger.debug(f"Error formatting Ichimoku signal: {e}")
+                self.logger.debug(f"Error calculating ichimoku signal: {e}")
             return ""
     
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:
-        """Format temporal array of indicator values with text-based trend description.
-        
+        """Format temporal array with text-based trend description.
+
         Args:
             td: Technical data dictionary
             key: Indicator key name
             lookback: Number of historical candles to analyze
             decimals: Decimal places for formatting
-            
+
         Returns:
             Formatted string with trend direction and delta, e.g., " (↑UP Δ+5.2)"
-            Empty string if data not available
         """
-        try:
-            
-            indicator_data = td.get(key)
-            if indicator_data is None:
-                return ""
-            
-            # Extract array values
-            if not hasattr(indicator_data, '__iter__') or isinstance(indicator_data, str):
-                return ""  # Not an array
-            
-            # Get last N valid values
-            valid_mask = ~np.isnan(indicator_data)
-            if not np.any(valid_mask):
-                return ""
-            
-            valid_data = indicator_data[valid_mask]
-            if len(valid_data) < 2:
-                return ""  # Need at least 2 points for trend
-            
-            # Get last N values
-            last_n = valid_data[-lookback:] if len(valid_data) >= lookback else valid_data
-            
-            if len(last_n) < 2:
-                return ""
-            
-            # Calculate delta (current - oldest in window)
-            delta = float(last_n[-1] - last_n[0])
-            delta_sign = "+" if delta >= 0 else ""
-            
-            # Calculate percentage change for threshold determination
-            if abs(last_n[0]) > 0.0001:
-                delta_pct = abs(delta / last_n[0]) * 100
-            else:
-                delta_pct = abs(delta) * 100  # Fallback for near-zero values
-            
-            # Determine trend direction based on meaningful change threshold
-            # Use 3% threshold for oscillators (RSI, Stoch), 5% for others
-            threshold_pct = 3.0 if key in ['rsi', 'stoch_k', 'stoch_d', 'mfi', 'cci'] else 5.0
-            
-            if delta_pct >= threshold_pct:
-                if delta > 0:
-                    trend_text = "↑UP"
-                else:
-                    trend_text = "↓DOWN"
-            else:
-                trend_text = "→FLAT"
-            
-            # Format: (trend_text Δdelta)
-            return f" ({trend_text} Δ{delta_sign}{delta:.{decimals}f})"
-            
-        except Exception as e:
-            if self.logger:
-                self.logger.debug(f"Error formatting temporal array for {key}: {e}")
+        indicator_data = td.get(key)
+        if indicator_data is None:
             return ""
+        if not isinstance(indicator_data, np.ndarray):
+            return ""
+        last_n = get_last_n_valid(indicator_data, lookback)
+        if len(last_n) < 2:
+            return ""
+        delta = float(last_n[-1] - last_n[0])
+        delta_sign = "+" if delta >= 0 else ""
+        if abs(last_n[0]) > 0.0001:
+            delta_pct = abs(delta / last_n[0]) * 100
+        else:
+            delta_pct = abs(delta) * 100
+        threshold_pct = 3.0 if key in ['rsi', 'stoch_k', 'stoch_d', 'mfi', 'cci'] else 5.0
+        if delta_pct >= threshold_pct:
+            trend_text = "↑UP" if delta > 0 else "↓DOWN"
+        else:
+            trend_text = "→FLAT"
+        return f" ({trend_text} Δ{delta_sign}{delta:.{decimals}f})"
     
     def _format_choppiness(self, td: dict) -> str:
         """Format Choppiness Index with market state interpretation.
         
-        Choppiness Index thresholds:
-        - > 61.8: Choppy/Ranging market
-        - < 38.2: Trending market
-        - Between: Transition
+        Thresholds: >61.8 Choppy, <38.2 Trending, else Transition.
         """
-        try:
-            chop = td.get('choppiness')
-            if chop is None:
-                return ""
-            
-            # Extract last value
-            if hasattr(chop, '__iter__') and not isinstance(chop, str):
-                valid_idx = np.where(~np.isnan(chop))[0]
-                if len(valid_idx) > 0:
-                    chop_val = float(chop[valid_idx[-1]])
-                else:
-                    return ""
-            else:
-                chop_val = float(chop)
-            
-            # Interpret market state
-            if chop_val > 61.8:
-                state = "Chop"
-            elif chop_val < 38.2:
-                state = "Trend"
-            else:
-                state = "Transition"
-            
-            return f"- Choppiness:{chop_val:.1f} ({state})"
-        except Exception as e:
-            if self.logger:
-                self.logger.debug(f"Error formatting choppiness: {e}")
+        chop = td.get('choppiness')
+        if chop is None:
             return ""
+        chop_val = get_last_valid_value(chop)
+        if chop_val is None:
+            return ""
+        if chop_val > 61.8:
+            state = "Chop"
+        elif chop_val < 38.2:
+            state = "Trend"
+        else:
+            state = "Transition"
+        return f"- Choppiness:{chop_val:.1f} ({state})"
 

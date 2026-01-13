@@ -20,7 +20,6 @@ class ContextBuilder:
         timeframe: str = "1h",
         logger: Optional[Logger] = None,
         format_utils=None,
-        data_processor=None,
         market_formatter: Optional[MarketFormatter] = None,
         period_formatter: Optional[MarketPeriodFormatter] = None,
         long_term_formatter: Optional[LongTermFormatter] = None
@@ -31,7 +30,6 @@ class ContextBuilder:
             timeframe: Primary timeframe for analysis
             logger: Optional logger instance for debugging
             format_utils: Format utilities
-            data_processor: Data processing utilities
             market_formatter: MarketFormatter instance (for coin details, ticker, etc.)
             period_formatter: MarketPeriodFormatter instance (for period metrics)
             long_term_formatter: LongTermFormatter instance (for long-term analysis)

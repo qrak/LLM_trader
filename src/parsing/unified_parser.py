@@ -171,27 +171,6 @@ class UnifiedParser:
             Error dictionary indicating all providers failed
         """
         return {"error": f"All models failed. Last attempt ({provider}): {error_detail}"}
-    
-    
-
-    
-    def parse_timestamp(self, timestamp_field: Union[int, float, str, None]) -> float:
-        """
-        Universal timestamp parser supporting all formats used across the application.
-        Consolidates timestamp parsing from MarketDataProcessor and ArticleProcessor.
-        """
-        if timestamp_field is None:
-            return 0.0
-
-        if isinstance(timestamp_field, (int, float)):
-            return float(timestamp_field)
-        
-        if isinstance(timestamp_field, str):
-            return self.format_utils.timestamp_from_iso(timestamp_field)
-        
-        return 0.0
-    
-    
 
     
     def parse_article_categories(self, categories_string: str) -> Set[str]:
@@ -217,9 +196,6 @@ class UnifiedParser:
                 categories.add(clean_category)
         
         return categories
-    
-    
-
     
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
