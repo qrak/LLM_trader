@@ -70,3 +70,17 @@ async def get_system_prompt(request: Request) -> Dict[str, Any]:
         }
     return {"system_prompt": "No system prompt generated yet.", "source": None, "has_brain_context": False}
 
+
+@router.get("/costs")
+async def get_api_costs() -> Dict[str, Any]:
+    """Get current API cost tracking data."""
+    from src.dashboard.dashboard_state import dashboard_state
+    return dashboard_state.get_cost_data()
+
+
+@router.post("/costs/reset")
+async def reset_api_costs() -> Dict[str, Any]:
+    """Reset API cost tracking to zero."""
+    from src.dashboard.dashboard_state import dashboard_state
+    await dashboard_state.reset_api_costs()
+    return {"status": "ok", "message": "API costs reset to zero"}

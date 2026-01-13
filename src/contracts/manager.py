@@ -166,12 +166,18 @@ class ModelManager(ModelManagerProtocol):
         # Use admin-specified provider if provided
         effective_provider = provider if provider else self.provider
         
-        # Only try streaming if using local provider (LM Studio) or all providers
-        if (effective_provider == "local" or effective_provider == "all") and self.lm_studio_client:
+        # Only try streaming if using local provider (LM Studio) or all providers, AND streaming is enabled
+        if (effective_provider == "local" or effective_provider == "all") and self.lm_studio_client and self.config.LM_STUDIO_STREAMING:
             try:
                 # Use admin-specified model if provided, otherwise use default
                 effective_model = model if model else self.config.LM_STUDIO_MODEL
-                response_json = await self.lm_studio_client.console_stream(effective_model, messages, self.model_config)
+                
+                async def print_stream_callback(chunk):
+                    print(chunk, end='', flush=True)
+
+                response_json = await self.lm_studio_client.stream_chat_completion(
+                    effective_model, messages, self.model_config, callback=print_stream_callback
+                )
                 if response_json is not None:  # Check for valid response before processing
                     return self._process_response(response_json)
                 else:
@@ -558,27 +564,19 @@ class ModelManager(ModelManagerProtocol):
         return provider_name, "unspecified"
         
     def _prepare_messages(self, prompt: str, system_message: Optional[str] = None) -> List[Dict[str, str]]:
-        """Prepare message structure and track tokens"""
-        # Reset token counter for this request to avoid accumulation
+        """Prepare message structure for API call."""
         self.token_counter.reset_session_stats()
-        
         messages = []
-    
         if system_message:
             combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
             messages.append({"role": "user", "content": combined_prompt})
-            
-            system_tokens = self.token_counter.track_prompt_tokens(system_message, "system")
-            prompt_tokens = self.token_counter.track_prompt_tokens(prompt, "prompt")
-            self.logger.info(f"System message token count: {system_tokens}")
-            self.logger.info(f"Prompt token count: {prompt_tokens}")
-            self.logger.debug(f"Full prompt content: {combined_prompt}")
+            system_tokens = self.token_counter.count_tokens(system_message)
+            prompt_tokens = self.token_counter.count_tokens(prompt)
+            self.logger.debug(f"Pre-call estimate: system={system_tokens:,}, prompt={prompt_tokens:,}")
         else:
             messages.append({"role": "user", "content": prompt})
-            prompt_tokens = self.token_counter.track_prompt_tokens(prompt, "prompt")
-            self.logger.info(f"Prompt token count: {prompt_tokens}")
-            self.logger.debug(f"Full prompt content: {prompt}")
-    
+            prompt_tokens = self.token_counter.count_tokens(prompt)
+            self.logger.debug(f"Pre-call estimate: prompt={prompt_tokens:,}")
         return messages
 
     async def _get_model_response(self, messages: List[Dict[str, str]], provider: Optional[str] = None, 
@@ -712,34 +710,25 @@ class ModelManager(ModelManagerProtocol):
 
         return response_json
 
-    def _process_response(self, response_json: Union[Dict[str, Any], ResponseDict]) -> str:
-        """Extract and process content from the response"""
+    def _process_response(self, response_json: Union[Dict[str, Any], ResponseDict], provider: str = "unknown") -> str:
+        """Extract and process content from the response."""
         try:
             if response_json is None:
                 return self.unified_parser.format_error_response("Empty response from API")
-                
             if "error" in response_json:
                 return self.unified_parser.format_error_response(response_json["error"])
-
             if not self._is_valid_response(response_json):
                 self.logger.error(f"Missing 'choices' key or invalid choices in API response: {response_json}")
                 return self.unified_parser.format_error_response("Invalid API response format")
-
-            # Extract content - validation already done by _is_valid_response
             content = response_json["choices"][0]["message"]["content"]
-
-            formatted_content = content
-
-            response_tokens = self.token_counter.track_prompt_tokens(formatted_content, "completion")
-            self.logger.info(f"Response token count: {response_tokens}")
-
-            stats = self.token_counter.get_usage_stats()
-            self.logger.info(f"Total tokens used: {stats['total']}")
-
-            self.logger.debug(f"Full response content: {formatted_content}")
-
-            return formatted_content
-
+            self.token_counter.process_response_usage(
+                usage=response_json.get("usage"),
+                provider=provider,
+                logger=self.logger,
+                fallback_text=content
+            )
+            self.logger.debug(f"Full response content: {content}")
+            return content
         except Exception as e:
             self.logger.error(f"Error processing response: {e}")
             self.logger.debug(f"Response that caused error: {response_json}")

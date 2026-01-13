@@ -58,9 +58,14 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-            except ValueError:
-                # Chart analysis failed, re-raise to let analysis engine handle logging and fallback
-                raise
+            except (ValueError, Exception) as chart_error:
+                self.logger.warning(f"Chart analysis failed: {chart_error}. Falling back to text-only analysis.")
+                complete_response = await self.model_manager.send_prompt_streaming(
+                    prompt=prompt,
+                    system_message=system_prompt,
+                    provider=provider,
+                    model=model
+                )
         else:
             # Use the standard send_prompt_streaming method
             complete_response = await self.model_manager.send_prompt_streaming(

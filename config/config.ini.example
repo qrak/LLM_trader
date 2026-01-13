@@ -8,8 +8,10 @@ provider = googleai
 
 # Base URL for local LM Studio instance (e.g., http://localhost:1234/v1)
 lm_studio_base_url = http://localhost:1234/v1
-# Model identifier to use with LM Studio
-lm_studio_model = local-model
+# Model identifier to use with LM Studio, leave empty for auto select
+lm_studio_model = 
+# Enable streaming for LM Studio (true/false)
+# lm_studio_streaming = true 
 
 # Base URL for OpenRouter API
 openrouter_base_url = https://openrouter.ai/api/v1
