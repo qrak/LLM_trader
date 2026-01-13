@@ -6,6 +6,7 @@ from typing import Optional
 import re
 import numpy as np
 from src.logger.logger import Logger
+from src.utils.array_utils import get_last_valid_value
 
 
 class TechnicalFormatter:
@@ -413,20 +414,10 @@ class TechnicalFormatter:
             sma_50 = td.get('sma_50')
             sma_200 = td.get('sma_200')
             
-            # Extract last values from arrays
-            
-            def get_last_valid(arr):
-                if arr is None:
-                    return None
-                if hasattr(arr, '__iter__') and not isinstance(arr, str):
-                    valid_idx = np.where(~np.isnan(arr))[0]
-                    if len(valid_idx) > 0:
-                        return float(arr[valid_idx[-1]])
-                return float(arr) if not np.isnan(arr) else None
-            
-            sma_20_val = get_last_valid(sma_20)
-            sma_50_val = get_last_valid(sma_50)
-            sma_200_val = get_last_valid(sma_200)
+            # Extract last values from arrays using shared utility
+            sma_20_val = get_last_valid_value(sma_20)
+            sma_50_val = get_last_valid_value(sma_50)
+            sma_200_val = get_last_valid_value(sma_200)
             
             # Build SMA line
             sma_parts = []

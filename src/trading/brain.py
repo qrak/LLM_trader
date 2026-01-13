@@ -4,6 +4,7 @@ Handles brain state management, learning from closed trades, and providing AI co
 """
 
 from datetime import datetime
+from collections import Counter
 from typing import Optional, Dict, Any, List
 
 from src.logger.logger import Logger
@@ -203,7 +204,9 @@ class TradingBrainService:
             lines.extend([
                 "",
                 "APPLY INSIGHTS (CoT Step 6 - Historical Evidence):",
-                "- Weight recent wins higher. Check if AVOID PATTERNS match current conditions.",
+                "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
+                "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
+                "- Weight recent wins higher. Check for pattern repetition that led to losses.",
                 "",
             ])
 
@@ -420,6 +423,10 @@ class TradingBrainService:
             return 0
         return sum(1 for _, score in confluence_factors if score > 50)
 
+    def _count_patterns(self, experiences: List[Dict], key_builder) -> Dict[str, int]:
+        """Helper to count patterns in experiences."""
+        return Counter(key_builder(exp["metadata"]) for exp in experiences)
+
     def _trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize semantic rules.
 
@@ -436,21 +443,19 @@ class TradingBrainService:
                 self.logger.debug("Not enough winning trades for reflection")
                 return
 
-            pattern_counts: Dict[str, int] = {}
-            for win in wins:
-                meta = win["metadata"]
+            def build_win_key(meta):
                 regime = meta.get("market_regime", "NEUTRAL")
                 adx = meta.get("adx_at_entry", 0)
                 direction = meta.get("direction", "UNKNOWN")
-
                 adx_label = "HIGH_ADX" if adx >= 25 else "LOW_ADX" if adx < 20 else "MED_ADX"
-                pattern_key = f"{direction}_{regime}_{adx_label}"
-                pattern_counts[pattern_key] = pattern_counts.get(pattern_key, 0) + 1
+                return f"{direction}_{regime}_{adx_label}"
+
+            pattern_counts = self._count_patterns(wins, build_win_key)
 
             if not pattern_counts:
                 return
 
-            best_pattern = max(pattern_counts.items(), key=lambda x: x[1])
+            best_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = best_pattern
             if count < 3:
                 return
@@ -497,20 +502,18 @@ class TradingBrainService:
                 self.logger.debug("Not enough losing trades for anti-pattern reflection")
                 return
 
-            pattern_counts: Dict[str, int] = {}
-            for loss in losses:
-                meta = loss["metadata"]
+            def build_loss_key(meta):
                 regime = meta.get("market_regime", "NEUTRAL")
                 close_reason = meta.get("close_reason", "unknown")
                 direction = meta.get("direction", "UNKNOWN")
+                return f"{direction}_{regime}_{close_reason}"
 
-                pattern_key = f"{direction}_{regime}_{close_reason}"
-                pattern_counts[pattern_key] = pattern_counts.get(pattern_key, 0) + 1
+            pattern_counts: Dict[str, int] = self._count_patterns(losses, build_loss_key)
 
             if not pattern_counts:
                 return
 
-            worst_pattern = max(pattern_counts.items(), key=lambda x: x[1])
+            worst_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = worst_pattern
             if count < 2:
                 return

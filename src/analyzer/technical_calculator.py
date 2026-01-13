@@ -6,6 +6,7 @@ if TYPE_CHECKING:
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
+from src.utils.array_utils import get_last_valid_value, safe_array_to_scalar
 from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
     detect_golden_cross_numba, detect_death_cross_numba
 )
@@ -652,10 +653,9 @@ class TechnicalCalculator:
     
     def _process_ichimoku_span(self, span_data, out: Dict[str, Any], key: str) -> None:
         """Process Ichimoku span data safely."""
-        if span_data is not None and len(span_data) > 0:
-            span_valid = np.where(~np.isnan(span_data))[0]
-            if len(span_valid) > 0:
-                out[key] = float(span_data[span_valid[-1]])
+        value = get_last_valid_value(span_data)
+        if value is not None:
+            out[key] = value
 
     def _add_signal_interpretations(self, indicators: dict, ohlcv_data: np.ndarray) -> None:
         """Add signal interpretations for various indicators.
@@ -674,13 +674,11 @@ class TechnicalCalculator:
             span_a = indicators.get('ichimoku_span_a')
             span_b = indicators.get('ichimoku_span_b')
             
-            # Handle numpy arrays by taking the last value
-            if hasattr(span_a, '__iter__') and not isinstance(span_a, str):
-                span_a = span_a[-1] if len(span_a) > 0 else None
-            if hasattr(span_b, '__iter__') and not isinstance(span_b, str):
-                span_b = span_b[-1] if len(span_b) > 0 else None
+            # Handle numpy arrays by taking the last value using shared utility
+            span_a = safe_array_to_scalar(span_a, -1)
+            span_b = safe_array_to_scalar(span_b, -1)
             
-            if isinstance(span_a, (int, float)) and isinstance(span_b, (int, float)) and not (np.isnan(span_a) or np.isnan(span_b)):
+            if span_a is not None and span_b is not None:
                 cloud_top = max(span_a, span_b)
                 cloud_bottom = min(span_a, span_b)
                 
@@ -701,15 +699,12 @@ class TechnicalCalculator:
             bb_middle = indicators.get('bb_middle')
             bb_lower = indicators.get('bb_lower')
             
-            # Handle numpy arrays by taking the last value
-            if hasattr(bb_upper, '__iter__') and not isinstance(bb_upper, str):
-                bb_upper = bb_upper[-1] if len(bb_upper) > 0 else None
-            if hasattr(bb_middle, '__iter__') and not isinstance(bb_middle, str):
-                bb_middle = bb_middle[-1] if len(bb_middle) > 0 else None
-            if hasattr(bb_lower, '__iter__') and not isinstance(bb_lower, str):
-                bb_lower = bb_lower[-1] if len(bb_lower) > 0 else None
+            # Handle numpy arrays by taking the last value using shared utility
+            bb_upper = safe_array_to_scalar(bb_upper, -1)
+            bb_middle = safe_array_to_scalar(bb_middle, -1)
+            bb_lower = safe_array_to_scalar(bb_lower, -1)
             
-            if all(isinstance(val, (int, float)) and not np.isnan(val) for val in [bb_upper, bb_middle, bb_lower]):
+            if all(val is not None for val in [bb_upper, bb_middle, bb_lower]):
                 # Calculate distance to each band as percentage
                 upper_dist = abs(current_price - bb_upper) / bb_upper
                 lower_dist = abs(current_price - bb_lower) / bb_lower

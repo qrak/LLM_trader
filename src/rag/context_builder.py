@@ -102,17 +102,13 @@ class ContextBuilder:
         )
     
     def _calculate_keyword_score(self, keywords: Set[str], content) -> float:
-        """Calculate score based on keyword matches."""
+        """Calculate score based on keyword matches with predefined weights."""
+        FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
         score = 0.0
         for keyword in keywords:
-            if keyword in content.title:
-                score += 10
-            if keyword in content.body:
-                score += 3
-            if keyword in content.categories:
-                score += 5
-            if keyword in content.tags:
-                score += 4
+            for field, weight in FIELD_WEIGHTS.items():
+                if keyword in getattr(content, field):
+                    score += weight
         return score
     
     def _calculate_category_score(self, query: str, categories: str, category_word_map: Dict[str, str]) -> float:
@@ -303,7 +299,13 @@ class ContextBuilder:
         scored = []
         for i, sent in enumerate(sentences):
             sent_lower = sent.lower()
-            kw_count = sum(1 for kw in keywords if kw in sent_lower)
+            # Faster keyword counting via set intersection
+            sent_words = set(sent_lower.split())
+            kw_count = len(keywords & sent_words)
+            # Fallback for multi-word keywords (if necessary) or partial matches
+            if kw_count == 0:
+                 kw_count = sum(1 for kw in keywords if kw in sent_lower)
+            
             score = float(kw_count)
             
             # Boost for numbers (likely data points)

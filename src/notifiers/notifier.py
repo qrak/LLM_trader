@@ -320,15 +320,8 @@ class DiscordNotifier(BaseNotifier):
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
             hours_held = self.calculate_time_held(position.entry_time)
 
-            if pnl_pct > 0:
-                color = discord.Color.green()
-                emoji = "📈"
-            elif pnl_pct < 0:
-                color = discord.Color.red()
-                emoji = "📉"
-            else:
-                color = discord.Color.light_grey()
-                emoji = "➡️"
+            color_key, emoji = self.get_pnl_styling(pnl_pct)
+            color = self._get_discord_color(color_key)
 
             embed = discord.Embed(
                 title=f"{emoji} Open {position.direction} Position - {position.symbol}",

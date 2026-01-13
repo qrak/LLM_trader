@@ -171,21 +171,25 @@ class MarketMetricsCalculator:
         }
     
     def _calculate_basic_metrics(self, data: List[Dict], period_name: str) -> Dict:
-        """Calculate basic price and volume metrics"""
-        prices = [candle["close"] for candle in data]
-        highs = [candle["high"] for candle in data]
-        lows = [candle["low"] for candle in data]
-        volumes = [candle["volume"] for candle in data]
-        
+        """Calculate basic price and volume metrics using numpy vectorization."""
+        # Convert to numpy arrays once for vectorized operations
+        prices = np.array([candle["close"] for candle in data])
+        highs = np.array([candle["high"] for candle in data])
+        lows = np.array([candle["low"] for candle in data])
+        volumes = np.array([candle["volume"] for candle in data])
+
+        high_max = float(np.max(highs))
+        low_min = float(np.min(lows))
+
         return {
-            "highest_price": max(highs),
-            "lowest_price": min(lows),
-            "avg_price": sum(prices) / len(prices),
-            "total_volume": sum(volumes),
-            "avg_volume": sum(volumes) / len(volumes),
-            "price_change": prices[-1] - prices[0],
-            "price_change_percent": ((prices[-1] / prices[0]) - 1) * 100,
-            "volatility": (max(highs) - min(lows)) / min(lows) * 100,
+            "highest_price": high_max,
+            "lowest_price": low_min,
+            "avg_price": float(np.mean(prices)),
+            "total_volume": float(np.sum(volumes)),
+            "avg_volume": float(np.mean(volumes)),
+            "price_change": float(prices[-1] - prices[0]),
+            "price_change_percent": float((prices[-1] / prices[0] - 1) * 100),
+            "volatility": float((high_max - low_min) / low_min * 100),
             "period": period_name,
             "data_points": len(prices)
         }

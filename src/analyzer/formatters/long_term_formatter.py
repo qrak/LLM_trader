@@ -71,45 +71,53 @@ class LongTermFormatter:
         
         return ""
     
+    SMA_PERIODS = (20, 50, 100, 200)
+    VOLUME_SMA_PERIODS = (20, 50)
+
+    def _format_items_for_periods(self, data: dict, periods: tuple, key_template: str, 
+                                  format_fn, item_template: str) -> str:
+        """Generic helper for formatting period-based items."""
+        items = []
+        for period in periods:
+            key = key_template.format(period=period)
+            if key in data and data[key] is not None:
+                items.append(item_template.format(period=period, value=format_fn(data[key])))
+        return items
+
     def _format_sma_section(self, long_term_data: dict) -> str:
         """Format Simple Moving Averages section."""
-        sma_items = []
-        for period in [20, 50, 100, 200]:
-            key = f'sma_{period}'
-            if key in long_term_data:
-                sma_items.append(f"SMA{period}: {self.format_utils.format_value(long_term_data[key])}")
-        
-        if sma_items:
-            return "## Simple Moving Averages:\n" + " | ".join(sma_items)
-        return ""
+        items = self._format_items_for_periods(
+            long_term_data, 
+            self.SMA_PERIODS, 
+            "sma_{period}", 
+            self.format_utils.format_value, 
+            "SMA{period}: {value}"
+        )
+        return "## Simple Moving Averages:\n" + " | ".join(items) if items else ""
     
     def _format_volume_sma_section(self, long_term_data: dict) -> str:
         """Format Volume SMA section."""
-        volume_sma_items = []
-        for period in [20, 50]:
-            key = f'volume_sma_{period}'
-            if key in long_term_data:
-                volume_sma_items.append(f"Vol SMA{period}: {self.format_utils.format_value(long_term_data[key])}")
-        
-        if volume_sma_items:
-            return "## Volume Moving Averages:\n" + " | ".join(volume_sma_items)
-        return ""
+        items = self._format_items_for_periods(
+            long_term_data, 
+            self.VOLUME_SMA_PERIODS, 
+            "volume_sma_{period}", 
+            self.format_utils.format_value, 
+            "Vol SMA{period}: {value}"
+        )
+        return "## Volume Moving Averages:\n" + " | ".join(items) if items else ""
     
     def _format_price_position_section(self, long_term_data: dict, current_price: float) -> str:
         """Format price position relative to moving averages."""
-        position_items = []
-        
-        for period in [20, 50, 100, 200]:
+        items = []
+        for period in self.SMA_PERIODS:
             key = f'sma_{period}'
             if key in long_term_data and long_term_data[key]:
                 sma_value = long_term_data[key]
                 percentage = ((current_price - sma_value) / sma_value) * 100
                 direction = "above" if percentage > 0 else "below"
-                position_items.append(f"SMA{period}: {self.format_utils.fmt(abs(percentage))}% {direction}")
+                items.append(f"SMA{period}: {self.format_utils.fmt(abs(percentage))}% {direction}")
         
-        if position_items:
-            return "## Price Position vs SMAs:\n" + " | ".join(position_items)
-        return ""
+        return "## Price Position vs SMAs:\n" + " | ".join(items) if items else ""
     
     def _format_daily_indicators_section(self, long_term_data: dict, current_price: float) -> str:
         """Format daily timeframe indicators."""
