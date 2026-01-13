@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 
-from src.utils.dataclass_utils import SerializableMixin
+from src.utils.data_utils import SerializableMixin
 
 
 @dataclass(slots=True)

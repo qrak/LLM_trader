@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from datetime import datetime
-from src.utils.array_utils import get_last_valid_value, get_last_n_valid, safe_array_to_scalar
+from src.utils.data_utils import get_last_valid_value, get_last_n_valid, safe_array_to_scalar
 from src.trading.statistics_calculator import StatisticsCalculator, TradingStatistics
 from src.analyzer.market_metrics_calculator import MarketMetricsCalculator
 from src.notifiers.base_notifier import BaseNotifier

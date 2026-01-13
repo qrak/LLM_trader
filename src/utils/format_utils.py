@@ -5,12 +5,26 @@ Contains all shared formatting functions and utilities.
 This module has NO dependencies on analyzer module to avoid circular imports.
 """
 import numpy as np
+import pandas as pd
 from datetime import datetime
+from typing import List, TYPE_CHECKING
 
-
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.analyzer.data_processor import DataProcessor
+
+
+def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> List[datetime]:
+    """Convert numpy array of millisecond timestamps to list of datetime objects.
+    
+    Uses pandas for ~10x faster vectorized conversion compared to list comprehension.
+    
+    Args:
+        timestamps_ms: Numpy array of timestamps in milliseconds
+        
+    Returns:
+        List of datetime objects
+    """
+    return pd.to_datetime(timestamps_ms, unit='ms').to_pydatetime().tolist()
 
 
 class FormatUtils:

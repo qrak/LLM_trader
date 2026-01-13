@@ -9,6 +9,7 @@ import aiohttp
 from .data_fetcher import DataFetcher
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.format_utils import timestamps_from_ms_array
 from src.platforms.alternative_me import AlternativeMeAPI
 
 
@@ -133,7 +134,7 @@ class MarketDataCollector:
             
             # Convert timestamps once here for reuse across all components
             try:
-                context.timestamps = [datetime.fromtimestamp(ts / 1000) for ts in context.ohlcv_candles[:, 0]]
+                context.timestamps = timestamps_from_ms_array(context.ohlcv_candles[:, 0])
             except Exception as e:
                 self.logger.warning(f"Could not extract timestamps from OHLCV data: {e}")
                 context.timestamps = None

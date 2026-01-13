@@ -6,7 +6,7 @@ from typing import Optional
 import re
 import numpy as np
 from src.logger.logger import Logger
-from src.utils.array_utils import get_last_valid_value
+from src.utils.data_utils import get_last_valid_value
 
 
 class TechnicalFormatter:
