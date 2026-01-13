@@ -10,15 +10,17 @@ from src.logger.logger import Logger
 class MarketDataProcessor:
     """Handles processing and normalization of market data."""
     
-    def __init__(self, logger: Logger, unified_parser=None):
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+    def __init__(self, logger: Logger, unified_parser=None, format_utils=None):
+        if format_utils is None:
+            format_utils = unified_parser.format_utils if unified_parser else None
+        if format_utils is None:
+            raise ValueError("format_utils is required")
         self.logger = logger
-        self.parser = unified_parser
+        self.format_utils = format_utils
     
     def normalize_timestamp(self, timestamp_field) -> float:
         """Convert various timestamp formats to a float timestamp."""
-        return self.parser.parse_timestamp(timestamp_field)
+        return self.format_utils.parse_timestamp(timestamp_field)
     
     def extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
         """Extract top cryptocurrency symbols from CoinGecko data."""

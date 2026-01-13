@@ -39,7 +39,6 @@ from src.logger.logger import Logger
 from src.config.loader import config
 from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.analysis_context import AnalysisContext
-from src.analyzer.data_processor import DataProcessor
 from src.analyzer.data_fetcher import DataFetcher
 from src.utils.format_utils import FormatUtils
 from src.platforms.ai_providers.mock import MockClient
@@ -83,8 +82,7 @@ async def main():
     print(f"{'='*60}\n")
 
     # Initialize core utilities
-    data_processor = DataProcessor()
-    format_utils = FormatUtils(data_processor)
+    format_utils = FormatUtils()
     unified_parser = UnifiedParser(logger=logger, format_utils=format_utils)
     ti_factory = TechnicalIndicatorsFactory()
     technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils, ti_factory=ti_factory)
@@ -189,7 +187,6 @@ async def main():
         technical_calculator=technical_calculator,
         format_utils=format_utils,
         config=config,
-        data_processor=data_processor,
         overview_formatter=overview_formatter,
         long_term_formatter=long_term_formatter,
         market_formatter=market_formatter,

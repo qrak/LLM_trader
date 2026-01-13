@@ -90,7 +90,7 @@ class LongTermFormatter:
             long_term_data, 
             self.SMA_PERIODS, 
             "sma_{period}", 
-            self.format_utils.format_value, 
+            self.format_utils.fmt, 
             "SMA{period}: {value}"
         )
         return "## Simple Moving Averages:\n" + " | ".join(items) if items else ""
@@ -101,7 +101,7 @@ class LongTermFormatter:
             long_term_data, 
             self.VOLUME_SMA_PERIODS, 
             "volume_sma_{period}", 
-            self.format_utils.format_value, 
+            self.format_utils.fmt, 
             "Vol SMA{period}: {value}"
         )
         return "## Volume Moving Averages:\n" + " | ".join(items) if items else ""
@@ -127,7 +127,7 @@ class LongTermFormatter:
         if 'daily_rsi' in long_term_data:
             rsi_val = long_term_data['daily_rsi']
             rsi_status = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
-            indicator_items.append(f"Daily RSI: {self.format_utils.format_value(rsi_val)} ({rsi_status})")
+            indicator_items.append(f"Daily RSI: {self.format_utils.fmt(rsi_val)} ({rsi_status})")
         
         # MACD
         if 'daily_macd_line' in long_term_data and 'daily_macd_signal' in long_term_data:
@@ -140,7 +140,7 @@ class LongTermFormatter:
         if 'daily_stoch_k' in long_term_data:
             stoch_val = long_term_data['daily_stoch_k']
             stoch_status = "Overbought" if stoch_val > 80 else "Oversold" if stoch_val < 20 else "Neutral"
-            indicator_items.append(f"Daily Stoch: {self.format_utils.format_value(stoch_val)} ({stoch_status})")
+            indicator_items.append(f"Daily Stoch: {self.format_utils.fmt(stoch_val)} ({stoch_status})")
         
         if indicator_items:
             return "## Daily Indicators:\n" + " | ".join(indicator_items)
@@ -161,7 +161,7 @@ class LongTermFormatter:
         else:
             strength = "Extremely Strong Trend"
         
-        return f"## Trend Strength (Daily ADX): {self.format_utils.format_value(adx_val)} ({strength})"
+        return f"## Trend Strength (Daily ADX): {self.format_utils.fmt(adx_val)} ({strength})"
     
     def _format_ichimoku_section(self, long_term_data: dict, current_price: float) -> str:
         """Format Ichimoku cloud analysis."""
@@ -170,11 +170,11 @@ class LongTermFormatter:
         # Tenkan and Kijun
         if 'ichimoku_tenkan' in long_term_data:
             tenkan = long_term_data['ichimoku_tenkan']
-            ichimoku_items.append(f"Tenkan: {self.format_utils.format_value(tenkan)}")
+            ichimoku_items.append(f"Tenkan: {self.format_utils.fmt(tenkan)}")
         
         if 'ichimoku_kijun' in long_term_data:
             kijun = long_term_data['ichimoku_kijun']
-            ichimoku_items.append(f"Kijun: {self.format_utils.format_value(kijun)}")
+            ichimoku_items.append(f"Kijun: {self.format_utils.fmt(kijun)}")
         
         # Cloud analysis
         if 'ichimoku_span_a' in long_term_data and 'ichimoku_span_b' in long_term_data:

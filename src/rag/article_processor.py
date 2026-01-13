@@ -44,7 +44,7 @@ class ArticleProcessor:
     def get_article_timestamp(self, article: Dict[str, Any]) -> float:
         """Extract timestamp from article in a consistent format."""
         published_on = article.get('published_on', 0)
-        return self.parser.parse_timestamp(published_on)
+        return self.format_utils.parse_timestamp(published_on)
     
     def format_article_date(self, article: Dict[str, Any]) -> str:
         """Format article date in a consistent way."""

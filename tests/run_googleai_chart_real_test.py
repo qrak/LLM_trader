@@ -40,7 +40,6 @@ from src.logger.logger import Logger
 from src.config.loader import config
 from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.analysis_context import AnalysisContext
-from src.analyzer.data_processor import DataProcessor
 from src.analyzer.data_fetcher import DataFetcher
 from src.utils.format_utils import FormatUtils
 from src.contracts.manager import ModelManager
@@ -120,8 +119,7 @@ async def main():
     print(f"{'='*60}\n")
 
     # Initialize core utilities
-    data_processor = DataProcessor()
-    format_utils = FormatUtils(data_processor)
+    format_utils = FormatUtils()
     unified_parser = UnifiedParser(logger=logger, format_utils=format_utils)
     ti_factory = TechnicalIndicatorsFactory()
     technical_calculator = TechnicalCalculator(logger=logger, format_utils=format_utils, ti_factory=ti_factory)

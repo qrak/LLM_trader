@@ -21,7 +21,6 @@ from src.utils.token_counter import TokenCounter
 from src.rag.article_processor import ArticleProcessor
 from src.parsing.unified_parser import UnifiedParser
 from src.utils.format_utils import FormatUtils
-from src.analyzer.data_processor import DataProcessor
 
 
 def load_random_btc_articles(num_articles: int = 5) -> List[Dict]:

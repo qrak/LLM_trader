@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
-from src.utils.serialize import serialize_for_json
+from src.utils.data_utils import serialize_for_json
 from .dataclasses import Position, TradeDecision
 from .statistics_calculator import TradingStatistics
 
