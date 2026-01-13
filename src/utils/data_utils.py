@@ -1,10 +1,3 @@
-"""Data utility functions for arrays and dataclass serialization.
-
-Consolidates:
-- Array extraction helpers (get_last_valid_value, get_last_n_valid, safe_array_to_scalar)
-- Dataclass serialization mixin (SerializableMixin)
-"""
-
 import dataclasses
 import numpy as np
 from datetime import datetime
@@ -13,10 +6,6 @@ from numpy.typing import NDArray
 
 T = TypeVar("T", bound="SerializableMixin")
 
-
-# =============================================================================
-# Array Utilities
-# =============================================================================
 
 def get_last_valid_value(
     arr: Union[NDArray, float, int, None],
@@ -120,10 +109,6 @@ def safe_array_to_scalar(
     except (IndexError, TypeError, ValueError):
         return default
 
-
-# =============================================================================
-# Dataclass Serialization
-# =============================================================================
 
 class SerializableMixin:
     """Mixin to add JSON serialization/deserialization to dataclasses.
