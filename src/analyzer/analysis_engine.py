@@ -241,29 +241,43 @@ class AnalysisEngine:
             if not await self._collect_market_data():
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
             
-            # Step 2 & 3: Parallelize Independent Heavy Tasks
-            # Task A: RAG (Network bound) - ~4s
-            # Task B: Technical Analysis + Chart Generation (CPU/IO bound) - ~4s
-            # Combined runtime: max(4, 4) = 4s (theoretical)
-            
             async def run_tech_and_chart():
-                # Perform technical analysis first (required for chart)
                 await self._perform_technical_analysis()
-                # Determine if chart is needed
                 has_chart_analysis = self.model_manager.supports_image_analysis(provider)
                 if has_chart_analysis:
                     return await self._generate_chart_image(), has_chart_analysis
                 return None, False
 
-            # Run parallel execution
-            # _enrich_market_context: Fetches news, Fear&Greed, Coin details
+            async def run_rag_analysis():
+                market_context = await self.rag_engine.retrieve_context(
+                    "current market news analysis trends",
+                    self.symbol,
+                    k=self.rag_engine.config.RAG_NEWS_LIMIT
+                )
+                
+                rag_urls = {}
+                try:
+                    rag_urls = self.rag_engine.context_builder.get_latest_article_urls()
+                except Exception as e:
+                    self.logger.warning(f"Could not retrieve article URLs from RAG engine: {e}")
+                
+                return market_context, rag_urls
+
             results = await asyncio.gather(
                 self._enrich_market_context(current_ticker=current_ticker),
-                run_tech_and_chart()
+                run_tech_and_chart(),
+                run_rag_analysis()
             )
             
-            # Unpack chart result from the second task (results[1])
             chart_image, has_chart_analysis = results[1]
+            market_context, rag_urls = results[2]
+            
+            self.article_urls.update(rag_urls)
+            
+            if market_context:
+                self.prompt_builder.add_custom_instruction(market_context)
+            else:
+                 self.logger.warning(f"No market context available for {self.symbol}")
             
             # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
             brain_context = None
@@ -299,15 +313,8 @@ class AnalysisEngine:
             self.logger.error(f"Failed to collect market data: {data_result['errors']}")
             return False
         
-        # Store article URLs
+        # Store article URLs (initial empty set, will be updated by parallel RAG task)
         self.article_urls = self.data_collector.article_urls
-        
-        # Add market context to prompt builder if available
-        market_context = data_result.get("market_context")
-        if market_context:
-            self.prompt_builder.add_custom_instruction(market_context)
-        else:
-            self.logger.warning(f"No market context available for {self.symbol}")
             
         return True
 

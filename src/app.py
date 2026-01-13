@@ -408,18 +408,24 @@ class CryptoTradingBot:
             # Default to 1 minute wait on error
             await self._interruptible_sleep(60)
     
-    async def _interruptible_sleep(self, seconds: float):
-        """Sleep in small chunks to allow responsive shutdown and force analysis."""
+    async def _interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True):
+        """Sleep in small chunks to allow responsive shutdown and force analysis.
+        
+        Args:
+            seconds: Duration to sleep
+            respect_force_analysis: If True, wake early on force analysis event (main loop only)
+        """
         chunk_size = 1.0  # Check every second
         elapsed = 0.0
         
-        # Clear force analysis flag before sleeping
-        self._force_analysis.clear()
+        # Only clear force analysis flag for main loop sleeps
+        if respect_force_analysis:
+            self._force_analysis.clear()
         
         try:
             while elapsed < seconds and self.running:
-                # Check for force analysis
-                if self._force_analysis.is_set():
+                # Check for force analysis (only if this sleep respects it)
+                if respect_force_analysis and self._force_analysis.is_set():
                     self._force_analysis.clear()
                     self.logger.info("Force analysis triggered - interrupting wait")
                     return
@@ -467,7 +473,7 @@ class CryptoTradingBot:
         try:
             while self.running:
                 # Wait for 1 hour (in chunks for responsiveness)
-                await self._interruptible_sleep(update_interval)
+                await self._interruptible_sleep(update_interval, respect_force_analysis=False)
                 
                 if not self.running:
                     break
