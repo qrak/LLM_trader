@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, TYPE_CHECKING
+from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
 import io
 
 from src.utils.timeframe_validator import TimeframeValidator
@@ -11,6 +11,7 @@ from src.logger.logger import Logger
 
 
 import numpy as np
+import asyncio
 
 if TYPE_CHECKING:
     from src.contracts.manager_factory import ModelManagerProtocol
@@ -240,11 +241,29 @@ class AnalysisEngine:
             if not await self._collect_market_data():
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
             
-            # Step 2: Enrich context with external data
-            await self._enrich_market_context(current_ticker=current_ticker)
+            # Step 2 & 3: Parallelize Independent Heavy Tasks
+            # Task A: RAG (Network bound) - ~4s
+            # Task B: Technical Analysis + Chart Generation (CPU/IO bound) - ~4s
+            # Combined runtime: max(4, 4) = 4s (theoretical)
             
-            # Step 3: Perform technical analysis
-            await self._perform_technical_analysis()
+            async def run_tech_and_chart():
+                # Perform technical analysis first (required for chart)
+                await self._perform_technical_analysis()
+                # Determine if chart is needed
+                has_chart_analysis = self.model_manager.supports_image_analysis(provider)
+                if has_chart_analysis:
+                    return await self._generate_chart_image(), has_chart_analysis
+                return None, False
+
+            # Run parallel execution
+            # _enrich_market_context: Fetches news, Fear&Greed, Coin details
+            results = await asyncio.gather(
+                self._enrich_market_context(current_ticker=current_ticker),
+                run_tech_and_chart()
+            )
+            
+            # Unpack chart result from the second task (results[1])
+            chart_image, has_chart_analysis = results[1]
             
             # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
             brain_context = None
@@ -254,7 +273,12 @@ class AnalysisEngine:
                 )
             
             # Step 4: Generate AI analysis
-            analysis_result = await self._generate_ai_analysis(provider, model, additional_context, previous_response, previous_indicators, position_context, performance_context, brain_context, last_analysis_time, dynamic_thresholds)
+            analysis_result = await self._generate_ai_analysis(
+                provider, model, additional_context, previous_response, 
+                previous_indicators, position_context, performance_context, 
+                brain_context, last_analysis_time, dynamic_thresholds,
+                precomputed_chart=(chart_image, has_chart_analysis) # Pass precomputed chart
+            )
             
             # Store the result for later publication
             self.last_analysis_result = analysis_result
@@ -361,19 +385,24 @@ class AnalysisEngine:
         performance_context: Optional[str] = None,
         brain_context: Optional[str] = None,
         last_analysis_time: Optional[str] = None,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None
+        dynamic_thresholds: Optional[Dict[str, Any]] = None,
+        precomputed_chart: Optional[Tuple[Optional[io.BytesIO], bool]] = None
     ) -> Dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
         
-        # Check if chart analysis is supported by the current provider
-        has_chart_analysis = self.model_manager.supports_image_analysis(provider)
-        chart_image: Optional[io.BytesIO] = None
-        
-        if has_chart_analysis:
-            chart_image = await self._generate_chart_image()
-            if chart_image is None:
-                has_chart_analysis = False
-                self.logger.warning("Chart generation failed, proceeding without chart analysis")
+        # Use precomputed chart if available, otherwise generate (fallback)
+        if precomputed_chart:
+            chart_image, has_chart_analysis = precomputed_chart
+        else:
+            # Fallback for synchronous calls or if parallel logic bypassed
+            has_chart_analysis = self.model_manager.supports_image_analysis(provider)
+            chart_image: Optional[io.BytesIO] = None
+            
+            if has_chart_analysis:
+                chart_image = await self._generate_chart_image()
+                if chart_image is None:
+                    has_chart_analysis = False
+                    self.logger.warning("Chart generation failed, proceeding without chart analysis")
         
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
