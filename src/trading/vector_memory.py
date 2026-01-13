@@ -552,6 +552,64 @@ class VectorMemoryService:
             self.logger.error(f"Failed to get active rules: {e}")
             return []
 
+    def get_relevant_rules(
+        self,
+        current_context: str,
+        n_results: int = 3,
+        min_similarity: float = 0.4
+    ) -> List[Dict[str, Any]]:
+        """Retrieve semantic rules relevant to current market context.
+
+        Uses vector similarity to find rules that match current conditions,
+        ensuring rules like "LONG in BULLISH" are only injected in bullish markets.
+
+        Args:
+            current_context: Description of current market conditions
+            n_results: Maximum rules to return
+            min_similarity: Minimum similarity threshold (0-1, default 0.4)
+
+        Returns:
+            List of dicts with rule_id, text, similarity, metadata
+        """
+        if not self._ensure_initialized():
+            return []
+
+        try:
+            count = self._semantic_rules_collection.count()
+            if count == 0:
+                return []
+
+            query_embedding = self._embedding_model.encode(current_context).tolist()
+
+            results = self._semantic_rules_collection.query(
+                query_embeddings=[query_embedding],
+                where={"active": True},
+                n_results=min(n_results * 2, count)  # Fetch extra, filter by threshold
+            )
+
+            rules = []
+            if results and results["ids"] and results["ids"][0]:
+                for i, rule_id in enumerate(results["ids"][0]):
+                    distance = results["distances"][0][i] if results["distances"] else 1.0
+                    similarity = 1 - distance  # Cosine distance to similarity
+
+                    if similarity < min_similarity:
+                        continue
+
+                    rules.append({
+                        "rule_id": rule_id,
+                        "text": results["documents"][0][i] if results["documents"] else "",
+                        "similarity": round(similarity * 100, 1),
+                        "metadata": results["metadatas"][0][i] if results["metadatas"] else {}
+                    })
+
+            rules.sort(key=lambda r: r["similarity"], reverse=True)
+            return rules[:n_results]
+
+        except Exception as e:
+            self.logger.error(f"Failed to get relevant rules: {e}")
+            return []
+
     @property
     def semantic_rule_count(self) -> int:
         """Get total number of stored semantic rules."""
