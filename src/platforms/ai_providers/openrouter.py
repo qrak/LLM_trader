@@ -4,59 +4,35 @@ Supports text-only and multimodal (text + image) requests with cost tracking.
 """
 import io
 import base64
-from typing import Optional, Dict, Any, List, TypedDict, Union
+import re
+from typing import Optional, Dict, Any, List, Union
 
 from PIL import Image
 from openrouter import OpenRouter
 
 from src.logger.logger import Logger
+from src.platforms.ai_providers.base import BaseAIClient, ResponseDict, UsageDict
 from src.utils.decorators import retry_api_call
 
 
-class UsageDict(TypedDict, total=False):
-    """Token usage and cost information from API response."""
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-    cost: float
-
-
-class ResponseDict(TypedDict, total=False):
-    """Type for API responses with usage tracking."""
-    error: str
-    choices: List[Dict[str, Any]]
-    usage: UsageDict
-    id: str
-    model: str
-
-
-class OpenRouterClient:
+class OpenRouterClient(BaseAIClient):
     """Client for handling OpenRouter API requests using the official SDK."""
 
     def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
+        super().__init__(logger)
         self.api_key = api_key
         self.base_url = base_url
-        self.logger = logger
         self._client: Optional[OpenRouter] = None
 
-    async def __aenter__(self):
-        """Async context manager entry."""
+    async def _initialize_client(self) -> None:
+        """Initialize the OpenRouter SDK client."""
         self._client = OpenRouter(api_key=self.api_key)
-        return self
-
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
-        """Async context manager exit."""
-        await self.close()
 
     async def close(self) -> None:
         """Close the SDK client."""
         if self._client:
-            try:
-                self.logger.debug("Closing OpenRouterClient SDK session")
-                # SDK handles cleanup internally
-                self._client = None
-            except Exception as e:
-                self.logger.error(f"Error closing OpenRouter SDK session: {e}")
+            self.logger.debug("Closing OpenRouterClient SDK session")
+            self._client = None
 
     def _ensure_client(self) -> OpenRouter:
         """Ensure a client exists and return it."""
@@ -66,7 +42,6 @@ class OpenRouterClient:
 
     def _detect_unsupported_param(self, error_msg: str) -> Optional[str]:
         """Detect which parameter caused the error from error message."""
-        import re
         match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
         if match:
             return match.group(1)
@@ -136,7 +111,7 @@ class OpenRouterClient:
         """
         client = self._ensure_client()
         try:
-            img_data = self._process_chart_image(chart_image)
+            img_data = self.process_chart_image(chart_image)
             base64_image = base64.b64encode(img_data).decode('utf-8')
             user_text = self._extract_user_text_from_messages(messages)
             multimodal_content = [
@@ -253,45 +228,18 @@ class OpenRouterClient:
                 multimodal_messages.append(message)
         return multimodal_messages
 
-    def _process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
-        """Process chart image and return as bytes."""
-        if isinstance(chart_image, io.BytesIO):
-            chart_image.seek(0)
-            img_data = chart_image.read()
-            chart_image.seek(0)
-            return img_data
-        elif isinstance(chart_image, str):
-            with open(chart_image, 'rb') as f:
-                return f.read()
-        else:
-            return chart_image
-
     def _process_image(self, image: Union[Image.Image, bytes, str]) -> bytes:
-        """Process image and return as bytes."""
+        """Process PIL Image and return as bytes."""
         if isinstance(image, Image.Image):
             img_buffer = io.BytesIO()
             image.save(img_buffer, format='PNG')
             return img_buffer.getvalue()
-        elif isinstance(image, bytes):
-            return image
-        elif isinstance(image, str):
-            with open(image, 'rb') as f:
-                return f.read()
-        else:
-            raise ValueError(f"Unsupported image type: {type(image)}")
+        return self.process_chart_image(image)
 
     def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
-        """Handle exceptions from OpenRouter API."""
-        error_message = str(exception)
-        if "quota" in error_message.lower() or "rate limit" in error_message.lower():
-            self.logger.error(f"Rate limit or quota exceeded: {error_message}")
-            return {"error": "rate_limit", "details": error_message}  # type: ignore
-        elif "authentication" in error_message.lower() or "api key" in error_message.lower():
-            self.logger.error(f"Authentication error: {error_message}")
-            return {"error": "authentication", "details": error_message}  # type: ignore
-        elif "timeout" in error_message.lower():
-            self.logger.error(f"Timeout error: {error_message}")
-            return {"error": "timeout", "details": error_message}  # type: ignore
-        else:
-            self.logger.error(f"Unexpected error: {error_message}")
-            return None
+        """Handle OpenRouter specific exceptions, falling back to common handler."""
+        result = self.handle_common_errors(exception)
+        if result:
+            return result
+        self.logger.error(f"Unexpected OpenRouter error: {exception}")
+        return None

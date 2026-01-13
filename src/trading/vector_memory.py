@@ -428,6 +428,51 @@ class VectorMemoryService:
         except Exception:
             return self._collection.count()
 
+    def get_all_experiences(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Retrieve all experiences without vector similarity search.
+        
+        Args:
+            limit: Maximum number of records to return.
+            where: Optional metadata filter dict.
+            
+        Returns:
+            List of dicts with id, document, metadata, etc.
+        """
+        if not self._ensure_initialized():
+            return []
+            
+        try:
+            # Default filter to exclude UPDATE entries if not specified
+            query_where = where if where else {"outcome": {"$ne": "UPDATE"}}
+            
+            results = self._collection.get(
+                where=query_where,
+                limit=limit,
+                include=["metadatas", "documents"]
+            )
+            
+            experiences = []
+            if results and results["ids"]:
+                for i, doc_id in enumerate(results["ids"]):
+                    meta = results["metadatas"][i] if results["metadatas"] else {}
+                    doc = results["documents"][i] if results["documents"] else ""
+                    
+                    experiences.append({
+                        "id": doc_id,
+                        "document": doc,
+                        "similarity": 0, # No similarity score for direct retrieval
+                        "recency": 0,
+                        "hybrid_score": 0,
+                        "metadata": meta
+                    })
+            
+            return experiences
+            
+        except Exception as e:
+            self.logger.error(f"Failed to retrieve all experiences: {e}")
+            return []
+
+
     def store_semantic_rule(
         self,
         rule_id: str,

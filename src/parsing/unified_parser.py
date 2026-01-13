@@ -34,44 +34,37 @@ class UnifiedParser:
     def parse_ai_response(self, raw_text: str) -> Dict[str, Any]:
         """
         Parse AI model response from raw string to structured data.
-        Supports all AI providers: OpenRouter, Google AI, LM Studio.
+        Requires models to produce valid JSON (no heuristic parsing for low-quality models).
         """
         try:
-            cleaned_text = self._clean_tool_response_tags(raw_text)
-            
-            if "```json" in cleaned_text:
-                json_start = cleaned_text.find("```json") + 7
-                json_end = cleaned_text.find("```", json_start)
+            if "```json" in raw_text:
+                json_start = raw_text.find("```json") + 7
+                json_end = raw_text.find("```", json_start)
                 if json_end > json_start:
                     try:
-                        result = json.loads(cleaned_text[json_start:json_end].strip())
+                        result = json.loads(raw_text[json_start:json_end].strip())
                         return self._normalize_numeric_fields(result)
                     except json.JSONDecodeError:
                         pass
             
-            first_brace = cleaned_text.find('{')
+            first_brace = raw_text.find('{')
             if first_brace != -1:
                 depth = 0
-                for i in range(first_brace, len(cleaned_text)):
-                    if cleaned_text[i] == '{':
+                for i in range(first_brace, len(raw_text)):
+                    if raw_text[i] == '{':
                         depth += 1
-                    elif cleaned_text[i] == '}':
+                    elif raw_text[i] == '}':
                         depth -= 1
                         if depth == 0:
                             try:
-                                result = json.loads(cleaned_text[first_brace:i+1])
+                                result = json.loads(raw_text[first_brace:i+1])
                                 return self._normalize_numeric_fields(result)
                             except json.JSONDecodeError:
                                 pass
                             break
             
-            heuristic = self._heuristic_extract_analysis_from_text(cleaned_text)
-            if heuristic:
-                self.logger.debug("Extracted analysis from markdown text")
-                return self._normalize_numeric_fields(heuristic)
-            
-            self.logger.warning(f"Unable to parse AI response, using fallback. Preview: {cleaned_text[:200]}")
-            return self._create_fallback_response(cleaned_text)
+            self.logger.warning(f"Unable to parse AI response, using fallback. Preview: {raw_text[:200]}")
+            return self._create_fallback_response(raw_text)
             
         except Exception as e:
             self.logger.error(f"Failed to parse AI response: {e}")
@@ -246,89 +239,7 @@ class UnifiedParser:
     
 
     
-    def _clean_tool_response_tags(self, text: str) -> str:
-        """Remove tool_response tags from AI responses."""
-        if "<tool_response>" in text:
-            self.logger.warning("Found tool_response tags in response, cleaning up")
-            cleaned = re.sub(r'<tool_response>[\s\n]*</tool_response>|<tool_response>|</tool_response>', '', text)
-            return re.sub(r'\n\s*\n', '\n', cleaned).strip()
-        return text
 
-    def _heuristic_extract_analysis_from_text(self, text: str) -> Optional[Dict[str, Any]]:
-        """Attempt to extract a minimal `analysis` object from plain text.
-
-        This provides graceful degradation when the model returns a natural
-        language analysis instead of strict JSON. It only extracts a few key
-        fields (current_price, RSI, ADX, summary) and leaves the rest for
-        downstream fallback handling.
-        """
-        if not text or len(text) < 100:
-            return None
-
-        def _find_currency(label_patterns: List[str]) -> Optional[float]:
-            for pat in label_patterns:
-                m = re.search(pat + r"\s*\$?([0-9,]+(?:\.[0-9]+)?)", text, flags=re.IGNORECASE)
-                if m:
-                    try:
-                        return float(m.group(1).replace(',', ''))
-                    except Exception:
-                        return None
-            return None
-
-        def _find_number(label_patterns: List[str]) -> Optional[float]:
-            for pat in label_patterns:
-                m = re.search(pat + r"\s*([0-9]+(?:\.[0-9]+)?)", text, flags=re.IGNORECASE)
-                if m:
-                    try:
-                        return float(m.group(1))
-                    except Exception:
-                        return None
-            return None
-
-        analysis: Dict[str, Any] = {}
-
-        current_price = _find_currency([
-            r"\*\*Current Price:\*\*",  # Markdown bold
-            r"Current Price:",
-            r"Current price",
-            r"price is"
-        ])
-        if current_price is not None:
-            analysis['current_price'] = current_price
-
-        rsi = _find_number([
-            r"\*\*Momentum \(RSI\):\*\*",
-            r"RSI\(14\):",
-            r"RSI:",
-            r"rsi "
-        ])
-        if rsi is not None:
-            analysis['rsi'] = rsi
-
-        adx = _find_number([
-            r"\*\*Trend Strength \(ADX\):\*\*",
-            r"Trend Strength \(ADX\):",
-            r"ADX:",
-            r"trend strength \(adx\)"
-        ])
-        if adx is not None:
-            analysis['trend_strength'] = adx
-
-        summary = None
-        m = re.search(r"\*\*What this means:(.*?)\n\n", text)
-        if m:
-            summary = m.group(1).strip()
-        else:
-            m2 = re.split(r"\n\n|## |### ", text)
-            if m2 and len(m2[0]) > 20:
-                summary = m2[0].strip()
-
-        if summary:
-            analysis['summary'] = summary
-
-        if analysis:
-            return {"analysis": analysis}
-        return None
     
     def _normalize_numeric_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Ensure numeric fields are properly typed at the data source."""

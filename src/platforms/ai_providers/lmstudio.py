@@ -3,36 +3,31 @@ LM Studio client implementation using the official LM Studio Python SDK.
 Supports text-only and multimodal (text + image) requests for local inference.
 """
 import io
+import re
 from typing import Optional, Dict, Any, List, Union
 
 import lmstudio as lms
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.openrouter import ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
 from src.utils.decorators import retry_api_call
 
 
-class LMStudioClient:
+class LMStudioClient(BaseAIClient):
     """Client for handling LM Studio API requests using the official SDK."""
 
     def __init__(self, base_url: str, logger: Logger) -> None:
+        super().__init__(logger)
         self.base_url = base_url
-        self.logger = logger
         self._client: Optional[lms.AsyncClient] = None
 
-    async def __aenter__(self):
-        """Async context manager entry."""
-        self._client = lms.AsyncClient(base_url=self.base_url)
-        return self
-
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
-        """Async context manager exit."""
-        await self.close()
+    async def _initialize_client(self) -> None:
+        """Initialize the LM Studio SDK client."""
+        self._client = lms.AsyncClient(api_host=self._get_api_host())
 
     async def close(self) -> None:
         """Close the SDK client."""
         if self._client:
-            # No persistent client to close with the new per-request client pattern
             self.logger.debug("LMStudioClient SDK session does not require explicit closing.")
 
     def _get_api_host(self) -> str:
@@ -105,7 +100,7 @@ class LMStudioClient:
         """
         api_host = self._get_api_host()
         try:
-            img_data = self._process_chart_image(chart_image)
+            img_data = self.process_chart_image(chart_image)
 
             async with lms.AsyncClient(api_host=api_host) as client:
                 self.logger.debug(f"Sending chart analysis request to LM Studio SDK with model: {model} (host={api_host})")
@@ -222,71 +217,33 @@ class LMStudioClient:
         if "top_k" in model_config:
             config_dict["top_k"] = model_config["top_k"]
         if config_dict:
-            # Smart retry loop to handle unsupported parameters
-            # Some SDK versions or models might reject specific params like 'top_k' or 'top_p'
             while config_dict:
                 try:
                     return lms.LlmPredictionConfig(**config_dict)
                 except TypeError as e:
                     error_str = str(e)
-                    # Extract the invalid argument name from error message
-                    # Error format usually: "__init__() got an unexpected keyword argument 'x'"
-                    # Using .lower() to handle "Unexpected" vs "unexpected"
                     if "unexpected keyword argument" in error_str.lower():
-                        import re
                         match = re.search(r"argument '([^']+)'", error_str)
                         if match:
                             bad_arg = match.group(1)
                             self.logger.warning(f"LM Studio SDK rejected parameter '{bad_arg}', retrying without it.")
                             del config_dict[bad_arg]
                             continue
-                    
-                    # If we can't parse the error or it's something else, stop trying
-                    # Log as warning since we fallback to default config which usually works
                     self.logger.warning(f"Failed to build LlmPredictionConfig: {e}. Falling back to default config.")
                     break
-                    
         return None
 
     def _convert_sdk_response(self, response) -> ResponseDict:
         """Convert SDK response to ResponseDict format."""
         content = str(response) if response else ""
-        return {
-            "choices": [{
-                "message": {
-                    "content": content,
-                    "role": "assistant"
-                }
-            }],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-            }
-        }
-
-    def _process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
-        """Process chart image and return as bytes."""
-        if isinstance(chart_image, io.BytesIO):
-            chart_image.seek(0)
-            img_data = chart_image.read()
-            chart_image.seek(0)
-            return img_data
-        elif isinstance(chart_image, str):
-            with open(chart_image, 'rb') as f:
-                return f.read()
-        else:
-            return chart_image
+        return self.create_response(
+            content=content,
+            usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+        )
 
     def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
-        """Handle exceptions from LM Studio API."""
+        """Handle LM Studio specific exceptions, falling back to common handler."""
         error_message = str(exception)
-        
-        # Check for specific LM Studio/GPU errors
-        if "rate limit" in error_message.lower():
-             self.logger.warning(f"Rate limit exceeded: {error_message}")
-             return {"error": "rate_limit", "details": error_message} # type: ignore
-             
         if "ErrorDeviceLost" in error_message or "vk::Queue::submit" in error_message:
             friendly_msg = (
                 "GPU Error detected on LM Studio server. "
@@ -294,18 +251,9 @@ class LMStudioClient:
                 "Try using a smaller model or reducing 'n_gpu_layers' in LM Studio."
             )
             self.logger.error(f"LM Studio GPU Crash: {friendly_msg}")
-            return {"error": "gpu_crash", "details": friendly_msg} # type: ignore
-
-        if "connection" in error_message.lower() or "ECONNRESET" in error_message:
-            friendly_msg = "Could not connect to LM Studio. Is the server running?"
-            self.logger.error(f"Connection error: {friendly_msg}")
-            return {"error": "connection", "details": friendly_msg} # type: ignore
-
-        if "timeout" in error_message.lower():
-            friendly_msg = "Request to LM Studio timed out."
-            self.logger.error(friendly_msg)
-            return {"error": "timeout", "details": friendly_msg} # type: ignore
-
-        # Generic fallback
+            return {"error": "gpu_crash", "details": friendly_msg}  # type: ignore
+        result = self.handle_common_errors(exception)
+        if result:
+            return result
         self.logger.error(f"LM Studio Error: {error_message}")
         return None

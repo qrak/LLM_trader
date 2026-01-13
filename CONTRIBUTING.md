@@ -15,6 +15,8 @@ Thank you for your interest in contributing!
 - Add tests for new features if possible
 - Be respectful and constructive in discussions
 
+By contributing to this project, you agree that your contributions will be licensed under the Apache License, Version 2.0.
+
 ## Issues & Feature Requests
 - Use GitHub Issues to report bugs or request features
 - Please provide clear steps to reproduce bugs

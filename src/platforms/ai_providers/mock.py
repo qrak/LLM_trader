@@ -1,12 +1,13 @@
+import io
 import json
 import random
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.openrouter import ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
 
 
-class MockClient:
+class MockClient(BaseAIClient):
     """Mock AI provider used for local prompt testing.
 
     This client emulates provider APIs used by the project and returns
@@ -16,18 +17,17 @@ class MockClient:
     """
 
     def __init__(self, api_key: str = "", base_url: str = "", logger: Optional[Logger] = None):
+        super().__init__(logger or Logger("mock_client", logger_debug=False))
         self.api_key = api_key
         self.base_url = base_url
-        self.logger = logger
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
-        await self.close()
+    async def _initialize_client(self) -> None:
+        """Mock client doesn't need initialization."""
+        pass
 
     async def close(self) -> None:
-        return None
+        """Mock client doesn't need cleanup."""
+        pass
 
     def _extract_last_close_hint(self, messages: List[Dict[str, Any]]) -> Optional[float]:
         """Try to find a TEST_HINT in messages with last_close value."""
@@ -138,52 +138,20 @@ class MockClient:
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close)
 
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "content": content
-                    }
-                }
-            ]
-        }
+        return self.create_response(content)
 
-    async def chat_completion_with_chart_analysis(self, *args, **kwargs) -> Optional[ResponseDict]:
-        """
-        Emulate chart analysis supporting both GoogleAI and OpenRouter signatures.
-        
-        Signatures:
-        1. OpenRouter: (model: str, messages: list, chart_image, model_config)
-        2. GoogleAI: (messages: list, chart_image, model_config, model=...)
-        """
-        messages = []
-        
-        # Determine signature based on first argument type
-        if len(args) > 0:
-            if isinstance(args[0], str): # Signature 1: model is first
-                if len(args) > 1:
-                    messages = args[1]
-            elif isinstance(args[0], list): # Signature 2: messages is first
-                messages = args[0]
-                
-        # Fallback to kwargs if explicitly passed
-        if not messages and "messages" in kwargs:
-            messages = kwargs["messages"]
-
+    async def chat_completion_with_chart_analysis(
+        self,
+        model: str,
+        messages: List[Dict[str, Any]],
+        chart_image: Union[io.BytesIO, bytes, str],
+        model_config: Dict[str, Any]
+    ) -> Optional[ResponseDict]:
+        """Emulate chart analysis with deterministic responses."""
         last_close = self._extract_last_close_hint(messages)
-        # Pass has_chart=True to include chart specific text in the response
         content = self._synthesize_response(last_close, has_chart=True)
-
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "content": content
-                    }
-                }
-            ]
-        }
+        return self.create_response(content)
 
     async def console_stream(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
-        # Simulate streaming by returning the full content immediately
+        """Simulate streaming by returning the full content immediately."""
         return await self.chat_completion(model, messages, model_config)

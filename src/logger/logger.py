@@ -155,3 +155,12 @@ class Logger(logging.Logger):
         new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
         open(new_file, 'a').close()
+
+    def close(self) -> None:
+        """Close all handlers and release resources."""
+        for handler in self.handlers[:]:
+            try:
+                handler.close()
+                self.removeHandler(handler)
+            except Exception:
+                pass

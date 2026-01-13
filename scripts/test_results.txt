@@ -1,0 +1,30 @@
+[01/13/26 22:33:20] INFO     Initializing VectorMemoryService...                                                                                                 vector_memory.py:58
+[01/13/26 22:33:22] INFO     VectorMemoryService initialized: 4 experiences stored                                                                               vector_memory.py:76
+================================================================================
+TEST 1: Semantic Search - Similar Experience Retrieval
+================================================================================
++--------------------- Traceback (most recent call last) ---------------------+
+| D:\qrak\PythonScripts\LLM_trader\scripts\test_semantic_flow.py:27 in        |
+| <module>                                                                    |
+|                                                                             |
+|   24 )                                                                      |
+|   25                                                                        |
+|   26 if experiences:                                                        |
+| > 27     print(f"\u2713 Found {len(experiences)} similar experiences")           |
+|   28     for i, exp in enumerate(experiences):                              |
+|   29         meta = exp["metadata"]                                         |
+|   30         print(f"  {i+1}. [{exp['similarity']:.0f}% match] {meta['outco |
+|                                                                             |
+| C:\Users\Kuruť\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1250 |
+| .py:19 in encode                                                            |
+|                                                                             |
+|    16                                                                       |
+|    17 class IncrementalEncoder(codecs.IncrementalEncoder):                  |
+|    18     def encode(self, input, final=False):                             |
+| >  19         return codecs.charmap_encode(input,self.errors,encoding_table |
+|    20                                                                       |
+|    21 class IncrementalDecoder(codecs.IncrementalDecoder):                  |
+|    22     def decode(self, input, final=False):                             |
++-----------------------------------------------------------------------------+
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position
+0: character maps to <undefined>
