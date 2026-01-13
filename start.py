@@ -171,7 +171,7 @@ class CompositionRoot:
         format_utils = FormatUtils()
         sentence_splitter = SentenceSplitter(logger=self.logger)
         ti_factory = TechnicalIndicatorsFactory()
-        unified_parser = UnifiedParser(self.logger)
+        unified_parser = UnifiedParser(self.logger, format_utils=format_utils)
         
         # Initialize ArticleProcessor
         article_processor = ArticleProcessor(

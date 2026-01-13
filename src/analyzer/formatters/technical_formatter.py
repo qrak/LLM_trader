@@ -367,6 +367,7 @@ class TechnicalFormatter:
         td_seq = td.get('td_sequential')
         if td_seq is None:
             return ""
+        
         td_val = get_last_valid_value(td_seq)
         if td_val is None:
             return ""

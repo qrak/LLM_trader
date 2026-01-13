@@ -57,8 +57,11 @@ class TradingBrainService:
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}
         self._cache_trade_count: int = 0
-        self._trade_count: int = 0
         self._reflection_interval: int = 10
+        
+        # Initialize trade count from persistent storage
+        # This ensures reflection triggers consistently across restarts
+        self._trade_count: int = self.vector_memory.trade_count
     
     def update_from_closed_trade(
         self,
