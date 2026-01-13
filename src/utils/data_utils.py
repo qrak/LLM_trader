@@ -20,6 +20,10 @@ def get_last_valid_value(
     Returns:
         Last valid (non-NaN) float value, or default if none found.
     """
+    # Handle scalar values directly
+    if isinstance(arr, (int, float)):
+        return float(arr) if not np.isnan(arr) else default
+
     if len(arr) == 0:
         return default
 
