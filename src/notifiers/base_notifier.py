@@ -109,6 +109,22 @@ class BaseNotifier(ABC):
         }
         return color_map.get(action, 'grey'), emoji_map.get(action, '📊')
 
+    @staticmethod
+    def get_pnl_styling(pnl_pct: float) -> Tuple[str, str]:
+        """Get color key and emoji based on PnL percentage.
+
+        Args:
+            pnl_pct: Profit and Loss percentage
+
+        Returns:
+            Tuple of (color_key, emoji)
+        """
+        if pnl_pct > 0:
+            return 'green', '📈'
+        elif pnl_pct < 0:
+            return 'red', '📉'
+        return 'grey', '➡️'
+
 
     def calculate_position_pnl(
             self,

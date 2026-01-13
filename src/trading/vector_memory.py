@@ -539,17 +539,28 @@ class VectorMemoryService:
 
         return "\n".join(lines)
 
+    def _get_trade_metadatas(self, exclude_updates: bool = True) -> List[Dict[str, Any]]:
+        """Retrieve metadatas for all stored trades, handling filtering."""
+        if not self._ensure_initialized():
+            return []
+            
+        all_experiences = self._collection.get(include=["metadatas"])
+        if not all_experiences or not all_experiences["ids"] or not all_experiences["metadatas"]:
+            return []
+            
+        metas = all_experiences["metadatas"]
+        if exclude_updates:
+            return [m for m in metas if m.get("outcome") != "UPDATE"]
+        return metas
+
     def compute_confidence_stats(self) -> Dict[str, Dict[str, Any]]:
         """Compute confidence level statistics from all stored experiences.
 
         Returns:
             Dict with HIGH/MEDIUM/LOW keys containing win rates, trade counts, avg P&L.
         """
-        if not self._ensure_initialized():
-            return {}
-
-        all_experiences = self._collection.get(include=["metadatas"])
-        if not all_experiences or not all_experiences["ids"]:
+        metas = self._get_trade_metadatas()
+        if not metas:
             return {}
 
         stats = {
@@ -558,11 +569,7 @@ class VectorMemoryService:
             "LOW": {"total_trades": 0, "winning_trades": 0, "pnl_sum": 0.0},
         }
 
-        for meta in all_experiences["metadatas"]:
-            # Skip UPDATE entries - they are intermediate states, not final outcomes
-            if meta.get("outcome") == "UPDATE":
-                continue
-            
+        for meta in metas:
             confidence = meta.get("confidence", "MEDIUM").upper()
             if confidence not in stats:
                 confidence = "MEDIUM"
@@ -593,11 +600,8 @@ class VectorMemoryService:
         Returns:
             Dict with LOW/MEDIUM/HIGH keys for ADX buckets.
         """
-        if not self._ensure_initialized():
-            return {}
-
-        all_experiences = self._collection.get(include=["metadatas"])
-        if not all_experiences or not all_experiences["ids"]:
+        metas = self._get_trade_metadatas()
+        if not metas:
             return {}
 
         buckets = {
@@ -606,10 +610,7 @@ class VectorMemoryService:
             "HIGH": {"level": "ADX>25", "trades": []},
         }
 
-        for meta in all_experiences["metadatas"]:
-            # Skip UPDATE entries - intermediate states, not final outcomes
-            if meta.get("outcome") == "UPDATE":
-                continue
+        for meta in metas:
             
             adx = meta.get("adx_at_entry", meta.get("adx", 0))
             pnl = meta.get("pnl_pct", 0)
@@ -647,11 +648,8 @@ class VectorMemoryService:
         Returns:
             Dict with factor_bucket keys (e.g., trend_alignment_HIGH).
         """
-        if not self._ensure_initialized():
-            return {}
-
-        all_experiences = self._collection.get(include=["metadatas"])
-        if not all_experiences or not all_experiences["ids"]:
+        metas = self._get_trade_metadatas()
+        if not metas:
             return {}
 
         factor_names = [
@@ -673,7 +671,7 @@ class VectorMemoryService:
                     "scores": [],
                 }
 
-        for meta in all_experiences["metadatas"]:
+        for meta in metas:
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
 

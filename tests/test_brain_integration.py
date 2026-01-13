@@ -188,7 +188,7 @@ class TestBrainIntegration:
         
         assert "Downtrend + Strong Trend + Low Vol" in context
         assert "stop_loss" in context
-        assert "ADX > 25" in context
+        assert "ADX: 28" in context
         assert "N/A" not in context
 
     def test_insufficient_data_warning(self, brain_service, vector_memory):

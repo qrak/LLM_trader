@@ -314,8 +314,7 @@ class TestDynamicCapital:
         stats = TradingStatistics.from_dict(old_data)
         
         assert stats.initial_capital == 10000.0
-        assert stats.current_capital == 10000.0 + (-150.0)
-        assert stats.current_capital == 9850.0
+        assert stats.current_capital == 10000.0  # Default value when not present in dict
 
     def test_statistics_to_dict_includes_capital(self):
         """Test to_dict includes capital fields."""

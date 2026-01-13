@@ -142,12 +142,7 @@ class ConsoleNotifier(BaseNotifier):
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
             hours_held = self.calculate_time_held(position.entry_time)
 
-            if pnl_pct > 0:
-                emoji = "📈"
-            elif pnl_pct < 0:
-                emoji = "📉"
-            else:
-                emoji = "➡️"
+            _, emoji = self.get_pnl_styling(pnl_pct)
 
             print("\n" + "=" * 60)
             print(f"{emoji} OPEN {position.direction} POSITION - {position.symbol}")
