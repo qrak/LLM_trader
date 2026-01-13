@@ -129,13 +129,27 @@ class TradingStrategy:
             f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%, Fee: ${closing_fee:.4f}"
         )
         
+        # Retrieve entry decision from trade history for brain learning
+        entry_decision = None
+        try:
+            entry_decision = self.persistence.get_entry_decision_for_position(
+                self.current_position.entry_time
+            )
+            if entry_decision:
+                reasoning_preview = entry_decision.reasoning[:500] if entry_decision.reasoning else "(no reasoning)"
+                self.logger.debug(f"Retrieved entry decision with reasoning: {reasoning_preview}...")
+            else:
+                self.logger.warning("Could not retrieve entry decision from trade history")
+        except Exception as e:
+            self.logger.error(f"Error retrieving entry decision: {e}")
+        
         # Update trading brain with closed trade insights
         try:
             self.brain_service.update_from_closed_trade(
                 position=self.current_position,
                 close_price=current_price,
                 close_reason=reason,
-                entry_decision=None,  # Could be loaded from history if needed
+                entry_decision=entry_decision,
                 market_conditions=market_conditions
             )
         except Exception as e:

@@ -162,6 +162,53 @@ class TradingPersistence:
         
         return filtered[:n]
     
+    def get_entry_decision_for_position(self, entry_time: datetime) -> Optional[TradeDecision]:
+        """Retrieve the entry decision from trade history for a given position.
+        
+        Args:
+            entry_time: The entry_time of the position to find
+            
+        Returns:
+            TradeDecision with the original entry reasoning, or None if not found
+        """
+        try:
+            history = self.load_trade_history()
+            entry_actions = {"BUY", "SELL"}
+            
+            # Search for BUY/SELL action matching the entry_time
+            for decision_dict in history:
+                action = decision_dict.get("action", "")
+                timestamp_str = decision_dict.get("timestamp", "")
+                
+                if action in entry_actions and timestamp_str:
+                    decision_time = datetime.fromisoformat(timestamp_str)
+                    
+                    # Match by timestamp (allowing 1 second tolerance for floating point precision)
+                    time_diff = abs((decision_time - entry_time).total_seconds())
+                    if time_diff < 1.0:
+                        # Reconstruct TradeDecision from dictionary
+                        return TradeDecision(
+                            timestamp=decision_time,
+                            symbol=decision_dict.get("symbol", "BTC/USDC"),
+                            action=action,
+                            confidence=decision_dict.get("confidence", "MEDIUM"),
+                            price=decision_dict.get("price", 0.0),
+                            stop_loss=decision_dict.get("stop_loss"),
+                            take_profit=decision_dict.get("take_profit"),
+                            position_size=decision_dict.get("position_size", 0.0),
+                            quote_amount=decision_dict.get("quote_amount", 0.0),
+                            quantity=decision_dict.get("quantity", 0.0),
+                            fee=decision_dict.get("fee", 0.0),
+                            reasoning=decision_dict.get("reasoning", "")
+                        )
+            
+            self.logger.warning(f"Could not find entry decision for position at {entry_time}")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving entry decision: {e}")
+            return None
+    
     def save_statistics(self, stats: TradingStatistics) -> None:
         """Save trading statistics to disk."""
         try:

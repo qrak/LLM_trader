@@ -5,8 +5,7 @@ if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.openrouter import ResponseDict
-from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
+from src.platforms.ai_providers import ResponseDict, OpenRouterClient, GoogleAIClient, LMStudioClient
 from src.utils.token_counter import TokenCounter
 from src.contracts.manager_factory import ModelManagerProtocol
 from src.factories import ProviderFactory
@@ -413,9 +412,9 @@ class ModelManager(ModelManagerProtocol):
         self.logger.info(f"Attempting with Google AI {tier_info} API (model: {effective_model})")
         
         if chart:
-            response = await client.chat_completion_with_chart_analysis(messages, cast(Any, chart_image), config, model=effective_model)
+            response = await client.chat_completion_with_chart_analysis(effective_model, messages, cast(Any, chart_image), config)
         else:
-            response = await client.chat_completion(messages, config, model=effective_model)
+            response = await client.chat_completion(effective_model, messages, config)
         
         # If free tier is overloaded/rate-limited and paid client is available, retry with paid API
         error_type = response.get("error") if response else None
@@ -423,9 +422,9 @@ class ModelManager(ModelManagerProtocol):
             error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
             self.logger.warning(f"Google AI free tier {error_reason}, retrying with paid API key")
             if chart:
-                response = await self.google_paid_client.chat_completion_with_chart_analysis(messages, cast(Any, chart_image), config, model=effective_model)
+                response = await self.google_paid_client.chat_completion_with_chart_analysis(effective_model, messages, cast(Any, chart_image), config)
             else:
-                response = await self.google_paid_client.chat_completion(messages, config, model=effective_model)
+                response = await self.google_paid_client.chat_completion(effective_model, messages, config)
             
             if self._is_valid_response(response):
                 self.logger.info(f"Successfully used paid Google AI API after free tier {error_reason}")
@@ -701,7 +700,7 @@ class ModelManager(ModelManagerProtocol):
     async def _try_google_api(self, messages: List[Dict[str, str]]) -> Optional[ResponseDict]:
         """Use Google Studio API as fallback"""
         self.logger.warning("OpenRouter rate limit hit or LM Studio/OpenRouter failed. Switching to Google Studio API...")
-        response_json = await self.google_client.chat_completion(messages, self.google_config)
+        response_json = await self.google_client.chat_completion(self.google_model, messages, self.google_config)
 
         if not response_json or not self._is_valid_response(response_json):
             self.logger.error("Google Studio API request failed or returned invalid response")

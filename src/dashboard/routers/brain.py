@@ -142,13 +142,36 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         # If query provided, retrieve similar experiences
         if query:
             experiences = vector_memory.retrieve_similar_experiences(query, k=limit, where=where_filter)
-            result["experiences"] = experiences
         else:
-            # Get all experiences (excluding UPDATE)
-            experiences = vector_memory.retrieve_similar_experiences(
-                "trading market conditions", k=limit, use_decay=False, where=where_filter
-            )
-            result["experiences"] = experiences
+            # Get all experiences (excluding UPDATE) using the new method
+            experiences = vector_memory.get_all_experiences(limit=limit, where=where_filter)
+
+        # Apply sorting
+        sort_by = request.query_params.get("sort_by", "date")
+        order = request.query_params.get("order", "desc")
+        reverse = (order == "desc")
+
+        def get_sort_key(item):
+            meta = item.get("metadata", {})
+            if sort_by == "date":
+                return meta.get("timestamp", "")
+            elif sort_by == "similarity":
+                return item.get("similarity", 0)
+            elif sort_by == "pnl":
+                return meta.get("pnl_pct", 0)
+            elif sort_by == "outcome":
+                return meta.get("outcome", "")
+            elif sort_by == "confidence":
+                # Map confidence strings to numeric values for sorting
+                conf_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                return conf_map.get(meta.get("confidence", "LOW"), 0)
+            elif sort_by == "direction":
+                return meta.get("direction", "")
+            return 0
+
+        experiences.sort(key=get_sort_key, reverse=reverse)
+        result["experiences"] = experiences[:limit]  # Re-slice after sort if needed
+
             
     except Exception as e:
         result["error"] = str(e)

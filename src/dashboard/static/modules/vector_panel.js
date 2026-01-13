@@ -1,11 +1,28 @@
+// Sort state
+let currentSort = {
+    by: 'date',
+    order: 'desc'
+};
+
 export async function initVectorPanel() {
+    // Expose sort handler globally
+    window.vectorSort = async (field) => {
+        if (currentSort.by === field) {
+            currentSort.order = currentSort.order === 'desc' ? 'asc' : 'desc';
+        } else {
+            currentSort.by = field;
+            currentSort.order = 'desc'; // Default to desc for new field
+        }
+        await updateVectorData();
+    };
+
     // Initial load
     await updateVectorData();
 }
 
 export async function updateVectorData() {
     try {
-        const response = await fetch('/api/brain/vectors?limit=50');
+        const response = await fetch(`/api/brain/vectors?limit=50&sort_by=${currentSort.by}&order=${currentSort.order}`);
         const data = await response.json();
         
         renderVectorPanel(data);
@@ -116,18 +133,27 @@ function renderExperienceTable(experiences) {
         `;
     }).join('');
     
+    const getSortIndicator = (field) => {
+        if (currentSort.by !== field) return '<span style="opacity: 0.3">↕</span>';
+        return currentSort.order === 'asc' ? '↑' : '↓';
+    };
+    
     return `
+        <style>
+            .sortable-header { cursor: pointer; user-select: none; }
+            .sortable-header:hover { background-color: rgba(255, 255, 255, 0.05); }
+        </style>
         <table>
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Context</th>
-                    <th>Outcome</th>
-                    <th>P&L</th>
-                    <th>Confidence</th>
-                    <th>Direction</th>
-                    <th>Similarity</th>
-                    <th>Date</th>
+                    <th class="sortable-header" onclick="vectorSort('outcome')">Outcome ${getSortIndicator('outcome')}</th>
+                    <th class="sortable-header" onclick="vectorSort('pnl')">P&L ${getSortIndicator('pnl')}</th>
+                    <th class="sortable-header" onclick="vectorSort('confidence')">Confidence ${getSortIndicator('confidence')}</th>
+                    <th class="sortable-header" onclick="vectorSort('direction')">Direction ${getSortIndicator('direction')}</th>
+                    <th class="sortable-header" onclick="vectorSort('similarity')">Similarity ${getSortIndicator('similarity')}</th>
+                    <th class="sortable-header" onclick="vectorSort('date')">Date ${getSortIndicator('date')}</th>
                 </tr>
             </thead>
             <tbody>
