@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 from src.logger.logger import Logger
 from src.platforms.ai_providers import ResponseDict, OpenRouterClient, GoogleAIClient, LMStudioClient
 from src.utils.token_counter import TokenCounter
-from src.contracts.manager_factory import ModelManagerProtocol
+from src.contracts.model_contract import ModelManagerProtocol
 from src.factories import ProviderFactory
 
 
@@ -150,15 +150,6 @@ class ModelManager(ModelManagerProtocol):
                                     provider: Optional[str] = None, model: Optional[str] = None) -> str:
         """
         Send a prompt to the model and get a streaming response.
-        
-        Args:
-            prompt: User prompt
-            system_message: Optional system instructions
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-            
-        Returns:
-            Complete response text from the AI model
         """
         messages = self._prepare_messages(prompt, system_message)
         
@@ -192,16 +183,6 @@ class ModelManager(ModelManagerProtocol):
                                             model: Optional[str] = None) -> str:
         """
         Send a prompt with chart image for pattern analysis.
-        
-        Args:
-            prompt: User prompt
-            chart_image: Chart image data
-            system_message: Optional system instructions
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-            
-        Returns:
-            Response text from the AI model
         """
         messages = self._prepare_messages(prompt, system_message)
         
@@ -233,15 +214,6 @@ class ModelManager(ModelManagerProtocol):
     def _resolve_model(self, provider: str, model_override: Optional[str] = None) -> str:
         """
         Resolve the effective model name for a provider.
-        
-        Centralized model resolution eliminates repeated 'model if model else config.X' pattern.
-        
-        Args:
-            provider: Provider ID (googleai, openrouter, local)
-            model_override: Optional admin-specified model override
-            
-        Returns:
-            Effective model name to use
         """
         if model_override:
             return model_override
@@ -250,18 +222,11 @@ class ModelManager(ModelManagerProtocol):
         if metadata:
             return metadata['default_model']
         
-        # Fallback for unknown provider
         return "unknown-model"
     
     def _get_provider_name(self, provider: str) -> str:
         """
         Get the display name for a provider.
-        
-        Args:
-            provider: Provider ID (googleai, openrouter, local)
-            
-        Returns:
-            Display name for the provider
         """
         metadata = self.PROVIDER_METADATA.get(provider)
         return metadata['name'] if metadata else provider
@@ -269,12 +234,6 @@ class ModelManager(ModelManagerProtocol):
     def _get_provider_client(self, provider: str):
         """
         Get the client instance for a provider.
-        
-        Args:
-            provider: Provider ID (googleai, openrouter, local)
-            
-        Returns:
-            Client instance or None if not available
         """
         metadata = self.PROVIDER_METADATA.get(provider)
         return metadata['client'] if metadata else None
@@ -283,14 +242,6 @@ class ModelManager(ModelManagerProtocol):
                                  is_final_fallback: bool = False) -> ResponseDict:
         """
         Handle provider failure and create error response.
-        
-        Args:
-            provider: Provider name that failed
-            response_json: Response from the provider (may contain error details)
-            is_final_fallback: Whether this is the final fallback attempt
-            
-        Returns:
-            Error response dictionary
         """
         provider_name = self._get_provider_name(provider)
         
@@ -309,12 +260,6 @@ class ModelManager(ModelManagerProtocol):
     def _log_provider_action(self, provider: str, *, action: str, chart: bool = False, model: Optional[str] = None) -> None:
         """
         Log provider action using metadata.
-        
-        Args:
-            provider: Provider ID
-            action: "attempting" for fallback path, "using" for single-provider path
-            chart: Whether this is chart analysis
-            model: Optional model override
         """
         noun = "chart analysis" if chart else "request"
         provider_name = self._get_provider_name(provider)
@@ -345,18 +290,6 @@ class ModelManager(ModelManagerProtocol):
                                model: Optional[str] = None) -> Dict[str, Any]:
         """
         Invoke a provider for normal or chart analysis requests and return its raw response dict.
-        
-        Uses PROVIDER_METADATA for client/config lookup and _resolve_model for model resolution.
-        
-        Args:
-            provider: Provider name (googleai, local, openrouter)
-            messages: Message list for the AI model
-            chart: Whether this is a chart analysis request
-            chart_image: Optional chart image data
-            model: Optional model override (admin only)
-            
-        Returns:
-            Response dictionary from the provider
         """
         metadata = self.PROVIDER_METADATA.get(provider)
         if not metadata or not metadata['client']:
@@ -394,17 +327,6 @@ class ModelManager(ModelManagerProtocol):
                                       chart_image: Optional[Union[io.BytesIO, bytes, str]]) -> Dict[str, Any]:
         """
         Invoke Google AI provider with free/paid tier fallback logic.
-        
-        Args:
-            client: Google AI client instance
-            messages: Message list for the AI model
-            config: Google AI config dict
-            effective_model: Resolved model name
-            chart: Whether this is chart analysis
-            chart_image: Optional chart image data
-            
-        Returns:
-            Response dictionary from Google AI
         """
         # Determine if model supports free tier (only Flash variants)
         is_free_tier_model = "flash" in effective_model.lower()
@@ -482,17 +404,6 @@ class ModelManager(ModelManagerProtocol):
                                          model: Optional[str] = None) -> Dict[str, Any]:
         """
         Try a single provider for chart analysis.
-        
-        Consolidated method replacing _try_google_chart_analysis_only, _try_openrouter_chart_analysis_only.
-        
-        Args:
-            provider: Provider ID (googleai, openrouter)
-            messages: Message list for the AI model
-            chart_image: Chart image data
-            model: Optional model override
-            
-        Returns:
-            Response dictionary from the provider
         """
         self._log_provider_action(provider, action="using", chart=True, model=model)
         response_json = await self._invoke_provider(provider, messages, chart=True, chart_image=chart_image, model=model)
@@ -584,14 +495,6 @@ class ModelManager(ModelManagerProtocol):
                                   model: Optional[str] = None) -> Dict[str, Any]:
         """
         Get response from the selected provider(s).
-        
-        Args:
-            messages: Message list for the AI model
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-            
-        Returns:
-            Response dictionary from the AI provider
         """
         # Use admin-specified provider if provided
         effective_provider = provider if provider else self.provider
@@ -623,16 +526,6 @@ class ModelManager(ModelManagerProtocol):
     async def _try_single_provider(self, provider: str, messages: List[Dict[str, str]], model: Optional[str] = None) -> Dict[str, Any]:
         """
         Try a single provider for text analysis.
-        
-        Consolidated method replacing _try_google_only, _try_lm_studio_only, _try_openrouter_only.
-        
-        Args:
-            provider: Provider ID (googleai, local, openrouter)
-            messages: Message list for the AI model
-            model: Optional model override
-            
-        Returns:
-            Response dictionary from the provider
         """
         self._log_provider_action(provider, action="using", model=model)
         response_json = await self._invoke_provider(provider, messages, model=model)

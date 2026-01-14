@@ -4,7 +4,7 @@ Manages statistics state, recalculation, and context formatting.
 """
 
 from src.logger.logger import Logger
-from .persistence import TradingPersistence
+from src.managers.persistence_manager import PersistenceManager
 from .statistics_calculator import TradingStatistics, StatisticsCalculator
 
 
@@ -18,7 +18,7 @@ class TradingStatisticsService:
     - Provide current capital
     """
     
-    def __init__(self, logger: Logger, persistence: TradingPersistence):
+    def __init__(self, logger: Logger, persistence: PersistenceManager):
         """Initialize trading statistics service.
         
         Args:

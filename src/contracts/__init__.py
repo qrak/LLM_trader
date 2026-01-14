@@ -1,5 +1,5 @@
 """Contracts and protocols for dependency injection"""
 
-from .manager_factory import ModelManagerProtocol
+from .model_contract import ModelManagerProtocol
 
 __all__ = ["ModelManagerProtocol"]

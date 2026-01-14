@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
+from .dataclasses import VectorSearchResult
 
 
 class VectorMemoryService:
@@ -211,7 +212,7 @@ class VectorMemoryService:
             where: Optional metadata filter dict (e.g., {"outcome": "WIN"})
 
         Returns:
-            List of dicts with keys: id, document, similarity, hybrid_score, metadata
+            List of VectorSearchResult objects
         """
         if not self._ensure_initialized():
             return []
@@ -244,17 +245,17 @@ class VectorMemoryService:
                         recency = 1.0
                         hybrid_score = similarity
 
-                    experiences.append({
-                        "id": doc_id,
-                        "document": results["documents"][0][i] if results["documents"] else "",
-                        "similarity": round(similarity * 100, 1),
-                        "recency": round(recency * 100, 1),
-                        "hybrid_score": round(hybrid_score * 100, 1),
-                        "metadata": meta
-                    })
+                    experiences.append(VectorSearchResult(
+                        id=doc_id,
+                        document=results["documents"][0][i] if results["documents"] else "",
+                        similarity=round(similarity * 100, 1),
+                        recency=round(recency * 100, 1),
+                        hybrid_score=round(hybrid_score * 100, 1),
+                        metadata=meta
+                    ))
 
             if use_decay:
-                experiences.sort(key=lambda x: x["hybrid_score"], reverse=True)
+                experiences.sort(key=lambda x: x.hybrid_score, reverse=True)
                 experiences = experiences[:k]
 
             return experiences
@@ -285,7 +286,7 @@ class VectorMemoryService:
         if not experiences:
             return ""
         
-        max_similarity = max(exp["similarity"] for exp in experiences)
+        max_similarity = max(exp.similarity for exp in experiences)
         if len(experiences) <= 2 and max_similarity < 50:
             lines = [
                 f"RELEVANT PAST EXPERIENCES (Context: {current_context}):",
@@ -300,13 +301,13 @@ class VectorMemoryService:
             ]
         
         for i, exp in enumerate(experiences, 1):
-            meta = exp.get("metadata", {})
+            meta = exp.metadata
             outcome = meta.get("outcome", "UNKNOWN")
             pnl = meta.get("pnl_pct", 0)
             direction = meta.get("direction", "?")
             
             lines.append(
-                f"{i}. [SIMILARITY {exp['similarity']:.0f}%] {direction} trade"
+                f"{i}. [SIMILARITY {exp.similarity:.0f}%] {direction} trade"
             )
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
             lines.append(f"   - Context: {meta.get('market_context', 'N/A')}")
@@ -400,8 +401,8 @@ class VectorMemoryService:
         if not experiences:
             return {"win_rate": 0, "avg_pnl": 0, "total_trades": 0}
         
-        wins = sum(1 for e in experiences if e["metadata"].get("outcome") == "WIN")
-        pnls = [e["metadata"].get("pnl_pct", 0) for e in experiences]
+        wins = sum(1 for e in experiences if e.metadata.get("outcome") == "WIN")
+        pnls = [e.metadata.get("pnl_pct", 0) for e in experiences]
         
         return {
             "win_rate": (wins / len(experiences)) * 100 if experiences else 0,
@@ -436,7 +437,7 @@ class VectorMemoryService:
             where: Optional metadata filter dict.
             
         Returns:
-            List of dicts with id, document, metadata, etc.
+            List of VectorSearchResult objects
         """
         if not self._ensure_initialized():
             return []
@@ -457,14 +458,14 @@ class VectorMemoryService:
                     meta = results["metadatas"][i] if results["metadatas"] else {}
                     doc = results["documents"][i] if results["documents"] else ""
                     
-                    experiences.append({
-                        "id": doc_id,
-                        "document": doc,
-                        "similarity": 0, # No similarity score for direct retrieval
-                        "recency": 0,
-                        "hybrid_score": 0,
-                        "metadata": meta
-                    })
+                    experiences.append(VectorSearchResult(
+                        id=doc_id,
+                        document=doc,
+                        similarity=0, # No similarity score for direct retrieval
+                        recency=0,
+                        hybrid_score=0,
+                        metadata=meta
+                    ))
             
             return experiences
             

@@ -1,7 +1,7 @@
 """Protocol definition for ModelManager interface"""
 
 import io
-from typing import Protocol, Optional, Union, Tuple, TYPE_CHECKING
+from typing import Protocol, Optional, Union, Tuple, TYPE_CHECKING, Dict, List
 
 if TYPE_CHECKING:
     from src.utils.token_counter import TokenCounter
@@ -17,6 +17,19 @@ class ModelManagerProtocol(Protocol):
     
     token_counter: "TokenCounter"
     
+    async def send_prompt(
+        self, 
+        prompt: str, 
+        system_message: str = None, 
+        prepared_messages: List[Dict[str, str]] = None,
+        provider: Optional[str] = None, 
+        model: Optional[str] = None
+    ) -> str:
+        """
+        Send a prompt to the model and get a response.
+        """
+        ...
+
     async def send_prompt_streaming(
         self,
         prompt: str,
@@ -26,15 +39,6 @@ class ModelManagerProtocol(Protocol):
     ) -> str:
         """
         Send a prompt to the model and get a streaming response.
-        
-        Args:
-            prompt: User prompt
-            system_message: Optional system instructions
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-            
-        Returns:
-            Complete response text from the AI model
         """
         ...
     
@@ -48,28 +52,12 @@ class ModelManagerProtocol(Protocol):
     ) -> str:
         """
         Send a prompt with chart image for pattern analysis.
-        
-        Args:
-            prompt: User prompt
-            chart_image: Chart image data
-            system_message: Optional system instructions
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-            
-        Returns:
-            Response text from the AI model
         """
         ...
     
     def supports_image_analysis(self, provider_override: Optional[str] = None) -> bool:
         """
         Check if the selected provider supports image analysis.
-        
-        Args:
-            provider_override: Optional provider to check instead of default
-            
-        Returns:
-            True if image analysis is supported, False otherwise
         """
         ...
     
@@ -82,14 +70,6 @@ class ModelManagerProtocol(Protocol):
     ) -> Tuple[str, str]:
         """
         Return provider + model description for logging and telemetry.
-        
-        Args:
-            provider_override: Optional provider override
-            model_override: Optional model override
-            chart: Whether this is for chart analysis
-            
-        Returns:
-            Tuple of (provider_name, model_name)
         """
         ...
     
