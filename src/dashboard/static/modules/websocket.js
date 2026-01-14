@@ -157,14 +157,14 @@ function updateCountdownDisplay() {
     const element = document.getElementById('next-analysis');
     if (!element) return;
     if (!window._nextCheckUTC) {
-        element.textContent = 'Next analysis: --';
+        element.textContent = '--:--';
         return;
     }
     const now = new Date();
     const remaining = (window._nextCheckUTC.getTime() - now.getTime()) / 1000;
     if (remaining <= 0) {
-        element.textContent = 'Next analysis: soon...';
+        element.textContent = 'soon...';
     } else {
-        element.textContent = `Next analysis: ${formatDuration(remaining)}`;
+        element.textContent = formatDuration(remaining);
     }
 }

@@ -4,7 +4,7 @@ This module holds state that is updated by the trading bot and read by the dashb
 It enables WebSocket broadcasts and API endpoints to share live data.
 """
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Set
 import asyncio
 
@@ -41,7 +41,7 @@ class DashboardState:
     async def update_analysis_complete(self) -> None:
         """Signal that analysis has completed."""
         async with self._lock:
-            self.last_analysis_time = datetime.utcnow()
+            self.last_analysis_time = datetime.now(timezone.utc)
         await self._broadcast({"type": "analysis_complete"})
 
     async def update_api_costs(self, provider: str, cost: float) -> None:
@@ -68,8 +68,8 @@ class DashboardState:
         """Get current countdown state for REST API."""
         if not self.next_check_utc:
             return {"next_check_utc": None, "seconds_remaining": None}
-        now = datetime.utcnow()
-        remaining = (self.next_check_utc.replace(tzinfo=None) - now).total_seconds()
+        now = datetime.now(timezone.utc)
+        remaining = (self.next_check_utc.replace(tzinfo=timezone.utc) if self.next_check_utc.tzinfo is None else self.next_check_utc - now).total_seconds()
         return {
             "next_check_utc": self.next_check_utc.isoformat(),
             "seconds_remaining": max(0, int(remaining))

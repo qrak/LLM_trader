@@ -6,6 +6,7 @@ import { initVectorPanel, updateVectorData } from './modules/vector_panel.js';
 import { initFullscreen } from './modules/fullscreen.js';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js';
+import { initUI } from './modules/ui.js';
 
 const state = {
     isConnected: false,
@@ -36,21 +37,15 @@ function updateCostDisplay(data) {
     const total = data.total_session_cost || 0;
     const orCost = costs.openrouter || 0;
     const googleCost = costs.google || 0;
-    document.getElementById('cost-openrouter').textContent = formatCost(orCost);
-    if (orCost > 0) {
-        document.getElementById('cost-openrouter').style.color = '#f0883e';
-    } else {
-        document.getElementById('cost-openrouter').style.color = '#8b949e';
-    }
-    const googleEl = document.getElementById('cost-google');
-    if (googleCost > 0) {
-        googleEl.textContent = formatCost(googleCost) + ' (est.)';
-        googleEl.style.color = '#58a6ff';
-    } else {
-        googleEl.textContent = '$0.00';
-        googleEl.style.color = '#8b949e';
-    }
-    document.getElementById('cost-total').textContent = formatCost(total);
+    
+    // Update main total
+    document.getElementById('overview-cost').textContent = formatCost(total);
+    
+    // Update tooltip or detailed view if we add one, for now just ensures these elements exist if we want to show them
+    // The user requested removing LM Studio (free) from costs.
+    // We already have specific IDs in index.html for specific providers if we want to show them in a detail view, 
+    // but the request was "Overview with graph... Session Cost... I should have reset button". 
+    // The reset button is in HTML. We just need to make sure the costs are accurate.
 }
 
 async function refreshCosts() {
@@ -157,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initFullscreen();
     initPositionPanel();
     initWebSocket();
+    initUI();
     startCountdownLoop();
     updateAll();
     setInterval(updateAll, state.pollInterval);

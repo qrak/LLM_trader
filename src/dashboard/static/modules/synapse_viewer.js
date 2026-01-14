@@ -37,12 +37,12 @@ export function initSynapseNetwork() {
                 updateInterval: 25
             },
             barnesHut: {
-                gravitationalConstant: -4000,
-                centralGravity: 0.5,
-                springConstant: 0.08,
-                springLength: 100,
+                gravitationalConstant: -8000,
+                centralGravity: 0.1,
+                springConstant: 0.04,
+                springLength: 250,
                 damping: 0.4,
-                avoidOverlap: 0.3
+                avoidOverlap: 0.5
             }
         },
         layout: {
@@ -63,6 +63,12 @@ export function initSynapseNetwork() {
         network.setOptions({ physics: { enabled: false } });
         network.fit({ animation: false });
     });
+}
+
+export function fitNetwork() {
+    if (network) {
+        network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+    }
 }
 
 export async function updateSynapses() {

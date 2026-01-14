@@ -1,8 +1,7 @@
 /**
  * Fullscreen panel module - Opens panels in modal overlay.
- * Also handles panel visibility toggling.
  * 
- * IMPORTANT: For canvas-based charts (ApexCharts, vis-network), we MOVE the original
+ * For canvas-based charts (ApexCharts, vis-network), we MOVE the original
  * element to the fullscreen container instead of cloning, then move it back on close.
  */
 
@@ -10,17 +9,11 @@ let currentPanel = null;
 let originalParent = null;
 let originalNextSibling = null;
 
-/**
- * Initialize fullscreen functionality.
- */
 export function initFullscreen() {
     createModalContainer();
     attachPanelButtons();
 }
 
-/**
- * Create the modal container element.
- */
 function createModalContainer() {
     if (document.getElementById('fullscreen-modal')) return;
     const modal = document.createElement('div');
@@ -43,31 +36,28 @@ function createModalContainer() {
     });
 }
 
-/**
- * Attach expand and hide buttons to all panels.
- */
 function attachPanelButtons() {
     document.querySelectorAll('.panel').forEach(panel => {
         const header = panel.querySelector('.panel-header');
         if (!header) return;
         const panelId = panel.id || 'unknown';
+        if (panelId === 'unknown') return;
         if (header.querySelector('.panel-controls')) return;
         const controls = document.createElement('div');
         controls.className = 'panel-controls';
         controls.innerHTML = `
-            <button class="panel-btn hide-btn" onclick="window.togglePanel('${panelId}')" title="Hide panel">−</button>
             <button class="panel-btn expand-btn" onclick="window.openFullscreen('${panelId}')" title="Fullscreen">⛶</button>
         `;
         header.appendChild(controls);
     });
 }
 
-/**
- * Open a panel in fullscreen modal.
- */
 export function openFullscreen(panelId) {
     const panel = document.getElementById(panelId);
-    if (!panel) return;
+    if (!panel) {
+        console.error('Panel not found:', panelId);
+        return;
+    }
     const modal = document.getElementById('fullscreen-modal');
     const titleEl = panel.querySelector('.panel-header h3');
     const title = titleEl ? titleEl.textContent : 'Panel';
@@ -84,14 +74,13 @@ export function openFullscreen(panelId) {
         setTimeout(() => {
             resizeContent(panelId, contentEl);
         }, 50);
+    } else {
+        console.error('Content element not found for panel:', panelId, 'content ID:', contentId);
     }
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
 }
 
-/**
- * Get the content element ID for a panel.
- */
 function getContentId(panelId) {
     const mapping = {
         'panel-performance': 'performance-chart',
@@ -104,9 +93,6 @@ function getContentId(panelId) {
     return mapping[panelId] || null;
 }
 
-/**
- * Resize content after moving to fullscreen.
- */
 function resizeContent(panelId, contentEl) {
     if (panelId === 'panel-performance') {
         const chart = window.performanceChart;
@@ -139,12 +125,9 @@ function resizeContent(panelId, contentEl) {
     }
 }
 
-/**
- * Close the fullscreen modal.
- */
 export function closeFullscreen() {
     const modal = document.getElementById('fullscreen-modal');
-    if (!modal.classList.contains('active')) return;
+    if (!modal || !modal.classList.contains('active')) return;
     const body = document.getElementById('fullscreen-body');
     const contentEl = body.firstElementChild;
     const panelId = currentPanel;
@@ -165,9 +148,6 @@ export function closeFullscreen() {
     originalNextSibling = null;
 }
 
-/**
- * Restore content size after returning from fullscreen.
- */
 function restoreContent(panelId, contentEl) {
     if (panelId === 'panel-performance') {
         const chart = window.performanceChart;
@@ -177,7 +157,7 @@ function restoreContent(panelId, contentEl) {
             setTimeout(() => {
                 chart.updateOptions({
                     chart: {
-                        height: 220,
+                        height: 450,
                         width: undefined
                     }
                 }, true, true);
@@ -198,20 +178,5 @@ function restoreContent(panelId, contentEl) {
     }
 }
 
-/**
- * Toggle panel visibility.
- */
-export function togglePanel(panelId) {
-    const panel = document.getElementById(panelId);
-    if (!panel) return;
-    const isHidden = panel.classList.toggle('panel-hidden');
-    const hideBtn = panel.querySelector('.hide-btn');
-    if (hideBtn) {
-        hideBtn.textContent = isHidden ? '+' : '−';
-        hideBtn.title = isHidden ? 'Show panel' : 'Hide panel';
-    }
-}
-
 window.openFullscreen = openFullscreen;
 window.closeFullscreen = closeFullscreen;
-window.togglePanel = togglePanel;

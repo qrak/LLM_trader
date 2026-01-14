@@ -213,11 +213,12 @@ POSITION SIZING FORMULA (calculate before finalizing - SHOW YOUR WORK in RISK/RE
 - FORMAT: "Position: base [X] - alignment [Y] = [Z]"
 
 MACRO TIMEFRAME CONFLICT (CRITICAL):
+MACRO TIMEFRAME CONFLICT (CRITICAL):
 If the 365D macro trend is BEARISH and you are going LONG (or vice versa):
 - Explicitly state: "⚠️ 365D MACRO CONFLICT: [direction]" in your analysis
-- Require 5+ strong confluences (not 3) to proceed
-- If you proceed anyway, justify the override with specific catalyst
-If both 365D and Weekly macro conflict with your trade: HOLD is MANDATORY unless exceptional news catalyst overrides.
+- Require 4+ strong confluences (standard is 3) or a clear REVERSAL structure (e.g. divergence, pattern break)
+- Differentiate between "Structural Bearishness" (don't buy) and "Overextended Bullishness" (valid short opportunity)
+If both 365D and Weekly macro conflict with your trade: Exercise EXTREME CAUTION. Only proceed if you identify a clear "Cycle Top/Bottom" or "Major Reversal" setup with 5+ confluences. Otherwise, HOLD is preferred.
 
 TRADING SIGNALS & CONFIDENCE:
 - BUY ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
