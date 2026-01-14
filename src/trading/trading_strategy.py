@@ -5,7 +5,8 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from .dataclasses import Position, TradeDecision
-from .persistence import TradingPersistence
+from src.managers.persistence_manager import PersistenceManager
+from src.contracts.risk_contract import RiskManagerProtocol
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
@@ -21,10 +22,11 @@ class TradingStrategy:
     def __init__(
         self,
         logger: Logger,
-        persistence: TradingPersistence,
+        persistence: PersistenceManager,
         brain_service: TradingBrainService,
         statistics_service: TradingStatisticsService,
         memory_service: TradingMemoryService,
+        risk_manager: RiskManagerProtocol,
         config: Any = None,
         position_extractor=None,
     ):
@@ -36,6 +38,7 @@ class TradingStrategy:
             brain_service: Brain service for learning and insights
             statistics_service: Statistics service for performance metrics
             memory_service: Memory service for recent decision context
+            risk_manager: Risk Manager for position sizing and SL/TP
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
         """
@@ -47,6 +50,7 @@ class TradingStrategy:
         self.brain_service = brain_service
         self.statistics_service = statistics_service
         self.memory_service = memory_service
+        self.risk_manager = risk_manager
         self.config = config
         self.extractor = position_extractor
         
@@ -340,106 +344,34 @@ class TradingStrategy:
         direction = "LONG" if signal == "BUY" else "SHORT"
         market_conditions = market_conditions or {}
 
-        # Extract ATR for dynamic calculation (fallback to 2% of price)
-        atr = market_conditions.get("atr", current_price * 0.02)
-        atr_pct = market_conditions.get("atr_percentage", (atr / current_price) * 100)
-        adx = market_conditions.get("adx", 0.0)
-        rsi = market_conditions.get("rsi", 50.0)
-
-        # Determine volatility level for Brain learning
-        if atr_pct > 3:
-            volatility_level = "HIGH"
-        elif atr_pct < 1.5:
-            volatility_level = "LOW"
-        else:
-            volatility_level = "MEDIUM"
-
-        # Dynamic default calculation based on ATR (not hardcoded 2%/4%)
-        # Use 2x ATR for SL, 4x ATR for TP (2:1 R/R default)
-        dynamic_sl_distance = atr * 2
-        dynamic_tp_distance = atr * 4
-
-        if direction == "LONG":
-            dynamic_sl = current_price - dynamic_sl_distance
-            dynamic_tp = current_price + dynamic_tp_distance
-        else:  # SHORT
-            dynamic_sl = current_price + dynamic_sl_distance
-            dynamic_tp = current_price - dynamic_tp_distance
-
-        # Use AI-provided values if valid, otherwise use dynamic defaults
-        if stop_loss and stop_loss > 0:
-            final_sl = stop_loss
-            self.logger.debug(f"Using AI-provided SL: ${final_sl:,.2f}")
-        else:
-            final_sl = dynamic_sl
-            self.logger.info(f"Using dynamic SL (2x ATR): ${final_sl:,.2f}")
-
-        if take_profit and take_profit > 0:
-            final_tp = take_profit
-            self.logger.debug(f"Using AI-provided TP: ${final_tp:,.2f}")
-        else:
-            final_tp = dynamic_tp
-            self.logger.info(f"Using dynamic TP (4x ATR): ${final_tp:,.2f}")
-
-        # Circuit Breaker: Validate and clamp extreme values
-        sl_distance_raw = abs(current_price - final_sl) / current_price
-        tp_distance_raw = abs(final_tp - current_price) / current_price
-
-        # Clamp SL: min 0.5%, max 10%
-        if sl_distance_raw > 0.10:
-            self.logger.warning(f"SL distance {sl_distance_raw:.1%} exceeds 10% max, clamping")
-            if direction == "LONG":
-                final_sl = current_price * 0.90
-            else:
-                final_sl = current_price * 1.10
-        elif sl_distance_raw < 0.005:
-            self.logger.warning(f"SL distance {sl_distance_raw:.1%} below 0.5% min, expanding")
-            if direction == "LONG":
-                final_sl = current_price * 0.995
-            else:
-                final_sl = current_price * 1.005
-
-        # Validate SL/TP direction makes sense
-        if direction == "LONG":
-            if final_sl >= current_price:
-                self.logger.warning(f"Invalid SL for LONG ({final_sl} >= {current_price}), using dynamic")
-                final_sl = dynamic_sl
-            if final_tp <= current_price:
-                self.logger.warning(f"Invalid TP for LONG ({final_tp} <= {current_price}), using dynamic")
-                final_tp = dynamic_tp
-        else:  # SHORT
-            if final_sl <= current_price:
-                self.logger.warning(f"Invalid SL for SHORT ({final_sl} <= {current_price}), using dynamic")
-                final_sl = dynamic_sl
-            if final_tp >= current_price:
-                self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using dynamic")
-                final_tp = dynamic_tp
-
-        # Calculate final distances for Brain learning
-        sl_distance_pct = abs(current_price - final_sl) / current_price
-        tp_distance_pct = abs(final_tp - current_price) / current_price
-        rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0
-
-        # Position sizing (use AI value or confidence-based default)
-        if position_size and position_size > 0:
-            final_size_pct = position_size
-        else:
-            # Dynamic sizing based on confidence
-            confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
-            final_size_pct = confidence_map.get(confidence.upper(), 0.02)
-            self.logger.info(f"Using confidence-based size: {final_size_pct*100:.1f}%")
-
         # Calculate quantity based on CURRENT capital (not initial)
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
-        allocation = capital * final_size_pct
-        quantity = allocation / current_price
 
-        # Calculate entry fee for limit order (based on allocated capital, not quantity)
-        entry_fee = allocation * self.config.TRANSACTION_FEE_PERCENT
+        # Delegate Risk Calculation to RiskManager
+        risk_assessment = self.risk_manager.calculate_entry_parameters(
+            signal=signal,
+            current_price=current_price,
+            capital=capital,
+            confidence=confidence,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            position_size=position_size,
+            market_conditions=market_conditions
+        )
+
+        final_sl = risk_assessment.stop_loss
+        final_tp = risk_assessment.take_profit
+        final_size_pct = risk_assessment.size_pct
+        quantity = risk_assessment.quantity
+        entry_fee = risk_assessment.entry_fee
+        sl_distance_pct = risk_assessment.sl_distance_pct
+        tp_distance_pct = risk_assessment.tp_distance_pct
+        rr_ratio = risk_assessment.rr_ratio
+        volatility_level = risk_assessment.volatility_level
 
         self.logger.info(
             f"Position sizing: Capital=${capital:,.2f}, Size={final_size_pct*100:.2f}%, "
-            f"Allocation=${allocation:,.2f}, Quantity={quantity:.6f}"
+            f"Allocation=${risk_assessment.quote_amount:,.2f}, Quantity={quantity:.6f}"
         )
         self.logger.info(
             f"Risk metrics: SL={sl_distance_pct*100:.2f}%, TP={tp_distance_pct*100:.2f}%, R/R={rr_ratio:.2f}"
@@ -457,15 +389,15 @@ class TradingStrategy:
             symbol=symbol,
             confluence_factors=confluence_factors,
             entry_fee=entry_fee,
-            quote_amount=allocation,
+            quote_amount=risk_assessment.quote_amount,
             size_pct=final_size_pct,
-            atr_at_entry=atr,
+            atr_at_entry=market_conditions.get("atr", 0.0),
             volatility_level=volatility_level,
             sl_distance_pct=sl_distance_pct,
             tp_distance_pct=tp_distance_pct,
             rr_ratio_at_entry=rr_ratio,
-            adx_at_entry=adx,
-            rsi_at_entry=rsi,
+            adx_at_entry=market_conditions.get("adx", 0.0),
+            rsi_at_entry=market_conditions.get("rsi", 50.0),
         )
         self.persistence.save_position(self.current_position)
         self.logger.info(
@@ -483,7 +415,7 @@ class TradingStrategy:
             stop_loss=final_sl,
             take_profit=final_tp,
             position_size=final_size_pct,
-            quote_amount=allocation,
+            quote_amount=risk_assessment.quote_amount,
             quantity=quantity,
             fee=entry_fee,
             reasoning=reasoning,

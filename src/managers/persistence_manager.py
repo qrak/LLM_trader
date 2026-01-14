@@ -7,15 +7,17 @@ Follows Single Responsibility Principle by delegating calculations to other serv
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.data_utils import serialize_for_json
-from .dataclasses import Position, TradeDecision
-from .statistics_calculator import TradingStatistics
+
+if TYPE_CHECKING:
+    from src.trading.dataclasses import Position, TradeDecision
+    from src.trading.statistics_calculator import TradingStatistics
 
 
-class TradingPersistence:
+class PersistenceManager:
     """Pure persistence layer for trading data.
     
     Responsibilities:
@@ -40,7 +42,7 @@ class TradingPersistence:
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
     
-    def save_position(self, position: Optional[Position]) -> None:
+    def save_position(self, position: Optional["Position"]) -> None:
         """Save current position to disk."""
         try:
             if position is None:
@@ -81,11 +83,12 @@ class TradingPersistence:
         except Exception as e:
             self.logger.error(f"Error saving position: {e}")
     
-    def load_position(self) -> Optional[Position]:
+    def load_position(self) -> Optional["Position"]:
         """Load current position from disk."""
         if not self.positions_file.exists():
             return None
         try:
+            from src.trading.dataclasses import Position
             with open(self.positions_file, 'r') as f:
                 data = json.load(f)
                 cf_list = data.get("confluence_factors", [])
@@ -117,7 +120,7 @@ class TradingPersistence:
             self.logger.error(f"Error loading position: {e}")
             return None
     
-    def save_trade_decision(self, decision: TradeDecision) -> None:
+    def save_trade_decision(self, decision: "TradeDecision") -> None:
         """Save a trade decision to history."""
         try:
             history = self.load_trade_history()
@@ -162,7 +165,7 @@ class TradingPersistence:
         
         return filtered[:n]
     
-    def get_entry_decision_for_position(self, entry_time: datetime) -> Optional[TradeDecision]:
+    def get_entry_decision_for_position(self, entry_time: datetime) -> Optional["TradeDecision"]:
         """Retrieve the entry decision from trade history for a given position.
         
         Args:
@@ -172,6 +175,7 @@ class TradingPersistence:
             TradeDecision with the original entry reasoning, or None if not found
         """
         try:
+            from src.trading.dataclasses import TradeDecision
             history = self.load_trade_history()
             entry_actions = {"BUY", "SELL"}
             
@@ -209,7 +213,7 @@ class TradingPersistence:
             self.logger.error(f"Error retrieving entry decision: {e}")
             return None
     
-    def save_statistics(self, stats: TradingStatistics) -> None:
+    def save_statistics(self, stats: "TradingStatistics") -> None:
         """Save trading statistics to disk."""
         try:
             with open(self.statistics_file, 'w') as f:
@@ -218,8 +222,9 @@ class TradingPersistence:
         except Exception as e:
             self.logger.error(f"Error saving statistics: {e}")
     
-    def load_statistics(self) -> TradingStatistics:
+    def load_statistics(self) -> "TradingStatistics":
         """Load trading statistics from disk."""
+        from src.trading.statistics_calculator import TradingStatistics
         if not self.statistics_file.exists():
             return TradingStatistics()
         try:

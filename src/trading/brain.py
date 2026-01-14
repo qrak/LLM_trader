@@ -8,9 +8,9 @@ from collections import Counter
 from typing import Optional, Dict, Any, List
 
 from src.logger.logger import Logger
-from .persistence import TradingPersistence
+from src.managers.persistence_manager import PersistenceManager
 from .vector_memory import VectorMemoryService
-from .dataclasses import Position, TradeDecision
+from .dataclasses import Position, TradeDecision, VectorSearchResult
 
 
 class TradingBrainService:
@@ -26,7 +26,7 @@ class TradingBrainService:
     def __init__(
         self,
         logger: Logger,
-        persistence: TradingPersistence,
+        persistence: PersistenceManager,
         symbol: str = "BTC/USDC",
         timeframe: str = "4h",
         vector_memory: Optional[VectorMemoryService] = None
@@ -443,9 +443,9 @@ class TradingBrainService:
             return 0
         return sum(1 for _, score in confluence_factors if score > 50)
 
-    def _count_patterns(self, experiences: List[Dict], key_builder) -> Dict[str, int]:
+    def _count_patterns(self, experiences: List[Any], key_builder) -> Dict[str, int]:
         """Helper to count patterns in experiences."""
-        return Counter(key_builder(exp["metadata"]) for exp in experiences)
+        return Counter(key_builder(exp.metadata) for exp in experiences)
 
     def _trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize semantic rules.
@@ -487,10 +487,10 @@ class TradingBrainService:
                 "recent trading experiences", k=50, use_decay=True
             )
             pattern_wins = sum(1 for exp in all_pattern_experiences 
-                             if exp["metadata"].get("outcome") == "WIN" 
-                             and build_win_key(exp["metadata"]) == pattern_key)
+                             if exp.metadata.get("outcome") == "WIN" 
+                             and build_win_key(exp.metadata) == pattern_key)
             pattern_total = sum(1 for exp in all_pattern_experiences 
-                              if build_win_key(exp["metadata"]) == pattern_key)
+                              if build_win_key(exp.metadata) == pattern_key)
             
             if pattern_total > 0:
                 win_rate = pattern_wins / pattern_total

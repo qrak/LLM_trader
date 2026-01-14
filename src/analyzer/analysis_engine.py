@@ -14,7 +14,7 @@ import numpy as np
 import asyncio
 
 if TYPE_CHECKING:
-    from src.contracts.manager_factory import ModelManagerProtocol
+    from src.contracts.model_contract import ModelManagerProtocol
     from src.config.protocol import ConfigProtocol
     from src.rag import RagEngine
 

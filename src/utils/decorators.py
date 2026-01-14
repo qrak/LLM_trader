@@ -227,6 +227,7 @@ class _ApiRetryContext:
             return self._check_dict_response(response)
         # Handle SDK Pydantic response objects (duck-typing)
         return self._check_sdk_response(response)
+
     def _check_dict_response(self, response: Dict[str, Any]) -> bool:
         """Check dict-based response for retryable errors."""
         if response.get('error') and _should_retry_api_error(response['error']):
@@ -247,6 +248,7 @@ class _ApiRetryContext:
                     )
                     return True
         return False
+        
     def _check_sdk_response(self, response: Any) -> bool:
         """Check SDK Pydantic response object for retryable errors using duck-typing."""
         error = getattr(response, 'error', None)

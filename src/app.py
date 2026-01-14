@@ -5,6 +5,13 @@ from typing import Optional, Dict, Any
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
+from src.managers.persistence_manager import PersistenceManager
+from src.contracts.model_contract import ModelManagerProtocol
+from src.trading import (
+    TradingBrainService,
+    TradingStatisticsService,
+    TradingMemoryService
+)
 
 
 
@@ -28,10 +35,11 @@ class CryptoTradingBot:
         categories_api,
         alternative_me_api,
         cryptocompare_session,
-        persistence,
-        brain_service,
-        statistics_service,
-        memory_service,
+        persistence: PersistenceManager,
+        model_manager: ModelManagerProtocol,
+        brain_service: TradingBrainService,
+        statistics_service: TradingStatisticsService,
+        memory_service: TradingMemoryService,
         dashboard_state = None,
         discord_task: Optional[asyncio.Task] = None
     ):
@@ -62,6 +70,7 @@ class CryptoTradingBot:
         
         # Injected trading services
         self.persistence = persistence
+        self.model_manager = model_manager
         self.brain_service = brain_service
         self.statistics_service = statistics_service
         self.memory_service = memory_service

@@ -1,7 +1,6 @@
 """Trading module for automated trading decisions and position management."""
 
 from .dataclasses import Position, TradeDecision, TradingMemory
-from .persistence import TradingPersistence
 from .brain import TradingBrainService
 from .memory import TradingMemoryService
 from .statistics import TradingStatisticsService
@@ -16,7 +15,6 @@ __all__ = [
     'TradingMemory',
     'TradingStatistics',
     'StatisticsCalculator',
-    'TradingPersistence',
     'TradingBrainService',
     'TradingMemoryService',
     'TradingStatisticsService',

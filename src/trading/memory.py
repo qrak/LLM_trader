@@ -6,7 +6,7 @@ Handles short-term memory of trading decisions for AI context injection.
 from typing import Optional, List
 
 from src.logger.logger import Logger
-from .persistence import TradingPersistence
+from src.managers.persistence_manager import PersistenceManager
 from .dataclasses import TradingMemory, TradeDecision
 
 
@@ -19,7 +19,7 @@ class TradingMemoryService:
     - Provide formatted memory context for AI
     """
     
-    def __init__(self, logger: Logger, persistence: TradingPersistence, max_memory: int = 10):
+    def __init__(self, logger: Logger, persistence: PersistenceManager, max_memory: int = 10):
         """Initialize trading memory service.
         
         Args:

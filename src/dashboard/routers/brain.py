@@ -214,11 +214,12 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         reverse = (order == "desc")
 
         def get_sort_key(item):
-            meta = item.get("metadata", {})
+            # item is now a VectorSearchResult dataclass
+            meta = item.metadata
             if sort_by == "date":
                 return meta.get("timestamp", "")
             elif sort_by == "similarity":
-                return item.get("similarity", 0)
+                return item.similarity
             elif sort_by == "pnl":
                 return meta.get("pnl_pct", 0)
             elif sort_by == "outcome":
@@ -232,7 +233,20 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
             return 0
 
         experiences.sort(key=get_sort_key, reverse=reverse)
-        result["experiences"] = experiences[:limit]  # Re-slice after sort if needed
+        
+        # Convert VectorSearchResult dataclasses to dicts for JSON response
+        experiences_list = []
+        for exp in experiences[:limit]:
+            experiences_list.append({
+                "id": exp.id,
+                "document": exp.document,
+                "similarity": exp.similarity,
+                "recency": exp.recency,
+                "hybrid_score": exp.hybrid_score,
+                "metadata": exp.metadata
+            })
+        
+        result["experiences"] = experiences_list
 
             
     except Exception as e:

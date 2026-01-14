@@ -200,3 +200,32 @@ class TradingMemory(SerializableMixin):
         for item in data:
             memory.decisions.append(TradeDecision.from_dict(item))
         return memory
+
+
+@dataclass(slots=True)
+class VectorSearchResult(SerializableMixin):
+    """Represents a search result from VectorMemory."""
+    id: str
+    document: str
+    similarity: float
+    recency: float
+    hybrid_score: float
+    metadata: Dict[str, Any]
+
+
+@dataclass(slots=True)
+class RiskAssessment(SerializableMixin):
+    """Represents the calculated risk parameters for a trade."""
+    direction: str
+    entry_price: float
+    stop_loss: float
+    take_profit: float
+    quantity: float
+    size_pct: float
+    quote_amount: float
+    entry_fee: float
+    sl_distance_pct: float
+    tp_distance_pct: float
+    rr_ratio: float
+    volatility_level: str
+

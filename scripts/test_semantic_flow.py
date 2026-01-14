@@ -7,10 +7,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.logger.logger import Logger
 from src.trading.vector_memory import VectorMemoryService
 from src.trading.brain import TradingBrainService
-from src.trading.persistence import TradingPersistence
+from src.managers.persistence_manager import PersistenceManager
 
 logger = Logger(logger_name="Test", logger_debug=False)
-persistence = TradingPersistence(logger, data_dir="data/trading")
+persistence = PersistenceManager(logger, data_dir="data/trading")
 brain = TradingBrainService(logger, persistence, symbol="BTC/USDC", timeframe="4h")
 
 print("=" * 80)
@@ -26,8 +26,9 @@ experiences = brain.vector_memory.retrieve_similar_experiences(
 if experiences:
     print(f"[OK] Found {len(experiences)} similar experiences")
     for i, exp in enumerate(experiences):
-        meta = exp["metadata"]
-        print(f"  {i+1}. [{exp['similarity']:.0f}% match] {meta['outcome']} {meta['pnl_pct']:+.2f}%")
+        # exp is now a VectorSearchResult dataclass
+        meta = exp.metadata
+        print(f"  {i+1}. [{exp.similarity:.0f}% match] {meta['outcome']} {meta['pnl_pct']:+.2f}%")
         reasoning = meta.get("reasoning", "N/A")
         if reasoning and reasoning != "N/A":
             print(f"     Reasoning: {reasoning[:80]}...")

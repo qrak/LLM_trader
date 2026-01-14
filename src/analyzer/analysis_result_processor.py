@@ -7,7 +7,7 @@ from src.logger.logger import Logger
 from src.utils.data_utils import serialize_for_json, safe_tolist
 
 if TYPE_CHECKING:
-    from src.contracts.manager_factory import ModelManagerProtocol
+    from src.contracts.model_contract import ModelManagerProtocol
 
 
 class AnalysisResultProcessor:

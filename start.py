@@ -31,9 +31,12 @@ from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter
 from src.utils.format_utils import FormatUtils
-from src.contracts.manager import ModelManager
+from src.contracts.model_contract import ModelManagerProtocol
+from src.managers.model_manager import ModelManager
+from src.managers.persistence_manager import PersistenceManager
+from src.managers.risk_manager import RiskManager
 from src.trading import (
-    TradingStrategy, TradingPersistence, TradingBrainService,
+    TradingStrategy, TradingBrainService,
     TradingStatisticsService, TradingMemoryService, PositionExtractor
 )
 from src.dashboard.server import DashboardServer
@@ -388,7 +391,11 @@ class CompositionRoot:
         
         # Initialize trading services
         position_extractor = PositionExtractor(self.logger, unified_parser=unified_parser)
-        persistence = TradingPersistence(self.logger, data_dir="data/trading")
+        persistence = PersistenceManager(self.logger, data_dir="data/trading")
+        
+        # Initialize Risk Manager
+        risk_manager = RiskManager(self.logger, self.config)
+        
         brain_service = TradingBrainService(
             self.logger,
             persistence,
@@ -404,6 +411,7 @@ class CompositionRoot:
             brain_service=brain_service,
             statistics_service=statistics_service,
             memory_service=memory_service,
+            risk_manager=risk_manager,
             config=self.config,
             position_extractor=position_extractor
         )
@@ -466,6 +474,7 @@ class CompositionRoot:
             'alternative_me_api': alternative_me_api,
             'cryptocompare_session': cryptocompare_session,
             'persistence': persistence,
+            'model_manager': model_manager,
             'brain_service': brain_service,
             'statistics_service': statistics_service,
             'memory_service': memory_service,
