@@ -1,12 +1,14 @@
-import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js';
-import { initSynapseNetwork, updateSynapses } from './modules/synapse_viewer.js';
-import { updateLogs } from './modules/log_viewer.js';
-import { updateVisuals } from './modules/visuals.js';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js';
-import { initFullscreen } from './modules/fullscreen.js';
-import { initWebSocket, startCountdownLoop } from './modules/websocket.js';
-import { initPositionPanel, updatePositionData } from './modules/position_panel.js';
-import { initUI } from './modules/ui.js';
+import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=3.1';
+import { initSynapseNetwork, updateSynapses } from './modules/synapse_viewer.js?v=3.1';
+import { updateLogs, updatePromptTab, updateResponseTab } from './modules/log_viewer.js?v=3.1';
+import { updateVisuals } from './modules/visuals.js?v=3.1';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=3.1';
+import { initFullscreen } from './modules/fullscreen.js?v=3.1';
+import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=3.1';
+import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=3.1';
+import { initUI } from './modules/ui.js?v=3.1';
+import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=3.1';
+import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=3.1';
 
 const state = {
     isConnected: false,
@@ -133,6 +135,18 @@ function updateLastUpdated() {
     }
 }
 
+function togglePanelMinimize(panelId) {
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.toggle('minimized');
+        const btn = panel.querySelector('.toolbar-btn[title="Minimize"]');
+        if (btn) {
+            btn.textContent = panel.classList.contains('minimized') ? '+' : '−';
+            btn.title = panel.classList.contains('minimized') ? 'Expand' : 'Minimize';
+        }
+    }
+}
+
 async function updateAll() {
     await fetchBrainStatus();
     await fetchRules();
@@ -143,30 +157,64 @@ async function updateAll() {
     await updateVisuals();
     await updateVectorData();
     await updatePositionData();
+    await updateStatisticsData();
+    await updateNewsData();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    initPerformanceChart();
-    initSynapseNetwork();
-    initVectorPanel();
-    initFullscreen();
-    initPositionPanel();
-    initWebSocket();
-    initUI();
-    startCountdownLoop();
-    updateAll();
-    setInterval(updateAll, state.pollInterval);
+// Initialize application
+function initApp() {
+    console.log('Initializing Dashboard App...');
+    
+    // Make crucial functions global immediately
+    window.updateAll = updateAll;
     window.updatePerformance = () => updatePerformanceData();
     window.updateVisuals = () => updateVisuals();
     window.updateLogView = () => updateLogs();
     window.updateVectors = () => updateVectorData();
     window.updatePosition = () => updatePositionData(null, true);
+    window.updatePromptTab = () => updatePromptTab();
+    window.updateResponseTab = () => updateResponseTab();
+    window.updateStatisticsPanel = () => updateStatisticsData();
+    window.updateNewsPanel = () => updateNewsData();
     window.resetCosts = resetCosts;
     window.refreshCosts = refreshCosts;
     window.confirmResetCosts = confirmResetCosts;
-    document.addEventListener('analysis-complete', () => {
-        console.log('Analysis complete, refreshing...');
+    window.togglePanelMinimize = togglePanelMinimize;
+
+    try {
+        initPerformanceChart();
+        initSynapseNetwork();
+        initVectorPanel();
+        initFullscreen();
+        initPositionPanel();
+        initStatisticsPanel();
+        initNewsPanel();
+        initWebSocket();
+        initUI();
+        startCountdownLoop();
+        
+        // Initial update
         updateAll();
-    });
-});
+        
+        // Start polling
+        setInterval(updateAll, state.pollInterval);
+
+        // Listen for WS analysis complete
+        document.addEventListener('analysis-complete', () => {
+            console.log('Analysis complete, refreshing...');
+            updateAll();
+        });
+        
+        console.log('Dashboard App Initialized');
+    } catch (e) {
+        console.error('Error initializing dashboard:', e);
+    }
+}
+
+// Run init when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
+}
 

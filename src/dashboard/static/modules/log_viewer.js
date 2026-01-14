@@ -1,47 +1,64 @@
+/**
+ * Log viewer module - Handles prompt and response display.
+ */
+
+let cachedPrompt = null;
+let cachedResponse = null;
+
 export async function updateLogs() {
-    const type = document.getElementById('log-type').value;
-    const endpoint = type === 'prompt' ? '/api/monitor/last_prompt' : '/api/monitor/last_response';
-    const viewer = document.getElementById('log-viewer');
-    
+    // Legacy function - now we update dedicated tabs instead
+    await updatePromptTab();
+    await updateResponseTab();
+}
+
+export async function updatePromptTab() {
+    const viewer = document.getElementById('prompt-viewer');
+    const meta = document.getElementById('prompt-meta');
+    if (!viewer) return;
     try {
-        const response = await fetch(endpoint);
+        const response = await fetch('/api/monitor/last_prompt');
         const data = await response.json();
-        
-        let content = '';
-        if (type === 'prompt') {
-            content = data.prompt || 'No prompt available';
-        } else {
-            content = data.response || 'No response available';
-        }
-        
-        // Create formatted content with header and copy button
+        const content = data.prompt || 'No prompt available';
         const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
-        
-        // Render markdown for response, plain text for prompt
-        let formattedContent;
-        if (type === 'response' && content && window.marked) {
-            formattedContent = marked.parse(content);
+        if (meta) meta.textContent = `${source} | ${timestamp}`;
+        // Render prompt with markdown for better readability
+        if (content && window.marked) {
+            viewer.innerHTML = marked.parse(content);
+            viewer.classList.remove('prompt-content');
+            viewer.classList.add('discord-content');
         } else {
-            // Escape HTML and preserve formatting
-            formattedContent = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+            viewer.textContent = content;
         }
-        
-        viewer.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid #30363d;">
-                <span style="font-size: 10px; color: #8b949e;">${source} | ${timestamp}</span>
-                <button onclick="copyLogContent()" style="font-size: 10px; padding: 2px 8px;">📋 Copy</button>
-            </div>
-            <div id="log-content" style="overflow-y: auto; max-height: calc(100% - 40px);">
-                ${formattedContent}
-            </div>
-        `;
-        
-        // Store raw content for copying
-        viewer.dataset.rawContent = content;
-        
+        cachedPrompt = content;
     } catch (e) {
-        viewer.textContent = "Error fetching logs: " + e.message;
+        viewer.textContent = "Error fetching prompt: " + e.message;
+    }
+}
+
+export async function updateResponseTab() {
+    const viewer = document.getElementById('response-viewer');
+    const meta = document.getElementById('response-meta');
+    if (!viewer) return;
+    try {
+        const response = await fetch('/api/monitor/last_response');
+        const data = await response.json();
+        const content = data.response || 'No response available';
+        const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
+        const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
+        if (meta) meta.textContent = `${source} | ${timestamp}`;
+        // Process content for Discord-style display
+        if (content && window.marked) {
+            let processed = content;
+            // Highlight warning sections
+            processed = processed.replace(/⚠️\s*([^.]+\.\s*)/g, '<div class="warning-banner">⚠️ $1</div>');
+            viewer.innerHTML = marked.parse(processed);
+        } else {
+            viewer.innerHTML = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+        }
+        cachedResponse = content;
+    } catch (e) {
+        viewer.innerHTML = "Error fetching response: " + e.message;
     }
 }
 
@@ -51,24 +68,31 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Global function for copy button
-window.copyLogContent = function() {
-    const viewer = document.getElementById('log-viewer');
-    const content = viewer.dataset.rawContent || viewer.textContent;
-    
-    navigator.clipboard.writeText(content).then(() => {
-        // Flash button to indicate success
-        const btn = viewer.querySelector('button');
-        if (btn) {
-            const originalText = btn.textContent;
-            btn.textContent = '✓ Copied!';
-            btn.style.background = '#238636';
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.style.background = '';
-            }, 1500);
-        }
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-    });
+window.copyPromptContent = function() {
+    if (!cachedPrompt) return;
+    navigator.clipboard.writeText(cachedPrompt).then(() => {
+        flashCopyButton('prompt');
+    }).catch(err => console.error('Failed to copy:', err));
 };
+
+window.copyResponseContent = function() {
+    if (!cachedResponse) return;
+    navigator.clipboard.writeText(cachedResponse).then(() => {
+        flashCopyButton('response');
+    }).catch(err => console.error('Failed to copy:', err));
+};
+
+function flashCopyButton(type) {
+    const viewer = document.getElementById(`${type}-viewer`);
+    const panel = viewer?.closest('.panel');
+    const btn = panel?.querySelector('button[onclick*="copy"]');
+    if (btn) {
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.background = '#238636';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 1500);
+    }
+}

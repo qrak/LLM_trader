@@ -101,3 +101,32 @@ async def reset_api_costs() -> Dict[str, Any]:
     storage = CostStorage()
     storage.reset()
     return {"status": "ok", "message": "API costs reset to zero"}
+
+
+@router.get("/news")
+async def get_news(request: Request) -> Dict[str, Any]:
+    """Get cached news articles from RAG engine or disk."""
+    articles = []
+    # Try in-memory first
+    rag_engine = getattr(request.app.state, "rag_engine", None)
+    if rag_engine:
+        news_manager = getattr(rag_engine, "news_manager", None)
+        if news_manager:
+            articles = getattr(news_manager, "news_database", [])
+    # Fallback to disk if memory is empty
+    if not articles:
+        config = request.app.state.config
+        data_dir = getattr(config, "DATA_DIR", "data")
+        # Try crypto_news.json first, then news_cache/recent_news.json
+        for news_path in ["crypto_news.json", "news_cache/recent_news.json"]:
+            news_file = Path(data_dir) / news_path
+            if news_file.exists():
+                try:
+                    with open(news_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        articles = data.get("articles", data) if isinstance(data, dict) else data
+                        if articles:
+                            break
+                except Exception:
+                    pass
+    return {"articles": articles, "count": len(articles)}
