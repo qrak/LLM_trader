@@ -142,8 +142,8 @@ class RagEngine:
             self.category_processor.category_word_map
         )
 
-    async def update_if_needed(self) -> bool:
-        """Update market data if needed based on time intervals"""
+    async def update_if_needed(self, force_update: bool = False) -> bool:
+        """Update market data if needed based on time intervals or forced update"""
         async with self._update_lock:
             if not self.last_update:
                 self.logger.debug("No previous update, refreshing market knowledge base")
@@ -156,8 +156,9 @@ class RagEngine:
                     return False
 
             time_since_update = datetime.now() - self.last_update
-            if time_since_update > self.update_interval:
-                self.logger.debug(f"Last update was {time_since_update.total_seconds()/60:.1f} minutes ago, refreshing market knowledge")
+            if force_update or time_since_update > self.update_interval:
+                reason = "forced update" if force_update else f"{time_since_update.total_seconds()/60:.1f} minutes since last update"
+                self.logger.debug(f"Refreshing market knowledge: {reason}")
                 try:
                     await self.refresh_market_data()
                     self.last_update = datetime.now()
