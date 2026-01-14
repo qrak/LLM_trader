@@ -572,10 +572,12 @@ class ModelManager(ModelManagerProtocol):
             system_tokens = self.token_counter.count_tokens(system_message)
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug(f"Pre-call estimate: system={system_tokens:,}, prompt={prompt_tokens:,}")
+            self.logger.debug(f"Full prompt content: {combined_prompt}")
         else:
             messages.append({"role": "user", "content": prompt})
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug(f"Pre-call estimate: prompt={prompt_tokens:,}")
+            self.logger.debug(f"Full prompt content: {prompt}")
         return messages
 
     async def _get_model_response(self, messages: List[Dict[str, str]], provider: Optional[str] = None, 
