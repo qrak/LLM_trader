@@ -5,6 +5,8 @@ from typing import Dict, Optional, Any
 
 import tiktoken
 
+from src.utils.dataclasses import ProviderCostStats, SessionCosts, TokenUsageStats
+
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
@@ -86,12 +88,8 @@ class TokenCounter:
             "system": 0,
             "total": 0
         }
-        self.session_costs: Dict[str, float] = {
-            "openrouter": 0.0,
-            "google": 0.0,
-            "lmstudio": 0.0,
-        }
-        self.request_usage: Optional[Dict[str, Any]] = None
+        self.session_costs = SessionCosts()
+        self.request_usage: Optional[TokenUsageStats] = None
 
     def count_tokens(self, text: str) -> int:
         """
@@ -142,18 +140,22 @@ class TokenCounter:
             completion_tokens: Actual completion token count from API
             cost: Optional cost from API (only OpenRouter provides this)
         """
-        self.request_usage = {
-            "provider": provider,
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens,
-            "cost": cost,
-        }
+        self.request_usage = TokenUsageStats(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            cost=cost
+        )
         self.session_tokens["prompt"] += prompt_tokens
         self.session_tokens["completion"] += completion_tokens
         self.session_tokens["total"] += prompt_tokens + completion_tokens
-        if cost and provider in self.session_costs:
-            self.session_costs[provider] += cost
+        if cost:
+            if provider == "openrouter":
+                self.session_costs.openrouter += cost
+            elif provider == "google":
+                self.session_costs.google += cost
+            elif provider == "lmstudio":
+                self.session_costs.lmstudio += cost
 
     @staticmethod
     def format_cost(cost: float) -> str:
@@ -212,12 +214,16 @@ class TokenCounter:
             provider: Provider name
             cost: Cost in dollars
         """
-        if provider in self.session_costs:
-            self.session_costs[provider] += cost
-        if self.request_usage and self.request_usage.get("provider") == provider:
-            self.request_usage["cost"] = cost
+        if provider == "openrouter":
+            self.session_costs.openrouter += cost
+        elif provider == "google":
+            self.session_costs.google += cost
+        elif provider == "lmstudio":
+            self.session_costs.lmstudio += cost
+        if self.request_usage:
+            self.request_usage.cost = cost
 
-    def get_last_request_usage(self) -> Optional[Dict[str, Any]]:
+    def get_last_request_usage(self) -> Optional[TokenUsageStats]:
         """Get usage data from the last recorded API request."""
         return self.request_usage
 
@@ -230,18 +236,18 @@ class TokenCounter:
         """
         return self.session_tokens.copy()
 
-    def get_session_costs(self) -> Dict[str, float]:
+    def get_session_costs(self) -> SessionCosts:
         """
         Get cumulative costs per provider for the session.
 
         Returns:
-            Dictionary with provider -> cost mapping
+            SessionCosts dataclass with provider costs
         """
-        return self.session_costs.copy()
+        return self.session_costs
 
     def get_total_session_cost(self) -> float:
         """Get total cost across all providers."""
-        return sum(self.session_costs.values())
+        return self.session_costs.total
 
     def format_usage_display(self, provider: str, prompt_tokens: int, completion_tokens: int, cost: Optional[float] = None) -> str:
         """
@@ -273,24 +279,17 @@ class TokenCounter:
             "system": 0,
             "total": 0
         }
-        self.session_costs = {
-            "openrouter": 0.0,
-            "google": 0.0,
-            "lmstudio": 0.0,
-        }
+        self.session_costs = SessionCosts()
         self.request_usage = None
 
     def reset_costs_only(self) -> None:
         """Reset only cost tracking (for dashboard reset button)."""
-        self.session_costs = {
-            "openrouter": 0.0,
-            "google": 0.0,
-            "lmstudio": 0.0,
-        }
+        self.session_costs = SessionCosts()
 
 
 class CostStorage:
     """Persistent storage for API costs loaded from/saved to JSON file."""
+    PROVIDERS = ("openrouter", "google", "lmstudio")
 
     def __init__(self, file_path: str = "data/trading/api_costs.json"):
         """
@@ -299,44 +298,53 @@ class CostStorage:
         Args:
             file_path: Path to the api_costs.json file
         """
-        import os
         self.file_path = file_path
         self._ensure_directory()
-        self._costs = self._load_or_create()
+        self._providers: Dict[str, ProviderCostStats] = {}
+        self._last_reset: Optional[str] = None
+        self._load_or_create()
 
     def _ensure_directory(self) -> None:
         """Ensure the directory exists."""
-        import os
         directory = os.path.dirname(self.file_path)
         if directory and not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
 
-    def _load_or_create(self) -> Dict[str, Any]:
+    def _load_or_create(self) -> None:
         """Load existing costs or create default structure."""
-        import json
-        import os
         if os.path.exists(self.file_path):
             try:
                 with open(self.file_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    data = json.load(f)
+                self._last_reset = data.get("last_reset")
+                for provider in self.PROVIDERS:
+                    if provider in data:
+                        p_data = data[provider]
+                        self._providers[provider] = ProviderCostStats(
+                            total_cost=p_data.get("total_cost", 0.0),
+                            total_input_tokens=p_data.get("total_input_tokens", 0),
+                            total_output_tokens=p_data.get("total_output_tokens", 0)
+                        )
+                    else:
+                        self._providers[provider] = ProviderCostStats()
+                return
             except (json.JSONDecodeError, IOError):
                 pass
-        return self._default_costs()
+        self._init_defaults()
 
-    def _default_costs(self) -> Dict[str, Any]:
-        """Return default cost structure."""
-        return {
-            "openrouter": {"total_cost": 0.0, "total_input_tokens": 0, "total_output_tokens": 0},
-            "google": {"total_cost": 0.0, "total_input_tokens": 0, "total_output_tokens": 0},
-            "lmstudio": {"total_input_tokens": 0, "total_output_tokens": 0},
-            "last_reset": None
-        }
+    def _init_defaults(self) -> None:
+        """Initialize default provider stats."""
+        for provider in self.PROVIDERS:
+            self._providers[provider] = ProviderCostStats()
+        self._last_reset = None
 
     def save(self) -> None:
         """Save current costs to file."""
-        import json
+        data = {"last_reset": self._last_reset}
+        for provider, stats in self._providers.items():
+            data[provider] = stats.to_dict()
         with open(self.file_path, 'w', encoding='utf-8') as f:
-            json.dump(self._costs, f, indent=2)
+            json.dump(data, f, indent=2)
 
     def record_usage(
         self,
@@ -354,31 +362,33 @@ class CostStorage:
             completion_tokens: Output tokens
             cost: Cost in dollars (for OpenRouter and Google)
         """
-        if provider not in self._costs:
-            self._costs[provider] = {"total_input_tokens": 0, "total_output_tokens": 0}
-        self._costs[provider]["total_input_tokens"] += prompt_tokens
-        self._costs[provider]["total_output_tokens"] += completion_tokens
+        if provider not in self._providers:
+            self._providers[provider] = ProviderCostStats()
+        stats = self._providers[provider]
+        stats.total_input_tokens += prompt_tokens
+        stats.total_output_tokens += completion_tokens
         if cost is not None:
-            if "total_cost" not in self._costs[provider]:
-                self._costs[provider]["total_cost"] = 0.0
-            self._costs[provider]["total_cost"] += cost
+            stats.total_cost += cost
         self.save()
 
     def get_costs(self) -> Dict[str, Any]:
-        """Get all stored costs."""
-        return self._costs.copy()
+        """Get all stored costs as dict (for backward compatibility)."""
+        result: Dict[str, Any] = {"last_reset": self._last_reset}
+        for provider, stats in self._providers.items():
+            result[provider] = stats.to_dict()
+        return result
 
-    def get_provider_costs(self, provider: str) -> Dict[str, Any]:
+    def get_provider_costs(self, provider: str) -> ProviderCostStats:
         """Get costs for a specific provider."""
-        return self._costs.get(provider, {}).copy()
+        return self._providers.get(provider, ProviderCostStats())
 
     def get_total_openrouter_cost(self) -> float:
         """Get total OpenRouter cost."""
-        return self._costs.get("openrouter", {}).get("total_cost", 0.0)
+        return self._providers.get("openrouter", ProviderCostStats()).total_cost
 
     def reset(self) -> None:
         """Reset all costs and update last_reset timestamp."""
-        from datetime import datetime
-        self._costs = self._default_costs()
-        self._costs["last_reset"] = datetime.utcnow().isoformat() + "Z"
+        from datetime import datetime, timezone
+        self._init_defaults()
+        self._last_reset = datetime.now(timezone.utc).isoformat()
         self.save()
