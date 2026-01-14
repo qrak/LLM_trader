@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from src.logger.logger import Logger
 from src.managers.persistence_manager import PersistenceManager
 from .vector_memory import VectorMemoryService
-from .dataclasses import Position, TradeDecision, VectorSearchResult
+from .dataclasses import Position, TradeDecision
 
 
 class TradingBrainService:
