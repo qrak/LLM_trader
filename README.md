@@ -115,7 +115,7 @@ graph TD
 - **Brain Visualization**: Interactive network graph showing trade sequences (BUY → UPDATE → CLOSE) using Vis.js with physics-based layout and automatic stabilization.
 - **Performance Chart**: Equity curve with zoom/pan controls, trade markers (BUY/CLOSE annotations), and ApexCharts integration.
 - **Live Statistics**: Real-time stats display (Win Rate, P&L%, Capital, Trades) pulled from trading history.
-- **Vector Memory Database**: Full ChromaDB visualization with experience table, confidence/ADX win rate breakdowns, and semantic similarity scores.
+- **Vector Memory Database**: Full ChromaDB visualization with **sortable columns** (Date, Similarity, P&L, Confidence, Outcome), experience table, and win rate breakdowns.
 - **Thought Stream**: View last AI prompt and response with markdown rendering and copy-to-clipboard.
 - **Visual Cortex**: Displays generated technical charts with lightbox for full-screen viewing.
 - **Neural State Panel**: Shows current trend sentiment, confidence level, and recommended action.
@@ -181,8 +181,13 @@ pip install -r requirements.txt
 2. **Bot Config**: Copy `config/config.ini.example` to `config/config.ini`. The default settings are "ready to go" for a standard setup, but you can edit it to customize your experience.
    ```ini
    [ai_providers]
-   provider = googleai  # or "local", "openrouter", "all"
-   lm_studio_base_url = http://localhost:1234/v1
+   # Options: "local", "googleai", "openrouter", "all"
+   provider = googleai
+   
+   [model_config]
+   # Critical for Gemini 3 Flash Preview
+   google_temperature = 1.0
+   google_thinking_level = high
    
    [general]
    crypto_pair = BTC/USDT
@@ -194,7 +199,6 @@ pip install -r requirements.txt
 Run the bot:
 ```powershell
 python start.py              # Default from config
-python start.py ETH/USDT     # Specific pair
 ```
 
 ### ⌨️ Controls
@@ -214,3 +218,6 @@ python start.py ETH/USDT     # Specific pair
 
 ## Contributors
 - **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
+
+## 📄 License
+Licensed under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details.

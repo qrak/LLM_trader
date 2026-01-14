@@ -4,8 +4,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
-import webbrowser
-from typing import Optional
 
 from .routers import brain, monitor, visuals, performance, ws_router
 from .dashboard_state import dashboard_state

@@ -1,12 +1,11 @@
-import json
 import io
 import re
 from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from src.utils.data_utils import serialize_for_json, safe_tolist
 
 if TYPE_CHECKING:
+    from src.analyzer.analysis_context import AnalysisContext
     from src.contracts.model_contract import ModelManagerProtocol
 
 
@@ -20,7 +19,8 @@ class AnalysisResultProcessor:
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
-        
+        self.context: Optional["AnalysisContext"] = None
+
     async def process_analysis(self, system_prompt: str, prompt: str, 
                               chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
                               provider: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
@@ -134,6 +134,8 @@ class AnalysisResultProcessor:
                                 cleaned_response: str) -> Dict[str, Any]:
         """Format the final analysis response."""
         parsed_response["raw_response"] = cleaned_response
+        if self.context is not None:
+            parsed_response["current_price"] = self.context.current_price
         return parsed_response
     
     @staticmethod

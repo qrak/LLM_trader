@@ -2,7 +2,7 @@
 Crypto Trading Bot - Entry Point
 Automated trading with AI-powered decisions.
 """
-import torch
+import torch # needed for SentenceSplitter (NLP model)
 import asyncio
 import sys
 import warnings

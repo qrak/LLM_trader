@@ -3,7 +3,6 @@ Comprehensive test suite for AI provider clients (GoogleAI, LMStudio, OpenRouter
 Tests cover chat completion, streaming, chart analysis, error handling, and image encoding.
 All SDK calls are mocked for isolation; the retry decorator is bypassed.
 """
-import asyncio
 import base64
 import io
 from typing import Any, Dict, List, Optional
