@@ -7,11 +7,11 @@ drawdowns, win rate, and other performance metrics from trade history.
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-import math
 import numpy as np
 
-
 from src.utils.data_utils import SerializableMixin
+from src.trading.dataclasses import ClosedTradeResult
+
 
 
 @dataclass(slots=True)
@@ -55,10 +55,10 @@ class StatisticsCalculator:
         trades = StatisticsCalculator._extract_closed_trades(trade_history)
         if not trades:
             return TradingStatistics()
-            
+
         # Convert to numpy arrays for vectorized operations
-        pnl_percentages = np.array([t["pnl_pct"] for t in trades])
-        pnl_amounts = np.array([t["pnl_quote"] for t in trades])
+        pnl_percentages = np.array([t.pnl_pct for t in trades])
+        pnl_amounts = np.array([t.pnl_quote for t in trades])
         
         total_trades = len(trades)
         winning_trades = int(np.sum(pnl_percentages > 0))
@@ -107,9 +107,9 @@ class StatisticsCalculator:
         )
 
     @staticmethod
-    def _extract_closed_trades(trade_history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _extract_closed_trades(trade_history: List[Dict[str, Any]]) -> List[ClosedTradeResult]:
         """Extract closed trades with P&L from history."""
-        closed_trades = []
+        closed_trades: List[ClosedTradeResult] = []
         open_position: Optional[Dict[str, Any]] = None
         for trade in trade_history:
             action = trade.get("action", "").upper()
@@ -125,14 +125,14 @@ class StatisticsCalculator:
                 else:
                     pnl_pct = ((entry_price - exit_price) / entry_price) * 100 if entry_price > 0 else 0
                     pnl_quote = (entry_price - exit_price) * quantity
-                closed_trades.append({
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "pnl_pct": pnl_pct,
-                    "pnl_quote": pnl_quote,
-                    "quantity": quantity,
-                    "direction": "LONG" if open_position["action"].upper() == "BUY" else "SHORT",
-                })
+                closed_trades.append(ClosedTradeResult(
+                    entry_price=entry_price,
+                    exit_price=exit_price,
+                    pnl_pct=pnl_pct,
+                    pnl_quote=pnl_quote,
+                    quantity=quantity,
+                    direction="LONG" if open_position["action"].upper() == "BUY" else "SHORT",
+                ))
                 open_position = None
         return closed_trades
 

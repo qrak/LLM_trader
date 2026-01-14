@@ -282,7 +282,7 @@ class TestBrainIntegration:
         experiences = vector_memory.retrieve_similar_experiences("BULLISH + High ADX", k=1)
 
         assert len(experiences) >= 1
-        meta = experiences[0]["metadata"]
+        meta = experiences[0].metadata  # VectorSearchResult is a dataclass
         assert meta.get("fear_greed_index") == 25
         assert meta.get("market_regime") == "BULLISH"
         assert meta.get("is_weekend") == True

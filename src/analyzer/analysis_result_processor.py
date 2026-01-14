@@ -132,14 +132,8 @@ class AnalysisResultProcessor:
             
     def _format_analysis_response(self, parsed_response: Dict[str, Any], 
                                 cleaned_response: str) -> Dict[str, Any]:
-        """Format the final analysis response"""
+        """Format the final analysis response."""
         parsed_response["raw_response"] = cleaned_response
-        
-        # Include current_price if available in context
-        if hasattr(self, 'context') and hasattr(self.context, 'current_price'):
-            parsed_response["current_price"] = self.context.current_price
-        
-        # Return formatted response - article_urls will be added by the caller
         return parsed_response
     
     @staticmethod

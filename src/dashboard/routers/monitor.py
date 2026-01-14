@@ -76,10 +76,9 @@ async def get_api_costs() -> Dict[str, Any]:
     """Get current API cost tracking data from persistent storage."""
     from src.utils.token_counter import CostStorage
     storage = CostStorage()
-    costs = storage.get_costs()
-    openrouter_cost = costs.get("openrouter", {}).get("total_cost", 0.0)
-    google_cost = costs.get("google", {}).get("total_cost", 0.0)
-    lmstudio_cost = 0.0
+    openrouter_cost = storage.get_provider_costs("openrouter").total_cost
+    google_cost = storage.get_provider_costs("google").total_cost
+    lmstudio_cost = storage.get_provider_costs("lmstudio").total_cost
     total = openrouter_cost + google_cost + lmstudio_cost
     return {
         "costs_by_provider": {
