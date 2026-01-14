@@ -35,11 +35,32 @@ function updateCostDisplay(data) {
     const costs = data.costs_by_provider || {};
     const total = data.total_session_cost || 0;
     const orCost = costs.openrouter || 0;
+    const googleCost = costs.google || 0;
     document.getElementById('cost-openrouter').textContent = formatCost(orCost);
     if (orCost > 0) {
         document.getElementById('cost-openrouter').style.color = '#f0883e';
+    } else {
+        document.getElementById('cost-openrouter').style.color = '#8b949e';
+    }
+    const googleEl = document.getElementById('cost-google');
+    if (googleCost > 0) {
+        googleEl.textContent = formatCost(googleCost) + ' (est.)';
+        googleEl.style.color = '#58a6ff';
+    } else {
+        googleEl.textContent = '$0.00';
+        googleEl.style.color = '#8b949e';
     }
     document.getElementById('cost-total').textContent = formatCost(total);
+}
+
+async function refreshCosts() {
+    await fetchCosts();
+}
+
+async function confirmResetCosts() {
+    if (confirm('Are you sure you want to reset all API costs to zero?')) {
+        await resetCosts();
+    }
 }
 
 async function resetCosts() {
@@ -105,7 +126,7 @@ async function fetchRules() {
             li.textContent = rule.rule_text || rule.text || JSON.stringify(rule);
             list.appendChild(li);
         });
-    } catch (e) { 
+    } catch (e) {
         console.error("Failed to fetch rules", e);
     }
 }
@@ -145,6 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
     window.updateVectors = () => updateVectorData();
     window.updatePosition = () => updatePositionData(null, true);
     window.resetCosts = resetCosts;
+    window.refreshCosts = refreshCosts;
+    window.confirmResetCosts = confirmResetCosts;
     document.addEventListener('analysis-complete', () => {
         console.log('Analysis complete, refreshing...');
         updateAll();
