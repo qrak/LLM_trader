@@ -11,6 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div id="app-container">
@@ -31,6 +32,18 @@
                 </a>
                 <a href="#" class="nav-item" data-target="tab-brain">
                     <span class="icon">🕸️</span> Brain Activity
+                </a>
+                <a href="#" class="nav-item" data-target="tab-prompt">
+                    <span class="icon">💬</span> Last Prompt
+                </a>
+                <a href="#" class="nav-item" data-target="tab-response">
+                    <span class="icon">📝</span> Last Response
+                </a>
+                <a href="#" class="nav-item" data-target="tab-stats">
+                    <span class="icon">📊</span> Statistics
+                </a>
+                <a href="#" class="nav-item" data-target="tab-news">
+                    <span class="icon">📰</span> Latest News
                 </a>
                 <a href="#" class="nav-item" data-target="tab-market">
                     <span class="icon">📈</span> Market Data
@@ -123,25 +136,14 @@
                         </div>
                         <div id="synapse-network" class="network-container"></div>
                     </section>
-
-                    <section id="panel-thoughts" class="panel medium-panel">
-                        <div class="panel-header">
-                            <h3>Reasoning Engine</h3>
-                            <div class="controls">
-                                <select id="log-type" onchange="updateLogView()">
-                                    <option value="prompt">Last Prompt</option>
-                                    <option value="response">Last Response</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="log-viewer" class="code-block">Waiting for data...</div>
-                    </section>
                     
-                    <section id="panel-visuals" class="panel medium-panel">
+                    <section id="panel-visuals" class="panel visual-panel">
                         <div class="panel-header">
                             <h3>Visual Cortex Input</h3>
-                            <div class="controls">
-                                <button onclick="updateVisuals()">Load Latest</button>
+                            <div class="controls panel-toolbar">
+                                <button class="toolbar-btn" onclick="updateVisuals()" title="Refresh">↻</button>
+                                <button class="toolbar-btn" onclick="togglePanelMinimize('panel-visuals')" title="Minimize">−</button>
+                                <button class="toolbar-btn" onclick="openLightbox(document.getElementById('analysis-chart').src)" title="Fullscreen">⛶</button>
                             </div>
                         </div>
                         <div id="visual-container" class="visual-box">
@@ -149,6 +151,64 @@
                             <span id="no-chart-msg">No visual data available</span>
                         </div>
                     </section>
+                </div>
+            </div>
+
+            <!-- Tab: Last Prompt -->
+            <div id="tab-prompt" class="tab-content">
+                <header class="tab-header">
+                    <h2>Last Prompt</h2>
+                    <button class="btn-primary" onclick="updatePromptTab()">Refresh</button>
+                </header>
+                <section class="panel full-height-panel">
+                    <div class="panel-header">
+                        <h3>Trading Context Sent to LLM</h3>
+                        <div class="controls">
+                            <span id="prompt-meta" class="meta-info"></span>
+                            <button onclick="copyPromptContent()">📋 Copy</button>
+                        </div>
+                    </div>
+                    <div id="prompt-viewer" class="code-block prompt-content">Loading...</div>
+                </section>
+            </div>
+
+            <!-- Tab: Last Response -->
+            <div id="tab-response" class="tab-content">
+                <header class="tab-header">
+                    <h2>Last Response</h2>
+                    <button class="btn-primary" onclick="updateResponseTab()">Refresh</button>
+                </header>
+                <section class="panel full-height-panel">
+                    <div class="panel-header">
+                        <h3>LLM Analysis Output</h3>
+                        <div class="controls">
+                            <span id="response-meta" class="meta-info"></span>
+                            <button onclick="copyResponseContent()">📋 Copy</button>
+                        </div>
+                    </div>
+                    <div id="response-viewer" class="discord-content">Loading...</div>
+                </section>
+            </div>
+
+            <!-- Tab: Statistics -->
+            <div id="tab-stats" class="tab-content">
+                <header class="tab-header">
+                    <h2>Trading Statistics</h2>
+                    <button class="btn-primary" onclick="updateStatisticsPanel()">Refresh</button>
+                </header>
+                <div id="statistics-content">
+                    <div class="empty-state">Loading statistics...</div>
+                </div>
+            </div>
+
+            <!-- Tab: Latest News -->
+            <div id="tab-news" class="tab-content">
+                <header class="tab-header">
+                    <h2>Latest Crypto News</h2>
+                    <button class="btn-primary" onclick="updateNewsPanel()">Refresh</button>
+                </header>
+                <div id="news-content">
+                    <div class="empty-state">Loading news...</div>
                 </div>
             </div>
 
@@ -189,7 +249,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js"></script>
+    <script type="module" src="main.js?v=3.1"></script>
     
     <script>
         // Sync hidden status fields to visible UI (except costs which are handled by main.js directly)

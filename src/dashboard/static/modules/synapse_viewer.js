@@ -1,3 +1,4 @@
+// CACHE BUSTER 2.2
 let network;
 let nodes;
 let edges;
@@ -63,6 +64,7 @@ export function initSynapseNetwork() {
         network.setOptions({ physics: { enabled: false } });
         network.fit({ animation: false });
     });
+    window.fitSynapseNetwork = fitNetwork;
 }
 
 export function fitNetwork() {

@@ -1,5 +1,5 @@
 
-import { fitNetwork } from './synapse_viewer.js';
+import { initSynapseNetwork } from './synapse_viewer.js';
 
 /**
  * UI Controller for Sidebar and Tabs
@@ -36,7 +36,9 @@ function setupSidebarNavigation() {
                 // Specific fix for vis-network graph in Brain Activity tab
                 if (targetId === 'tab-brain') {
                     // Small delay to ensure the div is fully visible/rendered
-                    setTimeout(() => fitNetwork(), 50);
+                    setTimeout(() => {
+                        if (window.fitSynapseNetwork) window.fitSynapseNetwork();
+                    }, 50);
                 }
             }
         });
