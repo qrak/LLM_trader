@@ -1,161 +1,224 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Trader Brain</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Semantic Signal LLM</title>
+    <link rel="stylesheet" href="style.css?v=2.1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
-
 <body>
-    <header>
-        <h1>LLM TRADER <span style="font-size: 0.6em; color: gray;">BRAIN LINK</span></h1>
-        <div style="display: flex; gap: 20px; align-items: center;">
-            <div id="next-analysis" style="font-size: 0.8em; color: #8b949e;">Next analysis: --</div>
-            <div id="connection-status">🟢 Connected</div>
-        </div>
-    </header>
-
-    <div id="status-panel">
-        <div class="panel-header">
-            <h3>Neural State</h3>
-            <span id="brain-state-indicator">ACTIVE</span>
-        </div>
-        <div id="status-content">
-            <div class="stat-row">
-                <span>Trend:</span> <strong id="trend-val">--</strong>
-            </div>
-            <div class="stat-row">
-                <span>Confidence:</span> <strong id="conf-val">--</strong>
-            </div>
-            <div class="stat-row">
-                <span>Action:</span> <strong id="action-val">--</strong>
-            </div>
-        </div>
-
-        <div class="panel-header" style="margin-top: 20px;">
-            <h3>Active Rules</h3>
-        </div>
-        <ul id="rules-list">
-            <li>Loading rules...</li>
-        </ul>
-
-        <div class="panel-header" style="margin-top: 20px;">
-            <h3>💰 API Costs</h3>
-            <button id="refresh-costs-btn" onclick="refreshCosts()"
-                style="font-size: 0.7em; padding: 2px 6px;">🔄</button>
-            <button id="reset-costs-btn" onclick="confirmResetCosts()"
-                style="font-size: 0.7em; padding: 2px 6px; background-color: #da3633; border-color: #f85149;">Reset</button>
-        </div>
-        <div id="costs-content">
-            <div class="stat-row">
-                <span>OpenRouter:</span> <strong id="cost-openrouter">$0.00</strong>
-            </div>
-            <div class="stat-row">
-                <span>Google AI:</span> <strong id="cost-google">$0.00</strong>
-            </div>
-            <div class="stat-row">
-                <span>LM Studio:</span> <strong id="cost-lmstudio" style="color: #8b949e;">Local</strong>
-            </div>
-            <div class="stat-row" style="margin-top: 8px; border-top: 1px solid #30363d; padding-top: 8px;">
-                <span>Session Total:</span> <strong id="cost-total" style="color: #58a6ff;">$0.00</strong>
-            </div>
-        </div>
-
-        <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid #30363d;">
-            <div id="experience-count" style="font-size: 0.8em; color: #8b949e;">-- learned experiences</div>
-            <div id="last-updated" style="font-size: 0.7em; color: #58a6ff; margin-top: 5px;">Updated: --</div>
-        </div>
-    </div>
-
-    <div id="main-content">
-        <!-- Top Row: Performance & Synapses -->
-        <div class="row">
-            <div class="panel" id="panel-performance">
-                <div class="panel-header">
-                    <h3>Performance</h3>
-                    <button onclick="updatePerformance()">Refresh</button>
-                </div>
-                <div id="stats-summary"
-                    style="font-size: 0.8em; color: #8b949e; margin-bottom: 8px; display: flex; gap: 15px; flex-wrap: wrap;">
-                    <span>Loading stats...</span>
-                </div>
-                <div id="performance-chart"></div>
-            </div>
-
-            <div class="panel" id="panel-synapses">
-                <div class="panel-header">
-                    <h3>Memory Synapses</h3>
-                    <div style="font-size: 0.7em; color: #8b949e;">
-                        <span style="color: #238636;">● BUY</span>
-                        <span style="color: #00e396;">● CLOSE</span>
-                        <span style="color: #8b949e;">● UPDATE</span>
-                    </div>
-                </div>
-                <div id="synapse-network"></div>
-            </div>
-        </div>
-
-        <!-- Middle Row: Monitor & Visuals -->
-        <div class="row">
-            <div class="panel" id="panel-thoughts">
-                <div class="panel-header">
-                    <h3>Thought Stream</h3>
-                    <select id="log-type" onchange="updateLogView()">
-                        <option value="prompt">Last Prompt</option>
-                        <option value="response">Last Response</option>
-                    </select>
-                </div>
-                <div id="log-viewer">Waiting for data...</div>
-            </div>
-
-            <div class="panel" id="panel-visuals">
-                <div class="panel-header">
-                    <h3>Visual Cortex</h3>
-                    <button onclick="updateVisuals()">Latest</button>
-                </div>
-                <div id="visual-container">
-                    <img id="analysis-chart" src="" alt="No chart generated" style="display: none;">
-                    <span id="no-chart-msg">No visual data - waiting for analysis</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 3: Position Details -->
-        <div class="row full-width">
-            <div class="panel" id="panel-position">
-                <div class="panel-header">
-                    <h3>📍 Position Details</h3>
-                    <button onclick="updatePosition()">Refresh</button>
-                </div>
-                <div id="position-content">
-                    <div class="no-position">
-                        <span class="no-position-icon">📭</span>
-                        <span>Loading position data...</span>
+    <div id="app-container">
+        <aside id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <span class="logo-icon">🧠</span>
+                    <div>
+                        <h1>SEMANTIC<span class="highlight">SIGNAL</span> LLM</h1>
+                        <div class="subtitle">LLM-POWERED NEURAL ENGINE</div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Bottom Row: Vector Memory Database -->
-        <div class="row full-width">
-            <div class="panel" id="panel-vectors">
-                <div class="panel-header">
-                    <h3>📊 Vector Memory Database</h3>
-                    <button onclick="updateVectors()">Refresh</button>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-target="tab-overview">
+                    <span class="icon">📊</span> Overview
+                </a>
+                <a href="#" class="nav-item" data-target="tab-brain">
+                    <span class="icon">🕸️</span> Brain Activity
+                </a>
+                <a href="#" class="nav-item" data-target="tab-market">
+                    <span class="icon">📈</span> Market Data
+                </a>
+                <a href="#" class="nav-item" data-target="tab-memory">
+                    <span class="icon">💾</span> Memory Bank
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span id="connection-status">Connecting...</span>
                 </div>
-                <div id="vector-content">
-                    <div class="empty-state">Loading vector database...</div>
+                <!-- Hidden legacy fields for main.js compatibility -->
+                <div id="status-panel" style="display: none;">
+                    <span id="brain-state-indicator">ACTIVE</span>
+                    <strong id="trend-val">--</strong>
+                    <strong id="conf-val">--</strong>
+                    <strong id="action-val">--</strong>
+                    <ul id="rules-list"></ul>
+                </div>
+                <div class="next-update">
+                    <span class="label">Next Analysis</span>
+                    <span id="next-analysis" class="value">--:--</span>
                 </div>
             </div>
-        </div>
+        </aside>
+
+        <main id="content-area">
+            <!-- Tab: Overview -->
+            <div id="tab-overview" class="tab-content active">
+                <header class="tab-header">
+                    <h2>Live Dashboard</h2>
+                    <span id="last-updated" style="font-size: 12px; color: var(--text-muted);">Updated: --</span>
+                </header>
+
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="label">Market Trend</div>
+                        <div class="value" id="overview-trend">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Confidence</div>
+                        <div class="value highlight" id="overview-conf">--%</div>
+                        <div class="sub-label" id="overview-action">WAITING</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Active Rules</div>
+                        <div class="value" id="overview-rules-count">0</div>
+                        <div class="sub-label" id="overview-rules-hint" style="font-size: 10px;">No rules learned yet</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Session Cost</div>
+                        <div class="value" id="overview-cost">$0.00</div>
+                        <div style="position: absolute; top: 15px; right: 15px; display: flex; gap: 5px;">
+                            <button class="icon-btn-xs" onclick="refreshCosts()" title="Refresh">↻</button>
+                            <button class="icon-btn-xs" onclick="confirmResetCosts()" title="Reset" style="color: var(--accent-danger);">🗑</button>
+                        </div>
+                    </div>
+                </div>
+
+                <section id="panel-performance" class="panel full-height-panel">
+                    <div class="panel-header">
+                        <h3>Performance Metrics</h3>
+                        <div class="controls">
+                            <span id="stats-summary" style="margin-right: 15px; font-size: 0.8em; color: var(--text-muted);">Loading stats...</span>
+                            <button onclick="updatePerformance()">Refresh</button>
+                        </div>
+                    </div>
+                    <div id="performance-chart" class="chart-container"></div>
+                </section>
+            </div>
+
+            <!-- Tab: Brain Activity -->
+            <div id="tab-brain" class="tab-content">
+                <header class="tab-header">
+                    <h2>Neural Network State</h2>
+                </header>
+
+                <div class="stack-layout">
+                    <section id="panel-synapses" class="panel large-panel">
+                        <div class="panel-header">
+                            <h3>Synaptic Pathways</h3>
+                            <div class="legend">
+                                <span class="dot buy"></span> BUY
+                                <span class="dot close"></span> CLOSE
+                                <span class="dot update"></span> UPDATE
+                            </div>
+                        </div>
+                        <div id="synapse-network" class="network-container"></div>
+                    </section>
+
+                    <section id="panel-thoughts" class="panel medium-panel">
+                        <div class="panel-header">
+                            <h3>Reasoning Engine</h3>
+                            <div class="controls">
+                                <select id="log-type" onchange="updateLogView()">
+                                    <option value="prompt">Last Prompt</option>
+                                    <option value="response">Last Response</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="log-viewer" class="code-block">Waiting for data...</div>
+                    </section>
+                    
+                    <section id="panel-visuals" class="panel medium-panel">
+                        <div class="panel-header">
+                            <h3>Visual Cortex Input</h3>
+                            <div class="controls">
+                                <button onclick="updateVisuals()">Load Latest</button>
+                            </div>
+                        </div>
+                        <div id="visual-container" class="visual-box">
+                            <img id="analysis-chart" src="" alt="No chart generated" style="display: none;">
+                            <span id="no-chart-msg">No visual data available</span>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- Tab: Market Data -->
+            <div id="tab-market" class="tab-content">
+                <header class="tab-header">
+                    <h2>Active Market Position</h2>
+                    <button class="btn-primary" onclick="updatePosition()">Force Refresh</button>
+                </header>
+                
+                <section id="panel-position" class="panel">
+                    <div class="panel-header">
+                        <h3>Position Details</h3>
+                    </div>
+                    <div id="position-content" class="position-details-container">
+                        <div class="no-position">
+                            <span class="no-position-icon">📭</span>
+                            <span>No active positions</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Tab: Memory Bank -->
+            <div id="tab-memory" class="tab-content">
+                <header class="tab-header">
+                    <h2>Vector Experience Database</h2>
+                    <button class="btn-primary" onclick="updateVectors()">Sync Database</button>
+                </header>
+
+                <section id="panel-vectors" class="panel full-height-panel">
+                    <div id="vector-content">
+                        <div class="empty-state">Loading vector database...</div>
+                    </div>
+                </section>
+            </div>
+
+        </main>
     </div>
 
     <script type="module" src="main.js"></script>
-</body>
+    
+    <script>
+        // Sync hidden status fields to visible UI (except costs which are handled by main.js directly)
+        function syncStatus() {
+            try {
+                const trend = document.getElementById('trend-val').textContent;
+                const trendEl = document.getElementById('overview-trend');
+                if(trendEl && trend !== '--') {
+                    trendEl.textContent = trend;
+                    trendEl.className = 'value ' + (trend === 'BULLISH' ? 'start-green' : (trend === 'BEARISH' ? 'start-red' : ''));
+                }
 
+                const conf = document.getElementById('conf-val').textContent;
+                if (conf !== '--') document.getElementById('overview-conf').textContent = conf;
+
+                const act = document.getElementById('action-val').textContent;
+                if (act !== '--') document.getElementById('overview-action').textContent = act;
+
+                const rulesList = document.getElementById('rules-list');
+                const count = rulesList ? rulesList.getElementsByTagName('li').length : 0;
+                const firstText = rulesList?.firstElementChild?.textContent || "";
+                const realCount = (firstText.includes('Loading') || firstText.includes('No rules')) ? 0 : count;
+                document.getElementById('overview-rules-count').textContent = realCount;
+                const hint = document.getElementById('overview-rules-hint');
+                if (hint) hint.style.display = realCount > 0 ? 'none' : 'block';
+
+            } catch(e) { /* ignore sync errors */ }
+        }
+        setInterval(syncStatus, 1000);
+    </script>
+</body>
 </html>

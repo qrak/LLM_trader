@@ -1,15 +1,14 @@
-# 🤖 LLM_Trader v2
+# 🤖 SEMANTIC SIGNAL LLM
 
 > **Status:** BETA / Paper Trading Only
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
-This is the **v2 evolution** of the original LLM_Trader project.
-LLM_Trader v2 focuses on **continuous trading**, **risk-managed execution**, and **machine-readable (JSON) decisions** that can be reliably parsed and acted on.
+![Semantic Signal LLM Dashboard Main](img/dashboard1.png)
 
-![LLM Trader Dashboard](img/1.png)
+![Semantic Signal LLM Dashboard Vector](img/dashboard2.png)
 
-![LLM Trader Brain Dashboard](img/dashboard_v21.png)
+![Semantic Signal LLM Dashboard Logs](img/dashboard3.png)
 
 ## 🏗️ Architecture
 
@@ -135,11 +134,11 @@ graph TD
 - [x] **Vector Memory System** (ChromaDB + Semantic Search)
 - [x] **Discord Integration** (Real-time signals, positions, and performance stats)
 - [x] **Interactive CLI** (Hotkeys for manual control)
-- [ ] **Multiple Trading Agent Personalities** (Diverse trading strategies: conservative, aggressive, contrarian, trend-following)
-- [ ] **Multi-Model Consensus Decision-Making** (Aggregate predictions from multiple AI models to reach consensus on trading signals)
-- [ ] **Live Trading** (Execution Layer)
-- [x] **Web Dashboard** (FastAPI + Vis.js brain visualization)
-- [ ] **Portfolio Management** (Multi-coin balancing)
+- [x] **Web Dashboard**: Real-time visualization of synaptic pathways and neural state.
+- [ ] **Multiple Trading Agent Personalities**: Diverse strategist personalities (conservative, aggressive, contrarian, trend-following) that engage in cross-agent reasoning to refine market entry/exit precision.
+- [ ] **Multi-Model Consensus Decision-Making**: A "Council of Models" architecture where specialized agents—**Visual Cortex Analyst** (chart vision), **Technical Specialist** (indicators), **Sentiment Scout** (news/macro), and **Memory Historian** (vector experiences)—collaborate to reach a final consensus signal.
+- [ ] **Live Trading**: Execution Layer integration for verified order placement.
+- [ ] **Concurrent Multi-Asset Analysis**: Scaling the engine to analyze 10+ coins simultaneously, leveraging parallel LLM execution for broad market coverage.
 
 ## 🚀 Quick Start
 

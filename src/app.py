@@ -346,7 +346,8 @@ class CryptoTradingBot:
             
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
             self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)")
-            
+            if self.dashboard_state:
+                await self.dashboard_state.update_next_check(next_check_time)
             await self._interruptible_sleep(delay_seconds)
             
         except Exception as e:
@@ -392,6 +393,8 @@ class CryptoTradingBot:
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
                     f"Still in same candle - next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)"
                 )
+                if self.dashboard_state:
+                    await self.dashboard_state.update_next_check(next_check_time)
                 await self._interruptible_sleep(delay_seconds)
             elif current_time_ms >= next_candle_ms:
                 # Already past next candle - run immediately
@@ -410,6 +413,8 @@ class CryptoTradingBot:
                     f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
                     f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)"
                 )
+                if self.dashboard_state:
+                    await self.dashboard_state.update_next_check(next_check_time)
                 await self._interruptible_sleep(delay_seconds)
             
         except Exception as e:
