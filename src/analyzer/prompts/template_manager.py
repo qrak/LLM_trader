@@ -213,7 +213,6 @@ POSITION SIZING FORMULA (calculate before finalizing - SHOW YOUR WORK in RISK/RE
 - FORMAT: "Position: base [X] - alignment [Y] = [Z]"
 
 MACRO TIMEFRAME CONFLICT (CRITICAL):
-MACRO TIMEFRAME CONFLICT (CRITICAL):
 If the 365D macro trend is BEARISH and you are going LONG (or vice versa):
 - Explicitly state: "⚠️ 365D MACRO CONFLICT: [direction]" in your analysis
 - Require 4+ strong confluences (standard is 3) or a clear REVERSAL structure (e.g. divergence, pattern break)

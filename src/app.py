@@ -161,19 +161,24 @@ class CryptoTradingBot:
         if last_analysis_time:
             self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._wait_until_next_timeframe_after(last_analysis_time)
-            self.logger.info("Ready for next analysis after wait")
+        self.logger.info("Ready for next analysis after wait")
         
+        # Initial run is considered regular (unless we want to skipping update on restart, but safer to update)
+        is_regular_run = True
+
         while self.running:
             try:
                 check_count += 1
-                await self._execute_trading_check(check_count)
+                await self._execute_trading_check(check_count, force_news_update=is_regular_run)
                 
                 # Check if still running before waiting
                 if not self.running:
                     break
                 
                 # Wait for next timeframe
-                await self._wait_for_next_timeframe()
+                # Returns True if forced (interrupted), False if waited full duration (regular)
+                was_forced_wait = await self._wait_for_next_timeframe()
+                is_regular_run = not was_forced_wait
                 
             except asyncio.CancelledError:
                 self.logger.info("Trading cancelled")
@@ -184,7 +189,7 @@ class CryptoTradingBot:
                 # Wait 60 seconds before retrying on error
                 await self._interruptible_sleep(60)
     
-    async def _execute_trading_check(self, check_count: int):
+    async def _execute_trading_check(self, check_count: int, force_news_update: bool = True):
         """Execute a single trading check iteration."""
         current_time = datetime.now()
         self.logger.info("=" * 60)
@@ -221,6 +226,14 @@ class CryptoTradingBot:
                 self.logger.error(f"Error checking position: {e}")
         
         # Run market analysis
+        if force_news_update:
+            self.logger.info("Updating market knowledge (Regular Analysis)...")
+            await self.rag_engine.update_if_needed(force_update=True)
+        else:
+            self.logger.info("Skipping forced market knowledge update (Forced Analysis)")
+            # Still check if update is needed by interval
+            await self.rag_engine.update_if_needed(force_update=False)
+
         self.logger.info("Running market analysis...")
         
         # Build trading context with P&L data (separate for system prompt)
@@ -341,19 +354,20 @@ class CryptoTradingBot:
             
             # Calculate next candle start
             next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
-            delay_ms = next_candle_ms - current_time_ms + 5000  # Add 5 second buffer
+            delay_ms = next_candle_ms - current_time_ms + 2000  # Add 2 second buffer
             delay_seconds = delay_ms / 1000
             
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
             self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)")
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
-            await self._interruptible_sleep(delay_seconds)
+            return await self._interruptible_sleep(delay_seconds)
             
         except Exception as e:
             self.logger.error(f"Error calculating next timeframe: {e}")
             # Default to 5 minute wait on error
             await self._interruptible_sleep(300)
+            return False
     
     async def _wait_until_next_timeframe_after(self, last_time: datetime):
         """Wait until the next timeframe candle after a specific timestamp.
@@ -442,11 +456,13 @@ class CryptoTradingBot:
                 if respect_force_analysis and self._force_analysis.is_set():
                     self._force_analysis.clear()
                     self.logger.info("Force analysis triggered - interrupting wait")
-                    return
+                    return True
                 
                 sleep_time = min(chunk_size, seconds - elapsed)
                 await asyncio.sleep(sleep_time)
                 elapsed += sleep_time
+            
+            return False
         except asyncio.CancelledError:
             # Allow immediate cancellation
             raise
