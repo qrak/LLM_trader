@@ -6,6 +6,10 @@ import torch
 import asyncio
 import sys
 import warnings
+# Suppress library warnings - MUST be done before other imports
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
 import time
 import os
 import aiohttp
@@ -64,11 +68,6 @@ from src.analyzer import (
 )
 from src.analyzer.prompts import PromptBuilder
 from src.analyzer.pattern_engine import ChartGenerator
-
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
-# Suppress library deprecation warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord.http")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai._api_client")
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox
