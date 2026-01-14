@@ -1,14 +1,74 @@
 """Token counting and cost tracking for AI model usage."""
+import json
+import os
 from typing import Dict, Optional, Any
 
 import tiktoken
+
+
+class ModelPricing:
+    """Loads and provides model pricing from config/model_pricing.json."""
+    _instance: Optional["ModelPricing"] = None
+    _pricing: Optional[Dict[str, Any]] = None
+
+    def __new__(cls) -> "ModelPricing":
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if ModelPricing._pricing is None:
+            ModelPricing._pricing = self._load_pricing()
+
+    def _load_pricing(self) -> Dict[str, Any]:
+        """Load pricing data from JSON file."""
+        pricing_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_pricing.json")
+        pricing_path = os.path.normpath(pricing_path)
+        try:
+            with open(pricing_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"google": {}, "openrouter": {}}
+
+    def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+        """
+        Calculate cost for a request based on token counts.
+
+        Args:
+            provider: Provider name (google, openrouter)
+            model: Model name/identifier
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+
+        Returns:
+            Cost in USD or None if pricing not available
+        """
+        provider_pricing = self._pricing.get(provider, {})
+        model_key = self._normalize_model_key(model)
+        model_pricing = provider_pricing.get(model_key)
+        if not model_pricing:
+            for key in provider_pricing:
+                if key.startswith("_"):
+                    continue
+                if model_key in key or key in model_key:
+                    model_pricing = provider_pricing[key]
+                    break
+        if not model_pricing:
+            return None
+        input_cost = (input_tokens / 1_000_000) * model_pricing.get("input_per_million", 0)
+        output_cost = (output_tokens / 1_000_000) * model_pricing.get("output_per_million", 0)
+        return input_cost + output_cost
+
+    def _normalize_model_key(self, model: str) -> str:
+        """Normalize model name for lookup."""
+        return model.lower().replace("models/", "")
 
 
 class TokenCounter:
     """Handles token counting and tracking for AI model usage with cost support."""
     PROVIDER_COST_MESSAGES = {
         "openrouter": "Cost: ${cost:.4f}",
-        "google": "Pricing not calculated for Gemini models using Google AI servers",
+        "google": "Cost: ${cost:.4f} (estimated)",
         "lmstudio": "Free - local model",
     }
 
@@ -191,14 +251,14 @@ class TokenCounter:
             provider: Provider name
             prompt_tokens: Input token count
             completion_tokens: Output token count
-            cost: Optional cost (for OpenRouter)
+            cost: Optional cost (for OpenRouter or Google)
 
         Returns:
             Formatted string for display
         """
         token_str = f"Tokens: {prompt_tokens:,} in / {completion_tokens:,} out"
-        if provider == "openrouter" and cost is not None:
-            cost_str = self.PROVIDER_COST_MESSAGES["openrouter"].format(cost=cost)
+        if cost is not None and provider in ("openrouter", "google"):
+            cost_str = self.PROVIDER_COST_MESSAGES[provider].format(cost=cost)
         elif provider in self.PROVIDER_COST_MESSAGES:
             cost_str = self.PROVIDER_COST_MESSAGES[provider]
         else:
@@ -267,7 +327,7 @@ class CostStorage:
         """Return default cost structure."""
         return {
             "openrouter": {"total_cost": 0.0, "total_input_tokens": 0, "total_output_tokens": 0},
-            "google": {"total_input_tokens": 0, "total_output_tokens": 0},
+            "google": {"total_cost": 0.0, "total_input_tokens": 0, "total_output_tokens": 0},
             "lmstudio": {"total_input_tokens": 0, "total_output_tokens": 0},
             "last_reset": None
         }
@@ -292,13 +352,15 @@ class CostStorage:
             provider: Provider name
             prompt_tokens: Input tokens
             completion_tokens: Output tokens
-            cost: Cost in dollars (only for OpenRouter)
+            cost: Cost in dollars (for OpenRouter and Google)
         """
         if provider not in self._costs:
             self._costs[provider] = {"total_input_tokens": 0, "total_output_tokens": 0}
         self._costs[provider]["total_input_tokens"] += prompt_tokens
         self._costs[provider]["total_output_tokens"] += completion_tokens
-        if cost is not None and "total_cost" in self._costs[provider]:
+        if cost is not None:
+            if "total_cost" not in self._costs[provider]:
+                self._costs[provider]["total_cost"] = 0.0
             self._costs[provider]["total_cost"] += cost
         self.save()
 

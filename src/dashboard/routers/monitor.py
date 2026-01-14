@@ -73,14 +73,32 @@ async def get_system_prompt(request: Request) -> Dict[str, Any]:
 
 @router.get("/costs")
 async def get_api_costs() -> Dict[str, Any]:
-    """Get current API cost tracking data."""
-    from src.dashboard.dashboard_state import dashboard_state
-    return dashboard_state.get_cost_data()
+    """Get current API cost tracking data from persistent storage."""
+    from src.utils.token_counter import CostStorage
+    storage = CostStorage()
+    costs = storage.get_costs()
+    openrouter_cost = costs.get("openrouter", {}).get("total_cost", 0.0)
+    google_cost = costs.get("google", {}).get("total_cost", 0.0)
+    lmstudio_cost = 0.0
+    total = openrouter_cost + google_cost + lmstudio_cost
+    return {
+        "costs_by_provider": {
+            "openrouter": openrouter_cost,
+            "google": google_cost,
+            "lmstudio": lmstudio_cost
+        },
+        "total_session_cost": total,
+        "last_request_cost": None,
+        "formatted_total": f"${total:.6f}" if total > 0 else "Free"
+    }
 
 
 @router.post("/costs/reset")
 async def reset_api_costs() -> Dict[str, Any]:
-    """Reset API cost tracking to zero."""
+    """Reset API cost tracking to zero (both in-memory and persistent storage)."""
     from src.dashboard.dashboard_state import dashboard_state
+    from src.utils.token_counter import CostStorage
     await dashboard_state.reset_api_costs()
+    storage = CostStorage()
+    storage.reset()
     return {"status": "ok", "message": "API costs reset to zero"}
