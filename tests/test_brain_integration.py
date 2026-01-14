@@ -94,17 +94,9 @@ class TestBrainIntegration:
         assert "+5.50%" in retrieved_context
 
     def test_semantic_reflection_flow(self, brain_service, vector_memory):
-        """
-        Verify that the brain can 'reflect' and generate semantic rules.
-        (Note: automated reflection usually requires LLM, checking if we can simulate the trigger)
-        """
-        # This test ensures that the method runs without error when data is present.
-        # Since actual reflection calls the LLM, we might need to mock the LLM call inside reflect_on_recent_performance
-        # if it's not purely vector-based.
-        # Checking implementation of reflect_on_recent_performance...
-        
-        # Inject some trades
-        for i in range(5):
+        """Verify that reflection requires at least 10 winning trades."""
+        # Inject 8 trades (below threshold)
+        for i in range(8):
             vector_memory.store_experience(
                 trade_id=f"trade_reflect_{i}",
                 market_context="BULLISH pattern",
@@ -112,16 +104,22 @@ class TestBrainIntegration:
                 pnl_pct=2.0,
                 direction="LONG",
                 confidence="HIGH",
-                reasoning="Pattern match"
+                reasoning="Pattern match",
+                metadata={
+                    "market_regime": "BULLISH",
+                    "adx_at_entry": 30,
+                    "direction": "LONG",
+                    "timestamp": f"2026-01-0{i+1}T12:00:00"
+                }
             )
-            
-        # We assume reflect_on_recent_performance calculates stats. 
-        # If it calls an LLM, we'd need to mock 'self.llm_client' or similar if reachable.
-        # Based on current `brain.py`, let's see what we can verify from the vector side (like 'semantic_rules' collection).
         
-        # For this integration test, we'll focus on the vector storage part of reflection if possible,
-        # or simply ensure the method handles state correctly.
-        pass 
+        # Trigger reflection - should reject due to insufficient samples
+        brain_service._trigger_reflection()
+        
+        # Verify no rules were created
+        rules = vector_memory.get_active_rules(n_results=10)
+        assert len(rules) == 0, "No rules should be created with < 10 winning trades"
+ 
 
     def test_context_recency_bias(self, brain_service, vector_memory):
         """Verify that recent trades are preferred (if Decay Engine is active)."""

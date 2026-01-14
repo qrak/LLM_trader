@@ -459,8 +459,8 @@ class TradingBrainService:
             )
 
             wins = experiences  # Already filtered by DB
-            if len(wins) < 5:
-                self.logger.debug("Not enough winning trades for reflection")
+            if len(wins) < 10:
+                self.logger.debug("Not enough winning trades for reflection (need 10+)")
                 return
 
             def build_win_key(meta):
@@ -477,9 +477,30 @@ class TradingBrainService:
 
             best_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = best_pattern
-            if count < 3:
+            if count < 5:
+                self.logger.debug(f"Pattern {pattern_key} rejected: only {count} occurrences (need 5+)")
                 return
 
+            # Validate win rate before storing rule
+            # Get all experiences (wins + losses) for this pattern to calculate win rate
+            all_pattern_experiences = self.vector_memory.retrieve_similar_experiences(
+                "recent trading experiences", k=50, use_decay=True
+            )
+            pattern_wins = sum(1 for exp in all_pattern_experiences 
+                             if exp["metadata"].get("outcome") == "WIN" 
+                             and build_win_key(exp["metadata"]) == pattern_key)
+            pattern_total = sum(1 for exp in all_pattern_experiences 
+                              if build_win_key(exp["metadata"]) == pattern_key)
+            
+            if pattern_total > 0:
+                win_rate = pattern_wins / pattern_total
+                if win_rate < 0.6:
+                    self.logger.debug(
+                        f"Pattern {pattern_key} rejected: win rate {win_rate:.0%} < 60% "
+                        f"({pattern_wins}/{pattern_total} trades)"
+                    )
+                    return
+            
             parts = pattern_key.split("_")
             direction = parts[0]
             regime = parts[1]
@@ -518,8 +539,8 @@ class TradingBrainService:
             )
 
             losses = experiences
-            if len(losses) < 3:
-                self.logger.debug("Not enough losing trades for anti-pattern reflection")
+            if len(losses) < 5:
+                self.logger.debug("Not enough losing trades for anti-pattern reflection (need 5+)")
                 return
 
             def build_loss_key(meta):
@@ -535,7 +556,8 @@ class TradingBrainService:
 
             worst_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = worst_pattern
-            if count < 2:
+            if count < 3:
+                self.logger.debug(f"Anti-pattern {pattern_key} rejected: only {count} occurrences (need 3+)")
                 return
 
             parts = pattern_key.split("_")
