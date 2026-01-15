@@ -1,6 +1,6 @@
 ccxt==4.5.3
 tiktoken==0.11.0
-aiohttp==3.13.2
+aiohttp==3.13.3
 aiodns==3.6.1
 aiosqlite==0.21.0
 aiohttp-client-cache==0.13.0

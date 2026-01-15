@@ -3,12 +3,14 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
+
 router = APIRouter(prefix="/api/performance", tags=["performance"])
 
 @router.get("/history")
 async def get_performance_history(request: Request) -> Dict[str, Any]:
     """Get historical performance data for the chart."""
     config = request.app.state.config
+    logger = request.app.state.logger
     data_dir = getattr(config, "DATA_DIR", "data")
     trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
     stats_file = Path(data_dir) / "trading" / "statistics.json"
@@ -19,7 +21,7 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
             with open(stats_file, "r") as f:
                 stats = json.load(f)
         except Exception:
-            pass
+            logger.error("Failed to load stats file", exc_info=True)
     if trade_history_file.exists():
         try:
             with open(trade_history_file, "r") as f:
@@ -49,8 +51,9 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
                         "value": round(running_capital, 2),
                         "action": action
                     })
-        except Exception as e:
-            return {"error": f"Failed to load trade history: {str(e)}"}
+        except Exception:
+            logger.error("Failed to process trade history", exc_info=True)
+            return {"error": "Failed to load trade history"}
     return {
         "history": equity_curve,
         "stats": stats
@@ -60,13 +63,15 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
 async def get_statistics(request: Request) -> Dict[str, Any]:
     """Get trading statistics summary."""
     config = request.app.state.config
+    logger = request.app.state.logger
     data_dir = getattr(config, "DATA_DIR", "data")
     stats_file = Path(data_dir) / "trading" / "statistics.json"
     if stats_file.exists():
         try:
             with open(stats_file, "r") as f:
                 return json.load(f)
-        except Exception as e:
-            return {"error": f"Failed to load stats: {str(e)}"}
+        except Exception:
+            logger.error("Failed to load statistics", exc_info=True)
+            return {"error": "Failed to load stats"}
     return {}
 

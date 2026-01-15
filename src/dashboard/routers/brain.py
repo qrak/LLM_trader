@@ -3,10 +3,11 @@ from typing import Dict, Any, List
 import json
 from pathlib import Path
 
+
 router = APIRouter(prefix="/api/brain", tags=["brain"])
 
 
-def _build_current_market_context(config) -> str:
+def _build_current_market_context(config, logger) -> str:
     """Build context query string from current market conditions.
 
     Reads previous_response.json to extract trend, ADX, and other indicators.
@@ -54,6 +55,7 @@ def _build_current_market_context(config) -> str:
 
             return f"{trend} + {adx_label} + {vol}"
     except Exception:
+        logger.error("Failed to build market context", exc_info=True)
         return ""
 
 @router.get("/status")
@@ -61,6 +63,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
     """Get the current thought process/status of the brain."""
     brain_service = request.app.state.brain_service
     config = request.app.state.config
+    logger = request.app.state.logger
     unified_parser = getattr(request.app.state, "unified_parser", None)
     data_dir = getattr(config, "DATA_DIR", "data")
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
@@ -93,7 +96,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
                         status["action"] = analysis.get("signal", "--")
                         status["confidence"] = analysis.get("confidence", "--")
         except Exception:
-            pass
+            logger.error("Failed to load brain status from previous response", exc_info=True)
     if stats_file.exists():
         try:
             with open(stats_file, "r") as f:
@@ -102,7 +105,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
                 status["win_rate"] = stats.get("win_rate", 0)
                 status["current_capital"] = stats.get("current_capital", 0)
         except Exception:
-            pass
+            logger.error("Failed to load statistics for brain status", exc_info=True)
     return status
 
 
@@ -111,6 +114,7 @@ async def get_vector_memory(request: Request, limit: int = 100) -> Dict[str, Any
     """Get recent vector memories (synapses)."""
     vector_memory = request.app.state.vector_memory
     config = request.app.state.config
+    logger = request.app.state.logger
     data_dir = getattr(config, "DATA_DIR", "data")
     
     result = {
@@ -143,7 +147,7 @@ async def get_vector_memory(request: Request, limit: int = 100) -> Dict[str, Any
                     for i, t in enumerate(trades[-limit:])
                 ]
         except Exception:
-            pass
+            logger.error("Failed to load trade history for memory", exc_info=True)
     
     return result
 
@@ -151,6 +155,7 @@ async def get_vector_memory(request: Request, limit: int = 100) -> Dict[str, Any
 async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
     """Get currently active semantic rules."""
     vector_memory = request.app.state.vector_memory
+    logger = request.app.state.logger
     if not vector_memory:
         return []
     
@@ -158,6 +163,7 @@ async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
         rules = vector_memory.get_active_rules(n_results=20)
         return rules
     except Exception:
+        logger.error("Failed to retrieve active rules", exc_info=True)
         return []
 
 @router.get("/vectors")
@@ -165,6 +171,7 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
     """Get detailed vector memory contents from ChromaDB."""
     vector_memory = request.app.state.vector_memory
     config = request.app.state.config
+    logger = request.app.state.logger
 
     result = {
         "experience_count": 0,
@@ -195,7 +202,7 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         # Build context query - use provided query or auto-generate from current market
         context_query = query
         if not context_query:
-            context_query = _build_current_market_context(config)
+            context_query = _build_current_market_context(config, logger)
             if context_query:
                 result["current_context"] = context_query
 
@@ -249,8 +256,9 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         result["experiences"] = experiences_list
 
             
-    except Exception as e:
-        result["error"] = str(e)
+    except Exception:
+        logger.error("Failed to retrieve vector details", exc_info=True)
+        result["error"] = "Internal error retrieving vector details"
     return result
 
 
@@ -260,6 +268,7 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
     import re
     persistence = request.app.state.persistence
     config = request.app.state.config
+    logger = request.app.state.logger
     dashboard_state = getattr(request.app.state, 'dashboard_state', None)
     current_price = dashboard_state.current_price if dashboard_state else None
     if current_price is None:
@@ -274,7 +283,7 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
                     if match:
                         current_price = float(match.group(1).replace(",", ""))
             except Exception:
-                pass
+                logger.error("Failed to parse current price from prompt", exc_info=True)
     if not persistence:
         return {"has_position": False, "error": "Persistence not available"}
     position = persistence.load_position()
@@ -310,6 +319,7 @@ async def refresh_current_price(request: Request) -> Dict[str, Any]:
     exchange_manager = getattr(request.app.state, 'exchange_manager', None)
     dashboard_state = getattr(request.app.state, 'dashboard_state', None)
     config = request.app.state.config
+    logger = request.app.state.logger
     if not exchange_manager:
         return {"success": False, "error": "Exchange manager not available"}
     try:
@@ -324,5 +334,6 @@ async def refresh_current_price(request: Request) -> Dict[str, Any]:
         if price > 0 and dashboard_state:
             await dashboard_state.update_price(price)
         return {"success": True, "current_price": price, "symbol": symbol}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    except Exception:
+        logger.error("Internal error during price refresh", exc_info=True)
+        return {"success": False, "error": "Internal error during price refresh"}

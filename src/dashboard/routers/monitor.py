@@ -3,12 +3,14 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
+
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
 
 @router.get("/last_prompt")
 async def get_last_prompt(request: Request) -> Dict[str, Any]:
     """Get the last prompt sent to the LLM."""
     analysis_engine = request.app.state.analysis_engine
+    logger = request.app.state.logger
     last_prompt = getattr(analysis_engine, "last_generated_prompt", None)
     if last_prompt:
         return {"prompt": last_prompt, "source": "memory"}
@@ -27,13 +29,14 @@ async def get_last_prompt(request: Request) -> Dict[str, Any]:
                         "timestamp": data.get("timestamp", "unknown")
                     }
         except Exception:
-            pass
+            logger.error("Failed to load last prompt", exc_info=True)
     return {"prompt": "No prompt generated yet.", "source": None}
 
 @router.get("/last_response")
 async def get_last_response(request: Request) -> Dict[str, Any]:
     """Get the last response received from the LLM."""
     analysis_engine = request.app.state.analysis_engine
+    logger = request.app.state.logger
     last_response = getattr(analysis_engine, "last_llm_response", None)
     if last_response:
         return {"response": last_response}
@@ -51,8 +54,9 @@ async def get_last_response(request: Request) -> Dict[str, Any]:
                     "timestamp": data.get("timestamp"),
                     "indicators": {k: v for k, v in response.items() if k != "text_analysis"}
                 }
-        except Exception as e:
-            return {"response": f"Error reading previous response: {str(e)}"}
+        except Exception:
+            logger.error("Failed to load last response", exc_info=True)
+            return {"error": "Error reading previous response"}
     return {"response": "No response received yet."}
 
 
@@ -109,6 +113,7 @@ async def get_news(request: Request) -> Dict[str, Any]:
     articles = []
     # Try in-memory first
     rag_engine = getattr(request.app.state, "rag_engine", None)
+    logger = request.app.state.logger
     if rag_engine:
         news_manager = getattr(rag_engine, "news_manager", None)
         if news_manager:
@@ -128,5 +133,5 @@ async def get_news(request: Request) -> Dict[str, Any]:
                         if articles:
                             break
                 except Exception:
-                    pass
+                    logger.error(f"Failed to load news from {news_path}", exc_info=True)
     return {"articles": articles, "count": len(articles)}
