@@ -5,7 +5,7 @@ Follows Single Responsibility Principle by delegating calculations to other serv
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
@@ -257,7 +257,7 @@ class PersistenceManager:
             
             data_to_save = {
                 "response": response_dict,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
             
             # Add prompt if provided
@@ -308,7 +308,7 @@ class PersistenceManager:
         """
         try:
             if timestamp is None:
-                timestamp = datetime.now()
+                timestamp = datetime.now(timezone.utc)
             
             with open(self.last_analysis_file, 'w') as f:
                 json.dump({

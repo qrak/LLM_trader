@@ -1,6 +1,6 @@
 """Trading strategy that wraps analysis with position management."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -114,7 +114,7 @@ class TradingStrategy:
         )
         
         decision = TradeDecision(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             symbol=self.current_position.symbol,
             action=f"CLOSE_{self.current_position.direction}",
             confidence=self.current_position.confidence,
@@ -264,7 +264,7 @@ class TradingStrategy:
             self.logger.info("Closing position based on analysis signal...")
             await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 symbol=symbol,
                 action="CLOSE",
                 confidence=confidence,
@@ -295,7 +295,7 @@ class TradingStrategy:
                 self.logger.warning(f"Failed to track position update: {e}")
 
             decision = TradeDecision(
-                timestamp=datetime.now(),
+                timestamp=datetime.now(timezone.utc),
                 symbol=symbol,
                 action="UPDATE",
                 confidence=confidence,
@@ -383,7 +383,7 @@ class TradingStrategy:
             stop_loss=final_sl,
             take_profit=final_tp,
             size=quantity,
-            entry_time=datetime.now(),
+            entry_time=datetime.now(timezone.utc),
             confidence=confidence,
             direction=direction,
             symbol=symbol,
@@ -407,7 +407,7 @@ class TradingStrategy:
 
         # Create and save decision (store size_pct for history context)
         decision = TradeDecision(
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             symbol=symbol,
             action=signal,
             confidence=confidence,

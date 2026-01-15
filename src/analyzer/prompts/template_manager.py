@@ -49,7 +49,7 @@ class TemplateManager:
         if last_analysis_time:
             header_lines.extend([
                 "TEMPORAL CONTEXT:",
-                f"Last analysis was performed at: {last_analysis_time}",
+                f"Last analysis was performed at: {last_analysis_time} UTC",
                 "",
             ])
         
