@@ -429,6 +429,30 @@ class VectorMemoryService:
         except Exception:
             return self._collection.count()
 
+    def get_direction_bias(self) -> Optional[Dict[str, Any]]:
+        """Get count of LONG vs SHORT trades for bias detection.
+        
+        Returns:
+            Dict with long_count, short_count, and percentages, or None if no data.
+        """
+        metas = self._get_trade_metadatas(exclude_updates=True)
+        if not metas:
+            return None
+        
+        long_count = sum(1 for m in metas if m.get("direction") == "LONG")
+        short_count = sum(1 for m in metas if m.get("direction") == "SHORT")
+        total = long_count + short_count
+        
+        if total == 0:
+            return None
+        
+        return {
+            "long_count": long_count,
+            "short_count": short_count,
+            "long_pct": round(long_count / total * 100, 1),
+            "short_pct": round(short_count / total * 100, 1),
+        }
+
     def get_all_experiences(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Retrieve all experiences without vector similarity search.
         
