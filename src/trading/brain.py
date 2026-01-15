@@ -185,6 +185,17 @@ class TradingBrainService:
             if recommendation:
                 lines.append(f"  → INSIGHT: {recommendation}")
         
+            # Direction bias warning
+            direction_bias = self.vector_memory.get_direction_bias()
+            if direction_bias:
+                lines.extend([
+                    "",
+                    "DIRECTION BIAS CHECK:",
+                    f"- Historical trades: {direction_bias['long_count']} LONG, {direction_bias['short_count']} SHORT",
+                ])
+                if direction_bias['short_count'] == 0:
+                    lines.append("- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; lack of data means you may be missing valid setups.")
+        
         # Section 2: Vector-Retrieved Past Experiences (context-aware)
         vector_context = self.get_vector_context(
             trend_direction=trend_direction,

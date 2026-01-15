@@ -219,6 +219,16 @@ If the 365D macro trend is BEARISH and you are going LONG (or vice versa):
 - Differentiate between "Structural Bearishness" (don't buy) and "Overextended Bullishness" (valid short opportunity)
 If both 365D and Weekly macro conflict with your trade: Exercise EXTREME CAUTION. Only proceed if you identify a clear "Cycle Top/Bottom" or "Major Reversal" setup with 5+ confluences. Otherwise, HOLD is preferred.
 
+SHORT TRADE OPPORTUNITIES:
+These are GUIDELINES, not hard rules. Use your judgment based on overall confluence, just as with LONG trades.
+When Weekly Macro is BULLISH but short-term conditions suggest exhaustion, SHORT may be valid if you observe:
+- Statistical overextension (elevated Z-score, overbought oscillators at extremes)
+- Momentum divergence (price making new highs, but indicators failing to confirm)
+- Volume climax with rejection (exceptionally high volume at resistance with reversal candle pattern)
+- One-sided order book pressure (heavy sell-side absorption visible in microstructure data)
+🧠 THINK STEP BY STEP: Before dismissing SHORT, ask: "What would a professional mean-reversion trader see here?"
+SHORT trades require stricter confluence than LONG in a bull macro - but they are NOT forbidden. If your analysis shows a clear exhaustion setup, state your reasoning and proceed with appropriate position sizing.
+
 TRADING SIGNALS & CONFIDENCE:
 - BUY ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
 - SELL ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
@@ -297,6 +307,11 @@ ANALYSIS STEPS (use findings to determine trading signal):
         
         analysis_steps += """
  | Fear & Greed Index (extremes) | Asset alignment with market | Relevant events
+
+5.5. BULL vs BEAR CASE (Forced Dialectical Analysis):
+   🐂 BULL CASE: What confluence supports LONG? What would need to happen for price to rise?
+   🐻 BEAR CASE: What confluence supports SHORT? What would need to happen for price to fall?
+   🧠 WHICH PERSPECTIVE WINS? Justify with data. If brain has relevant semantic rules for either direction, weight those appropriately.
 
 6. NEWS & SENTIMENT:
    Asset news | Market events | Sentiment | Institutional activity | Regulatory impacts | News that could override technicals
