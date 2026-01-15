@@ -55,3 +55,4 @@ config/config.ini
 # Private keys and sensitive data
 keys.env
 *.env
+*.ps1
