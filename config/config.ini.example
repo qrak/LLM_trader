@@ -23,6 +23,13 @@ openrouter_fallback_model = deepseek/deepseek-r1:free
 # Model identifier for Google AI Studio (e.g., gemini-flash-latest, gemini-2.5-flash)
 google_studio_model = gemini-3-flash-preview
 
+# BlockRun.AI Configuration
+# Base URL for BlockRun API
+blockrun_base_url = https://blockrun.ai/api
+# Model to use with BlockRun (format: provider/model)
+# Examples: openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash
+blockrun_model = deepseek/deepseek-reasoner
+
 [general]
 # Default cryptocurrency pair to analyze if none specified
 crypto_pair = BTC/USDC
