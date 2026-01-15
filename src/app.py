@@ -159,7 +159,7 @@ class CryptoTradingBot:
         # Check if resuming from previous session (regardless of position status)
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
-            self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
             await self._wait_until_next_timeframe_after(last_analysis_time)
         self.logger.info("Ready for next analysis after wait")
         
@@ -258,6 +258,15 @@ class CryptoTradingBot:
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
         last_analysis_time_str = None
         if last_analysis_time_obj:
+            # Ensure we are working with UTC
+            if last_analysis_time_obj.tzinfo is None:
+                # Legacy: Naive timestamps were local time. Convert to UTC.
+                # astimezone(timezone.utc) assumes naive is local system time
+                last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
+            else:
+                # Convert aware timestamp to UTC to match prompt expectation
+                last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
+            
             last_analysis_time_str = last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
 
         # Get dynamic thresholds for prompt template
