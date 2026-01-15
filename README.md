@@ -1,6 +1,8 @@
 # 🤖 SEMANTIC SIGNAL LLM
 
-> **Status:** BETA / Paper Trading Only
+> **Status:** BETA / Research Edition
+>
+> **Note:** This is the public research branch. It is frequently experimentaly updated. The stable production version runs privately.
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
@@ -219,4 +221,4 @@ python start.py              # Default from config
 - **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
 
 ## 📄 License
-Licensed under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details.
+Licensed under the PolyForm Noncommercial License 1.0.0. See [LICENSE.md](LICENSE.md) for details.
