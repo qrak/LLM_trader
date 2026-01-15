@@ -22,10 +22,10 @@ export async function updatePromptTab() {
         const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
         if (meta) meta.textContent = `${source} | ${timestamp}`;
-        // Render prompt with markdown for better readability
+        // Render prompt with markdown and discord-content styling (same as response)
         if (content && window.marked) {
             viewer.innerHTML = marked.parse(content);
-            viewer.classList.remove('prompt-content');
+            viewer.classList.remove('prompt-content', 'code-block');
             viewer.classList.add('discord-content');
         } else {
             viewer.textContent = content;
@@ -50,9 +50,15 @@ export async function updateResponseTab() {
         // Process content for Discord-style display
         if (content && window.marked) {
             let processed = content;
+            // Strip JSON code blocks (```json ... ```) for cleaner display
+            processed = processed.replace(/```json[\s\S]*?```/g, '');
+            // Strip any remaining { "analysis": ... } JSON objects that aren't in code blocks
+            processed = processed.replace(/\n*\{\s*"analysis"[\s\S]*?\n\}\s*$/g, '');
             // Highlight warning sections
             processed = processed.replace(/⚠️\s*([^.]+\.\s*)/g, '<div class="warning-banner">⚠️ $1</div>');
-            viewer.innerHTML = marked.parse(processed);
+            // Clean up any double line breaks left by JSON removal
+            processed = processed.replace(/\n{3,}/g, '\n\n');
+            viewer.innerHTML = marked.parse(processed.trim());
         } else {
             viewer.innerHTML = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
         }

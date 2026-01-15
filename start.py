@@ -485,6 +485,7 @@ class CompositionRoot:
             vector_memory=brain_service.vector_memory if brain_service and hasattr(brain_service, 'vector_memory') else None,
             analysis_engine=market_analyzer,
             config=self.config,
+            logger=self.logger,
             unified_parser=unified_parser,
             persistence=persistence,
             exchange_manager=exchange_manager

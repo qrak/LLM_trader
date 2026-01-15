@@ -14,6 +14,7 @@ class DashboardServer:
                  vector_memory, 
                  analysis_engine, 
                  config,
+                 logger,
                  unified_parser=None,
                  persistence=None,
                  exchange_manager=None,
@@ -23,6 +24,7 @@ class DashboardServer:
         self.vector_memory = vector_memory
         self.analysis_engine = analysis_engine
         self.config = config
+        self.logger = logger
         self.unified_parser = unified_parser
         self.persistence = persistence
         self.exchange_manager = exchange_manager
@@ -58,6 +60,7 @@ class DashboardServer:
         app.state.vector_memory = self.vector_memory
         app.state.analysis_engine = self.analysis_engine
         app.state.config = self.config
+        app.state.logger = self.logger
         app.state.unified_parser = self.unified_parser
         app.state.persistence = self.persistence
         app.state.exchange_manager = self.exchange_manager
