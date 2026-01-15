@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
+    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
 
 
 @dataclass
@@ -46,6 +46,7 @@ class ProviderClients:
     google_paid: Optional["GoogleAIClient"] = None
     openrouter: Optional["OpenRouterClient"] = None
     lmstudio: Optional["LMStudioClient"] = None
+    blockrun: Optional["BlockRunClient"] = None
 
     @classmethod
     def from_factory_dict(cls, clients: Dict[str, Any]) -> "ProviderClients":
@@ -54,5 +55,6 @@ class ProviderClients:
             google=clients.get('google'),
             google_paid=clients.get('google_paid'),
             openrouter=clients.get('openrouter'),
-            lmstudio=clients.get('lmstudio')
+            lmstudio=clients.get('lmstudio'),
+            blockrun=clients.get('blockrun')
         )

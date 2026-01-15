@@ -63,6 +63,8 @@ class ModelManager(ModelManagerProtocol):
             await self._clients.google_paid.__aenter__()
         if self._clients.lmstudio:
             await self._clients.lmstudio.__aenter__()
+        if self._clients.blockrun:
+            await self._clients.blockrun.__aenter__()
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
@@ -80,6 +82,8 @@ class ModelManager(ModelManagerProtocol):
                 await self._clients.google_paid.close()
             if self._clients.lmstudio:
                 await self._clients.lmstudio.close()
+            if self._clients.blockrun:
+                await self._clients.blockrun.close()
             self.logger.debug("All model clients closed successfully")
         except Exception as e:
             self.logger.error(f"Error during model manager cleanup: {e}")

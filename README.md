@@ -81,8 +81,9 @@ graph TD
 - **Multi-Provider Support**: 
   - **Google Gemini**: Configurable model selection. Optimized for `gemini-3-flash-preview` (Temp 1.0, TopK 64) via `config.ini`.
   - **Claude 4.5 / Google Gemini 3 Pro**: Support for state-of-the-art reasoning models via OpenRouter.
+  - **BlockRun.AI**: Pay-per-request access to 28+ AI models (ChatGPT, Claude, Gemini, etc.) via x402 micropayments on Base blockchain. No subscriptions needed.
   - **LM Studio**: Local LLM support verified via `lm_studio_base_url`.
-- **Fallback Logic**: Automatically switches providers if primary fails (Google AI -> OpenRouter -> Local).
+- **Fallback Logic**: Automatically switches providers if primary fails (Google AI -> OpenRouter -> BlockRun -> Local).
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 
 ### 📢 RAG Engine (News & Context)

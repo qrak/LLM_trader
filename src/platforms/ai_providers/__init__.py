@@ -2,6 +2,7 @@ from src.platforms.ai_providers.base import BaseAIClient, ResponseDict, UsageDic
 from src.platforms.ai_providers.google import GoogleAIClient
 from src.platforms.ai_providers.lmstudio import LMStudioClient
 from src.platforms.ai_providers.openrouter import OpenRouterClient
+from src.platforms.ai_providers.blockrun import BlockRunClient
 
 __all__ = [
     'BaseAIClient',
@@ -10,4 +11,5 @@ __all__ = [
     'OpenRouterClient',
     'GoogleAIClient',
     'LMStudioClient',
+    'BlockRunClient',
 ]
