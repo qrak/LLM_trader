@@ -34,8 +34,45 @@ def blockrun_client(mock_logger):
 @pytest.fixture
 def mock_blockrun_sdk():
     """Mock the BlockRun SDK."""
-    with patch('src.platforms.ai_providers.blockrun.BlockRun') as mock:
+    with patch('blockrun_llm.AsyncLLMClient') as mock:
         yield mock
+
+
+def create_mock_chat_response(
+    content: str = "Test response",
+    role: str = "assistant",
+    prompt_tokens: int = 10,
+    completion_tokens: int = 5,
+    total_tokens: int = 15,
+    response_id: str = "test-id",
+    model: str = "openai/gpt-4o"
+):
+    """Create a mock Pydantic-like ChatResponse object."""
+    mock_message = MagicMock()
+    mock_message.content = content
+    mock_message.role = role
+
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+
+    mock_usage = MagicMock()
+    mock_usage.prompt_tokens = prompt_tokens
+    mock_usage.completion_tokens = completion_tokens
+    mock_usage.total_tokens = total_tokens
+
+    # Use MagicMock with spec_set to control available attributes
+    # Delete 'response' attribute so hasattr check fails (not a wrapper)
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.usage = mock_usage
+    mock_response.id = response_id
+    mock_response.model = model
+
+    # Explicitly configure the mock to NOT have a 'response' attribute
+    # This ensures hasattr(response, 'response') returns False
+    del mock_response.response
+
+    return mock_response
 
 
 class TestBlockRunClientInitialization:
@@ -46,12 +83,12 @@ class TestBlockRunClientInitialization:
         """Test SDK client initialization."""
         mock_sdk_instance = AsyncMock()
         mock_blockrun_sdk.return_value = mock_sdk_instance
-        
+
         await blockrun_client._initialize_client()
-        
+
         mock_blockrun_sdk.assert_called_once_with(
-            wallet_private_key="0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-            base_url="https://blockrun.ai/api"
+            private_key="0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            api_url="https://blockrun.ai/api"
         )
         assert blockrun_client._client == mock_sdk_instance
         mock_logger.debug.assert_called_with("BlockRun SDK client initialized successfully")
@@ -59,7 +96,7 @@ class TestBlockRunClientInitialization:
     @pytest.mark.asyncio
     async def test_initialize_client_missing_sdk(self, blockrun_client, mock_logger):
         """Test initialization with missing SDK."""
-        with patch('src.platforms.ai_providers.blockrun.BlockRun', side_effect=ImportError("No module")):
+        with patch('blockrun_llm.AsyncLLMClient', side_effect=ImportError("No module")):
             with pytest.raises(ImportError, match="blockrun-llm SDK is required"):
                 await blockrun_client._initialize_client()
 
@@ -172,30 +209,22 @@ class TestChatCompletion:
     async def test_chat_completion_success(self, blockrun_client, mock_blockrun_sdk):
         """Test successful chat completion."""
         mock_client = AsyncMock()
-        mock_client.chat_completion = AsyncMock(return_value={
-            "id": "test-id",
-            "model": "openai/gpt-4o",
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "BTC is bullish"
-                }
-            }],
-            "usage": {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15
-            }
-        })
-        
+        mock_response = create_mock_chat_response(
+            content="BTC is bullish",
+            prompt_tokens=10,
+            completion_tokens=5,
+            total_tokens=15
+        )
+        mock_client.chat_completion = AsyncMock(return_value=mock_response)
+
         blockrun_client._client = mock_client
-        
+
         result = await blockrun_client.chat_completion(
             model="gpt-4o",
             messages=[{"role": "user", "content": "Analyze BTC"}],
             model_config={"temperature": 0.7}
         )
-        
+
         assert result is not None
         assert result["choices"][0]["message"]["content"] == "BTC is bullish"
         assert result["usage"]["prompt_tokens"] == 10
@@ -223,29 +252,27 @@ class TestChartAnalysis:
     async def test_chart_analysis_with_bytes(self, blockrun_client, mock_blockrun_sdk):
         """Test chart analysis with bytes image."""
         mock_client = AsyncMock()
-        mock_client.chat_completion = AsyncMock(return_value={
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "Pattern detected"
-                }
-            }],
-            "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}
-        })
-        
+        mock_response = create_mock_chat_response(
+            content="Pattern detected",
+            prompt_tokens=100,
+            completion_tokens=20,
+            total_tokens=120
+        )
+        mock_client.chat_completion = AsyncMock(return_value=mock_response)
+
         blockrun_client._client = mock_client
         chart_data = b"fake_image_data"
-        
+
         result = await blockrun_client.chat_completion_with_chart_analysis(
             model="openai/gpt-4o",
             messages=[{"role": "user", "content": "Analyze"}],
             chart_image=chart_data,
             model_config={}
         )
-        
+
         assert result is not None
         assert result["choices"][0]["message"]["content"] == "Pattern detected"
-        
+
         call_args = mock_client.chat_completion.call_args
         assert call_args[1]["model"] == "openai/gpt-4o"
         assert len(call_args[1]["messages"]) > 0
@@ -254,25 +281,19 @@ class TestChartAnalysis:
     async def test_chart_analysis_with_bytesio(self, blockrun_client, mock_blockrun_sdk):
         """Test chart analysis with BytesIO image."""
         mock_client = AsyncMock()
-        mock_client.chat_completion = AsyncMock(return_value={
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": "Chart analyzed"
-                }
-            }]
-        })
-        
+        mock_response = create_mock_chat_response(content="Chart analyzed")
+        mock_client.chat_completion = AsyncMock(return_value=mock_response)
+
         blockrun_client._client = mock_client
         chart_buffer = io.BytesIO(b"image_data")
-        
+
         result = await blockrun_client.chat_completion_with_chart_analysis(
             model="anthropic/claude-sonnet-4",
             messages=[{"role": "user", "content": "Check chart"}],
             chart_image=chart_buffer,
             model_config={}
         )
-        
+
         assert result is not None
         assert result["choices"][0]["message"]["content"] == "Chart analyzed"
 
@@ -286,10 +307,51 @@ class TestErrorHandling:
         assert "error" in result
         assert result["error"] == "Empty response from BlockRun SDK"
 
-    def test_convert_sdk_response_invalid_format(self, blockrun_client, mock_logger):
-        """Test conversion of invalid response format."""
-        result = blockrun_client._convert_sdk_response({"invalid": "response"})
-        assert "error" in result
+    def test_convert_sdk_response_pydantic_model(self, blockrun_client):
+        """Test conversion of Pydantic-like response."""
+        mock_response = create_mock_chat_response(
+            content="Test content",
+            role="assistant",
+            prompt_tokens=5,
+            completion_tokens=10,
+            total_tokens=15,
+            response_id="resp-123",
+            model="openai/gpt-4o"
+        )
+        result = blockrun_client._convert_sdk_response(mock_response)
+
+        assert result["choices"][0]["message"]["content"] == "Test content"
+        assert result["choices"][0]["message"]["role"] == "assistant"
+        assert result["usage"]["prompt_tokens"] == 5
+        assert result["usage"]["completion_tokens"] == 10
+        assert result["usage"]["total_tokens"] == 15
+        assert result["id"] == "resp-123"
+        assert result["model"] == "openai/gpt-4o"
+
+    def test_convert_sdk_response_with_cost_wrapper(self, blockrun_client):
+        """Test conversion of ChatResponseWithCost wrapper."""
+        inner_response = create_mock_chat_response(content="Wrapped response")
+        wrapper = Mock()
+        wrapper.response = inner_response
+
+        result = blockrun_client._convert_sdk_response(wrapper)
+
+        assert result["choices"][0]["message"]["content"] == "Wrapped response"
+
+    def test_convert_sdk_response_empty_choices(self, blockrun_client, mock_logger):
+        """Test conversion with empty choices list."""
+        mock_response = MagicMock()
+        mock_response.choices = []
+        mock_response.usage = None
+        mock_response.id = None
+        mock_response.model = None
+        # Remove 'response' attribute so hasattr check fails
+        del mock_response.response
+
+        result = blockrun_client._convert_sdk_response(mock_response)
+
+        assert result["choices"][0]["message"]["content"] == ""
+        assert result["choices"][0]["message"]["role"] == "assistant"
 
     @pytest.mark.asyncio
     async def test_handle_exception_with_redaction(self, blockrun_client, mock_logger):

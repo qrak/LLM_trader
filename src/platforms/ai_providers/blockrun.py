@@ -177,33 +177,48 @@ class BlockRunClient(BaseAIClient):
         """Convert SDK response to ResponseDict format."""
         if response is None:
             return {"error": "Empty response from BlockRun SDK"}  # type: ignore
-        
+
         try:
+            # Handle ChatResponseWithCost (has .response attribute)
+            if hasattr(response, 'response'):
+                chat_response = response.response
+            else:
+                chat_response = response
+
+            # SDK returns Pydantic models, access as object attributes
+            content = ""
+            role = "assistant"
+            if chat_response.choices and len(chat_response.choices) > 0:
+                message = chat_response.choices[0].message
+                content = message.content if message else ""
+                role = message.role if message and message.role else "assistant"
+
             result: ResponseDict = {
                 "choices": [{
                     "message": {
-                        "content": response.get("choices", [{}])[0].get("message", {}).get("content", ""),
-                        "role": response.get("choices", [{}])[0].get("message", {}).get("role", "assistant")
+                        "content": content,
+                        "role": role
                     }
                 }]
             }
-            
-            if "usage" in response:
+
+            if hasattr(chat_response, 'usage') and chat_response.usage:
                 result["usage"] = {
-                    "prompt_tokens": response["usage"].get("prompt_tokens", 0),
-                    "completion_tokens": response["usage"].get("completion_tokens", 0),
-                    "total_tokens": response["usage"].get("total_tokens", 0)
+                    "prompt_tokens": chat_response.usage.prompt_tokens or 0,
+                    "completion_tokens": chat_response.usage.completion_tokens or 0,
+                    "total_tokens": chat_response.usage.total_tokens or 0
                 }
-            
-            if "id" in response:
-                result["id"] = response["id"]
-            if "model" in response:
-                result["model"] = response["model"]
-                
+
+            if hasattr(chat_response, 'id') and chat_response.id:
+                result["id"] = chat_response.id
+            if hasattr(chat_response, 'model') and chat_response.model:
+                result["model"] = chat_response.model
+
             return result
         except (KeyError, IndexError, AttributeError) as e:
             self.logger.error(f"Failed to parse BlockRun response: {e}")
             return {"error": f"Invalid response format: {str(e)}"}  # type: ignore
+
 
     def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
         """Handle BlockRun specific exceptions, falling back to common handler."""
