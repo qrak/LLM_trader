@@ -1,8 +1,9 @@
 [ai_providers]
-# Options: "local", "googleai", "openrouter", "all"
+# Options: "local", "googleai", "openrouter", "blockrun", "all"
 # - "local": Use LM Studio only
 # - "googleai": Use Google AI Studio only  
 # - "openrouter": Use OpenRouter only
+# - "blockrun": Use BlockRun.AI only
 # - "all": Use fallback system (tries primary providers first, then falls back)
 provider = googleai
 
