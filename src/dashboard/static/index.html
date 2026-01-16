@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semantic Signal LLM</title>
-    <link rel="stylesheet" href="style.css?v=2.1">
+    <link rel="stylesheet" href="style.css?v=2.6">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -140,7 +140,7 @@
                     <section id="panel-visuals" class="panel visual-panel">
                         <div class="panel-header">
                             <h3>Visual Cortex Input</h3>
-                            <div class="controls panel-toolbar">
+                            <div class="controls panel-toolbar panel-controls">
                                 <button class="toolbar-btn" onclick="updateVisuals(this)" title="Refresh" aria-label="Refresh visuals">↻</button>
                                 <button class="toolbar-btn" onclick="togglePanelMinimize('panel-visuals')" title="Minimize" aria-label="Minimize visual panel">−</button>
                                 <button class="toolbar-btn" onclick="openLightbox(document.getElementById('analysis-chart').src)" title="Fullscreen" aria-label="Fullscreen chart">⛶</button>
@@ -249,7 +249,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js?v=3.1"></script>
+    <script type="module" src="main.js?v=3.3"></script>
     
     <script>
         // Sync hidden status fields to visible UI (except costs which are handled by main.js directly)

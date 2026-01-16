@@ -42,7 +42,8 @@ function attachPanelButtons() {
         if (!header) return;
         const panelId = panel.id || 'unknown';
         if (panelId === 'unknown') return;
-        if (header.querySelector('.panel-controls')) return;
+        if (panelId === 'panel-visuals') return;
+        if (header.querySelector('.panel-controls') || header.querySelector('.panel-toolbar')) return;
         const controls = document.createElement('div');
         controls.className = 'panel-controls';
         controls.innerHTML = `
