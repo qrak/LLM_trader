@@ -956,3 +956,19 @@ button:hover {
 }
 
 ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Only spin buttons that have the refresh icon or are explicitly refresh buttons */
+button[title="Refresh"].loading,
+button[aria-label*="Refresh"].loading {
+    animation: spin 1s linear infinite;
+}
