@@ -3,7 +3,7 @@ import io
 from typing import Optional, Dict, Any, List, Union, cast, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers import ResponseDict
+from src.platforms.ai_providers.response_models import ChatResponseModel
 from .provider_types import ProviderMetadata, InvocationResult, ProviderClients
 
 if TYPE_CHECKING:
@@ -128,7 +128,7 @@ class ProviderOrchestrator:
         if not metadata or not metadata.is_available():
             return InvocationResult(
                 success=False,
-                response={"error": f"Provider '{provider}' is not available"},
+                response=ChatResponseModel.from_error(f"Provider '{provider}' is not available"),
                 provider=provider,
                 model=self.resolve_model(provider, model)
             )
@@ -143,7 +143,7 @@ class ProviderOrchestrator:
             return await self._invoke_blockrun(metadata, messages, effective_model, chart, chart_image)
         return InvocationResult(
             success=False,
-            response={"error": f"Unknown provider '{provider}'"},
+            response=ChatResponseModel.from_error(f"Unknown provider '{provider}'"),
             provider=provider,
             model=effective_model
         )
@@ -183,7 +183,7 @@ class ProviderOrchestrator:
             last_result = result
         return last_result or InvocationResult(
             success=False,
-            response={"error": "No providers available"},
+            response=ChatResponseModel.from_error("No providers available"),
             provider="none",
             model="none"
         )
@@ -220,7 +220,7 @@ class ProviderOrchestrator:
         self._log_unavailable_guidance(effective_provider)
         return InvocationResult(
             success=False,
-            response={"error": f"Provider '{effective_provider}' is not available"},
+            response=ChatResponseModel.from_error(f"Provider '{effective_provider}' is not available"),
             provider=effective_provider,
             model=self.resolve_model(effective_provider, model)
         )
@@ -251,7 +251,7 @@ class ProviderOrchestrator:
         if effective_provider == "local":
             return InvocationResult(
                 success=False,
-                response={"error": "Chart analysis unavailable - local models don't support images"},
+                response=ChatResponseModel.from_error("Chart analysis unavailable - local models don't support images"),
                 provider="local",
                 model=self.resolve_model("local", model)
             )
@@ -262,7 +262,7 @@ class ProviderOrchestrator:
         self._log_unavailable_guidance(effective_provider)
         return InvocationResult(
             success=False,
-            response={"error": f"Provider '{effective_provider}' is not available for chart analysis"},
+            response=ChatResponseModel.from_error(f"Provider '{effective_provider}' is not available for chart analysis"),
             provider=effective_provider,
             model=self.resolve_model(effective_provider, model)
         )
@@ -285,8 +285,8 @@ class ProviderOrchestrator:
             )
         else:
             response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
-        error_type = response.get("error") if response else None
-        if error_type in ("overloaded", "rate_limit") and metadata.paid_client:
+        error_type = response.error if response else None
+        if error_type and ("overloaded" in error_type or "rate_limit" in error_type) and metadata.paid_client:
             error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
             self.logger.warning(f"Google AI free tier {error_reason}, retrying with paid API key")
             if chart and chart_image:
@@ -304,7 +304,7 @@ class ProviderOrchestrator:
                     model=effective_model,
                     used_paid_tier=True
                 )
-            paid_error = response.get("error", "unknown") if response else "no response"
+            paid_error = response.error if response else "no response"
             self.logger.error(f"Paid Google AI API also failed: {paid_error}")
             return InvocationResult(
                 success=False,
@@ -341,7 +341,7 @@ class ProviderOrchestrator:
         if chart:
             return InvocationResult(
                 success=False,
-                response={"error": "Chart analysis unavailable - local models don't support images"},
+                response=ChatResponseModel.from_error("Chart analysis unavailable - local models don't support images"),
                 provider="lmstudio",
                 model=effective_model
             )
@@ -357,7 +357,7 @@ class ProviderOrchestrator:
         except Exception as e:
             return InvocationResult(
                 success=False,
-                response={"error": f"LM Studio connection failed: {str(e)}"},
+                response=ChatResponseModel.from_error(f"LM Studio connection failed: {str(e)}"),
                 provider="lmstudio",
                 model=effective_model
             )
@@ -385,31 +385,30 @@ class ProviderOrchestrator:
             model=effective_model
         )
 
-    def _is_valid_response(self, response: Optional[Dict[str, Any]]) -> bool:
+    def _is_valid_response(self, response: Optional[ChatResponseModel]) -> bool:
         """Check if response contains valid choices with content."""
-        if not response or not isinstance(response, dict):
+        if not response:
             return False
-        if "choices" not in response or not response["choices"]:
+        if not response.choices:
             return False
-        first_choice = response["choices"][0]
-        if "error" in first_choice:
-            error_detail = first_choice['error']
-            error_code = error_detail.get('code', 'unknown') if isinstance(error_detail, dict) else error_detail
+        first_choice = response.choices[0]
+        if first_choice.error:
+            error_detail = first_choice.error
+            error_code = error_detail.get('code', 'unknown') if isinstance(error_detail, dict) else 'unknown'
             error_msg = error_detail.get('message', 'unknown') if isinstance(error_detail, dict) else str(error_detail)
             provider = error_detail.get('metadata', {}).get('provider_name', 'unknown') if isinstance(error_detail, dict) else 'unknown'
             self.logger.error(f"Error in API response choice from {provider}: [{error_code}] {error_msg}")
             self.logger.debug(f"Full error details: {error_detail}")
             return False
-        message = first_choice.get("message", {})
-        content = message.get("content", "")
+        content = first_choice.message.content if first_choice.message else ""
         if not content:
-            self.logger.debug(f"Empty content in API response choice. Message: {message}")
+            self.logger.debug(f"Empty content in API response choice. Message: {first_choice.message}")
             return False
         return True
 
-    def _is_rate_limited(self, response: Optional[Dict[str, Any]]) -> bool:
+    def _is_rate_limited(self, response: Optional[ChatResponseModel]) -> bool:
         """Check if response indicates rate limiting."""
-        return bool(response and isinstance(response, dict) and response.get("error") == "rate_limit")
+        return bool(response and response.error and "rate_limit" in response.error)
 
     def _log_attempt(self, provider: str, model: str, chart: bool) -> None:
         """Log provider attempt."""
@@ -465,6 +464,5 @@ class ProviderOrchestrator:
             provider="blockrun",
             model=effective_model
         )
-
 
 from typing import Any

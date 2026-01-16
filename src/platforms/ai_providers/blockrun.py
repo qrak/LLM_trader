@@ -4,10 +4,11 @@ Supports text-only and multimodal (text + image) requests with x402 micropayment
 """
 import io
 import base64
-from typing import Optional, Dict,Any, List, Union
+from typing import Optional, Dict, Any, List, Union
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.response_models import ChatResponseModel
 from src.utils.decorators import retry_api_call
 
 
@@ -36,10 +37,10 @@ class BlockRunClient(BaseAIClient):
             self.logger.debug("Closing BlockRunClient SDK session")
             self._client = None
 
-    def _ensure_client(self) -> Any:
-        """Ensure a client exists and return it."""
+    async def _ensure_client(self) -> Any:
+        """Ensure a client exists and return it, initializing if needed."""
         if not self._client:
-            raise RuntimeError("BlockRun client not initialized. Call __aenter__ or _initialize_client first.")
+            await self._initialize_client()
         return self._client
 
     def _redact_private_key(self, message: str) -> str:
@@ -51,28 +52,31 @@ class BlockRunClient(BaseAIClient):
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
         self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """
         Send a chat completion request to the BlockRun API using the SDK.
-        
+
         Args:
             model: Model name in provider/model format (e.g., openai/gpt-4o, anthropic/claude-sonnet-4)
             messages: List of OpenAI-style messages
             model_config: Configuration parameters for the model
-            
+
         Returns:
-            Response in OpenAI-compatible format or None if failed
+            ChatResponseModel or None if failed
         """
-        client = self._ensure_client()
+        client = await self._ensure_client()
         try:
             self.logger.debug(f"Sending request to BlockRun SDK with model: {model}")
             effective_model = self._ensure_provider_prefix(model)
-            response = await client.chat_completion(
-                model=effective_model,
-                messages=messages,
-                **model_config
+            
+            # Use base class retry logic for unsupported parameters
+            response = await self._execute_with_param_retry(
+                client.chat_completion, 
+                model_config, 
+                model=effective_model, 
+                messages=messages
             )
-            return self._convert_sdk_response(response)
+            return self.convert_pydantic_response(response, wrapper_attr='response')
         except Exception as e:
             return self._handle_exception(e)
 
@@ -83,20 +87,20 @@ class BlockRunClient(BaseAIClient):
         messages: List[Dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
         model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """
         Send a chat completion request with a chart image for pattern analysis.
-        
+
         Args:
             model: Model name in provider/model format (e.g., openai/gpt-4o, anthropic/claude-sonnet-4)
             messages: List of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
-            
+
         Returns:
-            Response in OpenAI-compatible format or None if failed
+            ChatResponseModel or None if failed
         """
-        client = self._ensure_client()
+        client = await self._ensure_client()
         try:
             img_data = self.process_chart_image(chart_image)
             base64_image = base64.b64encode(img_data).decode('utf-8')
@@ -110,34 +114,29 @@ class BlockRunClient(BaseAIClient):
             )
             self.logger.debug(f"Sending chart analysis request to BlockRun SDK ({len(img_data)} bytes)")
             effective_model = self._ensure_provider_prefix(model)
-            response = await client.chat_completion(
+            
+            # Use base class retry logic for unsupported parameters
+            response = await self._execute_with_param_retry(
+                client.chat_completion,
+                model_config,
                 model=effective_model,
-                messages=multimodal_messages,
-                **model_config
+                messages=multimodal_messages
             )
             if response:
                 self.logger.debug("Received successful chart analysis response from BlockRun SDK")
-            return self._convert_sdk_response(response)
+            return self.convert_pydantic_response(response, wrapper_attr='response')
         except Exception as e:
             self.logger.error(f"Error during BlockRun chart analysis request: {self._redact_private_key(str(e))}")
             return self._handle_exception(e)
 
     def _ensure_provider_prefix(self, model: str) -> str:
-        """
-        Ensure model has provider/model format.
-        If no slash is present, assume openai.
-        """
+        """Ensure model has provider/model format. If no slash is present, assume openai."""
         if "/" not in model:
             return f"openai/{model}"
         return model
 
     def _extract_all_user_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
-        """
-        Extract and concatenate text content from all user messages.
-        
-        This ensures multimodal requests preserve full conversation context,
-        not just the last user message.
-        """
+        """Extract and concatenate text content from all user messages."""
         user_texts = []
         for message in messages:
             if message.get("role") == "user":
@@ -151,12 +150,7 @@ class BlockRunClient(BaseAIClient):
         messages: List[Dict[str, Any]],
         multimodal_content: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        Convert messages to BlockRun multimodal format.
-        
-        Strategy: Replace the last user message with multimodal content,
-        preserve system messages, and keep the conversation structure.
-        """
+        """Convert messages to BlockRun multimodal format."""
         multimodal_messages = []
         for i, message in enumerate(messages):
             if message.get("role") == "system":
@@ -173,60 +167,11 @@ class BlockRunClient(BaseAIClient):
                 multimodal_messages.append(message)
         return multimodal_messages
 
-    def _convert_sdk_response(self, response: Any) -> ResponseDict:
-        """Convert SDK response to ResponseDict format."""
-        if response is None:
-            return {"error": "Empty response from BlockRun SDK"}  # type: ignore
-
-        try:
-            # Handle ChatResponseWithCost (has .response attribute)
-            if hasattr(response, 'response'):
-                chat_response = response.response
-            else:
-                chat_response = response
-
-            # SDK returns Pydantic models, access as object attributes
-            content = ""
-            role = "assistant"
-            if chat_response.choices and len(chat_response.choices) > 0:
-                message = chat_response.choices[0].message
-                content = message.content if message else ""
-                role = message.role if message and message.role else "assistant"
-
-            result: ResponseDict = {
-                "choices": [{
-                    "message": {
-                        "content": content,
-                        "role": role
-                    }
-                }]
-            }
-
-            if hasattr(chat_response, 'usage') and chat_response.usage:
-                result["usage"] = {
-                    "prompt_tokens": chat_response.usage.prompt_tokens or 0,
-                    "completion_tokens": chat_response.usage.completion_tokens or 0,
-                    "total_tokens": chat_response.usage.total_tokens or 0
-                }
-
-            if hasattr(chat_response, 'id') and chat_response.id:
-                result["id"] = chat_response.id
-            if hasattr(chat_response, 'model') and chat_response.model:
-                result["model"] = chat_response.model
-
-            return result
-        except (KeyError, IndexError, AttributeError) as e:
-            self.logger.error(f"Failed to parse BlockRun response: {e}")
-            return {"error": f"Invalid response format: {str(e)}"}  # type: ignore
-
-
-    def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
+    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
         """Handle BlockRun specific exceptions, falling back to common handler."""
         redacted_error = self._redact_private_key(str(exception))
         self.logger.error(f"BlockRun API error: {redacted_error}")
-        
         result = self.handle_common_errors(exception)
         if result:
             return result
-        
-        return {"error": redacted_error}  # type: ignore
+        return ChatResponseModel.from_error(redacted_error)

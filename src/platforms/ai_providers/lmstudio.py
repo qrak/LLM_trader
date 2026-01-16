@@ -9,7 +9,8 @@ from typing import Optional, Dict, Any, List, Union
 import lmstudio as lms
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 from src.utils.decorators import retry_api_call
 
 
@@ -42,14 +43,12 @@ class LMStudioClient(BaseAIClient):
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
         self, model: str, messages: list, model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """Send a chat completion request to the LM Studio API using the SDK."""
         api_host = self._get_api_host()
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
                 self.logger.debug(f"Sending request to LM Studio SDK with model: {model} (host={api_host})")
-                
-                # Auto-discover model if not provided
                 if not model:
                     loaded_models = await client.llm.list_loaded()
                     if loaded_models:
@@ -57,7 +56,6 @@ class LMStudioClient(BaseAIClient):
                         self.logger.info(f"Auto-selected loaded model: {model}")
                     else:
                         raise ValueError("No model specified and no models loaded in LM Studio")
-
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -70,10 +68,13 @@ class LMStudioClient(BaseAIClient):
                     elif role == "assistant":
                         chat.add_assistant_response(content)
                 config = self._build_prediction_config(model_config)
-                # Correct method is respond(), likely awaitable in async context
                 response = await llm.respond(chat, config=config)
                 self.logger.debug("Received successful response from LM Studio SDK")
-                return self._convert_sdk_response(response)
+                content = str(response) if response else ""
+                return self.create_response(
+                    content=content,
+                    usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+                )
         except Exception as e:
             self.logger.error(f"Error during LM Studio request: {str(e)}")
             return self._handle_exception(e)
@@ -85,7 +86,7 @@ class LMStudioClient(BaseAIClient):
         messages: List[Dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
         model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
@@ -96,16 +97,13 @@ class LMStudioClient(BaseAIClient):
             model_config: Configuration parameters for the model
 
         Returns:
-            Response in OpenAI-compatible format or None if failed
+            ChatResponseModel or None if failed
         """
         api_host = self._get_api_host()
         try:
             img_data = self.process_chart_image(chart_image)
-
             async with lms.AsyncClient(api_host=api_host) as client:
                 self.logger.debug(f"Sending chart analysis request to LM Studio SDK with model: {model} (host={api_host})")
-                
-                # Auto-discover model if not provided
                 if not model:
                     loaded_models = await client.llm.list_loaded()
                     if loaded_models:
@@ -113,9 +111,7 @@ class LMStudioClient(BaseAIClient):
                         self.logger.info(f"Auto-selected loaded model: {model}")
                     else:
                         raise ValueError("No model specified and no models loaded in LM Studio")
-
                 image_handle = await client.files.prepare_image(img_data)
-
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -124,17 +120,17 @@ class LMStudioClient(BaseAIClient):
                     if role == "system":
                         chat.add_user_message(f"System: {content}")
                     elif role == "user":
-                        # If msg has content "Analyze this chart...", assume image belongs here.
-                        # This logic is a bit rigid, assuming last user message gets the image.
                         chat.add_user_message(content, images=[image_handle])
                     elif role == "assistant":
                         chat.add_assistant_response(content)
-
                 config = self._build_prediction_config(model_config)
-                # Correct method is respond()
                 response = await llm.respond(chat, config=config)
                 self.logger.debug("Received successful chart analysis response from LM Studio SDK")
-                return self._convert_sdk_response(response)
+                content = str(response) if response else ""
+                return self.create_response(
+                    content=content,
+                    usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+                )
         except Exception as e:
             self.logger.error(f"Error during LM Studio chart analysis request: {str(e)}")
             return self._handle_exception(e)
@@ -146,14 +142,12 @@ class LMStudioClient(BaseAIClient):
         messages: list,
         model_config: Dict[str, Any],
         callback=None
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """Send a streaming chat completion request to the LM Studio API."""
         api_host = self._get_api_host()
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
                 self.logger.debug(f"Sending streaming request to LM Studio SDK with model: {model} (host={api_host})")
-                
-                # Auto-discover model if not provided
                 if not model:
                     loaded_models = await client.llm.list_loaded()
                     if loaded_models:
@@ -161,7 +155,6 @@ class LMStudioClient(BaseAIClient):
                         self.logger.info(f"Auto-selected loaded model: {model}")
                     else:
                         raise ValueError("No model specified and no models loaded in LM Studio")
-
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -175,35 +168,24 @@ class LMStudioClient(BaseAIClient):
                         chat.add_assistant_response(content)
                 config = self._build_prediction_config(model_config)
                 complete_content = ""
-                # Correct method is respond_stream(), and it's async so we await it to get the iterator
                 stream = await llm.respond_stream(chat, config=config)
                 try:
                     async for fragment in stream:
-                        text = str(fragment.content) # Fragment has .content attribute
+                        text = str(fragment.content)
                         complete_content += text
                         if callback:
                             await callback(text)
                 except Exception:
-                    # If stream is interrupted (e.g. cleanup), just finish naturally if we have content
-                    if complete_content:
-                        pass
-                    else:
+                    if not complete_content:
                         raise
-
                 self.logger.debug("Streaming response from LM Studio completed")
-                return {
-                    "choices": [{
-                        "message": {
-                            "content": complete_content,
-                            "role": "assistant"
-                        }
-                    }]
-                }
+                return self.create_response(
+                    content=complete_content,
+                    usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
+                )
         except Exception as e:
             self.logger.error(f"Error during LM Studio streaming request: {str(e)}")
             return self._handle_exception(e)
-
-
 
     def _build_prediction_config(self, model_config: Dict[str, Any]) -> Optional[lms.LlmPredictionConfig]:
         """Build LM Studio prediction config from model_config dict."""
@@ -233,15 +215,7 @@ class LMStudioClient(BaseAIClient):
                     break
         return None
 
-    def _convert_sdk_response(self, response) -> ResponseDict:
-        """Convert SDK response to ResponseDict format."""
-        content = str(response) if response else ""
-        return self.create_response(
-            content=content,
-            usage={'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
-        )
-
-    def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
+    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
         """Handle LM Studio specific exceptions, falling back to common handler."""
         error_message = str(exception)
         if "ErrorDeviceLost" in error_message or "vk::Queue::submit" in error_message:
@@ -251,7 +225,7 @@ class LMStudioClient(BaseAIClient):
                 "Try using a smaller model or reducing 'n_gpu_layers' in LM Studio."
             )
             self.logger.error(f"LM Studio GPU Crash: {friendly_msg}")
-            return {"error": "gpu_crash", "details": friendly_msg}  # type: ignore
+            return ChatResponseModel.from_error(f"gpu_crash: {friendly_msg}")
         result = self.handle_common_errors(exception)
         if result:
             return result

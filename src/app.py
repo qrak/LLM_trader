@@ -385,6 +385,10 @@ class CryptoTradingBot:
             last_time: Timestamp of last analysis
         """
         try:
+            # Ensure last_time is timezone-aware (assume UTC if naive)
+            if last_time.tzinfo is None:
+                last_time = last_time.replace(tzinfo=timezone.utc)
+            
             # Get current time
             try:
                 current_time_ms = await self.current_exchange.fetch_time()

@@ -4,7 +4,7 @@ Handles loading, saving, and managing cached news data.
 """
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 from src.logger.logger import Logger
@@ -30,7 +30,11 @@ class NewsCache:
                 with open(self.news_cache_file, 'r', encoding='utf-8') as f:
                     cached_data = json.load(f)
                     if "last_updated" in cached_data:
-                        self.last_news_update = datetime.fromisoformat(cached_data["last_updated"])
+                        loaded_time = datetime.fromisoformat(cached_data["last_updated"])
+                        # Ensure timezone-aware (old caches may be naive)
+                        if loaded_time.tzinfo is None:
+                            loaded_time = loaded_time.replace(tzinfo=timezone.utc)
+                        self.last_news_update = loaded_time
                         self.logger.debug(f"Found cached news data from {self.last_news_update.isoformat()}")
             except Exception as e:
                 self.logger.error(f"Error loading news cache: {e}")
@@ -39,7 +43,11 @@ class NewsCache:
         """Determine if we should fetch fresh news from the API"""
         if not self.last_news_update:
             return True
-        return datetime.now() - self.last_news_update > update_interval
+        now = datetime.now(timezone.utc)
+        last = self.last_news_update
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        return now - last > update_interval
     
     def get_cached_news(self, limit: int, cutoff_time: datetime) -> List[Dict[str, Any]]:
         """Get news from cache with filtering by age and limit"""
@@ -69,7 +77,7 @@ class NewsCache:
             
         try:
             cache_data = {
-                "last_updated": datetime.now().isoformat(),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
                 "count": len(articles),
                 "articles": articles
             }
@@ -77,7 +85,7 @@ class NewsCache:
             with open(self.news_cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
                 
-            self.last_news_update = datetime.now()
+            self.last_news_update = datetime.now(timezone.utc)
             self.logger.debug(f"Saved {len(articles)} news articles to cache")
         except Exception as e:
             self.logger.error(f"Error saving news cache: {e}")

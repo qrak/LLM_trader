@@ -4,6 +4,7 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
+    from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
 @dataclass
@@ -26,7 +27,7 @@ class ProviderMetadata:
 class InvocationResult:
     """Result of a provider invocation attempt."""
     success: bool
-    response: Optional[Dict[str, Any]]
+    response: Optional["ChatResponseModel"]
     provider: str
     model: str
     used_paid_tier: bool = False
@@ -34,8 +35,8 @@ class InvocationResult:
     @property
     def error(self) -> Optional[str]:
         """Extract error message from response if present."""
-        if self.response and "error" in self.response:
-            return self.response["error"]
+        if self.response and self.response.error:
+            return self.response.error
         return None
 
 

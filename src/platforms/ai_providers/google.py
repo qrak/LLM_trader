@@ -9,7 +9,8 @@ from google import genai
 from google.genai import types
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 from src.utils.decorators import retry_api_call
 
 
@@ -76,16 +77,16 @@ class GoogleAIClient(BaseAIClient):
             self.logger.error(f"Failed to extract text from Google AI response: {e}")
             return ""
 
-    def _extract_usage_metadata(self, response) -> Optional[Dict[str, int]]:
+    def _extract_usage_metadata(self, response) -> Optional[UsageModel]:
         """Extract token usage metadata from Google AI response."""
         try:
             if hasattr(response, 'usage_metadata') and response.usage_metadata:
                 metadata = response.usage_metadata
-                return {
-                    'prompt_tokens': getattr(metadata, 'prompt_token_count', 0),
-                    'completion_tokens': getattr(metadata, 'candidates_token_count', 0),
-                    'total_tokens': getattr(metadata, 'total_token_count', 0),
-                }
+                return UsageModel(
+                    prompt_tokens=getattr(metadata, 'prompt_token_count', 0),
+                    completion_tokens=getattr(metadata, 'candidates_token_count', 0),
+                    total_tokens=getattr(metadata, 'total_token_count', 0),
+                )
         except Exception as e:
             self.logger.debug(f"Failed to extract usage metadata: {e}")
         return None
@@ -104,11 +105,11 @@ class GoogleAIClient(BaseAIClient):
             max_output_tokens=model_config.get("max_tokens", 32768),
             thinking_config=thinking_config,
         )
-    
+
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
         self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """
         Send a chat completion request to the Google AI API.
 
@@ -118,7 +119,7 @@ class GoogleAIClient(BaseAIClient):
             model_config: Configuration parameters for the model
 
         Returns:
-            Response in standardized format or None if failed
+            ChatResponseModel or None if failed
         """
         client = self._ensure_client()
         prompt = self._extract_text_from_messages(messages)
@@ -152,7 +153,7 @@ class GoogleAIClient(BaseAIClient):
         messages: List[Dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
         model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
@@ -163,7 +164,7 @@ class GoogleAIClient(BaseAIClient):
             model_config: Configuration parameters for the model
 
         Returns:
-            Response in standardized format or None if failed
+            ChatResponseModel or None if failed
         """
         client = self._ensure_client()
         prompt = self._extract_text_from_messages(messages)
@@ -193,7 +194,7 @@ class GoogleAIClient(BaseAIClient):
                 return self._handle_exception(e)
         return None
 
-    def _handle_exception(self, exception: Exception) -> Optional[ResponseDict]:
+    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
         """Handle Google AI specific exceptions, falling back to common handler."""
         result = self.handle_common_errors(exception)
         if result:

@@ -45,34 +45,40 @@ def create_mock_chat_response(
     completion_tokens: int = 5,
     total_tokens: int = 15,
     response_id: str = "test-id",
-    model: str = "openai/gpt-4o"
+    model: str = "openai/gpt-4o",
+    as_wrapper: bool = True
 ):
-    """Create a mock Pydantic-like ChatResponse object."""
+    """
+    Create a mock Pydantic-like ChatResponse object.
+    
+    Args:
+        as_wrapper: If True, wraps in ChatResponseWithCost-like wrapper with .response attr
+    """
     mock_message = MagicMock()
     mock_message.content = content
     mock_message.role = role
 
     mock_choice = MagicMock()
     mock_choice.message = mock_message
+    mock_choice.finish_reason = "stop"
 
     mock_usage = MagicMock()
     mock_usage.prompt_tokens = prompt_tokens
     mock_usage.completion_tokens = completion_tokens
     mock_usage.total_tokens = total_tokens
 
-    # Use MagicMock with spec_set to control available attributes
-    # Delete 'response' attribute so hasattr check fails (not a wrapper)
-    mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    mock_response.usage = mock_usage
-    mock_response.id = response_id
-    mock_response.model = model
-
-    # Explicitly configure the mock to NOT have a 'response' attribute
-    # This ensures hasattr(response, 'response') returns False
-    del mock_response.response
-
-    return mock_response
+    mock_inner = MagicMock()
+    mock_inner.choices = [mock_choice]
+    mock_inner.usage = mock_usage
+    mock_inner.id = response_id
+    mock_inner.model = model
+    
+    if as_wrapper:
+        # BlockRun SDK returns ChatResponseWithCost with .response attribute
+        mock_wrapper = MagicMock()
+        mock_wrapper.response = mock_inner
+        return mock_wrapper
+    return mock_inner
 
 
 class TestBlockRunClientInitialization:
@@ -226,8 +232,8 @@ class TestChatCompletion:
         )
 
         assert result is not None
-        assert result["choices"][0]["message"]["content"] == "BTC is bullish"
-        assert result["usage"]["prompt_tokens"] == 10
+        assert result.choices[0].message.content == "BTC is bullish"
+        assert result.usage.prompt_tokens == 10
         mock_client.chat_completion.assert_called_once_with(
             model="openai/gpt-4o",
             messages=[{"role": "user", "content": "Analyze BTC"}],
@@ -271,7 +277,7 @@ class TestChartAnalysis:
         )
 
         assert result is not None
-        assert result["choices"][0]["message"]["content"] == "Pattern detected"
+        assert result.choices[0].message.content == "Pattern detected"
 
         call_args = mock_client.chat_completion.call_args
         assert call_args[1]["model"] == "openai/gpt-4o"
@@ -295,20 +301,20 @@ class TestChartAnalysis:
         )
 
         assert result is not None
-        assert result["choices"][0]["message"]["content"] == "Chart analyzed"
+        assert result.choices[0].message.content == "Chart analyzed"
 
 
 class TestErrorHandling:
     """Test error handling and exception management."""
 
-    def test_convert_sdk_response_none(self, blockrun_client):
+    def test_convert_pydantic_response_none(self, blockrun_client):
         """Test conversion of None response."""
-        result = blockrun_client._convert_sdk_response(None)
-        assert "error" in result
-        assert result["error"] == "Empty response from BlockRun SDK"
+        result = blockrun_client.convert_pydantic_response(None)
+        assert result.error
+        assert "Empty response" in result.error
 
-    def test_convert_sdk_response_pydantic_model(self, blockrun_client):
-        """Test conversion of Pydantic-like response."""
+    def test_convert_pydantic_response_model(self, blockrun_client):
+        """Test conversion of Pydantic-like response (unwrapped)."""
         mock_response = create_mock_chat_response(
             content="Test content",
             role="assistant",
@@ -316,42 +322,45 @@ class TestErrorHandling:
             completion_tokens=10,
             total_tokens=15,
             response_id="resp-123",
-            model="openai/gpt-4o"
+            model="openai/gpt-4o",
+            as_wrapper=False
         )
-        result = blockrun_client._convert_sdk_response(mock_response)
+        result = blockrun_client.convert_pydantic_response(mock_response)
 
-        assert result["choices"][0]["message"]["content"] == "Test content"
-        assert result["choices"][0]["message"]["role"] == "assistant"
-        assert result["usage"]["prompt_tokens"] == 5
-        assert result["usage"]["completion_tokens"] == 10
-        assert result["usage"]["total_tokens"] == 15
-        assert result["id"] == "resp-123"
-        assert result["model"] == "openai/gpt-4o"
+        assert result.choices[0].message.content == "Test content"
+        assert result.choices[0].message.role == "assistant"
+        assert result.usage.prompt_tokens == 5
+        assert result.usage.completion_tokens == 10
+        assert result.usage.total_tokens == 15
+        assert result.id == "resp-123"
+        assert result.model == "openai/gpt-4o"
 
-    def test_convert_sdk_response_with_cost_wrapper(self, blockrun_client):
+    def test_convert_pydantic_response_with_wrapper(self, blockrun_client):
         """Test conversion of ChatResponseWithCost wrapper."""
-        inner_response = create_mock_chat_response(content="Wrapped response")
-        wrapper = Mock()
-        wrapper.response = inner_response
+        mock_response = create_mock_chat_response(
+            content="Wrapped response",
+            as_wrapper=True
+        )
 
-        result = blockrun_client._convert_sdk_response(wrapper)
+        result = blockrun_client.convert_pydantic_response(mock_response, wrapper_attr='response')
 
-        assert result["choices"][0]["message"]["content"] == "Wrapped response"
+        assert result.choices[0].message.content == "Wrapped response"
 
-    def test_convert_sdk_response_empty_choices(self, blockrun_client, mock_logger):
+    def test_convert_pydantic_response_empty_choices(self, blockrun_client, mock_logger):
         """Test conversion with empty choices list."""
-        mock_response = MagicMock()
-        mock_response.choices = []
-        mock_response.usage = None
-        mock_response.id = None
-        mock_response.model = None
-        # Remove 'response' attribute so hasattr check fails
-        del mock_response.response
+        mock_inner = MagicMock()
+        mock_inner.choices = []
+        mock_inner.usage = None
+        mock_inner.id = None
+        mock_inner.model = None
+        
+        mock_wrapper = MagicMock()
+        mock_wrapper.response = mock_inner
 
-        result = blockrun_client._convert_sdk_response(mock_response)
+        result = blockrun_client.convert_pydantic_response(mock_wrapper, wrapper_attr='response')
 
-        assert result["choices"][0]["message"]["content"] == ""
-        assert result["choices"][0]["message"]["role"] == "assistant"
+        # Empty choices should result in empty choices list
+        assert result.choices == []
 
     @pytest.mark.asyncio
     async def test_handle_exception_with_redaction(self, blockrun_client, mock_logger):

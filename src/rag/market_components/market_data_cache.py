@@ -2,7 +2,7 @@
 Market Data Cache Manager
 Handles caching and storage of market overview data.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
 from src.logger.logger import Logger
@@ -40,8 +40,8 @@ class MarketDataCache:
             timestamp = float(timestamp_field) if isinstance(timestamp_field, (int, float)) else 0
         
         if timestamp:
-            data_time = datetime.fromtimestamp(timestamp)
-            current_time = datetime.now()
+            data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            current_time = datetime.now(timezone.utc)
             return current_time - data_time > timedelta(hours=max_age_hours)
         
         return True

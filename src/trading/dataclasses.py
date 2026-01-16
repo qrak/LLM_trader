@@ -1,7 +1,7 @@
 """Dataclasses for trading system."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 
@@ -140,8 +140,13 @@ class TradingMemory(SerializableMixin):
         
         # Calculate P&L from FULL trade history, not just recent decisions
         history_to_analyze = full_history if full_history else self.decisions
-        # Ensure chronological order for P&L calculation
-        history_to_analyze = sorted(history_to_analyze, key=lambda x: x.timestamp)
+        # Helper to ensure timezone-aware timestamps for sorting
+        def _ensure_utc(dt: datetime) -> datetime:
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+        # Ensure chronological order for P&L calculation (handle mixed tz-aware/naive)
+        history_to_analyze = sorted(history_to_analyze, key=lambda x: _ensure_utc(x.timestamp))
         total_pnl_quote = 0.0
         total_pnl_pct = 0.0
         closed_trades = 0

@@ -25,6 +25,13 @@ class PersistenceManager:
     - No business logic (no P&L calculation, no insight extraction)
     """
     
+    @staticmethod
+    def _ensure_utc(dt: datetime) -> datetime:
+        """Ensure datetime is timezone-aware (UTC)."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    
     def __init__(self, logger: Logger, data_dir: str = "trading_data"):
         """Initialize trading persistence.
         
@@ -98,7 +105,7 @@ class PersistenceManager:
                     stop_loss=data["stop_loss"],
                     take_profit=data["take_profit"],
                     size=data["size"],
-                    entry_time=datetime.fromisoformat(data["entry_time"]),
+                    entry_time=self._ensure_utc(datetime.fromisoformat(data["entry_time"])),
                     confidence=data.get("confidence", "MEDIUM"),
                     direction=data.get("direction", "LONG"),
                     symbol=data.get("symbol", "BTC/USDC"),
@@ -159,7 +166,7 @@ class PersistenceManager:
         ]
         
         filtered.sort(
-            key=lambda x: datetime.fromisoformat(x["timestamp"]),
+            key=lambda x: self._ensure_utc(datetime.fromisoformat(x["timestamp"])),
             reverse=True
         )
         
@@ -185,10 +192,11 @@ class PersistenceManager:
                 timestamp_str = decision_dict.get("timestamp", "")
                 
                 if action in entry_actions and timestamp_str:
-                    decision_time = datetime.fromisoformat(timestamp_str)
+                    decision_time = self._ensure_utc(datetime.fromisoformat(timestamp_str))
+                    entry_time_utc = self._ensure_utc(entry_time)
                     
                     # Match by timestamp (allowing 1 second tolerance for floating point precision)
-                    time_diff = abs((decision_time - entry_time).total_seconds())
+                    time_diff = abs((decision_time - entry_time_utc).total_seconds())
                     if time_diff < 1.0:
                         # Reconstruct TradeDecision from dictionary
                         return TradeDecision(
@@ -326,7 +334,7 @@ class PersistenceManager:
         try:
             with open(self.last_analysis_file, 'r') as f:
                 data = json.load(f)
-                return datetime.fromisoformat(data["timestamp"])
+                return self._ensure_utc(datetime.fromisoformat(data["timestamp"]))
         except Exception as e:
             self.logger.warning(f"Could not get last analysis time: {e}")
             return None
