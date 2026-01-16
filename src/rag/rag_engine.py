@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -121,7 +121,7 @@ class RagEngine:
             await self.news_manager.load_cached_news()
 
             if self.news_manager.get_database_size() > 0:
-                self.last_update = datetime.now()
+                self.last_update = datetime.now(timezone.utc)
                 self._build_indices()
                 self.logger.debug(f"Loaded {self.news_manager.get_database_size()} recent news articles")
 
@@ -129,7 +129,7 @@ class RagEngine:
 
             if self.news_manager.get_database_size() < 10:
                 await self.refresh_market_data()
-                self.last_update = datetime.now()
+                self.last_update = datetime.now(timezone.utc)
         except Exception as e:
             self.logger.exception(f"Error initializing RAG engine: {e}")
             self.news_manager.clear_database()
@@ -149,19 +149,19 @@ class RagEngine:
                 self.logger.debug("No previous update, refreshing market knowledge base")
                 try:
                     await self.refresh_market_data()
-                    self.last_update = datetime.now()
+                    self.last_update = datetime.now(timezone.utc)
                     return True
                 except Exception as e:
                     self.logger.error(f"Failed to update market knowledge: {e}")
                     return False
 
-            time_since_update = datetime.now() - self.last_update
+            time_since_update = datetime.now(timezone.utc) - self.last_update
             if force_update or time_since_update > self.update_interval:
                 reason = "forced update" if force_update else f"{time_since_update.total_seconds()/60:.1f} minutes since last update"
                 self.logger.debug(f"Refreshing market knowledge: {reason}")
                 try:
                     await self.refresh_market_data()
-                    self.last_update = datetime.now()
+                    self.last_update = datetime.now(timezone.utc)
                     return True
                 except Exception as e:
                     self.logger.error(f"Failed to update market knowledge: {e}")
@@ -225,7 +225,7 @@ class RagEngine:
             if rebuild_indices:
                 self._build_indices()
 
-            if not self.last_update or datetime.now() - self.last_update > timedelta(minutes=30):
+            if not self.last_update or datetime.now(timezone.utc) - self.last_update > timedelta(minutes=30):
                 await self.update_if_needed()
 
             # Extract keywords from query for smart sentence selection

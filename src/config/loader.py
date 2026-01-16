@@ -15,6 +15,8 @@ CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
+VALID_PROVIDERS = {"local", "googleai", "openrouter", "blockrun", "all"}
+
 class Config:
     """Configuration class that loads settings from environment and INI files.
     
@@ -26,6 +28,7 @@ class Config:
         self._config_data = {}
         self._load_environment()
         self._load_ini_config()
+        self._validate_provider()
         self._build_dynamic_urls()
         self._build_model_configs()
     
@@ -73,6 +76,20 @@ class Config:
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
     
+    def _validate_provider(self):
+        """Validate that the configured AI provider is supported."""
+        provider = self.PROVIDER.lower()
+        if provider not in VALID_PROVIDERS:
+            # Create a formatted list of valid options
+            valid_options = ", ".join(f'"{p}"' for p in sorted(VALID_PROVIDERS))
+            error_msg = (
+                f"Invalid AI provider '{provider}' in config.ini.\n"
+                f"Supported values are: {valid_options}.\n"
+                f"Please update the [ai_providers] -> provider setting."
+            )
+            logging.critical(error_msg)
+            raise ValueError(error_msg)
+
     @staticmethod
     def _convert_value(value: str) -> Any:
         """Convert string values to appropriate Python types."""
@@ -126,7 +143,9 @@ class Config:
         }
 
         google_max_tokens = self.get_config('model_config', 'google_max_tokens', None)
-        if google_max_tokens is None:
+        
+        # Only enforce Google config if we are actually using it
+        if google_max_tokens is None and self.PROVIDER in ('googleai', 'all'):
             raise RuntimeError("`google_max_tokens` is required in [model_config] of config.ini when using Google models")
 
         self._google_model_config = {

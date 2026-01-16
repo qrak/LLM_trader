@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 import pytest
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers import ResponseDict, UsageDict
+from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 
 
 def passthrough_decorator(*args, **kwargs):
@@ -187,7 +187,7 @@ class TestGoogleAIClient:
     
     @pytest.mark.asyncio
     async def test_chat_completion_success(self, google_client, sample_messages, sample_model_config):
-        """Test successful chat completion returns proper ResponseDict."""
+        """Test successful chat completion returns proper ChatResponseModel."""
         mock_response = MockGoogleAIResponse(
             text="Analysis complete: BUY signal detected.",
             usage={'prompt_tokens': 100, 'completion_tokens': 50, 'total_tokens': 150}
@@ -206,11 +206,11 @@ class TestGoogleAIClient:
             )
         
         assert result is not None
-        assert 'choices' in result
-        assert result['choices'][0]['message']['content'] == "Analysis complete: BUY signal detected."
-        assert result['choices'][0]['message']['role'] == "assistant"
-        assert 'usage' in result
-        assert result['usage']['prompt_tokens'] == 100
+        assert result.choices
+        assert result.choices[0].message.content == "Analysis complete: BUY signal detected."
+        assert result.choices[0].message.role == "assistant"
+        assert result.usage
+        assert result.usage.prompt_tokens == 100
     
     @pytest.mark.asyncio
     async def test_chat_completion_with_model_override(self, google_client, sample_messages, sample_model_config):
@@ -256,7 +256,7 @@ class TestGoogleAIClient:
             )
         assert call_count[0] == 2
         assert result is not None
-        assert result['choices'][0]['message']['content'] == "Success without thinking"
+        assert result.choices[0].message.content == "Success without thinking"
     
     @pytest.mark.asyncio
     async def test_(self, google_client, sample_messages, sample_model_config, sample_image_bytes):
@@ -279,7 +279,7 @@ class TestGoogleAIClient:
                 )
         
         assert result is not None
-        assert 'bullish pattern' in result['choices'][0]['message']['content']
+        assert 'bullish pattern' in result.choices[0].message.content
         mock_from_bytes.assert_called_once()
         call_kwargs = mock_from_bytes.call_args.kwargs
         assert call_kwargs['data'] == sample_image_bytes
@@ -346,7 +346,7 @@ class TestGoogleAIClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'overloaded'
+        assert result.error and 'overloaded' in result.error
     
     @pytest.mark.asyncio
     async def test_error_handling_rate_limit(self, google_client, sample_messages, sample_model_config):
@@ -366,7 +366,7 @@ class TestGoogleAIClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'rate_limit'
+        assert result.error and 'rate_limit' in result.error
     
     def test_extract_usage_metadata(self, google_client):
         """Test usage metadata extraction from response."""
@@ -378,9 +378,9 @@ class TestGoogleAIClient:
         usage = google_client._extract_usage_metadata(mock_response)
         
         assert usage is not None
-        assert usage['prompt_tokens'] == 100
-        assert usage['completion_tokens'] == 50
-        assert usage['total_tokens'] == 150
+        assert usage.prompt_tokens == 100
+        assert usage.completion_tokens == 50
+        assert usage.total_tokens == 150
 
 
 class TestLMStudioClient:
@@ -428,8 +428,8 @@ class TestLMStudioClient:
             )
         
         assert result is not None
-        assert 'choices' in result
-        assert result['choices'][0]['message']['content'] == "LM Studio analysis complete"
+        assert result.choices
+        assert result.choices[0].message.content == "LM Studio analysis complete"
     
     @pytest.mark.asyncio
     async def test_chat_completion_auto_select_model(self, lmstudio_client, sample_messages, sample_model_config):
@@ -507,7 +507,7 @@ class TestLMStudioClient:
         
         assert callback_results == chunks
         assert result is not None
-        assert result['choices'][0]['message']['content'] == "Hello world from LM Studio!"
+        assert result.choices[0].message.content == "Hello world from LM Studio!"
     
     @pytest.mark.asyncio
     async def test_stream_aggregated_response(self, lmstudio_client, sample_messages, sample_model_config):
@@ -534,8 +534,8 @@ class TestLMStudioClient:
                 model_config=sample_model_config
             )
         
-        assert result['choices'][0]['message']['content'] == "Part1Part2Part3"
-        assert result['choices'][0]['message']['role'] == "assistant"
+        assert result.choices[0].message.content == "Part1Part2Part3"
+        assert result.choices[0].message.role == "assistant"
     
     @pytest.mark.asyncio
     async def test_(self, lmstudio_client, sample_messages, sample_model_config, sample_image_bytes):
@@ -563,7 +563,7 @@ class TestLMStudioClient:
                 )
         
         assert result is not None
-        assert 'head and shoulders' in result['choices'][0]['message']['content']
+        assert 'head and shoulders' in result.choices[0].message.content
         mock_client.files.prepare_image.assert_called_once_with(sample_image_bytes)
     
     @pytest.mark.asyncio
@@ -582,7 +582,7 @@ class TestLMStudioClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'gpu_crash'
+        assert result.error and 'gpu_crash' in result.error
     
     @pytest.mark.asyncio
     async def test_error_handling_connection(self, lmstudio_client, sample_messages, sample_model_config):
@@ -600,7 +600,7 @@ class TestLMStudioClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'connection'
+        assert result.error and 'connection' in result.error
     
     def test_get_api_host_parsing(self, lmstudio_client):
         """Test API host parsing from various URL formats."""
@@ -672,9 +672,9 @@ class TestOpenRouterClient:
             )
         
         assert result is not None
-        assert 'choices' in result
-        assert result['choices'][0]['message']['content'] == "OpenRouter analysis complete"
-        assert result['usage']['prompt_tokens'] == 100
+        assert result.choices
+        assert result.choices[0].message.content == "OpenRouter analysis complete"
+        assert result.usage.prompt_tokens == 100
     
     @pytest.mark.asyncio
     async def test_(self, openrouter_client, sample_messages, sample_model_config, sample_image_bytes):
@@ -695,7 +695,7 @@ class TestOpenRouterClient:
             )
         
         assert result is not None
-        assert 'bullish divergence' in result['choices'][0]['message']['content']
+        assert 'bullish divergence' in result.choices[0].message.content
         
         call_args = mock_client.chat.send_async.call_args
         sent_messages = call_args.kwargs.get('messages') or call_args[1] if len(call_args) > 1 else None
@@ -783,7 +783,7 @@ class TestOpenRouterClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'rate_limit'
+        assert result.error and 'rate_limit' in result.error
     
     @pytest.mark.asyncio
     async def test_error_handling_authentication(self, openrouter_client, sample_messages, sample_model_config):
@@ -803,22 +803,22 @@ class TestOpenRouterClient:
             )
         
         assert result is not None
-        assert result.get('error') == 'authentication'
+        assert result.error and 'authentication' in result.error
     
-    def test_convert_sdk_response(self, openrouter_client):
-        """Test SDK response conversion to ResponseDict format."""
+    def test_convert_pydantic_response(self, openrouter_client):
+        """Test SDK response conversion using base class method."""
         mock_response = MockOpenRouterResponse(
             content="Test content",
             usage={'prompt_tokens': 50, 'completion_tokens': 25, 'total_tokens': 75}
         )
         
-        result = openrouter_client._convert_sdk_response(mock_response)
+        result = openrouter_client.convert_pydantic_response(mock_response)
         
-        assert result['id'] == "test-gen-id-123"
-        assert result['model'] == "test-model"
-        assert result['choices'][0]['message']['content'] == "Test content"
-        assert result['choices'][0]['message']['role'] == "assistant"
-        assert result['usage']['prompt_tokens'] == 50
+        assert result.id == "test-gen-id-123"
+        assert result.model == "test-model"
+        assert result.choices[0].message.content == "Test content"
+        assert result.choices[0].message.role == "assistant"
+        assert result.usage.prompt_tokens == 50
     
     def test_extract_user_text_from_messages(self, openrouter_client, sample_messages):
         """Test extraction of user text from message list."""
@@ -863,7 +863,7 @@ class TestMockClientCompatibility:
     
     @pytest.mark.asyncio
     async def test_mock_chat_completion_response_structure(self, mock_client, sample_messages):
-        """Test MockClient returns proper ResponseDict structure."""
+        """Test MockClient returns proper ChatResponseModel structure."""
         result = await mock_client.chat_completion(
             model="test-model",
             messages=sample_messages,
@@ -871,10 +871,10 @@ class TestMockClientCompatibility:
         )
         
         assert result is not None
-        assert 'choices' in result
-        assert len(result['choices']) > 0
-        assert 'message' in result['choices'][0]
-        assert 'content' in result['choices'][0]['message']
+        assert result.choices
+        assert len(result.choices) > 0
+        assert result.choices[0].message
+        assert result.choices[0].message.content
     
     @pytest.mark.asyncio
     async def test_mock_chart_analysis_response_structure(self, mock_client, sample_messages, sample_image_bytes):
@@ -887,8 +887,8 @@ class TestMockClientCompatibility:
         )
         
         assert result is not None
-        assert 'choices' in result
-        content = result['choices'][0]['message']['content']
+        assert result.choices
+        content = result.choices[0].message.content
         assert 'json' in content.lower() or '```' in content
     
     @pytest.mark.asyncio
@@ -904,7 +904,7 @@ class TestMockClientCompatibility:
             model_config={}
         )
         
-        content = result['choices'][0]['message']['content']
+        content = result.choices[0].message.content
         assert 'json' in content.lower()
         assert 'signal' in content.lower()
     
@@ -918,42 +918,39 @@ class TestMockClientCompatibility:
         )
         
         assert result is not None
-        assert 'choices' in result
+        assert result.choices
 
 
-class TestResponseDictValidation:
-    """Tests to validate ResponseDict structure across all providers."""
+class TestChatResponseModelValidation:
+    """Tests to validate ChatResponseModel structure."""
     
-    def test_response_dict_typing(self):
-        """Verify ResponseDict TypedDict structure is correct."""
-        response: ResponseDict = {
-            'choices': [{'message': {'content': 'test', 'role': 'assistant'}}],
-            'usage': {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15}
-        }
+    def test_response_model_structure(self):
+        """Verify ChatResponseModel Pydantic structure is correct."""
+        response = ChatResponseModel.from_content(
+            content='test',
+            usage=UsageModel(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        )
         
-        assert 'choices' in response
-        assert 'usage' in response
+        assert response.choices
+        assert response.usage
     
-    def test_usage_dict_typing(self):
-        """Verify UsageDict TypedDict structure is correct."""
-        usage: UsageDict = {
-            'prompt_tokens': 100,
-            'completion_tokens': 50,
-            'total_tokens': 150,
-            'cost': 0.001
-        }
+    def test_usage_model_structure(self):
+        """Verify UsageModel Pydantic structure is correct."""
+        usage = UsageModel(
+            prompt_tokens=100,
+            completion_tokens=50,
+            total_tokens=150
+        )
         
-        assert 'prompt_tokens' in usage
-        assert 'cost' in usage
+        assert usage.prompt_tokens == 100
+        assert usage.total_tokens == 150
     
     def test_error_response_format(self):
         """Verify error response format is consistent."""
-        error_response: ResponseDict = {
-            'error': 'rate_limit'
-        }
+        error_response = ChatResponseModel.from_error('rate_limit')
         
-        assert 'error' in error_response
-        assert error_response['error'] == 'rate_limit'
+        assert error_response.error
+        assert error_response.error == 'rate_limit'
 
 
 if __name__ == "__main__":

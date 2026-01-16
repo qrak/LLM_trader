@@ -605,7 +605,12 @@ class TradingStrategy:
                 f"CURRENT POSITION: None"
             )
         pos = self.current_position
-        duration = datetime.now() - pos.entry_time
+        # Ensure both datetimes are timezone-aware for subtraction
+        now = datetime.now(timezone.utc)
+        entry_time = pos.entry_time
+        if entry_time.tzinfo is None:
+            entry_time = entry_time.replace(tzinfo=timezone.utc)
+        duration = now - entry_time
         hours = duration.total_seconds() / 3600
         allocated = pos.quote_amount
         available = capital - allocated

@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 import aiohttp
@@ -63,7 +63,10 @@ class CryptoCompareCategoriesAPI:
                     elif isinstance(cached_data, dict):
                         # Object format with timestamp and categories
                         if "timestamp" in cached_data:
-                            self.categories_last_update = datetime.fromisoformat(cached_data["timestamp"])
+                            loaded_time = datetime.fromisoformat(cached_data["timestamp"])
+                            if loaded_time.tzinfo is None:
+                                loaded_time = loaded_time.replace(tzinfo=timezone.utc)
+                            self.categories_last_update = loaded_time
                         
                         if "categories" in cached_data:
                             self.api_categories = cached_data["categories"]
@@ -89,7 +92,7 @@ class CryptoCompareCategoriesAPI:
         Returns:
             List of category objects
         """
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         
         # Check if we need to refresh
         if not force_refresh and self.categories_last_update and \

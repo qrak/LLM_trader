@@ -179,7 +179,12 @@ class BaseNotifier(ABC):
         Returns:
             Hours held as float
         """
-        time_held = datetime.now() - entry_time
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        # Handle naive datetime by assuming UTC
+        if entry_time.tzinfo is None:
+            entry_time = entry_time.replace(tzinfo=timezone.utc)
+        time_held = now - entry_time
         return time_held.total_seconds() / 3600
 
     def calculate_performance_stats(

@@ -4,7 +4,7 @@ Market Data Management Module for RAG Engine
 Handles fetching and processing of cryptocurrency market overview data.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
@@ -80,7 +80,7 @@ class MarketDataManager:
         # Add CoinGecko global market data
         if coingecko_data:
             overview.update(coingecko_data)
-            self.coingecko_last_update = datetime.now()
+            self.coingecko_last_update = datetime.now(timezone.utc)
     
     def _process_coin_data(self, values: Dict) -> Optional[Dict]:
         """Process individual coin data from price API response."""
@@ -137,8 +137,8 @@ class MarketDataManager:
             timestamp = self.unified_parser.format_utils.parse_timestamp(timestamp_field)
             
             if timestamp:
-                data_time = datetime.fromtimestamp(timestamp)
-                current_time = datetime.now()
+                data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                current_time = datetime.now(timezone.utc)
                 
                 if current_time - data_time > timedelta(hours=max_age_hours):
                     self.logger.debug(f"Market overview data is older than {max_age_hours} hours, refreshing")
@@ -175,8 +175,8 @@ class MarketDataManager:
         timestamp = self.unified_parser.format_utils.parse_timestamp(timestamp_field)
 
         if timestamp:
-            data_time = datetime.fromtimestamp(timestamp)
-            current_time = datetime.now()
+            data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            current_time = datetime.now(timezone.utc)
             return current_time - data_time > timedelta(hours=max_age_hours)
         
         return True

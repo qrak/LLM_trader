@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from os.path import exists, getsize
 from typing import Dict, List, Any, Literal, Optional
 
@@ -71,7 +71,11 @@ class CoinGeckoAPI:
                 with open(self.coingecko_cache_file, 'r', encoding='utf-8') as f:
                     cached_data = json.load(f)
                     if "timestamp" in cached_data:
-                        self.last_update = datetime.fromisoformat(cached_data["timestamp"])
+                        loaded_time = datetime.fromisoformat(cached_data["timestamp"])
+                        # Ensure timezone-aware (old caches may be naive)
+                        if loaded_time.tzinfo is None:
+                            loaded_time = loaded_time.replace(tzinfo=timezone.utc)
+                        self.last_update = loaded_time
                         self.logger.debug(f"Loaded CoinGecko cache from {self.last_update.isoformat()}")
             except Exception as e:
                 self.logger.error(f"Error loading CoinGecko cache: {e}")
@@ -235,7 +239,7 @@ class CoinGeckoAPI:
         Returns:
             Dictionary containing processed market data
         """
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         
         # Check if we should use cached data
         if not force_refresh and self.last_update and \

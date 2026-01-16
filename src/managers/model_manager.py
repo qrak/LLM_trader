@@ -246,28 +246,31 @@ class ModelManager(ModelManagerProtocol):
         from .provider_types import InvocationResult
         if not isinstance(result, InvocationResult):
             return self.unified_parser.format_error_response("Invalid result type")
-        response_json = result.response
-        if response_json is None:
+        response = result.response
+        if response is None:
             return self.unified_parser.format_error_response("Empty response from API")
-        if "error" in response_json:
-            return self.unified_parser.format_error_response(response_json["error"])
+        if response.error:
+            return self.unified_parser.format_error_response(response.error)
         if not result.success:
-            self.logger.error(f"API response invalid: {response_json}")
+            self.logger.error(f"API response invalid: {response}")
             return self.unified_parser.format_error_response("Invalid API response format")
-        content = response_json["choices"][0]["message"]["content"]
-        await self._track_cost(result, response_json, content)
+        if not response.choices or not response.choices[0].message:
+            return self.unified_parser.format_error_response("No content in response")
+        content = response.choices[0].message.content
+        await self._track_cost(result, response, content)
         self.logger.debug(f"Full response content: {content}")
         return content
 
-    async def _track_cost(self, result, response_json: Dict[str, Any], content: str) -> None:
+    async def _track_cost(self, result, response, content: str) -> None:
         """Track token usage and costs for the response."""
         from .provider_types import InvocationResult
-        usage = response_json.get("usage", {})
-        prompt_tokens = int(usage.get("prompt_tokens", 0))
-        completion_tokens = int(usage.get("completion_tokens", 0))
+        from src.platforms.ai_providers.response_models import ChatResponseModel
+        usage = response.usage
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
         cost: Optional[float] = None
         if result.provider == "openrouter" and self._clients.openrouter:
-            generation_id = response_json.get("id")
+            generation_id = response.id
             if generation_id:
                 cost_data = await self._clients.openrouter.get_generation_cost(generation_id, retry_delay=0.8)
                 if cost_data:

@@ -3,27 +3,12 @@ Base client for AI providers with shared functionality.
 Implements common patterns: context managers, image processing, error handling.
 """
 import io
+import re
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, Union, TypedDict
+from typing import Optional, Dict, Any, List, Union, Callable
 
 from src.logger.logger import Logger
-
-
-class UsageDict(TypedDict, total=False):
-    """Token usage and cost information from API response."""
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-    cost: float
-
-
-class ResponseDict(TypedDict, total=False):
-    """Type for API responses with usage tracking."""
-    error: str
-    choices: List[Dict[str, Any]]
-    usage: UsageDict
-    id: str
-    model: str
+from .response_models import ChatResponseModel, ChoiceModel, MessageModel, UsageModel
 
 
 class BaseAIClient(ABC):
@@ -31,6 +16,8 @@ class BaseAIClient(ABC):
 
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
+        # Common unsupported parameters to pre-filter
+        self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k'}
 
     async def __aenter__(self):
         """Async context manager entry - calls _initialize_client."""
@@ -54,7 +41,7 @@ class BaseAIClient(ABC):
     @abstractmethod
     async def chat_completion(
         self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """Send a chat completion request."""
         pass
 
@@ -65,7 +52,7 @@ class BaseAIClient(ABC):
         messages: List[Dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
         model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """Send a chat completion request with chart image analysis."""
         pass
 
@@ -89,7 +76,7 @@ class BaseAIClient(ABC):
                 return f.read()
         return chart_image
 
-    def handle_common_errors(self, exception: Exception) -> Optional[ResponseDict]:
+    def handle_common_errors(self, exception: Exception) -> Optional[ChatResponseModel]:
         """
         Handle common API errors across all providers.
 
@@ -97,59 +84,162 @@ class BaseAIClient(ABC):
             exception: The exception that occurred
 
         Returns:
-            Error response dictionary or None for unhandled errors
+            Error response or None for unhandled errors
         """
         error_message = str(exception).lower()
         if "quota" in error_message or "rate limit" in error_message or "resource_exhausted" in error_message:
             self.logger.error(f"Rate limit or quota exceeded: {exception}")
-            return {"error": "rate_limit", "details": str(exception)}  # type: ignore
+            return ChatResponseModel.from_error(f"rate_limit: {exception}")
         if "authentication" in error_message or "api key" in error_message or "invalid_api_key" in error_message:
             self.logger.error(f"Authentication error: {exception}")
-            return {"error": "authentication", "details": str(exception)}  # type: ignore
+            return ChatResponseModel.from_error(f"authentication: {exception}")
         if "timeout" in error_message:
             self.logger.error(f"Timeout error: {exception}")
-            return {"error": "timeout", "details": str(exception)}  # type: ignore
+            return ChatResponseModel.from_error(f"timeout: {exception}")
         if "503" in str(exception) or "overloaded" in error_message or "unavailable" in error_message:
             self.logger.error(f"Service unavailable/overloaded: {exception}")
-            return {"error": "overloaded", "details": str(exception)}  # type: ignore
+            return ChatResponseModel.from_error(f"overloaded: {exception}")
         if "connection" in error_message or "econnreset" in error_message:
             self.logger.error(f"Connection error: {exception}")
-            return {"error": "connection", "details": str(exception)}  # type: ignore
+            return ChatResponseModel.from_error(f"connection: {exception}")
         return None
+
+    def convert_pydantic_response(
+        self,
+        response: Any,
+        wrapper_attr: Optional[str] = None
+    ) -> ChatResponseModel:
+        """
+        Convert any Pydantic SDK response to ChatResponseModel.
+        Used by: BlockRun (wrapper_attr='response'), OpenRouter (no wrapper)
+
+        Args:
+            response: SDK response (Pydantic model)
+            wrapper_attr: Unwrap attribute (e.g., 'response' for ChatResponseWithCost)
+        """
+        if response is None:
+            return ChatResponseModel.from_error("Empty response from SDK")
+        inner = getattr(response, wrapper_attr, response) if wrapper_attr else response
+        try:
+            return ChatResponseModel(
+                choices=[
+                    ChoiceModel(
+                        message=MessageModel(
+                            role=getattr(choice.message, 'role', 'assistant') if choice.message else "assistant",
+                            content=getattr(choice.message, 'content', '') if choice.message else ""
+                        ),
+                        finish_reason=getattr(choice, 'finish_reason', None)
+                    )
+                    for choice in (inner.choices or [])
+                ],
+                usage=UsageModel(
+                    prompt_tokens=getattr(inner.usage, 'prompt_tokens', 0) or 0,
+                    completion_tokens=getattr(inner.usage, 'completion_tokens', 0) or 0,
+                    total_tokens=getattr(inner.usage, 'total_tokens', 0) or 0
+                ) if inner.usage else None,
+                id=getattr(inner, 'id', None),
+                model=getattr(inner, 'model', None)
+            )
+        except (AttributeError, TypeError) as e:
+            self.logger.error(f"Failed to create response model: {e}")
+            return ChatResponseModel.from_error(f"Response creation error: {e}")
+
+    def _detect_unsupported_param(self, error_msg: str) -> Optional[str]:
+        """
+        Detect which parameter caused the error from error message.
+        Shared logic for all providers to handle SDK strictness.
+        """
+        # Python keyword argument error
+        match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
+        if match:
+            return match.group(1)
+        # API error message format 1
+        match = re.search(r"unknown (parameter|argument)[:\s]+['\"]?(\w+)['\"]?", error_msg, re.IGNORECASE)
+        if match:
+            return match.group(2)
+        # API error message format 2 (e.g. "Additional properties are not allowed ('top_k' was unexpected)")
+        match = re.search(r"Additional properties are not allowed \('(\w+)' was unexpected\)", error_msg)
+        if match:
+            return match.group(1)
+        return None
+
+    async def _execute_with_param_retry(
+        self, 
+        func: Callable[..., Any], 
+        config: Dict[str, Any], 
+        **fixed_args: Any
+    ) -> Any:
+        """
+        Execute an SDK function with automatic retry handling for unsupported parameters.
+        
+        Args:
+            func: Async function to call (e.g., client.chat.completions.create)
+            config: Configuration dictionary that might contain unsupported params (will be unpacked)
+            **fixed_args: Fixed named arguments to pass to the function (e.g., model, messages)
+            
+        Returns:
+            The result of the function call
+            
+        Raises:
+            Exception: If the call fails after retries or for non-parameter reasons
+        """
+        # Start with a copy of config and pre-filter known unsupported params
+        current_config = {k: v for k, v in config.items() if k not in self._known_unsupported_params}
+        rejected_params = set()
+        max_retries = 3
+        
+        for attempt in range(max_retries + 1):
+            try:
+                # Call function with fixed args AND unpacked config
+                return await func(**fixed_args, **current_config)
+            except Exception as e:
+                # Only retry if we haven't exhausted retries
+                if attempt == max_retries:
+                    raise
+                
+                error_msg = str(e)
+                bad_param = self._detect_unsupported_param(error_msg)
+                
+                # If we found a bad parameter that is currently in our config
+                if bad_param and bad_param in current_config:
+                    self.logger.warning(
+                        f"Parameter '{bad_param}' not supported by provider/model. "
+                        f"Retrying without it (Attempt {attempt + 1}/{max_retries})"
+                    )
+                    rejected_params.add(bad_param)
+                    # Create new config without the bad parameter
+                    current_config = {k: v for k, v in current_config.items() if k not in rejected_params}
+                    continue
+                
+                # If it's not a parameter error or we can't identify the parameter, re-raise
+                raise
 
     def create_response(
         self,
         content: str,
         role: str = "assistant",
-        usage: Optional[Dict[str, int]] = None,
+        usage: Optional[UsageModel] = None,
         model: Optional[str] = None,
         response_id: Optional[str] = None
-    ) -> ResponseDict:
+    ) -> ChatResponseModel:
         """
-        Create a standardized ResponseDict from content.
+        Create a ChatResponseModel from content.
+        Used by: Google, LMStudio (providers with custom extraction logic)
 
         Args:
             content: Response text content
             role: Message role (default: assistant)
-            usage: Optional token usage dict
+            usage: Optional token usage
             model: Optional model identifier
             response_id: Optional response ID
 
         Returns:
-            Standardized ResponseDict
+            ChatResponseModel instance
         """
-        result: ResponseDict = {
-            "choices": [{
-                "message": {
-                    "content": content,
-                    "role": role
-                }
-            }]
-        }
-        if usage:
-            result["usage"] = usage  # type: ignore
-        if model:
-            result["model"] = model
-        if response_id:
-            result["id"] = response_id
-        return result
+        return ChatResponseModel.from_content(
+            content=content,
+            role=role,
+            usage=usage,
+            model=model,
+            response_id=response_id
+        )

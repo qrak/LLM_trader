@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
 import aiohttp
@@ -42,7 +42,11 @@ class AlternativeMeAPI:
                 with open(self.fear_greed_cache_file, 'r', encoding='utf-8') as f:
                     cached_data = json.load(f)
                     if "timestamp" in cached_data and "data" in cached_data:
-                        self.last_update = datetime.fromisoformat(cached_data["timestamp"])
+                        loaded_time = datetime.fromisoformat(cached_data["timestamp"])
+                        # Ensure timezone-aware (old caches may be naive)
+                        if loaded_time.tzinfo is None:
+                            loaded_time = loaded_time.replace(tzinfo=timezone.utc)
+                        self.last_update = loaded_time
                         self.current_index = cached_data["data"]
                         self.logger.debug(f"Loaded Fear & Greed cache from {self.last_update.isoformat()}")
             except Exception as e:
@@ -59,7 +63,7 @@ class AlternativeMeAPI:
         Returns:
             Dictionary containing Fear & Greed Index data
         """
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         
         # Check if we should use cached data
         if not force_refresh and self.last_update and self.current_index and \
@@ -82,7 +86,7 @@ class AlternativeMeAPI:
                                 "value": int(index_data.get("value", 0)),
                                 "value_classification": index_data.get("value_classification", "Unknown"),
                                 "timestamp": int(index_data.get("timestamp", 0)),
-                                "time": datetime.fromtimestamp(int(index_data.get("timestamp", 0))).isoformat()
+                                "time": datetime.fromtimestamp(int(index_data.get("timestamp", 0)), tz=timezone.utc).isoformat()
                             }
                             
                             # Cache the result
@@ -146,7 +150,7 @@ class AlternativeMeAPI:
                                     "value": int(item.get("value", 0)),
                                     "value_classification": item.get("value_classification", "Unknown"),
                                     "timestamp": int(item.get("timestamp", 0)),
-                                    "time": datetime.fromtimestamp(int(item.get("timestamp", 0))).isoformat()
+                                    "time": datetime.fromtimestamp(int(item.get("timestamp", 0)), tz=timezone.utc).isoformat()
                                 })
                             
                             # Sort by timestamp (newest first)

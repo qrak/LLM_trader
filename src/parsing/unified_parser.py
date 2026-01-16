@@ -148,7 +148,7 @@ class UnifiedParser:
             error_detail: Details about the error
             
         Returns:
-            Error dictionary in ResponseDict format
+            Error dictionary for use in ChatResponseModel
         """
         return {"error": f"{provider} failed: {error_detail}"}
     

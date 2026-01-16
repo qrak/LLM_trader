@@ -19,7 +19,8 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers import GoogleAIClient, LMStudioClient, OpenRouterClient, ResponseDict
+from src.platforms.ai_providers import GoogleAIClient, LMStudioClient, OpenRouterClient
+from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
 load_dotenv("keys.env")
@@ -39,33 +40,32 @@ class RateLimitError(Exception):
     pass
 
 
-def validate_response(response: Optional[ResponseDict], test_name: str) -> bool:
-    """Validate a response dict has required fields and content.
+def validate_response(response: Optional[ChatResponseModel], test_name: str) -> bool:
+    """Validate a ChatResponseModel has required fields and content.
     
     Raises RateLimitError if response indicates rate limiting.
     """
     if response is None:
         print(f"  ✗ {test_name}: No response received")
         return False
-    if "error" in response and response["error"]:
-        error = response["error"]
-        if error in ("rate_limit", "overloaded"):
-            raise RateLimitError(f"Rate limited: {response.get('details', 'No details')}")
+    if response.error:
+        error = response.error
+        if error in ("rate_limit", "overloaded") or "rate_limit" in error or "overloaded" in error:
+            raise RateLimitError(f"Rate limited: {error}")
         print(f"  ✗ {test_name}: Error in response: {error}")
         return False
-    if "choices" not in response or not response["choices"]:
+    if not response.choices:
         print(f"  ✗ {test_name}: No choices in response")
         return False
-    content = response["choices"][0].get("message", {}).get("content", "")
+    content = response.choices[0].message.content if response.choices[0].message else ""
     if not content:
         print(f"  ✗ {test_name}: Empty content in response")
         return False
     print(f"  ✓ {test_name}: Content received ({len(content)} chars)")
     print(f"    Response: {content[:200]}{'...' if len(content) > 200 else ''}")
-    if "usage" in response:
-        usage = response["usage"]
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
+    if response.usage:
+        prompt_tokens = response.usage.prompt_tokens or 0
+        completion_tokens = response.usage.completion_tokens or 0
         print(f"    Tokens: prompt={prompt_tokens}, completion={completion_tokens}")
     return True
 
@@ -191,8 +191,8 @@ class TestLMStudioIntegration:
                 chart_image=test_image,
                 model_config={"max_tokens": 50, "temperature": 0.1}
             )
-            if response and "error" in response:
-                if "vision" in str(response.get("error", "")).lower():
+            if response and response.error:
+                if "vision" in str(response.error).lower():
                     pytest.skip("Model does not support vision")
             assert validate_response(response, "vision")
         finally:
@@ -231,7 +231,7 @@ class TestLMStudioIntegration:
             assert validate_response(response1, "turn_1")
             messages.append({
                 "role": "assistant",
-                "content": response1["choices"][0]["message"]["content"]
+                "content": response1.choices[0].message.content
             })
             messages.append({"role": "user", "content": "What number did I ask you to remember?"})
             response2 = await client.chat_completion(
@@ -276,8 +276,8 @@ class TestOpenRouterIntegration:
                 model_config={"max_tokens": 50, "temperature": 0.5}
             )
             assert validate_response(response, "chat_completion")
-            if response and "id" in response:
-                cost_data = await client.get_generation_cost(response["id"])
+            if response and response.id:
+                cost_data = await client.get_generation_cost(response.id)
                 if cost_data:
                     print(f"    Cost: ${cost_data.get('total_cost', 0):.6f}")
         finally:
@@ -464,7 +464,7 @@ class TestGoogleAIIntegration:
                 model_config={"max_tokens": 100, "temperature": 0.1, "response_format": {"type": "json_object"}}
             )
             assert validate_response(response, "json_mode")
-            content = response["choices"][0]["message"]["content"]
+            content = response.choices[0].message.content
             import json
             try:
                 parsed = json.loads(content)
@@ -494,7 +494,7 @@ class TestGoogleAIIntegration:
             assert validate_response(response1, "turn_1")
             messages.append({
                 "role": "assistant",
-                "content": response1["choices"][0]["message"]["content"]
+                "content": response1.choices[0].message.content
             })
             messages.append({"role": "user", "content": "What is my favorite color?"})
             response2 = await client.chat_completion(
@@ -535,7 +535,7 @@ class TestCrossProviderConsistency:
 
     @pytest.mark.asyncio
     async def test_response_format_consistency(self, openrouter_key, google_key):
-        """Verify all providers return consistent ResponseDict format."""
+        """Verify all providers return consistent ChatResponseModel format."""
         print("\n=== Cross-Provider Response Format Test ===")
         logger = Logger("cross_provider_test", logger_debug=False)
         prompt = "What is 2 + 2? Answer with just the number."
@@ -549,11 +549,11 @@ class TestCrossProviderConsistency:
                         messages=[{"role": "user", "content": prompt}],
                         model_config={"max_tokens": 20}
                     )
-                    if response and "error" not in response:
+                    if response and not response.error:
                         results["lmstudio"] = response
-                        print(f"  LMStudio: {response.get('choices', [{}])[0].get('message', {}).get('content', 'N/A')}")
+                        print(f"  LMStudio: {response.choices[0].message.content if response.choices else 'N/A'}")
                     else:
-                        print(f"  LMStudio: Error - {response.get('error', 'Unknown')}")
+                        print(f"  LMStudio: Error - {response.error if response else 'Unknown'}")
             if openrouter_key:
                 async with OpenRouterClient(
                     api_key=openrouter_key,
@@ -565,11 +565,11 @@ class TestCrossProviderConsistency:
                         messages=[{"role": "user", "content": prompt}],
                         model_config={"max_tokens": 20}
                     )
-                    if response and "error" not in response:
+                    if response and not response.error:
                         results["openrouter"] = response
-                        print(f"  OpenRouter: {response.get('choices', [{}])[0].get('message', {}).get('content', 'N/A')}")
+                        print(f"  OpenRouter: {response.choices[0].message.content if response.choices else 'N/A'}")
                     else:
-                        print(f"  OpenRouter: Error - {response.get('error', 'Unknown')}")
+                        print(f"  OpenRouter: Error - {response.error if response else 'Unknown'}")
             if google_key:
                 async with GoogleAIClient(api_key=google_key, model="gemini-2.0-flash", logger=logger) as client:
                     response = await client.chat_completion(
@@ -577,22 +577,22 @@ class TestCrossProviderConsistency:
                         messages=[{"role": "user", "content": prompt}],
                         model_config={"max_tokens": 20}
                     )
-                    if response and "error" not in response:
+                    if response and not response.error:
                         results["google"] = response
-                        print(f"  Google AI: {response.get('choices', [{}])[0].get('message', {}).get('content', 'N/A')}")
+                        print(f"  Google AI: {response.choices[0].message.content if response.choices else 'N/A'}")
                     else:
                         print(f"  Google AI: Skipped (rate limited or error)")
             if not results:
                 pytest.skip("No providers returned successful responses")
             for provider, response in results.items():
-                assert "choices" in response, f"{provider}: Missing 'choices' key"
-                assert isinstance(response["choices"], list), f"{provider}: 'choices' not a list"
-                assert len(response["choices"]) > 0, f"{provider}: Empty choices list"
-                choice = response["choices"][0]
-                assert "message" in choice, f"{provider}: Missing 'message' in choice"
-                assert "content" in choice["message"], f"{provider}: Missing 'content' in message"
-                assert "usage" in response, f"{provider}: Missing 'usage' key"
-            print(f"  ✓ {len(results)} provider(s) return consistent ResponseDict format")
+                assert response.choices, f"{provider}: Missing 'choices'"
+                assert isinstance(response.choices, list), f"{provider}: 'choices' not a list"
+                assert len(response.choices) > 0, f"{provider}: Empty choices list"
+                choice = response.choices[0]
+                assert choice.message, f"{provider}: Missing 'message' in choice"
+                assert choice.message.content, f"{provider}: Missing 'content' in message"
+                assert response.usage, f"{provider}: Missing 'usage'"
+            print(f"  ✓ {len(results)} provider(s) return consistent ChatResponseModel format")
         finally:
             logger.close()
 

@@ -4,7 +4,8 @@ import random
 from typing import Optional, Dict, Any, List, Union
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers.base import BaseAIClient, ResponseDict
+from src.platforms.ai_providers.base import BaseAIClient
+from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
 class MockClient(BaseAIClient):
@@ -48,10 +49,7 @@ class MockClient(BaseAIClient):
     def _synthesize_response(self, last_close: Optional[float] = None, has_chart: bool = False) -> str:
         """Create a human-readable analysis + JSON block following the project's template."""
         if last_close is None:
-            # Default safe response
             last_close = 100.0
-
-        # Very small decision heuristic for deterministic tests
         rnd = (int(last_close) % 3)
         if rnd == 0:
             signal = "BUY"
@@ -71,10 +69,8 @@ class MockClient(BaseAIClient):
             entry = round(last_close, 2)
             sl = round(last_close * 0.98, 2)
             tp = round(last_close * 1.02, 2)
-
         pos_size = round(min(0.05, max(0.001, random.random() * 0.03)), 4)
         rr = round(abs((tp - entry) / (entry - sl)) if entry != sl else 0.0, 2)
-
         if has_chart:
             analysis_text = (
                 "Technical indicators point to a clear short-to-medium term bias. "
@@ -86,7 +82,6 @@ class MockClient(BaseAIClient):
                 "Technical indicators point to a clear short-to-medium term bias. "
                 "Volume and momentum signals have been considered in decision-making.\n\n"
             )
-
         payload = {
             "analysis": {
                 "signal": signal,
@@ -109,35 +104,22 @@ class MockClient(BaseAIClient):
                 "risk_reward_ratio": rr
             }
         }
-
         response = f"{analysis_text}\n```json\n{json.dumps(payload, indent=4)}\n```"
         return response
 
-    async def chat_completion(self, *args, **kwargs) -> Optional[ResponseDict]:
-        """
-        Emulate chat completion supporting both GoogleAI and OpenRouter signatures.
-        
-        Signatures:
-        1. OpenRouter/Local: (model: str, messages: list, model_config: Dict)
-        2. GoogleAI: (messages: list, model_config: Dict, model: str = None)
-        """
+    async def chat_completion(self, *args, **kwargs) -> Optional[ChatResponseModel]:
+        """Emulate chat completion supporting both GoogleAI and OpenRouter signatures."""
         messages = []
-        
-        # Determine signature based on first argument type
         if len(args) > 0:
-            if isinstance(args[0], str): # Signature 1: model is first
+            if isinstance(args[0], str):
                 if len(args) > 1:
                     messages = args[1]
-            elif isinstance(args[0], list): # Signature 2: messages is first
+            elif isinstance(args[0], list):
                 messages = args[0]
-        
-        # Fallback to kwargs if explicitly passed
         if not messages and "messages" in kwargs:
             messages = kwargs["messages"]
-            
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close)
-
         return self.create_response(content)
 
     async def chat_completion_with_chart_analysis(
@@ -146,12 +128,12 @@ class MockClient(BaseAIClient):
         messages: List[Dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
         model_config: Dict[str, Any]
-    ) -> Optional[ResponseDict]:
+    ) -> Optional[ChatResponseModel]:
         """Emulate chart analysis with deterministic responses."""
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close, has_chart=True)
         return self.create_response(content)
 
-    async def console_stream(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ResponseDict]:
+    async def console_stream(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ChatResponseModel]:
         """Simulate streaming by returning the full content immediately."""
         return await self.chat_completion(model, messages, model_config)
