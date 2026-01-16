@@ -331,6 +331,28 @@ class Config:
     def DATA_DIR(self):
         return self.get_config('directories', 'data_dir', 'data')
     
+    # Dashboard Configuration
+    @property
+    def DASHBOARD_HOST(self):
+        return self.get_config('dashboard', 'host', '0.0.0.0')
+
+    @property
+    def DASHBOARD_PORT(self):
+        return int(self.get_config('dashboard', 'port', 8000))
+
+    @property
+    def DASHBOARD_ENABLE_CORS(self):
+        return self.get_config('dashboard', 'enable_cors', False)
+
+    @property
+    def DASHBOARD_CORS_ORIGINS(self):
+        origins = self.get_config('dashboard', 'cors_origins', [])
+        if isinstance(origins, str):
+            if origins.strip() == '*':
+                return ["*"]
+            return [o.strip() for o in origins.split(',')]
+        return origins
+
     # Cooldown Configuration
 
     
