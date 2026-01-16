@@ -50,13 +50,23 @@ function updateCostDisplay(data) {
     // The reset button is in HTML. We just need to make sure the costs are accurate.
 }
 
-async function refreshCosts() {
-    await fetchCosts();
+async function refreshCosts(btn) {
+    if (btn) btn.classList.add('loading');
+    try {
+        await fetchCosts();
+    } finally {
+        if (btn) btn.classList.remove('loading');
+    }
 }
 
-async function confirmResetCosts() {
+async function confirmResetCosts(btn) {
     if (confirm('Are you sure you want to reset all API costs to zero?')) {
-        await resetCosts();
+        if (btn) btn.classList.add('loading');
+        try {
+            await resetCosts();
+        } finally {
+            if (btn) btn.classList.remove('loading');
+        }
     }
 }
 
@@ -168,7 +178,14 @@ function initApp() {
     // Make crucial functions global immediately
     window.updateAll = updateAll;
     window.updatePerformance = () => updatePerformanceData();
-    window.updateVisuals = () => updateVisuals();
+    window.updateVisuals = async (btn) => {
+        if (btn) btn.classList.add('loading');
+        try {
+            await updateVisuals();
+        } finally {
+            if (btn) btn.classList.remove('loading');
+        }
+    };
     window.updateLogView = () => updateLogs();
     window.updateVectors = () => updateVectorData();
     window.updatePosition = () => updatePositionData(null, true);
