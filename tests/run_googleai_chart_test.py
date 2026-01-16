@@ -42,7 +42,7 @@ from src.analyzer.analysis_context import AnalysisContext
 from src.analyzer.data_fetcher import DataFetcher
 from src.utils.format_utils import FormatUtils
 from src.platforms.ai_providers.mock import MockClient
-from src.contracts.manager import ModelManager
+from src.managers.model_manager import ModelManager
 from src.parsing.unified_parser import UnifiedParser
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory

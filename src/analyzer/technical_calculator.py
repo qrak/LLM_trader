@@ -56,10 +56,13 @@ class TechnicalCalculator:
 
     def _calculate_momentum_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate momentum indicators"""
+        # Calculate Stochastic once
+        stoch_k, stoch_d = self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)
+
         indicators = {
             "rsi": self.ti.rsi(length=14),
-            "stoch_k": self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)[0],
-            "stoch_d": self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)[1],
+            "stoch_k": stoch_k,
+            "stoch_d": stoch_d,
             "williams_r": self.ti.williams_r(length=14),
             "uo": self.ti.uo(),
             "tsi": self.ti.tsi(long_length=20, short_length=10),
@@ -126,10 +129,13 @@ class TechnicalCalculator:
 
     def _calculate_trend_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate trend indicators"""
+        # Calculate ADX once
+        adx, plus_di, minus_di = self.ti.adx(length=14)
+
         indicators = {
-            "adx": self.ti.adx(length=14)[0],
-            "plus_di": self.ti.adx(length=14)[1],
-            "minus_di": self.ti.adx(length=14)[2],
+            "adx": adx,
+            "plus_di": plus_di,
+            "minus_di": minus_di,
             "trix": self.ti.trix(length=20),
             "pfe": self.ti.pfe(n=20, m=5),
             "td_sequential": self.ti.td_sequential(length=9),
