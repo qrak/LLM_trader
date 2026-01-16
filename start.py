@@ -488,7 +488,9 @@ class CompositionRoot:
             logger=self.logger,
             unified_parser=unified_parser,
             persistence=persistence,
-            exchange_manager=exchange_manager
+            exchange_manager=exchange_manager,
+            host=self.config.DASHBOARD_HOST,
+            port=self.config.DASHBOARD_PORT
         )
         
         # Add dashboard to dependencies
