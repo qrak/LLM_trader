@@ -1,9 +1,9 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=3.1';
 import { initSynapseNetwork, updateSynapses } from './modules/synapse_viewer.js?v=3.1';
 import { updateLogs, updatePromptTab, updateResponseTab } from './modules/log_viewer.js?v=3.1';
-import { updateVisuals } from './modules/visuals.js?v=3.1';
+import { updateVisuals } from './modules/visuals.js?v=3.3';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=3.1';
-import { initFullscreen } from './modules/fullscreen.js?v=3.1';
+import { initFullscreen } from './modules/fullscreen.js?v=3.2';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=3.1';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=3.1';
 import { initUI } from './modules/ui.js?v=3.1';

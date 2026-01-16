@@ -67,34 +67,128 @@ function updateChartTimestamp(timestamp) {
 }
 
 function openLightbox(src) {
-    // Create lightbox overlay
+    let zoom = 1;
+    let panX = 0, panY = 0;
+    let panStart = { x: 0, y: 0 };
+
     const overlay = document.createElement('div');
     overlay.id = 'lightbox-overlay';
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.9); z-index: 9999;
-        display: flex; justify-content: center; align-items: center;
-        cursor: pointer;
+
+    // Toolbar (without measurement tool)
+    const toolbar = document.createElement('div');
+    toolbar.className = 'lightbox-toolbar';
+    toolbar.innerHTML = `
+        <button id="lb-zoom-in" title="Zoom In (+)">🔍+</button>
+        <button id="lb-zoom-out" title="Zoom Out (-)">🔍−</button>
+        <button id="lb-reset" title="Reset View (0)">↺</button>
+        <span class="zoom-display" id="lb-zoom-display">100%</span>
     `;
-    
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'lightbox-close';
+    closeBtn.innerHTML = '✕';
+    closeBtn.title = 'Close (Esc)';
+
+    // Viewport
+    const viewport = document.createElement('div');
+    viewport.className = 'lightbox-viewport';
+
     const img = document.createElement('img');
     img.src = src;
-    img.style.cssText = 'max-width: 95%; max-height: 95%; object-fit: contain; border-radius: 8px;';
-    
-    const closeBtn = document.createElement('div');
-    closeBtn.textContent = '✕';
-    closeBtn.style.cssText = `
-        position: absolute; top: 20px; right: 30px;
-        font-size: 30px; color: #fff; cursor: pointer;
-    `;
-    
-    overlay.appendChild(img);
+    img.draggable = false;
+
+    viewport.appendChild(img);
+    overlay.appendChild(toolbar);
     overlay.appendChild(closeBtn);
+    overlay.appendChild(viewport);
     document.body.appendChild(overlay);
-    
-    // Close on click
-    overlay.onclick = () => overlay.remove();
+
+    function updateTransform() {
+        img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+        document.getElementById('lb-zoom-display').textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function zoomIn() {
+        zoom = Math.min(zoom * 1.25, 10);
+        updateTransform();
+    }
+
+    function zoomOut() {
+        zoom = Math.max(zoom / 1.25, 0.1);
+        updateTransform();
+    }
+
+    function resetView() {
+        zoom = 1;
+        panX = 0;
+        panY = 0;
+        updateTransform();
+    }
+
+    // Event listeners
+    document.getElementById('lb-zoom-in').onclick = zoomIn;
+    document.getElementById('lb-zoom-out').onclick = zoomOut;
+    document.getElementById('lb-reset').onclick = resetView;
+    closeBtn.onclick = () => overlay.remove();
+
+    // Mouse wheel zoom
+    viewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (e.deltaY < 0) zoomIn();
+        else zoomOut();
+    }, { passive: false });
+
+    // Pan on drag (always enabled)
+    viewport.addEventListener('mousedown', (e) => {
+        if (e.target === img || e.target === viewport) {
+            viewport.classList.add('panning');
+            panStart = { x: e.clientX - panX, y: e.clientY - panY };
+        }
+    });
+
+    viewport.addEventListener('mousemove', (e) => {
+        if (viewport.classList.contains('panning')) {
+            panX = e.clientX - panStart.x;
+            panY = e.clientY - panStart.y;
+            updateTransform();
+        }
+    });
+
+    viewport.addEventListener('mouseup', () => {
+        viewport.classList.remove('panning');
+    });
+
+    viewport.addEventListener('mouseleave', () => {
+        viewport.classList.remove('panning');
+    });
+
+    // Keyboard shortcuts
+    function handleKeydown(e) {
+        if (e.key === 'Escape') overlay.remove();
+        else if (e.key === '+' || e.key === '=') zoomIn();
+        else if (e.key === '-') zoomOut();
+        else if (e.key === '0') resetView();
+    }
+    document.addEventListener('keydown', handleKeydown);
+
+    overlay.addEventListener('remove', () => {
+        document.removeEventListener('keydown', handleKeydown);
+    });
+
+    // Remove overlay cleanup
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            mutation.removedNodes.forEach((node) => {
+                if (node === overlay) {
+                    document.removeEventListener('keydown', handleKeydown);
+                    observer.disconnect();
+                }
+            });
+        });
+    });
+    observer.observe(document.body, { childList: true });
 }
 
-// Export for window access
 window.openLightbox = openLightbox;
+

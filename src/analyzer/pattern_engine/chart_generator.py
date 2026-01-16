@@ -39,7 +39,7 @@ class ChartGenerator:
         # AI-optimized colors for better pattern recognition
         self.ai_colors = {
             'background': '#000000',  # Pure black for maximum contrast
-            'grid': '#404040',        # Lighter grid for visibility
+            'grid': '#555555',        # Visible grid for AI readability
             'text': '#ffffff',        # Pure white text
             'candle_up': '#00ff00',   # Bright green for bullish candles
             'candle_down': '#ff0000', # Bright red for bearish candles
@@ -467,15 +467,15 @@ class ChartGenerator:
         # Configure all 4 x-axes (shared, but show labels on indicator subplots)
         common_xaxis = dict(
             showgrid=True,
-            gridwidth=0.6,
+            gridwidth=1.0,
             gridcolor=self.ai_colors['grid'],
             zeroline=False,
             tickformat='%m/%d %H:%M',
             tickangle=-45,
-            nticks=30,
+            dtick=12*60*60*1000,  # 12 hour intervals (in milliseconds)
             type='date',
             range=x_range,
-            tickfont=dict(size=14),
+            tickfont=dict(size=18),
             showline=True,
             linewidth=1,
             linecolor=self.ai_colors['grid']
@@ -490,22 +490,22 @@ class ChartGenerator:
         # Y-axis configurations
         common_yaxis = dict(
             showgrid=True,
-            gridwidth=0.6,
+            gridwidth=1.0,
             gridcolor=self.ai_colors['grid'],
             zeroline=False,
             side="right",
-            tickfont=dict(size=16)
+            tickfont=dict(size=20)
         )
-        # Row 1: Price
-        fig.update_yaxes(**common_yaxis, title_text="Price", tickformat=y_tickformat, nticks=15, row=1, col=1)
+        # Row 1: Price - use dtick=500 for $500 intervals (suitable for BTC prices)
+        fig.update_yaxes(**common_yaxis, title_text="Price", tickformat=y_tickformat, dtick=500, row=1, col=1)
         # Row 2: RSI (0-100 range)
         fig.update_yaxes(**common_yaxis, title_text="RSI", range=[0, 100], nticks=5, row=2, col=1)
         # Row 3: Volume
         fig.update_yaxes(**common_yaxis, title_text="Vol", nticks=4, row=3, col=1)
         # Row 4: CMF (primary y-axis, left), OBV (secondary y-axis, right)
         fig.update_yaxes(
-            showgrid=True, gridwidth=0.6, gridcolor=self.ai_colors['grid'],
-            zeroline=False, tickfont=dict(size=16),
+            showgrid=True, gridwidth=1.0, gridcolor=self.ai_colors['grid'],
+            zeroline=False, tickfont=dict(size=20),
             title_text="CMF", nticks=4, side="left", row=4, col=1, secondary_y=False
         )
         fig.update_yaxes(**common_yaxis, title_text="OBV", nticks=4, row=4, col=1, secondary_y=True)
