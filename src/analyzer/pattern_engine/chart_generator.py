@@ -567,6 +567,79 @@ class ChartGenerator:
             row=1, col=1
         )
 
+        # ENHANCEMENT 1: Round price reference lines (dashed lines at round numbers)
+        price_min, price_max = float(np.min(lows)), float(np.max(highs))
+        # Determine appropriate interval based on price magnitude
+        if price_max > 10000:
+            round_interval = 2000  # $2000 intervals for BTC-like prices
+        elif price_max > 1000:
+            round_interval = 500
+        elif price_max > 100:
+            round_interval = 50
+        elif price_max > 10:
+            round_interval = 5
+        else:
+            round_interval = 1
+        # Calculate round price levels within visible range
+        start_level = int(price_min // round_interval) * round_interval
+        end_level = int(price_max // round_interval + 1) * round_interval
+        for level in range(start_level, end_level + round_interval, round_interval):
+            if price_min <= level <= price_max:
+                fig.add_hline(
+                    y=level, row=1, col=1,
+                    line=dict(color='rgba(100, 100, 100, 0.6)', width=1, dash='dash'),
+                    annotation_text=f"${level:,}",
+                    annotation_position="left",
+                    annotation_font=dict(size=14, color='#888888')
+                )
+
+        # ENHANCEMENT 2: OHLC annotations at fixed intervals (every 12 candles to avoid clutter)
+        ohlc_interval = max(12, len(closes) // 10)  # At least 12, or ~10 annotations total
+        for i in range(ohlc_interval, len(closes) - 5, ohlc_interval):
+            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            # Position annotation above or below candle based on available space
+            is_bullish = c >= o
+            y_pos = h + (price_max - price_min) * 0.02 if is_bullish else l - (price_max - price_min) * 0.02
+            ay_offset = -40 if is_bullish else 40
+            ohlc_text = f"O:{self.formatter(o)}<br>H:{self.formatter(h)}<br>L:{self.formatter(l)}<br>C:{self.formatter(c)}"
+            fig.add_annotation(
+                x=timestamps_py[i], y=y_pos,
+                text=ohlc_text,
+                showarrow=True, arrowhead=1, arrowsize=0.5, arrowwidth=1,
+                ax=0, ay=ay_offset,
+                font=dict(size=12, color='#cccccc'),
+                bgcolor='rgba(0,0,0,0.8)',
+                bordercolor='#555555', borderwidth=1,
+                align='left',
+                row=1, col=1
+            )
+
+        # ENHANCEMENT 3: Volume labels on significant bars (top 5 volume bars)
+        vol_threshold = np.percentile(volumes, 85)  # Top 15% volume
+        vol_labeled_count = 0
+        for i in range(len(volumes)):
+            if volumes[i] >= vol_threshold and vol_labeled_count < 5:
+                # Format volume (K for thousands, M for millions)
+                vol_val = volumes[i]
+                if vol_val >= 1_000_000:
+                    vol_str = f"{vol_val/1_000_000:.1f}M"
+                elif vol_val >= 1_000:
+                    vol_str = f"{vol_val/1_000:.0f}K"
+                else:
+                    vol_str = f"{vol_val:.0f}"
+                fig.add_annotation(
+                    x=timestamps_py[i], y=volumes[i],
+                    text=vol_str,
+                    showarrow=False,
+                    font=dict(size=11, color='#ffffff'),
+                    yshift=12,
+                    row=3, col=1
+                )
+                vol_labeled_count += 1
+
+        # Note: Data summary table removed to avoid overlapping with price chart elements
+        # OHLC annotations on individual candles (ENHANCEMENT 2) serve the same purpose
+
         # SMA legend annotation for AI comprehension (on price chart)
         sma_legend = []
         if sma_50_data is not None:
