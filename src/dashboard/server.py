@@ -47,14 +47,24 @@ class DashboardServer:
 
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
 
-        # CORS
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        # CORS Configuration
+        # Defaults to False for security. Can be enabled in config.ini.
+        enable_cors = getattr(self.config, 'DASHBOARD_ENABLE_CORS', False)
+
+        if enable_cors:
+            allowed_origins = getattr(self.config, 'DASHBOARD_CORS_ORIGINS', [])
+
+            # If enabled but empty, log a warning and default to strict (empty list)
+            if not allowed_origins:
+                print("WARNING: CORS enabled but no origins specified. CORS will effectively be disabled.")
+
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=allowed_origins,
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            )
 
         app.state.brain_service = self.brain_service
         app.state.vector_memory = self.vector_memory

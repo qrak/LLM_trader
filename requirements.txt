@@ -9,7 +9,6 @@ numpy==2.2.3
 numba==0.61.2
 scipy==1.16.1
 pandas==2.3.2
-audioop-lts==0.2.2
 discord.py==2.6.4
 plotly==6.3.0
 google-genai>=1.57.0

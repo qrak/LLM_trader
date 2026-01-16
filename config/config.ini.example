@@ -7,6 +7,20 @@
 # - "all": Use fallback system (tries primary providers first, then falls back)
 provider = googleai
 
+[dashboard]
+# Host to bind the dashboard server to
+# Use 127.0.0.1 for local access only (Recommended for security)
+# Use 0.0.0.0 to allow access from other devices on the network
+host = 127.0.0.1
+# Port to listen on
+port = 8000
+# Enable Cross-Origin Resource Sharing (CORS)
+# Set to true only if you need to access the API from a different domain/port (e.g. external tools)
+enable_cors = false
+# Comma-separated list of allowed origins (e.g. http://localhost:3000, http://example.com)
+# Use "*" to allow all origins (NOT recommended for production)
+cors_origins = *
+
 # Base URL for local LM Studio instance (e.g., http://localhost:1234/v1)
 lm_studio_base_url = http://localhost:1234/v1
 # Model identifier to use with LM Studio, leave empty for auto select
