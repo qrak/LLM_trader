@@ -99,10 +99,7 @@
                     <div class="kpi-card">
                         <div class="label">Session Cost</div>
                         <div class="value" id="overview-cost">$0.00</div>
-                        <div style="position: absolute; top: 15px; right: 15px; display: flex; gap: 5px;">
-                            <button class="icon-btn-xs" onclick="refreshCosts(this)" title="Refresh" aria-label="Refresh costs">↻</button>
-                            <button class="icon-btn-xs" onclick="confirmResetCosts(this)" title="Reset" aria-label="Reset costs" style="color: var(--accent-danger);">🗑</button>
-                        </div>
+
                     </div>
                 </div>
 
@@ -111,7 +108,7 @@
                         <h3>Performance Metrics</h3>
                         <div class="controls">
                             <span id="stats-summary" style="margin-right: 15px; font-size: 0.8em; color: var(--text-muted);">Loading stats...</span>
-                            <button onclick="updatePerformance()">Refresh</button>
+
                         </div>
                     </div>
                     <div id="performance-chart" class="chart-container"></div>
@@ -141,7 +138,7 @@
                         <div class="panel-header">
                             <h3>Visual Cortex Input</h3>
                             <div class="controls panel-toolbar panel-controls">
-                                <button class="toolbar-btn" onclick="updateVisuals(this)" title="Refresh" aria-label="Refresh visuals">↻</button>
+
                                 <button class="toolbar-btn" onclick="togglePanelMinimize('panel-visuals')" title="Minimize" aria-label="Minimize visual panel">−</button>
                                 <button class="toolbar-btn" onclick="openLightbox(document.getElementById('analysis-chart').src)" title="Fullscreen" aria-label="Fullscreen chart">⛶</button>
                             </div>
@@ -158,7 +155,7 @@
             <div id="tab-prompt" class="tab-content">
                 <header class="tab-header">
                     <h2>Last Prompt</h2>
-                    <button class="btn-primary" onclick="updatePromptTab()">Refresh</button>
+
                 </header>
                 <section class="panel full-height-panel">
                     <div class="panel-header">
@@ -176,7 +173,7 @@
             <div id="tab-response" class="tab-content">
                 <header class="tab-header">
                     <h2>Last Response</h2>
-                    <button class="btn-primary" onclick="updateResponseTab()">Refresh</button>
+
                 </header>
                 <section class="panel full-height-panel">
                     <div class="panel-header">
@@ -194,7 +191,7 @@
             <div id="tab-stats" class="tab-content">
                 <header class="tab-header">
                     <h2>Trading Statistics</h2>
-                    <button class="btn-primary" onclick="updateStatisticsPanel()">Refresh</button>
+
                 </header>
                 <div id="statistics-content">
                     <div class="empty-state">Loading statistics...</div>
@@ -205,7 +202,7 @@
             <div id="tab-news" class="tab-content">
                 <header class="tab-header">
                     <h2>Latest Crypto News</h2>
-                    <button class="btn-primary" onclick="updateNewsPanel()">Refresh</button>
+
                 </header>
                 <div id="news-content">
                     <div class="empty-state">Loading news...</div>
@@ -216,7 +213,7 @@
             <div id="tab-market" class="tab-content">
                 <header class="tab-header">
                     <h2>Active Market Position</h2>
-                    <button class="btn-primary" onclick="updatePosition()">Force Refresh</button>
+
                 </header>
                 
                 <section id="panel-position" class="panel">
@@ -236,7 +233,7 @@
             <div id="tab-memory" class="tab-content">
                 <header class="tab-header">
                     <h2>Vector Experience Database</h2>
-                    <button class="btn-primary" onclick="updateVectors()">Sync Database</button>
+
                 </header>
 
                 <section id="panel-vectors" class="panel full-height-panel">

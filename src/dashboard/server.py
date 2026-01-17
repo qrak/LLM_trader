@@ -47,6 +47,45 @@ class DashboardServer:
 
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
 
+        # Security Headers Middleware
+        @app.middleware("http")
+        async def add_security_headers(request, call_next):
+            response = await call_next(request)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+            return response
+
+        # Simple Rate Limiting (in-memory, per-IP)
+        from collections import defaultdict
+        import time as time_module
+        request_counts = defaultdict(list)
+        RATE_LIMIT = 60  # requests per minute
+        RATE_WINDOW = 60  # seconds
+
+        @app.middleware("http")
+        async def rate_limit_middleware(request, call_next):
+            # Skip rate limiting for static files
+            if request.url.path.startswith("/static") or not request.url.path.startswith("/api"):
+                return await call_next(request)
+            client_ip = request.client.host if request.client else "unknown"
+            current_time = time_module.time()
+            # Clean old requests
+            request_counts[client_ip] = [
+                t for t in request_counts[client_ip] 
+                if current_time - t < RATE_WINDOW
+            ]
+            if len(request_counts[client_ip]) >= RATE_LIMIT:
+                from fastapi.responses import JSONResponse
+                return JSONResponse(
+                    status_code=429, 
+                    content={"error": "Rate limit exceeded. Try again later."}
+                )
+            request_counts[client_ip].append(current_time)
+            return await call_next(request)
+
         # CORS Configuration
         # Defaults to False for security. Can be enabled in config.ini.
         enable_cors = getattr(self.config, 'DASHBOARD_ENABLE_CORS', False)

@@ -96,15 +96,7 @@ async def get_api_costs() -> Dict[str, Any]:
     }
 
 
-@router.post("/costs/reset")
-async def reset_api_costs() -> Dict[str, Any]:
-    """Reset API cost tracking to zero (both in-memory and persistent storage)."""
-    from src.dashboard.dashboard_state import dashboard_state
-    from src.utils.token_counter import CostStorage
-    await dashboard_state.reset_api_costs()
-    storage = CostStorage()
-    storage.reset()
-    return {"status": "ok", "message": "API costs reset to zero"}
+
 
 
 @router.get("/news")
