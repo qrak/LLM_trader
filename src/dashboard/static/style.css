@@ -157,6 +157,11 @@ html, body {
     position: relative;
 }
 
+/* Mobile Header - hidden on desktop */
+#mobile-header {
+    display: none;
+}
+
 .tab-content {
     display: none;
     padding: 30px 40px;
@@ -1107,18 +1112,112 @@ button:hover {
 
 ::-webkit-scrollbar-thumb:hover { background: #484f58; }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    /* Allow scrolling on page */
+    html, body {
+        overflow-x: hidden; /* Prevent horizontal scroll */
+        overflow-y: auto;
+        height: auto;
+    }
 
-.loading {
-    pointer-events: none;
-    opacity: 0.7;
-}
+    #app-container {
+        flex-direction: column;
+        height: auto;
+        overflow: visible;
+        position: relative;
+    }
 
-/* Only spin buttons that have the refresh icon or are explicitly refresh buttons */
-button[title="Refresh"].loading,
-button[aria-label*="Refresh"].loading {
-    animation: spin 1s linear infinite;
+    /* Off-Canvas Sidebar */
+    #sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px; /* Slightly wider for ease of use */
+        height: 100vh;
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-right: 1px solid var(--border-subtle);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+    }
+
+    #sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+    #mobile-menu-close {
+        display: flex !important; /* Show close button inside sidebar */
+    }
+
+    /* Content Area */
+    #content-area {
+        width: 100%;
+        overflow-x: hidden;
+        min-height: 100vh;
+    }
+
+    /* Mobile Header - Always Visible on Mobile */
+    #mobile-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: var(--bg-dark-1);
+        border-bottom: 1px solid var(--border-subtle);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+    }
+
+    #mobile-header #mobile-menu-toggle {
+        display: flex;
+        font-size: 20px;
+        width: 36px;
+        height: 36px;
+        background: var(--bg-dark-3);
+        border: 1px solid var(--border-subtle);
+    }
+
+    /* Layout Adjustments */
+    .tab-content {
+        padding: 15px;
+        width: 100%;
+    }
+
+    .tab-header {
+        margin-bottom: 20px;
+    }
+
+    /* Grids to Single Column for readability */
+    .kpi-grid, .vector-stats, .position-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    /* Adjust Panels */
+    .panel {
+        padding: 15px;
+    }
+    
+    /* Ensure charts/visuals don't break width */
+    .chart-container, .network-container, .visual-box {
+        width: 100%;
+        min-width: 0;
+    }
+    
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .full-height-panel, .large-panel, .medium-panel, .visual-panel {
+        height: auto;
+        min-height: 350px;
+    }
+
+    .sidebar-nav {
+        overflow-y: auto;
+    }
 }

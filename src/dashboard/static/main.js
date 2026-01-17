@@ -60,35 +60,53 @@ async function fetchBrainStatus() {
     try {
         const response = await fetch('/api/brain/status');
         const data = await response.json();
-        document.getElementById('connection-status').textContent = '🟢 Connected';
-        document.getElementById('connection-status').style.color = '#238636';
-        if (data.status) {
-            document.getElementById('brain-state-indicator').textContent = data.status.toUpperCase();
+        const connStatus = document.getElementById('connection-status');
+        if (connStatus) {
+            connStatus.textContent = '🟢 Connected';
+            connStatus.style.color = '#238636';
         }
-        document.getElementById('trend-val').textContent = data.trend || '--';
-        document.getElementById('conf-val').textContent = data.confidence ? `${data.confidence}%` : '--';
-        document.getElementById('action-val').textContent = data.action || '--';
-        const trendEl = document.getElementById('trend-val');
-        if (data.trend === 'BULLISH') {
-            trendEl.style.color = '#238636';
-        } else if (data.trend === 'BEARISH') {
-            trendEl.style.color = '#f85149';
-        } else {
-            trendEl.style.color = '#8b949e';
+        
+        // Update Brain State Indicator
+        // (Legacy indicator removed from UI, skipping update)
+
+        // Direct update to Overview KPIs
+        const trendEl = document.getElementById('overview-trend');
+        if (trendEl) {
+            trendEl.textContent = data.trend || '--';
+            if (data.trend === 'BULLISH') {
+                trendEl.className = 'value start-green';
+            } else if (data.trend === 'BEARISH') {
+                trendEl.className = 'value start-red';
+            } else {
+                trendEl.className = 'value'; // default color
+            }
         }
-        const actionEl = document.getElementById('action-val');
-        if (data.action === 'BUY') {
-            actionEl.style.color = '#238636';
-        } else if (data.action === 'SELL') {
-            actionEl.style.color = '#f85149';
-        } else {
-            actionEl.style.color = '#58a6ff';
+
+        const confEl = document.getElementById('overview-conf');
+        if (confEl) {
+            confEl.textContent = data.confidence ? `${data.confidence}%` : '--%';
         }
+
+        const actionEl = document.getElementById('overview-action');
+        if (actionEl) {
+            actionEl.textContent = data.action || 'WAITING';
+            // Styling logic for action (sub-label text color usually muted, but user had color logic)
+            // The previous logic colored the text. Let's keep it consistent if possible, 
+            // but usually sub-labels are muted. The legacy code colored #action-val.
+            // syncStatus copied text content, but NOT style. 
+            // WAIT - syncStatus did NOT copy style from action-val to overview-action.
+            // It only did: document.getElementById('overview-action').textContent = act;
+            // So visible UI was NOT colored. I will stick to text content to match visible behavior.
+        }
+
         state.lastUpdateTime = new Date();
         updateLastUpdated();
     } catch (e) {
-        document.getElementById('connection-status').textContent = '🔴 Disconnected';
-        document.getElementById('connection-status').style.color = '#f85149';
+        const connStatus = document.getElementById('connection-status');
+        if (connStatus) {
+            connStatus.textContent = '🔴 Disconnected';
+            connStatus.style.color = '#f85149';
+        }
     }
 }
 
@@ -96,20 +114,20 @@ async function fetchRules() {
     try {
         const response = await fetch('/api/brain/rules');
         const rules = await response.json();
-        const list = document.getElementById('rules-list');
-        list.innerHTML = '';
-        if (rules.length === 0) {
-            const li = document.createElement('li');
-            li.textContent = 'No rules learned yet. Trade more to build knowledge.';
-            li.style.fontStyle = 'italic';
-            list.appendChild(li);
-            return;
+        
+        // Direct update to Rules Count KPI
+        const countEl = document.getElementById('overview-rules-count');
+        const hintEl = document.getElementById('overview-rules-hint');
+        
+        if (countEl) {
+             const count = rules.length;
+             countEl.textContent = count;
+             
+             if (hintEl) {
+                 hintEl.style.display = count > 0 ? 'none' : 'block';
+             }
         }
-        rules.forEach(rule => {
-            const li = document.createElement('li');
-            li.textContent = rule.rule_text || rule.text || JSON.stringify(rule);
-            list.appendChild(li);
-        });
+        
     } catch (e) {
         console.error("Failed to fetch rules", e);
     }
@@ -156,6 +174,27 @@ function initApp() {
     window.updateAll = updateAll;
 
     window.togglePanelMinimize = togglePanelMinimize;
+
+    // Mobile Menu Logic
+    const toggleBtn = document.getElementById('mobile-menu-toggle');
+    const closeBtn = document.getElementById('mobile-menu-close');
+    const sidebar = document.getElementById('sidebar');
+    
+    function toggleMobileMenu() {
+        sidebar.classList.toggle('mobile-open');
+    }
+
+    if (toggleBtn) toggleBtn.addEventListener('click', toggleMobileMenu);
+    if (closeBtn) closeBtn.addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+
+    // Close on navigation
+    document.querySelectorAll('.nav-item').forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('mobile-open');
+            }
+        });
+    });
 
     try {
         initPerformanceChart();
