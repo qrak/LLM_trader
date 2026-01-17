@@ -56,13 +56,29 @@ class DashboardServer:
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+            
+            # Content Security Policy (CSP)
+            # - script-src: 'self' 'unsafe-inline' (for dashboard logic), CDNs
+            # - style-src: 'self' 'unsafe-inline' (for dashboard styles), CDNs
+            # - connect-src: 'self' (for internal API), CDNs if needed
+            # - img-src: 'self' data: https: (for content/news images)
+            # Cloudflare support: *.cloudflare.com added
+            csp = (
+                "default-src 'self'; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://*.cloudflare.com https://ajax.cloudflare.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' data: https:; "
+                "connect-src 'self' https://*.cloudflare.com;"
+            )
+            response.headers["Content-Security-Policy"] = csp
             return response
 
         # Simple Rate Limiting (in-memory, per-IP)
         from collections import defaultdict
         import time as time_module
         request_counts = defaultdict(list)
-        RATE_LIMIT = 60  # requests per minute
+        RATE_LIMIT = 300  # requests per minute
         RATE_WINDOW = 60  # seconds
 
         @app.middleware("http")
@@ -141,6 +157,8 @@ class DashboardServer:
             log_level="warning",
             loop="asyncio",
             ws="wsproto",
+            proxy_headers=True,
+            forwarded_allow_ips="*",
         )
         self._server = uvicorn.Server(config)
         

@@ -32,7 +32,12 @@ export async function updateStatisticsData() {
         }
         container.innerHTML = renderStatistics(stats);
     } catch (e) {
-        container.innerHTML = `<div class="empty-state">Error loading statistics: ${e.message}</div>`;
+        // Helper to escape HTML - reuse from other modules or define locally if needed,
+        // but since we don't have a shared util imported here, we'll do a simple replace or assume data is safe? 
+        // Better to be safe. We'll add a simple escaper or use textContent strategy if possible.
+        // Actually, let's use a safe text node insertion or basic replace.
+        const safeError = e.message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        container.innerHTML = `<div class="empty-state">Error loading statistics: ${safeError}</div>`;
     }
 }
 
