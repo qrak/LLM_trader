@@ -3,7 +3,9 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import asyncio
 import time
 from typing import Optional, Tuple, List
+import numpy as np
 from src.rag.text_splitting import SentenceSplitter
+from src.indicators.volatility.volatility_indicators import choppiness_index_numba
 
 class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
     
@@ -114,6 +116,43 @@ class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
         engine._perform_technical_analysis.assert_called_once()
         engine._generate_chart_image.assert_called_once()
         mock_rag.retrieve_context.assert_called_once()
+
+    def test_choppiness_index_performance(self):
+        """Test that choppiness_index_numba is performant (O(N))."""
+        # Setup data
+        np.random.seed(42)
+        size = 100_000
+        high = np.random.uniform(100, 200, size)
+        low = high - np.random.uniform(1, 10, size)
+        close = (high + low) / 2
+        length = 100
+
+        # Warmup
+        choppiness_index_numba(high[:200], low[:200], close[:200], length)
+
+        start_time = time.perf_counter()
+        _ = choppiness_index_numba(high, low, close, length)
+        duration = time.perf_counter() - start_time
         
+        # Should be well under 0.2s on modern hardware for 100k points with optimization.
+        # Allowing generous buffer for CI environments.
+        print(f"Choppiness Index (N={size}, L={length}) took {duration:.4f}s")
+        self.assertLess(duration, 1.0, "Choppiness Index calculation too slow")
+
+    def test_choppiness_index_short_input(self):
+        """Test that choppiness_index_numba handles short inputs gracefully."""
+        # Setup data shorter than length
+        size = 10
+        high = np.random.uniform(100, 200, size)
+        low = high - np.random.uniform(1, 10, size)
+        close = (high + low) / 2
+        length = 14
+
+        # This should not raise IndexError
+        result = choppiness_index_numba(high, low, close, length)
+
+        # Result should be all NaNs
+        self.assertTrue(np.all(np.isnan(result)), "Result should be all NaNs for short input")
+
 if __name__ == '__main__':
     unittest.main()
