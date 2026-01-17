@@ -23,8 +23,8 @@ export async function updatePromptTab() {
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
         if (meta) meta.textContent = `${source} | ${timestamp}`;
         // Render prompt with markdown and discord-content styling (same as response)
-        if (content && window.marked) {
-            viewer.innerHTML = marked.parse(content);
+        if (content && window.marked && window.DOMPurify) {
+            viewer.innerHTML = DOMPurify.sanitize(marked.parse(content));
             viewer.classList.remove('prompt-content', 'code-block');
             viewer.classList.add('discord-content');
         } else {
@@ -58,7 +58,8 @@ export async function updateResponseTab() {
             processed = processed.replace(/⚠️\s*([^.]+\.\s*)/g, '<div class="warning-banner">⚠️ $1</div>');
             // Clean up any double line breaks left by JSON removal
             processed = processed.replace(/\n{3,}/g, '\n\n');
-            viewer.innerHTML = marked.parse(processed.trim());
+            // Sanitize output to prevent XSS (prompts/responses may contain unsanitized data)
+            viewer.innerHTML = window.DOMPurify ? DOMPurify.sanitize(marked.parse(processed.trim())) : marked.parse(processed.trim());
         } else {
             viewer.innerHTML = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
         }
