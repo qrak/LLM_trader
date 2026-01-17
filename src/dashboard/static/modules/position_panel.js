@@ -82,7 +82,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-badge ${directionClass}">
                     ${data.direction === 'LONG' ? '📈' : '📉'} ${data.direction}
                 </div>
-                <div class="position-symbol">${data.symbol}</div>
+                <div class="position-symbol">${escapeHtml(data.symbol)}</div>
                 <div class="position-stat">
                     <span class="label">Entry</span>
                     <span class="value">$${data.entry_price.toLocaleString()}</span>
@@ -101,7 +101,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-meta">
                     <span title="Time in position">⏱️ ${formatDuration(timeInPosition)}</span>
                     <span title="Risk/Reward ratio">R:R ${data.rr_ratio.toFixed(1)}</span>
-                    <span title="Confidence">${data.confidence}</span>
+                    <span title="Confidence">${escapeHtml(String(data.confidence))}</span>
                 </div>
                 
                 <div class="position-indicators" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
@@ -117,7 +117,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                     <ul style="list-style: none; padding: 0; margin: 0;">
                         ${data.confluence_factors.map(f => `
                             <li style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                                <span style="text-transform: capitalize;">${f[0].replace(/_/g, ' ')}</span>
+                                <span style="text-transform: capitalize;">${escapeHtml(f[0].replace(/_/g, ' '))}</span>
                                 <span style="color: var(--accent-color);">${f[1]}%</span>
                             </li>
                         `).join('')}
@@ -163,4 +163,11 @@ function calculateGaugePosition(position, currentPrice) {
  */
 export function getLastPosition() {
     return lastPosition;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

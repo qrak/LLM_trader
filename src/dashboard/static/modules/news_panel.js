@@ -18,7 +18,7 @@ export async function updateNewsData() {
         }
         container.innerHTML = renderNews(data.articles);
     } catch (e) {
-        container.innerHTML = `<div class="empty-state">Error loading news: ${e.message}</div>`;
+        container.innerHTML = `<div class="empty-state">Error loading news: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -41,7 +41,7 @@ function renderNews(articles) {
                 <div class="news-card">
                     <div class="news-header">
                         <div class="news-title">
-                            <a href="${article.url || article.guid || '#'}" target="_blank" rel="noopener">
+                            <a href="${escapeHtml(article.url || article.guid || '#')}" target="_blank" rel="noopener">
                                 ${escapeHtml(article.title || 'Untitled')}
                             </a>
                         </div>
@@ -53,7 +53,7 @@ function renderNews(articles) {
                     ${renderTopics(article)}
                     <div class="news-source">
                         Source: ${escapeHtml(article.source_info?.name || article.source || 'Unknown')}
-                        ${article.detected_coins ? ` • Coins: ${article.detected_coins.join(', ')}` : ''}
+                        ${article.detected_coins ? ` • Coins: ${article.detected_coins.map(c => escapeHtml(c)).join(', ')}` : ''}
                     </div>
                 </div>
             `).join('')}
