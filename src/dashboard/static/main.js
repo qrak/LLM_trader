@@ -50,34 +50,11 @@ function updateCostDisplay(data) {
     // The reset button is in HTML. We just need to make sure the costs are accurate.
 }
 
-async function refreshCosts(btn) {
-    if (btn) btn.classList.add('loading');
-    try {
-        await fetchCosts();
-    } finally {
-        if (btn) btn.classList.remove('loading');
-    }
-}
 
-async function confirmResetCosts(btn) {
-    if (confirm('Are you sure you want to reset all API costs to zero?')) {
-        if (btn) btn.classList.add('loading');
-        try {
-            await resetCosts();
-        } finally {
-            if (btn) btn.classList.remove('loading');
-        }
-    }
-}
 
-async function resetCosts() {
-    try {
-        await fetch('/api/monitor/costs/reset', { method: 'POST' });
-        await fetchCosts();
-    } catch (e) {
-        console.error("Failed to reset costs", e);
-    }
-}
+
+
+
 
 async function fetchBrainStatus() {
     try {
@@ -177,25 +154,7 @@ function initApp() {
     
     // Make crucial functions global immediately
     window.updateAll = updateAll;
-    window.updatePerformance = () => updatePerformanceData();
-    window.updateVisuals = async (btn) => {
-        if (btn) btn.classList.add('loading');
-        try {
-            await updateVisuals();
-        } finally {
-            if (btn) btn.classList.remove('loading');
-        }
-    };
-    window.updateLogView = () => updateLogs();
-    window.updateVectors = () => updateVectorData();
-    window.updatePosition = () => updatePositionData(null, true);
-    window.updatePromptTab = () => updatePromptTab();
-    window.updateResponseTab = () => updateResponseTab();
-    window.updateStatisticsPanel = () => updateStatisticsData();
-    window.updateNewsPanel = () => updateNewsData();
-    window.resetCosts = resetCosts;
-    window.refreshCosts = refreshCosts;
-    window.confirmResetCosts = confirmResetCosts;
+
     window.togglePanelMinimize = togglePanelMinimize;
 
     try {

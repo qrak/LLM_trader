@@ -6,6 +6,8 @@
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
+🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
+
 ![Semantic Signal LLM Dashboard Main](img/dashboard1.png)
 
 ![Semantic Signal LLM Dashboard Vector](img/dashboard2.png)
