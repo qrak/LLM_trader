@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semantic Signal LLM</title>
-    <link rel="stylesheet" href="style.css?v=2.6">
+    <link rel="stylesheet" href="style.css?v=4.3">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -24,6 +24,7 @@
                         <div class="subtitle">LLM-POWERED NEURAL ENGINE</div>
                     </div>
                 </div>
+                <button id="mobile-menu-close" class="icon-btn-xs" style="margin-left: auto; display: none;">✕</button>
             </div>
 
             <nav class="sidebar-nav">
@@ -59,13 +60,7 @@
                     <span id="connection-status">Connecting...</span>
                 </div>
                 <!-- Hidden legacy fields for main.js compatibility -->
-                <div id="status-panel" style="display: none;">
-                    <span id="brain-state-indicator">ACTIVE</span>
-                    <strong id="trend-val">--</strong>
-                    <strong id="conf-val">--</strong>
-                    <strong id="action-val">--</strong>
-                    <ul id="rules-list"></ul>
-                </div>
+                <!-- Legacy fields removed. -->
                 <div class="next-update">
                     <span class="label">Next Analysis</span>
                     <span id="next-analysis" class="value">--:--</span>
@@ -74,6 +69,11 @@
         </aside>
 
         <main id="content-area">
+            <!-- Mobile Header (visible only on mobile) -->
+            <div id="mobile-header">
+                <button id="mobile-menu-toggle" class="icon-btn-xs" aria-label="Open menu">☰</button>
+            </div>
+
             <!-- Tab: Overview -->
             <div id="tab-overview" class="tab-content active">
                 <header class="tab-header">
@@ -246,36 +246,10 @@
         </main>
     </div>
 
-    <script type="module" src="main.js?v=3.3"></script>
+    <script type="module" src="main.js?v=4.3"></script>
     
     <script>
-        // Sync hidden status fields to visible UI (except costs which are handled by main.js directly)
-        function syncStatus() {
-            try {
-                const trend = document.getElementById('trend-val').textContent;
-                const trendEl = document.getElementById('overview-trend');
-                if(trendEl && trend !== '--') {
-                    trendEl.textContent = trend;
-                    trendEl.className = 'value ' + (trend === 'BULLISH' ? 'start-green' : (trend === 'BEARISH' ? 'start-red' : ''));
-                }
-
-                const conf = document.getElementById('conf-val').textContent;
-                if (conf !== '--') document.getElementById('overview-conf').textContent = conf;
-
-                const act = document.getElementById('action-val').textContent;
-                if (act !== '--') document.getElementById('overview-action').textContent = act;
-
-                const rulesList = document.getElementById('rules-list');
-                const count = rulesList ? rulesList.getElementsByTagName('li').length : 0;
-                const firstText = rulesList?.firstElementChild?.textContent || "";
-                const realCount = (firstText.includes('Loading') || firstText.includes('No rules')) ? 0 : count;
-                document.getElementById('overview-rules-count').textContent = realCount;
-                const hint = document.getElementById('overview-rules-hint');
-                if (hint) hint.style.display = realCount > 0 ? 'none' : 'block';
-
-            } catch(e) { /* ignore sync errors */ }
-        }
-        setInterval(syncStatus, 1000);
+        // No inline scripts needed. main.js handles all logic.
     </script>
 </body>
 </html>
