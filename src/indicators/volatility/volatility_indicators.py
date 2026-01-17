@@ -225,19 +225,28 @@ def choppiness_index_numba(high, low, close, length=14):
     n = len(high)
     ci = np.full(n, np.nan)
     
+    if n <= length:
+        return ci
+
+    # Pre-calculate True Range for the whole series
+    # tr[0] is 0 because there is no previous close, and the original loop skipped j=0
+    tr = np.zeros(n)
+    for i in range(1, n):
+        tr[i] = max(
+            high[i] - low[i],
+            abs(high[i] - close[i - 1]),
+            abs(low[i] - close[i - 1])
+        )
+
+    # Initial sum for the first window (at i = length)
+    # The window indices are from 1 to length (inclusive)
+    current_tr_sum = 0.0
+    for i in range(1, length + 1):
+        current_tr_sum += tr[i]
+
     for i in range(length, n):
-        # Calculate True Range for the period
-        true_range_sum = 0.0
-        for j in range(i - length + 1, i + 1):
-            if j > 0:
-                tr = max(
-                    high[j] - low[j],
-                    abs(high[j] - close[j - 1]),
-                    abs(low[j] - close[j - 1])
-                )
-                true_range_sum += tr
-        
         # Calculate highest high and lowest low over the period
+        # Note: Optimization opportunity: monotonic queue for O(1) min/max
         period_high = np.max(high[i - length + 1:i + 1])
         period_low = np.min(low[i - length + 1:i + 1])
         
@@ -245,9 +254,13 @@ def choppiness_index_numba(high, low, close, length=14):
         # CI = 100 * log10(sum(TR) / (highest_high - lowest_low)) / log10(length)
         range_hl = period_high - period_low
         
-        if range_hl > 0 and true_range_sum > 0:
-            ci[i] = 100.0 * np.log10(true_range_sum / range_hl) / np.log10(length)
+        if range_hl > 0 and current_tr_sum > 0:
+            ci[i] = 100.0 * np.log10(current_tr_sum / range_hl) / np.log10(length)
         else:
             ci[i] = 50.0  # Neutral value when range is zero
+
+        # Update sum for next iteration
+        if i < n - 1:
+            current_tr_sum += tr[i + 1] - tr[i - length + 1]
     
     return ci
