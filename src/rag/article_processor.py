@@ -2,7 +2,7 @@
 Shared article processing utilities for RAG components.
 Eliminates code duplication between news_manager and context_builder.
 """
-from typing import Dict, Any, Set, List
+from typing import Dict, Any, Set
 import logging
 
 

@@ -112,7 +112,6 @@ def variance_numba(close, length=30, ddof=1):
         sum_x += val
         sum_x2 += val * val
 
-    mean = sum_x / length
     # Use max(0, ...) to prevent negative variance due to floating point errors
     var = (sum_x2 - (sum_x * sum_x) / length) / (length - ddof)
     variance_values[length - 1] = max(0.0, var)

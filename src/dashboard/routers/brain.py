@@ -61,7 +61,6 @@ def _build_current_market_context(config, logger) -> str:
 @router.get("/status")
 async def get_brain_status(request: Request) -> Dict[str, Any]:
     """Get the current thought process/status of the brain."""
-    brain_service = request.app.state.brain_service
     config = request.app.state.config
     logger = request.app.state.logger
     unified_parser = getattr(request.app.state, "unified_parser", None)

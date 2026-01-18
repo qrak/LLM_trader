@@ -713,7 +713,7 @@ class AnalysisEngine:
         bb = technical_data.get("bb_bands", [0, 0, 0])
         if isinstance(bb, list) and len(bb) >= 3 and self.context.current_price:
             bb_upper = bb[0]
-            bb_middle = bb[1]
+            bb[1]
             bb_lower = bb[2]
             current_price = self.context.current_price
             

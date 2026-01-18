@@ -1,10 +1,7 @@
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse
 import base64
-import os
 from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 router = APIRouter(prefix="/api/visuals", tags=["visuals"])
 
