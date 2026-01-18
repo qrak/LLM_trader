@@ -12,8 +12,12 @@ from src.logger.logger import Logger
 class TestDefiLlamaFundamentals(unittest.IsolatedAsyncioTestCase):
     
     async def asyncSetUp(self):
-        self.mock_logger = AsyncMock(spec=Logger)
-        self.client = DefiLlamaClient(logger=self.mock_logger)
+        self.mock_logger = MagicMock(spec=Logger)
+        # Use a temp cache directory to avoid interference with real cache
+        self.client = DefiLlamaClient(
+            logger=self.mock_logger,
+            cache_dir='temp_test_cache'
+        )
 
     async def test_get_dex_volumes(self):
         mock_response = {
@@ -70,11 +74,13 @@ class TestDefiLlamaFundamentals(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fees_data.top_earners[0]["name"], "Lido")
 
     async def test_get_defi_fundamentals_aggregation(self):
-        # Mock individual methods
+        """Test that get_defi_fundamentals correctly aggregates data from all sources."""
         from src.platforms.defillama import MacroMarketData
         
-        # Create a mock MacroMarketData object that mimics Pydantic model behavior roughly or just is one
-        # Since we just want to verify aggregation, we can mock the return values
+        # Force cache invalidation by clearing last_update
+        self.client.last_update = None
+        
+        # Mock individual methods to return controlled test data
         self.client.get_macro_overview = AsyncMock(return_value=MacroMarketData(
             stablecoins_market_cap=100.0,
             stablecoins_24h_change=0.0,

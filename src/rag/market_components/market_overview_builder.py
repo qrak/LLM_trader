@@ -15,7 +15,7 @@ class MarketOverviewBuilder:
         self.logger = logger
         self.processor = processor
     
-    def build_overview_structure(self, price_data: Optional[Dict], coingecko_data: Optional[Dict]) -> Dict[str, Any]:
+    def build_overview_structure(self, price_data: Optional[Dict], coingecko_data: Optional[Dict], top_coins: Optional[list] = None) -> Dict[str, Any]:
         """Build the complete market overview structure."""
         overview = {
             "timestamp": datetime.now().isoformat(), 
@@ -23,35 +23,66 @@ class MarketOverviewBuilder:
         }
         
         try:
-            # Add CoinGecko global data if available
+            # 1. Add CoinGecko global data if available (flattened for formatter compatibility)
             if coingecko_data:
                 # Handle both direct global data and wrapped data
                 if 'data' in coingecko_data:
-                    overview['global_data'] = coingecko_data['data']
+                    overview.update(coingecko_data['data'])
                 elif any(key in coingecko_data for key in ['market_cap', 'volume', 'dominance', 'stats']):
                     # Direct global data format
-                    overview['global_data'] = coingecko_data
+                    overview.update(coingecko_data)
                 else:
                     self.logger.warning(f"Unexpected CoinGecko data format: {list(coingecko_data.keys())}")
             
-            # Add price data if available
+            # 2. Add price data if available (Process BEFORE top_coins to use it for enrichment)
+            overview['coin_data'] = {}
             if price_data:
-                overview['coin_data'] = {}
                 for symbol, values in price_data.items():
                     processed_coin = self.processor.process_coin_data(values)
                     if processed_coin:
                         overview['coin_data'][symbol] = processed_coin
+
+            # 3. Add top coins list if available (Enrich with price data)
+            if top_coins:
+                rich_top_coins = []
+                for i, symbol in enumerate(top_coins):
+                    # Try to find corresponding data in coin_data
+                    # coin_data keys are typically "BTC/USDT" etc.
+                    coin_info = None
+                    if isinstance(symbol, str):
+                        # Find matching data (e.g. "BTC" matches "BTC/USDT")
+                        for key, data in overview['coin_data'].items():
+                            if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
+                                coin_info = data
+                                break
+                        
+                        # Create rich coin object (CoinGecko style) for formatter
+                        rich_coin = {
+                            "symbol": symbol,
+                            "name": symbol,
+                            "market_cap_rank": i + 1,
+                            "current_price": coin_info.get('price') if coin_info else 0,
+                            "price_change_percentage_24h": coin_info.get('change_24h') if coin_info else 0,
+                            "total_volume": coin_info.get('volume') if coin_info else 0
+                        }
+                        rich_top_coins.append(rich_coin)
+                    elif isinstance(symbol, dict):
+                        # Already a dict (maybe from CoinGecko direct?)
+                        rich_top_coins.append(symbol)
+                
+                overview['top_coins'] = rich_top_coins
             
             return self._finalize_overview(overview)
             
         except Exception as e:
             self.logger.error(f"Error building overview structure: {e}")
+            self.logger.exception("Traceback:")
             return overview
     
     def build_overview(self, coingecko_data: Optional[Dict], price_data: Optional[Dict], top_coins: Optional[list] = None) -> Dict[str, Any]:
         """Build market overview from fetched data - main entry point."""
         try:
-            return self.build_overview_structure(price_data, coingecko_data)
+            return self.build_overview_structure(price_data, coingecko_data, top_coins)
         except Exception as e:
             self.logger.error(f"Error building market overview: {e}")
             return {

@@ -64,10 +64,10 @@ class MarketDataManager:
             overview = self.overview_builder.build_overview(coingecko_data, price_data, top_coins)
 
             if macro_data:
-                overview["macro"] = macro_data.dict()
+                overview["macro"] = macro_data.model_dump()
             
             if defi_fundamentals:
-                overview["fundamentals"] = defi_fundamentals.dict()
+                overview["fundamentals"] = defi_fundamentals.model_dump()
             
             return overview
                 

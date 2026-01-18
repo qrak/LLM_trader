@@ -110,14 +110,14 @@ class MarketOverviewFormatter:
             if defi_summary:
                 sections.append(defi_summary)
         
+        # Format on-chain fundamentals if available
+        fundamentals = market_overview.get("fundamentals")
+        if fundamentals:
+            fundamentals_summary = self._format_onchain_fundamentals(fundamentals)
+            if fundamentals_summary:
+                sections.append(fundamentals_summary)
+
         if sections:
-            # Format on-chain fundamentals if available
-            fundamentals = market_overview.get("fundamentals")
-            if fundamentals:
-                fundamentals_summary = self._format_onchain_fundamentals(fundamentals)
-                if fundamentals_summary:
-                    sections.append(fundamentals_summary)
-            
             return "## Market Overview:\n" + "\n".join([f"- {section}" for section in sections])
         
         return ""
@@ -157,6 +157,7 @@ class MarketOverviewFormatter:
         fees_data = fundamentals.get("fees", {})
         if fees_data and fees_data.get("total_24h_fees"):
             fees = fees_data.get("total_24h_fees", 0)
+            # Only show top earner if we have valid fee data
             top_earner = fees_data.get("top_earners", [])
             top_earner_str = f" (Top: {top_earner[0].get('name')} ${self.format_utils.fmt(top_earner[0].get('total24h', 0))})" if top_earner else ""
             activity_lines.append(f"    - Protocol Fees: ${self.format_utils.fmt(fees)}{top_earner_str}")
@@ -167,12 +168,13 @@ class MarketOverviewFormatter:
             
         # Options (Smart Money)
         options_data = fundamentals.get("options", {})
-        if options_data and options_data.get("notional_volume_24h"):
+        # Only show section if we have non-zero notional volume
+        if options_data and options_data.get("notional_volume_24h", 0) > 0:
             notional = options_data.get("notional_volume_24h", 0)
             premium = options_data.get("premium_volume_24h", 0)
             lines.append("  • Smart Money (Options):")
             lines.append(f"    - Notional Volume: ${self.format_utils.fmt(notional)}")
-            if premium:
+            if premium > 0:
                 lines.append(f"    - Premium Volume: ${self.format_utils.fmt(premium)}")
                 
         return "\n".join(lines)
