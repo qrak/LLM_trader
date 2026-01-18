@@ -249,13 +249,20 @@ class UnifiedParser:
         # Check analysis section
         analysis = data.get('analysis', {})
         for field, default_value in self._numeric_fields.items():
-            if field in analysis and isinstance(analysis[field], str):
-                try:
-                    analysis[field] = float(analysis[field])
-                except ValueError:
-                    # Use default value for invalid strings (fix at source)
-                    analysis[field] = default_value
-        
+            if field in analysis:
+                val = analysis[field]
+                if self.format_utils:
+                    parsed = self.format_utils.parse_value(val, default=None)
+                    if parsed is not None:
+                        analysis[field] = parsed
+                    else:
+                        analysis[field] = default_value
+                elif isinstance(val, str):
+                    try:
+                        analysis[field] = float(val)
+                    except ValueError:
+                        analysis[field] = default_value
+
         # Normalize confluence_factors (new Chain-of-Thought scoring)
         confluence_factors = analysis.get('confluence_factors', {})
         if isinstance(confluence_factors, dict):
@@ -263,16 +270,18 @@ class UnifiedParser:
                               'pattern_quality', 'support_resistance_strength']:
                 if factor_key in confluence_factors:
                     value = confluence_factors[factor_key]
-                    if isinstance(value, str):
+                    if self.format_utils:
+                        # Default to 50.0 (Neutral) if parsing fails
+                        parsed = self.format_utils.parse_value(value, default=None)
+                        confluence_factors[factor_key] = parsed if parsed is not None else 50.0
+                    elif isinstance(value, str):
                         try:
                             confluence_factors[factor_key] = float(value)
                         except ValueError:
-                            # Invalid string, use neutral score of 50
                             confluence_factors[factor_key] = 50.0
                     elif isinstance(value, (int, float)):
                         confluence_factors[factor_key] = float(value)
                     else:
-                        # Unexpected type, default to neutral
                         confluence_factors[factor_key] = 50.0
         
         # Normalize key_levels arrays (support/resistance)
@@ -283,23 +292,33 @@ class UnifiedParser:
                 if isinstance(levels, list):
                     normalized_levels = []
                     for level in levels:
-                        if isinstance(level, (int, float)):
+                        if self.format_utils:
+                            val = self.format_utils.parse_value(level, default=None)
+                            if val is not None:
+                                normalized_levels.append(val)
+                        elif isinstance(level, (int, float)):
                             normalized_levels.append(float(level))
                         elif isinstance(level, str):
                             try:
                                 normalized_levels.append(float(level))
                             except ValueError:
-                                # Skip invalid string values - don't add them to the list
                                 continue
                     key_levels[level_type] = normalized_levels
         
         # Check root level
         for field, default_value in self._numeric_fields.items():
-            if field in data and isinstance(data[field], str):
-                try:
-                    data[field] = float(data[field])
-                except ValueError:
-                    data[field] = default_value
+            if field in data:
+                if self.format_utils:
+                    parsed = self.format_utils.parse_value(data[field], default=None)
+                    if parsed is not None:
+                        data[field] = parsed
+                    else:
+                        data[field] = default_value
+                elif isinstance(data[field], str):
+                    try:
+                        data[field] = float(data[field])
+                    except ValueError:
+                        data[field] = default_value
         
         return data
     

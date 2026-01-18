@@ -189,7 +189,12 @@ function initApp() {
 
     // Close on navigation
     document.querySelectorAll('.nav-item').forEach(link => {
-        link.addEventListener('click', () => {
+        link.addEventListener('click', function() {
+            // Update aria-selected for all tabs
+            document.querySelectorAll('.nav-item').forEach(t => t.setAttribute('aria-selected', 'false'));
+            // Set current to true
+            this.setAttribute('aria-selected', 'true');
+
             if (window.innerWidth <= 768) {
                 sidebar.classList.remove('mobile-open');
             }

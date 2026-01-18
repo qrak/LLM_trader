@@ -24,39 +24,39 @@
                         <div class="subtitle">LLM-POWERED NEURAL ENGINE</div>
                     </div>
                 </div>
-                <button id="mobile-menu-close" class="icon-btn-xs" style="margin-left: auto; display: none;">✕</button>
+                <button id="mobile-menu-close" class="icon-btn-xs mobile-close-btn" aria-label="Close menu">✕</button>
             </div>
 
-            <nav class="sidebar-nav">
-                <a href="#" class="nav-item active" data-target="tab-overview">
-                    <span class="icon">📊</span> Overview
+            <nav class="sidebar-nav" role="tablist" aria-label="Dashboard Navigation">
+                <a href="#" class="nav-item active" data-target="tab-overview" role="tab" aria-selected="true" aria-controls="tab-overview" id="nav-overview">
+                    <span class="icon" aria-hidden="true">📊</span> Overview
                 </a>
-                <a href="#" class="nav-item" data-target="tab-brain">
-                    <span class="icon">🕸️</span> Brain Activity
+                <a href="#" class="nav-item" data-target="tab-brain" role="tab" aria-selected="false" aria-controls="tab-brain" id="nav-brain">
+                    <span class="icon" aria-hidden="true">🕸️</span> Brain Activity
                 </a>
-                <a href="#" class="nav-item" data-target="tab-prompt">
-                    <span class="icon">💬</span> Last Prompt
+                <a href="#" class="nav-item" data-target="tab-prompt" role="tab" aria-selected="false" aria-controls="tab-prompt" id="nav-prompt">
+                    <span class="icon" aria-hidden="true">💬</span> Last Prompt
                 </a>
-                <a href="#" class="nav-item" data-target="tab-response">
-                    <span class="icon">📝</span> Last Response
+                <a href="#" class="nav-item" data-target="tab-response" role="tab" aria-selected="false" aria-controls="tab-response" id="nav-response">
+                    <span class="icon" aria-hidden="true">📝</span> Last Response
                 </a>
-                <a href="#" class="nav-item" data-target="tab-stats">
-                    <span class="icon">📊</span> Statistics
+                <a href="#" class="nav-item" data-target="tab-stats" role="tab" aria-selected="false" aria-controls="tab-stats" id="nav-stats">
+                    <span class="icon" aria-hidden="true">📊</span> Statistics
                 </a>
-                <a href="#" class="nav-item" data-target="tab-news">
-                    <span class="icon">📰</span> Latest News
+                <a href="#" class="nav-item" data-target="tab-news" role="tab" aria-selected="false" aria-controls="tab-news" id="nav-news">
+                    <span class="icon" aria-hidden="true">📰</span> Latest News
                 </a>
-                <a href="#" class="nav-item" data-target="tab-market">
-                    <span class="icon">📈</span> Market Data
+                <a href="#" class="nav-item" data-target="tab-market" role="tab" aria-selected="false" aria-controls="tab-market" id="nav-market">
+                    <span class="icon" aria-hidden="true">📈</span> Market Data
                 </a>
-                <a href="#" class="nav-item" data-target="tab-memory">
-                    <span class="icon">💾</span> Memory Bank
+                <a href="#" class="nav-item" data-target="tab-memory" role="tab" aria-selected="false" aria-controls="tab-memory" id="nav-memory">
+                    <span class="icon" aria-hidden="true">💾</span> Memory Bank
                 </a>
             </nav>
 
             <div class="sidebar-footer">
-                <div class="status-indicator">
-                    <div class="status-dot"></div>
+                <div class="status-indicator" role="status" aria-live="polite">
+                    <div class="status-dot" aria-hidden="true"></div>
                     <span id="connection-status">Connecting...</span>
                 </div>
                 <!-- Hidden legacy fields for main.js compatibility -->
@@ -75,7 +75,7 @@
             </div>
 
             <!-- Tab: Overview -->
-            <div id="tab-overview" class="tab-content active">
+            <div id="tab-overview" class="tab-content active" role="tabpanel" aria-labelledby="nav-overview">
                 <header class="tab-header">
                     <h2>Live Dashboard</h2>
                     <span id="last-updated" style="font-size: 12px; color: var(--text-muted);">Updated: --</span>
@@ -116,7 +116,7 @@
             </div>
 
             <!-- Tab: Brain Activity -->
-            <div id="tab-brain" class="tab-content">
+            <div id="tab-brain" class="tab-content" role="tabpanel" aria-labelledby="nav-brain">
                 <header class="tab-header">
                     <h2>Neural Network State</h2>
                 </header>
@@ -152,7 +152,7 @@
             </div>
 
             <!-- Tab: Last Prompt -->
-            <div id="tab-prompt" class="tab-content">
+            <div id="tab-prompt" class="tab-content" role="tabpanel" aria-labelledby="nav-prompt">
                 <header class="tab-header">
                     <h2>Last Prompt</h2>
 
@@ -170,7 +170,7 @@
             </div>
 
             <!-- Tab: Last Response -->
-            <div id="tab-response" class="tab-content">
+            <div id="tab-response" class="tab-content" role="tabpanel" aria-labelledby="nav-response">
                 <header class="tab-header">
                     <h2>Last Response</h2>
 
@@ -188,7 +188,7 @@
             </div>
 
             <!-- Tab: Statistics -->
-            <div id="tab-stats" class="tab-content">
+            <div id="tab-stats" class="tab-content" role="tabpanel" aria-labelledby="nav-stats">
                 <header class="tab-header">
                     <h2>Trading Statistics</h2>
 
@@ -199,7 +199,7 @@
             </div>
 
             <!-- Tab: Latest News -->
-            <div id="tab-news" class="tab-content">
+            <div id="tab-news" class="tab-content" role="tabpanel" aria-labelledby="nav-news">
                 <header class="tab-header">
                     <h2>Latest Crypto News</h2>
 
@@ -210,7 +210,7 @@
             </div>
 
             <!-- Tab: Market Data -->
-            <div id="tab-market" class="tab-content">
+            <div id="tab-market" class="tab-content" role="tabpanel" aria-labelledby="nav-market">
                 <header class="tab-header">
                     <h2>Active Market Position</h2>
 
@@ -230,7 +230,7 @@
             </div>
 
             <!-- Tab: Memory Bank -->
-            <div id="tab-memory" class="tab-content">
+            <div id="tab-memory" class="tab-content" role="tabpanel" aria-labelledby="nav-memory">
                 <header class="tab-header">
                     <h2>Vector Experience Database</h2>
 
