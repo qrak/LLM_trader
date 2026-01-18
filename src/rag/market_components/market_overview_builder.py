@@ -42,33 +42,62 @@ class MarketOverviewBuilder:
                     if processed_coin:
                         overview['coin_data'][symbol] = processed_coin
 
-            # 3. Add top coins list if available (Enrich with price data)
-            if top_coins:
+            # 3. Add top coins list if available
+            # Strategy: Prefer existing rich data from CoinGecko, update with fresh prices if available.
+            # If no CoinGecko data, build from scratch using the symbols list.
+            
+            existing_top_coins = overview.get('top_coins', [])
+            
+            if existing_top_coins and isinstance(existing_top_coins[0], dict):
+                # We have rich CoinGecko data. Update it with fresh stats if available.
+                for coin in existing_top_coins:
+                    symbol = coin.get('symbol', '').upper()
+                    
+                    # Find matching fresh data
+                    fresh_data = None
+                    for key, data in overview.get('coin_data', {}).items():
+                        if key.upper().startswith(symbol + "/") or key.upper() == symbol:
+                            fresh_data = data
+                            break
+                    
+                    if fresh_data:
+                        # Only update if we have valid non-zero data, or if we really trust the fresh source
+                        # Here we prioritize the fresh source if it has a price
+                        fresh_price = fresh_data.get('price', 0)
+                        if fresh_price > 0:
+                            coin['current_price'] = fresh_price
+                            coin['price_change_percentage_24h'] = fresh_data.get('change_24h', coin.get('price_change_percentage_24h', 0))
+                            coin['total_volume'] = fresh_data.get('volume', coin.get('total_volume', 0))
+                
+                # Update the overview with the potentially updated list
+                overview['top_coins'] = existing_top_coins
+                
+            elif top_coins:
+                 # Fallback: We only have a list of symbols (top_coins arg) and no rich CoinGecko data
+                 # We must build the objects from scratch using coin_data
                 rich_top_coins = []
                 for i, symbol in enumerate(top_coins):
                     # Try to find corresponding data in coin_data
-                    # coin_data keys are typically "BTC/USDT" etc.
                     coin_info = None
                     if isinstance(symbol, str):
                         # Find matching data (e.g. "BTC" matches "BTC/USDT")
-                        for key, data in overview['coin_data'].items():
+                        for key, data in overview.get('coin_data', {}).items():
                             if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
                                 coin_info = data
                                 break
                         
-                        # Create rich coin object (CoinGecko style) for formatter
+                        # Create rich coin object
                         rich_coin = {
                             "symbol": symbol,
                             "name": symbol,
                             "market_cap_rank": i + 1,
-                            "current_price": coin_info.get('price') if coin_info else 0,
-                            "price_change_percentage_24h": coin_info.get('change_24h') if coin_info else 0,
-                            "total_volume": coin_info.get('volume') if coin_info else 0
+                            "current_price": coin_info.get('price', 0) if coin_info else 0,
+                            "price_change_percentage_24h": coin_info.get('change_24h', 0) if coin_info else 0,
+                            "total_volume": coin_info.get('volume', 0) if coin_info else 0
                         }
                         rich_top_coins.append(rich_coin)
                     elif isinstance(symbol, dict):
-                        # Already a dict (maybe from CoinGecko direct?)
-                        rich_top_coins.append(symbol)
+                         rich_top_coins.append(symbol)
                 
                 overview['top_coins'] = rich_top_coins
             
