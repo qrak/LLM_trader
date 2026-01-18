@@ -111,9 +111,71 @@ class MarketOverviewFormatter:
                 sections.append(defi_summary)
         
         if sections:
+            # Format on-chain fundamentals if available
+            fundamentals = market_overview.get("fundamentals")
+            if fundamentals:
+                fundamentals_summary = self._format_onchain_fundamentals(fundamentals)
+                if fundamentals_summary:
+                    sections.append(fundamentals_summary)
+            
             return "## Market Overview:\n" + "\n".join([f"- {section}" for section in sections])
         
         return ""
+    
+    def _format_onchain_fundamentals(self, fundamentals: dict) -> str:
+        """
+        Format detailed on-chain fundamentals from DefiLlama.
+        Includes TVL, Stablecoins, DEX Volumes, Fees, and Options.
+        """
+        if not fundamentals:
+            return ""
+            
+        lines = ["## On-Chain Fundamentals (DefiLlama):"]
+        
+        # Macro Data (TVL & Stablecoins)
+        macro = fundamentals.get("macro", {})
+        if macro:
+            tvl = macro.get("total_tvl", 0)
+            stables = macro.get("stablecoins_market_cap", 0)
+            stable_change = macro.get("stablecoins_24h_change", 0)
+            
+            if tvl:
+                lines.append(f"  • TVL: ${self.format_utils.fmt(tvl)}")
+            if stables:
+                lines.append(f"  • Dry Powder (Stablecoins): ${self.format_utils.fmt(stables)} ({stable_change:+.1f}%)")
+        
+        # Activity (DEX & Fees)
+        activity_lines = []
+        dex_data = fundamentals.get("dex_volumes", {})
+        if dex_data and dex_data.get("total_24h"):
+            dex_vol = dex_data.get("total_24h", 0)
+            dex_change = dex_data.get("change_1d", 0)
+            top_dex = dex_data.get("top_protocols", [])
+            top_dex_str = f" (Top: {top_dex[0].get('name')} ${self.format_utils.fmt(top_dex[0].get('total24h', 0))})" if top_dex else ""
+            activity_lines.append(f"    - DEX Volume: ${self.format_utils.fmt(dex_vol)}{top_dex_str} | 24h Change: {dex_change:+.1f}%")
+            
+        fees_data = fundamentals.get("fees", {})
+        if fees_data and fees_data.get("total_24h_fees"):
+            fees = fees_data.get("total_24h_fees", 0)
+            top_earner = fees_data.get("top_earners", [])
+            top_earner_str = f" (Top: {top_earner[0].get('name')} ${self.format_utils.fmt(top_earner[0].get('total24h', 0))})" if top_earner else ""
+            activity_lines.append(f"    - Protocol Fees: ${self.format_utils.fmt(fees)}{top_earner_str}")
+            
+        if activity_lines:
+            lines.append("  • Activity (24h):")
+            lines.extend(activity_lines)
+            
+        # Options (Smart Money)
+        options_data = fundamentals.get("options", {})
+        if options_data and options_data.get("notional_volume_24h"):
+            notional = options_data.get("notional_volume_24h", 0)
+            premium = options_data.get("premium_volume_24h", 0)
+            lines.append("  • Smart Money (Options):")
+            lines.append(f"    - Notional Volume: ${self.format_utils.fmt(notional)}")
+            if premium:
+                lines.append(f"    - Premium Volume: ${self.format_utils.fmt(premium)}")
+                
+        return "\n".join(lines)
     
     def _format_analyzed_coin_position(self, coin_data: dict, total_market_cap: float, total_volume: float) -> str:
         """
