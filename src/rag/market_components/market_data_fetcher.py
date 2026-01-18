@@ -5,16 +5,18 @@ Handles fetching market data from various sources like CoinGecko and exchanges.
 from typing import Dict, Optional, List
 
 from src.logger.logger import Logger
+from src.platforms.defillama import DefiLlamaClient, MacroMarketData
 
 
 class MarketDataFetcher:
     """Handles fetching market data from external APIs."""
     
-    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None):
+    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None, defillama_client: Optional[DefiLlamaClient] = None):
         self.logger = logger
         self.coingecko_api = coingecko_api
         self.exchange_manager = exchange_manager
         self.market_api = market_api
+        self.defillama_client = defillama_client
     
     async def fetch_global_market_data(self) -> Optional[Dict]:
         """Fetch global market data from CoinGecko."""
@@ -26,6 +28,17 @@ class MarketDataFetcher:
             return await self.coingecko_api.get_global_market_data()
         except Exception as e:
             self.logger.error(f"Error fetching global market data: {e}")
+            return None
+
+    async def fetch_macro_data(self) -> Optional[MacroMarketData]:
+        """Fetch macro market data (Stablecoins, TVL) from DefiLlama."""
+        if not self.defillama_client:
+            return None
+            
+        try:
+            return await self.defillama_client.get_macro_overview()
+        except Exception as e:
+            self.logger.error(f"Error fetching macro data from DefiLlama: {e}")
             return None
     
     async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:

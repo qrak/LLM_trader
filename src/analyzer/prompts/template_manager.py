@@ -336,11 +336,7 @@ ANALYSIS STEPS (use findings to determine trading signal):
         
         analysis_steps += f"""
 
-{step_number}. CONFLUENCE SCORING:
-   Score 0-100 for each factor supporting your signal:
-   trend_alignment (timeframe agreement) | momentum_strength (RSI/MACD confirm) | volume_support (volume confirms move) | pattern_quality (clear patterns, 0=unclear) | support_resistance_strength (S/R favors trade)
-
-{step_number + 1}. SYNTHESIS:
+{step_number}. SYNTHESIS:
    Trend direction/strength | Indicator confluence | SL/TP levels | R/R ratio | Confidence | Invalidation triggers
 
 NOTE: Indicators calculated from CLOSED CANDLES ONLY. No pattern = state "No clear pattern detected"."""
