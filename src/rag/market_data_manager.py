@@ -54,14 +54,20 @@ class MarketDataManager:
             # Use fetcher to get price data
             price_data = await self.fetcher.fetch_price_data(top_coins)
 
-            # Fetch macro data (DefiLlama)
+            # Fetch macro data (DefiLlama) - keeping for backward compatibility
             macro_data = await self.fetcher.fetch_macro_data()
+            
+            # Fetch comprehensive DeFi fundamentals (aggregated)
+            defi_fundamentals = await self.fetcher.fetch_defi_fundamentals()
             
             # Use overview builder to create final structure
             overview = self.overview_builder.build_overview(coingecko_data, price_data, top_coins)
 
             if macro_data:
                 overview["macro"] = macro_data.dict()
+            
+            if defi_fundamentals:
+                overview["fundamentals"] = defi_fundamentals.dict()
             
             return overview
                 

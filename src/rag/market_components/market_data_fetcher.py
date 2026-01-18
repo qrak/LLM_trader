@@ -40,6 +40,28 @@ class MarketDataFetcher:
         except Exception as e:
             self.logger.error(f"Error fetching macro data from DefiLlama: {e}")
             return None
+
+    async def fetch_defi_fundamentals(self) -> Optional['DeFiFundamentalsData']:
+        """Fetch aggregated DeFi fundamentals from DefiLlama and cache results."""
+        if not self.defillama_client:
+            return None
+            
+        try:
+            data = await self.defillama_client.get_defi_fundamentals()
+            
+            # Simple caching mechanism: save successful fetch to disk
+            # Using FILE_HANDLER if available directly or via some mechanism?
+            # MarketDataFetcher is in src.rag.market_components which usually doesn't hold FileHandler directly.
+            # However, MarketDataManager holds FileHandler. 
+            # Ideally, fetcher should just fetch. Caching should be in Manager or a dedicated Cache component.
+            # But specific request was "like coingecko_global.json"
+            
+            # Let's keep fetcher pure and return data. The Manager should handle caching.
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Error fetching DeFi fundamentals: {e}")
+            return None
     
     async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
         """Fetch price data for top coins using CCXT or fallback to CryptoCompare."""

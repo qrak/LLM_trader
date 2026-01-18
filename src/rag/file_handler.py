@@ -33,6 +33,10 @@ class RagFileHandler:
         self.market_data_dir = os.path.join(self.data_dir, self.MARKET_DATA_DIR)
         self.news_file_path = os.path.join(self.data_dir, self.NEWS_FILE)
         self.tickers_file = os.path.join(self.data_dir, "known_tickers.json")
+        
+        # Cache paths
+        self.coingecko_file_path = os.path.join(self.market_data_dir, self.COINGECKO_CACHE_FILE)
+        
         # RAG priorities are configuration, not data - store in config directory
         config_dir = os.path.join(self.base_dir, "config")
         self.rag_priorities_file = os.path.join(config_dir, "rag_priorities.json")
