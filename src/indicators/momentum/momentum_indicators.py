@@ -91,8 +91,21 @@ def stochastic_numba(high, low, close, period_k, smooth_k, period_d):
     d_values = np.full(n, np.nan)
 
     for i in range(period_k - 1, n):
-        high_max = np.max(high[i - period_k + 1:i + 1])
-        low_min = np.min(low[i - period_k + 1:i + 1])
+        # Optimization: Avoid creating slice arrays in the loop
+        start_idx = i - period_k + 1
+        end_idx = i + 1
+
+        # Manual max/min finding to avoid slice allocation
+        high_max = high[start_idx]
+        low_min = low[start_idx]
+
+        for j in range(start_idx + 1, end_idx):
+            val_h = high[j]
+            val_l = low[j]
+            if val_h > high_max:
+                high_max = val_h
+            if val_l < low_min:
+                low_min = val_l
 
         if high_max != low_min:
             k_values[i] = 100 * (close[i] - low_min) / (high_max - low_min)
