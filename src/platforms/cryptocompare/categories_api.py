@@ -99,10 +99,20 @@ class CryptoCompareCategoriesAPI:
            current_time - self.categories_last_update < self.categories_update_interval:
             return self.api_categories
             
+        # We assume RAG_CATEGORIES_API_URL contains the base URL
+        url = self.config.RAG_CATEGORIES_API_URL
+
+        # Append API key if available
+        if self.config.CRYPTOCOMPARE_API_KEY and "api_key=" not in url:
+             connector = "&" if "?" in url else "?"
+             url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
+
+        # Note: logging raw URL might leak API key, so we log the configured base URL instead
         self.logger.debug(f"Fetching categories from CryptoCompare API: {self.config.RAG_CATEGORIES_API_URL}")
+
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.get(self.config.RAG_CATEGORIES_API_URL, timeout=30) as resp:
+                async with session.get(url, timeout=30) as resp:
                     self.logger.debug(f"Categories API response status: {resp.status}")
                     if resp.status == 200:
                         data = await resp.json()
