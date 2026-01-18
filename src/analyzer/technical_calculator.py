@@ -6,7 +6,7 @@ if TYPE_CHECKING:
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
-from src.utils.data_utils import get_last_valid_value, safe_array_to_scalar
+from src.utils.data_utils import get_last_valid_value
 from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
     detect_golden_cross_numba, detect_death_cross_numba
 )

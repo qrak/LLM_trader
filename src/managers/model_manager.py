@@ -1,6 +1,6 @@
 """ModelManager - Public API for AI model interactions."""
 import io
-from typing import Optional, Dict, Any, List, Union, Tuple, TYPE_CHECKING
+from typing import Optional, Dict, List, Union, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -263,8 +263,6 @@ class ModelManager(ModelManagerProtocol):
 
     async def _track_cost(self, result, response, content: str) -> None:
         """Track token usage and costs for the response."""
-        from .provider_types import InvocationResult
-        from src.platforms.ai_providers.response_models import ChatResponseModel
         usage = response.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0

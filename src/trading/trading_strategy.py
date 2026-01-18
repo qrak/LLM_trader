@@ -13,7 +13,7 @@ from .memory import TradingMemoryService
 
 
 if TYPE_CHECKING:
-    from src.parsing.unified_parser import UnifiedParser
+    pass
 
 
 class TradingStrategy:

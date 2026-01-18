@@ -287,7 +287,7 @@ class ChartGenerator:
         volumes = ohlcv[:, 5].astype(float) if ohlcv.shape[1] > 5 else np.zeros(len(ohlcv))
 
         # Slice indicator arrays to match displayed candle count
-        slice_start = original_len - len(ohlcv) if chosen_limit and original_len > chosen_limit else 0
+        original_len - len(ohlcv) if chosen_limit and original_len > chosen_limit else 0
         def slice_indicator(arr: Optional[np.ndarray]) -> Optional[np.ndarray]:
             if arr is None or len(arr) == 0:
                 return None
@@ -596,12 +596,12 @@ class ChartGenerator:
         # ENHANCEMENT 2: OHLC annotations at fixed intervals (every 12 candles to avoid clutter)
         ohlc_interval = max(12, len(closes) // 10)  # At least 12, or ~10 annotations total
         for i in range(ohlc_interval, len(closes) - 5, ohlc_interval):
-            o, h, l, c = opens[i], highs[i], lows[i], closes[i]
+            o, h, low, c = opens[i], highs[i], lows[i], closes[i]
             # Position annotation above or below candle based on available space
             is_bullish = c >= o
-            y_pos = h + (price_max - price_min) * 0.02 if is_bullish else l - (price_max - price_min) * 0.02
+            y_pos = h + (price_max - price_min) * 0.02 if is_bullish else low - (price_max - price_min) * 0.02
             ay_offset = -40 if is_bullish else 40
-            ohlc_text = f"O:{self.formatter(o)}<br>H:{self.formatter(h)}<br>L:{self.formatter(l)}<br>C:{self.formatter(c)}"
+            ohlc_text = f"O:{self.formatter(o)}<br>H:{self.formatter(h)}<br>L:{self.formatter(low)}<br>C:{self.formatter(c)}"
             fig.add_annotation(
                 x=timestamps_py[i], y=y_pos,
                 text=ohlc_text,

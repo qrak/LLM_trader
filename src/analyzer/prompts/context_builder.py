@@ -67,7 +67,7 @@ class ContextBuilder:
             candle_status = (
                 f"\n- Next Candle Close: in {minutes_until_close} minutes"
             )
-            candle_status += f"\n- Data Quality: All indicators based on CLOSED CANDLES ONLY (professional trading standard)"
+            candle_status += "\n- Data Quality: All indicators based on CLOSED CANDLES ONLY (professional trading standard)"
         
         # Get analysis timeframes description
         analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"

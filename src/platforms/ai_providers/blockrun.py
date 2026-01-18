@@ -28,7 +28,7 @@ class BlockRunClient(BaseAIClient):
             self._client = AsyncLLMClient(private_key=self._wallet_key, api_url=self.base_url)
             self.logger.debug("BlockRun SDK client initialized successfully")
         except ImportError as e:
-            self.logger.error(f"BlockRun SDK not installed. Run: pip install blockrun-llm")
+            self.logger.error("BlockRun SDK not installed. Run: pip install blockrun-llm")
             raise ImportError("blockrun-llm SDK is required but not installed") from e
 
     async def close(self) -> None:

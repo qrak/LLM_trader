@@ -3,7 +3,7 @@ import functools
 import logging
 import traceback
 import socket
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from src.utils.protocols import HasLogger
 
 import ccxt
