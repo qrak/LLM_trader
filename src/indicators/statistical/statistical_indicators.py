@@ -97,10 +97,41 @@ def variance_numba(close, length=30, ddof=1):
     n = len(close)
     variance_values = np.full(n, np.nan)
 
-    for i in range(length - 1, n):
-        window = close[i - length + 1:i + 1]
-        mean = np.sum(window) / length
-        variance_values[i] = np.sum((window - mean) ** 2) / (length - ddof)
+    if n < length:
+        return variance_values
+
+    # Offset to stabilize numerical precision for large numbers
+    offset = close[0]
+
+    sum_x = 0.0
+    sum_x2 = 0.0
+
+    # Initial window
+    for i in range(length):
+        val = close[i] - offset
+        sum_x += val
+        sum_x2 += val * val
+
+    mean = sum_x / length
+    # Use max(0, ...) to prevent negative variance due to floating point errors
+    var = (sum_x2 - (sum_x * sum_x) / length) / (length - ddof)
+    variance_values[length - 1] = max(0.0, var)
+
+    # Sliding window
+    for i in range(length, n):
+        old_val = close[i - length] - offset
+        new_val = close[i] - offset
+
+        sum_x += new_val - old_val
+        sum_x2 += new_val * new_val - old_val * old_val
+
+        # We re-calculate variance from sums
+        # Var = (Sum(x^2) - (Sum(x)^2)/N) / (N - ddof)
+        # This is algebraically equivalent to (Sum(x^2)/N - mean^2) * N/(N-ddof)
+        # But using the sum form directly with centered data is stable.
+
+        var = (sum_x2 - (sum_x * sum_x) / length) / (length - ddof)
+        variance_values[i] = max(0.0, var)
 
     return variance_values
 
@@ -108,6 +139,13 @@ def variance_numba(close, length=30, ddof=1):
 def zscore_numba(close, length=30, std=1.0):
     n = len(close)
     zscore_values = np.full(n, np.nan)
+
+    # We can optimize this too, but for now let's focus on variance/stdev
+    # Actually, zscore needs mean and stdev.
+    # We can compute mean (SMA) and stdev (sqrt(Var)) efficiently.
+    # But zscore_numba currently does it O(N*L).
+    # Since we are optimizing variance, let's leave zscore for now unless requested.
+    # The request specifically mentioned variance_numba and sma_numba.
 
     for i in range(length - 1, n):
         window = close[i - length + 1:i + 1]
