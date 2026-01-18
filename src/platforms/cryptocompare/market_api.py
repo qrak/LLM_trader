@@ -24,11 +24,15 @@ class CryptoCompareMarketAPI:
         """
         self.logger = logger
         self.config = config
-        # Build URL template with API key
-        if self.config.CRYPTOCOMPARE_API_KEY:
-            self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
-        else:
-            self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}"
+        # Build URL template without API key (it will be appended if needed)
+        # Note: This template might be used by external callers who expect it to be ready to use
+        # For now, we will NOT include the API key in the template to avoid logging it.
+        # Callers of get_ohlcv_url_template should be aware, or we should change the design.
+        # Looking at usage, get_ohlcv_url_template is used by chart_generator.
+
+        # We'll use a placeholder for the API key if it exists, or empty string
+        api_key_param = f"&api_key={self.config.CRYPTOCOMPARE_API_KEY}" if self.config.CRYPTOCOMPARE_API_KEY else ""
+        self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}{api_key_param}"
     
     @retry_api_call(max_retries=3)
     async def get_multi_price_data(
@@ -57,11 +61,12 @@ class CryptoCompareMarketAPI:
         if coins is None and vs_currencies is None:
             url = self.config.RAG_PRICE_API_URL
         else:
-            base_url = f"https://min-api.cryptocompare.com/data/pricemultifull?fsyms={','.join(fsyms)}&tsyms={','.join(tsyms)}"
-            if self.config.CRYPTOCOMPARE_API_KEY:
-                url = f"{base_url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
-            else:
-                url = base_url
+            url = f"https://min-api.cryptocompare.com/data/pricemultifull?fsyms={','.join(fsyms)}&tsyms={','.join(tsyms)}"
+
+        # Append API key if available
+        if self.config.CRYPTOCOMPARE_API_KEY and "api_key=" not in url:
+             connector = "&" if "?" in url else "?"
+             url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -97,10 +102,11 @@ class CryptoCompareMarketAPI:
             - Taxonomy: Regulatory classifications (Access, FCA, FINMA, Industry, etc.)
             - Rating: Weiss ratings including overall, technology adoption, and market performance
         """
+        url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}"
+
+        # Append API key if available
         if self.config.CRYPTOCOMPARE_API_KEY:
-            url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
-        else:
-            url = f"https://min-api.cryptocompare.com/data/all/coinlist?fsym={symbol}"
+             url = f"{url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
         
         async with aiohttp.ClientSession() as session:
             try:
@@ -178,11 +184,13 @@ class CryptoCompareMarketAPI:
             f"{aggregate_param}"
         )
         
+        # Append API key if available
         if self.config.CRYPTOCOMPARE_API_KEY:
             url = f"{base_url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
         else:
             url = base_url
         
+        # Note: We do NOT log the full URL here to avoid leaking the API key
         self.logger.debug(
             f"Built CryptoCompare OHLCV URL: endpoint={endpoint_type}, "
             f"multiplier={multiplier}, timeframe={timeframe}, limit={limit}"

@@ -40,6 +40,11 @@ class CryptoCompareNewsClient:
                 categories_param = f"&categories={','.join(important_cats[:5])}"
                 
         url = f"{self.config.RAG_NEWS_API_URL}{categories_param}"
+
+        # Append API key if available and not already in URL (checking RAG_NEWS_API_URL content)
+        if self.config.CRYPTOCOMPARE_API_KEY and "api_key=" not in url:
+             connector = "&" if "?" in url else "?"
+             url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
         
         # Use provided session if available, otherwise create temporary one
         session_to_use = session or aiohttp.ClientSession()
