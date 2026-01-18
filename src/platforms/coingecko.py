@@ -227,6 +227,26 @@ class CoinGeckoAPI:
             self.logger.error(f"Error fetching DeFi data: {e}")
             return {}
 
+    async def get_derivatives(self) -> List[Dict[str, Any]]:
+        """
+        Fetch derivative tickers (Open Interest, Volume).
+        Useful for gauging market leverage/sentiment.
+        """
+        if not self.session:
+            self.session = CachedSession(cache=self.cache_backend)
+        
+        url = "https://api.coingecko.com/api/v3/derivatives"
+        try:
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    return await response.json()
+                else:
+                    self.logger.error(f"Failed to fetch derivatives. Status: {response.status}")
+                    return []
+        except Exception as e:
+            self.logger.error(f"Error fetching derivatives: {e}")
+            return []
+
     @retry_api_call(max_retries=3)
     async def get_global_market_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """

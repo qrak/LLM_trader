@@ -26,6 +26,8 @@ from src.app import CryptoTradingBot
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
+from src.platforms.alternative_me import AlternativeMeAPI
+from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.cryptocompare.news_api import CryptoCompareNewsAPI
 from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
@@ -222,6 +224,10 @@ class CompositionRoot:
         alternative_me_api = AlternativeMeAPI(logger=self.logger)
         await alternative_me_api.initialize()
         self.logger.debug("AlternativeMeAPI initialized")
+
+        # Initialize DefiLlamaClient
+        defillama_client = DefiLlamaClient(logger=self.logger, session=cryptocompare_session)
+        self.logger.debug("DefiLlamaClient initialized")
         
         # Create RAG component managers
         rag_file_handler = RagFileHandler(
@@ -244,8 +250,11 @@ class CompositionRoot:
             file_handler=rag_file_handler,
             coingecko_api=coingecko_api,
             market_api=market_api,
+            coingecko_api=coingecko_api,
+            market_api=market_api,
             exchange_manager=exchange_manager,
-            unified_parser=unified_parser
+            unified_parser=unified_parser,
+            defillama_client=defillama_client
         )
         
         index_manager = IndexManager(
