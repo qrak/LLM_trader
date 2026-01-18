@@ -7,7 +7,7 @@ This module has NO dependencies on analyzer module to avoid circular imports.
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from typing import List
+from typing import List, Any
 
 from src.utils.data_utils import get_indicator_value
 
@@ -36,6 +36,42 @@ class FormatUtils:
     def __init__(self):
         """Initialize the formatting utilities."""
         pass
+
+    def parse_value(self, value: Any, default: Any = None) -> float:
+        """Parse various numeric formats into a clean float.
+
+        Handles:
+        - Currency symbols ($, €, £, etc.)
+        - Percentages (%)
+        - Commas (1,000.00)
+        - Whitespace
+        - Strings containing only numbers
+        - Already numeric values
+
+        Args:
+            value: The input value to parse (str, int, float, or None)
+            default: Value to return if parsing fails (defaults to None)
+
+        Returns:
+            Float representation of the value, or default if parsing fails
+        """
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if not isinstance(value, str):
+            return default
+
+        # Clean string
+        clean = value.strip()
+
+        # Remove common currency/percentage symbols and separators
+        for char in ['$', '€', '£', '%', ',']:
+            clean = clean.replace(char, '')
+
+        try:
+            return float(clean)
+        except ValueError:
+            return default
     
     def fmt(self, val, precision=8):
         """Format a value with appropriate precision based on its magnitude"""
