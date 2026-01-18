@@ -4,7 +4,6 @@ Supports text-only and multimodal (text + image) requests with cost tracking.
 """
 import io
 import base64
-import re
 from typing import Optional, Dict, Any, List, Union
 
 from PIL import Image

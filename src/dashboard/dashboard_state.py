@@ -5,7 +5,7 @@ It enables WebSocket broadcasts and API endpoints to share live data.
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, Set
+from typing import Optional, Dict, Any
 import asyncio
 
 

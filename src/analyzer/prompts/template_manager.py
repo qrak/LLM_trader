@@ -38,7 +38,7 @@ class TemplateManager:
         """
         header_lines = [
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
-            f"You combine technical analysis, market microstructure, and macro context using a structured analytical framework.",
+            "You combine technical analysis, market microstructure, and macro context using a structured analytical framework.",
             "",
             "ANALYTICAL FRAMEWORK (Chain of Thought):",
             "Before deciding, mentally work through: (1) Market Structure phase, (2) Timeframe alignment,",

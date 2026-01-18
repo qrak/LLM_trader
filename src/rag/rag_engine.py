@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import Dict, Any, Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
@@ -257,7 +257,7 @@ class RagEngine:
                 relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
 
-            articles_added = len([idx for idx in relevant_indices 
+            len([idx for idx in relevant_indices
                                 if idx < self.news_manager.get_database_size()])
 
             # self.logger.debug(f"Added {min(articles_added, k)} news articles to context (market overview handled separately)")

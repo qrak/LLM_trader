@@ -2,11 +2,13 @@
 Market Data Fetcher
 Handles fetching market data from various sources like CoinGecko and exchanges.
 """
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.defillama import DefiLlamaClient, MacroMarketData
 
+if TYPE_CHECKING:
+    from src.platforms.defillama import DeFiFundamentalsData
 
 class MarketDataFetcher:
     """Handles fetching market data from external APIs."""

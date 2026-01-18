@@ -1,9 +1,9 @@
 """Protocol definition for RiskManager interface"""
 
-from typing import Protocol, Optional, Dict, Any, Tuple, TYPE_CHECKING
+from typing import Protocol, Optional, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.trading.dataclasses import RiskAssessment, Position
+    from src.trading.dataclasses import RiskAssessment
 
 class RiskManagerProtocol(Protocol):
     """

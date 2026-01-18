@@ -189,7 +189,7 @@ class StatisticsCalculator:
         if len(negative_returns) == 0:
             return float('inf') if mean_return > 0 else 0.0
             
-        downside_std = np.std(negative_returns)
+        np.std(negative_returns)
         # Note: Standard Sortino uses sqrt(sum(r^2)/N), np.std uses sqrt(sum((r-mean)^2)/N)
         # For true downside deviation relative to 0 target:
         downside_deviation = np.sqrt(np.mean(negative_returns ** 2))

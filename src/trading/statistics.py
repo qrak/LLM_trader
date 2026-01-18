@@ -5,7 +5,7 @@ Manages statistics state, recalculation, and context formatting.
 
 from src.logger.logger import Logger
 from src.managers.persistence_manager import PersistenceManager
-from .statistics_calculator import TradingStatistics, StatisticsCalculator
+from .statistics_calculator import StatisticsCalculator
 
 
 class TradingStatisticsService:
