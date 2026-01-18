@@ -6,9 +6,9 @@ from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 import aiohttp
 import asyncio
+from datetime import datetime, timedelta, timezone
 from src.logger.logger import Logger
 
-# --- Pydantic Models ---
 
 class StablecoinData(BaseModel):
     """Data model for a single stablecoin."""
@@ -60,6 +60,7 @@ class DeFiFundamentalsData(BaseModel):
     fees: Optional[FeesData] = None
     options: Optional[OptionsData] = None
 
+
 class MacroMarketData(BaseModel):
     """Aggregated macro market data."""
     stablecoins_market_cap: float
@@ -67,7 +68,6 @@ class MacroMarketData(BaseModel):
     total_tvl: float
     top_chains: List[ChainTVLData]
 
-# --- Client Class ---
 
 class DefiLlamaClient:
     """Client for DefiLlama API."""
@@ -75,10 +75,39 @@ class DefiLlamaClient:
     BASE_URL = "https://api.llama.fi"
     STABLECOINS_URL = "https://stablecoins.llama.fi"
 
-    def __init__(self, logger: Logger, session: Optional[aiohttp.ClientSession] = None):
+    DEFILLAMA_CACHE_FILE = "defillama_fundamentals.json"
+    
+    def __init__(self, logger: Logger, session: Optional[aiohttp.ClientSession] = None, 
+                 cache_dir: str = 'cache', update_interval_hours: float = 0.25):
         self.logger = logger
         self._external_session = session is not None
         self.session = session
+        
+        # Caching setup
+        self.cache_dir = cache_dir
+        self.update_interval = timedelta(hours=update_interval_hours)
+        self.cache_file_path = f"{cache_dir}/{self.DEFILLAMA_CACHE_FILE}"
+        self.last_update: Optional[datetime] = None
+        
+        # Ensure cache directory exists
+        import os
+        os.makedirs(self.cache_dir, exist_ok=True)
+        
+        # Try to load last update time from cache
+        self._load_cache_metadata()
+
+    def _load_cache_metadata(self):
+        """Load metadata from cache file to set last_update without full parse."""
+        import os
+        import json
+        try:
+            if os.path.exists(self.cache_file_path):
+                with open(self.cache_file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if "timestamp" in data:
+                        self.last_update = datetime.fromisoformat(data["timestamp"])
+        except Exception as e:
+            self.logger.debug(f"Could not read DefiLlama cache metadata: {e}")
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None:
@@ -170,6 +199,15 @@ class DefiLlamaClient:
             await self.session.close()
             self.session = None
 
+    def _safe_float(self, value: Any) -> float:
+        """Safely convert value to float."""
+        try:
+            if value is None: 
+                return 0.0
+            return float(value)
+        except (ValueError, TypeError):
+            return 0.0
+
     async def get_dex_volumes(self) -> Optional[DexVolumeData]:
         """Fetch DEX volume overview."""
         url = f"{self.BASE_URL}/overview/dexs"
@@ -181,14 +219,14 @@ class DefiLlamaClient:
                     protocols = data.get("protocols", [])
                     # Sort by 24h volume
                     top_protocols = sorted(
-                        [p for p in protocols if isinstance(p.get("total24h"), (int, float))],
-                        key=lambda x: x.get("total24h", 0),
+                        [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
+                        key=lambda x: self._safe_float(x.get("total24h")),
                         reverse=True
                     )[:5]
                     
                     return DexVolumeData(
-                        total_24h=float(data.get("total24h") or 0),
-                        change_1d=float(data.get("change_1d") or 0),
+                        total_24h=self._safe_float(data.get("total24h")),
+                        change_1d=self._safe_float(data.get("change_1d")),
                         top_protocols=top_protocols
                     )
                 else:
@@ -209,21 +247,20 @@ class DefiLlamaClient:
                     protocols = data.get("protocols", [])
                     # Sort by 24h fees
                     top_earners = sorted(
-                        [p for p in protocols if isinstance(p.get("total24h"), (int, float))],
-                        key=lambda x: x.get("total24h", 0),
+                        [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
+                        key=lambda x: self._safe_float(x.get("total24h")),
                         reverse=True
                     )[:5]
                     
                     # Calculate total revenue if not provided
-                    total_revenue = sum(float(p.get("total24hRevenue") or 0) for p in protocols) if protocols else 0
+                    total_revenue = sum(self._safe_float(p.get("total24hRevenue")) for p in protocols) if protocols else 0
                     
                     return FeesData(
-                        total_24h_fees=float(data.get("total24h") or 0),
+                        total_24h_fees=self._safe_float(data.get("total24h")),
                         total_24h_revenue=total_revenue,
                         top_earners=top_earners
                     )
                 else:
-                    # Fees endpoint might return 404 or empty if not available/down
                     self.logger.warning(f"DefiLlama Fees API error: {response.status}")
                     return None
         except Exception as e:
@@ -241,18 +278,17 @@ class DefiLlamaClient:
                     protocols = data.get("protocols", [])
                     # Sort by notional volume
                     top_protocols = sorted(
-                        [p for p in protocols if isinstance(p.get("totalNotionalVolume"), (int, float))],
-                        key=lambda x: x.get("totalNotionalVolume", 0),
+                        [p for p in protocols if self._safe_float(p.get("totalNotionalVolume")) > 0],
+                        key=lambda x: self._safe_float(x.get("totalNotionalVolume")),
                         reverse=True
                     )[:5]
                     
                     return OptionsData(
-                        notional_volume_24h=float(data.get("totalNotionalVolume") or 0),
-                        premium_volume_24h=float(data.get("totalPremiumVolume") or 0),
+                        notional_volume_24h=self._safe_float(data.get("totalNotionalVolume")),
+                        premium_volume_24h=self._safe_float(data.get("totalPremiumVolume")),
                         top_protocols=top_protocols
                     )
                 else:
-                    # Options endpoint might return 404 or empty if not available/down
                     self.logger.warning(f"DefiLlama Options API error: {response.status}")
                     return None
         except Exception as e:
@@ -261,6 +297,24 @@ class DefiLlamaClient:
 
     async def get_defi_fundamentals(self) -> Optional[DeFiFundamentalsData]:
         """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
+        import json
+        import os
+        from datetime import timezone
+
+        # Check cache freshness
+        current_time = datetime.now(timezone.utc)
+        if self.last_update and (current_time - self.last_update < self.update_interval):
+            if os.path.exists(self.cache_file_path):
+                try:
+                    with open(self.cache_file_path, 'r', encoding='utf-8') as f:
+                        cached_data = json.load(f)
+                        if "data" in cached_data:
+                            self.logger.debug(f"Using cached DefiLlama data from {self.last_update.isoformat()}")
+                            return DeFiFundamentalsData(**cached_data["data"])
+                except Exception as e:
+                    self.logger.warning(f"Failed to read DefiLlama cache: {e}")
+        
+        self.logger.debug("Fetching fresh DefiLlama fundamentals...")
         try:
             # Run all requests in parallel
             macro_task = self.get_macro_overview()
@@ -293,12 +347,38 @@ class DefiLlamaClient:
                 self.logger.error(f"Failed to fetch Options data: {options}")
                 options = None
                 
-            return DeFiFundamentalsData(
+            fundamentals = DeFiFundamentalsData(
                 macro=macro,
                 dex_volumes=dex,
                 fees=fees,
                 options=options
             )
+            
+            # Save to cache
+            try:
+                cache_payload = {
+                    "timestamp": current_time.isoformat(),
+                    "data": fundamentals.model_dump()
+                }
+                # Write to temp file then rename for atomic write
+                temp_path = f"{self.cache_file_path}.tmp"
+                with open(temp_path, 'w', encoding='utf-8') as f:
+                    json.dump(cache_payload, f, ensure_ascii=False, indent=2)
+                
+                # Windows atomic replace might need unlink first if exists, but os.replace usually handles it
+                if os.path.exists(self.cache_file_path):
+                     try:
+                         os.remove(self.cache_file_path)
+                     except Exception: 
+                         pass
+                os.rename(temp_path, self.cache_file_path)
+                
+                self.last_update = current_time
+                self.logger.debug("Updated DefiLlama cache")
+            except Exception as e:
+                self.logger.warning(f"Failed to save DefiLlama cache: {e}")
+                
+            return fundamentals
             
         except Exception as e:
             self.logger.error(f"Error building DeFi fundamentals: {e}")

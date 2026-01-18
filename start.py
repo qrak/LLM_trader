@@ -226,7 +226,12 @@ class CompositionRoot:
         self.logger.debug("AlternativeMeAPI initialized")
 
         # Initialize DefiLlamaClient
-        defillama_client = DefiLlamaClient(logger=self.logger, session=cryptocompare_session)
+        defillama_client = DefiLlamaClient(
+            logger=self.logger, 
+            session=cryptocompare_session,
+            cache_dir='cache',
+            update_interval_hours=self.config.RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS
+        )
         self.logger.debug("DefiLlamaClient initialized")
         
         # Create RAG component managers
@@ -248,8 +253,6 @@ class CompositionRoot:
         market_data_manager = MarketDataManager(
             logger=self.logger,
             file_handler=rag_file_handler,
-            coingecko_api=coingecko_api,
-            market_api=market_api,
             coingecko_api=coingecko_api,
             market_api=market_api,
             exchange_manager=exchange_manager,

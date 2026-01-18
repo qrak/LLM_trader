@@ -269,47 +269,15 @@ class RagEngine:
             return "Error retrieving market context."
 
     async def get_market_overview(self) -> Optional[Dict[str, Any]]:
-        """Get current market overview data - now uses CoinGecko data directly"""
+        """Get current market overview data using MarketDataManager (aggregates CoinGecko + DefiLlama)"""
         try:
-            # Try to get fresh CoinGecko global data directly
-            if self.coingecko_api:
-                coingecko_data = await self.coingecko_api.get_global_market_data()
-                if coingecko_data:
-                    # Format CoinGecko data as market overview
-                    market_overview = {
-                        "timestamp": self.coingecko_api.last_update.isoformat() if self.coingecko_api.last_update else "unknown",
-                        "summary": "CRYPTO MARKET OVERVIEW",
-                        "published_on": self.coingecko_api.last_update.timestamp() if self.coingecko_api.last_update else 0,
-                        "data_sources": ["coingecko_global"],
-                        "market_cap": coingecko_data.get("market_cap", {}),
-                        "volume": coingecko_data.get("volume", {}),
-                        "dominance": coingecko_data.get("dominance", {}),
-                        "stats": coingecko_data.get("stats", {}),
-                        "top_coins": coingecko_data.get("top_coins", []),
-                        "defi": coingecko_data.get("defi", {})
-                    }
-                    return market_overview
+            # Delegate to MarketDataManager which handles aggregation of all sources
+            if self.market_data_manager:
+                 # Check/Update if needed
+                 await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
+                 return self.market_data_manager.get_current_overview()
             
-            # Fallback to complex market data manager if CoinGecko fails
-            current_overview = self.market_data_manager.get_current_overview()
-            
-            # Try to get market overview data directly from CoinGecko API
-            if current_overview is None:
-                self.logger.debug("No current market overview, fetching from CoinGecko")
-                await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
-                current_overview = self.market_data_manager.get_current_overview()
-
-            if current_overview is not None:
-                if self.market_data_manager.is_overview_stale(max_age_hours=1):
-                    self.logger.debug("Market overview data needs refresh")
-                    await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
-                    current_overview = self.market_data_manager.get_current_overview()
-            else:
-                self.logger.debug("No market overview data, fetching fresh data")
-                await self.market_data_manager.update_market_overview_if_needed(max_age_hours=0)
-                current_overview = self.market_data_manager.get_current_overview()
-
-            return current_overview
+            return None
         except Exception as e:
             self.logger.error(f"Error getting market overview: {e}")
             return None

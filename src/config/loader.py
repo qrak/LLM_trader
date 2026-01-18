@@ -368,6 +368,10 @@ class Config:
         return self.get_config('rag', 'coingecko_update_interval_hours', 24)
     
     @property
+    def RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS(self):
+        return float(self.get_config('rag', 'defillama_update_interval_hours', 0.25))
+    
+    @property
     def RAG_COINGECKO_GLOBAL_API_URL(self):
         return self.get_config('rag', 'coingecko_global_api_url', 'https://api.coingecko.com/api/v3/global')
 

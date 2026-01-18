@@ -48,18 +48,52 @@ async def main():
     overview = await manager.fetch_market_overview()
     
     # 4. Verification
+    
+    # Check Macro (Backward Compatibility)
     if overview and "macro" in overview:
         macro = overview["macro"]
-        print("\n[SUCCESS] Macro Data Fetched:")
+        print("\n[SUCCESS] Macro Data Fetched (Legacy Key):")
         print(f"  Stablecoin MC: ${macro.get('stablecoins_market_cap', 0):,.2f}")
-        print(f"  Stablecoin Change: {macro.get('stablecoins_24h_change', 0):.2f}%")
         print(f"  Total TVL: ${macro.get('total_tvl', 0):,.2f}")
-        
-        top_chains = macro.get("top_chains", [])
-        if top_chains:
-            print(f"  Top Chain: {top_chains[0].get('name')} (${top_chains[0].get('tvl', 0):,.2f})")
     else:
-        print("\n[FAIL] Macro data missing from overview.")
+        print("\n[FAIL] Legacy 'macro' key missing.")
+
+    # Check Fundamentals (New Aggregated Data)
+    if overview and "fundamentals" in overview:
+        fund = overview["fundamentals"]
+        print("\n[SUCCESS] DeFi Fundamentals Fetched (New Key):")
+        
+        # Check DEX Volumes
+        dex = fund.get("dex_volumes")
+        if dex:
+            print(f"  DEX Volume 24h: ${dex.get('total_24h', 0):,.2f}")
+            top_dex = dex.get("top_protocols", [])
+            if top_dex:
+                print(f"  Top DEX: {top_dex[0].get('name')} (${top_dex[0].get('total24h', 0):,.2f})")
+        else:
+            print("  [WARN] DEX Volumes missing")
+
+        # Check Fees
+        fees = fund.get("fees")
+        if fees:
+            print(f"  Fees 24h: ${fees.get('total_24h_fees', 0):,.2f}")
+            revenue = fees.get('total_24h_revenue', 0)
+            if revenue > 0:
+                print(f"  Revenue 24h: ${revenue:,.2f}")
+        else:
+            print("  [WARN] Fees/Revenue missing")
+
+        # Check Options
+        opts = fund.get("options")
+        if opts:
+            notional = opts.get('notional_volume_24h', 0)
+            if notional > 0:
+                print(f"  Options Notional 24h: ${notional:,.2f}")
+        else:
+            print("  [WARN] Options data missing")
+            
+    else:
+        print("\n[FAIL] 'fundamentals' key missing from overview!")
         print(overview.keys() if overview else "Overview is None")
 
     await defillama.close()

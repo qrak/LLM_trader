@@ -135,6 +135,9 @@ class ConfigProtocol(Protocol):
     def RAG_COINGECKO_UPDATE_INTERVAL_HOURS(self) -> int: ...
     
     @property
+    def RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS(self) -> float: ...
+    
+    @property
     def RAG_COINGECKO_GLOBAL_API_URL(self) -> str: ...
 
     @property
