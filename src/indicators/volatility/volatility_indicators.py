@@ -1,5 +1,7 @@
 import numpy as np
 from numba import njit
+from src.indicators.overlap import sma_numba
+from src.indicators.statistical import stdev_numba
 
 
 @njit(cache=True)
@@ -44,50 +46,19 @@ def atr_numba(high, low, close, length=14, mamode='rma', percent=False):
 
 @njit(cache=True)
 def bollinger_bands_numba(close, length, num_std_dev):
+    # Replaced custom sliding window implementation with optimized shared utilities
+    # to adhere to DRY principles and ensure consistent performance across indicators.
+    middle_band = sma_numba(close, length)
+    std_dev = stdev_numba(close, length)
+
     n = len(close)
     upper_band = np.full(n, np.nan)
     lower_band = np.full(n, np.nan)
-    middle_band = np.full(n, np.nan)
 
-    if n < length:
-        return upper_band, middle_band, lower_band
-
-    # Initial window calculation
-    sum_x = 0.0
-    sum_x2 = 0.0
-    for i in range(length):
-        val = close[i]
-        sum_x += val
-        sum_x2 += val * val
-
-    mean = sum_x / length
-    var = (sum_x2 / length) - (mean * mean)
-    if var < 0:
-        var = 0.0
-    std = np.sqrt(var)
-
-    upper_band[length - 1] = mean + (std * num_std_dev)
-    middle_band[length - 1] = mean
-    lower_band[length - 1] = mean - (std * num_std_dev)
-
-    # Sliding window
-    for i in range(length, n):
-        old_val = close[i - length]
-        new_val = close[i]
-
-        sum_x += new_val - old_val
-        sum_x2 += new_val * new_val - old_val * old_val
-
-        mean = sum_x / length
-        var = (sum_x2 / length) - (mean * mean)
-        if var < 0:
-            var = 0.0
-
-        std = np.sqrt(var)
-
-        upper_band[i] = mean + (std * num_std_dev)
-        middle_band[i] = mean
-        lower_band[i] = mean - (std * num_std_dev)
+    for i in range(length - 1, n):
+        dev = std_dev[i] * num_std_dev
+        upper_band[i] = middle_band[i] + dev
+        lower_band[i] = middle_band[i] - dev
 
     return upper_band, middle_band, lower_band
 
