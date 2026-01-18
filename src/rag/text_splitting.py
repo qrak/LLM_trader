@@ -5,9 +5,7 @@ Provides robust sentence splitting using wtpsplit with regex fallback.
 """
 import re
 import time
-import logging
-import logging
-from typing import List, Optional
+from typing import List
 from functools import lru_cache
 
 class SentenceSplitter:

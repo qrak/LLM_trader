@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.parsing.unified_parser import UnifiedParser
+    from src.utils.format_utils import FormatUtils
 
 from .base_notifier import BaseNotifier
 

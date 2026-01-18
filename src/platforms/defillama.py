@@ -299,7 +299,6 @@ class DefiLlamaClient:
         """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
         import json
         import os
-        from datetime import timezone
 
         # Check cache freshness
         current_time = datetime.now(timezone.utc)

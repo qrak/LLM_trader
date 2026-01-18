@@ -55,7 +55,7 @@ class PatternAnalyzer:
                 technical_history, ohlcv_data, sma_values, timestamps
             )
             if self.logger:
-                ind_count = sum(len(p) for p in indicator_patterns.values())
+                sum(len(p) for p in indicator_patterns.values())
                 # self.logger.debug(f"Detected {ind_count} indicator patterns")
         except Exception as e:
             if self.logger:

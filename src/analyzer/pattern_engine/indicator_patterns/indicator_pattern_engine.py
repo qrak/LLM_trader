@@ -734,7 +734,7 @@ class IndicatorPatternEngine:
             if sma_20 > sma_50 and sma_50 > sma_200:
                 patterns.append({
                     'type': 'ma_bullish_alignment',
-                    'description': f'Bullish MA alignment (20>50>200 SMA) - current configuration',
+                    'description': 'Bullish MA alignment (20>50>200 SMA) - current configuration',
                     'index': 0,
                     'details': {
                         'sma_20': float(sma_20),
@@ -748,7 +748,7 @@ class IndicatorPatternEngine:
             elif sma_20 < sma_50 and sma_50 < sma_200:
                 patterns.append({
                     'type': 'ma_bearish_alignment',
-                    'description': f'Bearish MA alignment (20<50<200 SMA) - current configuration',
+                    'description': 'Bearish MA alignment (20<50<200 SMA) - current configuration',
                     'index': 0,
                     'details': {
                         'sma_20': float(sma_20),
@@ -771,7 +771,7 @@ class IndicatorPatternEngine:
                 if sma_50 > sma_200:
                     patterns.append({
                         'type': 'golden_cross_active',
-                        'description': f'Golden Cross active: 50 SMA above 200 SMA (bullish) - current configuration',
+                        'description': 'Golden Cross active: 50 SMA above 200 SMA (bullish) - current configuration',
                         'index': 0,
                         'details': {
                             'sma_50': float(sma_50),
@@ -783,7 +783,7 @@ class IndicatorPatternEngine:
                 else:
                     patterns.append({
                         'type': 'death_cross_active',
-                        'description': f'Death Cross active: 50 SMA below 200 SMA (bearish) - current configuration',
+                        'description': 'Death Cross active: 50 SMA below 200 SMA (bearish) - current configuration',
                         'index': 0,
                         'details': {
                             'sma_50': float(sma_50),
