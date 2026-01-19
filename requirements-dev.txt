@@ -1,0 +1,7 @@
+# Development dependencies for testing
+# Install with: pip install -r requirements-dev.txt
+
+pytest>=9.0.0
+pytest-asyncio>=1.3.0
+pytest-timeout>=2.4.0
+ruff>=0.11.0
