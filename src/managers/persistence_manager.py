@@ -41,7 +41,7 @@ class PersistenceManager:
         """
         self.logger = logger
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         
         self.positions_file = self.data_dir / "positions.json"
         self.history_file = self.data_dir / "trade_history.json"
