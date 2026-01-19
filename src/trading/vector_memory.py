@@ -85,7 +85,7 @@ class VectorMemoryService:
             )
             return False
         except Exception as e:
-            self.logger.error(f"Failed to initialize VectorMemoryService: {e}")
+            self.logger.error(f"Failed to initialize VectorMemoryService: {e}", exc_info=True)
             return False
     
     def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,6 +123,7 @@ class VectorMemoryService:
             True if stored successfully, False otherwise.
         """
         if not self._ensure_initialized():
+            self.logger.warning("VectorMemoryService not initialized, cannot store experience.")
             return False
         
         try:
