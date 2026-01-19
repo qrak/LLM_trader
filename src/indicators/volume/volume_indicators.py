@@ -209,15 +209,18 @@ def rolling_vwap_numba(high, low, close, volume, length):
 def twap_numba(high, low, close, length):
     n = len(high)
     twap = np.full(n, np.nan)
+    tp_sum = 0.0
 
-    for i in range(length - 1, n):
-        tp_sum = 0
+    for i in range(n):
+        tp = (high[i] + low[i] + close[i]) / 3
+        tp_sum += tp
 
-        for j in range(i - length + 1, i + 1):
-            tp = (high[j] + low[j] + close[j]) / 3
-            tp_sum += tp
+        if i >= length:
+            old_tp = (high[i - length] + low[i - length] + close[i - length]) / 3
+            tp_sum -= old_tp
 
-        twap[i] = tp_sum / length
+        if i >= length - 1:
+            twap[i] = tp_sum / length
 
     return twap
 
@@ -230,4 +233,3 @@ def average_quote_volume_numba(close_prices, volumes, window_size):
         average_volume = np.mean(volumes[i - window_size + 1:i + 1])
         quote_volumes[i] = average_close_price * average_volume
     return quote_volumes
-
