@@ -76,6 +76,24 @@ class BaseAIClient(ABC):
                 return f.read()
         return chart_image
 
+    def _sanitize_error_message(self, message: str) -> str:
+        """
+        Sanitize error message by redaction of sensitive information like API keys.
+
+        Args:
+            message: The raw error message string.
+
+        Returns:
+            Sanitized string with API keys redacted.
+        """
+        sanitized = message
+        # If the instance has an api_key attribute, try to redact it
+        if hasattr(self, 'api_key') and self.api_key:
+            if isinstance(self.api_key, str) and len(self.api_key) > 5:
+                sanitized = sanitized.replace(self.api_key, "[REDACTED_API_KEY]")
+
+        return sanitized
+
     def handle_common_errors(self, exception: Exception) -> Optional[ChatResponseModel]:
         """
         Handle common API errors across all providers.
@@ -86,22 +104,28 @@ class BaseAIClient(ABC):
         Returns:
             Error response or None for unhandled errors
         """
-        error_message = str(exception).lower()
-        if "quota" in error_message or "rate limit" in error_message or "resource_exhausted" in error_message:
-            self.logger.error(f"Rate limit or quota exceeded: {exception}")
-            return ChatResponseModel.from_error(f"rate_limit: {exception}")
-        if "authentication" in error_message or "api key" in error_message or "invalid_api_key" in error_message:
-            self.logger.error(f"Authentication error: {exception}")
-            return ChatResponseModel.from_error(f"authentication: {exception}")
-        if "timeout" in error_message:
-            self.logger.error(f"Timeout error: {exception}")
-            return ChatResponseModel.from_error(f"timeout: {exception}")
-        if "503" in str(exception) or "overloaded" in error_message or "unavailable" in error_message:
-            self.logger.error(f"Service unavailable/overloaded: {exception}")
-            return ChatResponseModel.from_error(f"overloaded: {exception}")
-        if "connection" in error_message or "econnreset" in error_message:
-            self.logger.error(f"Connection error: {exception}")
-            return ChatResponseModel.from_error(f"connection: {exception}")
+        # Use raw message for logic (classification) to ensure robustness
+        error_message_raw = str(exception)
+        error_message_lower = error_message_raw.lower()
+
+        # Use sanitized message for logging and output to ensure security
+        error_message_sanitized = self._sanitize_error_message(error_message_raw)
+
+        if "quota" in error_message_lower or "rate limit" in error_message_lower or "resource_exhausted" in error_message_lower:
+            self.logger.error(f"Rate limit or quota exceeded: {error_message_sanitized}")
+            return ChatResponseModel.from_error(f"rate_limit: {error_message_sanitized}")
+        if "authentication" in error_message_lower or "api key" in error_message_lower or "invalid_api_key" in error_message_lower:
+            self.logger.error(f"Authentication error: {error_message_sanitized}")
+            return ChatResponseModel.from_error(f"authentication: {error_message_sanitized}")
+        if "timeout" in error_message_lower:
+            self.logger.error(f"Timeout error: {error_message_sanitized}")
+            return ChatResponseModel.from_error(f"timeout: {error_message_sanitized}")
+        if "503" in error_message_raw or "overloaded" in error_message_lower or "unavailable" in error_message_lower:
+            self.logger.error(f"Service unavailable/overloaded: {error_message_sanitized}")
+            return ChatResponseModel.from_error(f"overloaded: {error_message_sanitized}")
+        if "connection" in error_message_lower or "econnreset" in error_message_lower:
+            self.logger.error(f"Connection error: {error_message_sanitized}")
+            return ChatResponseModel.from_error(f"connection: {error_message_sanitized}")
         return None
 
     def convert_pydantic_response(
