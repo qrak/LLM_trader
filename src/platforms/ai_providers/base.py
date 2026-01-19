@@ -104,10 +104,12 @@ class BaseAIClient(ABC):
         Returns:
             Error response or None for unhandled errors
         """
-        # Sanitize exception string before logging
+        # Use raw message for logic (classification) to ensure robustness
         error_message_raw = str(exception)
+        error_message_lower = error_message_raw.lower()
+
+        # Use sanitized message for logging and output to ensure security
         error_message_sanitized = self._sanitize_error_message(error_message_raw)
-        error_message_lower = error_message_sanitized.lower()
 
         if "quota" in error_message_lower or "rate limit" in error_message_lower or "resource_exhausted" in error_message_lower:
             self.logger.error(f"Rate limit or quota exceeded: {error_message_sanitized}")
