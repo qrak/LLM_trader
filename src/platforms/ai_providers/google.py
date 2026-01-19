@@ -199,5 +199,6 @@ class GoogleAIClient(BaseAIClient):
         result = self.handle_common_errors(exception)
         if result:
             return result
-        self.logger.error(f"Unexpected Google AI error: {exception}")
+        sanitized_error = self._sanitize_error_message(str(exception))
+        self.logger.error(f"Unexpected Google AI error: {sanitized_error}")
         return None
