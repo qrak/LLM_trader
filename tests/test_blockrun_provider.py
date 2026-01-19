@@ -2,7 +2,6 @@
 Unit tests for BlockRun.AI provider client using mocks.
 Tests security features, message handling, and API interactions.
 """
-import base64
 import io
 import pytest
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
@@ -242,13 +241,16 @@ class TestChatCompletion:
 
     @pytest.mark.asyncio
     async def test_chat_completion_not_initialized(self, blockrun_client):
-        """Test chat completion when client not initialized."""
-        with pytest.raises(RuntimeError, match="BlockRun client not initialized"):
-            await blockrun_client.chat_completion(
-                model="gpt-4o",
-                messages=[],
-                model_config={}
-            )
+        """Test chat completion auto-initializes and raises ImportError when SDK missing."""
+        # BlockRunClient uses lazy initialization via _ensure_client()
+        # When SDK isn't installed, ImportError should be raised
+        with patch('blockrun_llm.AsyncLLMClient', side_effect=ImportError("No module")):
+            with pytest.raises(ImportError, match="blockrun-llm SDK is required"):
+                await blockrun_client.chat_completion(
+                    model="gpt-4o",
+                    messages=[],
+                    model_config={}
+                )
 
 
 class TestChartAnalysis:
