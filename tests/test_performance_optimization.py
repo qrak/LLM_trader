@@ -6,8 +6,55 @@ from typing import Optional, Tuple, List
 import numpy as np
 from src.rag.text_splitting import SentenceSplitter
 from src.indicators.volatility.volatility_indicators import choppiness_index_numba
+from src.indicators.momentum.momentum_indicators import williams_r_numba
+import pandas as pd
 
 class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
+
+    def test_williams_r_correctness_and_performance(self):
+        """Test that Williams %R is correct and performant."""
+
+        # 1. Correctness Check
+        # Generate deterministic data
+        np.random.seed(42)
+        n = 1000
+        length = 14
+        close = np.random.random(n) * 100
+        high = close + np.random.random(n) * 5
+        low = close - np.random.random(n) * 5
+
+        # Run optimized numba version
+        res_numba = williams_r_numba(high, low, close, length)
+
+        # Run reference pandas implementation
+        high_s = pd.Series(high)
+        low_s = pd.Series(low)
+        close_s = pd.Series(close)
+        highest_high = high_s.rolling(window=length).max()
+        lowest_low = low_s.rolling(window=length).min()
+        # Formula: %R = (Highest High - Close) / (Highest High - Lowest Low) * -100
+        # Note: Some sources use (Highest High - Close), others (Close - Highest High).
+        # Our implementation uses: ((highest_high - close[i]) / (highest_high - lowest_low)) * -100
+        res_ref = ((highest_high - close_s) / (highest_high - lowest_low)) * -100
+        res_ref = res_ref.to_numpy()
+
+        # Compare (ignoring NaNs at start)
+        mask = ~np.isnan(res_ref)
+        np.testing.assert_allclose(res_numba[mask], res_ref[mask], err_msg="Williams %R output mismatch")
+
+        # 2. Performance Check (simple threshold)
+        # Larger dataset
+        n_perf = 100_000
+        close_p = np.random.random(n_perf) * 100
+        high_p = close_p + np.random.random(n_perf) * 5
+        low_p = close_p - np.random.random(n_perf) * 5
+
+        start_time = time.perf_counter()
+        _ = williams_r_numba(high_p, low_p, close_p, length)
+        duration = time.perf_counter() - start_time
+
+        print(f"Williams %R (N={n_perf}) took {duration:.4f}s")
+        self.assertLess(duration, 0.5, "Williams %R calculation too slow")
     
     def test_sentence_splitter_cache(self):
         """Test that lru_cache is working on split_text."""
