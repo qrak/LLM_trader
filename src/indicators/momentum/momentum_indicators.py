@@ -143,9 +143,22 @@ def williams_r_numba(high, low, close, length):
     n = len(close)
     williams_r = np.full(n, np.nan)
 
+    # Optimization: Manual max/min finding to avoid slice allocation in loop
     for i in range(length - 1, n):
-        highest_high = np.max(high[i - length + 1: i + 1])
-        lowest_low = np.min(low[i - length + 1: i + 1])
+        start_idx = i - length + 1
+        end_idx = i + 1
+
+        highest_high = high[start_idx]
+        lowest_low = low[start_idx]
+
+        # Inner loop over the window - efficient for small windows (default 14)
+        for j in range(start_idx + 1, end_idx):
+            h_val = high[j]
+            l_val = low[j]
+            if h_val > highest_high:
+                highest_high = h_val
+            if l_val < lowest_low:
+                lowest_low = l_val
 
         if highest_high != lowest_low:
             williams_r[i] = ((highest_high - close[i]) / (highest_high - lowest_low)) * -100
