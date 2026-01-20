@@ -129,13 +129,13 @@ function renderExperienceTable(experiences) {
         const context = (exp.document || '').substring(0, 60) + ((exp.document?.length > 60) ? '...' : '');
         
         return `
-            <tr title="${exp.document || ''}">
-                <td>${exp.id || '--'}</td>
-                <td class="context">${context}</td>
-                <td class="${outcomeClass}">${outcome}</td>
+            <tr title="${escapeHtml(exp.document || '')}">
+                <td>${escapeHtml(exp.id || '--')}</td>
+                <td class="context">${escapeHtml(context)}</td>
+                <td class="${outcomeClass}">${escapeHtml(outcome)}</td>
                 <td class="${pnlClass}">${pnl}</td>
-                <td>${confidence}</td>
-                <td>${direction}</td>
+                <td>${escapeHtml(confidence)}</td>
+                <td>${escapeHtml(direction)}</td>
                 <td>${similarity}</td>
                 <td>${timestamp}</td>
             </tr>
@@ -184,4 +184,11 @@ function renderEmptyState() {
             </p>
         </div>
     `;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

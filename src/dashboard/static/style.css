@@ -1226,3 +1226,32 @@ button:hover {
         overflow-y: auto;
     }
 }
+/* Contact Info in Sidebar */
+.contact-list {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 11px;
+    transition: color 0.2s;
+}
+
+.contact-item:hover {
+    color: var(--accent-primary);
+}
+
+.contact-item .icon {
+    font-size: 14px;
+    width: 16px; 
+    text-align: center;
+}
