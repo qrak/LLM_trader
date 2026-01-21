@@ -47,6 +47,10 @@ class DashboardServer:
 
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
 
+        # GZip Compression - reduces bandwidth by ~60-70%
+        from starlette.middleware.gzip import GZipMiddleware
+        app.add_middleware(GZipMiddleware, minimum_size=500)
+
         # Security Headers Middleware
         @app.middleware("http")
         async def add_security_headers(request, call_next):
@@ -73,6 +77,11 @@ class DashboardServer:
                 "connect-src 'self' https://*.cloudflare.com;"
             )
             response.headers["Content-Security-Policy"] = csp
+            path = request.url.path
+            if path.endswith(('.css', '.js')):
+                response.headers["Cache-Control"] = "public, max-age=86400"
+            elif path.endswith('.html') or path == '/':
+                response.headers["Cache-Control"] = "public, max-age=300"
             return response
 
         # Simple Rate Limiting (in-memory, per-IP)

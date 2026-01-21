@@ -8,7 +8,7 @@ export function initPerformanceChart() {
         }],
         chart: {
             type: 'area',
-            height: 250,
+            height: 280,
             background: '#161b22',
             toolbar: {
                 show: true,
@@ -55,7 +55,9 @@ export function initPerformanceChart() {
             labels: {
                 datetimeUTC: false,
                 format: 'dd MMM HH:mm',
-                style: { colors: '#8b949e', fontSize: '10px' }
+                style: { colors: '#c9d1d9', fontSize: '12px' },
+                rotate: -45,
+                rotateAlways: false
             },
             axisBorder: { show: false },
             axisTicks: { show: true, color: '#30363d' }
@@ -63,8 +65,9 @@ export function initPerformanceChart() {
         yaxis: {
             labels: {
                 formatter: (value) => "$" + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}),
-                style: { colors: '#8b949e', fontSize: '10px' }
-            }
+                style: { colors: '#c9d1d9', fontSize: '12px' }
+            },
+            tickAmount: 5
         },
         tooltip: {
             theme: 'dark',
@@ -103,6 +106,8 @@ export async function updatePerformanceData() {
         
         let seriesData = [];
         let annotations = [];
+        let lastAnnotationTime = 0;
+        let alternateOffset = false;
         
         if (historyData.history && Array.isArray(historyData.history) && historyData.history.length > 0) {
             historyData.history.forEach((point, index) => {
@@ -111,27 +116,68 @@ export async function updatePerformanceData() {
                 
                 // Add trade markers
                 if (point.action) {
-                    const isBuy = point.action.includes('BUY');
-                    const isClose = point.action.includes('CLOSE');
-                    
-                    if (isBuy || isClose) {
+                    const action = point.action;
+                    const isBuy = action === 'BUY';
+                    const isSell = action === 'SELL';
+                    const isCloseLong = action === 'CLOSE_LONG';
+                    const isCloseShort = action === 'CLOSE_SHORT';
+                    const isGenericClose = action.includes('CLOSE') && !isCloseLong && !isCloseShort;
+
+                    // Only add markers for trade entry/exit actions
+                    if (isBuy || isSell || isCloseLong || isCloseShort || isGenericClose) {
+                        let color = '#8b949e';
+                        let label = action;
+
+                        if (isBuy) {
+                            color = '#238636';  // Green - open LONG
+                            label = '🔼 LONG';
+                        } else if (isSell) {
+                            color = '#1f6feb';  // Blue - open SHORT
+                            label = '🔽 SHORT';
+                        } else if (isCloseLong) {
+                            color = '#f85149';  // Red - close LONG
+                            label = '❌ CLOSE';
+                        } else if (isCloseShort) {
+                            color = '#a371f7';  // Purple - close SHORT
+                            label = '✅ CLOSE';
+                        } else if (isGenericClose) {
+                            // Legacy compatibility for old CLOSE without direction
+                            color = '#f85149';
+                            label = '❌ CLOSE';
+                        }
+
+                        // Check if this annotation is too close to the last one (within 2 hours)
+                        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+                        if (time - lastAnnotationTime < TWO_HOURS_MS) {
+                            alternateOffset = !alternateOffset;
+                        } else {
+                            alternateOffset = false;
+                        }
+                        lastAnnotationTime = time;
+
+                        // Stagger labels: -20 for normal, +40 for alternate (below point)
+                        const yOffset = alternateOffset ? 40 : -20;
+
                         annotations.push({
                             x: time,
                             y: point.value,
                             marker: {
-                                size: 6,
-                                fillColor: isBuy ? '#238636' : '#f85149',
+                                size: 8,
+                                fillColor: color,
                                 strokeColor: '#fff',
-                                strokeWidth: 1
+                                strokeWidth: 2
                             },
                             label: {
-                                text: isBuy ? 'BUY' : 'CLOSE',
+                                text: label,
                                 style: {
                                     color: '#fff',
-                                    background: isBuy ? '#238636' : '#f85149',
-                                    fontSize: '9px',
-                                    padding: { left: 4, right: 4, top: 2, bottom: 2 }
-                                }
+                                    background: color,
+                                    fontSize: '12px',
+                                    fontWeight: 'bold',
+                                    padding: { left: 8, right: 8, top: 5, bottom: 5 }
+                                },
+                                offsetY: yOffset,
+                                borderRadius: 4
                             }
                         });
                     }
