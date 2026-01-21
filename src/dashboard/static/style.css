@@ -1255,3 +1255,24 @@ button:hover {
     width: 16px; 
     text-align: center;
 }
+
+/* Utility Highlights */
+.highlight {
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+/* Stats Summary Header */
+.stats-summary-text {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-main);
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.stats-summary-text strong {
+    color: var(--text-muted);
+    font-weight: 500;
+}

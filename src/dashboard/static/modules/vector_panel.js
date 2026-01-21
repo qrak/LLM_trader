@@ -37,10 +37,17 @@ function renderVectorPanel(data) {
     if (!container) return;
 
     // Build context indicator
+    // Build context indicator
+    // Parse "BEARISH + High ADX + HIGH Volatility" into readable parts if possible
+    let readableContext = data.current_context || '';
+    if (readableContext.includes('+')) {
+        const parts = readableContext.split('+').map(p => p.trim());
+        readableContext = `Searching for trades from similar markets: <span class="highlight">${parts.join(', ')}</span>`;
+    }
+
     const contextHtml = data.current_context
         ? `<div class="context-indicator">
-             <span class="context-label">Similarity vs Current:</span>
-             <span class="context-value">${data.current_context}</span>
+             <span class="context-value">${readableContext}</span>
            </div>`
         : '';
 

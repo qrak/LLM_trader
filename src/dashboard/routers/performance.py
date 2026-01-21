@@ -9,6 +9,10 @@ router = APIRouter(prefix="/api/performance", tags=["performance"])
 @router.get("/history")
 async def get_performance_history(request: Request) -> Dict[str, Any]:
     """Get historical performance data for the chart."""
+    dashboard_state = request.app.state.dashboard_state
+    cached = dashboard_state.get_cached("performance_history", ttl_seconds=60.0)
+    if cached:
+        return cached
     config = request.app.state.config
     logger = request.app.state.logger
     data_dir = getattr(config, "DATA_DIR", "data")
@@ -51,17 +55,29 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
                         "value": round(running_capital, 2),
                         "action": action
                     })
+                elif action == "SELL":
+                    equity_curve.append({
+                        "time": ts,
+                        "value": round(running_capital, 2),
+                        "action": action
+                    })
         except Exception:
             logger.error("Failed to process trade history", exc_info=True)
             return {"error": "Failed to load trade history"}
-    return {
+    result = {
         "history": equity_curve,
         "stats": stats
     }
+    dashboard_state.set_cached("performance_history", result)
+    return result
 
 @router.get("/stats")
 async def get_statistics(request: Request) -> Dict[str, Any]:
     """Get trading statistics summary."""
+    dashboard_state = request.app.state.dashboard_state
+    cached = dashboard_state.get_cached("statistics", ttl_seconds=60.0)
+    if cached:
+        return cached
     config = request.app.state.config
     logger = request.app.state.logger
     data_dir = getattr(config, "DATA_DIR", "data")
@@ -69,7 +85,9 @@ async def get_statistics(request: Request) -> Dict[str, Any]:
     if stats_file.exists():
         try:
             with open(stats_file, "r") as f:
-                return json.load(f)
+                result = json.load(f)
+                dashboard_state.set_cached("statistics", result)
+                return result
         except Exception:
             logger.error("Failed to load statistics", exc_info=True)
             return {"error": "Failed to load stats"}

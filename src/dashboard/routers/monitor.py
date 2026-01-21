@@ -102,19 +102,20 @@ async def get_api_costs() -> Dict[str, Any]:
 @router.get("/news")
 async def get_news(request: Request) -> Dict[str, Any]:
     """Get cached news articles from RAG engine or disk."""
+    dashboard_state = request.app.state.dashboard_state
+    cached = dashboard_state.get_cached("news", ttl_seconds=3600.0)
+    if cached is not None:
+        return {"articles": cached, "count": len(cached)}
     articles = []
-    # Try in-memory first
     rag_engine = getattr(request.app.state, "rag_engine", None)
     logger = request.app.state.logger
     if rag_engine:
         news_manager = getattr(rag_engine, "news_manager", None)
         if news_manager:
             articles = getattr(news_manager, "news_database", [])
-    # Fallback to disk if memory is empty
     if not articles:
         config = request.app.state.config
         data_dir = getattr(config, "DATA_DIR", "data")
-        # Try crypto_news.json first, then news_cache/recent_news.json
         for news_path in ["crypto_news.json", "news_cache/recent_news.json"]:
             news_file = Path(data_dir) / news_path
             if news_file.exists():
@@ -126,4 +127,5 @@ async def get_news(request: Request) -> Dict[str, Any]:
                             break
                 except Exception:
                     logger.error(f"Failed to load news from {news_path}", exc_info=True)
+    dashboard_state.set_cached("news", articles)
     return {"articles": articles, "count": len(articles)}

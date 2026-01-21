@@ -31,7 +31,6 @@ ENV/
 .idea/
 .vscode/
 .github/
-.agent/
 *.swp
 *.swo
 .devcontainer/

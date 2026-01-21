@@ -7,7 +7,7 @@ from pathlib import Path
 router = APIRouter(prefix="/api/brain", tags=["brain"])
 
 
-def _build_current_market_context(config, logger) -> str:
+def _build_current_market_context(config, logger, unified_parser=None) -> str:
     """Build context query string from current market conditions.
 
     Reads previous_response.json to extract trend, ADX, and other indicators.
@@ -25,15 +25,25 @@ def _build_current_market_context(config, logger) -> str:
         with open(prev_response_file, "r") as f:
             data = json.load(f)
             response = data.get("response", {})
-
-            # Extract trend from text analysis
             text = response.get("text_analysis", "")
-            if "BULLISH" in text.upper():
-                trend = "BULLISH"
-            elif "BEARISH" in text.upper():
-                trend = "BEARISH"
-            else:
-                trend = "NEUTRAL"
+            
+            # Extract trend from JSON block first (most reliable source)
+            trend = None
+            if unified_parser:
+                analysis = unified_parser.extract_json_block(text, unwrap_key='analysis')
+                if analysis:
+                    trend_data = analysis.get("trend")
+                    if isinstance(trend_data, dict):
+                        trend = trend_data.get("direction")
+            
+            # Fallback to text search only if JSON extraction failed
+            if not trend:
+                if "BEARISH" in text.upper():
+                    trend = "BEARISH"
+                elif "BULLISH" in text.upper():
+                    trend = "BULLISH"
+                else:
+                    trend = "NEUTRAL"
 
             # Extract ADX
             adx = response.get("adx", 0) or 0
@@ -61,6 +71,10 @@ def _build_current_market_context(config, logger) -> str:
 @router.get("/status")
 async def get_brain_status(request: Request) -> Dict[str, Any]:
     """Get the current thought process/status of the brain."""
+    dashboard_state = request.app.state.dashboard_state
+    cached = dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
+    if cached:
+        return cached
     config = request.app.state.config
     logger = request.app.state.logger
     unified_parser = getattr(request.app.state, "unified_parser", None)
@@ -81,19 +95,23 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
                 data = json.load(f)
                 response = data.get("response", {})
                 text = response.get("text_analysis", "")
-                if "BULLISH" in text.upper():
-                    status["trend"] = "BULLISH"
-                elif "BEARISH" in text.upper():
-                    status["trend"] = "BEARISH"
-                else:
-                    status["trend"] = "NEUTRAL"
                 status["adx"] = response.get("adx")
                 status["rsi"] = response.get("rsi")
                 if unified_parser:
                     analysis = unified_parser.extract_json_block(text, unwrap_key='analysis')
                     if analysis:
+                        trend_data = analysis.get("trend")
+                        if isinstance(trend_data, dict):
+                            status["trend"] = trend_data.get("direction", "--")
                         status["action"] = analysis.get("signal", "--")
                         status["confidence"] = analysis.get("confidence", "--")
+                if status["trend"] == "--":
+                    if "BEARISH" in text.upper():
+                        status["trend"] = "BEARISH"
+                    elif "BULLISH" in text.upper():
+                        status["trend"] = "BULLISH"
+                    else:
+                        status["trend"] = "NEUTRAL"
         except Exception:
             logger.error("Failed to load brain status from previous response", exc_info=True)
     if stats_file.exists():
@@ -105,6 +123,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
                 status["current_capital"] = stats.get("current_capital", 0)
         except Exception:
             logger.error("Failed to load statistics for brain status", exc_info=True)
+    dashboard_state.set_cached("brain_status", status)
     return status
 
 
@@ -171,6 +190,7 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
     vector_memory = request.app.state.vector_memory
     config = request.app.state.config
     logger = request.app.state.logger
+    unified_parser = getattr(request.app.state, "unified_parser", None)
 
     result = {
         "experience_count": 0,
@@ -201,7 +221,7 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
         # Build context query - use provided query or auto-generate from current market
         context_query = query
         if not context_query:
-            context_query = _build_current_market_context(config, logger)
+            context_query = _build_current_market_context(config, logger, unified_parser)
             if context_query:
                 result["current_context"] = context_query
 
