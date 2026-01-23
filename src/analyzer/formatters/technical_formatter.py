@@ -7,6 +7,7 @@ import re
 import numpy as np
 from src.logger.logger import Logger
 from src.utils.data_utils import get_last_valid_value, get_last_n_valid
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 class TechnicalFormatter:
@@ -40,7 +41,7 @@ class TechnicalFormatter:
         crypto_data = {'current_price': context.current_price}
         
         # Build all sections
-        patterns_section = self._format_patterns_section(context)
+        patterns_section = self._format_patterns_section(context, timeframe)
         price_action_section = self.format_price_action_section(context, td)
         momentum_section = self.format_momentum_section(td)
         trend_section = self.format_trend_section(td)
@@ -236,11 +237,12 @@ class TechnicalFormatter:
             f"- Chandelier: Long:{self.format_utils.fmt_ta(td, 'chandelier_long', 8)} Short:{self.format_utils.fmt_ta(td, 'chandelier_short', 8)}"
         )
     
-    def _format_patterns_section(self, context) -> str:
+    def _format_patterns_section(self, context, timeframe: str = '4h') -> str:
         """Format patterns section using detected patterns from context.
         
         Args:
             context: Analysis context containing technical data
+            timeframe: Timeframe string for dynamic threshold calculation
             
         Returns:
             str: Formatted patterns section
@@ -250,7 +252,11 @@ class TechnicalFormatter:
             try:
                 pattern_summaries = []
                 last_candle_index = len(context.ohlcv_candles) - 1 if context.ohlcv_candles is not None else None
-                
+                # Deduplication: track most recent pattern per (category, base_type)
+                # This prevents showing redundant signals like:
+                #   - Stochastic bull × 2 bars ago + Stochastic bear × 3 bars ago
+                # Instead, only the most recent crossover per indicator is shown.
+                dedup_tracker: dict[tuple[str, str], dict] = {}
                 for category, patterns_list in context.technical_patterns.items():
                     if patterns_list:  # Only process non-empty pattern lists
                         for pattern_dict in patterns_list:
@@ -261,35 +267,56 @@ class TechnicalFormatter:
                             # Determine recency threshold based on pattern type and data size
                             if last_candle_index is not None and pattern_index is not None:
                                 total_candles = last_candle_index + 1
+                                periods_ago = last_candle_index - pattern_index
                                 
-                                # For long-term signals (MA crossovers), use wider window (30% of data)
+                                # Category-specific ABSOLUTE thresholds (in bars) based on timeframe
+                                # These ensure stale patterns are filtered regardless of data window size
+                                abs_threshold = self._calculate_staleness_threshold(category, timeframe)
+                                
+                                # Calculate percentage-based threshold (existing logic)
                                 if category == 'ma_crossover':
-                                    recency_threshold = int(total_candles * 0.3)  # Last 30% of candles
-                                # For persistent patterns (volatility, volume), use narrow window (5% of data)
+                                    pct_threshold = int(total_candles * 0.3)
                                 elif category in ['volatility', 'volume']:
-                                    recency_threshold = max(10, int(total_candles * 0.05))  # Last 5% or min 10 candles
-                                # For divergences, use narrow window (10% of data) - they're time-sensitive
+                                    pct_threshold = max(10, int(total_candles * 0.05))
                                 elif category == 'divergence':
-                                    recency_threshold = max(20, int(total_candles * 0.10))  # Last 10% or min 20 candles
-                                # For other patterns (crossovers, etc.), use moderate window (15% of data)
+                                    pct_threshold = max(20, int(total_candles * 0.10))
                                 else:
-                                    recency_threshold = max(20, int(total_candles * 0.15))  # Last 15% or min 20 candles
+                                    pct_threshold = max(20, int(total_candles * 0.15))
                                 
-                                is_recent = pattern_index >= (last_candle_index - recency_threshold)
+                                # Use the MORE RESTRICTIVE of the two thresholds
+                                recency_threshold = min(abs_threshold, pct_threshold)
+                                
+                                is_recent = periods_ago <= recency_threshold
                             else:
                                 # If no index info, include the pattern
                                 is_recent = True
                             
                             if is_recent:
-                                description = pattern_dict.get('description', f'Unknown {category} pattern')
-                                # Compress pattern descriptions for token efficiency
-                                compressed_desc = self._compress_pattern_description(description)
-                                pattern_summaries.append(f"- {compressed_desc}")
-                
+                                # Extract base type for deduplication
+                                # e.g., 'stoch_bullish_crossover' -> 'stoch_crossover'
+                                # This groups bullish/bearish variants together
+                                pattern_type = pattern_dict.get('type', '')
+                                base_type = self._get_dedup_key(category, pattern_type)
+                                dedup_key = (category, base_type)
+                                periods_ago_val = pattern_dict.get('details', {}).get('periods_ago', 999)
+                                # Keep only the most recent pattern per dedup key
+                                if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]['periods']:
+                                    dedup_tracker[dedup_key] = {
+                                        'pattern': pattern_dict,
+                                        'periods': periods_ago_val,
+                                        'category': category
+                                    }
+                # Convert dedup_tracker to pattern_summaries
+                for dedup_key, entry in dedup_tracker.items():
+                    pattern_dict = entry['pattern']
+                    category = entry['category']
+                    description = pattern_dict.get('description', f'Unknown {category} pattern')
+                    compressed_desc = self._compress_pattern_description(description)
+                    pattern_summaries.append(f"- {compressed_desc}")
                 if pattern_summaries:
                     if self.logger:
-                        self.logger.debug(f"Including {len(pattern_summaries)} recent patterns in technical analysis (adaptive recency filter)")
-                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])  # Show last 25 recent patterns
+                        self.logger.debug(f"Including {len(pattern_summaries)} recent patterns in technical analysis (dedup + recency filter)")
+                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
             except Exception as e:
                 if self.logger:
                     self.logger.debug(f"Error using stored technical_patterns: {e}")
@@ -331,7 +358,7 @@ class TechnicalFormatter:
 
         
         # Remove full timestamps (keep relative time if present)
-        description = re.sub(r' at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', '', description)
+        description = re.sub(r' at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?', '', description)
         
         # Remove index numbers
         description = re.sub(r' \(index \d+\)', '', description)
@@ -357,7 +384,47 @@ class TechnicalFormatter:
         description = re.sub(r'\s+', ' ', description).strip()
         
         return description
+    def _get_dedup_key(self, category: str, pattern_type: str) -> str:
+        """Extract base pattern type for deduplication.
+        Groups bullish/bearish variants together, e.g.:
+        - 'stoch_bullish_crossover' -> 'stoch_crossover'
+        - 'macd_bullish_zero_cross' -> 'macd_zero_cross'
+        - 'rsi_oversold' -> 'rsi_level' (group with overbought)
+        - 'rsi_overbought' -> 'rsi_level'
+        """
+        # Remove directional qualifiers to group similar patterns
+        base = pattern_type.replace('bullish_', '').replace('bearish_', '')
+        # Group oversold/overbought together
+        if 'oversold' in base or 'overbought' in base:
+            return f"{category}_level"
+        # Group divergences by indicator
+        if 'divergence' in base:
+            return base.split('_')[0] + '_divergence'
+        return base
     
+    def _calculate_staleness_threshold(self, category: str, timeframe: str) -> int:
+        """Calculate staleness threshold dynamically based on timeframe."""
+        try:
+            # Get minutes per candle, defaulting to 4h (240m) on error
+            minutes_per_candle = TimeframeValidator.to_minutes(timeframe)
+        except (ValueError, TypeError):
+            minutes_per_candle = 240 
+        
+        # Target hours relative to pattern significance
+        target_hours = {
+            'rsi': 40,           # Momentum: ~40h
+            'macd': 40,          # Momentum: ~40h
+            'stochastic': 40,    # Momentum: ~40h
+            'ma_crossover': 200, # Trend: ~8 days
+            'divergence': 80,    # Divergence: ~3 days
+            'volatility': 20,    # Volatility: ~20h
+            'volume': 40,        # Volume: ~40h
+        }
+        
+        target_minutes = target_hours.get(category, 40) * 60
+        # Ensure at least 1 bar
+        return max(1, target_minutes // minutes_per_candle)
+
     def _format_td_sequential(self, td: dict) -> str:
         """Format TD Sequential indicator (trend exhaustion detector).
         

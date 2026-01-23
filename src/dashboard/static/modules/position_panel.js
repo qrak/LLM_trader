@@ -128,7 +128,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-gauge">
                     <div class="gauge-track">
                         <div class="gauge-sl" style="left: 0;" title="Stop Loss: $${data.stop_loss.toLocaleString()}"></div>
-                        <div class="gauge-entry" style="left: 50%;" title="Entry: $${data.entry_price.toLocaleString()}"></div>
+                        <div class="gauge-entry" style="left: ${calculateGaugePosition(data, data.entry_price)}%;" title="Entry: $${data.entry_price.toLocaleString()}"></div>
                         <div class="gauge-tp" style="right: 0;" title="Take Profit: $${data.take_profit.toLocaleString()}"></div>
                         ${priceToUse ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, priceToUse)}%;" title="Current: $${priceToUse.toLocaleString()} (${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%)"></div>` : ''}
                     </div>

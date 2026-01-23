@@ -351,11 +351,7 @@ class CryptoTradingBot:
     async def _wait_for_next_timeframe(self):
         """Wait until the next timeframe candle starts."""
         try:
-            # Get current time from exchange if possible
-            try:
-                current_time_ms = await self.current_exchange.fetch_time()
-            except Exception:
-                current_time_ms = int(time.time() * 1000)
+            current_time_ms = int(time.time() * 1000)
             
             # Calculate interval in milliseconds
             interval_seconds = TimeframeValidator.to_minutes(self.current_timeframe) * 60
@@ -390,10 +386,8 @@ class CryptoTradingBot:
                 last_time = last_time.replace(tzinfo=timezone.utc)
             
             # Get current time
-            try:
-                current_time_ms = await self.current_exchange.fetch_time()
-            except Exception:
-                current_time_ms = int(time.time() * 1000)
+            # Get current time
+            current_time_ms = int(time.time() * 1000)
             
 
             # Calculate interval
@@ -457,23 +451,27 @@ class CryptoTradingBot:
             respect_force_analysis: If True, wake early on force analysis event (main loop only)
         """
         chunk_size = 1.0  # Check every second
-        elapsed = 0.0
+        start_time = time.monotonic()  # Use monotonic clock to track real elapsed time
         
         # Only clear force analysis flag for main loop sleeps
         if respect_force_analysis:
             self._force_analysis.clear()
         
         try:
-            while elapsed < seconds and self.running:
+            while self.running:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= seconds:
+                    break
+                
                 # Check for force analysis (only if this sleep respects it)
                 if respect_force_analysis and self._force_analysis.is_set():
                     self._force_analysis.clear()
                     self.logger.info("Force analysis triggered - interrupting wait")
                     return True
                 
-                sleep_time = min(chunk_size, seconds - elapsed)
+                remaining = seconds - elapsed
+                sleep_time = min(chunk_size, remaining)
                 await asyncio.sleep(sleep_time)
-                elapsed += sleep_time
             
             return False
         except asyncio.CancelledError:

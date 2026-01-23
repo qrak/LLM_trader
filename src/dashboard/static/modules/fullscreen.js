@@ -109,7 +109,10 @@ function resizeContent(panelId, contentEl) {
                 }
             }, false, true);
             setTimeout(() => {
-                chart.resetSeries(true, true);
+                // NEW: Re-apply annotations at larger scale
+                if (typeof window.refreshPerformanceAnnotations === 'function') {
+                    window.refreshPerformanceAnnotations();
+                }
             }, 100);
         }
     } else if (panelId === 'panel-synapses') {
@@ -163,6 +166,10 @@ function restoreContent(panelId, contentEl) {
                     }
                 }, true, true);
                 window.dispatchEvent(new Event('resize'));
+                // NEW: Restore annotations to original scale
+                if (typeof window.refreshPerformanceAnnotations === 'function') {
+                    window.refreshPerformanceAnnotations();
+                }
             }, 150);
         }
     } else if (panelId === 'panel-synapses') {
