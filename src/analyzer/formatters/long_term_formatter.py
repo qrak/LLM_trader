@@ -239,7 +239,7 @@ class LongTermFormatter:
         cycle_phase = weekly_macro.get('cycle_phase')
         distance = weekly_macro.get('distance_from_200w_sma_pct')
         
-        lines = ["WEEKLY MACRO TREND (200W SMA Analysis):"]
+        lines = ["## Weekly Macro Trend (200W SMA Analysis):"]
         lines.append(f"  • Overall Trend: **{trend}** (Confidence: {confidence}%)")
         
         if cycle_phase:

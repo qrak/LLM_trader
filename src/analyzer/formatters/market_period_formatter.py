@@ -25,7 +25,7 @@ class MarketPeriodFormatter:
         if not market_metrics:
             return ""
         
-        sections = []
+        sections = ["## Market Period Metrics"]
         
         for period, period_data in market_metrics.items():
             if not period_data:
@@ -79,26 +79,26 @@ class MarketPeriodFormatter:
         # RSI changes
         rsi_change = indicator_changes.get('rsi_change')
         if rsi_change is not None and abs(rsi_change) > 0.1:  # Only show significant changes
-            direction = "↑" if rsi_change >= 0 else "↓"
-            parts.append(f"RSI{direction}{self.format_utils.fmt(abs(rsi_change))}")
+            direction = "↑ " if rsi_change >= 0 else "↓ "
+            parts.append(f"RSI {direction}{self.format_utils.fmt(abs(rsi_change))}")
         
         # MACD changes
         macd_change = indicator_changes.get('macd_line_change')
         if macd_change is not None and abs(macd_change) > 1:  # Only show significant changes
-            direction = "↑" if macd_change >= 0 else "↓"
-            parts.append(f"MACD{direction}{self.format_utils.fmt(abs(macd_change))}")
+            direction = "↑ " if macd_change >= 0 else "↓ "
+            parts.append(f"MACD {direction}{self.format_utils.fmt(abs(macd_change))}")
         
         # ADX changes
         adx_change = indicator_changes.get('adx_change')
         if adx_change is not None and abs(adx_change) > 0.5:  # Only show significant changes
-            direction = "↑" if adx_change >= 0 else "↓"
-            parts.append(f"ADX{direction}{self.format_utils.fmt(abs(adx_change))}")
+            direction = "↑ " if adx_change >= 0 else "↓ "
+            parts.append(f"ADX {direction}{self.format_utils.fmt(abs(adx_change))}")
         
         # Stochastic %K changes
         stoch_change = indicator_changes.get('stoch_k_change')
         if stoch_change is not None and abs(stoch_change) > 1:  # Only show significant changes
-            direction = "↑" if stoch_change >= 0 else "↓"
-            parts.append(f"Stoch{direction}{self.format_utils.fmt(abs(stoch_change))}")
+            direction = "↑ " if stoch_change >= 0 else "↓ "
+            parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change))}")
         
         return " ".join(parts) if parts else ""
     

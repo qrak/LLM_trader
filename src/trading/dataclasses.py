@@ -135,7 +135,7 @@ class TradingMemory(SerializableMixin):
         if not self.decisions:
             return "No previous trading decisions."
         
-        lines = ["RECENT TRADING HISTORY (Last 5 Decisions):"]
+        lines = ["## Recent Trading History (Last 5 Decisions):"]
         recent = self.decisions[-5:]  # Last 5 decisions for context
         
         # Calculate P&L from FULL trade history, not just recent decisions
@@ -187,7 +187,7 @@ class TradingMemory(SerializableMixin):
             avg_pnl_pct = total_pnl_pct / closed_trades
             win_rate = (winning_trades / closed_trades) * 100
             lines.append("")
-            lines.append(f"OVERALL PERFORMANCE ({closed_trades} Total Closed Trades):")
+            lines.append(f"## Overall Performance ({closed_trades} Total Closed Trades):")
             lines.append(f"- Total P&L: ${total_pnl_quote:+,.2f} ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
             lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")

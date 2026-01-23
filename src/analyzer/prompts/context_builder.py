@@ -109,7 +109,7 @@ class ContextBuilder:
         - Classification: {sentiment_data.get('value_classification', 'N/A')}"""
         
         if historical_data:
-            sentiment_section += "\n\n    Historical Fear & Greed (Last 7 days):"
+            sentiment_section += "\n\n        ### Historical Fear & Greed (Last 7 days):"
             for day in historical_data:
                 # Use centralized timestamp formatting
                 if isinstance(day['timestamp'], datetime):

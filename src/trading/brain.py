@@ -165,9 +165,9 @@ class TradingBrainService:
         if exp_count > 0:
             lines.extend([
                 "",
-                f"## TRADING BRAIN ({exp_count} closed trades)",
+                f"## Trading Brain ({exp_count} closed trades)",
                 "",
-                "CONFIDENCE CALIBRATION:",
+                "### Confidence Calibration:",
             ])
 
             conf_stats = self._get_cached_stats(
@@ -190,7 +190,7 @@ class TradingBrainService:
             if direction_bias:
                 lines.extend([
                     "",
-                    "DIRECTION BIAS CHECK:",
+                    "### Direction Bias Check:",
                     f"- Historical trades: {direction_bias['long_count']} LONG, {direction_bias['short_count']} SHORT",
                 ])
                 if direction_bias['short_count'] == 0:
@@ -220,7 +220,7 @@ class TradingBrainService:
         if lines and not has_limited_data:
             lines.extend([
                 "",
-                "APPLY INSIGHTS (CoT Step 6 - Historical Evidence):",
+                "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
                 "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
                 "- Weight recent wins higher. Check for pattern repetition that led to losses.",
@@ -243,7 +243,7 @@ class TradingBrainService:
         )
         if semantic_rules:
             lines.extend([
-                "LEARNED TRADING RULES (relevant to current conditions):",
+                "### Learned Trading Rules (relevant to current conditions):",
             ])
             for rule in semantic_rules:
                 similarity = rule.get("similarity", 0)
@@ -384,7 +384,7 @@ class TradingBrainService:
         stats = self.vector_memory.get_stats_for_context(context_query, k=20)
         if stats["total_trades"] > 0:
             vector_context += (
-                f"\nLEARNED STATS FOR THIS CONTEXT:\n"
+                f"### Learned Stats for This Context:\n"
                 f"- Win Rate in similar conditions: {stats['win_rate']:.0f}% "
                 f"({stats['total_trades']} trades)\n"
                 f"- Avg P&L: {stats['avg_pnl']:+.2f}%\n"

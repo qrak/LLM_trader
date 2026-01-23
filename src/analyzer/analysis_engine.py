@@ -367,8 +367,7 @@ class AnalysisEngine:
         await self._process_long_term_data()
         
         # Calculate market metrics
-        data = self.data_collector.extract_ohlcv_data(self.context)
-        self.metrics_calculator.update_period_metrics(data, self.context)
+        self.metrics_calculator.update_period_metrics(self.context)
         
         # Run technical pattern analysis
         technical_patterns = self.pattern_analyzer.detect_patterns(
