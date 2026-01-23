@@ -43,7 +43,7 @@ class TemplateManager:
             "",
             "## Analytical Framework (Chain of Thought)",
             "Step through: (1) Market Structure phase, (2) Timeframe alignment, (3) Momentum/volatility state,",
-            "(4) Microstructure bias, (5) Risk/reward assessment.",
+            "(4) Microstructure bias, (5) Risk/reward assessment, (6) Historical Evidence (Trading Brain insights).",
             "",
         ]
         

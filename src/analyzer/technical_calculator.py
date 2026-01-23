@@ -53,7 +53,7 @@ class TechnicalCalculator:
             "force_index": self.ti.force_index(length=20),
             "cci": self.ti.cci(length=14),
             "pvt": self.ti.pvt(length=14),
-            "ad_line": self.ti.ad_line(length=20),
+            "ad_line": self.ti.accumulation_distribution_line(),
         }
 
     def _calculate_momentum_indicators(self) -> Dict[str, np.ndarray]:
@@ -85,6 +85,7 @@ class TechnicalCalculator:
         """Calculate volatility indicators"""
         indicators = {
             "atr": self.ti.atr(length=20),
+            "atr_percent": self.ti.atr(length=20, percent=True),
         }
         
         bb_upper, bb_middle, bb_lower = self.ti.bollinger_bands(length=20, num_std_dev=2)
@@ -115,11 +116,6 @@ class TechnicalCalculator:
         long_exit, short_exit = self.ti.chandelier_exit(length=20, multiplier=3.0)
         indicators["chandelier_long"] = long_exit
         indicators["chandelier_short"] = short_exit
-        
-
-        current_price = ohlcv_data[-1, 4] if len(ohlcv_data) > 0 else 1
-        atr_values = indicators["atr"]
-        indicators["atr_percent"] = (atr_values / current_price) * 100 if current_price > 0 else np.full_like(atr_values, np.nan)
         
         # Choppiness Index
         indicators["choppiness"] = self.ti.choppiness_index(length=14)
@@ -177,7 +173,7 @@ class TechnicalCalculator:
             "skewness": self.ti.skew(length=20),
             "variance": self.ti.variance(length=20),
             "linreg_slope": self.ti.linreg(length=14, r=False),
-            "linreg_r2": self.ti.linreg(length=14, r=True),
+            "linreg_r2": self.ti.linreg(length=14, r=True) ** 2,
         }
         
         # Basic Support/Resistance
