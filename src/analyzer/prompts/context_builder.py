@@ -251,23 +251,48 @@ class ContextBuilder:
             ""
         ]
         
-        # Key indicators to compare (in priority order)
+        # Key indicators to compare (organized by category)
         key_indicators = [
+            # Momentum Indicators
             ('rsi', 'RSI'),
             ('macd_line', 'MACD Line'),
             ('macd_signal', 'MACD Signal'),
             ('macd_hist', 'MACD Histogram'),
+            ('ppo', 'PPO'),
+            ('stoch_k', 'Stochastic %K'),
+            ('stoch_d', 'Stochastic %D'),
+            ('williams_r', 'Williams %R'),
+            ('tsi', 'TSI'),
+            ('roc_14', 'ROC'),
+            ('mfi', 'MFI'),
+            
+            # Trend Indicators
             ('adx', 'ADX'),
             ('plus_di', '+DI'),
             ('minus_di', '-DI'),
-            ('stoch_k', 'Stochastic %K'),
-            ('stoch_d', 'Stochastic %D'),
-            ('mfi', 'MFI'),
+            ('trix', 'TRIX'),
+            ('vortex_plus', 'Vortex VI+'),
+            ('vortex_minus', 'Vortex VI-'),
+            
+            # Volume Indicators
             ('obv', 'OBV'),
+            ('cci', 'CCI'),
+            ('cmf', 'Chaikin MF'),
+            
+            # Volatility Indicators
             ('atr', 'ATR'),
+            ('atr_percent', 'ATR%'),
+            ('bb_percent_b', 'BB %B'),
+            ('choppiness', 'Choppiness'),
+            
+            # Moving Averages
             ('sma_20', '20 SMA'),
             ('sma_50', '50 SMA'),
             ('sma_200', '200 SMA'),
+            
+            # Statistical/Trend Quality
+            ('linreg_slope', 'LinReg Slope'),
+            ('linreg_r2', 'LinReg R²'),
         ]
         
 
