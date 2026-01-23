@@ -72,15 +72,59 @@ export function initPerformanceChart() {
         tooltip: {
             theme: 'dark',
             x: { format: 'dd MMM yyyy HH:mm' },
-            y: {
-                formatter: (value) => "$" + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+            custom: function({series, seriesIndex, dataPointIndex, w}) {
+                // robustness check
+                if (!w.config.series[seriesIndex] || !w.config.series[seriesIndex].data[dataPointIndex]) {
+                    return '';
+                }
+
+                const data = w.config.series[seriesIndex].data[dataPointIndex];
+                const value = series[seriesIndex][dataPointIndex];
+                const valueFormatted = value != null ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'N/A';
+                const date = new Date(data.x);
+                const dateFormatted = date.toLocaleString('en-GB', { 
+                    day: '2-digit', month: 'short', year: 'numeric', 
+                    hour: '2-digit', minute: '2-digit' 
+                });
+
+                let actionHtml = '';
+                // Check if extra data exists and has an action
+                if (data.extra && data.extra.action) {
+                    const action = data.extra.action;
+                    let color = '#8b949e';
+                    if (action === 'BUY') color = '#238636';
+                    else if (action === 'SELL') color = '#1f6feb';
+                    else if (action.includes('CLOSE')) color = '#a371f7';
+                    
+                    const price = data.extra.price ? `$${data.extra.price.toLocaleString()}` : 'N/A';
+
+                    actionHtml = `
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
+                            <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color}; margin-right: 6px;"></span>
+                                <span style="color: #eee; font-weight: 600; font-size: 13px;">${action}</span>
+                            </div>
+                            <div style="color: #aaa; font-size: 12px; margin-left: 14px;">Price: ${price}</div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div style="background: #161b22; padding: 10px; border: 1px solid #30363d; border-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); min-width: 150px;">
+                        <div style="color: #8b949e; font-size: 11px; margin-bottom: 4px;">${dateFormatted}</div>
+                        <div style="font-size: 16px; font-weight: 700; color: #fff; margin-bottom: ${actionHtml ? '4px' : '0'};">
+                            $${valueFormatted}
+                        </div>
+                        ${actionHtml}
+                    </div>
+                `;
             }
         },
         grid: {
             borderColor: '#30363d',
             strokeDashArray: 4,
             yaxis: { lines: { show: true } },
-            padding: { bottom: 10 }
+            padding: { bottom: 10, top: 50, right: 30, left: 20 }
         },
         noData: {
             text: 'No trades yet',
@@ -110,7 +154,11 @@ export async function updatePerformanceData() {
         if (historyData.history && Array.isArray(historyData.history) && historyData.history.length > 0) {
             historyData.history.forEach((point, index) => {
                 const time = new Date(point.time).getTime();
-                seriesData.push({ x: time, y: point.value });
+                seriesData.push({ 
+                    x: time, 
+                    y: point.value,
+                    extra: point
+                });
                 
                 // Add trade markers
                 if (point.action) {
@@ -129,9 +177,10 @@ export async function updatePerformanceData() {
                         // Check current fullscreen state for scaling
                         const isFullscreen = document.getElementById('fullscreen-modal')?.classList.contains('active');
                         const scale = isFullscreen ? 1.3 : 1.0;
-                        const fontSize = isFullscreen ? '15px' : '13px';
-                        const borderRadius = isFullscreen ? 6 : 4;
-                        const markerSize = isFullscreen ? 10 : 7;
+                        // Reduced sizes as requested
+                        const fontSize = isFullscreen ? '13px' : '11px';
+                        const borderRadius = isFullscreen ? 5 : 3;
+                        const markerSize = isFullscreen ? 8 : 5;
                         
                         if (isBuy) {
                             color = '#238636';  // Green - open LONG
@@ -155,7 +204,7 @@ export async function updatePerformanceData() {
                         // Instead of just toggling, we check multiple vertical levels
                         // Base offline levels relative to point: [Top-Close, Top-Far, Bottom-Close, Bottom-Far, Top-VeryFar]
                         // Offsets are scaled by the current view scale
-                        const baseOffsets = [-25, -55, 35, 65, -85]; 
+                        const baseOffsets = [-30, -60, 40, 70, -90]; 
                         const levels = baseOffsets.map(o => o * scale);
                         let chosenLevel = 0;
                         
@@ -212,10 +261,10 @@ export async function updatePerformanceData() {
                                     fontSize: fontSize,
                                     fontWeight: '700',
                                     padding: { 
-                                        left: 8 * scale, 
-                                        right: 8 * scale, 
-                                        top: 5 * scale, 
-                                        bottom: 5 * scale 
+                                        left: 6 * scale, 
+                                        right: 6 * scale, 
+                                        top: 3 * scale, 
+                                        bottom: 3 * scale 
                                     },
                                     fontFamily: 'Inter, sans-serif'
                                 },
@@ -230,7 +279,11 @@ export async function updatePerformanceData() {
         }
         
         if (seriesData.length > 0) {
-            chart.updateSeries([{ data: seriesData }]);
+            // FORCE full replace of series to ensure name and data are tied
+            chart.updateSeries([{ 
+                name: 'Account Value',
+                data: seriesData 
+            }]);
             if (annotations.length > 0) {
                 chart.updateOptions({ annotations: { points: annotations } });
             }
