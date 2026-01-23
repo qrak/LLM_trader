@@ -304,6 +304,11 @@ class Config:
     def AI_CHART_CANDLE_LIMIT(self):
         """Configured candle limit to use for AI chart images (must be present in config.ini)."""
         return int(self.get_config('general', 'ai_chart_candle_limit', 200))
+
+    @property
+    def INCLUDE_COIN_DESCRIPTION(self) -> bool:
+        """Whether to include project description in coin details section."""
+        return self.get_config('general', 'include_coin_description', False)
     
     # Debug Configuration
     @property

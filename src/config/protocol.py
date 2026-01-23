@@ -96,6 +96,9 @@ class ConfigProtocol(Protocol):
     @property
     def AI_CHART_CANDLE_LIMIT(self) -> int: ...
     
+    @property
+    def INCLUDE_COIN_DESCRIPTION(self) -> bool: ...
+    
     
 
     @property

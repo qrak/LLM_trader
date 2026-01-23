@@ -13,28 +13,31 @@ from .long_term_formatter import LongTermFormatter
 class MarketFormatter:
     """Main coordinator for market analysis formatting."""
     
-    def __init__(self, logger: Optional[Logger] = None, format_utils=None):
+    def __init__(self, logger: Optional[Logger] = None, format_utils=None, config=None, token_counter=None):
         """Initialize the market formatter and its specialized components.
         
         Args:
             logger: Optional logger instance
             format_utils: Format utilities for value formatting
+            config: Configuration instance (ConfigProtocol)
+            token_counter: Utility for counting tokens
         """
         self.logger = logger
         self.format_utils = format_utils
+        self.config = config
+        self.token_counter = token_counter
         self.overview_formatter = MarketOverviewFormatter(logger, format_utils)
         self.period_formatter = MarketPeriodFormatter(logger, format_utils)
         self.long_term_formatter = LongTermFormatter(logger, format_utils)
     
 
     
-    def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256, include_description: bool = False) -> str:
+    def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256) -> str:
         """Format coin details into a compressed section (removed low-trading-value data)
         
         Args:
             coin_details: Dictionary containing coin details from CryptoCompare API
             max_description_tokens: Maximum tokens allowed for description (default: 256)
-            include_description: Whether to include project description (default: False for trading bot)
             
         Returns:
             str: Compressed coin details section
@@ -45,7 +48,7 @@ class MarketFormatter:
         # Only include high-value trading data (removed: Algorithm, Proof Type, Regulatory Classifications, Weiss Ratings)
         # These rarely change and don't impact immediate trading decisions
         
-        section = "CRYPTOCURRENCY DETAILS:\n"
+        section = "## Cryptocurrency Details\n"
         
         # Basic information only
         if coin_details.get("full_name"):
@@ -54,7 +57,8 @@ class MarketFormatter:
                 section += f" ({coin_details['coin_name']} Project)"
             section += "\n"
         
-        # Project description (optional - disabled by default for trading bot)
+        # Project description (optional - based on config)
+        include_description = self.config.INCLUDE_COIN_DESCRIPTION if self.config else False
         if include_description:
             description = coin_details.get("description", "")
             if description:

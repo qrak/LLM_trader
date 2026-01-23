@@ -51,7 +51,7 @@ class TechnicalFormatter:
         key_levels_section = self.format_key_levels_section(td)
 
         # Build main technical analysis content
-        technical_analysis = f"""\nTECHNICAL ANALYSIS ({timeframe}):\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Statistical Metrics:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} | Z-Score:{self.format_utils.fmt_ta(td, 'zscore', 2)} | Kurtosis:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
+        technical_analysis = f"""\n## Technical Analysis ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Statistical Metrics:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} | Z-Score:{self.format_utils.fmt_ta(td, 'zscore', 2)} | Kurtosis:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
 
         return technical_analysis
     

@@ -79,7 +79,7 @@ class ContextBuilder:
              weekend_note = "\n        - WEEKEND MODE: Trading volume/liquidity is typically lower. Be cautious of fakeouts/manipulation."
 
         trading_context = f"""
-        TRADING CONTEXT:
+        ## Trading Context
         - Symbol: {context.symbol if hasattr(context, 'symbol') else 'BTC/USDT'}
         - Current Day: {day_of_week} (UTC)
         - Current Price: {context.current_price}
@@ -104,7 +104,7 @@ class ContextBuilder:
         historical_data = sentiment_data.get('historical', [])
         
         sentiment_section = f"""
-        MARKET SENTIMENT:
+        ## Market Sentiment
         - Current Fear & Greed Index: {sentiment_data.get('fear_greed_index', 'N/A')}
         - Classification: {sentiment_data.get('value_classification', 'N/A')}"""
         
@@ -164,7 +164,7 @@ class ContextBuilder:
             return "MARKET DATA:\nInsufficient historical data (less than 25 candles)"
 
         available_candles = ohlcv_candles.shape[0]
-        data = "MARKET DATA:\n"
+        data = "## Market Data\n"
 
         # Keep multi-timeframe price summary if desired
         if available_candles >= 100:
@@ -247,7 +247,7 @@ class ContextBuilder:
             return ""
         
         lines = [
-            "INDICATOR CHANGES (Previous → Current):",
+            "### Indicator Changes (Previous → Current):",
             ""
         ]
         

@@ -324,7 +324,7 @@ class CompositionRoot:
         # Create formatters for dependency injection
         overview_formatter = MarketOverviewFormatter(self.logger, format_utils)
         long_term_formatter = LongTermFormatter(self.logger, format_utils)
-        market_formatter = MarketFormatter(self.logger, format_utils)
+        market_formatter = MarketFormatter(self.logger, format_utils, self.config, token_counter)
         period_formatter = MarketPeriodFormatter(self.logger, format_utils)
         
         # Create Analyzer components
