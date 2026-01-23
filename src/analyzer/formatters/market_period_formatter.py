@@ -25,7 +25,7 @@ class MarketPeriodFormatter:
         if not market_metrics:
             return ""
         
-        sections = ["## Market Period Metrics"]
+        sections = ["## Period Metrics"]
         
         for period, period_data in market_metrics.items():
             if not period_data:

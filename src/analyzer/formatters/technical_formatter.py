@@ -49,7 +49,7 @@ class TechnicalFormatter:
         advanced_section = self.format_advanced_indicators_section(td, crypto_data)
         key_levels_section = self.format_key_levels_section(td)
 
-        technical_analysis = f"""\n## Technical Analysis ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Statistical Metrics:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
+        technical_analysis = f"""\n## Technical ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Stats:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
 
         return technical_analysis
     
@@ -144,7 +144,7 @@ class TechnicalFormatter:
         macd_hist_temporal = self._format_temporal_array(td, 'macd_hist', 12, 8)
         stoch_k_temporal = self._format_temporal_array(td, 'stoch_k', 12, 1)
         
-        return f"""## Momentum Indicators:
+        return f"""## Momentum:
 - RSI:{self.format_utils.fmt_ta(td, 'rsi', 1)}{rsi_temporal} | MACD:{self.format_utils.fmt_ta(td, 'macd_line', 8)}/{self.format_utils.fmt_ta(td, 'macd_signal', 8)} Hist:{self.format_utils.fmt_ta(td, 'macd_hist', 8)}{macd_hist_temporal}
 - Stoch %K:{self.format_utils.fmt_ta(td, 'stoch_k', 1)}{stoch_k_temporal} %D:{self.format_utils.fmt_ta(td, 'stoch_d', 1)} | Williams %R:{self.format_utils.fmt_ta(td, 'williams_r', 1)}
 - TSI:{self.format_utils.fmt_ta(td, 'tsi', 2)} | RMI:{self.format_utils.fmt_ta(td, 'rmi', 1)} | PPO:{self.format_utils.fmt_ta(td, 'ppo', 2)} | ROC:{self.format_utils.fmt_ta(td, 'roc_14', 2)}"""
@@ -166,10 +166,10 @@ class TechnicalFormatter:
         adx_temporal = self._format_temporal_array(td, 'adx', 12, 1)
 
         return (
-            "## Trend Indicators:\n"
+            "## Trend:\n"
             f"- ADX:{self.format_utils.fmt_ta(td, 'adx', 1)}{adx_temporal} +DI:{self.format_utils.fmt_ta(td, 'plus_di', 1)} -DI:{self.format_utils.fmt_ta(td, 'minus_di', 1)} | Supertrend:{supertrend_direction}{td_seq_str}\n"
             f"- TRIX:{self.format_utils.fmt_ta(td, 'trix', 4)} | PFE:{self.format_utils.fmt_ta(td, 'pfe', 2)}{ichimoku_str}\n"
-            f"- Vortex+ VI+:{self.format_utils.fmt_ta(td, 'vortex_plus', 2)} VI-:{self.format_utils.fmt_ta(td, 'vortex_minus', 2)}\n"
+            f"- Vortex VI+:{self.format_utils.fmt_ta(td, 'vortex_plus', 2)} VI-:{self.format_utils.fmt_ta(td, 'vortex_minus', 2)}\n"
             f"{sma_str}"
         )
 
@@ -180,7 +180,7 @@ class TechnicalFormatter:
         mfi_temporal = self._format_temporal_array(td, 'mfi', 12, 1)
         
         return (
-            "## Volume Indicators:\n"
+            "## Volume:\n"
             f"- MFI:{self.format_utils.fmt_ta(td, 'mfi', 1)}{mfi_temporal} | OBV:{self.format_utils.fmt_ta(td, 'obv', 0)}\n"
             f"- Chaikin MF:{self.format_utils.fmt_ta(td, 'cmf', 4)}{cmf_interpretation} | Force Index:{self.format_utils.fmt_ta(td, 'force_index', 0)}\n"
             f"- PVT:{self.format_utils.fmt_ta(td, 'pvt', 0)} | AD Line:{self.format_utils.fmt_ta(td, 'ad_line', 0)}"
@@ -200,7 +200,7 @@ class TechnicalFormatter:
         chop_str = self._format_choppiness(td)
         
         return (
-            "## Volatility Indicators:\n"
+            "## Volatility:\n"
             f"- BB: U:{self.format_utils.fmt_ta(td, 'bb_upper', 8)} M:{self.format_utils.fmt_ta(td, 'bb_middle', 8)} L:{self.format_utils.fmt_ta(td, 'bb_lower', 8)}{bb_interpretation} %B:{self.format_utils.fmt_ta(td, 'bb_percent_b', 2)}{bb_percent_b_temporal}\n"
             f"- ATR:{self.format_utils.fmt_ta(td, 'atr', 8)}{atr_temporal} | KC: U:{self.format_utils.fmt_ta(td, 'kc_upper', 8)} M:{self.format_utils.fmt_ta(td, 'kc_middle', 8)} L:{self.format_utils.fmt_ta(td, 'kc_lower', 8)}\n"
             f"{chop_str}"
@@ -209,7 +209,7 @@ class TechnicalFormatter:
     def format_key_levels_section(self, td: dict) -> str:
         """Format key levels section (compressed format)."""
         return (
-            "## Key Levels:\n"
+            "## Levels:\n"
             f"- S/R: Support:{self.format_utils.fmt_ta(td, 'basic_support', 8)} Resistance:{self.format_utils.fmt_ta(td, 'basic_resistance', 8)}\n"
             f"- Pivot:{self.format_utils.fmt_ta(td, 'pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'pivot_s2', 8)},{self.format_utils.fmt_ta(td, 'pivot_s3', 8)}] R[{self.format_utils.fmt_ta(td, 'pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'pivot_r2', 8)},{self.format_utils.fmt_ta(td, 'pivot_r3', 8)}]\n"
             f"- FibPivot:{self.format_utils.fmt_ta(td, 'fib_pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'fib_pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_s2', 8)}] R[{self.format_utils.fmt_ta(td, 'fib_pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_r2', 8)}]"
@@ -227,7 +227,7 @@ class TechnicalFormatter:
         kst_temporal = self._format_temporal_array(td, 'kst', 12, 2)
         
         return (
-            "## Advanced Indicators:\n"
+            "## Advanced:\n"
             f"- Adv S/R: {self.format_utils.fmt_ta(td, 'advanced_support', 8)}/{self.format_utils.fmt_ta(td, 'advanced_resistance', 8)}\n"
             f"- CCI:{self.format_utils.fmt_ta(td, 'cci', 1)}{cci_temporal} | ATR%:{self.format_utils.fmt_ta(td, 'atr_percent', 2)}% | SAR:{self.format_utils.fmt_ta(td, 'sar', 8)}\n"
             f"- Donchian: U:{self.format_utils.fmt_ta(td, 'donchian_upper', 8)} L:{self.format_utils.fmt_ta(td, 'donchian_lower', 8)}\n"
@@ -563,10 +563,10 @@ class TechnicalFormatter:
             delta_pct = abs(delta) * 100
         threshold_pct = 3.0 if key in ['rsi', 'stoch_k', 'stoch_d', 'mfi', 'cci'] else 5.0
         if delta_pct >= threshold_pct:
-            trend_text = "↑UP" if delta > 0 else "↓DOWN"
+            trend_text = "↑" if delta > 0 else "↓"
         else:
-            trend_text = "→FLAT"
-        return f" ({trend_text} Δ{delta_sign}{delta:.{decimals}f})"
+            trend_text = "→"
+        return f" ({trend_text} {delta_sign}{delta:.{decimals}f})"
     
     def _format_choppiness(self, td: dict) -> str:
         """Format Choppiness Index with market state interpretation.
