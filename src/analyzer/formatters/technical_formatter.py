@@ -40,7 +40,6 @@ class TechnicalFormatter:
         td = context.technical_data
         crypto_data = {'current_price': context.current_price}
         
-        # Build all sections
         patterns_section = self._format_patterns_section(context, timeframe)
         price_action_section = self.format_price_action_section(context, td)
         momentum_section = self.format_momentum_section(td)
@@ -50,8 +49,7 @@ class TechnicalFormatter:
         advanced_section = self.format_advanced_indicators_section(td, crypto_data)
         key_levels_section = self.format_key_levels_section(td)
 
-        # Build main technical analysis content
-        technical_analysis = f"""\n## Technical Analysis ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Statistical Metrics:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} | Z-Score:{self.format_utils.fmt_ta(td, 'zscore', 2)} | Kurtosis:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
+        technical_analysis = f"""\n## Technical Analysis ({timeframe})\n\n{price_action_section}\n\n{momentum_section}\n\n{trend_section}\n\n{volatility_section}\n\n{volume_section}\n\n## Statistical Metrics:\n- Hurst:{self.format_utils.fmt_ta(td, 'hurst', 2)} Z:{self.format_utils.fmt_ta(td, 'zscore', 2)} Kurt:{self.format_utils.fmt_ta(td, 'kurtosis', 2)}\n- Entropy:{self.format_utils.fmt_ta(td, 'entropy', 3)} Skew:{self.format_utils.fmt_ta(td, 'skewness', 2)} Var:{self.format_utils.fmt_ta(td, 'variance', 8)}\n- LinReg: Slope:{self.format_utils.fmt_ta(td, 'linreg_slope', 8)} R²:{self.format_utils.fmt_ta(td, 'linreg_r2', 3)}\n\n{key_levels_section}\n\n{advanced_section}\n\n{patterns_section}"""
 
         return technical_analysis
     
@@ -149,7 +147,7 @@ class TechnicalFormatter:
         return f"""## Momentum Indicators:
 - RSI:{self.format_utils.fmt_ta(td, 'rsi', 1)}{rsi_temporal} | MACD:{self.format_utils.fmt_ta(td, 'macd_line', 8)}/{self.format_utils.fmt_ta(td, 'macd_signal', 8)} Hist:{self.format_utils.fmt_ta(td, 'macd_hist', 8)}{macd_hist_temporal}
 - Stoch %K:{self.format_utils.fmt_ta(td, 'stoch_k', 1)}{stoch_k_temporal} %D:{self.format_utils.fmt_ta(td, 'stoch_d', 1)} | Williams %R:{self.format_utils.fmt_ta(td, 'williams_r', 1)}
-- TSI:{self.format_utils.fmt_ta(td, 'tsi', 2)} | RMI:{self.format_utils.fmt_ta(td, 'rmi', 1)} | PPO:{self.format_utils.fmt_ta(td, 'ppo', 2)}"""
+- TSI:{self.format_utils.fmt_ta(td, 'tsi', 2)} | RMI:{self.format_utils.fmt_ta(td, 'rmi', 1)} | PPO:{self.format_utils.fmt_ta(td, 'ppo', 2)} | ROC:{self.format_utils.fmt_ta(td, 'roc_14', 2)}"""
 
     def format_trend_section(self, td: dict) -> str:
         """Format the trend indicators section with temporal context for trend strength evolution."""
@@ -179,13 +177,13 @@ class TechnicalFormatter:
         """Format the volume indicators section with temporal context for volume trends."""
         cmf_interpretation = self.format_utils.format_cmf_interpretation(td)
         
-        # MFI temporal array to show buying/selling pressure evolution
         mfi_temporal = self._format_temporal_array(td, 'mfi', 12, 1)
         
         return (
             "## Volume Indicators:\n"
             f"- MFI:{self.format_utils.fmt_ta(td, 'mfi', 1)}{mfi_temporal} | OBV:{self.format_utils.fmt_ta(td, 'obv', 0)}\n"
-            f"- Chaikin MF:{self.format_utils.fmt_ta(td, 'cmf', 4)}{cmf_interpretation} | Force Index:{self.format_utils.fmt_ta(td, 'force_index', 0)}"
+            f"- Chaikin MF:{self.format_utils.fmt_ta(td, 'cmf', 4)}{cmf_interpretation} | Force Index:{self.format_utils.fmt_ta(td, 'force_index', 0)}\n"
+            f"- PVT:{self.format_utils.fmt_ta(td, 'pvt', 0)} | AD Line:{self.format_utils.fmt_ta(td, 'ad_line', 0)}"
         )
 
     def format_volatility_section(self, td: dict, crypto_data: dict) -> str:
@@ -247,7 +245,6 @@ class TechnicalFormatter:
         Returns:
             str: Formatted patterns section
         """
-        # Use stored technical_patterns from analysis engine
         if context.technical_patterns:
             try:
                 pattern_summaries = []
@@ -321,7 +318,6 @@ class TechnicalFormatter:
                 if self.logger:
                     self.logger.debug(f"Error using stored technical_patterns: {e}")
         
-        # Fallback: try direct pattern detection
         try:
             ohlcv_data = context.ohlcv_candles
             technical_history = context.technical_data.get('history', {})

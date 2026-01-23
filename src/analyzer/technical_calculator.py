@@ -38,7 +38,7 @@ class TechnicalCalculator:
         indicators.update(self._calculate_support_resistance_indicators())
         
         if self.logger:
-            pass # self.logger.debug("Calculated technical indicators")
+            pass
         
         return indicators
 
@@ -52,11 +52,12 @@ class TechnicalCalculator:
             "cmf": self.ti.chaikin_money_flow(length=20),
             "force_index": self.ti.force_index(length=20),
             "cci": self.ti.cci(length=14),
+            "pvt": self.ti.pvt(length=14),
+            "ad_line": self.ti.ad_line(length=20),
         }
 
     def _calculate_momentum_indicators(self) -> Dict[str, np.ndarray]:
         """Calculate momentum indicators"""
-        # Calculate Stochastic once
         stoch_k, stoch_d = self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)
 
         indicators = {
@@ -70,9 +71,9 @@ class TechnicalCalculator:
             "ppo": self.ti.ppo(fast_length=12, slow_length=26),
             "coppock": self.ti.coppock_curve(wl1=11, wl2=14, wma_length=10),
             "kst": self.ti.kst(),
+            "roc_14": self.ti.roc(length=14),
         }
         
-        # Calculate MACD separately
         macd_line, macd_signal, macd_hist = self.ti.macd(fast_length=12, slow_length=26, signal_length=9)
         indicators["macd_line"] = macd_line
         indicators["macd_signal"] = macd_signal
@@ -86,14 +87,12 @@ class TechnicalCalculator:
             "atr": self.ti.atr(length=20),
         }
         
-        # Bollinger Bands
         bb_upper, bb_middle, bb_lower = self.ti.bollinger_bands(length=20, num_std_dev=2)
         indicators["bb_upper"] = bb_upper
         indicators["bb_middle"] = bb_middle
         indicators["bb_lower"] = bb_lower
         
-        # Calculate BB %B
-        close_prices = ohlcv_data[:, 3]
+        close_prices = ohlcv_data[:, 4]
         band_width = bb_upper - bb_lower
         indicators["bb_percent_b"] = np.where(
             band_width != 0,
@@ -142,7 +141,6 @@ class TechnicalCalculator:
             "sar": self.ti.parabolic_sar(step=0.02, max_step=0.2),
         }
         
-        # Supertrend
         supertrend, supertrend_direction = self.ti.supertrend(length=20, multiplier=3.0)
         indicators["supertrend"] = supertrend
         indicators["supertrend_direction"] = supertrend_direction
@@ -175,6 +173,11 @@ class TechnicalCalculator:
             "kurtosis": self.ti.kurtosis(length=20),
             "zscore": self.ti.zscore(length=20),
             "hurst": self.ti.hurst(max_lag=20),
+            "entropy": self.ti.entropy(length=20),
+            "skewness": self.ti.skew(length=20),
+            "variance": self.ti.variance(length=20),
+            "linreg_slope": self.ti.linreg(length=14, r=False),
+            "linreg_r2": self.ti.linreg(length=14, r=True),
         }
         
         # Basic Support/Resistance

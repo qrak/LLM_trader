@@ -7,6 +7,9 @@ import numpy as np
 from src.rag.text_splitting import SentenceSplitter
 from src.indicators.volatility.volatility_indicators import choppiness_index_numba
 from src.indicators.momentum.momentum_indicators import williams_r_numba
+from src.indicators.statistical.statistical_indicators import (
+    linreg_numba, entropy_numba, skew_numba, kurtosis_numba
+)
 import pandas as pd
 
 class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
@@ -239,6 +242,79 @@ class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
         
         # The slope for the last window should be close to 2
         self.assertAlmostEqual(result[-1], 2.0, places=10)
+
+    def test_linreg_r_squared_correctness(self):
+        """Test linreg_numba R-squared correctness."""
+        np.random.seed(42)
+        n = 100
+        x = np.linspace(0, 10, n)
+        # Perfect linear correlation: y = 2x
+        y = 2 * x
+        
+        length = 10
+        r_values = linreg_numba(y, length, r=True)
+        
+        # For perfect positive correlation, r should be 1.0
+        mask = ~np.isnan(r_values)
+        self.assertTrue(np.allclose(r_values[mask], 1.0), "Correlation should be 1.0 for linear data")
+        
+        # Test with noise
+        y_noisy = 2 * x + np.random.normal(0, 0.1, n)
+        r_noisy = linreg_numba(y_noisy, length, r=True)
+        
+        # Verify against numpy for a few arbitrary points
+        for i in range(length, n, 10): # Check every 10th point
+            window = y_noisy[i-length+1 : i+1]
+            wx = np.arange(1, length+1)
+            expected_r = np.corrcoef(wx, window)[0, 1]
+            # linreg_numba returns r (correlation coefficient) when r=True, despite the "R-Squared" name in some docs.
+            # Paper mentions "r = ...", so we expect r.
+            self.assertAlmostEqual(r_noisy[i], expected_r, places=5, msg=f"Mismatch at index {i}")
+
+    def test_entropy_correctness(self):
+        """Test entropy_numba correctness against a simple Python reference."""
+        np.random.seed(42)
+        data = np.random.uniform(1, 100, 100)
+        length = 10
+        base = 2.0
+        
+        result_numba = entropy_numba(data, length, base=base)
+        
+        # Reference implementation
+        expected = np.full(len(data), np.nan)
+        # Use length-1 to match Numba implementation start
+        for i in range(length - 1, len(data)):
+            # Standard window: ends at i (inclusive), length L
+            # Slice: [i - length + 1 : i + 1]
+            window = data[i-length+1 : i+1]
+            
+            total = np.sum(window)
+            p = window / total
+            e = -np.sum(p * np.log(p) / np.log(base))
+            expected[i] = e
+            
+        mask = ~np.isnan(expected)
+        np.testing.assert_allclose(result_numba[mask], expected[mask], err_msg="Entropy mismatch", atol=1e-7)
+
+    def test_moments_stability(self):
+        """Test Skewness and Kurtosis stability with large offsets."""
+        np.random.seed(42)
+        base_data = np.random.normal(0, 1, 100)
+        large_offset = 1_000_000.0
+        large_data = base_data + large_offset
+        length = 20
+        
+        s_base = skew_numba(base_data, length)
+        s_large = skew_numba(large_data, length)
+        
+        k_base = kurtosis_numba(base_data, length)
+        k_large = kurtosis_numba(large_data, length)
+        
+        mask = ~np.isnan(s_base)
+        
+        # Verify translation invariance (stability)
+        np.testing.assert_allclose(s_large[mask], s_base[mask], err_msg="Skewness stability failure", atol=1e-5)
+        np.testing.assert_allclose(k_large[mask], k_base[mask], err_msg="Kurtosis stability failure", atol=1e-5)
 
 if __name__ == '__main__':
     unittest.main()
