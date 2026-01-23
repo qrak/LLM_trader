@@ -249,13 +249,15 @@ def linreg_numba(close, length=14, r=False):
     n = len(close)
     linreg = np.full(n, np.nan)
 
-    x = np.arange(1, length + 1)
+    # Pre-compute constant sums (x = 1, 2, ..., length)
     x_sum = 0.5 * length * (length + 1)
     x2_sum = x_sum * (2 * length + 1) / 3
     divisor = length * x2_sum - x_sum * x_sum
 
-    for i in range(length - 1, n):
-        series = close[i - length + 1:i + 1]
+    # Initialize first window
+    if n >= length:
+        x = np.arange(1, length + 1)
+        series = close[0:length]
         y_sum = np.sum(series)
         xy_sum = np.sum(x * series)
 
@@ -265,9 +267,30 @@ def linreg_numba(close, length=14, r=False):
             y2_sum = np.sum(series * series)
             rn = length * xy_sum - x_sum * y_sum
             rd = np.sqrt(divisor * (length * y2_sum - y_sum * y_sum))
-            linreg[i] = rn / rd
+            linreg[length - 1] = rn / rd if rd != 0 else 0.0
         else:
-            linreg[i] = m
+            linreg[length - 1] = m
+
+        # Slide window for remaining positions
+        for i in range(length, n):
+            y_old = close[i - length]
+            y_new = close[i]
+            
+            # Update sums: CRITICAL ORDER - update xy_sum before y_sum
+            xy_sum = xy_sum + length * y_new - y_sum
+            y_sum = y_sum - y_old + y_new
+
+            m = (length * xy_sum - x_sum * y_sum) / divisor
+
+            if r:
+                # Recalculate y2_sum for correlation coefficient
+                series = close[i - length + 1:i + 1]
+                y2_sum = np.sum(series * series)
+                rn = length * xy_sum - x_sum * y_sum
+                rd = np.sqrt(divisor * (length * y2_sum - y_sum * y_sum))
+                linreg[i] = rn / rd if rd != 0 else 0.0
+            else:
+                linreg[i] = m
 
     return linreg
 

@@ -201,5 +201,44 @@ class TestPerformanceOptimization(unittest.IsolatedAsyncioTestCase):
         # Result should be all NaNs
         self.assertTrue(np.all(np.isnan(result)), "Result should be all NaNs for short input")
 
+    def test_linreg_performance(self):
+        """Test that linreg_numba is performant with O(N) complexity."""
+        from src.indicators.statistical.statistical_indicators import linreg_numba
+        
+        np.random.seed(42)
+        size = 100_000
+        close = np.random.uniform(50, 150, size)
+        length = 14
+
+        # Warmup
+        linreg_numba(close[:200], length)
+
+        start_time = time.perf_counter()
+        result = linreg_numba(close, length, r=False)
+        duration = time.perf_counter() - start_time
+        
+        print(f"Linear Regression (N={size}, L={length}) took {duration:.4f}s")
+        self.assertLess(duration, 1.0, "Linear regression calculation too slow")
+        
+        # Verify output is correct length
+        self.assertEqual(len(result), size)
+
+    def test_linreg_correctness(self):
+        """Test linreg_numba produces correct slope values."""
+        from src.indicators.statistical.statistical_indicators import linreg_numba
+        
+        # Test with known linear data: y = 2x + 10
+        length = 5
+        x = np.arange(1, length + 1)
+        y = 2 * x + 10  # slope = 2
+        
+        # Pad with some values before to test windowing
+        close = np.concatenate([np.array([15, 20, 25]), y])
+        
+        result = linreg_numba(close, length, r=False)
+        
+        # The slope for the last window should be close to 2
+        self.assertAlmostEqual(result[-1], 2.0, places=10)
+
 if __name__ == '__main__':
     unittest.main()

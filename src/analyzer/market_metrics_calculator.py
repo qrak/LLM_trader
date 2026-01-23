@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict
 import numpy as np
 from src.utils.timeframe_validator import TimeframeValidator
 

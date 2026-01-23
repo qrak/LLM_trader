@@ -61,15 +61,13 @@ class TestRefactoring(unittest.TestCase):
 
     def test_market_metrics_calculator_numpy(self):
         calc = MarketMetricsCalculator(self.mock_logger)
-        # Mock data (list of dictionaries)
-        data = [
-            {"close": 100, "high": 105, "low": 95, "volume": 1000},
-            {"close": 110, "high": 115, "low": 105, "volume": 1200},
-            {"close": 105, "high": 110, "low": 100, "volume": 1100}
-        ]
-        
+        # Mock data as numpy array: [timestamp, open, high, low, close, volume]
+        data = np.array([
+            [1700000000, 95, 105, 95, 100, 1000],
+            [1700003600, 100, 115, 105, 110, 1200],
+            [1700007200, 110, 110, 100, 105, 1100]
+        ], dtype=np.float64)
         metrics = calc._calculate_basic_metrics(data, "test_period")
-        
         self.assertEqual(metrics["highest_price"], 115)
         self.assertEqual(metrics["lowest_price"], 95)
         self.assertEqual(metrics["total_volume"], 3300)
