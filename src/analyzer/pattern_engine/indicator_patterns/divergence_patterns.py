@@ -129,14 +129,14 @@ def detect_bullish_divergence_numba(
     if len(prices) < 10 or len(indicator) < 10:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
     
-    # FIXED: Scan ENTIRE array instead of limiting to last 'lookback' periods
-    # This ensures divergences anywhere in the dataset are detected
+    # Scan ENTIRE array for divergences with conservative lookback for 4h timeframe
+    # Lookback of 10 reduces false positives from minor price fluctuations
     # Find local minima in both price and indicator
     price_low_indices, price_low_values = _find_local_extrema_numba(
-        prices, lookback=2, find_maxima=False
+        prices, lookback=10, find_maxima=False
     )
     indicator_low_indices, indicator_low_values = _find_local_extrema_numba(
-        indicator, lookback=2, find_maxima=False
+        indicator, lookback=10, find_maxima=False
     )
     
     if len(price_low_indices) < 2 or len(indicator_low_indices) < 2:
@@ -159,6 +159,11 @@ def detect_bullish_divergence_numba(
         
         # Price must make lower low
         if second_price >= first_price:
+            continue
+        
+        # Require significant price drop (min 0.5%) to filter trivial divergences
+        price_drop_pct = (first_price - second_price) / first_price * 100
+        if price_drop_pct < 0.5:
             continue
         
         # Find corresponding indicator lows around same times
@@ -215,14 +220,14 @@ def detect_bearish_divergence_numba(
     if len(prices) < 10 or len(indicator) < 10:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
     
-    # FIXED: Scan ENTIRE array instead of limiting to last 'lookback' periods
-    # This ensures divergences anywhere in the dataset are detected
+    # Scan ENTIRE array for divergences with conservative lookback for 4h timeframe
+    # Lookback of 10 reduces false positives from minor price fluctuations
     # Find local maxima in both price and indicator
     price_high_indices, price_high_values = _find_local_extrema_numba(
-        prices, lookback=2, find_maxima=True
+        prices, lookback=10, find_maxima=True
     )
     indicator_high_indices, indicator_high_values = _find_local_extrema_numba(
-        indicator, lookback=2, find_maxima=True
+        indicator, lookback=10, find_maxima=True
     )
     
     if len(price_high_indices) < 2 or len(indicator_high_indices) < 2:
@@ -245,6 +250,11 @@ def detect_bearish_divergence_numba(
         
         # Price must make higher high
         if second_price <= first_price:
+            continue
+        
+        # Require significant price rise (min 0.5%) to filter trivial divergences
+        price_rise_pct = (second_price - first_price) / first_price * 100
+        if price_rise_pct < 0.5:
             continue
         
         # Find corresponding indicator highs around same times

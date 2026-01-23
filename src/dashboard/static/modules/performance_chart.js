@@ -106,8 +106,6 @@ export async function updatePerformanceData() {
         
         let seriesData = [];
         let annotations = [];
-        let lastAnnotationTime = 0;
-        let alternateOffset = false;
         
         if (historyData.history && Array.isArray(historyData.history) && historyData.history.length > 0) {
             historyData.history.forEach((point, index) => {
@@ -128,41 +126,80 @@ export async function updatePerformanceData() {
                         let color = '#8b949e';
                         let label = action;
 
+                        // Check current fullscreen state for scaling
+                        const isFullscreen = document.getElementById('fullscreen-modal')?.classList.contains('active');
+                        const scale = isFullscreen ? 1.3 : 1.0;
+                        const fontSize = isFullscreen ? '15px' : '13px';
+                        const borderRadius = isFullscreen ? 6 : 4;
+                        const markerSize = isFullscreen ? 10 : 7;
+                        
                         if (isBuy) {
                             color = '#238636';  // Green - open LONG
-                            label = '🔼 LONG';
+                            label = '▲ LONG';
                         } else if (isSell) {
                             color = '#1f6feb';  // Blue - open SHORT
-                            label = '🔽 SHORT';
+                            label = '▼ SHORT';
                         } else if (isCloseLong) {
                             color = '#f85149';  // Red - close LONG
-                            label = '❌ CLOSE';
+                            label = '✕ CLOSE';
                         } else if (isCloseShort) {
                             color = '#a371f7';  // Purple - close SHORT
-                            label = '✅ CLOSE';
+                            label = '✓ CLOSE';
                         } else if (isGenericClose) {
-                            // Legacy compatibility for old CLOSE without direction
+                            // Legacy compatibility
                             color = '#f85149';
-                            label = '❌ CLOSE';
+                            label = '✕ CLOSE';
                         }
-
-                        // Check if this annotation is too close to the last one (within 2 hours)
-                        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-                        if (time - lastAnnotationTime < TWO_HOURS_MS) {
-                            alternateOffset = !alternateOffset;
-                        } else {
-                            alternateOffset = false;
+                        
+                        // Smart Collision Detection Logic
+                        // Instead of just toggling, we check multiple vertical levels
+                        // Base offline levels relative to point: [Top-Close, Top-Far, Bottom-Close, Bottom-Far, Top-VeryFar]
+                        // Offsets are scaled by the current view scale
+                        const baseOffsets = [-25, -55, 35, 65, -85]; 
+                        const levels = baseOffsets.map(o => o * scale);
+                        let chosenLevel = 0;
+                        
+                        // Simple grid-based collision check
+                        // We map time to "slots" to check for horizontal proximity
+                        // Slot width is roughly 2 hours in ms
+                        const SLOT_WIDTH_MS = 2 * 60 * 60 * 1000;
+                        const timeSlot = Math.floor(time / SLOT_WIDTH_MS);
+                        
+                        // Check which level is free in this time slot and adjacent slots
+                        // We look at occupied levels in [slot-1, slot, slot+1]
+                        const occupiedLevels = new Set();
+                        
+                        // Check recent annotations
+                        annotations.forEach(ann => {
+                            const annTime = ann.x;
+                            const annSlot = Math.floor(annTime / SLOT_WIDTH_MS);
+                            if (Math.abs(annSlot - timeSlot) <= 1) {
+                                // This annotation is close horizontally, mark its level as occupied
+                                if (ann._level !== undefined) {
+                                    occupiedLevels.add(ann._level);
+                                }
+                            }
+                        });
+                        
+                        // Find first free level
+                        for (let i = 0; i < levels.length; i++) {
+                            if (!occupiedLevels.has(i)) {
+                                chosenLevel = i;
+                                break;
+                            }
+                            // If all levels full, default to last level (highest stack)
+                            if (i === levels.length - 1) chosenLevel = i;
                         }
-                        lastAnnotationTime = time;
-
-                        // Stagger labels: -20 for normal, +40 for alternate (below point)
-                        const yOffset = alternateOffset ? 40 : -20;
+                        
+                        const yOffset = levels[chosenLevel];
 
                         annotations.push({
                             x: time,
                             y: point.value,
+                            // Store internal level for collision detection of subsequent points
+                            _level: chosenLevel, 
                             marker: {
-                                size: 8,
+                                size: markerSize,
                                 fillColor: color,
                                 strokeColor: '#fff',
                                 strokeWidth: 2
@@ -172,12 +209,19 @@ export async function updatePerformanceData() {
                                 style: {
                                     color: '#fff',
                                     background: color,
-                                    fontSize: '12px',
-                                    fontWeight: 'bold',
-                                    padding: { left: 8, right: 8, top: 5, bottom: 5 }
+                                    fontSize: fontSize,
+                                    fontWeight: '700',
+                                    padding: { 
+                                        left: 8 * scale, 
+                                        right: 8 * scale, 
+                                        top: 5 * scale, 
+                                        bottom: 5 * scale 
+                                    },
+                                    fontFamily: 'Inter, sans-serif'
                                 },
                                 offsetY: yOffset,
-                                borderRadius: 4
+                                borderRadius: borderRadius,
+                                textAnchor: 'middle'
                             }
                         });
                     }
@@ -213,3 +257,6 @@ export async function updatePerformanceData() {
         console.error("Failed to update performance chart", e);
     }
 }
+
+// Expose refresh function specifically for fullscreen toggle or resize events
+window.refreshPerformanceAnnotations = updatePerformanceData;
