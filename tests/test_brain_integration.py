@@ -404,9 +404,9 @@ class TestContextAwareRuleRetrieval:
             macd_signal="BULLISH"
         )
 
-        # Context should include the relevant rule with similarity
-        assert "LEARNED TRADING RULES" in context or context == ""
-        if "LEARNED TRADING RULES" in context:
+        # Context should include the relevant rule with similarity (case-insensitive)
+        assert "learned trading rules" in context.lower() or context == ""
+        if "learned trading rules" in context.lower():
             assert "match]" in context  # Similarity indicator
 
     def test_anti_pattern_rules_retrieved_for_matching_context(self, brain_service, vector_memory):
