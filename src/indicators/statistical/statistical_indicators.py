@@ -74,16 +74,60 @@ def kurtosis_numba(arr, length):
 
 @njit(cache=True)
 def skew_numba(close, length=30):
+    """O(N) Sample Skewness using sliding window raw moments."""
     n = len(close)
     skew_values = np.full(n, np.nan)
 
-    for i in range(length - 1, n):
-        window = close[i - length + 1:i + 1]
-        mean = np.sum(window) / length
-        std_dev = np.sqrt(np.sum((window - mean) ** 2) / length)
+    if n < length:
+        return skew_values
 
-        skew_sum = np.sum(((window - mean) / std_dev) ** 3)
-        skew_values[i] = ((length * (length + 1)) / ((length - 1) * (length - 2) * (length - 3))) * skew_sum
+    sqrt_n_n1 = np.sqrt(length * (length - 1))
+    bias_factor = sqrt_n_n1 / (length * (length - 2))
+
+    offset = close[0]
+    s1 = 0.0
+    s2 = 0.0
+    s3 = 0.0
+
+    for i in range(length):
+        val = close[i] - offset
+        s1 += val
+        s2 += val * val
+        s3 += val * val * val
+
+    mean = s1 / length
+    sum_sq_diff = max(0.0, s2 - length * mean * mean)
+    std_dev = np.sqrt(sum_sq_diff / length)
+    sum_cubed_diff = s3 - 3 * mean * s2 + 2 * length * mean * mean * mean
+
+    if std_dev > 1e-10:
+        skew_values[length-1] = bias_factor * (sum_cubed_diff / (std_dev * std_dev * std_dev))
+    else:
+        skew_values[length-1] = 0.0
+
+    for i in range(length, n):
+        old_val = close[i - length] - offset
+        new_val = close[i] - offset
+
+        if i % 1000 == 0:
+            window = close[i - length + 1 : i + 1] - offset
+            s1 = np.sum(window)
+            s2 = np.sum(window * window)
+            s3 = np.sum(window * window * window)
+        else:
+            s1 = s1 - old_val + new_val
+            s2 = s2 - old_val * old_val + new_val * new_val
+            s3 = s3 - old_val * old_val * old_val + new_val * new_val * new_val
+
+        mean = s1 / length
+        sum_sq_diff = max(0.0, s2 - length * mean * mean)
+        std_dev = np.sqrt(sum_sq_diff / length)
+        sum_cubed_diff = s3 - 3 * mean * s2 + 2 * length * mean * mean * mean
+
+        if std_dev > 1e-10:
+            skew_values[i] = bias_factor * (sum_cubed_diff / (std_dev * std_dev * std_dev))
+        else:
+            skew_values[i] = 0.0
 
     return skew_values
 
@@ -94,40 +138,36 @@ def stdev_numba(close, length=30, ddof=1):
 
 @njit(cache=True)
 def variance_numba(close, length=30, ddof=1):
+    """O(N) Sample Variance using sliding window sums."""
     n = len(close)
     variance_values = np.full(n, np.nan)
 
     if n < length:
         return variance_values
 
-    # Offset to stabilize numerical precision for large numbers
     offset = close[0]
-
     sum_x = 0.0
     sum_x2 = 0.0
 
-    # Initial window
     for i in range(length):
         val = close[i] - offset
         sum_x += val
         sum_x2 += val * val
 
-    # Use max(0, ...) to prevent negative variance due to floating point errors
     var = (sum_x2 - (sum_x * sum_x) / length) / (length - ddof)
     variance_values[length - 1] = max(0.0, var)
 
-    # Sliding window
     for i in range(length, n):
         old_val = close[i - length] - offset
         new_val = close[i] - offset
 
-        sum_x += new_val - old_val
-        sum_x2 += new_val * new_val - old_val * old_val
-
-        # We re-calculate variance from sums
-        # Var = (Sum(x^2) - (Sum(x)^2)/N) / (N - ddof)
-        # This is algebraically equivalent to (Sum(x^2)/N - mean^2) * N/(N-ddof)
-        # But using the sum form directly with centered data is stable.
+        if i % 1000 == 0:
+            window = close[i - length + 1 : i + 1] - offset
+            sum_x = np.sum(window)
+            sum_x2 = np.sum(window * window)
+        else:
+            sum_x += new_val - old_val
+            sum_x2 += new_val * new_val - old_val * old_val
 
         var = (sum_x2 - (sum_x * sum_x) / length) / (length - ddof)
         variance_values[i] = max(0.0, var)
@@ -136,15 +176,9 @@ def variance_numba(close, length=30, ddof=1):
 
 @njit(cache=True)
 def zscore_numba(close, length=30, std=1.0):
+    """Rolling Z-Score (O(N*L) - not yet optimized)."""
     n = len(close)
     zscore_values = np.full(n, np.nan)
-
-    # We can optimize this too, but for now let's focus on variance/stdev
-    # Actually, zscore needs mean and stdev.
-    # We can compute mean (SMA) and stdev (sqrt(Var)) efficiently.
-    # But zscore_numba currently does it O(N*L).
-    # Since we are optimizing variance, let's leave zscore for now unless requested.
-    # The request specifically mentioned variance_numba and sma_numba.
 
     for i in range(length - 1, n):
         window = close[i - length + 1:i + 1]
@@ -182,15 +216,47 @@ def quantile_numba(close, length=30, q=0.5):
 
 @njit(cache=True)
 def entropy_numba(close, length=10, base=2.0):
+    """O(N) Price Entropy using sliding window sums."""
     n = len(close)
     entropy = np.full(n, np.nan)
-    log_base = np.log(base)  # precompute log base
 
-    for i in range(length, n):
-        total = np.sum(close[i - length:i])
-        p = close[i - length:i] / total
-        ent = -np.sum(p * np.log(p) / log_base)
-        entropy[i] = ent
+    safe_close = np.copy(close)
+    for k in range(n):
+        if safe_close[k] <= 1e-10:
+            safe_close[k] = 1e-10
+
+    x_ln_x = safe_close * np.log(safe_close)
+    sum_x = 0.0
+    sum_x_ln_x = 0.0
+
+    if n >= length:
+        for i in range(length):
+            sum_x += safe_close[i]
+            sum_x_ln_x += x_ln_x[i]
+
+        term = np.log(sum_x) - (sum_x_ln_x / sum_x)
+        entropy[length - 1] = max(0.0, term / np.log(base))
+
+        for i in range(length, n):
+            old_idx = i - length
+            new_idx = i
+
+            if i % 1000 == 0:
+                 window = safe_close[i - length + 1 : i + 1]
+                 window_ln = x_ln_x[i - length + 1 : i + 1]
+                 sum_x = np.sum(window)
+                 sum_x_ln_x = np.sum(window_ln)
+            else:
+                diff_x = safe_close[new_idx] - safe_close[old_idx]
+                diff_x_ln_x = x_ln_x[new_idx] - x_ln_x[old_idx]
+                sum_x += diff_x
+                sum_x_ln_x += diff_x_ln_x
+
+            if sum_x > 0:
+                term = np.log(sum_x) - (sum_x_ln_x / sum_x)
+                entropy[i] = max(0.0, term / np.log(base))
+            else:
+                entropy[i] = 0.0
 
     return entropy
 
@@ -246,50 +312,56 @@ def hurst_numba(ts: np.ndarray, max_lag: int = 20) -> np.ndarray:
 
 @njit(cache=True)
 def linreg_numba(close, length=14, r=False):
+    """O(N) Linear Regression (slope or Pearson correlation)."""
     n = len(close)
     linreg = np.full(n, np.nan)
 
-    # Pre-compute constant sums (x = 1, 2, ..., length)
-    x_sum = 0.5 * length * (length + 1)
-    x2_sum = x_sum * (2 * length + 1) / 3
+    x = np.arange(1, length + 1)
+    x_sum = np.sum(x)
+    x2_sum = np.sum(x * x)
     divisor = length * x2_sum - x_sum * x_sum
 
-    # Initialize first window
+    offset = close[0]
+
     if n >= length:
-        x = np.arange(1, length + 1)
-        series = close[0:length]
+        series = close[0:length] - offset
         y_sum = np.sum(series)
         xy_sum = np.sum(x * series)
-
-        m = (length * xy_sum - x_sum * y_sum) / divisor
+        y2_sum = 0.0
 
         if r:
             y2_sum = np.sum(series * series)
             rn = length * xy_sum - x_sum * y_sum
-            rd = np.sqrt(divisor * (length * y2_sum - y_sum * y_sum))
+            term1 = length * y2_sum - y_sum * y_sum
+            rd = np.sqrt(divisor * max(0.0, term1))
             linreg[length - 1] = rn / rd if rd != 0 else 0.0
         else:
+            m = (length * xy_sum - x_sum * y_sum) / divisor
             linreg[length - 1] = m
 
-        # Slide window for remaining positions
         for i in range(length, n):
-            y_old = close[i - length]
-            y_new = close[i]
-            
-            # Update sums: CRITICAL ORDER - update xy_sum before y_sum
-            xy_sum = xy_sum + length * y_new - y_sum
-            y_sum = y_sum - y_old + y_new
+            y_old = close[i - length] - offset
+            y_new = close[i] - offset
 
-            m = (length * xy_sum - x_sum * y_sum) / divisor
+            if i % 100 == 0:
+                series = close[i - length + 1 : i + 1] - offset
+                y_sum = np.sum(series)
+                xy_sum = np.sum(x * series)
+                if r:
+                     y2_sum = np.sum(series * series)
+            else:
+                xy_sum = xy_sum - y_sum + length * y_new
+                y_sum = y_sum - y_old + y_new
+                if r:
+                    y2_sum = y2_sum - y_old * y_old + y_new * y_new
 
             if r:
-                # Recalculate y2_sum for correlation coefficient
-                series = close[i - length + 1:i + 1]
-                y2_sum = np.sum(series * series)
                 rn = length * xy_sum - x_sum * y_sum
-                rd = np.sqrt(divisor * (length * y2_sum - y_sum * y_sum))
+                term1 = length * y2_sum - y_sum * y_sum
+                rd = np.sqrt(divisor * max(0.0, term1))
                 linreg[i] = rn / rd if rd != 0 else 0.0
             else:
+                m = (length * xy_sum - x_sum * y_sum) / divisor
                 linreg[i] = m
 
     return linreg

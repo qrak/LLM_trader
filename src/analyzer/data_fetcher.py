@@ -23,8 +23,6 @@ class DataFetcher:
                                      limit: int,
                                      start_time: Optional[int] = None
                                      ) -> Optional[Tuple[NDArray, float]]:
-        # self.logger.debug(f"Fetching {pair} OHLCV data on {timeframe} timeframe with limit {limit}")
-        
         # Validate timeframe is supported by exchange
         if hasattr(self.exchange, 'timeframes') and self.exchange.timeframes:
             if timeframe not in self.exchange.timeframes:
@@ -48,11 +46,14 @@ class DataFetcher:
             self.logger.warning(f"No data returned for {pair} on {self.exchange.id}")
             return None
         
-        # self.logger.debug(f"Received {len(ohlcv)} raw candles from exchange for {pair}")
+        # Sanitize data: Replace None with np.nan for float64 conversion
+        ohlcv_sanitized = [
+            [x if x is not None else np.nan for x in candle] 
+            for candle in ohlcv
+        ]
         
-        ohlcv_array = np.array(ohlcv)
-        # TRADING MODE: Use only COMPLETED candles (exclude the incomplete current candle)
-        # This ensures all trading decisions are based on confirmed closed candle data
+        ohlcv_array = np.array(ohlcv_sanitized, dtype=np.float64)
+        # Use only COMPLETED candles
         if len(ohlcv_array) < 2:
              self.logger.warning(f"Not enough candles to exclude incomplete one. Received: {len(ohlcv_array)}")
              return None
@@ -86,7 +87,6 @@ class DataFetcher:
                 'available_days': Number of days of data actually available
                 'is_complete': Boolean indicating if we have full history for requested period
         """
-        # self.logger.debug(f"Fetching historical daily data for {pair}, {days} days")
         
         try:
             result = await self.fetch_candlestick_data(
@@ -112,7 +112,7 @@ class DataFetcher:
             if not is_complete:
                 self.logger.info(f"Limited historical data for {pair}: requested {days} days, got {available_days} days")
             else:
-                pass # self.logger.debug(f"Successfully fetched {available_days} days of historical data for {pair}")
+                pass
                 
             return {
                 'data': ohlcv_data,
@@ -149,8 +149,6 @@ class DataFetcher:
                 'meets_200w_threshold': Boolean indicating if we have 200+ weeks for full 200W SMA analysis
                 'error': Error message if fetch failed, None otherwise
         """
-        # self.logger.debug(f"Fetching weekly data for {pair}: {target_weeks} weeks")
-        
         try:
             # REUSE existing method - already supports '1w'
             result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)
@@ -196,7 +194,6 @@ class DataFetcher:
         Returns:
             Dictionary with processed ticker data in a format similar to CryptoCompare API
         """
-        # self.logger.debug(f"Fetching multiple tickers: {symbols if symbols else 'all'}")
         
         try:
             # Validate exchange capabilities
@@ -267,15 +264,7 @@ class DataFetcher:
         )
 
     def _create_raw_ticker_data(self, ticker: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Create raw ticker data structure with comprehensive 24h statistics.
-        
-        Includes price, volume, volatility, and bid/ask data useful for:
-        - Momentum analysis (percentage changes, volume trends)
-        - Volatility assessment (high/low range, VWAP deviation)
-        - Liquidity evaluation (bid/ask spread, volumes)
-        - Market microstructure (bid/ask sizes, quote volume)
-        """
+        """Create raw ticker data structure with comprehensive 24h statistics."""
         return {
             # Core price data
             "PRICE": ticker.get('last', 0),
@@ -402,10 +391,6 @@ class DataFetcher:
                 'best_ask': best_ask
             }
             
-            # self.logger.debug(
-            #     f"Order book for {pair}: spread={spread_percent:.3f}%, "
-            #     f"imbalance={imbalance:+.3f}, depth={bid_depth:.2f}/{ask_depth:.2f}"
-            # )
             
             return result
             
@@ -480,11 +465,6 @@ class DataFetcher:
                 'time_span_minutes': time_span_minutes
             }
             
-            # self.logger.debug(
-            #     f"Recent trades for {pair}: {len(trades)} trades, "
-            #     f"buy_pressure={buy_pressure_percent:.1f}%, "
-            #     f"velocity={trade_velocity:.1f}/min"
-            # )
             
             return result
             
@@ -557,10 +537,6 @@ class DataFetcher:
                 'sentiment': sentiment
             }
             
-            self.logger.debug(
-                f"Funding rate for {pair}: {rate*100:.4f}% ({sentiment}), "
-                f"annualized: {annualized_rate:.2f}%"
-            )
             
             return result
             
@@ -647,10 +623,6 @@ class DataFetcher:
         except Exception as e:
             self.logger.debug(f"Funding rate not available for {pair}: {e}")
         
-        # self.logger.info(
-        #     f"Market microstructure for {pair}: "
-        #     f"available_data={result['available_data']}"
-        # )
         
         return result
 

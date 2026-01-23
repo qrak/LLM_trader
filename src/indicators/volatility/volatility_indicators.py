@@ -59,10 +59,8 @@ def atr_numba(high, low, close, length=14, mamode='rma', percent=False):
 
 @njit(cache=True)
 def bollinger_bands_numba(close, length, num_std_dev):
-    # Replaced custom sliding window implementation with optimized shared utilities
-    # to adhere to DRY principles and ensure consistent performance across indicators.
     middle_band = sma_numba(close, length)
-    std_dev = stdev_numba(close, length)
+    std_dev = stdev_numba(close, length, ddof=0)
 
     n = len(close)
     upper_band = np.full(n, np.nan)
@@ -90,7 +88,6 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode='rma'):
         period_high = np.max(high[i - length + 1:i + 1])
         period_low = np.min(low[i - length + 1:i + 1])
 
-        # Calculate the chandelier exits
         chandelier_exit_long[i] = period_high - atr_values[i] * multiplier
         chandelier_exit_short[i] = period_low + atr_values[i] * multiplier
 
