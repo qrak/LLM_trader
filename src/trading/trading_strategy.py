@@ -599,7 +599,7 @@ class TradingStrategy:
         currency = self.config.QUOTE_CURRENCY
         if not self.current_position:
             return (
-                f"CAPITAL STATUS:\n"
+                f"## Capital Status\n"
                 f"- Total Capital: ${capital:,.2f} {currency}\n"
                 f"- Available: ${capital:,.2f} (100%)\n\n"
                 f"CURRENT POSITION: None"
@@ -616,12 +616,12 @@ class TradingStrategy:
         available = capital - allocated
         allocation_pct = (allocated / capital) * 100 if capital > 0 else 0
         context_lines = [
-            "CAPITAL STATUS:",
+            "## Capital Status",
             f"- Total Capital: ${capital:,.2f} {currency}",
             f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
             f"- Available: ${available:,.2f} ({100 - allocation_pct:.1f}%)",
             "",
-            "CURRENT POSITION:",
+            "## Current Position",
             f"- Direction: {pos.direction}",
             f"- Symbol: {pos.symbol}",
             f"- Entry Price: ${pos.entry_price:,.2f}",

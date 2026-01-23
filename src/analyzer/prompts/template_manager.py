@@ -279,7 +279,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
             timeframe_desc = "Analyze the provided Multi-Timeframe Price Summary periods (dynamically calculated based on your analysis timeframe)"
         
         analysis_steps = f"""
-ANALYSIS STEPS (use findings to determine trading signal):
+## Analysis Steps (use findings to determine trading signal):
 
 1. MULTI-TIMEFRAME ASSESSMENT:
    {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA)

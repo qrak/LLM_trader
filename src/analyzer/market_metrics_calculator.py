@@ -31,18 +31,21 @@ class MarketMetricsCalculator:
         """
         self.logger = logger
     
-    def update_period_metrics(self, data: List, context) -> None:
-        """Calculate and update market metrics for different time periods"""
+    def update_period_metrics(self, context) -> None:
+        """Calculate and update market metrics for different time periods.
+        
+        Args:
+            context: AnalysisContext with ohlcv_candles (np.ndarray), timestamps, technical_history
+        """
         period_metrics = {}
+        ohlcv = context.ohlcv_candles
         
-        hourly_distribution = {}
-        for item in data:
-            hour = item['timestamp'].hour
-            hourly_distribution[hour] = hourly_distribution.get(hour, 0) + 1
-        
+        if ohlcv is None or len(ohlcv) == 0:
+            self.logger.warning("No OHLCV data for period metrics")
+            return
         
         # Get timeframe from context to calculate correct candle counts
-        timeframe = context.timeframe if hasattr(context, 'timeframe') and context.timeframe else '1h'
+        timeframe = context.timeframe if context.timeframe else '1h'
         
         # Calculate period candle requirements based on actual timeframe
         try:
@@ -64,61 +67,53 @@ class MarketMetricsCalculator:
                 "30D": 720
             }
         
-        # self.logger.debug(f"Total candles available for period metrics: {len(data)}, Timeframe: {timeframe}")
-        # self.logger.debug(f"Period candle requirements: {periods}")
-        
+
+        n = len(ohlcv)
         try:
             for period_name, required_candles in periods.items():
-                if len(data) >= required_candles:
+                if n >= required_candles:
                     # self.logger.debug(f"Calculating full {period_name} metrics with {required_candles} candles")
-                    period_metrics[period_name] = self._calculate_period_metrics(data[-required_candles:], period_name, context)
+                    period_metrics[period_name] = self._calculate_period_metrics(ohlcv[-required_candles:], period_name, context)
                 else:
                     if period_name in ["1D", "2D", "3D"]:
-                        self.logger.warning(f"Insufficient data for {period_name} analysis. Need {required_candles}, have {len(data)} candles")
-                        period_metrics[period_name] = self._calculate_period_metrics(data, f"{period_name} (Partial)", context)
-                    elif period_name == "7D" and len(data) >= periods["1D"]:  # Use dynamic 1D requirement
-                        self.logger.warning(f"Insufficient data for 7D metrics. Only {len(data)} candles available, need {required_candles}")
-                        period_metrics["7D"] = self._calculate_period_metrics(data, "7D (Partial)", context)
-                    elif period_name == "30D" and len(data) >= periods["7D"]:  # Use dynamic 7D requirement
-                        self.logger.warning(f"Insufficient data for 30D metrics. Only {len(data)} candles available, need {required_candles}")
-                        period_metrics["30D"] = self._calculate_period_metrics(data, "30D (Partial)", context)
+                        self.logger.warning(f"Insufficient data for {period_name} analysis. Need {required_candles}, have {n} candles")
+                        period_metrics[period_name] = self._calculate_period_metrics(ohlcv, f"{period_name} (Partial)", context)
+                    elif period_name == "7D" and n >= periods["1D"]:  # Use dynamic 1D requirement
+                        self.logger.warning(f"Insufficient data for 7D metrics. Only {n} candles available, need {required_candles}")
+                        period_metrics["7D"] = self._calculate_period_metrics(ohlcv, "7D (Partial)", context)
+                    elif period_name == "30D" and n >= periods["7D"]:  # Use dynamic 7D requirement
+                        self.logger.warning(f"Insufficient data for 30D metrics. Only {n} candles available, need {required_candles}")
+                        period_metrics["30D"] = self._calculate_period_metrics(ohlcv, "30D (Partial)", context)
                     else:
-                        self.logger.warning(f"Cannot calculate {period_name} metrics - not enough data (need {required_candles}, have {len(data)})")
-            
-            # Log what was calculated
-            # for period_name, metrics_data in period_metrics.items():
-            #     if metrics_data and 'metrics' in metrics_data:
-            #         basic_metrics = metrics_data['metrics']
-            #         self.logger.debug(f"{period_name}: price_change={basic_metrics.get('price_change')}, "
-            #                          f"price_change_percent={basic_metrics.get('price_change_percent')}%, "
-            #                          f"data_points={basic_metrics.get('data_points')}")
-            #         if 'indicator_changes' in metrics_data:
-            #             ind_changes = metrics_data['indicator_changes']
-            #             rsi_change = ind_changes.get('rsi_change', 'N/A')
-            #             macd_change = ind_changes.get('macd_line_change', 'N/A')
-            #             self.logger.debug(f"{period_name} indicator changes: RSI={rsi_change}, MACD={macd_change}")
+                        self.logger.warning(f"Cannot calculate {period_name} metrics - not enough data (need {required_candles}, have {n})")
             
             context.market_metrics = period_metrics
         
         except Exception as e:
             self.logger.error(f"Error updating period metrics: {e}")
-            if not period_metrics and len(data) > 0:
+            if not period_metrics and n > 0:
                 self.logger.warning("Setting fallback period metrics due to error")
-                period_metrics["1D"] = self._calculate_period_metrics(data[-min(24, len(data)):], "1D (Fallback)", context)
+                period_metrics["1D"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "1D (Fallback)", context)
                 context.market_metrics = period_metrics
                 
-    def _calculate_period_metrics(self, data: List, period_name: str, context) -> Dict:
-        """Calculate metrics for a specific time period"""
+    def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> Dict:
+        """Calculate metrics for a specific time period.
+        
+        Args:
+            ohlcv_slice: NumPy array slice of shape (N, 6) with columns [ts, open, high, low, close, volume]
+            period_name: Name of the period (e.g., "1D", "7D")
+            context: AnalysisContext for technical_data access
+        """
         # Calculate core metrics directly from data (do this FIRST to avoid redundant calculations)
-        basic_metrics = self._calculate_basic_metrics(data, period_name)
+        basic_metrics = self._calculate_basic_metrics(ohlcv_slice, period_name)
         
         # Calculate indicator changes
-        start_idx = -len(data)
+        start_idx = -len(ohlcv_slice)
         end_idx = -1
         indicator_changes = self._calculate_indicator_changes_for_period(context, start_idx, end_idx)
         
         # Use support/resistance from technical_calculator instead of duplicating
-        current_price = data[-1]["close"]
+        current_price = float(ohlcv_slice[-1, 4])  # Column 4 = close
         td = context.technical_data
         
         # Get support/resistance from existing technical indicators
@@ -170,13 +165,19 @@ class MarketMetricsCalculator:
             "key_levels": levels
         }
     
-    def _calculate_basic_metrics(self, data: List[Dict], period_name: str) -> Dict:
-        """Calculate basic price and volume metrics using numpy vectorization."""
-        # Convert to numpy arrays once for vectorized operations
-        prices = np.array([candle["close"] for candle in data])
-        highs = np.array([candle["high"] for candle in data])
-        lows = np.array([candle["low"] for candle in data])
-        volumes = np.array([candle["volume"] for candle in data])
+    def _calculate_basic_metrics(self, ohlcv_slice: np.ndarray, period_name: str) -> Dict:
+        """Calculate basic price and volume metrics using numpy vectorization.
+        
+        Args:
+            ohlcv_slice: NumPy array of shape (N, 6) with columns [ts, open, high, low, close, volume]
+            period_name: Period identifier string
+        """
+        # Direct column access - no conversion needed
+        # Column mapping: 0=ts, 1=open, 2=high, 3=low, 4=close, 5=volume
+        highs = ohlcv_slice[:, 2]
+        lows = ohlcv_slice[:, 3]
+        prices = ohlcv_slice[:, 4]  # close prices
+        volumes = ohlcv_slice[:, 5]
 
         high_max = float(np.max(highs))
         low_min = float(np.min(lows))
@@ -188,8 +189,8 @@ class MarketMetricsCalculator:
             "total_volume": float(np.sum(volumes)),
             "avg_volume": float(np.mean(volumes)),
             "price_change": float(prices[-1] - prices[0]),
-            "price_change_percent": float((prices[-1] / prices[0] - 1) * 100),
-            "volatility": float((high_max - low_min) / low_min * 100),
+            "price_change_percent": float((prices[-1] / prices[0] - 1) * 100) if prices[0] != 0 else 0.0,
+            "volatility": float((high_max - low_min) / low_min * 100) if low_min != 0 else 0.0,
             "period": period_name,
             "data_points": len(prices)
         }
