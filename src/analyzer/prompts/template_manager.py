@@ -38,35 +38,30 @@ class TemplateManager:
         """
         header_lines = [
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
-            "You combine technical analysis, market microstructure, and macro context using a structured analytical framework.",
+            "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
+            "Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop loss, and take profit level reasoning.",
             "",
             "## Analytical Framework (Chain of Thought)",
-            "Before deciding, mentally work through: (1) Market Structure phase, (2) Timeframe alignment,",
-            "(3) Momentum/volatility state, (4) Microstructure bias, (5) Risk/reward assessment.",
+            "Step through: (1) Market Structure phase, (2) Timeframe alignment, (3) Momentum/volatility state,",
+            "(4) Microstructure bias, (5) Risk/reward assessment.",
             "",
         ]
         
         if last_analysis_time:
             header_lines.extend([
                 "## Temporal Context",
-                f"Last analysis was performed at: {last_analysis_time} UTC",
+                f"Last analysis: {last_analysis_time} UTC",
                 "",
             ])
         
         header_lines.extend([
             "## Core Principles",
-            "- Technical indicators are calculated using CLOSED CANDLES ONLY (no incomplete candle data)",
-            "- Current price reflects real-time market price from the incomplete candle (accurate position tracking)",
-            "- Trading decisions must be based on confirmed signals, not speculation",
-            "- Risk management is paramount: every trade requires proper stop loss and take profit",
-            "- Confidence must match signal strength: only high-confidence trades in strong setups",
-            "- **MAXIMIZE PROFIT**: Learn from past trades, avoid repeated mistakes, improve win rate",
-            "- **ONE DECISION PER RESPONSE**: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE).",
+            "- Indicators calculated on CLOSED CANDLES ONLY (no repaint). Current price is REAL-TIME (incomplete candle).",
+            "- Decisions must be based on CONFIRMED signals, not speculation.",
+            "- Risk management is paramount: SL and TP required for every trade.",
+            "- Confidence must match signal strength: >70 required for trades (strong setups only).",
+            "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate.",
             "",
-            "## Your Task",
-            "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
-            "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
-            "Include specific entry, stop loss, and take profit levels with your reasoning.",
         ])
         
         # Add performance context if available
@@ -189,21 +184,17 @@ Factors to score:
 
 CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL". Make only the immediate action decision.
 
-=== TREND STRENGTH GUIDELINES (Advisory - You Decide) ===
-These are GUIDELINES, not hard rules. Use your judgment based on overall confluence.
-
+=== Trend Strength Rules (Advisory) ===
 ADX + CHOPPINESS ASSESSMENT:
-- ADX < {adx_weak} AND Choppiness > 50: ⚠️ CAUTION - Weak trend + choppy market. Requires {conf_weak}+ strong confluences to trade.
-- ADX < {adx_weak} but Choppiness < 50: Potential trend emerging (ADX lags). Trade allowed with strong confirmation.
-- ADX {adx_weak}-{adx_strong}: Developing trend. Standard {conf_std}+ confluences required.
-- ADX >= {adx_strong}: Strong trend environment. Full confidence range available.
+- ADX < {adx_weak} AND Choppiness > 50: ⚠️ Weak trend + choppy. Needs {conf_weak}+ confluences.
+- ADX < {adx_weak} but Choppiness < 50: Potential trend emerging. Trade with strong confirmation.
+- ADX {adx_weak}-{adx_strong}: Developing trend. Standard {conf_std}+ confluences.
+- ADX >= {adx_strong}: Strong trend environment.
 
 CHOPPINESS INDEX CONTEXT:
-- Choppiness > 61.8: Ranging market - trend-following strategies may underperform
-- Choppiness < 38.2: Trending market - breakouts/trend continuation favored
-- Choppiness 38-62: Transitional - exercise caution
+- > 61.8: Ranging | < 38.2: Trending | 38-62: Transitional
 
-NOTE: You may OVERRIDE these guidelines if you have exceptionally strong conviction (e.g., major news catalyst, {conf_weak + 1}+ confluences, extreme oversold/overbought). When overriding, explicitly state your reasoning.
+NOTE: You may OVERRIDE these guidelines if you have exceptional conviction ( catalyst, {conf_weak + 1}+ confluences). State reasoning.
 
 POSITION SIZING FORMULA (calculate before finalizing - SHOW YOUR WORK in RISK/REWARD section):
 - Base size = confidence / 100 (e.g., 75 confidence = 0.75 base)
@@ -286,7 +277,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
    🧠 Are timeframes aligned or divergent? Which dominates?
 
 2. TECHNICAL INDICATORS:
-   Momentum: RSI (<30/>70), MACD crosses | Trend: ADX (>25), DI+/DI- | Volatility: ATR, BBands | Volume: MFI, OBV, Force Index | SMAs: 20/50/200 crosses
+   Analyze all provided Momentum, Trend, Volatility, and Volume indicators (RSI, MACD, ADX, ATR, ROC, MFI, etc.)
    🧠 Do indicators confirm each other or show divergence?
 
 3. PATTERN RECOGNITION (Conservative Approach):
