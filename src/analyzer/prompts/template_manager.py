@@ -40,7 +40,7 @@ class TemplateManager:
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
             "You combine technical analysis, market microstructure, and macro context using a structured analytical framework.",
             "",
-            "ANALYTICAL FRAMEWORK (Chain of Thought):",
+            "## Analytical Framework (Chain of Thought)",
             "Before deciding, mentally work through: (1) Market Structure phase, (2) Timeframe alignment,",
             "(3) Momentum/volatility state, (4) Microstructure bias, (5) Risk/reward assessment.",
             "",
@@ -48,22 +48,22 @@ class TemplateManager:
         
         if last_analysis_time:
             header_lines.extend([
-                "TEMPORAL CONTEXT:",
+                "## Temporal Context",
                 f"Last analysis was performed at: {last_analysis_time} UTC",
                 "",
             ])
         
         header_lines.extend([
-            "CORE PRINCIPLES:",
+            "## Core Principles",
             "- Technical indicators are calculated using CLOSED CANDLES ONLY (no incomplete candle data)",
             "- Current price reflects real-time market price from the incomplete candle (accurate position tracking)",
             "- Trading decisions must be based on confirmed signals, not speculation",
             "- Risk management is paramount: every trade requires proper stop loss and take profit",
             "- Confidence must match signal strength: only high-confidence trades in strong setups",
-            "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate",
-            "- ONE DECISION PER RESPONSE: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE).",
+            "- **MAXIMIZE PROFIT**: Learn from past trades, avoid repeated mistakes, improve win rate",
+            "- **ONE DECISION PER RESPONSE**: Provide exactly ONE trading signal (BUY/SELL/HOLD/CLOSE/UPDATE).",
             "",
-            "YOUR TASK:",
+            "## Your Task",
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
             "Provide a clear trading decision: BUY (long), SELL (short), HOLD (no action), or CLOSE (exit position).",
             "Include specific entry, stop loss, and take profit levels with your reasoning.",
@@ -75,7 +75,8 @@ class TemplateManager:
                 "",
                 performance_context.strip(),
                 "",
-                "PROFIT MAXIMIZATION STRATEGY:",
+                "",
+                "## Profit Maximization Strategy",
                 "- LEARN from closed trades: Why did stops get hit? Were entries premature? Was trend strength misjudged?",
                 "- IMPROVE win rate: Only trade when multiple factors align strongly (3+ confluences)",
                 "- AVOID repeated mistakes: If recent trades failed due to weak setups, demand stronger confirmation",
@@ -138,7 +139,7 @@ class TemplateManager:
         if safe_mae_pct > 0:
             safe_mae_line = f"\n- **Safe Drawdown**: Historical winning trades survived up to {safe_mae_pct*100:.2f}% drawdown. Ensure stop isn't too tight."
             
-        response_template = f'''RESPONSE FORMAT:
+        response_template = f'''## Response Format
 
 Structure your analysis before JSON:
 1. **MARKET STRUCTURE**: Current phase and trend state

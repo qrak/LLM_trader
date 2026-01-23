@@ -56,6 +56,8 @@ candle_limit = 999
 ai_chart_candle_limit = 150
 # Master switch to enable or disable the Discord bot integration
 discord_bot = false
+# Whether to include project description in coin details (useful for unknown tokens)
+include_coin_description = false
 
 [debug]
 # Save generated chart images to disk for debugging purposes
