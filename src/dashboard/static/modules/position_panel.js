@@ -152,10 +152,47 @@ function calculateGaugePosition(position, currentPrice) {
     const sl = position.stop_loss;
     const tp = position.take_profit;
     const entry = position.entry_price;
-    const range = tp - sl;
-    if (range === 0) return 50;
-    const pos = ((currentPrice - sl) / range) * 100;
-    return Math.max(0, Math.min(100, pos));
+    const direction = position.direction;
+
+    // Handle invalid range
+    if (tp === sl) return 50;
+
+    // Fix entry at 50%
+    if (currentPrice === entry) return 50;
+
+    // The gauge logic depends on direction for SL/TP relationship
+    // For LONG: SL < Entry < TP
+    // For SHORT: TP < Entry < SL
+    
+    if (direction === 'LONG') {
+        if (currentPrice < entry) {
+            // Scale in [0, 50] range between SL and Entry
+            const range = entry - sl;
+            if (range <= 0) return 0;
+            const pos = ((currentPrice - sl) / range) * 50;
+            return Math.max(0, Math.min(50, pos));
+        } else {
+            // Scale in [50, 100] range between Entry and TP
+            const range = tp - entry;
+            if (range <= 0) return 100;
+            const pos = 50 + ((currentPrice - entry) / range) * 50;
+            return Math.max(50, Math.min(100, pos));
+        }
+    } else { // SHORT
+        if (currentPrice > entry) {
+            // Scale in [0, 50] range between SL and Entry (SL is higher in SHORT)
+            const range = sl - entry;
+            if (range <= 0) return 0;
+            const pos = ((sl - currentPrice) / range) * 50;
+            return Math.max(0, Math.min(50, pos));
+        } else {
+            // Scale in [50, 100] range between Entry and TP (TP is lower in SHORT)
+            const range = entry - tp;
+            if (range <= 0) return 100;
+            const pos = 50 + ((entry - currentPrice) / range) * 50;
+            return Math.max(50, Math.min(100, pos));
+        }
+    }
 }
 
 /**

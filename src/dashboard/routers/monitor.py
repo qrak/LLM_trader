@@ -76,24 +76,28 @@ async def get_system_prompt(request: Request) -> Dict[str, Any]:
 
 
 @router.get("/costs")
-async def get_api_costs() -> Dict[str, Any]:
-    """Get current API cost tracking data from persistent storage."""
+async def get_api_costs(request: Request) -> Dict[str, Any]:
+    """Get current API cost tracking data."""
+    dashboard_state = request.app.state.dashboard_state
+    cached = dashboard_state.get_cached("costs", ttl_seconds=30.0)
+    if cached:
+        return cached
     from src.utils.token_counter import CostStorage
     storage = CostStorage()
     openrouter_cost = storage.get_provider_costs("openrouter").total_cost
     google_cost = storage.get_provider_costs("google").total_cost
-    lmstudio_cost = storage.get_provider_costs("lmstudio").total_cost
-    total = openrouter_cost + google_cost + lmstudio_cost
-    return {
+    total = openrouter_cost + google_cost
+    result = {
         "costs_by_provider": {
             "openrouter": openrouter_cost,
-            "google": google_cost,
-            "lmstudio": lmstudio_cost
+            "google": google_cost
         },
         "total_session_cost": total,
         "last_request_cost": None,
         "formatted_total": f"${total:.6f}" if total > 0 else "Free"
     }
+    dashboard_state.set_cached("costs", result)
+    return result
 
 
 

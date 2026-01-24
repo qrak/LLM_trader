@@ -17,15 +17,20 @@ class DashboardState:
     last_analysis_time: Optional[datetime] = None
     current_position: Optional[Dict[str, Any]] = None
     current_price: Optional[float] = None
-    api_costs: Dict[str, float] = field(default_factory=lambda: {"openrouter": 0.0, "google": 0.0, "lmstudio": 0.0})
+    api_costs: Dict[str, float] = field(default_factory=lambda: {"openrouter": 0.0, "google": 0.0})
     last_request_cost: Optional[float] = None
     cached_statistics: Optional[Dict[str, Any]] = None
     cached_trade_history: Optional[list] = None
     cached_news: Optional[list] = None
     cached_last_response: Optional[Dict[str, Any]] = None
-    cached_brain_status: Optional[Dict[str, Any]] = None
-    cached_performance_history: Optional[Dict[str, Any]] = None
-    cache_timestamps: Dict[str, float] = field(default_factory=dict)
+    cached_brain_status: Optional[dict[str, Any]] = None
+    cached_performance_history: Optional[dict[str, Any]] = None
+    cached_memory: Optional[dict[str, Any]] = None
+    cached_rules: Optional[list[dict[str, Any]]] = None
+    cached_vectors: Optional[dict[str, Any]] = None
+    cached_position: Optional[dict[str, Any]] = None
+    cached_costs: Optional[dict[str, Any]] = None
+    cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
     async def update_price(self, price: float) -> None:
@@ -62,7 +67,7 @@ class DashboardState:
     async def reset_api_costs(self) -> None:
         """Reset all API costs to zero."""
         async with self._lock:
-            self.api_costs = {"openrouter": 0.0, "google": 0.0, "lmstudio": 0.0}
+            self.api_costs = {"openrouter": 0.0, "google": 0.0}
             self.last_request_cost = None
         await self._broadcast({"type": "cost_reset", "total": self.api_costs})
 

@@ -78,8 +78,12 @@ class DashboardServer:
             )
             response.headers["Content-Security-Policy"] = csp
             path = request.url.path
-            if path.endswith(('.css', '.js')):
+            if path.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico')):
                 response.headers["Cache-Control"] = "public, max-age=86400"
+            elif path.startswith('/api/'):
+                # Most API data changes every ~60s due to internal TTL.
+                # Setting edge cache to 30s to balance freshness and hit ratio.
+                response.headers["Cache-Control"] = "public, max-age=30"
             elif path.endswith('.html') or path == '/':
                 response.headers["Cache-Control"] = "public, max-age=300"
             return response
