@@ -172,105 +172,38 @@ export async function updatePerformanceData() {
                     // Only add markers for trade entry/exit actions
                     if (isBuy || isSell || isCloseLong || isCloseShort || isGenericClose) {
                         let color = '#8b949e';
-                        let label = action;
+                        let symbol = 'circle';
+                        let markerSize = 6;
+                        let labelText = '';
 
-                        // Check current fullscreen state for scaling
-                        const isFullscreen = document.getElementById('fullscreen-modal')?.classList.contains('active');
-                        const scale = isFullscreen ? 1.3 : 1.0;
-                        // Reduced sizes as requested
-                        const fontSize = isFullscreen ? '13px' : '11px';
-                        const borderRadius = isFullscreen ? 5 : 3;
-                        const markerSize = isFullscreen ? 8 : 5;
-                        
                         if (isBuy) {
-                            color = '#238636';  // Green - open LONG
-                            label = '▲ LONG';
+                            color = '#00ff9d'; // Vibrant entry green
+                            symbol = 'rect'; // Triangle effectively via shape
+                            markerSize = 8;
                         } else if (isSell) {
-                            color = '#1f6feb';  // Blue - open SHORT
-                            label = '▼ SHORT';
-                        } else if (isCloseLong) {
-                            color = '#f85149';  // Red - close LONG
-                            label = '✕ CLOSE';
-                        } else if (isCloseShort) {
-                            color = '#a371f7';  // Purple - close SHORT
-                            label = '✓ CLOSE';
-                        } else if (isGenericClose) {
-                            // Legacy compatibility
-                            color = '#f85149';
-                            label = '✕ CLOSE';
+                            color = '#1f6feb'; // Entry blue
+                            symbol = 'rect';
+                            markerSize = 8;
+                        } else {
+                            color = '#f85149'; // Exit red
+                            symbol = 'circle';
+                            markerSize = 5;
                         }
-                        
-                        // Smart Collision Detection Logic
-                        // Instead of just toggling, we check multiple vertical levels
-                        // Base offline levels relative to point: [Top-Close, Top-Far, Bottom-Close, Bottom-Far, Top-VeryFar]
-                        // Offsets are scaled by the current view scale
-                        const baseOffsets = [-30, -60, 40, 70, -90]; 
-                        const levels = baseOffsets.map(o => o * scale);
-                        let chosenLevel = 0;
-                        
-                        // Simple grid-based collision check
-                        // We map time to "slots" to check for horizontal proximity
-                        // Slot width is roughly 2 hours in ms
-                        const SLOT_WIDTH_MS = 2 * 60 * 60 * 1000;
-                        const timeSlot = Math.floor(time / SLOT_WIDTH_MS);
-                        
-                        // Check which level is free in this time slot and adjacent slots
-                        // We look at occupied levels in [slot-1, slot, slot+1]
-                        const occupiedLevels = new Set();
-                        
-                        // Check recent annotations
-                        annotations.forEach(ann => {
-                            const annTime = ann.x;
-                            const annSlot = Math.floor(annTime / SLOT_WIDTH_MS);
-                            if (Math.abs(annSlot - timeSlot) <= 1) {
-                                // This annotation is close horizontally, mark its level as occupied
-                                if (ann._level !== undefined) {
-                                    occupiedLevels.add(ann._level);
-                                }
-                            }
-                        });
-                        
-                        // Find first free level
-                        for (let i = 0; i < levels.length; i++) {
-                            if (!occupiedLevels.has(i)) {
-                                chosenLevel = i;
-                                break;
-                            }
-                            // If all levels full, default to last level (highest stack)
-                            if (i === levels.length - 1) chosenLevel = i;
-                        }
-                        
-                        const yOffset = levels[chosenLevel];
 
                         annotations.push({
                             x: time,
                             y: point.value,
-                            // Store internal level for collision detection of subsequent points
-                            _level: chosenLevel, 
                             marker: {
                                 size: markerSize,
                                 fillColor: color,
                                 strokeColor: '#fff',
-                                strokeWidth: 2
+                                strokeWidth: 1.5,
+                                shape: symbol === 'rect' ? 'square' : 'circle' 
                             },
                             label: {
-                                text: label,
-                                style: {
-                                    color: '#fff',
-                                    background: color,
-                                    fontSize: fontSize,
-                                    fontWeight: '700',
-                                    padding: { 
-                                        left: 6 * scale, 
-                                        right: 6 * scale, 
-                                        top: 3 * scale, 
-                                        bottom: 3 * scale 
-                                    },
-                                    fontFamily: 'Inter, sans-serif'
-                                },
-                                offsetY: yOffset,
-                                borderRadius: borderRadius,
-                                textAnchor: 'middle'
+                                text: '', // Removing bulky text labels
+                                borderWidth: 0,
+                                style: { background: 'transparent' }
                             }
                         });
                     }

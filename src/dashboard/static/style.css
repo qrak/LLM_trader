@@ -534,16 +534,7 @@ button:hover {
     min-height: 0;
 }
 
-.code-block {
-    background: #000;
-    border: 1px solid var(--border-subtle);
-    padding: 15px;
-    border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    overflow-y: auto;
-    flex: 1;
-}
+
 
 .dot {
     display: inline-block;
@@ -901,14 +892,7 @@ button:hover {
 }
 
 /* Prompt Content */
-.prompt-content {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    color: var(--text-muted);
-    overflow-y: auto;
-}
+
 .meta-info {
     font-size: 10px;
     color: var(--text-dim);

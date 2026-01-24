@@ -45,7 +45,8 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
                         equity_curve.append({
                             "time": ts,
                             "value": round(running_capital, 2),
-                            "action": action
+                            "action": action,
+                            "price": trade.get("price")
                         })
                     except (ValueError, IndexError):
                         pass
@@ -53,13 +54,15 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
                     equity_curve.append({
                         "time": ts,
                         "value": round(running_capital, 2),
-                        "action": action
+                        "action": action,
+                        "price": trade.get("price")
                     })
                 elif action == "SELL":
                     equity_curve.append({
                         "time": ts,
                         "value": round(running_capital, 2),
-                        "action": action
+                        "action": action,
+                        "price": trade.get("price")
                     })
         except Exception:
             logger.error("Failed to process trade history", exc_info=True)
