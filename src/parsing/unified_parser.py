@@ -49,19 +49,12 @@ class UnifiedParser:
             
             first_brace = raw_text.find('{')
             if first_brace != -1:
-                depth = 0
-                for i in range(first_brace, len(raw_text)):
-                    if raw_text[i] == '{':
-                        depth += 1
-                    elif raw_text[i] == '}':
-                        depth -= 1
-                        if depth == 0:
-                            try:
-                                result = json.loads(raw_text[first_brace:i+1])
-                                return self._normalize_numeric_fields(result)
-                            except json.JSONDecodeError:
-                                pass
-                            break
+                try:
+                    decoder = json.JSONDecoder()
+                    result, _ = decoder.raw_decode(raw_text, first_brace)
+                    return self._normalize_numeric_fields(result)
+                except json.JSONDecodeError:
+                    pass
             
             self.logger.warning(f"Unable to parse AI response, using fallback. Preview: {raw_text[:200]}")
             return self._create_fallback_response(raw_text)

@@ -21,6 +21,7 @@ class LMStudioClient(BaseAIClient):
         super().__init__(logger)
         self.base_url = base_url
         self._client: Optional[lms.AsyncClient] = None
+        self._cached_model: Optional[str] = None
 
     async def _initialize_client(self) -> None:
         """Initialize the LM Studio SDK client."""
@@ -40,6 +41,19 @@ class LMStudioClient(BaseAIClient):
             api_host = api_host.split("/")[0]
         return api_host
 
+    async def _get_model_or_auto_select(self, client: lms.AsyncClient, model: str) -> str:
+        """Get model name or auto-select from loaded models (cached)."""
+        if model:
+            return model
+        if self._cached_model:
+            return self._cached_model
+        loaded_models = await client.llm.list_loaded()
+        if loaded_models:
+            self._cached_model = loaded_models[0].identifier
+            self.logger.info(f"Auto-selected loaded model: {self._cached_model}")
+            return self._cached_model
+        raise ValueError("No model specified and no models loaded in LM Studio")
+
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
         self, model: str, messages: list, model_config: Dict[str, Any]
@@ -48,14 +62,8 @@ class LMStudioClient(BaseAIClient):
         api_host = self._get_api_host()
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
+                model = await self._get_model_or_auto_select(client, model)
                 self.logger.debug(f"Sending request to LM Studio SDK with model: {model} (host={api_host})")
-                if not model:
-                    loaded_models = await client.llm.list_loaded()
-                    if loaded_models:
-                        model = loaded_models[0].identifier
-                        self.logger.info(f"Auto-selected loaded model: {model}")
-                    else:
-                        raise ValueError("No model specified and no models loaded in LM Studio")
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -103,14 +111,8 @@ class LMStudioClient(BaseAIClient):
         try:
             img_data = self.process_chart_image(chart_image)
             async with lms.AsyncClient(api_host=api_host) as client:
+                model = await self._get_model_or_auto_select(client, model)
                 self.logger.debug(f"Sending chart analysis request to LM Studio SDK with model: {model} (host={api_host})")
-                if not model:
-                    loaded_models = await client.llm.list_loaded()
-                    if loaded_models:
-                        model = loaded_models[0].identifier
-                        self.logger.info(f"Auto-selected loaded model: {model}")
-                    else:
-                        raise ValueError("No model specified and no models loaded in LM Studio")
                 image_handle = await client.files.prepare_image(img_data)
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
@@ -147,14 +149,8 @@ class LMStudioClient(BaseAIClient):
         api_host = self._get_api_host()
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
+                model = await self._get_model_or_auto_select(client, model)
                 self.logger.debug(f"Sending streaming request to LM Studio SDK with model: {model} (host={api_host})")
-                if not model:
-                    loaded_models = await client.llm.list_loaded()
-                    if loaded_models:
-                        model = loaded_models[0].identifier
-                        self.logger.info(f"Auto-selected loaded model: {model}")
-                    else:
-                        raise ValueError("No model specified and no models loaded in LM Studio")
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:

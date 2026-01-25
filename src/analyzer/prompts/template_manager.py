@@ -72,6 +72,13 @@ class TemplateManager:
             "- Confidence must match signal strength: >70 required for trades (strong setups only).",
             "- MAXIMIZE PROFIT: Learn from past trades, avoid repeated mistakes, improve win rate.",
             "",
+            "## Technical Terminology (CRITICAL)",
+            "- **Golden Cross**: ONLY when 50 SMA crosses ABOVE 200 SMA (major bullish event, rare)",
+            "- **Death Cross**: ONLY when 50 SMA crosses BELOW 200 SMA (major bearish event, rare)",
+            "- **50>200 / 50<200**: Current SMA relationship shown in prompt (NOT a crossover event)",
+            "- **20 SMA crossing 50 SMA**: Short-term signal only, NOT a Golden/Death Cross",
+            "- Do NOT conflate short-term (20/50) crossovers with long-term (50/200) Golden/Death Crosses",
+            "",
         ])
         
         # Add performance context if available

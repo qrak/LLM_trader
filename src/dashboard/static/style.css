@@ -1260,3 +1260,23 @@ button:hover {
     color: var(--text-muted);
     font-weight: 500;
 }
+
+/* Focus Indicators (WCAG 2.1 AA - 2.4.7 Focus Visible) */
+:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+button:focus-visible,
+.nav-item:focus-visible,
+.toolbar-btn:focus-visible,
+.panel-btn:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(0, 240, 255, 0.2);
+}
+
+a:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}

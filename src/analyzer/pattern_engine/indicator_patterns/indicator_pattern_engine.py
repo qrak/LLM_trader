@@ -779,11 +779,12 @@ class IndicatorPatternEngine:
                     }
                 })
         
-        # Short-term crossover (20 SMA vs 50 SMA)
+        # Short-term crossover (20 SMA vs 50 SMA) - NOT a Golden/Death Cross
+        # Golden/Death Cross specifically refers to 50 vs 200 SMA crossovers
         if sma_20_array is not None and sma_50_array is not None:
             found, is_bullish, periods_ago, sma_20_val, sma_50_val = detect_short_term_crossover_numba(sma_20_array, sma_50_array)
             if found:
-                cross_type = 'bullish' if is_bullish else 'bearish'
+                cross_type = 'bull' if is_bullish else 'bear'
                 pattern_index = len(sma_20_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
                 patterns.append({
