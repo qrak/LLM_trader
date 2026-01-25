@@ -17,26 +17,37 @@ if TYPE_CHECKING:
 class DiscordFileHandler:
     """Simplified handler for message tracking and automatic deletion with specialized components."""
     
-    def __init__(self, bot, logger, config: "ConfigProtocol", tracking_file="data/tracked_messages.json", cleanup_interval=7200):
-        """Initialize DiscordFileHandler with bot, logger, and config.
+    def __init__(
+        self, 
+        bot, 
+        logger, 
+        config: "ConfigProtocol", 
+        persistence: TrackingPersistence,
+        tracker: MessageTracker,
+        scheduler: CleanupScheduler,
+        deleter: MessageDeleter
+    ):
+        """Initialize DiscordFileHandler with injected dependencies.
         
         Args:
             bot: Discord bot instance
             logger: Logger instance
             config: ConfigProtocol instance for message expiry settings
-            tracking_file: Path to tracking persistence file
-            cleanup_interval: Cleanup interval in seconds
+            persistence: TrackingPersistence instance
+            tracker: MessageTracker instance
+            scheduler: CleanupScheduler instance
+            deleter: MessageDeleter instance
         """
         self.bot = bot
         self.logger = logger
         self.config = config
         self.is_initialized = False
         
-        # Initialize specialized components
-        self.persistence = TrackingPersistence(tracking_file, logger)
-        self.tracker = MessageTracker(self.persistence, logger, config)
-        self.scheduler = CleanupScheduler(cleanup_interval, logger)
-        self.deleter = MessageDeleter(bot, logger)
+        # Injected specialized components
+        self.persistence = persistence
+        self.tracker = tracker
+        self.scheduler = scheduler
+        self.deleter = deleter
     
     def initialize(self):
         """Initialize the file handler and start background tasks."""

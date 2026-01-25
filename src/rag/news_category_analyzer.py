@@ -10,8 +10,7 @@ class NewsCategoryAnalyzer:
     """Handles category analysis from news articles and content."""
     
     def __init__(self, logger: Logger, category_processor=None, unified_parser=None):
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+
         self.logger = logger
         self.category_processor = category_processor
         self.parser = unified_parser

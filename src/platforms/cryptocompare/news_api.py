@@ -25,17 +25,21 @@ class CryptoCompareNewsAPI:
         logger: Logger,
         config: "ConfigProtocol",
         cache_dir: str = 'data/news_cache',
-        update_interval_hours: int = 1
+        update_interval_hours: int = 1,
+        client: Optional[CryptoCompareNewsClient] = None,
+        cache: Optional[NewsCache] = None,
+        processor: Optional[NewsProcessor] = None,
+        news_filter: Optional[NewsFilter] = None
     ) -> None:
         self.logger = logger
         self.config = config
         self.update_interval = timedelta(hours=update_interval_hours)
         
-        # Initialize specialized components
-        self.client = CryptoCompareNewsClient(logger, config)
-        self.cache = NewsCache(cache_dir, logger)
-        self.processor = NewsProcessor(logger)
-        self.filter = NewsFilter(logger)
+        # Use specialized components
+        self.client = client
+        self.cache = cache
+        self.processor = processor
+        self.filter = news_filter
     
     async def initialize(self) -> None:
         """Initialize the news API and load cached data"""

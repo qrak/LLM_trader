@@ -17,8 +17,6 @@ class TechnicalCalculator:
     
     def __init__(self, logger: Optional[Logger] = None, format_utils=None, ti_factory: "TechnicalIndicatorsFactory" = None):
         """Initialize the technical indicator calculator"""
-        if ti_factory is None:
-            raise ValueError("ti_factory is required - must be injected from app.py")
         self.logger = logger
         self.format_utils = format_utils
         self.ti_factory = ti_factory

@@ -14,8 +14,7 @@ class NewsManager:
     
     def __init__(self, logger: Logger, file_handler: RagFileHandler, 
                  news_api=None, categories_api=None, session=None, article_processor=None):
-        if article_processor is None:
-            raise ValueError("article_processor is required - must be injected from app.py")
+
         self.logger = logger
         self.file_handler = file_handler
         self.news_api = news_api

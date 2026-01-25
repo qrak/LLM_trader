@@ -24,6 +24,8 @@ class CryptoCompareCategoriesAPI:
         self,
         logger: Logger,
         config: "ConfigProtocol",
+        data_processor: CryptoCompareDataProcessor,
+        collision_resolver: CategoryCollisionResolver,
         data_dir: str = 'data',
         categories_update_interval_hours: int = 24
     ) -> None:
@@ -36,9 +38,9 @@ class CryptoCompareCategoriesAPI:
         self.category_word_map: Dict[str, str] = {}
         self.categories_file = os.path.join(data_dir, "categories.json")
         
-        # Initialize data processor and collision resolver
-        self.data_processor = CryptoCompareDataProcessor(logger)
-        self.collision_resolver = CategoryCollisionResolver()
+        # Injected data processor and collision resolver
+        self.data_processor = data_processor
+        self.collision_resolver = collision_resolver
         
         # Ensure data directory exists
         os.makedirs(data_dir, exist_ok=True)

@@ -14,8 +14,6 @@ class AnalysisResultProcessor:
     
     def __init__(self, model_manager: "ModelManagerProtocol", logger: Logger, unified_parser=None):
         """Initialize the processor"""
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser

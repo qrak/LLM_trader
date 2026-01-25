@@ -19,19 +19,29 @@ from .market_components import (
 class MarketDataManager:
     """Manages cryptocurrency market overview data and operations."""
     
-    def __init__(self, logger: Logger, file_handler: RagFileHandler, 
-                 coingecko_api=None, market_api=None, exchange_manager=None, unified_parser=None, defillama_client=None):
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+    def __init__(
+        self, 
+        logger: Logger, 
+        file_handler: RagFileHandler, 
+        coingecko_api=None, 
+        market_api=None, 
+        exchange_manager=None, 
+        unified_parser=None, 
+        defillama_client=None,
+        fetcher: Optional[MarketDataFetcher] = None,
+        processor: Optional[MarketDataProcessor] = None,
+        cache: Optional[MarketDataCache] = None,
+        overview_builder: Optional[MarketOverviewBuilder] = None
+    ):
         self.logger = logger
         self.file_handler = file_handler
         self.unified_parser = unified_parser
         
         # Initialize specialized components
-        self.fetcher = MarketDataFetcher(logger, coingecko_api, exchange_manager, market_api, defillama_client)
-        self.processor = MarketDataProcessor(logger, unified_parser=unified_parser)
-        self.cache = MarketDataCache(logger, file_handler)
-        self.overview_builder = MarketOverviewBuilder(logger, self.processor)
+        self.fetcher = fetcher
+        self.processor = processor
+        self.cache = cache
+        self.overview_builder = overview_builder
         
         self.coingecko_api = coingecko_api
         self.market_api = market_api

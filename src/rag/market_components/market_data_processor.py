@@ -13,8 +13,7 @@ class MarketDataProcessor:
     def __init__(self, logger: Logger, unified_parser=None, format_utils=None):
         if format_utils is None:
             format_utils = unified_parser.format_utils if unified_parser else None
-        if format_utils is None:
-            raise ValueError("format_utils is required")
+
         self.logger = logger
         self.format_utils = format_utils
     

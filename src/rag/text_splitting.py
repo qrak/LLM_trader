@@ -31,15 +31,29 @@ class SentenceSplitter:
             self.__class__._initialized = True
             
     def _initialize_model(self):
-        """Initialize the SaT model."""
+        """Initialize the SaT model with GPU support if available."""
         self.logger.info("Initializing SentenceSplitter (NLP model)...")
         start_time = time.perf_counter()
         try:
+            import torch
             from wtpsplit import SaT
+            
+            # Detect device
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            if device == "cuda":
+                self.logger.info("CUDA detected, using GPU for SentenceSplitter")
+            else:
+                self.logger.info("CUDA not available (or torch-cpu installed), using CPU for SentenceSplitter")
+
             # Use the newer SaT model
             self._model = SaT("sat-3l-sm")
+            
+            # Move to device if possible
+            if hasattr(self._model, "to"):
+                self._model.to(device)
+            
             duration = time.perf_counter() - start_time
-            self.logger.info(f"SentenceSplitter initialized took {duration:.2f} seconds")
+            self.logger.info(f"SentenceSplitter initialized on {device} took {duration:.2f} seconds")
         except ImportError:
             self.logger.warning("wtpsplit or torch not available, utilizing regex fallback")
             self._model = None

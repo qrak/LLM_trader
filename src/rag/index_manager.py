@@ -14,8 +14,7 @@ class IndexManager:
     """Manages search indices for efficient article lookup."""
     
     def __init__(self, logger: Logger, article_processor=None):
-        if article_processor is None:
-            raise ValueError("article_processor is required - must be injected from app.py")
+
         self.logger = logger
         self.article_processor = article_processor
         

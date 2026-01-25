@@ -18,8 +18,7 @@ class ContextBuilder:
     """Builds analysis context from various data sources."""
     
     def __init__(self, logger: Logger, token_counter: TokenCounter, article_processor=None, sentence_splitter: Optional[SentenceSplitter] = None):
-        if article_processor is None:
-            raise ValueError("article_processor is required - must be injected from app.py")
+
         self.logger = logger
         self.config = None  # Will be set via setter or initialization update
         self.token_counter = token_counter

@@ -10,10 +10,15 @@ from src.utils.format_utils import timestamps_from_ms_array
 
 class PatternAnalyzer:
     
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(
+        self, 
+        pattern_engine: PatternEngine,
+        indicator_pattern_engine: IndicatorPatternEngine,
+        logger: Optional[Logger] = None
+    ):
         self.logger = logger
-        self.pattern_engine = PatternEngine(lookback=5, lookahead=5)
-        self.indicator_pattern_engine = IndicatorPatternEngine()
+        self.pattern_engine = pattern_engine
+        self.indicator_pattern_engine = indicator_pattern_engine
         self._warmed_up = False
     
     @profile_performance

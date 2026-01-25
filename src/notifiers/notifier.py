@@ -23,7 +23,7 @@ from src.utils.decorators import retry_async
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
+    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
         """Initialize DiscordNotifier.
 
         Args:
@@ -31,24 +31,19 @@ class DiscordNotifier(BaseNotifier):
             config: ConfigProtocol instance for Discord settings
             unified_parser: UnifiedParser for JSON extraction (DRY)
             formatter: FormatUtils instance for value formatting
+            bot: Injected Discord client instance
+            file_handler: Injected DiscordFileHandler instance
         """
-        if config is None:
-            raise ValueError("config is a required parameter and cannot be None")
+
 
         super().__init__(logger, config, unified_parser, formatter)
         self.session: Optional[ClientSession] = None
         self._ready_event = asyncio.Event()
 
-        intents = discord.Intents.default()
-        intents.message_content = False
-        intents.reactions = False
-        intents.typing = False
-        intents.presences = False
-
-        self.bot = discord.Client(intents=intents)
+        self.bot = bot
         self.bot.discord_notifier = self
         self.bot.event(self.on_ready)
-        self.file_handler = DiscordFileHandler(self.bot, self.logger, self.config)
+        self.file_handler = file_handler
 
 
     async def on_ready(self):

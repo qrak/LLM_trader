@@ -48,24 +48,7 @@ class RagEngine:
             news_category_analyzer: NewsCategoryAnalyzer instance (injected from app.py)
             context_builder: ContextBuilder instance (injected from app.py)
         """
-        if file_handler is None:
-            raise ValueError("file_handler is required - must be injected from app.py")
-        if news_manager is None:
-            raise ValueError("news_manager is required - must be injected from app.py")
-        if market_data_manager is None:
-            raise ValueError("market_data_manager is required - must be injected from app.py")
-        if index_manager is None:
-            raise ValueError("index_manager is required - must be injected from app.py")
-        if category_fetcher is None:
-            raise ValueError("category_fetcher is required - must be injected from app.py")
-        if category_processor is None:
-            raise ValueError("category_processor is required - must be injected from app.py")
-        if ticker_manager is None:
-            raise ValueError("ticker_manager is required - must be injected from app.py")
-        if news_category_analyzer is None:
-            raise ValueError("news_category_analyzer is required - must be injected from app.py")
-        if context_builder is None:
-            raise ValueError("context_builder is required - must be injected from app.py")
+
         
         self.logger = logger
         self.config = config
@@ -103,14 +86,6 @@ class RagEngine:
     async def initialize(self) -> None:
         """Initialize RAG engine and load cached data"""
         try:
-            # Initialize API clients if they weren't provided
-            if self.coingecko_api is None:
-                self.coingecko_api = CoinGeckoAPI(logger=self.logger)
-                await self.coingecko_api.initialize()
-                # Update market data manager with the API
-                self.market_data_manager.coingecko_api = self.coingecko_api
-                
-            
             # Load known tickers
             await self.ticker_manager.load_known_tickers()
 
