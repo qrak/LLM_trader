@@ -4,7 +4,6 @@ from typing import Dict, Any, Optional
 from src.trading.dataclasses import Position, RiskAssessment
 from src.logger.logger import Logger
 
-
 class PositionFactory:
     """Factory for creating and updating Position objects."""
     

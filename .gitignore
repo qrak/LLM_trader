@@ -34,9 +34,7 @@ ENV/
 *.swp
 *.swo
 .devcontainer/
-
-
-
+.claude/
 # Testing
 .pytest_cache/
 .coverage
