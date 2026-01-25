@@ -472,14 +472,19 @@ class TechnicalFormatter:
             if not sma_parts:
                 return ""
             
-            # Detect crossovers
+            # Detect 50/200 SMA relationship (macro trend structure)
+            # NOTE: "Golden Cross" = 50 crossing ABOVE 200 (event), "Death Cross" = 50 crossing BELOW 200 (event)
+            # Here we show CURRENT STATE, not crossover events
             cross_signal = ""
             if sma_50_val is not None and sma_200_val is not None:
+                pct_diff = ((sma_50_val - sma_200_val) / sma_200_val) * 100
                 if sma_50_val > sma_200_val:
-                    cross_signal = " | Golden×"
-                elif sma_50_val < sma_200_val:
-                    cross_signal = " | Death×"
-            
+                    # 50 is ABOVE 200 = bullish macro structure (Golden Cross configuration)
+                    cross_signal = f" | 50>200 (+{pct_diff:.1f}%)"
+                else:
+                    # 50 is BELOW 200 = bearish macro structure (Death Cross configuration)
+                    cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
+
             return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
         except Exception as e:
             if self.logger:
