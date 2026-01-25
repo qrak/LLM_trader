@@ -63,10 +63,8 @@ class AnalysisEngine:
             data_fetcher_factory: DataFetcherFactory instance (injected from app.py)
         """
         self.logger = logger
-        
+
         self.config = config
-
-
         # Basic properties
         self.exchange = None
         self.symbol = None
@@ -90,9 +88,6 @@ class AnalysisEngine:
         except Exception as e:
             self.logger.exception(f"Error loading configuration values: {e}.")
             raise
-
-
-
         # Store injected components
         self.model_manager = model_manager
         self.technical_calculator = technical_calculator

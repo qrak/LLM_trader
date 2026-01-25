@@ -27,7 +27,6 @@ from src.app import CryptoTradingBot
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
-from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.cryptocompare.news_api import CryptoCompareNewsAPI
@@ -220,7 +219,7 @@ class CompositionRoot:
         # Initialize Dashboard Server
         dashboard_server = DashboardServer(
             brain_service=trading['brain_service'],
-            vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] and hasattr(trading['brain_service'], 'vector_memory') else None,
+            vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
             analysis_engine=analyzer['engine'],
             config=self.config,
             logger=self.logger,
