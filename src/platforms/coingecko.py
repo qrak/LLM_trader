@@ -20,6 +20,7 @@ class CoinGeckoAPI:
     def __init__(
         self,
         logger: Logger,
+        cache_backend: Optional[SQLiteBackend] = None,
         cache_name: str = 'cache/coingecko_cache.db',
         cache_dir: str = 'data/market_data',
         expire_after: int = -1,
@@ -27,7 +28,7 @@ class CoinGeckoAPI:
         update_interval_hours: int = 24,
         global_api_url: str = 'https://api.coingecko.com/api/v3/global'
     ) -> None:
-        self.cache_backend = SQLiteBackend(cache_name=cache_name, expire_after=expire_after)
+        self.cache_backend = cache_backend
         self.session: Optional[CachedSession] = None
         self.symbol_to_id_map: Dict[str, List[Dict[str, str]]] = {}
         self.logger = logger

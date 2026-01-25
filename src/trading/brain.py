@@ -27,32 +27,22 @@ class TradingBrainService:
         self,
         logger: Logger,
         persistence: PersistenceManager,
+        vector_memory: VectorMemoryService,
         symbol: str = "BTC/USDC",
-        timeframe: str = "4h",
-        vector_memory: Optional[VectorMemoryService] = None
+        timeframe: str = "4h"
     ):
-        """Initialize trading brain service (vector-only mode).
+        """Initialize trading brain service.
 
         Args:
             logger: Logger instance
-            persistence: Persistence service (used for data_dir path)
-            symbol: Trading symbol (e.g., "BTC/USDC") for symbol-specific learning
-            timeframe: Timeframe (e.g., "4h") for timeframe-specific learning
-            vector_memory: Optional injected vector memory (for testing)
+            persistence: Persistence service
+            vector_memory: Injected vector memory service (required)
+            symbol: Trading symbol
+            timeframe: Timeframe
         """
         self.logger = logger
         self.persistence = persistence
-
-        if vector_memory:
-            self.vector_memory = vector_memory
-        else:
-            # Generate symbol-specific brain directory: BTC/USDC + 4h -> brain_BTC_USDC_4h
-            safe_symbol = symbol.replace("/", "_").replace("-", "_")
-            brain_path = persistence.data_dir / f"brain_{safe_symbol}_{timeframe}"
-            self.vector_memory = VectorMemoryService(
-                logger=logger,
-                data_dir=str(brain_path)
-            )
+        self.vector_memory = vector_memory
 
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}

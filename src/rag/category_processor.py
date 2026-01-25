@@ -9,7 +9,7 @@ from src.rag.collision_resolver import CategoryCollisionResolver
 class CategoryProcessor:
     """Handles processing and normalization of cryptocurrency categories."""
     
-    def __init__(self, logger: Logger, file_handler=None):
+    def __init__(self, logger: Logger, collision_resolver: CategoryCollisionResolver, file_handler=None):
         self.logger = logger
         self.file_handler = file_handler
         
@@ -25,13 +25,9 @@ class CategoryProcessor:
         self.important_categories: Set[str] = self._load_important_categories(rag_config)
         self.generic_priorities: Dict[str, int] = self._load_generic_priorities(rag_config)
         
-        # Initialize collision resolver with category sets and priorities
-        self.collision_resolver = CategoryCollisionResolver(
-            important_categories=self.important_categories,
-            ticker_categories=self.ticker_categories,
-            general_categories=self.general_categories,
-            generic_priorities=self.generic_priorities
-        )
+        # Injected collision resolver
+        self.collision_resolver = collision_resolver
+        self._update_collision_resolver()
     
     def _load_rag_config(self) -> Dict:
         """Load RAG priorities config once for reuse."""

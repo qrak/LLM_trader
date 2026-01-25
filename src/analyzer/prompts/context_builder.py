@@ -4,11 +4,10 @@ Handles building context sections like trading context, sentiment, market data, 
 """
 
 import numpy as np
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 from src.logger.logger import Logger
-from src.utils.timeframe_validator import TimeframeValidator
 from ..formatters import MarketFormatter, MarketPeriodFormatter, LongTermFormatter
 
 
@@ -22,7 +21,8 @@ class ContextBuilder:
         format_utils=None,
         market_formatter: Optional[MarketFormatter] = None,
         period_formatter: Optional[MarketPeriodFormatter] = None,
-        long_term_formatter: Optional[LongTermFormatter] = None
+        long_term_formatter: Optional[LongTermFormatter] = None,
+        timeframe_validator: Any = None
     ):
         """Initialize the context builder.
         
@@ -33,6 +33,7 @@ class ContextBuilder:
             market_formatter: MarketFormatter instance (for coin details, ticker, etc.)
             period_formatter: MarketPeriodFormatter instance (for period metrics)
             long_term_formatter: LongTermFormatter instance (for long-term analysis)
+            timeframe_validator: TimeframeValidator instance (injected)
         """
         self.timeframe = timeframe
         self.logger = logger
@@ -40,6 +41,7 @@ class ContextBuilder:
         self.market_formatter = market_formatter
         self.period_formatter = period_formatter
         self.long_term_formatter = long_term_formatter
+        self.timeframe_validator = timeframe_validator
     
     def build_trading_context(self, context) -> str:
         """Build trading context section with current market information.
@@ -55,7 +57,11 @@ class ContextBuilder:
         
         # Create candle status message dynamically based on timeframe
         candle_status = ""
-        timeframe_minutes = TimeframeValidator.to_minutes(self.timeframe)
+        
+        # Calculate timeframe minutes using injected validator if available, else fallback
+        timeframe_minutes = 60
+        if self.timeframe_validator:
+            timeframe_minutes = self.timeframe_validator.to_minutes(self.timeframe)
         
         # Calculate time until next candle closes (for intraday timeframes)
         # Exchange candles align to UTC boundaries (00:00, 04:00, 08:00 UTC etc.)
@@ -78,16 +84,59 @@ class ContextBuilder:
         if day_of_week in ["Saturday", "Sunday"]:
              weekend_note = "\n        - WEEKEND MODE: Trading volume/liquidity is typically lower. Be cautious of fakeouts/manipulation."
 
+        # Get market milestones countdown
+        milestones = self._get_market_milestones(current_time)
+        
         trading_context = f"""
         ## Trading Context
         - Symbol: {context.symbol if hasattr(context, 'symbol') else 'BTC/USDT'}
         - Current Day: {day_of_week} (UTC)
         - Current Price: {context.current_price}
         - Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}
-        - Primary Timeframe: {self.timeframe}
-        - Analysis Includes: {analysis_timeframes}"""
+        - Primary Timeframe: {self.timeframe} ({timeframe_minutes} min/candle)
+        - Analysis Includes: {analysis_timeframes}
+        
+        ### Market Milestones (UTC)
+{milestones}"""
         
         return trading_context
+    
+    def _get_market_milestones(self, current_time: datetime) -> str:
+        """Calculate and format countdowns to major market milestones.
+        
+        Args:
+            current_time: Current time in UTC
+            
+        Returns:
+            str: Formatted milestones list
+        """
+        milestones = []
+        
+        def format_delta(delta: timedelta) -> str:
+            total_seconds = int(delta.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            return f"{hours}h {minutes}m"
+
+        # 1. Daily Close (00:00 UTC)
+        next_daily = (current_time + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        milestones.append(f"        - Daily Close: in {format_delta(next_daily - current_time)} (00:00 UTC)")
+
+        # 2. CME/Service Open (Sunday 22:00 UTC) - Show only on Sunday
+        if current_time.weekday() == 6: # Sunday
+            cme_open = current_time.replace(hour=22, minute=0, second=0, microsecond=0)
+            if current_time < cme_open:
+                milestones.append(f"        - CME/Service Open: in {format_delta(cme_open - current_time)} (Today 22:00 UTC)")
+            else:
+                milestones.append("        - CME/Service Open: Currently Active (since 22:00 UTC)")
+
+        # 3. Weekly Open (Monday 00:00 UTC) - Show on weekend
+        if current_time.weekday() >= 5: # Sat or Sun
+            days_until_monday = (7 - current_time.weekday()) % 7 or 7
+            next_weekly = (current_time + timedelta(days=days_until_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
+            milestones.append(f"        - Weekly Open: in {format_delta(next_weekly - current_time)} (Mon 00:00 UTC)")
+
+        return "\n".join(milestones) if milestones else "        - No major milestones within 24h"
     
     def build_sentiment_section(self, sentiment_data: Optional[Dict[str, Any]]) -> str:
         """Build sentiment analysis section.
@@ -128,7 +177,10 @@ class ContextBuilder:
         Returns:
             Dict mapping period names to candle counts needed (filters out periods smaller than timeframe)
         """
-        base_minutes = TimeframeValidator.to_minutes(self.timeframe)
+        # Default fallback
+        base_minutes = 60
+        if self.timeframe_validator:
+            base_minutes = self.timeframe_validator.to_minutes(self.timeframe)
         
         period_targets = {
             "4h": 4 * 60,      # 240 minutes
@@ -296,6 +348,12 @@ class ContextBuilder:
         ]
         
 
+        # Indicators that oscillate around zero (signs matter more than %, % can be misleading on zero-cross)
+        zero_cross_indicators = {
+            'macd_line', 'macd_hist', 'macd_signal', 'roc_14', 'cci', 'cmf', 
+            'trix', 'tsi', 'ppo', 'linreg_slope', 'coppock', 'kst'
+        }
+        
         changes = []
         for key, label in key_indicators:
             prev_val = previous_indicators.get(key)
@@ -306,9 +364,9 @@ class ContextBuilder:
                 continue
             
             # Handle array values (take last element)
-            if isinstance(prev_val, (list, tuple)):
+            if isinstance(prev_val, (list, tuple, np.ndarray)):
                 prev_val = prev_val[-1] if len(prev_val) > 0 else None
-            if isinstance(curr_val, (list, tuple)):
+            if isinstance(curr_val, (list, tuple, np.ndarray)):
                 curr_val = curr_val[-1] if len(curr_val) > 0 else None
             
             if prev_val is None or curr_val is None:
@@ -319,32 +377,56 @@ class ContextBuilder:
                 curr_val = float(curr_val)
                 
                 # Calculate change
-                if abs(prev_val) > 0.0001:  # Avoid division by tiny numbers
-                    change_pct = ((curr_val - prev_val) / abs(prev_val)) * 100
+                diff = curr_val - prev_val
+                abs_prev = abs(prev_val)
+                
+                # Skip if no meaningful change
+                if abs(diff) < 0.000001:
+                    continue
+                
+                # Handle zero-crossing oscillators or small basis values
+                is_zero_cross_type = key in zero_cross_indicators
+                crossed_zero = (prev_val * curr_val < 0)
+                
+                # Determine how to format the change
+                line = ""
+                arrow = "↑" if diff > 0 else "↓"
+                sign = "+" if diff > 0 else ""
+                
+                # Logic for display:
+                # 1. If it crossed zero, the percentage change is mathematically valid but semantically confusing
+                # 2. If the previous value is very small, the percentage change explodes (noise)
+                if (is_zero_cross_type and crossed_zero) or (abs_prev < 0.1 and is_zero_cross_type):
+                    change_desc = f"({arrow} zero-cross)" if crossed_zero else f"({arrow} Δ{diff:+.4f})"
+                    if abs(curr_val) >= 1:
+                        line = f"- {label}: {prev_val:.2f} → {curr_val:.2f} {change_desc}"
+                    else:
+                        line = f"- {label}: {prev_val:.4f} → {curr_val:.4f} {change_desc}"
+                elif abs_prev > 0.0001:
+                    change_pct = (diff / abs_prev) * 100
                     
+                    # Only show if change is significant (at least 1% or it's a zero-cross type with small basis)
                     if abs(change_pct) >= 1.0:
-                        arrow = "↑" if change_pct > 0 else "↓"
-                        sign = "+" if change_pct > 0 else ""
-                        
-                        # Format values appropriately
-                        line = ""
                         if abs(curr_val) >= 1:
                             line = f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)"
                         else:
                             line = f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)"
-                        
-                        changes.append(line)
-
+                else:
+                    # Tiny basis, just show delta
+                    line = f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} Δ{diff:+.4f})"
+                
+                if line:
+                    changes.append(line)
             except (ValueError, TypeError):
                 continue
         
         # If no significant changes were found, but we did process valid indicators
         if not changes:
-            lines.append("No significant indicator changes (< 1.0%) observed since last analysis.")
+            lines.append("No significant indicator changes observed since last analysis.")
         else:
             lines.extend(changes)
             lines.append("")
-            lines.append("(Note: Indicators with < 1.0% change are omitted)")
+            lines.append("(Note: Indicators with < 1.0% change or specific zero-cross logic are filtered)")
             
         lines.append("")
         lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")

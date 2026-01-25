@@ -4,6 +4,7 @@ Handles system prompts, response templates, and analysis steps for TRADING DECIS
 """
 
 import re
+from datetime import datetime, timezone
 from typing import Optional, Any, Dict
 
 from src.logger.logger import Logger
@@ -12,15 +13,17 @@ from src.logger.logger import Logger
 class TemplateManager:
     """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
     
-    def __init__(self, config: Any, logger: Optional[Logger] = None):
+    def __init__(self, config: Any, logger: Optional[Logger] = None, timeframe_validator: Any = None):
         """Initialize the template manager.
         
         Args:
             config: Configuration module providing prompt defaults
             logger: Optional logger instance for debugging
+            timeframe_validator: TimeframeValidator instance (injected)
         """
         self.logger = logger
         self.config = config
+        self.timeframe_validator = timeframe_validator
     
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None, performance_context: Optional[str] = None, brain_context: Optional[str] = None, last_analysis_time: Optional[str] = None) -> str:
         """Build the system prompt for trading decision AI.
@@ -36,6 +39,13 @@ class TemplateManager:
         Returns:
             str: Formatted system prompt
         """
+        # Validate dependency needed for relevance window calculation
+        if self.timeframe_validator is None:
+             # Fallback if somehow not injected, though it should be. 
+             # Ideally raise error, but to avoid crash in prod if missed, maybe safe default or error?
+             # Given strict DI rules, raising error or logging warning is better.
+             pass
+
         header_lines = [
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
@@ -92,13 +102,27 @@ class TemplateManager:
             # Extract only text reasoning, exclude JSON block
             text_reasoning = re.split(r'```json', previous_response, flags=re.IGNORECASE)[0].strip()
             if text_reasoning:
+                # Calculate window duration safely using injected validator
+                window_minutes = 120 # Default fallback
+                if self.timeframe_validator:
+                    try:
+                        window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
+                    except Exception as e:
+                        if self.logger:
+                            self.logger.warning(f"Failed to calculate relevance window for {timeframe}: {e}")
+                
                 header_lines.extend([
                     "",
                     "## PREVIOUS ANALYSIS CONTEXT",
                     "Your last analysis reasoning (for continuity):",
                     text_reasoning,
                     "",
-                    "Use this context to maintain consistency in your analysis approach.",
+                    "### DETERMINISTIC TIME CHECK",
+                    f"- **Current Time**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC",
+                    "- **Relevance**: PREVIOUS reasoning MUST be verified against CURRENT data. If previous claims (e.g., 'approaching' events) contradict the current clock or were based on now-outdated milestones, you MUST ignore or correct them.",
+                    f"- **Relevance Window**: Only consider an event 'imminent' if it occurs within the next 2 full candles (Window: {window_minutes} minutes).",
+                    "",
+                    "Use this context to maintain consistency in your analysis approach while prioritizing ground truth temporal data.",
                 ])
 
         return "\n".join(header_lines)

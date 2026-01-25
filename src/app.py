@@ -93,6 +93,30 @@ class CryptoTradingBot:
         """Initialize all components."""
         if self.shutdown_manager:
             self.shutdown_manager.register_shutdown_callback(self.shutdown)
+            
+            # Register components for shutdown
+            if self.keyboard_handler:
+                self.shutdown_manager.register_shutdown_callback(self.keyboard_handler.stop_listening)
+            
+            if self.model_manager:
+                self.shutdown_manager.register_shutdown_callback(self.model_manager.close)
+            
+            if self.market_analyzer:
+                self.shutdown_manager.register_shutdown_callback(self.market_analyzer.close)
+                
+            if self.rag_engine:
+                self.shutdown_manager.register_shutdown_callback(self.rag_engine.close)
+                
+            if self.exchange_manager:
+                self.shutdown_manager.register_shutdown_callback(self.exchange_manager.shutdown)
+                
+            if self.cryptocompare_session:
+                self.shutdown_manager.register_shutdown_callback(self.cryptocompare_session.close)
+
+            # API clients (if they have close method)
+            for client in [self.alternative_me_api, self.coingecko_api, self.news_api, self.market_api, self.categories_api]:
+                if client and hasattr(client, 'close'):
+                    self.shutdown_manager.register_shutdown_callback(client.close)
         
         # Register keyboard commands
         self.keyboard_handler.register_command('a', self._force_analysis_now, "Force immediate analysis")
@@ -110,6 +134,33 @@ class CryptoTradingBot:
         
         self.logger.info("Crypto Trading Bot ready")
         self.logger.info("Keyboard commands: 'a' = force analysis, 'h' = help, 'q' = quit")
+
+    async def shutdown(self):
+        """Callback for graceful shutdown."""
+        self.logger.info("Signaling trading loops to stop...")
+        self.running = False
+        
+        # Cancel active tasks managed by bot
+        pending_tasks = list(self._active_tasks)
+        if pending_tasks:
+            self.logger.info(f"Cancelling {len(pending_tasks)} bot-specific tasks...")
+            for task in pending_tasks:
+                if not task.done():
+                    task.cancel()
+            try:
+                await asyncio.wait(pending_tasks, timeout=3.0)
+            except asyncio.TimeoutError:
+                self.logger.warning("Bot tasks shutdown timed out")
+
+        # Discord task cleanup
+        if self._discord_task and not self._discord_task.done():
+            self._discord_task.cancel()
+            try:
+                await asyncio.wait_for(self._discord_task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+        
+        self.logger.info("Bot shutdown signaling complete.")
 
 
     async def run(self, symbol: str, timeframe: str = None):
@@ -557,15 +608,5 @@ class CryptoTradingBot:
                 if not task.done():
                     task.cancel()
     
-    async def shutdown(self):
-        self.logger.info("Shutting down gracefully...")
-        self.running = False
-        
-        # Give a moment for loops to see running=False
-        await asyncio.sleep(0.1)
 
-        if self.shutdown_manager:
-            await self.shutdown_manager.cleanup_bot_resources(self)
-        
-        self.logger.info("Shutdown complete")
         

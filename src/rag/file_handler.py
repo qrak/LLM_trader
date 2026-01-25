@@ -24,8 +24,7 @@ class RagFileHandler:
             config: ConfigProtocol instance for data directory path
             unified_parser: UnifiedParser instance (must be injected from app.py)
         """
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
+
         self.logger = logger
         self.config = config
         self.base_dir = self._resolve_base_dir()

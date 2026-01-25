@@ -37,7 +37,8 @@ class AnalysisEngine:
         data_collector=None,
         metrics_calculator=None,
         result_processor=None,
-        chart_generator=None
+        chart_generator=None,
+        data_fetcher_factory=None
     ) -> None:
         """
         Initialize AnalysisEngine with injected dependencies (DI pattern).
@@ -59,13 +60,12 @@ class AnalysisEngine:
             metrics_calculator: MarketMetricsCalculator instance (injected from app.py)
             result_processor: AnalysisResultProcessor instance (injected from app.py)
             chart_generator: ChartGenerator instance (injected from app.py)
+            data_fetcher_factory: DataFetcherFactory instance (injected from app.py)
         """
         self.logger = logger
         
-        # Validate required config dependency
-        if config is None:
-            raise ValueError("config is a required parameter and cannot be None")
         self.config = config
+
 
         # Basic properties
         self.exchange = None
@@ -91,27 +91,7 @@ class AnalysisEngine:
             self.logger.exception(f"Error loading configuration values: {e}.")
             raise
 
-        # Validate required dependencies
-        if model_manager is None:
-            raise ValueError("model_manager is a required parameter and cannot be None")
-        if alternative_me_api is None:
-            raise ValueError("alternative_me_api is a required parameter and cannot be None")
-        if market_api is None:
-            raise ValueError("market_api is a required parameter and cannot be None")
-        if technical_calculator is None:
-            raise ValueError("technical_calculator is required - must be injected from app.py")
-        if pattern_analyzer is None:
-            raise ValueError("pattern_analyzer is required - must be injected from app.py")
-        if prompt_builder is None:
-            raise ValueError("prompt_builder is required - must be injected from app.py")
-        if data_collector is None:
-            raise ValueError("data_collector is required - must be injected from app.py")
-        if metrics_calculator is None:
-            raise ValueError("metrics_calculator is required - must be injected from app.py")
-        if result_processor is None:
-            raise ValueError("result_processor is required - must be injected from app.py")
-        if chart_generator is None:
-            raise ValueError("chart_generator is required - must be injected from app.py")
+
 
         # Store injected components
         self.model_manager = model_manager
@@ -122,6 +102,7 @@ class AnalysisEngine:
         self.metrics_calculator = metrics_calculator
         self.result_processor = result_processor
         self.chart_generator = chart_generator
+        self.data_fetcher_factory = data_fetcher_factory
 
         # Store references to external services
         self.rag_engine = rag_engine
@@ -164,8 +145,8 @@ class AnalysisEngine:
         self.context.exchange = exchange.name if exchange.name else str(exchange)
         self.context.timeframe = effective_timeframe
         
-        # Create data fetcher and initialize data collector
-        data_fetcher = DataFetcher(exchange=exchange, logger=self.logger)
+        # Create data fetcher via factory
+        data_fetcher = self.data_fetcher_factory.create(exchange)
         
         self.data_collector.initialize(
             data_fetcher=data_fetcher, 

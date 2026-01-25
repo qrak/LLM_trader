@@ -13,7 +13,16 @@ from .long_term_formatter import LongTermFormatter
 class MarketFormatter:
     """Main coordinator for market analysis formatting."""
     
-    def __init__(self, logger: Optional[Logger] = None, format_utils=None, config=None, token_counter=None):
+    def __init__(
+        self, 
+        logger: Optional[Logger] = None, 
+        format_utils=None, 
+        config=None, 
+        token_counter=None,
+        overview_formatter: Optional[MarketOverviewFormatter] = None,
+        period_formatter: Optional[MarketPeriodFormatter] = None,
+        long_term_formatter: Optional[LongTermFormatter] = None
+    ):
         """Initialize the market formatter and its specialized components.
         
         Args:
@@ -21,14 +30,18 @@ class MarketFormatter:
             format_utils: Format utilities for value formatting
             config: Configuration instance (ConfigProtocol)
             token_counter: Utility for counting tokens
+            overview_formatter: MarketOverviewFormatter instance
+            period_formatter: MarketPeriodFormatter instance
+            long_term_formatter: LongTermFormatter instance
         """
         self.logger = logger
         self.format_utils = format_utils
         self.config = config
         self.token_counter = token_counter
-        self.overview_formatter = MarketOverviewFormatter(logger, format_utils)
-        self.period_formatter = MarketPeriodFormatter(logger, format_utils)
-        self.long_term_formatter = LongTermFormatter(logger, format_utils)
+        
+        self.overview_formatter = overview_formatter
+        self.period_formatter = period_formatter
+        self.long_term_formatter = long_term_formatter
     
 
     

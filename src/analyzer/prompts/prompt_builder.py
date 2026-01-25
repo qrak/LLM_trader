@@ -27,7 +27,10 @@ class PromptBuilder:
         long_term_formatter: Optional[LongTermFormatter] = None,
         technical_formatter: Optional[TechnicalFormatter] = None,
         market_formatter: Optional[MarketFormatter] = None,
-        period_formatter: Optional[MarketPeriodFormatter] = None
+        period_formatter: Optional[MarketPeriodFormatter] = None,
+        timeframe_validator: Any = None,
+        template_manager: Optional[TemplateManager] = None,
+        context_builder: Optional[ContextBuilder] = None
     ) -> None:
         """Initialize the PromptBuilder
         
@@ -42,9 +45,10 @@ class PromptBuilder:
             technical_formatter: TechnicalFormatter instance (injected)
             market_formatter: MarketFormatter instance (injected)
             period_formatter: MarketPeriodFormatter instance (injected)
+            timeframe_validator: TimeframeValidator instance (injected)
+            template_manager: TemplateManager instance (injected)
+            context_builder: ContextBuilder instance (injected)
         """
-        if technical_calculator is None:
-            raise ValueError("technical_calculator is required - must be injected from app.py")
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
@@ -52,22 +56,16 @@ class PromptBuilder:
         self.technical_calculator = technical_calculator
         self.config = config
         self.format_utils = format_utils
+        self.timeframe_validator = timeframe_validator
         
         # Initialize component managers
-        self.template_manager = TemplateManager(config=self.config, logger=logger)
+        self.template_manager = template_manager
         self.overview_formatter = overview_formatter
         self.long_term_formatter = long_term_formatter
         self.technical_analysis_formatter = technical_formatter
         
-        # Create ContextBuilder with injected formatters
-        self.context_builder = ContextBuilder(
-            timeframe,
-            logger,
-            format_utils,
-            market_formatter=market_formatter,
-            period_formatter=period_formatter,
-            long_term_formatter=self.long_term_formatter
-        )
+        # Use injected ContextBuilder
+        self.context_builder = context_builder
         self.market_formatter = market_formatter
 
     def build_prompt(

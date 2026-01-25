@@ -26,25 +26,24 @@ class VectorMemoryService:
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
     DEFAULT_DECAY_HALF_LIFE_DAYS = 90
     
-    def __init__(self, logger: Logger, data_dir: str = "data/brain_vector_db"):
+    
+    def __init__(self, logger: Logger, chroma_client: Any, embedding_model: Any = None):
         """Initialize vector memory service.
         
         Args:
             logger: Logger instance
-            data_dir: Directory for ChromaDB persistence
+            chroma_client: Injected ChromaDB client instance
+            embedding_model: SentenceTransformer instance (injected)
         """
         self.logger = logger
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        
-        self._client: Optional[Any] = None
+        self._client = chroma_client
         self._collection: Optional[Any] = None
         self._semantic_rules_collection: Optional[Any] = None
-        self._embedding_model: Optional[Any] = None
+        self._embedding_model = embedding_model
         self._initialized = False
     
     def _ensure_initialized(self) -> bool:
-        """Lazy initialization of ChromaDB and embedding model.
+        """Lazy setup of collections (client is already injected).
         
         Returns:
             True if initialization succeeded, False otherwise.
@@ -53,12 +52,8 @@ class VectorMemoryService:
             return True
         
         try:
-            import chromadb
-            from sentence_transformers import SentenceTransformer
+            self.logger.info("Setting up VectorMemoryService collections...")
             
-            self.logger.info("Initializing VectorMemoryService...")
-            
-            self._client = chromadb.PersistentClient(path=str(self.data_dir))
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"}
@@ -68,14 +63,9 @@ class VectorMemoryService:
                 metadata={"hnsw:space": "cosine"}
             )
             
-            self._embedding_model = SentenceTransformer(
-                self.EMBEDDING_MODEL,
-                device="cpu"
-            )
-            
             self._initialized = True
             self.logger.info(
-                f"VectorMemoryService initialized: {self._collection.count()} experiences stored"
+                f"VectorMemoryService collections ready: {self._collection.count()} experiences stored"
             )
             return True
             

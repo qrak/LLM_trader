@@ -23,8 +23,7 @@ class ExchangeManager:
         Raises:
             ValueError: If config is None
         """
-        if config is None:
-            raise ValueError("config is a required parameter and cannot be None")
+
         
         self.logger = logger
         self.config = config

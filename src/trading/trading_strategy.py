@@ -29,6 +29,7 @@ class TradingStrategy:
         risk_manager: RiskManagerProtocol,
         config: Any = None,
         position_extractor=None,
+        position_factory=None,
     ):
         """Initialize the trading strategy with DI pattern.
         
@@ -41,10 +42,8 @@ class TradingStrategy:
             risk_manager: Risk Manager for position sizing and SL/TP
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
+            position_factory: PositionFactory instance (injected from start.py)
         """
-        if position_extractor is None:
-            raise ValueError("position_extractor is required - must be injected from app.py")
-        
         self.logger = logger
         self.persistence = persistence
         self.brain_service = brain_service
@@ -53,6 +52,7 @@ class TradingStrategy:
         self.risk_manager = risk_manager
         self.config = config
         self.extractor = position_extractor
+        self.position_factory = position_factory
         
         # Load any existing position
         self.current_position: Optional[Position] = self.persistence.load_position()
@@ -324,23 +324,7 @@ class TradingStrategy:
         confluence_factors: tuple = (),
         market_conditions: Optional[Dict[str, Any]] = None,
     ) -> TradeDecision:
-        """Open a new trading position with dynamic parameter calculation.
-
-        Args:
-            signal: BUY or SELL
-            confidence: Confidence level
-            stop_loss: Stop loss price (from AI)
-            take_profit: Take profit price (from AI)
-            position_size: Position size as decimal (e.g., 0.02 = 2% of capital)
-            current_price: Entry price
-            symbol: Trading symbol
-            reasoning: AI reasoning
-            confluence_factors: Tuple of (factor_name, score) pairs for brain learning
-            market_conditions: Market state dict with ATR, volatility_level, etc.
-
-        Returns:
-            TradeDecision for the new position
-        """
+        """Open a new trading position with dynamic parameter calculation."""
         direction = "LONG" if signal == "BUY" else "SHORT"
         market_conditions = market_conditions or {}
 
@@ -367,7 +351,6 @@ class TradingStrategy:
         sl_distance_pct = risk_assessment.sl_distance_pct
         tp_distance_pct = risk_assessment.tp_distance_pct
         rr_ratio = risk_assessment.rr_ratio
-        volatility_level = risk_assessment.volatility_level
 
         self.logger.info(
             f"Position sizing: Capital=${capital:,.2f}, Size={final_size_pct*100:.2f}%, "
@@ -377,28 +360,16 @@ class TradingStrategy:
             f"Risk metrics: SL={sl_distance_pct*100:.2f}%, TP={tp_distance_pct*100:.2f}%, R/R={rr_ratio:.2f}"
         )
 
-        # Create position with confluence factors and market conditions for brain learning
-        self.current_position = Position(
-            entry_price=current_price,
-            stop_loss=final_sl,
-            take_profit=final_tp,
-            size=quantity,
-            entry_time=datetime.now(timezone.utc),
-            confidence=confidence,
-            direction=direction,
+        # Create position using Factory
+        self.current_position = self.position_factory.create_position(
             symbol=symbol,
+            direction=direction,
+            confidence=confidence,
+            risk_assessment=risk_assessment,
             confluence_factors=confluence_factors,
-            entry_fee=entry_fee,
-            quote_amount=risk_assessment.quote_amount,
-            size_pct=final_size_pct,
-            atr_at_entry=market_conditions.get("atr", 0.0),
-            volatility_level=volatility_level,
-            sl_distance_pct=sl_distance_pct,
-            tp_distance_pct=tp_distance_pct,
-            rr_ratio_at_entry=rr_ratio,
-            adx_at_entry=market_conditions.get("adx", 0.0),
-            rsi_at_entry=market_conditions.get("rsi", 50.0),
+            market_conditions=market_conditions
         )
+        
         self.persistence.save_position(self.current_position)
         self.logger.info(
             f"Opened {direction} position @ ${current_price:,.2f} "
@@ -457,29 +428,11 @@ class TradingStrategy:
             updated = True
         
         if updated:
-            # Create new position with updated values (frozen dataclass)
-            self.current_position = Position(
-                entry_price=self.current_position.entry_price,
-                stop_loss=new_sl,
-                take_profit=new_tp,
-                size=self.current_position.size,
-                quote_amount=self.current_position.quote_amount,
-                entry_time=self.current_position.entry_time,
-                confidence=self.current_position.confidence,
-                direction=self.current_position.direction,
-                symbol=self.current_position.symbol,
-                confluence_factors=self.current_position.confluence_factors,
-                entry_fee=self.current_position.entry_fee,
-                size_pct=self.current_position.size_pct,
-                atr_at_entry=self.current_position.atr_at_entry,
-                volatility_level=self.current_position.volatility_level,
-                sl_distance_pct=self.current_position.sl_distance_pct,
-                tp_distance_pct=self.current_position.tp_distance_pct,
-                rr_ratio_at_entry=self.current_position.rr_ratio_at_entry,
-                adx_at_entry=self.current_position.adx_at_entry,
-                rsi_at_entry=self.current_position.rsi_at_entry,
-                max_drawdown_pct=self.current_position.max_drawdown_pct,
-                max_profit_pct=self.current_position.max_profit_pct,
+            # Create new position with updated values using factory
+            self.current_position = self.position_factory.create_updated_position(
+                original_position=self.current_position,
+                new_stop_loss=new_sl,
+                new_take_profit=new_tp
             )
             self.persistence.save_position(self.current_position)
         

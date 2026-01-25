@@ -26,7 +26,17 @@ class ModelManager(ModelManagerProtocol):
     Provider orchestration is delegated to ProviderOrchestrator.
     """
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol", unified_parser=None) -> None:
+    def __init__(
+        self, 
+        logger: Logger, 
+        config: "ConfigProtocol", 
+        unified_parser=None,
+        token_counter: Optional[TokenCounter] = None,
+        cost_storage: Optional[CostStorage] = None,
+        model_pricing: Optional[ModelPricing] = None,
+        orchestrator: Optional[ProviderOrchestrator] = None,
+        provider_clients: Optional[ProviderClients] = None
+    ) -> None:
         """
         Initialize the ModelManager.
         
@@ -34,24 +44,24 @@ class ModelManager(ModelManagerProtocol):
             logger: Logger instance for logging
             config: ConfigProtocol instance for configuration access
             unified_parser: UnifiedParser instance (must be injected from app.py)
+            token_counter: TokenCounter instance
+            cost_storage: CostStorage instance
+            model_pricing: ModelPricing instance
+            orchestrator: ProviderOrchestrator instance
+            provider_clients: ProviderClients instance
         
         Raises:
-            ValueError: If config or unified_parser is None
+            ValueError: If required dependencies are missing
         """
-        if config is None:
-            raise ValueError("config is a required parameter and cannot be None")
-        if unified_parser is None:
-            raise ValueError("unified_parser is required - must be injected from app.py")
         self.logger = logger
         self.config = config
         self.provider = self.config.PROVIDER.lower()
         self.unified_parser = unified_parser
-        self.token_counter = TokenCounter()
-        self.cost_storage = CostStorage()
-        self.model_pricing = ModelPricing()
-        factory = ProviderFactory(logger, config)
-        self._clients = ProviderClients.from_factory_dict(factory.create_all_clients())
-        self._orchestrator = ProviderOrchestrator(logger, config, self._clients)
+        self.token_counter = token_counter
+        self.cost_storage = cost_storage
+        self.model_pricing = model_pricing
+        self._clients = provider_clients
+        self._orchestrator = orchestrator
 
     async def __aenter__(self):
         """Async context manager entry."""
