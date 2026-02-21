@@ -1,5 +1,8 @@
 """Test demo trading configuration (capital and fees)."""
 
+import os
+import sys
+import importlib
 import pytest
 from unittest.mock import MagicMock, patch
 from typing import Any, Dict
@@ -178,9 +181,30 @@ class TestFeeCalculation:
 class TestConfigLoaderIntegration:
     """Integration tests with actual Config loader."""
 
-    def test_config_loader_parses_demo_capital(self):
+    @pytest.fixture
+    def real_config_class(self):
+        """Fixture to recover the real Config class, bypassing conftest mocking."""
+        # Save the mock module
+        mock_module = sys.modules.get('src.config.loader')
+        
+        # Temporarily remove it from sys.modules to allow real import
+        if 'src.config.loader' in sys.modules:
+            del sys.modules['src.config.loader']
+            
+        try:
+            # Import and reload the real module
+            import src.config.loader
+            importlib.reload(src.config.loader)
+            config_class = src.config.loader.Config
+            yield config_class
+        finally:
+            # Restore the mock for other tests
+            if mock_module:
+                sys.modules['src.config.loader'] = mock_module
+
+    def test_config_loader_parses_demo_capital(self, real_config_class):
         """Test Config.DEMO_QUOTE_CAPITAL returns float from config data."""
-        from src.config.loader import Config
+        Config = real_config_class
 
         with patch.object(Config, '_load_environment'):
             with patch.object(Config, '_load_ini_config'):
@@ -197,9 +221,9 @@ class TestConfigLoaderIntegration:
                         assert config.DEMO_QUOTE_CAPITAL == 25000.0
                         assert config.TRANSACTION_FEE_PERCENT == 0.001
 
-    def test_config_defaults_when_section_missing(self):
+    def test_config_defaults_when_section_missing(self, real_config_class):
         """Test defaults are used when demo_trading section is missing."""
-        from src.config.loader import Config
+        Config = real_config_class
 
         with patch.object(Config, '_load_environment'):
             with patch.object(Config, '_load_ini_config'):

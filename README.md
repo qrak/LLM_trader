@@ -8,11 +8,16 @@
 
 🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
 
-![Semantic Signal LLM Dashboard Main](img/dashboard1.png)
+🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
 
-![Semantic Signal LLM Dashboard Vector](img/dashboard2.png)
-
-![Semantic Signal LLM Dashboard Logs](img/dashboard3.png)
+![Semantic Signal LLM Dashboard - Overview](img/dashboard1.png)
+![Semantic Signal LLM Dashboard - Brain Activity](img/dashboard2.png)
+![Semantic Signal LLM Dashboard - Last Prompt](img/dashboard3.png)
+![Semantic Signal LLM Dashboard - Last Response](img/dashboard4.png)
+![Semantic Signal LLM Dashboard - Statistics](img/dashboard5.png)
+![Semantic Signal LLM Dashboard - Latest News](img/dashboard6.png)
+![Semantic Signal LLM Dashboard - Market Data](img/dashboard7.png)
+![Semantic Signal LLM Dashboard - Memory Bank](img/dashboard8.png)
 
 ## 🏗️ Architecture
 
@@ -91,7 +96,7 @@ graph TD
 ### 📢 RAG Engine (News & Context)
 - **News Aggregator**: Requires a **CryptoCompare API Key**. The free tier typically offers ~150k lifetime requests, which is sufficient for continuous bot operation.
 - **Smart Relevance Scoring**: Uses **keyword density**, **category matching**, and **coin-specific heuristics** to filter noise and prioritize data-rich content.
-- **Segmentation**: Uses `wtpsplit` for precise sentence segmentation to extract key facts/numbers.
+- **Lead Paragraph Extraction**: Extracts coherent lead paragraphs from articles following the "Inverted Pyramid" structure, preserving narrative flow and context.
 - **Configurable Limits**: Adjustable token limits and article counts to manage context window.
 
 ### 🌍 Market Data & Exchanges

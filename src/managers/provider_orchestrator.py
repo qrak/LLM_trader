@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, Union, cast, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.response_models import ChatResponseModel
-from .provider_types import ProviderMetadata, InvocationResult, ProviderClients
+from src.managers.provider_types import ProviderMetadata, InvocationResult, ProviderClients
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class ProviderOrchestrator:
     """
     Orchestrates AI provider invocation with fallback and retry logic.
-    
+
     Responsibilities:
     - Provider metadata management
     - Single provider invocation
@@ -30,7 +30,7 @@ class ProviderOrchestrator:
     ) -> None:
         """
         Initialize the provider orchestrator.
-        
+
         Args:
             logger: Logger instance
             config: Configuration instance
@@ -113,14 +113,14 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Invoke a single provider and return structured result.
-        
+
         Args:
             provider: Provider key (googleai, openrouter, local)
             messages: Chat messages
             chart: Whether this is a chart analysis request
             chart_image: Optional chart image for analysis
             model: Optional model override
-            
+
         Returns:
             InvocationResult with success status, response, and metadata
         """
@@ -159,14 +159,14 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Try providers in order, returning first successful result.
-        
+
         Args:
             providers: List of provider keys to try in order
             messages: Chat messages
             chart: Whether this is a chart analysis request
             chart_image: Optional chart image
             model: Optional model override
-            
+
         Returns:
             InvocationResult from first successful provider, or last failure
         """
@@ -196,12 +196,12 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Get text response using single provider or fallback chain.
-        
+
         Args:
             effective_provider: Provider key or 'all' for fallback chain
             messages: Chat messages
             model: Optional model override
-            
+
         Returns:
             InvocationResult with response
         """
@@ -234,13 +234,13 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Get chart analysis response using single provider or fallback chain.
-        
+
         Args:
             effective_provider: Provider key or 'all' for fallback chain
             messages: Chat messages
             chart_image: Chart image for analysis
             model: Optional model override
-            
+
         Returns:
             InvocationResult with response
         """
@@ -464,4 +464,3 @@ class ProviderOrchestrator:
             provider="blockrun",
             model=effective_model
         )
-

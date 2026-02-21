@@ -8,4 +8,3 @@ from .filehandler import DiscordFileHandler
 from .console_notifier import ConsoleNotifier
 
 __all__ = ['BaseNotifier', 'DiscordNotifier', 'DiscordFileHandler', 'ConsoleNotifier']
-

@@ -71,7 +71,9 @@ class GoogleAIClient(BaseAIClient):
                     else:
                         non_text_parts.append(type(part).__name__)
             if non_text_parts:
-                self.logger.debug(f"Google AI response contains non-text parts: {non_text_parts}. Extracting text only.")
+                self.logger.debug(
+                    f"Google AI response contains non-text parts: {non_text_parts}. Extracting text only."
+                )
             return "\n".join(text_parts)
         except Exception as e:
             self.logger.error(f"Failed to extract text from Google AI response: {e}")
@@ -91,19 +93,30 @@ class GoogleAIClient(BaseAIClient):
             self.logger.debug(f"Failed to extract usage metadata: {e}")
         return None
 
-    def _create_generation_config(self, model_config: Dict[str, Any], include_thinking: bool = True) -> types.GenerateContentConfig:
+    def _create_generation_config(
+        self,
+        model_config: Dict[str, Any],
+        include_thinking: bool = True,
+        include_code_execution: bool = False
+    ) -> types.GenerateContentConfig:
         """Create a generation config from model configuration dictionary."""
         thinking_config = None
         if include_thinking:
             thinking_level = model_config.get("thinking_level", "high")
             if thinking_level and thinking_level in ("minimal", "low", "medium", "high"):
                 thinking_config = types.ThinkingConfig(thinking_level=thinking_level)
+
+        tools = []
+        if include_code_execution:
+            tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
+
         return types.GenerateContentConfig(
             temperature=model_config.get("temperature", 0.7),
             top_p=model_config.get("top_p", 0.9),
             top_k=model_config.get("top_k", 40),
             max_output_tokens=model_config.get("max_tokens", 32768),
             thinking_config=thinking_config,
+            tools=tools if tools else None,
         )
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
@@ -126,8 +139,13 @@ class GoogleAIClient(BaseAIClient):
         effective_model = model if model else self.model
         for include_thinking in (True, False):
             try:
-                generation_config = self._create_generation_config(model_config, include_thinking=include_thinking)
-                self.logger.debug(f"Sending request to Google AI with model: {effective_model} (thinking={include_thinking})")
+                generation_config = self._create_generation_config(
+                    model_config, include_thinking=include_thinking
+                )
+                self.logger.debug(
+                    f"Sending request to Google AI with model: {effective_model} "
+                    f"(thinking={include_thinking})"
+                )
                 response = await client.aio.models.generate_content(
                     model=effective_model,
                     contents=prompt,
@@ -137,10 +155,12 @@ class GoogleAIClient(BaseAIClient):
                 usage = self._extract_usage_metadata(response)
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
-            except Exception as e:
+            except Exception as e: # pylint: disable=broad-exception-caught
                 error_str = str(e).lower()
                 if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
-                    self.logger.warning(f"Model may not support thinking_config, retrying without it: {e}")
+                    self.logger.warning(
+                        f"Model may not support thinking_config, retrying without it: {e}"
+                    )
                     continue
                 self.logger.error(f"Error during Google AI request: {e}")
                 return self._handle_exception(e)
@@ -174,8 +194,19 @@ class GoogleAIClient(BaseAIClient):
         contents = [prompt, image_part]
         for include_thinking in (True, False):
             try:
-                generation_config = self._create_generation_config(model_config, include_thinking=include_thinking)
-                self.logger.debug(f"Sending chart analysis to Google AI: {effective_model} (thinking={include_thinking}, {len(img_data)} bytes)")
+                # Check for code execution config, default to True if not specified
+                include_code_execution = model_config.get("google_code_execution", False)
+
+                generation_config = self._create_generation_config(
+                    model_config,
+                    include_thinking=include_thinking,
+                    include_code_execution=include_code_execution
+                )
+                self.logger.debug(
+                    f"Sending chart analysis to Google AI: {effective_model} "
+                    f"(thinking={include_thinking}, code_execution={include_code_execution}, "
+                    f"{len(img_data)} bytes)"
+                )
                 response = await client.aio.models.generate_content(
                     model=effective_model,
                     contents=contents,
@@ -185,10 +216,12 @@ class GoogleAIClient(BaseAIClient):
                 usage = self._extract_usage_metadata(response)
                 self.logger.debug("Received successful chart analysis response from Google AI")
                 return self.create_response(content_text, usage=usage)
-            except Exception as e:
+            except Exception as e: # pylint: disable=broad-exception-caught
                 error_str = str(e).lower()
                 if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
-                    self.logger.warning(f"Model may not support thinking_config for chart analysis, retrying without it: {e}")
+                    self.logger.warning(
+                        f"Model may not support thinking_config for chart analysis, retrying without it: {e}"
+                    )
                     continue
                 self.logger.error(f"Error during Google AI chart analysis request: {e}")
                 return self._handle_exception(e)

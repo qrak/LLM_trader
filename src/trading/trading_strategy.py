@@ -4,25 +4,23 @@ from datetime import datetime, timezone
 from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from .dataclasses import Position, TradeDecision
-from src.managers.persistence_manager import PersistenceManager
 from src.contracts.risk_contract import RiskManagerProtocol
+from .dataclasses import Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
 
-
 if TYPE_CHECKING:
-    pass
+    from src.managers.persistence_manager import PersistenceManager
 
 
 class TradingStrategy:
     """Manages trading positions and decision execution based on AI analysis."""
-    
+
     def __init__(
         self,
         logger: Logger,
-        persistence: PersistenceManager,
+        persistence: "PersistenceManager",
         brain_service: TradingBrainService,
         statistics_service: TradingStatisticsService,
         memory_service: TradingMemoryService,
@@ -32,7 +30,7 @@ class TradingStrategy:
         position_factory=None,
     ):
         """Initialize the trading strategy with DI pattern.
-        
+
         Args:
             logger: Logger instance
             persistence: Persistence service for loading/saving data
@@ -53,50 +51,52 @@ class TradingStrategy:
         self.config = config
         self.extractor = position_extractor
         self.position_factory = position_factory
-        
+
         # Load any existing position
         self.current_position: Optional[Position] = self.persistence.load_position()
-        
+
         if self.current_position:
             self.logger.info(
                 f"Loaded existing position: {self.current_position.direction} "
                 f"{self.current_position.symbol} @ ${self.current_position.entry_price:,.2f}"
             )
-    
+
     async def check_position(self, current_price: float) -> Optional[str]:
         """Check if current position hit stop loss or take profit.
-        
+
         Args:
             current_price: Current market price
-            
+
         Returns:
             Reason for closing position if hit, else None
         """
         if not self.current_position:
             return None
-        
+
         # Update live performance metrics (MAE/MFE)
         self.current_position.update_metrics(current_price)
-        self.persistence.save_position(self.current_position)
-        
+        await self.persistence.async_save_position(self.current_position)
+
         if self.current_position.is_stop_hit(current_price):
-            await self.close_position("stop_loss", current_price)
+            conditions = self._build_conditions_from_position(self.current_position)
+            await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
-        
+
         if self.current_position.is_target_hit(current_price):
-            await self.close_position("take_profit", current_price)
+            conditions = self._build_conditions_from_position(self.current_position)
+            await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
-        
+
         return None
-    
+
     async def close_position(
-        self, 
-        reason: str, 
+        self,
+        reason: str,
         current_price: float,
         market_conditions: Optional[Dict[str, Any]] = None
     ) -> None:
         """Close the current position and update trading brain.
-        
+
         Args:
             reason: Reason for closing (stop_loss, take_profit, signal)
             current_price: Current market price
@@ -104,15 +104,15 @@ class TradingStrategy:
         """
         if not self.current_position:
             return
-        
+
         pnl = self.current_position.calculate_pnl(current_price)
-        
+
         # Calculate closing fee
         closing_fee = self.current_position.calculate_closing_fee(
-            current_price, 
+            current_price,
             self.config.TRANSACTION_FEE_PERCENT
         )
-        
+
         decision = TradeDecision(
             timestamp=datetime.now(timezone.utc),
             symbol=self.current_position.symbol,
@@ -127,12 +127,12 @@ class TradingStrategy:
             fee=closing_fee,
             reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%. Fee: ${closing_fee:.4f}",
         )
-        
+
         self.logger.info(
             f"Closing {self.current_position.direction} position ({reason}) "
             f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%, Fee: ${closing_fee:.4f}"
         )
-        
+
         # Retrieve entry decision from trade history for brain learning
         entry_decision = None
         try:
@@ -146,7 +146,7 @@ class TradingStrategy:
                 self.logger.warning("Could not retrieve entry decision from trade history")
         except Exception as e:
             self.logger.error(f"Error retrieving entry decision: {e}")
-        
+
         # Update trading brain with closed trade insights
         try:
             self.brain_service.update_from_closed_trade(
@@ -159,62 +159,62 @@ class TradingStrategy:
         except Exception as e:
             self.logger.error(f"Error updating trading brain: {e}")
         # Save close decision FIRST so statistics include this trade
-        self.persistence.save_trade_decision(decision)
-        
+        await self.persistence.async_save_trade_decision(decision)
+
         # Recalculate performance statistics (Sharpe, Sortino, drawdown, etc.)
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
         except Exception as e:
             self.logger.error(f"Error recalculating statistics: {e}")
-        self.persistence.save_position(None)
+        await self.persistence.async_save_position(None)
         self.current_position = None
-    
+
     async def process_analysis(self, analysis_result: dict, symbol: str) -> Optional[TradeDecision]:
         """Process AI analysis result and execute trading decision.
-        
+
         Args:
             analysis_result: Result from AnalysisEngine.analyze_market()
             symbol: Trading symbol
-            
+
         Returns:
             TradeDecision if action taken, else None
         """
         try:
             raw_response = analysis_result.get("raw_response", "")
             current_price = self._extract_price_from_result(analysis_result)
-            
+
             if not raw_response:
                 self.logger.warning("No response to process")
                 return None
-            
+
             if current_price <= 0:
                 self.logger.error("Invalid current_price extracted, cannot process trade")
                 return None
-            
+
             # Extract trading info from response
             signal, confidence, stop_loss, take_profit, position_size, reasoning = \
                 self.extractor.extract_trading_info(raw_response)
-            
+
             self.logger.info(f"Extracted Signal: {signal}, Confidence: {confidence}")
-            
+
             # Validate signal
             if not self.extractor.validate_signal(signal):
                 self.logger.warning(f"Invalid signal: {signal}")
                 return None
-            
+
             # Extract market conditions for brain learning
             market_conditions = self._extract_market_conditions(analysis_result)
-            
+
             # Extract confluence factors for brain learning (Feature 1)
             confluence_factors = self._extract_confluence_factors(analysis_result)
-            
+
             # Handle existing position
             if self.current_position:
                 return await self._handle_existing_position(
-                    signal, confidence, stop_loss, take_profit, 
+                    signal, confidence, stop_loss, take_profit,
                     current_price, symbol, reasoning, market_conditions
                 )
-            
+
             # Handle new position
             if signal in ("BUY", "SELL"):
                 return await self._open_new_position(
@@ -222,18 +222,18 @@ class TradingStrategy:
                     position_size, current_price, symbol, reasoning,
                     confluence_factors, market_conditions
                 )
-            
+
             # HOLD or no action
             if reasoning:
                 self.logger.info(f"No action taken. Signal: {signal}. Reasoning: {reasoning[:200]}")
             else:
                 self.logger.info(f"No action taken. Signal: {signal}")
             return None
-            
+
         except Exception as e:
             self.logger.error(f"Error processing analysis: {e}")
             return None
-    
+
     async def _handle_existing_position(
         self,
         signal: str,
@@ -246,7 +246,7 @@ class TradingStrategy:
         market_conditions: Optional[Dict[str, Any]] = None,
     ) -> Optional[TradeDecision]:
         """Handle trading decision when position exists.
-        
+
         Args:
             signal: Trading signal
             confidence: Confidence level
@@ -256,7 +256,7 @@ class TradingStrategy:
             symbol: Trading symbol
             reasoning: AI reasoning
             market_conditions: Market state for brain learning
-            
+
         Returns:
             TradeDecision if action taken
         """
@@ -276,7 +276,7 @@ class TradingStrategy:
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
 
-        updated = self._update_position_parameters(stop_loss, take_profit)
+        updated = await self._update_position_parameters(stop_loss, take_profit)
 
         if updated:
             try:
@@ -305,12 +305,12 @@ class TradingStrategy:
                 fee=0.0,
                 reasoning=f"Updated position parameters. {reasoning}",
             )
-            self.persistence.save_trade_decision(decision)
+            await self.persistence.async_save_trade_decision(decision)
             self.logger.info(f"Position updated: New SL=${stop_loss:,.2f}, TP=${take_profit:,.2f}")
             return decision
 
         return None
-    
+
     async def _open_new_position(
         self,
         signal: str,
@@ -369,8 +369,8 @@ class TradingStrategy:
             confluence_factors=confluence_factors,
             market_conditions=market_conditions
         )
-        
-        self.persistence.save_position(self.current_position)
+
+        await self.persistence.async_save_position(self.current_position)
         self.logger.info(
             f"Opened {direction} position @ ${current_price:,.2f} "
             f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Qty: {quantity:.6f}, Fee: ${entry_fee:.4f})"
@@ -392,41 +392,59 @@ class TradingStrategy:
             reasoning=reasoning,
         )
 
-        self.persistence.save_trade_decision(decision)
+        await self.persistence.async_save_trade_decision(decision)
 
         return decision
-    
-    def _update_position_parameters(
+
+    async def _update_position_parameters(
         self,
         stop_loss: Optional[float],
         take_profit: Optional[float],
     ) -> bool:
         """Update position stop loss and take profit.
-        
+
         Args:
             stop_loss: New stop loss
             take_profit: New take profit
-            
+
         Returns:
             True if anything was updated
         """
         if not self.current_position:
             return False
-        
+
         updated = False
         new_sl = self.current_position.stop_loss
         new_tp = self.current_position.take_profit
-        
+
         if stop_loss and stop_loss != self.current_position.stop_loss:
-            new_sl = stop_loss
-            self.logger.info(f"Updated Stop Loss: ${stop_loss:,.2f}")
-            updated = True
-        
+            direction = self.current_position.direction
+            old_sl = self.current_position.stop_loss
+            # FULL AI AUTONOMY: Allow AI to move stop loss in any direction
+            if direction == "LONG" and stop_loss < old_sl:
+                self.logger.info(
+                    "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
+                    old_sl, stop_loss
+                )
+                new_sl = stop_loss
+                updated = True
+            elif direction == "SHORT" and stop_loss > old_sl:
+                self.logger.info(
+                    "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f (Risk Increased)",
+                    old_sl, stop_loss
+                )
+                new_sl = stop_loss
+                updated = True
+            else:
+                new_sl = stop_loss
+                self.logger.info(f"Updated Stop Loss: ${stop_loss:,.2f}")
+                updated = True
+
         if take_profit and take_profit != self.current_position.take_profit:
             new_tp = take_profit
             self.logger.info(f"Updated Take Profit: ${take_profit:,.2f}")
             updated = True
-        
+
         if updated:
             # Create new position with updated values using factory
             self.current_position = self.position_factory.create_updated_position(
@@ -434,59 +452,124 @@ class TradingStrategy:
                 new_stop_loss=new_sl,
                 new_take_profit=new_tp
             )
-            self.persistence.save_position(self.current_position)
-        
+            await self.persistence.async_save_position(self.current_position)
+
         return updated
-    
+
     def _extract_price_from_result(self, result: dict) -> float:
         """Extract current price from analysis result.
-        
+
         Args:
             result: Analysis result dictionary
-            
+
         Returns:
             Current price
         """
         # Try different possible locations for price
         if "current_price" in result:
             return float(result["current_price"])
-        
+
         if "context" in result and result["context"] is not None:
             return float(result["context"].current_price)
-        
+
         # Default fallback
         if self.logger:
             self.logger.warning(f"Could not extract price from result keys: {list(result.keys())}")
         return 0.0
-    
+
+    @staticmethod
+    def _build_conditions_from_position(position: Position) -> Dict[str, Any]:
+        """Reconstruct market conditions from Position's stored entry fields.
+
+        Used when closing via SL/TP hit where no fresh analysis is available.
+        """
+        rsi = position.rsi_at_entry
+        if rsi > 70:
+            rsi_level = "OVERBOUGHT"
+        elif rsi > 60:
+            rsi_level = "STRONG"
+        elif rsi < 30:
+            rsi_level = "OVERSOLD"
+        elif rsi < 40:
+            rsi_level = "WEAK"
+        else:
+            rsi_level = "NEUTRAL"
+
+        return {
+            "trend_direction": position.trend_direction_at_entry,
+            "adx": position.adx_at_entry,
+            "rsi": rsi,
+            "rsi_level": rsi_level,
+            "volatility": position.volatility_level,
+            "macd_signal": position.macd_signal_at_entry,
+            "bb_position": position.bb_position_at_entry,
+            "volume_state": position.volume_state_at_entry,
+            "market_sentiment": position.market_sentiment_at_entry,
+        }
+
     def _extract_market_conditions(self, result: dict) -> Dict[str, Any]:
         """Extract market conditions from analysis result for brain learning.
-        
+
         Args:
             result: Analysis result dictionary
-            
+
         Returns:
             Dictionary with trend_direction, adx, volatility, etc.
         """
         conditions = {}
-        
+
         try:
             # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
             analysis = result.get("analysis", {})
-            
+
             # Get trend info
             trend = analysis.get("trend", {})
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                conditions["trend_strength"] = trend.get("strength", 50)
+                conditions["trend_strength"] = trend.get("strength_4h", trend.get("strength", 50))
                 conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
-            
+
             # Get technical data (result has 'technical_data' at top level, not under 'context')
             tech_data = result.get("technical_data", {})
             if tech_data:
                 conditions["adx"] = tech_data.get("adx", 0)
                 conditions["rsi"] = tech_data.get("rsi", 50)
+                # Derive RSI Level
+                rsi_val = conditions["rsi"]
+                if rsi_val > 70:
+                    conditions["rsi_level"] = "OVERBOUGHT"
+                elif rsi_val > 60:
+                    conditions["rsi_level"] = "STRONG"
+                elif rsi_val < 30:
+                    conditions["rsi_level"] = "OVERSOLD"
+                elif rsi_val < 40:
+                    conditions["rsi_level"] = "WEAK"
+                else:
+                    conditions["rsi_level"] = "NEUTRAL"
+                    
                 conditions["choppiness"] = tech_data.get("choppiness", None)
+                
+                # MACD
+                macd = tech_data.get("macd", {})
+                if isinstance(macd, dict):
+                    conditions["macd_signal"] = macd.get("signal", "NEUTRAL")
+                
+                # Bollinger Bands
+                bb = tech_data.get("bollinger_bands", {})
+                if isinstance(bb, dict):
+                    pct_b = bb.get("percent_b", 0.5)
+                    if pct_b > 0.95:
+                        conditions["bb_position"] = "UPPER"
+                    elif pct_b < 0.05:
+                        conditions["bb_position"] = "LOWER"
+                    else:
+                        conditions["bb_position"] = "MIDDLE"
+
+                # Volume
+                vol_data = tech_data.get("volume", {})
+                if isinstance(vol_data, dict):
+                    conditions["volume_state"] = vol_data.get("state", "NORMAL")
+
                 # Extract ATR for dynamic SL/TP calculation
                 conditions["atr"] = tech_data.get("atr", 0)
                 atr_pct = tech_data.get("atr_percentage", 0)
@@ -498,6 +581,11 @@ class TradingStrategy:
                     conditions["volatility"] = "LOW"
                 else:
                     conditions["volatility"] = "MEDIUM"
+            
+            # Market Sentiment
+            conditions["market_sentiment"] = result.get("context", {}).get("market_sentiment", "NEUTRAL") if "context" in result else "NEUTRAL"
+            conditions["fear_greed_index"] = result.get("context", {}).get("fear_greed_index", 50) if "context" in result else 50
+
             # Fallback: try to extract from raw response keywords
             raw_response = result.get("raw_response", "").lower()
             if not conditions.get("trend_direction"):
@@ -510,18 +598,18 @@ class TradingStrategy:
         except Exception as e:
             self.logger.warning(f"Could not extract market conditions: {e}")
         return conditions
-    
+
     def _extract_confluence_factors(self, result: dict) -> tuple:
         """Extract confluence factors from analysis result for brain learning.
-        
+
         Args:
             result: Analysis result dictionary
-            
+
         Returns:
             Tuple of (factor_name, score) pairs
         """
         factors = []
-        
+
         try:
             # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
             analysis = result.get("analysis", {})
@@ -538,13 +626,13 @@ class TradingStrategy:
         except Exception as e:
             self.logger.warning(f"Could not extract confluence factors: {e}")
         return tuple(factors)
-    
+
     def get_position_context(self, current_price: Optional[float] = None) -> str:
         """Get formatted context about current position for prompts.
-        
+
         Args:
             current_price: Current market price for P&L calculation
-            
+
         Returns:
             Formatted position context string with capital status
         """
@@ -595,4 +683,3 @@ class TradingStrategy:
             pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
             context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
         return "\n".join(context_lines)
-

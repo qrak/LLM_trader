@@ -4,12 +4,12 @@ Prints AI trading analysis to console with colored and formatted output.
 """
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
+from .base_notifier import BaseNotifier
+
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
-
-from .base_notifier import BaseNotifier
 
 
 
@@ -101,17 +101,20 @@ class ConsoleNotifier(BaseNotifier):
         """Print full analysis notification with reasoning and JSON data.
 
         Args:
-            result: Analysis result dict with raw_response
+            result: Analysis result dict with corrected analysis and raw_response
             symbol: Trading symbol
             timeframe: Trading timeframe
             channel_id: Ignored for console output
         """
         try:
-            raw_response = result.get("raw_response", "")
-            if not raw_response:
+            # Get the corrected analysis dict (has R/R correction and other validations applied)
+            analysis = result.get("analysis")
+            if not analysis:
                 return
 
-            reasoning, analysis_json = self.parse_analysis_response(raw_response)
+            # Get reasoning text from raw_response (narrative text, not data)
+            raw_response = result.get("raw_response", "")
+            reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
             print("\n" + "=" * 60)
             print(f"📊 ANALYSIS: {symbol} ({timeframe})")
@@ -120,8 +123,8 @@ class ConsoleNotifier(BaseNotifier):
             if reasoning:
                 print(f"\n{reasoning}")
 
-            if analysis_json:
-                self._print_analysis_data(analysis_json, timeframe)
+            # Use the corrected analysis dict (not re-parsed raw JSON)
+            self._print_analysis_data(analysis, timeframe)
         except Exception as e:
             self.logger.error(f"Error printing analysis notification: {e}")
 

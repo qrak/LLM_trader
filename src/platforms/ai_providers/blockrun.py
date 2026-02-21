@@ -11,6 +11,11 @@ from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
 from src.utils.decorators import retry_api_call
 
+try:
+    from blockrun_llm import AsyncLLMClient
+except ImportError:
+    AsyncLLMClient = None
+
 
 class BlockRunClient(BaseAIClient):
     """Client for handling BlockRun.AI API requests using the official SDK."""
@@ -24,12 +29,13 @@ class BlockRunClient(BaseAIClient):
     async def _initialize_client(self) -> None:
         """Initialize the BlockRun SDK client."""
         try:
-            from blockrun_llm import AsyncLLMClient
+            if AsyncLLMClient is None:
+                raise ImportError("blockrun-llm SDK is required but not installed")
             self._client = AsyncLLMClient(private_key=self._wallet_key, api_url=self.base_url)
             self.logger.debug("BlockRun SDK client initialized successfully")
-        except ImportError as e:
+        except ImportError:
             self.logger.error("BlockRun SDK not installed. Run: pip install blockrun-llm")
-            raise ImportError("blockrun-llm SDK is required but not installed") from e
+            raise
 
     async def close(self) -> None:
         """Close the SDK client."""
@@ -68,12 +74,12 @@ class BlockRunClient(BaseAIClient):
         try:
             self.logger.debug(f"Sending request to BlockRun SDK with model: {model}")
             effective_model = self._ensure_provider_prefix(model)
-            
+
             # Use base class retry logic for unsupported parameters
             response = await self._execute_with_param_retry(
-                client.chat_completion, 
-                model_config, 
-                model=effective_model, 
+                client.chat_completion,
+                model_config,
+                model=effective_model,
                 messages=messages
             )
             return self.convert_pydantic_response(response, wrapper_attr='response')
@@ -114,7 +120,7 @@ class BlockRunClient(BaseAIClient):
             )
             self.logger.debug(f"Sending chart analysis request to BlockRun SDK ({len(img_data)} bytes)")
             effective_model = self._ensure_provider_prefix(model)
-            
+
             # Use base class retry logic for unsupported parameters
             response = await self._execute_with_param_retry(
                 client.chat_completion,

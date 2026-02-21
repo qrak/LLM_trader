@@ -726,7 +726,7 @@ class TestOpenRouterClient:
             )
         
         call_args = mock_client.chat.send_async.call_args
-        sent_messages = call_args.kwargs.get('messages', [])
+        sent_messages = call_args[1].get('messages', []) if len(call_args) > 1 else []
         
         found_base64 = False
         for msg in sent_messages:
@@ -834,7 +834,7 @@ class TestOpenRouterClient:
         ]
         
         result = openrouter_client._prepare_multimodal_messages(
-            sample_messages, user_text, multimodal_content
+            sample_messages, multimodal_content
         )
         
         assert len(result) >= 1

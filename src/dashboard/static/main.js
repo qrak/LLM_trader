@@ -61,9 +61,18 @@ async function fetchBrainStatus() {
         const response = await fetch('/api/brain/status');
         const data = await response.json();
         const connStatus = document.getElementById('connection-status');
+        const statusDot = document.querySelector('.status-dot');
+
         if (connStatus) {
-            connStatus.textContent = '🟢 Connected';
-            connStatus.style.color = '#238636';
+            connStatus.textContent = 'Connected';
+            connStatus.classList.remove('status-text', 'disconnected');
+            connStatus.classList.add('status-text', 'connected');
+            connStatus.style.color = ''; // Clear inline style if present
+        }
+
+        if (statusDot) {
+            statusDot.classList.remove('disconnected');
+            statusDot.classList.add('connected');
         }
         
         // Update Brain State Indicator
@@ -103,9 +112,18 @@ async function fetchBrainStatus() {
         updateLastUpdated();
     } catch (e) {
         const connStatus = document.getElementById('connection-status');
+        const statusDot = document.querySelector('.status-dot');
+
         if (connStatus) {
-            connStatus.textContent = '🔴 Disconnected';
-            connStatus.style.color = '#f85149';
+            connStatus.textContent = 'Disconnected';
+            connStatus.classList.remove('status-text', 'connected');
+            connStatus.classList.add('status-text', 'disconnected');
+            connStatus.style.color = ''; // Clear inline style if present
+        }
+
+        if (statusDot) {
+            statusDot.classList.remove('connected');
+            statusDot.classList.add('disconnected');
         }
     }
 }
@@ -136,7 +154,7 @@ async function fetchRules() {
 function updateLastUpdated() {
     const el = document.getElementById('last-updated');
     if (el && state.lastUpdateTime) {
-        el.textContent = `Updated: ${state.lastUpdateTime.toLocaleTimeString()}`;
+        el.textContent = `Updated: ${new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(state.lastUpdateTime)}`;
     }
 }
 
@@ -202,6 +220,30 @@ function initApp() {
     });
 
     try {
+        // Event listeners for static buttons
+        const btnMinimize = document.getElementById('btn-minimize-visuals');
+        if (btnMinimize) {
+            btnMinimize.addEventListener('click', () => togglePanelMinimize('panel-visuals'));
+        }
+
+        const btnLightbox = document.getElementById('btn-lightbox-visuals');
+        if (btnLightbox) {
+            btnLightbox.addEventListener('click', () => {
+                const img = document.getElementById('analysis-chart');
+                if (img && img.src && window.openLightbox) window.openLightbox(img.src);
+            });
+        }
+
+        const btnCopyPrompt = document.getElementById('btn-copy-prompt');
+        if (btnCopyPrompt && window.copyPromptContent) {
+            btnCopyPrompt.addEventListener('click', window.copyPromptContent);
+        }
+
+        const btnCopyResponse = document.getElementById('btn-copy-response');
+        if (btnCopyResponse && window.copyResponseContent) {
+            btnCopyResponse.addEventListener('click', window.copyResponseContent);
+        }
+
         initPerformanceChart();
         initSynapseNetwork();
         initVectorPanel();

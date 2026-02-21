@@ -2,6 +2,7 @@
 OpenRouter client implementation using the official OpenRouter SDK.
 Supports text-only and multimodal (text + image) requests with cost tracking.
 """
+import asyncio
 import io
 import base64
 from typing import Optional, Dict, Any, List, Union
@@ -50,7 +51,7 @@ class OpenRouterClient(BaseAIClient):
         client = self._ensure_client()
         try:
             self.logger.debug(f"Sending request to OpenRouter SDK with model: {model}")
-            
+
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.send_async,
@@ -92,10 +93,10 @@ class OpenRouterClient(BaseAIClient):
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
             ]
             multimodal_messages = self._prepare_multimodal_messages(
-                messages, user_text, multimodal_content
+                messages, multimodal_content
             )
             self.logger.debug(f"Sending chart analysis request to OpenRouter SDK ({len(img_data)} bytes)")
-            
+
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.send_async,
@@ -121,7 +122,6 @@ class OpenRouterClient(BaseAIClient):
         Returns:
             Dictionary with token counts and costs
         """
-        import asyncio
         await asyncio.sleep(retry_delay)
         client = self._ensure_client()
         try:
@@ -155,7 +155,6 @@ class OpenRouterClient(BaseAIClient):
     def _prepare_multimodal_messages(
         self,
         messages: List[Dict[str, Any]],
-        user_text: str,
         multimodal_content: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Convert messages to OpenRouter multimodal format."""

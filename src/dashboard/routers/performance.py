@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Request
-from typing import Dict, Any
 import json
 from pathlib import Path
+from typing import Dict, Any
+
+from fastapi import APIRouter, Request
+
+from src.trading.statistics_calculator import StatisticsCalculator
 
 
 router = APIRouter(prefix="/api/performance", tags=["performance"])
@@ -22,48 +25,41 @@ async def get_performance_history(request: Request) -> Dict[str, Any]:
     stats = {}
     if stats_file.exists():
         try:
-            with open(stats_file, "r") as f:
+            with open(stats_file, "r", encoding="utf-8") as f:
                 stats = json.load(f)
         except Exception:
             logger.error("Failed to load stats file", exc_info=True)
     if trade_history_file.exists():
         try:
-            with open(trade_history_file, "r") as f:
+            with open(trade_history_file, "r", encoding="utf-8") as f:
                 trades = json.load(f)
             initial_capital = stats.get("initial_capital", 10000.0)
             running_capital = initial_capital
+            closed_trades = StatisticsCalculator._extract_closed_trades(trades)
+            closed_trade_idx = 0
+            open_position = None
             for trade in trades:
                 ts = trade.get("timestamp")
-                action = trade.get("action", "")
-                reasoning = trade.get("reasoning", "")
-                if "CLOSE" in action and "P&L:" in reasoning:
-                    try:
-                        pnl_str = reasoning.split("P&L:")[1].strip().split("%")[0].replace("+", "")
-                        pnl_pct = float(pnl_str)
-                        pnl_quote = running_capital * (pnl_pct / 100)
-                        running_capital += pnl_quote
-                        equity_curve.append({
-                            "time": ts,
-                            "value": round(running_capital, 2),
-                            "action": action,
-                            "price": trade.get("price")
-                        })
-                    except (ValueError, IndexError):
-                        pass
-                elif action == "BUY":
+                action = trade.get("action", "").upper()
+                if action in ("BUY", "SELL"):
+                    open_position = trade
                     equity_curve.append({
                         "time": ts,
                         "value": round(running_capital, 2),
                         "action": action,
                         "price": trade.get("price")
                     })
-                elif action == "SELL":
+                elif action in ("CLOSE", "CLOSE_LONG", "CLOSE_SHORT") and open_position:
+                    if closed_trade_idx < len(closed_trades):
+                        running_capital += closed_trades[closed_trade_idx].pnl_quote
+                        closed_trade_idx += 1
                     equity_curve.append({
                         "time": ts,
                         "value": round(running_capital, 2),
                         "action": action,
                         "price": trade.get("price")
                     })
+                    open_position = None
         except Exception:
             logger.error("Failed to process trade history", exc_info=True)
             return {"error": "Failed to load trade history"}
@@ -87,7 +83,7 @@ async def get_statistics(request: Request) -> Dict[str, Any]:
     stats_file = Path(data_dir) / "trading" / "statistics.json"
     if stats_file.exists():
         try:
-            with open(stats_file, "r") as f:
+            with open(stats_file, "r", encoding="utf-8") as f:
                 result = json.load(f)
                 dashboard_state.set_cached("statistics", result)
                 return result
@@ -95,4 +91,3 @@ async def get_statistics(request: Request) -> Dict[str, Any]:
             logger.error("Failed to load statistics", exc_info=True)
             return {"error": "Failed to load stats"}
     return {}
-

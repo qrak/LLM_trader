@@ -7,7 +7,12 @@ from unittest.mock import MagicMock, patch
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.config.loader import Config
+import importlib.util
+spec = importlib.util.spec_from_file_location("real_loader", str(Path(__file__).parent.parent / "src" / "config" / "loader.py"))
+real_loader = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(real_loader)
+Config = real_loader.Config
+
 from src.dashboard.server import DashboardServer
 
 def test_config_loader_dashboard_defaults():

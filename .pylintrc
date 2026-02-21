@@ -1,0 +1,52 @@
+[MAIN]
+disable=
+    R0903, # too-few-public-methods
+    W0311, # bad-indentation
+    W0718, # broad-exception-caught
+
+init-hook='import sys; sys.path.append(".")'
+
+fail-under=8.0
+ignore=CVS
+ignore-patterns=
+jobs=1
+limit-inference-results=100
+persistent=yes
+unsafe-load-any-extension=no
+
+[MESSAGES CONTROL]
+enable=
+    C0114, # missing-module-docstring
+    C0115, # missing-class-docstring
+    C0116, # missing-function-docstring
+    C0103, # invalid-name
+    C0301, # line-too-long
+    R0914, # too-many-locals
+    W0611, # unused-import
+    W0612, # unused-variable
+    W0613, # unused-argument
+    E0602, # undefined-variable
+    W0201  # attribute-defined-outside-init
+
+[REPORTS]
+output-format=text
+reports=no
+score=yes
+
+[FORMAT]
+max-line-length=120
+max-module-lines=1000
+indent-string='    '
+indent-after-paren=4
+
+[DESIGN]
+max-args=5
+max-attributes=7
+max-bool-expr=5
+max-branches=12
+max-locals=25
+max-parents=7
+max-public-methods=20
+max-returns=6
+max-statements=50
+min-public-methods=2

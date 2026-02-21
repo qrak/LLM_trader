@@ -9,7 +9,7 @@ class RiskManagerProtocol(Protocol):
     """
     Protocol defining the interface for Risk Management.
     """
-    
+
     def calculate_entry_parameters(
         self,
         signal: str,
@@ -23,7 +23,7 @@ class RiskManagerProtocol(Protocol):
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
-        
+
         Returns:
             RiskAssessment dataclass with calculated SL, TP, size, quantity, fees, etc.
         """

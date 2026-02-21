@@ -1,35 +1,33 @@
 """ModelManager - Public API for AI model interactions."""
 import io
 from typing import Optional, Dict, List, Union, Tuple, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
-
 from src.logger.logger import Logger
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.contracts.model_contract import ModelManagerProtocol
-from src.factories import ProviderFactory
-from .provider_types import ProviderClients
-from .provider_orchestrator import ProviderOrchestrator
+from src.managers.provider_types import ProviderClients, InvocationResult
+from src.managers.provider_orchestrator import ProviderOrchestrator
+
+if TYPE_CHECKING:
+    from src.config.protocol import ConfigProtocol
 
 
 class ModelManager(ModelManagerProtocol):
     """
     Public API for AI model interactions.
-    
+
     Responsibilities:
     - Public send_prompt methods
     - Message preparation
     - Response processing and cost tracking
     - Async context management
-    
+
     Provider orchestration is delegated to ProviderOrchestrator.
     """
 
     def __init__(
-        self, 
-        logger: Logger, 
-        config: "ConfigProtocol", 
+        self,
+        logger: Logger,
+        config: "ConfigProtocol",
         unified_parser=None,
         token_counter: Optional[TokenCounter] = None,
         cost_storage: Optional[CostStorage] = None,
@@ -39,7 +37,7 @@ class ModelManager(ModelManagerProtocol):
     ) -> None:
         """
         Initialize the ModelManager.
-        
+
         Args:
             logger: Logger instance for logging
             config: ConfigProtocol instance for configuration access
@@ -49,7 +47,7 @@ class ModelManager(ModelManagerProtocol):
             model_pricing: ModelPricing instance
             orchestrator: ProviderOrchestrator instance
             provider_clients: ProviderClients instance
-        
+
         Raises:
             ValueError: If required dependencies are missing
         """
@@ -108,14 +106,14 @@ class ModelManager(ModelManagerProtocol):
     ) -> str:
         """
         Send a prompt to the model and get a response.
-        
+
         Args:
             prompt: User prompt
             system_message: Optional system instructions
             prepared_messages: Pre-prepared message list (if None, will be created from prompt)
             provider: Optional provider override
             model: Optional model override
-            
+
         Returns:
             Response text from the AI model
         """
@@ -133,7 +131,7 @@ class ModelManager(ModelManagerProtocol):
     ) -> str:
         """
         Send a prompt to the model and get a streaming response.
-        
+
         Falls back to regular prompt if streaming is unavailable.
         """
         messages = self._prepare_messages(prompt, system_message)
@@ -147,7 +145,6 @@ class ModelManager(ModelManagerProtocol):
                     effective_model, messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback
                 )
                 if response_json is not None:
-                    from .provider_types import InvocationResult
                     result = InvocationResult(
                         success=True,
                         response=response_json,
@@ -170,17 +167,17 @@ class ModelManager(ModelManagerProtocol):
     ) -> str:
         """
         Send a prompt with chart image for pattern analysis.
-        
+
         Args:
             prompt: User prompt
             chart_image: Chart image (BytesIO, bytes, or base64 string)
             system_message: Optional system instructions
             provider: Optional provider override
             model: Optional model override
-            
+
         Returns:
             Response text from the AI model
-            
+
         Raises:
             ValueError: If chart analysis is unavailable
         """
@@ -235,25 +232,24 @@ class ModelManager(ModelManagerProtocol):
             system_tokens = self.token_counter.count_tokens(system_message)
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug(f"Pre-call estimate: system={system_tokens:,}, prompt={prompt_tokens:,}")
-            self.logger.debug(f"Full prompt content: {combined_prompt}")
+            self.logger.info(f"Full prompt content: {combined_prompt}")
         else:
             messages.append({"role": "user", "content": prompt})
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug(f"Pre-call estimate: prompt={prompt_tokens:,}")
-            self.logger.debug(f"Full prompt content: {prompt}")
+            self.logger.info(f"Full prompt content: {prompt}")
         return messages
 
     async def _process_result(self, result) -> str:
         """
         Process invocation result: extract content, track costs, handle errors.
-        
+
         Args:
             result: InvocationResult from orchestrator
-            
+
         Returns:
             Response content string
         """
-        from .provider_types import InvocationResult
         if not isinstance(result, InvocationResult):
             return self.unified_parser.format_error_response("Invalid result type")
         response = result.response
@@ -267,8 +263,8 @@ class ModelManager(ModelManagerProtocol):
         if not response.choices or not response.choices[0].message:
             return self.unified_parser.format_error_response("No content in response")
         content = response.choices[0].message.content
+        self.logger.info(f"Full response content: {content}")
         await self._track_cost(result, response, content)
-        self.logger.debug(f"Full response content: {content}")
         return content
 
     async def _track_cost(self, result, response, content: str) -> None:

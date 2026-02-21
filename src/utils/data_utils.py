@@ -37,7 +37,7 @@ def get_last_valid_value(
     valid_indices = np.where(~np.isnan(arr))[0]
     if len(valid_indices) > 0:
         return float(arr[valid_indices[-1]])
-    
+
     return default
 
 
@@ -62,7 +62,7 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
 
     valid_mask = ~np.isnan(arr)
     valid_data = arr[valid_mask]
-    
+
     return valid_data[-n:] if len(valid_data) >= n else valid_data
 
 
@@ -87,10 +87,10 @@ def safe_array_to_scalar(
     try:
         val = arr[index]
         val_float = float(val)
-        
+
         if np.isnan(val_float):
             return default
-            
+
         return val_float
     except (IndexError, TypeError, ValueError):
         return default
@@ -98,11 +98,11 @@ def safe_array_to_scalar(
 
 def get_indicator_value(td: dict, key: str) -> Union[float, str]:
     """Get indicator value with proper type checking and error handling.
-    
+
     Args:
         td: Technical data dictionary
         key: Indicator key to retrieve
-        
+
     Returns:
         float or str: Indicator value or 'N/A' if invalid
     """
@@ -123,23 +123,23 @@ def serialize_for_json(obj: Any) -> Any:
     """Recursively convert NumPy objects to JSON-serializable types."""
     if isinstance(obj, dict):
         return {k: serialize_for_json(v) for k, v in obj.items()}
-    
+
     if isinstance(obj, (list, tuple)):
         return [serialize_for_json(v) for v in obj]
-    
+
     if isinstance(obj, np.ndarray):
         try:
             return obj.tolist()
         except Exception:
             # Fallback for complex/mixed arrays
             return [serialize_for_json(v) for v in obj]
-            
+
     if isinstance(obj, np.generic):
         try:
             return obj.item()
         except Exception:
             return str(obj)
-            
+
     # Handle NaN/Inf float values which are standard in NumPy but invalid in JSON
     if isinstance(obj, float):
         if np.isnan(obj) or np.isinf(obj):
@@ -149,7 +149,7 @@ def serialize_for_json(obj: Any) -> Any:
     # Primitive types pass through
     if isinstance(obj, (str, int, bool)) or obj is None:
         return obj
-        
+
     # Last resort fallback
     try:
         return str(obj)
@@ -169,7 +169,7 @@ def safe_tolist(obj: Any) -> Union[List, Any]:
 
 class SerializableMixin:
     """Mixin to add JSON serialization/deserialization to dataclasses.
-    
+
     Handles:
     - datetime objects (ISO format)
     - Nested dataclasses (recursive conversion)

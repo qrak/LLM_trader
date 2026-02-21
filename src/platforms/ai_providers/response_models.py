@@ -1,6 +1,7 @@
 """Unified Pydantic response models for all AI providers."""
-from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+
+from pydantic import BaseModel
 
 
 class MessageModel(BaseModel):

@@ -14,7 +14,7 @@ install_rich_traceback()
 
 
 class DailyRotatingFileHandler(TimedRotatingFileHandler):
-    def __init__(self, filename, log_dir, log_filename_prefix, logger_name, is_error_handler=False, *args, **kwargs):
+    def __init__(self, filename, log_dir, log_filename_prefix, logger_name, *args, is_error_handler=False, **kwargs):
         self.log_dir = log_dir
         self.log_filename_prefix = log_filename_prefix
         self.logger_name = logger_name
@@ -23,10 +23,10 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
 
     def emit(self, record):
         current_date = datetime.now().strftime("%Y_%m_%d")
-        
+
         # Always use the main logger directory, even for errors
         current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
-        
+
         if self.is_error_handler:
             # Force filename to be errors.log for error handler
             current_filename = os.path.join(current_log_dir, "errors.log")
@@ -60,18 +60,18 @@ class Logger(logging.Logger):
     def __init__(self, logger_name: str = '', log_filename_prefix: str = '', log_dir: str = None,
                  logger_debug: bool = False) -> None:
         sanitized_name = logger_name.replace('/', '_').replace('\\', '_')
-        
+
         level = logging.DEBUG if logger_debug else logging.INFO
         super().__init__(sanitized_name, level)
 
         self.log_filename_prefix = log_filename_prefix
-        
+
         if log_dir is None:
             # Import config here to avoid circular imports
             self.log_dir = config.LOG_DIR
         else:
             self.log_dir = log_dir
-            
+
         self.date_format = "%d.%m.%Y %H:%M:%S"
 
         self._setup_logger()
@@ -126,7 +126,7 @@ class Logger(logging.Logger):
         file_handler.setLevel(self.level)
         file_handler.setFormatter(self._plain_formatter())
         file_handler.namer = lambda name: name.replace(".log", "") + ".log"
-        file_handler.rotator = lambda source, _dest: self._log_rotator(source, is_error=False)
+        file_handler.rotator = lambda source, _dest: self._log_rotator(source)
         self.addHandler(file_handler)
 
     def _add_error_file_handler(self, error_log_dir):
@@ -146,15 +146,15 @@ class Logger(logging.Logger):
         error_file_handler.setLevel(logging.ERROR)
         error_file_handler.setFormatter(self._plain_formatter())
         error_file_handler.namer = lambda name: name.replace(".log", "") + ".log"
-        error_file_handler.rotator = lambda source, _dest: self._log_rotator(source, is_error=True)
+        error_file_handler.rotator = lambda source, _dest: self._log_rotator(source)
         self.addHandler(error_file_handler)
 
-    def _log_rotator(self, source, is_error=False):
+    def _log_rotator(self, source):
         new_date = datetime.now().strftime("%Y_%m_%d")
         # _get_log_dir no longer accepts is_error, it returns the main directory
         new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
-        open(new_file, 'a').close()
+        open(new_file, 'a', encoding='utf-8').close()
 
     def close(self) -> None:
         """Close all handlers and release resources."""

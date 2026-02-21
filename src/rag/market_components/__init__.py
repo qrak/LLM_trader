@@ -11,6 +11,6 @@ from .market_overview_builder import MarketOverviewBuilder
 __all__ = [
     'MarketDataProcessor',
     'MarketDataFetcher',
-    'MarketDataCache', 
+    'MarketDataCache',
     'MarketOverviewBuilder'
 ]

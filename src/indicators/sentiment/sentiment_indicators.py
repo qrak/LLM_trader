@@ -1,6 +1,7 @@
+from dataclasses import dataclass
+
 import numpy as np
 from numba import njit
-from dataclasses import dataclass
 
 
 @dataclass
@@ -38,7 +39,7 @@ def _calculate_rsi_window(close, rsi_length):
         else:
             rs = avg_gain / avg_loss
             rsi_list[i] = 100 - (100 / (1 + rs))
-    
+
     return rsi_list
 
 
@@ -74,7 +75,7 @@ def _calculate_macd_window(close, macd_fast_length, macd_slow_length, macd_signa
                     signal = (macd - signal) * multiplier_signal + signal
                     signal_list[i] = signal
                     histogram_list[i] = macd - signal
-    
+
     return macd_list, signal_list, histogram_list
 
 
@@ -95,7 +96,7 @@ def _calculate_mfi_window(high, low, close, volume, mfi_length):
         else:
             mfr = pmf / nmf
             mfi_list[i] = 100 * mfr / (1 + mfr)
-    
+
     return mfi_list
 
 
@@ -109,12 +110,12 @@ def _normalize_value(value, min_val, max_val):
 
 
 @njit(cache=True)
-def _calculate_fear_greed_for_window(rsi_list, histogram_list, mfi_list, window_size, 
+def _calculate_fear_greed_for_window(rsi_list, histogram_list, mfi_list, window_size,
                                    rsi_length, macd_slow_length, macd_signal_length, mfi_length):
     """Calculate fear and greed index for a specific window."""
     start_idx = max(rsi_length, macd_slow_length + macd_signal_length - 1, mfi_length)
     result = np.full(window_size, np.nan)
-    
+
     for i in range(start_idx, window_size):
         # Normalize RSI
         normalized_rsi = (rsi_list[i] - 30) / (70 - 30) * 100
@@ -129,7 +130,7 @@ def _calculate_fear_greed_for_window(rsi_list, histogram_list, mfi_list, window_
         normalized_mfi = max(0, min(100, mfi_list[i]))
 
         result[i] = (normalized_rsi + normalized_macd_histogram + normalized_mfi) / 3
-    
+
     return result
 
 
@@ -148,7 +149,7 @@ def _fear_and_greed_index_numba(close, high, low, volume, rsi_length, macd_fast_
 
         # Calculate indicators for this window
         rsi_list = _calculate_rsi_window(window_close, rsi_length)
-        macd_list, signal_list, histogram_list = _calculate_macd_window(
+        _, __, histogram_list = _calculate_macd_window(
             window_close, macd_fast_length, macd_slow_length, macd_signal_length)
         mfi_list = _calculate_mfi_window(window_high, window_low, window_close, window_volume, mfi_length)
 
@@ -156,7 +157,7 @@ def _fear_and_greed_index_numba(close, high, low, volume, rsi_length, macd_fast_
         window_fg = _calculate_fear_greed_for_window(
             rsi_list, histogram_list, mfi_list, window_size,
             rsi_length, macd_slow_length, macd_signal_length, mfi_length)
-        
+
         # Copy results to main array
         for i in range(window_size):
             if not np.isnan(window_fg[i]):
@@ -167,24 +168,24 @@ def _fear_and_greed_index_numba(close, high, low, volume, rsi_length, macd_fast_
 
 
 def fear_and_greed_index_numba(
-    close: np.ndarray, 
-    high: np.ndarray, 
-    low: np.ndarray, 
-    volume: np.ndarray, 
+    close: np.ndarray,
+    high: np.ndarray,
+    low: np.ndarray,
+    volume: np.ndarray,
     config: FearGreedConfig
 ) -> np.ndarray:
     """
     Fear and Greed Index - Simple interface using config object.
-    
+
     Calculates a composite sentiment indicator based on RSI, MACD, and MFI.
-    
+
     Args:
         close: Close prices
-        high: High prices  
+        high: High prices
         low: Low prices
         volume: Volume data
         config: Configuration object containing all parameters
-        
+
     Returns:
         Fear and greed index array (0-100, where <30 is fear, >70 is greed)
     """

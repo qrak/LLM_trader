@@ -59,7 +59,7 @@ function updateChartTimestamp(timestamp) {
     }
     
     if (timestamp) {
-        overlay.textContent = new Date(timestamp).toLocaleString();
+        overlay.textContent = new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(timestamp));
         overlay.style.display = 'block';
     } else {
         overlay.style.display = 'none';
@@ -67,6 +67,9 @@ function updateChartTimestamp(timestamp) {
 }
 
 function openLightbox(src) {
+    // 1. Capture previously focused element to restore later
+    const lastFocusedElement = document.activeElement;
+
     let zoom = 1;
     let panX = 0, panY = 0;
     let panStart = { x: 0, y: 0 };
@@ -74,13 +77,22 @@ function openLightbox(src) {
     const overlay = document.createElement('div');
     overlay.id = 'lightbox-overlay';
 
+    // 2. Add Accessibility Attributes
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Image View');
+
+    // 3. Hide main content from screen readers
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) appContainer.setAttribute('aria-hidden', 'true');
+
     // Toolbar (without measurement tool)
     const toolbar = document.createElement('div');
     toolbar.className = 'lightbox-toolbar';
     toolbar.innerHTML = `
-        <button id="lb-zoom-in" title="Zoom In (+)">🔍+</button>
-        <button id="lb-zoom-out" title="Zoom Out (-)">🔍−</button>
-        <button id="lb-reset" title="Reset View (0)">↺</button>
+        <button id="lb-zoom-in" title="Zoom In (+)" aria-label="Zoom In">🔍+</button>
+        <button id="lb-zoom-out" title="Zoom Out (-)" aria-label="Zoom Out">🔍−</button>
+        <button id="lb-reset" title="Reset View (0)" aria-label="Reset View">↺</button>
         <span class="zoom-display" id="lb-zoom-display">100%</span>
     `;
 
@@ -89,6 +101,7 @@ function openLightbox(src) {
     closeBtn.className = 'lightbox-close';
     closeBtn.innerHTML = '✕';
     closeBtn.title = 'Close (Esc)';
+    closeBtn.setAttribute('aria-label', 'Close Image View');
 
     // Viewport
     const viewport = document.createElement('div');
@@ -97,12 +110,16 @@ function openLightbox(src) {
     const img = document.createElement('img');
     img.src = src;
     img.draggable = false;
+    img.alt = "Enlarged chart view";
 
     viewport.appendChild(img);
     overlay.appendChild(toolbar);
     overlay.appendChild(closeBtn);
     overlay.appendChild(viewport);
     document.body.appendChild(overlay);
+
+    // 4. Focus Management - Set initial focus
+    closeBtn.focus();
 
     function updateTransform() {
         img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
@@ -163,25 +180,54 @@ function openLightbox(src) {
         viewport.classList.remove('panning');
     });
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts & Focus Trap
     function handleKeydown(e) {
-        if (e.key === 'Escape') overlay.remove();
-        else if (e.key === '+' || e.key === '=') zoomIn();
+        if (e.key === 'Escape') {
+            overlay.remove();
+            return;
+        }
+
+        // Focus Trap Logic
+        if (e.key === 'Tab') {
+            const focusableElements = overlay.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (focusableElements.length === 0) return;
+
+            const firstElement = focusableElements[0];
+            const lastElement = focusableElements[focusableElements.length - 1];
+
+            if (e.shiftKey) { // Shift + Tab
+                if (document.activeElement === firstElement) {
+                    e.preventDefault();
+                    lastElement.focus();
+                }
+            } else { // Tab
+                if (document.activeElement === lastElement) {
+                    e.preventDefault();
+                    firstElement.focus();
+                }
+            }
+            return;
+        }
+
+        if (e.key === '+' || e.key === '=') zoomIn();
         else if (e.key === '-') zoomOut();
         else if (e.key === '0') resetView();
     }
     document.addEventListener('keydown', handleKeydown);
 
-    overlay.addEventListener('remove', () => {
+    // Cleanup function
+    function cleanup() {
         document.removeEventListener('keydown', handleKeydown);
-    });
+        if (appContainer) appContainer.removeAttribute('aria-hidden');
+        if (lastFocusedElement) lastFocusedElement.focus();
+    }
 
-    // Remove overlay cleanup
+    // Remove overlay cleanup via MutationObserver
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             mutation.removedNodes.forEach((node) => {
                 if (node === overlay) {
-                    document.removeEventListener('keydown', handleKeydown);
+                    cleanup();
                     observer.disconnect();
                 }
             });

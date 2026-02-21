@@ -14,14 +14,11 @@ class IndicatorBase:
 
     def __post_init__(self) -> None:
         self.timestamp: Optional[np.ndarray] = None
-        self._initialize_arrays()
-
-    def _initialize_arrays(self) -> None:
-        self.open = np.array([], dtype=np.float64)
-        self.high = np.array([], dtype=np.float64)
-        self.low = np.array([], dtype=np.float64)
-        self.close = np.array([], dtype=np.float64)
-        self.volume = np.array([], dtype=np.float64)
+        self.open: np.ndarray = np.array([], dtype=np.float64)
+        self.high: np.ndarray = np.array([], dtype=np.float64)
+        self.low: np.ndarray = np.array([], dtype=np.float64)
+        self.close: np.ndarray = np.array([], dtype=np.float64)
+        self.volume: np.ndarray = np.array([], dtype=np.float64)
 
     def get_data(self, new_data: Union[pd.DataFrame, np.ndarray, List[List[Union[int, float]]]]) -> None:
         if isinstance(new_data, pd.DataFrame):
@@ -161,4 +158,3 @@ class IndicatorBase:
         self.low = data[:, 2].reshape(-1)
         self.close = data[:, 3].reshape(-1)
         self.volume = data[:, 4].reshape(-1)
-

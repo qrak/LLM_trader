@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -5,21 +6,22 @@ from typing import Dict, List, Any, Optional
 
 import aiohttp
 
+from src.platforms.cryptocompare.data_processor import CryptoCompareDataProcessor
+from src.logger.logger import Logger
+from src.utils.decorators import retry_api_call
+from src.rag.collision_resolver import CategoryCollisionResolver
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
-from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
-from src.rag.collision_resolver import CategoryCollisionResolver
-from .data_processor import CryptoCompareDataProcessor
 
 
 class CryptoCompareCategoriesAPI:
     """
     Handles CryptoCompare categories API operations including fetching, caching, and processing categories
     """
-    
+
     def __init__(
         self,
         logger: Logger,
@@ -37,70 +39,101 @@ class CryptoCompareCategoriesAPI:
         self.api_categories: List[Dict[str, Any]] = []
         self.category_word_map: Dict[str, str] = {}
         self.categories_file = os.path.join(data_dir, "categories.json")
-        
+        self._file_lock = asyncio.Lock()
+
         # Injected data processor and collision resolver
         self.data_processor = data_processor
         self.collision_resolver = collision_resolver
-        
+
         # Ensure data directory exists
         os.makedirs(data_dir, exist_ok=True)
-    
+
     async def initialize(self) -> None:
         """Initialize the categories API and load cached data"""
         await self._load_cached_categories()
-    
-    async def _load_cached_categories(self) -> None:
-        """Load cached categories data - supports both list and object formats"""
+
+    def _read_cache_file_sync(self) -> Optional[Any]:
+        """Synchronous file read for asyncio.to_thread"""
         if os.path.exists(self.categories_file):
             try:
                 with open(self.categories_file, 'r', encoding='utf-8') as f:
-                    cached_data = json.load(f)
-                    
-                    # Handle both list and object formats
-                    if isinstance(cached_data, list):
-                        # Direct list format
-                        self.api_categories = cached_data
-                        self._process_api_categories(self.api_categories)
-                        self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (list format)")
-                    elif isinstance(cached_data, dict):
-                        # Object format with timestamp and categories
-                        if "timestamp" in cached_data:
-                            loaded_time = datetime.fromisoformat(cached_data["timestamp"])
-                            if loaded_time.tzinfo is None:
-                                loaded_time = loaded_time.replace(tzinfo=timezone.utc)
-                            self.categories_last_update = loaded_time
-                        
-                        if "categories" in cached_data:
-                            self.api_categories = cached_data["categories"]
-                        else:
-                            # Fallback: treat the dict as the categories data itself
-                            self.api_categories = [cached_data]
-                            
-                        self._process_api_categories(self.api_categories)
-                        self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (object format)")
-                    else:
-                        self.logger.warning(f"Unexpected cache format: {type(cached_data)}")
+                    return json.load(f)
             except Exception as e:
-                self.logger.error(f"Error loading categories cache: {e}")
-    
+                self.logger.error(f"Error reading categories cache file: {e}")
+                return None
+        return None
+
+    def _write_cache_file_sync(self, data: Dict) -> None:
+        """Synchronous file write for asyncio.to_thread"""
+        try:
+            with open(self.categories_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.error(f"Error writing categories cache file: {e}")
+
+    async def _load_cached_categories(self) -> None:
+        """Load cached categories data - supports both list and object formats"""
+        try:
+            async with self._file_lock:
+                cached_data = await asyncio.to_thread(self._read_cache_file_sync)
+
+            if cached_data is None:
+                return
+
+            # Handle both list and object formats
+            if isinstance(cached_data, list):
+                # Direct list format
+                self.api_categories = cached_data
+                self._process_api_categories(self.api_categories)
+                self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (list format)")
+            elif isinstance(cached_data, dict):
+                # Object format with timestamp and categories
+                if "timestamp" in cached_data:
+                    loaded_time = datetime.fromisoformat(cached_data["timestamp"])
+                    if loaded_time.tzinfo is None:
+                        loaded_time = loaded_time.replace(tzinfo=timezone.utc)
+                    self.categories_last_update = loaded_time
+
+                if "categories" in cached_data:
+                    self.api_categories = cached_data["categories"]
+                else:
+                    # Fallback: treat the dict as the categories data itself
+                    self.api_categories = [cached_data]
+
+                self._process_api_categories(self.api_categories)
+                self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (object format)")
+            else:
+                self.logger.warning(f"Unexpected cache format: {type(cached_data)}")
+        except Exception as e:
+            self.logger.error(f"Error loading categories cache: {e}")
+
     @retry_api_call(max_retries=3)
     async def get_categories(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
         Get cryptocurrency categories data
-        
+
         Args:
             force_refresh: Force refresh from API instead of using cache
-            
+
         Returns:
             List of category objects
         """
         current_time = datetime.now(timezone.utc)
-        
+
         # Check if we need to refresh
         if not force_refresh and self.categories_last_update and \
            current_time - self.categories_last_update < self.categories_update_interval:
+            self.logger.debug(f"Using cached categories (last update: {self.categories_last_update}, expires in: {self.categories_update_interval - (current_time - self.categories_last_update)})")
             return self.api_categories
-            
+        
+        # Log why we are fetching
+        if force_refresh:
+            self.logger.info("Fetching categories: Force refresh requested")
+        elif not self.categories_last_update:
+            self.logger.info("Fetching categories: No cache available")
+        else:
+            self.logger.info(f"Fetching categories: Cache expired (last update: {self.categories_last_update})")
+
         # We assume RAG_CATEGORIES_API_URL contains the base URL
         url = self.config.RAG_CATEGORIES_API_URL
 
@@ -125,47 +158,47 @@ class CryptoCompareCategoriesAPI:
                                 "timestamp": current_time.isoformat(),
                                 "categories": data
                             }
-                            
-                            with open(self.categories_file, 'w', encoding='utf-8') as f:
-                                json.dump(cache_data, f, ensure_ascii=False, indent=2)
-                                
+
+                            async with self._file_lock:
+                                await asyncio.to_thread(self._write_cache_file_sync, cache_data)
+
                             # Update internal data
                             self.api_categories = data
                             self._process_api_categories(data)
                             self.categories_last_update = current_time
-                            
+
                             return data
                     else:
                         self.logger.error(f"Categories API request failed with status {resp.status}")
                         self.logger.error(f"Response body: {await resp.text()}")
             except Exception as e:
                 self.logger.error(f"Error fetching CryptoCompare categories: {e}")
-        
+
         # Return cached data as fallback if API call fails
         return self.api_categories
-    
+
     def _process_api_categories(self, api_categories: Any) -> None:
         """Process API categories and update internal data structures"""
         if not api_categories:
             return
-            
+
         self.category_word_map = {}
-        
+
         try:
             # Debug logging for the received categories data
             self.logger.debug(f"Processing categories data of type: {type(api_categories)}")
-            
+
             # Normalize data format using the data processor
             normalized_data = self.data_processor.normalize_categories_data(api_categories)
             if normalized_data is None:
                 return
-                
+
             # Process the normalized data
             self._extract_category_mappings(normalized_data)
-            
+
         except Exception as e:
             self.logger.error(f"Error processing API categories: {e}")
-    
+
     def _extract_category_mappings(self, categories_list: List) -> None:
         """Extract word-to-category mappings from the categories list"""
         # Process items based on expected CryptoCompare category structure
@@ -178,34 +211,34 @@ class CryptoCompareCategoriesAPI:
                 self.logger.debug(f"Adding string category: {cat}")
             else:
                 self.logger.debug(f"Skipping category with unexpected structure: {type(cat)}")
-        
+
         self.logger.debug(f"Processed {len(self.category_word_map)} category-word associations")
-    
+
     def _process_category_dict(self, cat: Dict) -> None:
         """Process a single category dictionary to extract word mappings"""
         category_name = cat.get('categoryName', '')
         if not category_name:
             return
-        
+
         # Process wordsAssociatedWithCategory
         words = cat.get('wordsAssociatedWithCategory', [])
         if isinstance(words, list):
             self._add_words_to_mapping(words, category_name)
-        
+
         # Process includedPhrases
         phrases = cat.get('includedPhrases', [])
         if isinstance(phrases, list):
             self._add_words_to_mapping(phrases, category_name)
-    
+
     def _add_words_to_mapping(self, words: List, category_name: str) -> None:
         """Add a list of words/phrases to the category mapping with priority-based collision resolution"""
         collision_count = 0
         excluded_count = 0
-        
+
         for word in words:
             if not isinstance(word, str):
                 continue
-                
+
             word_stripped = word.strip()
             if len(word_stripped) < 2:
                 # Skip single-character tokens
@@ -216,13 +249,13 @@ class CryptoCompareCategoriesAPI:
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
                     excluded_count += 1
                     continue
-            
+
             word_lower = word_stripped.lower()
             if word_lower in self.category_word_map:
                 # Use shared collision resolver
                 existing_category = self.category_word_map[word_lower]
                 winner = self.collision_resolver.resolve_collision(existing_category, category_name, word_lower)
-                
+
                 if winner != existing_category:
                     # New category wins, update mapping
                     self.category_word_map[word_lower] = winner
@@ -230,13 +263,13 @@ class CryptoCompareCategoriesAPI:
                 collision_count += 1
             else:
                 self.category_word_map[word_lower] = category_name
-        
+
         # Collision and exclusion counts are kept for internal use but not logged per user request
-    
+
     def get_category_word_map(self) -> Dict[str, str]:
         """Get the current category word mapping"""
         return self.category_word_map.copy()
-    
+
     def get_api_categories(self) -> List[Dict[str, Any]]:
         """Get the current API categories list"""
         return self.api_categories.copy()

@@ -24,13 +24,21 @@ from src.config.loader import config
 @pytest.fixture
 def demo_capital():
     """Fixture providing demo capital from config."""
-    return config.DEMO_QUOTE_CAPITAL
+    capital = config.DEMO_QUOTE_CAPITAL
+    from unittest.mock import MagicMock
+    if isinstance(capital, MagicMock):
+        return 100000.0
+    return float(capital)
 
 
 @pytest.fixture
 def fee_percent():
     """Fixture providing transaction fee percent from config."""
-    return config.TRANSACTION_FEE_PERCENT
+    fee = config.TRANSACTION_FEE_PERCENT
+    from unittest.mock import MagicMock
+    if isinstance(fee, MagicMock):
+        return 0.00075
+    return float(fee)
 
 
 @pytest.fixture

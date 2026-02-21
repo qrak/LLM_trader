@@ -10,146 +10,151 @@ from typing import Any, Dict, Protocol
 
 class ConfigProtocol(Protocol):
     """Protocol defining the interface for configuration management.
-    
+
     All configuration properties and methods must be defined here.
     Implementations must provide all these members to satisfy the Protocol.
     """
-    
-    
+
+
 
     @property
     def BOT_TOKEN_DISCORD(self) -> str | None: ...
-    
+
     @property
     def GUILD_ID_DISCORD(self) -> int | None: ...
-    
+
     @property
     def MAIN_CHANNEL_ID(self) -> int | None: ...
-    
+
     @property
     def TEMPORARY_CHANNEL_ID_DISCORD(self) -> int | None: ...
-    
+
     @property
     def OPENROUTER_API_KEY(self) -> str | None: ...
-    
+
     @property
     def GOOGLE_STUDIO_API_KEY(self) -> str | None: ...
-    
+
     @property
     def GOOGLE_STUDIO_PAID_API_KEY(self) -> str | None: ...
-    
+
     @property
     def CRYPTOCOMPARE_API_KEY(self) -> str | None: ...
-    
+
     @property
     def BLOCKRUN_WALLET_KEY(self) -> str | None: ...
-    
+
     @property
     def ADMIN_USER_IDS(self) -> list[int]: ...
-    
-    
+
+
 
     @property
     def PROVIDER(self) -> str: ...
-    
+
     @property
     def LM_STUDIO_BASE_URL(self) -> str: ...
-    
+
     @property
     def LM_STUDIO_MODEL(self) -> str: ...
 
     @property
     def LM_STUDIO_STREAMING(self) -> bool: ...
-    
+
     @property
     def OPENROUTER_BASE_URL(self) -> str: ...
-    
+
     @property
     def OPENROUTER_BASE_MODEL(self) -> str: ...
-    
+
     @property
     def OPENROUTER_FALLBACK_MODEL(self) -> str: ...
-    
+
     @property
     def GOOGLE_STUDIO_MODEL(self) -> str: ...
-    
+
     @property
     def BLOCKRUN_BASE_URL(self) -> str: ...
-    
+
     @property
     def BLOCKRUN_MODEL(self) -> str: ...
-    
-    
+
+
 
     @property
     def LOGGER_DEBUG(self) -> bool: ...
-    
-    @property
-    def TEST_ENVIRONMENT(self) -> bool: ...
-    
+
     @property
     def TIMEFRAME(self) -> str: ...
-    
+
     @property
     def CANDLE_LIMIT(self) -> int: ...
-    
+
     @property
     def AI_CHART_CANDLE_LIMIT(self) -> int: ...
-    
+
     @property
     def INCLUDE_COIN_DESCRIPTION(self) -> bool: ...
-    
-    
+
+
 
     @property
     def DEBUG_SAVE_CHARTS(self) -> bool: ...
-    
+
     @property
     def DEBUG_CHART_SAVE_PATH(self) -> str: ...
-    
-    
+
+
 
     @property
     def LOG_DIR(self) -> str: ...
-    
-    @property
-    def DATA_DIR(self) -> str: ...
-    
-    
 
     @property
-    def ANALYSIS_COOLDOWN_COIN(self) -> int: ...
-    
-    @property
-    def ANALYSIS_COOLDOWN_USER(self) -> int: ...
-    
+    def DATA_DIR(self) -> str: ...
+
+
+
     @property
     def FILE_MESSAGE_EXPIRY(self) -> int: ...
-    
-    
+
+
 
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self) -> int: ...
-    
+
     @property
     def RAG_CATEGORIES_UPDATE_INTERVAL_HOURS(self) -> int: ...
-    
+
     @property
     def RAG_COINGECKO_UPDATE_INTERVAL_HOURS(self) -> int: ...
-    
+
     @property
     def RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS(self) -> float: ...
-    
+
     @property
     def RAG_COINGECKO_GLOBAL_API_URL(self) -> str: ...
 
     @property
-    def RAG_ARTICLE_MAX_SENTENCES(self) -> int: ...
+    def RAG_ARTICLE_MAX_TOKENS(self) -> int: ...
 
     @property
-    def RAG_ARTICLE_MAX_TOKENS(self) -> int: ...
-    
+    def RAG_DENSITY_PENALTY_THRESHOLD(self) -> int: ...
+
+    @property
+    def RAG_DENSITY_BOOST_THRESHOLD(self) -> int: ...
+
+    @property
+    def RAG_DENSITY_PENALTY_MULTIPLIER(self) -> float: ...
+
+    @property
+    def RAG_DENSITY_BOOST_MULTIPLIER(self) -> float: ...
+
+    @property
+    def RAG_COOCCURRENCE_MULTIPLIER(self) -> float: ...
+
     RAG_NEWS_API_URL: str
+    RAG_NEWS_FILTER_SOURCES: bool
+    RAG_NEWS_ALLOWED_FEEDS: list[str] | None
     RAG_CATEGORIES_API_URL: str
     RAG_PRICE_API_URL: str
 
@@ -165,18 +170,18 @@ class ConfigProtocol(Protocol):
 
     @property
     def SUPPORTED_EXCHANGES(self) -> list[str]: ...
-    
+
     @property
     def MARKET_REFRESH_HOURS(self) -> int: ...
-    
-    
+
+
 
     def get_env(self, key: str, default: Any = None) -> Any: ...
-    
+
     def get_config(self, section: str, key: str, default: Any = None) -> Any: ...
-    
+
     def get_section(self, section: str) -> Dict[str, Any]: ...
-    
-    def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]: ...
-    
+
+    def get_model_config(self, model_name: str, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]: ...
+
     def reload(self) -> None: ...

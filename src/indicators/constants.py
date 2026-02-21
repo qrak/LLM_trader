@@ -29,14 +29,14 @@ INDICATOR_THRESHOLDS = {
         'oversold': 20,
         'overbought': 80
     },
-    
+
     # Trend Indicators
     'adx': {
         'weak': 25,
         'strong': 50,
         'very_strong': 75
     },
-    
+
     # Volatility Indicators
     'bb_width': {
         'tight': 2,

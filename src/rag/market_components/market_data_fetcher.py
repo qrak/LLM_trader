@@ -12,20 +12,23 @@ if TYPE_CHECKING:
 
 class MarketDataFetcher:
     """Handles fetching market data from external APIs."""
-    
-    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None, defillama_client: Optional[DefiLlamaClient] = None):
+
+    def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None,
+                 defillama_client: Optional[DefiLlamaClient] = None):
+        # pylint: disable=too-many-arguments
+        """Initialize MarketDataFetcher."""
         self.logger = logger
         self.coingecko_api = coingecko_api
         self.exchange_manager = exchange_manager
         self.market_api = market_api
         self.defillama_client = defillama_client
-    
+
     async def fetch_global_market_data(self) -> Optional[Dict]:
         """Fetch global market data from CoinGecko."""
         if not self.coingecko_api:
             self.logger.error("CoinGecko API client not initialized")
             return None
-        
+
         try:
             return await self.coingecko_api.get_global_market_data()
         except Exception as e:
@@ -36,7 +39,7 @@ class MarketDataFetcher:
         """Fetch macro market data (Stablecoins, TVL) from DefiLlama."""
         if not self.defillama_client:
             return None
-            
+
         try:
             return await self.defillama_client.get_macro_overview()
         except Exception as e:
@@ -47,24 +50,15 @@ class MarketDataFetcher:
         """Fetch aggregated DeFi fundamentals from DefiLlama and cache results."""
         if not self.defillama_client:
             return None
-            
+
         try:
             data = await self.defillama_client.get_defi_fundamentals()
-            
-            # Simple caching mechanism: save successful fetch to disk
-            # Using FILE_HANDLER if available directly or via some mechanism?
-            # MarketDataFetcher is in src.rag.market_components which usually doesn't hold FileHandler directly.
-            # However, MarketDataManager holds FileHandler. 
-            # Ideally, fetcher should just fetch. Caching should be in Manager or a dedicated Cache component.
-            # But specific request was "like coingecko_global.json"
-            
-            # Let's keep fetcher pure and return data. The Manager should handle caching.
             return data
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching DeFi fundamentals: {e}")
             return None
-    
+
     async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
         """Fetch price data for top coins using CCXT or fallback to CryptoCompare."""
         price_data = None
@@ -72,7 +66,7 @@ class MarketDataFetcher:
             price_data = await self._try_ccxt_price_data(top_coins)
         except Exception as e:
             self.logger.error(f"Error fetching CCXT price data: {e}")
-            
+
         # Fallback to CryptoCompare
         if not price_data or not price_data.get("RAW"):
             if self.market_api:
@@ -82,28 +76,28 @@ class MarketDataFetcher:
                 except Exception as e:
                     self.logger.error(f"Error fetching CryptoCompare price data: {e}")
 
-                    
+
         return price_data
-    
+
 
     async def _try_ccxt_price_data(self, top_coins: List[str]) -> Optional[Dict]:
         """Try to fetch price data using CCXT exchange."""
         if not (self.exchange_manager and self.exchange_manager.exchanges):
             return None
-        
+
         # Select best available exchange
         exchange = self._select_exchange()
         if not exchange:
             return None
-        
+
         try:
             # Import DataFetcher here to avoid circular dependencies if it's in analyzer
-            from src.analyzer.data_fetcher import DataFetcher
-            
+            from src.analyzer.data_fetcher import DataFetcher  # pylint: disable=import-outside-toplevel
+
             data_fetcher = DataFetcher(exchange=exchange, logger=self.logger)
             symbols = [f"{coin}/USDT" for coin in top_coins]
             self.logger.debug(f"Fetching data for top coins: {symbols}")
-            
+
             price_data = await data_fetcher.fetch_multiple_tickers(symbols)
             self.logger.debug(f"Fetched price data for {len(symbols)} symbols using CCXT")
             return price_data
@@ -117,11 +111,11 @@ class MarketDataFetcher:
         if 'binance' in self.exchange_manager.exchanges:
             self.logger.debug("Using Binance exchange for market data")
             return self.exchange_manager.exchanges['binance']
-        
+
         # Use first available exchange that supports fetch_tickers
         for exchange_id, exch in self.exchange_manager.exchanges.items():
             if exch.has.get('fetchTickers', False):
                 self.logger.debug(f"Using {exchange_id} exchange for market data")
                 return exch
-        
+
         return None

@@ -15,10 +15,10 @@ else:
 
 class KeyboardHandler:
     """Handles keyboard input for console commands"""
-    
+
     def __init__(self, logger: Optional[Logger] = None):
         """Initialize the keyboard handler
-        
+
         Args:
             logger: Optional logger instance
         """
@@ -27,10 +27,10 @@ class KeyboardHandler:
         self._commands: Dict[str, Tuple[Callable, str]] = {}
         self._listening_task = None
         self._old_settings = None  # To store terminal settings on Linux/Mac
-    
+
     def register_command(self, key: str, callback: Callable[[], Awaitable], description: str) -> None:
         """Register a keyboard command
-        
+
         Args:
             key: Single character key that triggers the command (case-sensitive for SHIFT detection)
             callback: Async function to call when key is pressed
@@ -38,17 +38,17 @@ class KeyboardHandler:
         """
         if len(key) != 1:
             raise ValueError("Key must be a single character")
-        
+
         # Store command with its original case to support SHIFT+key detection
         self._commands[key] = (callback, description)
-        
+
     async def start_listening(self) -> None:
         """Start listening for keyboard input"""
         if self.running:
             return
-            
+
         self.running = True
-        
+
         # Linux/macOS: Switch to non-canonical mode
         if sys.platform != "win32":
             try:
@@ -61,12 +61,12 @@ class KeyboardHandler:
 
         if self.logger:
             self.logger.debug("Keyboard handler started")
-            
+
         while self.running:
             try:
                 await self._process_keyboard_input()
                 await asyncio.sleep(0.1)  # Prevent CPU hogging
-                
+
             except asyncio.CancelledError:
                 if self.logger:
                     self.logger.debug("Keyboard listener task cancelled")
@@ -76,7 +76,7 @@ class KeyboardHandler:
 
     async def _process_keyboard_input(self) -> None:
         """Process keyboard input if available.
-        
+
         Consumes ALL buffered input to prevent infinite loops from pasted/held keys.
         """
         while self._has_input():
@@ -100,7 +100,7 @@ class KeyboardHandler:
 
     def _read_key(self) -> Optional[str]:
         """Read a single character from keyboard input.
-        
+
         Returns the actual key pressed (preserves case for SHIFT detection).
         """
         try:
@@ -132,11 +132,11 @@ class KeyboardHandler:
         if self.logger:
             self.logger.error(f"Error in keyboard handler: {error}")
         await asyncio.sleep(1)  # Longer sleep on error
-    
+
     async def stop_listening(self) -> None:
         """Stop listening for keyboard input"""
         self.running = False
-        
+
         if self._listening_task and not self._listening_task.done():
             self._listening_task.cancel()
             try:
@@ -153,10 +153,10 @@ class KeyboardHandler:
             except Exception as e:
                 if self.logger:
                     self.logger.warning(f"Failed to restore terminal settings: {e}")
-            
+
         if self.logger:
             self.logger.debug("Keyboard handler stopped")
-            
+
     def display_help(self) -> None:
         """Display available keyboard commands"""
         for key, (_, description) in sorted(self._commands.items()):

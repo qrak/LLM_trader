@@ -1,3 +1,8 @@
+"""
+Analysis Result Processor.
+
+Handles the processing and formatting of analysis results from the AI models.
+"""
 import io
 import re
 from typing import Dict, Any, Optional, Union, TYPE_CHECKING
@@ -11,7 +16,7 @@ if TYPE_CHECKING:
 
 class AnalysisResultProcessor:
     """Processes and formats market analysis results from AI models"""
-    
+
     def __init__(self, model_manager: "ModelManagerProtocol", logger: Logger, unified_parser=None):
         """Initialize the processor"""
         self.model_manager = model_manager
@@ -19,25 +24,26 @@ class AnalysisResultProcessor:
         self.unified_parser = unified_parser
         self.context: Optional["AnalysisContext"] = None
 
-    async def process_analysis(self, system_prompt: str, prompt: str, 
+    async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
                               provider: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
+        # pylint: disable=too-many-arguments, too-many-positional-arguments
         """
         Process analysis by sending prompts to AI model and formatting response.
-        
+
         Args:
             system_prompt: System instructions for the AI model
             prompt: User prompt for analysis
             chart_image: Optional chart image for visual analysis
             provider: Optional provider override (admin only)
             model: Optional model override (admin only)
-            
+
         Returns:
             Dictionary containing formatted analysis results
         """
         # Send the prompt to the model
         self.logger.debug("Sending prompt to AI model for analysis")
-        
+
         # Use chart analysis if image is provided and model supports it
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
         if use_chart_analysis:
@@ -56,7 +62,7 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-            except (ValueError, Exception) as chart_error:
+            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught
                 self.logger.warning(f"Chart analysis failed: {chart_error}. Falling back to text-only analysis.")
                 complete_response = await self.model_manager.send_prompt_streaming(
                     prompt=prompt,
@@ -72,40 +78,82 @@ class AnalysisResultProcessor:
                 provider=provider,
                 model=model
             )
-        
+
         self.logger.debug("Received response from AI model")
         cleaned_response = self._clean_response(complete_response)
-        
+
         parsed_response = self.unified_parser.parse_ai_response(cleaned_response)
-        
+
         if not self.unified_parser.validate_ai_response(parsed_response):
             self.logger.warning("Invalid response format from AI model")
             return {
                 "error": "Invalid response format",
                 "raw_response": cleaned_response
             }
-        
+
+        # Recalculate R/R from the AI's own entry/SL/TP to prevent hallucinated ratios
+        if "analysis" in parsed_response:
+            self._recalculate_risk_reward(parsed_response["analysis"])
+
         # Log the analysis result
         self._log_analysis_result(parsed_response)
-        
+
         # Format the final response
         return self._format_analysis_response(parsed_response, cleaned_response)
-    
 
-        
+
+
+    def _recalculate_risk_reward(self, analysis: Dict[str, Any]) -> None:
+        """Recalculate R/R from the AI's own entry/SL/TP to prevent hallucinated ratios.
+
+        For UPDATE signals, uses current_price as the reference point.
+        For new entries (BUY/SELL), uses entry_price.
+        """
+        entry = analysis.get("entry_price", 0)
+        sl = analysis.get("stop_loss", 0)
+        tp = analysis.get("take_profit", 0)
+        signal = analysis.get("signal", "")
+
+        if not all([entry, sl, tp]) or entry == 0:
+            return
+
+        if signal == "UPDATE" and self.context is not None:
+            ref_price = self.context.current_price
+        else:
+            ref_price = entry
+
+        risk = abs(ref_price - sl)
+        reward = abs(tp - ref_price)
+
+        if risk > 0:
+            corrected_rr = round(reward / risk, 2)
+            original_rr = analysis.get("risk_reward_ratio", 0)
+            if abs(corrected_rr - original_rr) > 0.1:
+                self.logger.warning(
+                    "Corrected AI R/R: %.2f -> %.2f (entry=%.2f, sl=%.2f, tp=%.2f, ref=%.2f)",
+                    original_rr, corrected_rr, entry, sl, tp, ref_price
+                )
+            analysis["risk_reward_ratio"] = corrected_rr
+
+
     def _log_analysis_result(self, parsed_response: Dict[str, Any]) -> None:
         """Log analysis result information"""
         if "analysis" in parsed_response:
             analysis = parsed_response["analysis"]
-            
+
             # Check if this is trading analysis (has signal field)
             if "signal" in analysis:
                 signal = analysis.get("signal", "UNKNOWN")
                 confidence = analysis.get("confidence", 0)
                 trend_info = analysis.get("trend", {})
-                direction = trend_info.get("direction", "UNKNOWN") if isinstance(trend_info, dict) else "UNKNOWN"
-                strength = trend_info.get("strength", 0) if isinstance(trend_info, dict) else 0
-                
+                # No isinstance needed - analysis.get() with default {} always returns a dict
+                direction = trend_info.get("direction", "UNKNOWN")
+
+                # Try legacy 'strength' field first, then prefer daily (macro), fall back to 4h
+                strength = trend_info.get("strength")
+                if strength is None:
+                    strength = trend_info.get("strength_daily", trend_info.get("strength_4h", 0))
+
                 # Log confluence factors if available (Chain-of-Thought scoring)
                 confluence_factors = analysis.get("confluence_factors", {})
                 if confluence_factors and isinstance(confluence_factors, dict):
@@ -124,18 +172,20 @@ class AnalysisResultProcessor:
                 bias = analysis.get("technical_bias", "UNKNOWN")
                 trend = analysis.get("observed_trend", "UNKNOWN")
                 confidence = analysis.get("confidence_score", 0)
-                self.logger.debug(f"Analysis complete: Technical bias {bias} with {trend} trend ({confidence}% confidence)")
+                self.logger.debug(
+                    f"Analysis complete: Technical bias {bias} with {trend} trend ({confidence}% confidence)"
+                )
         else:
             self.logger.warning("Analysis complete but response format may be incomplete")
-            
-    def _format_analysis_response(self, parsed_response: Dict[str, Any], 
+
+    def _format_analysis_response(self, parsed_response: Dict[str, Any],
                                 cleaned_response: str) -> Dict[str, Any]:
         """Format the final analysis response."""
         parsed_response["raw_response"] = cleaned_response
         if self.context is not None:
             parsed_response["current_price"] = self.context.current_price
         return parsed_response
-    
+
     @staticmethod
     def _clean_response(text: str) -> str:
         """Remove thinking sections and extra whitespace from AI responses"""

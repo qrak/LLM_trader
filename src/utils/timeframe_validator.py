@@ -14,15 +14,31 @@ import re
 class TimeframeValidator:
     """Validates and manages timeframe configurations"""
     SUPPORTED_TIMEFRAMES = ['1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w']
+    # Time constants
+    MINUTES_IN_HOUR = 60
+    MINUTES_IN_DAY = 1440
+    MINUTES_IN_WEEK = 10080
+
+    MS_IN_SECOND = 1000
+    MS_IN_MINUTE = 60 * 1000
+    MS_IN_HOUR = 60 * 60 * 1000
+    MS_IN_DAY = 24 * 60 * 60 * 1000
+
+    # Alignment constants
+    # Offset to align weekly candles to Monday.
+    # Unix Epoch (1970-01-01) was Thursday.
+    # Monday (1970-01-05) is +4 days from Epoch.
+    MONDAY_ALIGNMENT_OFFSET_DAYS = 4
+
     TIMEFRAME_MINUTES = {
-        '1h': 60,
-        '2h': 120,
-        '4h': 240,
-        '6h': 360,
-        '8h': 480,
-        '12h': 720,
-        '1d': 1440,
-        '1w': 10080
+        '1h': MINUTES_IN_HOUR,
+        '2h': 2 * MINUTES_IN_HOUR,
+        '4h': 4 * MINUTES_IN_HOUR,
+        '6h': 6 * MINUTES_IN_HOUR,
+        '8h': 8 * MINUTES_IN_HOUR,
+        '12h': 12 * MINUTES_IN_HOUR,
+        '1d': MINUTES_IN_DAY,
+        '1w': MINUTES_IN_WEEK
     }
     CRYPTOCOMPARE_FORMAT = {
         '1h': 'hour',
@@ -39,15 +55,15 @@ class TimeframeValidator:
     def validate(cls, timeframe: str) -> bool:
         """
         Check if timeframe is fully supported.
-        
+
         Args:
             timeframe: Timeframe string (e.g., "1h", "4h", "1d")
-            
+
         Returns:
             bool: True if timeframe is supported, False otherwise
         """
         return timeframe in cls.SUPPORTED_TIMEFRAMES
-    
+
     @classmethod
     def to_minutes(cls, timeframe: str) -> int:
         """
@@ -65,47 +81,46 @@ class TimeframeValidator:
         if timeframe not in cls.TIMEFRAME_MINUTES:
             raise ValueError(f"Unrecognized timeframe: {timeframe}")
         return cls.TIMEFRAME_MINUTES[timeframe]
-    
+
     @classmethod
     def parse_period_to_minutes(cls, period: str) -> int:
         """
         Parse period string to minutes. Supports both timeframes and arbitrary periods.
-        
+
         Args:
             period: Period string (e.g., "1h", "4h", "24h", "7d", "30d")
-            
+
         Returns:
             int: Number of minutes in the period
-            
+
         Raises:
             ValueError: If period format is invalid
         """
         match = re.match(r'^(\d+)([hd])$', period.lower())
         if not match:
             raise ValueError(f"Invalid period format: {period}")
-        
+
         value = int(match.group(1))
         unit = match.group(2)
-        
+
         if unit == 'h':
-            return value * 60
-        elif unit == 'd':
-            return value * 1440
-        else:
-            raise ValueError(f"Invalid period unit: {unit}")
-    
+            return value * cls.MINUTES_IN_HOUR
+        if unit == 'd':
+            return value * cls.MINUTES_IN_DAY
+        raise ValueError(f"Invalid period unit: {unit}")
+
     @classmethod
     def calculate_period_candles(cls, base_timeframe: str, target_period: str) -> int:
         """
         Calculate how many candles are needed for a target period.
-        
+
         Args:
             base_timeframe: The base timeframe (e.g., "1h", "4h")
             target_period: The target period (e.g., "24h", "7d", "30d")
-            
+
         Returns:
             int: Number of candles needed
-            
+
         Example:
             >>> calculate_period_candles("4h", "24h")
             6  # 6 four-hour candles = 24 hours
@@ -113,30 +128,30 @@ class TimeframeValidator:
         base_mins = cls.to_minutes(base_timeframe)
         target_mins = cls.parse_period_to_minutes(target_period)
         return target_mins // base_mins
-    
+
     @classmethod
     def to_cryptocompare_format(cls, timeframe: str) -> Tuple[str, int]:
         """
         Convert our timeframe to CryptoCompare API format.
-        
+
         CryptoCompare uses endpoints like:
         - /data/v2/histohour for hourly data
         - /data/v2/histoday for daily data
-        
+
         And uses an "aggregate" parameter for multipliers.
-        
+
         Args:
             timeframe: Our timeframe format (e.g., "1h", "4h", "1d")
-            
+
         Returns:
             tuple: (endpoint_type, multiplier)
                 - endpoint_type: "hour", "day", etc.
                 - multiplier: Number of base units (e.g., 4 for "4h")
-            
+
         Example:
             >>> to_cryptocompare_format("4h")
             ("hour", 4)
-            
+
         Raises:
             ValueError: If timeframe is not supported by CryptoCompare API
         """
@@ -145,9 +160,9 @@ class TimeframeValidator:
                 f"Timeframe {timeframe} not supported by CryptoCompare API. "
                 f"Supported: {', '.join(cls.CRYPTOCOMPARE_FORMAT.keys())}"
             )
-        
+
         endpoint = cls.CRYPTOCOMPARE_FORMAT[timeframe]
-        
+
         # Extract multiplier from timeframe
         if 'h' in timeframe:
             multiplier = int(timeframe.replace('h', ''))
@@ -155,21 +170,21 @@ class TimeframeValidator:
             multiplier = int(timeframe.replace('d', ''))
         else:
             multiplier = 1
-        
+
         return endpoint, multiplier
-    
+
     @classmethod
     def is_ccxt_compatible(cls, timeframe: str, exchange_name: Optional[str] = None) -> bool:
         """
         Check if timeframe is compatible with CCXT exchanges.
-        
+
         Args:
             timeframe: Timeframe string (e.g., "1h", "4h")
             exchange_name: Optional specific exchange name for exact validation
-            
+
         Returns:
             bool: True if timeframe is likely supported
-            
+
         Note:
             For exact validation with a specific exchange, pass the exchange instance
             to check its .timeframes property directly.
@@ -177,123 +192,148 @@ class TimeframeValidator:
         # Basic check for standard timeframes
         if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:
             return True
-        
+
         # Could be extended to check specific exchange support
         # via exchange.timeframes property if exchange instance is available
         return False
-    
+
     @classmethod
     def get_candle_limit_for_days(cls, timeframe: str, target_days: int = 30) -> int:
         """
         Calculate how many candles are needed to cover a target number of days.
-        
+
         Args:
             timeframe: The timeframe (e.g., "1h", "4h", "1d")
             target_days: Number of days to cover (default: 30)
-            
+
         Returns:
             int: Number of candles needed
-            
+
         Example:
             >>> get_candle_limit_for_days("4h", 30)
             180  # 6 candles per day * 30 days
         """
         timeframe_minutes = cls.to_minutes(timeframe)
-        target_minutes = target_days * 24 * 60
+        target_minutes = target_days * cls.MINUTES_IN_DAY
         return target_minutes // timeframe_minutes
-    
+
     @classmethod
     def validate_and_normalize(cls, timeframe: str) -> str:
         """
         Validate and normalize timeframe string.
-        
+
         Handles case variations and returns normalized form.
-        
+
         Args:
             timeframe: Timeframe string (e.g., "1H", "4h", "1D")
-            
+
         Returns:
             str: Normalized timeframe (lowercase)
-            
+
         Raises:
             ValueError: If timeframe is invalid or unsupported
         """
         normalized = timeframe.lower()
-        
+
         if not cls.validate(normalized):
             raise ValueError(
                 f"Unsupported timeframe: {timeframe}. "
                 f"Supported: {', '.join(cls.SUPPORTED_TIMEFRAMES)}"
             )
-        
+
         return normalized
-    
+
+    @classmethod
+    def _get_alignment_offset(cls, timeframe: str) -> int:
+        """
+        Get alignment offset in milliseconds for timeframes that don't align with Unix Epoch (Thursday).
+
+        Weekly candles ('1w') are aligned to start on Monday 00:00 UTC.
+        Since the Unix Epoch (1970-01-01) was a Thursday, we need an offset to shift
+        the reference point to the next Monday (1970-01-05).
+
+        Args:
+            timeframe: Timeframe string
+
+        Returns:
+            int: Offset in milliseconds required to align the timeframe
+        """
+        if timeframe == '1w':
+            return cls.MONDAY_ALIGNMENT_OFFSET_DAYS * cls.MS_IN_DAY
+        return 0
+
     @classmethod
     def calculate_next_candle_time(cls, current_time_ms: int, timeframe: str) -> int:
         """
         Calculate the start time of the next candle for a given timeframe.
-        
+
         Args:
             current_time_ms: Current timestamp in milliseconds
             timeframe: Timeframe string (e.g., "1h", "4h", "1d")
-            
+
         Returns:
             int: Next candle start time in milliseconds
-            
+
         Example:
             >>> calculate_next_candle_time(1704067200000, "4h")
             1704081600000  # Next 4h candle boundary
         """
         interval_minutes = cls.to_minutes(timeframe)
-        interval_ms = interval_minutes * 60 * 1000
-        
-        # Calculate next candle boundary
-        next_candle_ms = ((current_time_ms // interval_ms) + 1) * interval_ms
+        interval_ms = interval_minutes * cls.MS_IN_MINUTE
+        offset = cls._get_alignment_offset(timeframe)
+
+        # Calculate next candle boundary with offset
+        # (time - offset) aligns to 0-based index relative to alignment point
+        aligned_time = current_time_ms - offset
+        next_index = (aligned_time // interval_ms) + 1
+        next_candle_ms = (next_index * interval_ms) + offset
+
         return next_candle_ms
-    
+
     @classmethod
     def calculate_wait_duration(
-        cls, 
-        current_time_ms: int, 
-        timeframe: str, 
+        cls,
+        current_time_ms: int,
+        timeframe: str,
         buffer_seconds: int = 5
     ) -> float:
         """
         Calculate how many seconds to wait until the next candle starts.
-        
+
         Args:
             current_time_ms: Current timestamp in milliseconds
             timeframe: Timeframe string (e.g., "1h", "4h", "1d")
             buffer_seconds: Additional buffer to wait after candle start (default: 5)
-            
+
         Returns:
             float: Seconds to wait
-            
+
         Example:
             >>> calculate_wait_duration(1704067200000, "4h", buffer_seconds=5)
             14405.0  # 4h + 5s in seconds
         """
         next_candle_ms = cls.calculate_next_candle_time(current_time_ms, timeframe)
-        delay_ms = next_candle_ms - current_time_ms + (buffer_seconds * 1000)
-        return max(0, delay_ms / 1000)
-    
+        delay_ms = next_candle_ms - current_time_ms + (buffer_seconds * cls.MS_IN_SECOND)
+        return max(0, delay_ms / cls.MS_IN_SECOND)
+
     @classmethod
     def is_same_candle(cls, time1_ms: int, time2_ms: int, timeframe: str) -> bool:
         """
         Check if two timestamps fall within the same candle period.
-        
+
         Args:
             time1_ms: First timestamp in milliseconds
             time2_ms: Second timestamp in milliseconds
             timeframe: Timeframe string (e.g., "1h", "4h", "1d")
-            
+
         Returns:
             bool: True if both timestamps are in the same candle period
         """
         interval_minutes = cls.to_minutes(timeframe)
-        interval_ms = interval_minutes * 60 * 1000
-        
-        candle1 = time1_ms // interval_ms
-        candle2 = time2_ms // interval_ms
-        
+        interval_ms = interval_minutes * cls.MS_IN_MINUTE
+        offset = cls._get_alignment_offset(timeframe)
+
+        candle1 = (time1_ms - offset) // interval_ms
+        candle2 = (time2_ms - offset) // interval_ms
+
         return candle1 == candle2

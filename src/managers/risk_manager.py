@@ -43,7 +43,7 @@ class RiskManager(RiskManagerProtocol):
         # 1. Extract or Default ATR/Volatility
         atr = market_conditions.get("atr", current_price * 0.02)
         atr_pct = market_conditions.get("atr_percentage", (atr / current_price) * 100)
-        
+
         # Determine volatility level
         if atr_pct > 3:
             volatility_level = "HIGH"
@@ -81,7 +81,7 @@ class RiskManager(RiskManagerProtocol):
 
         # 4. Circuit Breakers (Clamp Extreme Values)
         sl_distance_raw = abs(current_price - final_sl) / current_price
-        
+
         # Clamp SL: min 0.5%, max 10%
         if sl_distance_raw > 0.10:
             self.logger.warning(f"SL distance {sl_distance_raw:.1%} exceeds 10% max, clamping")

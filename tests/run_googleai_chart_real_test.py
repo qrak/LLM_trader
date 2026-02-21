@@ -99,6 +99,8 @@ async def main():
                        help=f'Chart timeframe (default: {config.TIMEFRAME})')
     parser.add_argument('--limit', type=int, default=999,
                        help='Number of candles to fetch (default: 999, then ai_chart_candle_limit limits display)')
+    parser.add_argument('--compare-code-execution', action='store_true',
+                       help='Run comparison test: Code Execution OFF vs ON')
     args = parser.parse_args()
 
     pair = args.pair or config.CRYPTO_PAIR
@@ -224,47 +226,180 @@ async def main():
     prompt = create_chart_analysis_prompt(pair, timeframe, context.current_price)
     system_prompt = f"You are a professional crypto chart analyst. Analyze the provided chart image for {pair}."
 
-    # Initialize ModelManager with REAL Google AI client
-    print("\nInitializing ModelManager with REAL Google AI client...")
-    manager = ModelManager(logger=logger, config=config, unified_parser=unified_parser)
-    
-    # Verify Google client is available
-    if manager.google_client is None:
-        print("ERROR: Google AI client not initialized!")
-        print("Make sure GOOGLE_AI_API_KEY environment variable is set.")
-        await exchange_manager.shutdown()
-        return
-    
-    # Force provider to googleai
-    manager.provider = 'googleai'
-    
     print("\n--- System Prompt ---")
     print(system_prompt)
     print("\n--- Analysis Prompt ---")
     print(prompt)
 
     # Run chart analysis with REAL API
-    print(f"\n{'='*60}")
-    print("SENDING REQUEST TO GOOGLE AI (gemini-3-flash-preview)...")
-    print(f"{'='*60}\n")
-    
-    try:
-        response = await manager.send_prompt_with_chart_analysis(
-            prompt,
-            chart_buffer,
-            system_message=system_prompt,
-            provider='googleai'
-        )
+    if args.compare_code_execution:
+        # Comparison mode: run with Code Execution OFF and ON (uses GoogleAIClient directly)
+        print(f"\n{'='*60}")
+        print("CODE EXECUTION COMPARISON MODE")
+        print(f"{'='*60}\n")
+        
+        from src.platforms.ai_providers import GoogleAIClient
+        
+        api_key = config.GOOGLE_STUDIO_API_KEY
+        if not api_key:
+            print("ERROR: GOOGLE_STUDIO_API_KEY not set in keys.env!")
+            await exchange_manager.shutdown()
+            return
+        
+        google_client = GoogleAIClient(api_key=api_key, model="gemini-3-flash-preview", logger=logger)
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        
+        base_config = {
+            "max_tokens": 8192,
+            "temperature": 1.0,
+            "thinking_level": "high",
+        }
+        
+        results = {}
+        chart_bytes = chart_buffer.getvalue()
+        
+        # TEST 1: Code Execution OFF
+        print(f"\n[TEST 1] Code Execution: OFF")
+        print("-" * 50)
+        config_off = {**base_config, "google_code_execution": False}
+        
+        try:
+            response_off = await google_client.chat_completion_with_chart_analysis(
+                model="gemini-3-flash-preview",
+                messages=messages,
+                chart_image=chart_bytes,
+                model_config=config_off
+            )
+            
+            if response_off and not response_off.error:
+                content_off = response_off.choices[0].message.content
+                usage_off = response_off.usage
+                
+                results["off"] = {
+                    "content": content_off,
+                    "prompt_tokens": usage_off.prompt_tokens if usage_off else 0,
+                    "completion_tokens": usage_off.completion_tokens if usage_off else 0,
+                    "total_tokens": usage_off.total_tokens if usage_off else 0,
+                }
+                
+                print(f"  Prompt tokens:     {results['off']['prompt_tokens']:,}")
+                print(f"  Completion tokens: {results['off']['completion_tokens']:,}")
+                print(f"  Total tokens:      {results['off']['total_tokens']:,}")
+                print(f"\n--- RESPONSE (Code Execution OFF) ---")
+                print(content_off[:1500] + "..." if len(content_off) > 1500 else content_off)
+            else:
+                print(f"  ERROR: {response_off.error if response_off else 'No response'}")
+        except Exception as e:
+            print(f"  EXCEPTION: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        # Wait to avoid rate limiting
+        print("\n  Waiting 5s to avoid rate limiting...")
+        await asyncio.sleep(5)
+        
+        # TEST 2: Code Execution ON
+        print(f"\n[TEST 2] Code Execution: ON (Agentic Vision)")
+        print("-" * 50)
+        config_on = {**base_config, "google_code_execution": True}
+        
+        try:
+            response_on = await google_client.chat_completion_with_chart_analysis(
+                model="gemini-3-flash-preview",
+                messages=messages,
+                chart_image=chart_bytes,
+                model_config=config_on
+            )
+            
+            if response_on and not response_on.error:
+                content_on = response_on.choices[0].message.content
+                usage_on = response_on.usage
+                
+                results["on"] = {
+                    "content": content_on,
+                    "prompt_tokens": usage_on.prompt_tokens if usage_on else 0,
+                    "completion_tokens": usage_on.completion_tokens if usage_on else 0,
+                    "total_tokens": usage_on.total_tokens if usage_on else 0,
+                }
+                
+                print(f"  Prompt tokens:     {results['on']['prompt_tokens']:,}")
+                print(f"  Completion tokens: {results['on']['completion_tokens']:,}")
+                print(f"  Total tokens:      {results['on']['total_tokens']:,}")
+                print(f"\n--- RESPONSE (Code Execution ON) ---")
+                print(content_on[:1500] + "..." if len(content_on) > 1500 else content_on)
+            else:
+                print(f"  ERROR: {response_on.error if response_on else 'No response'}")
+        except Exception as e:
+            print(f"  EXCEPTION: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        await google_client.close()
+        
+        # Summary
+        if "off" in results and "on" in results:
+            print(f"\n{'='*70}")
+            print("COMPARISON SUMMARY")
+            print(f"{'='*70}")
+            
+            prompt_diff = results["on"]["prompt_tokens"] - results["off"]["prompt_tokens"]
+            completion_diff = results["on"]["completion_tokens"] - results["off"]["completion_tokens"]
+            total_diff = results["on"]["total_tokens"] - results["off"]["total_tokens"]
+            
+            print(f"\n{'Metric':<25} {'OFF':>12} {'ON':>12} {'Difference':>15}")
+            print("-" * 70)
+            print(f"{'Prompt tokens':<25} {results['off']['prompt_tokens']:>12,} {results['on']['prompt_tokens']:>12,} {prompt_diff:>+15,}")
+            print(f"{'Completion tokens':<25} {results['off']['completion_tokens']:>12,} {results['on']['completion_tokens']:>12,} {completion_diff:>+15,}")
+            print(f"{'Total tokens':<25} {results['off']['total_tokens']:>12,} {results['on']['total_tokens']:>12,} {total_diff:>+15,}")
+            
+            # Cost estimation (Gemini 3 Flash Preview pricing)
+            cost_off = (results["off"]["prompt_tokens"] * 0.075 + results["off"]["completion_tokens"] * 0.30) / 1_000_000
+            cost_on = (results["on"]["prompt_tokens"] * 0.075 + results["on"]["completion_tokens"] * 0.30) / 1_000_000
+            cost_diff = cost_on - cost_off
+            
+            print(f"\n{'Estimated cost (USD)':<25} ${cost_off:>11.6f} ${cost_on:>11.6f} ${cost_diff:>+14.6f}")
+            
+            print(f"\n  Response length:")
+            print(f"    - OFF: {len(results['off']['content']):,} chars")
+            print(f"    - ON:  {len(results['on']['content']):,} chars")
+            
+            # Save full responses
+            save_path = Path(config.DEBUG_CHART_SAVE_PATH)
+            save_path.mkdir(exist_ok=True)
+            (save_path / "response_OFF.txt").write_text(results["off"]["content"], encoding="utf-8")
+            (save_path / "response_ON.txt").write_text(results["on"]["content"], encoding="utf-8")
+            print(f"\n  Full responses saved to: {save_path}/response_OFF.txt, response_ON.txt")
+    else:
+        # Normal mode: single request (uses ModelManager)
+        print("\nInitializing ModelManager with REAL Google AI client...")
+        manager = ModelManager(logger=logger, config=config, unified_parser=unified_parser)
+        manager.provider = 'googleai'
         
         print(f"\n{'='*60}")
-        print("GOOGLE AI RESPONSE")
+        print("SENDING REQUEST TO GOOGLE AI (gemini-3-flash-preview)...")
         print(f"{'='*60}\n")
-        print(response)
         
-    except Exception as e:
-        print(f"ERROR during chart analysis: {e}")
-        import traceback
-        traceback.print_exc()
+        try:
+            response = await manager.send_prompt_with_chart_analysis(
+                prompt,
+                chart_buffer,
+                system_message=system_prompt,
+                provider='googleai'
+            )
+            
+            print(f"\n{'='*60}")
+            print("GOOGLE AI RESPONSE")
+            print(f"{'='*60}\n")
+            print(response)
+            
+        except Exception as e:
+            print(f"ERROR during chart analysis: {e}")
+            import traceback
+            traceback.print_exc()
 
     # Cleanup
     await exchange_manager.shutdown()
@@ -273,8 +408,12 @@ async def main():
     print("TEST COMPLETE")
     print(f"{'='*60}")
     print(f"\nChart image saved in: {config.DEBUG_CHART_SAVE_PATH}/")
-    print("Review the AI response above to verify chart interpretation accuracy.")
+    if args.compare_code_execution:
+        print("Compare response_OFF.txt and response_ON.txt for quality differences.")
+    else:
+        print("Review the AI response above to verify chart interpretation accuracy.")
 
 
 if __name__ == '__main__':
     asyncio.run(main())
+

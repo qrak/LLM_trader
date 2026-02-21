@@ -9,18 +9,16 @@ from typing import Union, List, Tuple
 import numpy as np
 import pandas as pd
 
-from .indicator_base import IndicatorBase
-
-# Import all indicator implementations
 from src.indicators.momentum import (
     rsi_numba, macd_numba, stochastic_numba, roc_numba,
     momentum_numba, williams_r_numba, tsi_numba, rmi_numba,
     ppo_numba, coppock_curve_numba, detect_rsi_divergence,
-    calculate_relative_strength_numba, uo_numba
+    calculate_relative_strength_numba, uo_numba, kst_numba
 )
 from src.indicators.overlap import ema_numba, sma_numba, ewma_numba
 from src.indicators.price import log_return_numba, percent_return_numba, pdist_numba
 from src.indicators.sentiment import fear_and_greed_index_numba
+from src.indicators.sentiment.sentiment_indicators import FearGreedConfig
 from src.indicators.statistical import (
     kurtosis_numba, skew_numba, stdev_numba, variance_numba,
     zscore_numba, mad_numba, quantile_numba, entropy_numba,
@@ -44,30 +42,32 @@ from src.indicators.volatility import (
     choppiness_index_numba
 )
 from src.indicators.volume import (
-    mfi_numba, obv_numba, pvt_numba, chaikin_money_flow_numba,
+    mfi_numba, obv_numba, obv_slope_numba, pvt_numba, chaikin_money_flow_numba,
     ad_line_numba, force_index_numba, eom_numba, volume_profile_numba,
     rolling_vwap_numba, twap_numba, average_quote_volume_numba, cci_numba
 )
+
+from .indicator_base import IndicatorBase
 
 
 class TechnicalIndicators:
     """
     Technical Indicators class with direct method access.
-    
+
     All indicator methods are now directly on this class instead of
     being delegated through category sub-objects (momentum, overlap, etc.).
-    
+
     Usage:
-        ti = TechnicalIndicators()
         ti.get_data(ohlcv_data)
         rsi_values = ti.rsi(length=14)  # Direct call
     """
-    
+    # pylint: disable=too-many-public-methods
+
     def __init__(self, measure_time: bool = False, save_to_csv: bool = False) -> None:
         self._base = IndicatorBase(measure_time=measure_time, save_to_csv=save_to_csv)
 
     # ==================== PROPERTIES ====================
-    
+
     @property
     def open(self) -> np.ndarray:
         return self._base.open
@@ -92,7 +92,7 @@ class TechnicalIndicators:
         self._base.get_data(data)
 
     # ==================== MOMENTUM INDICATORS ====================
-    
+
     def rsi(self, length: int = 14) -> np.ndarray:
         return self._base.calculate_indicator(
             rsi_numba,
@@ -222,18 +222,20 @@ class TechnicalIndicators:
             sma3_length: int = 7,
             sma4_length: int = 9
         ) -> np.ndarray:
-
-        roc1 = self.roc(length=roc1_length)
-        roc2 = self.roc(length=roc2_length)
-        roc3 = self.roc(length=roc3_length)
-        roc4 = self.roc(length=roc4_length)
-
-        rcma1 = self.sma(data_series=roc1, length=sma1_length)
-        rcma2 = self.sma(data_series=roc2, length=sma2_length)
-        rcma3 = self.sma(data_series=roc3, length=sma3_length)
-        rcma4 = self.sma(data_series=roc4, length=sma4_length)
-
-        return rcma1 * 1 + rcma2 * 2 + rcma3 * 3 + rcma4 * 4
+        """Know Sure Thing (KST) oscillator - NaN-aware implementation."""
+        return self._base.calculate_indicator(
+            kst_numba,
+            self.close,
+            roc1_length,
+            roc2_length,
+            roc3_length,
+            roc4_length,
+            sma1_length,
+            sma2_length,
+            sma3_length,
+            sma4_length,
+            required_length=roc4_length + sma4_length
+        )
 
     def uo(self, fast=7, medium=14, slow=28, fast_w=4.0, medium_w=2.0, slow_w=1.0, drift=1) -> np.ndarray:
         config = {
@@ -254,7 +256,7 @@ class TechnicalIndicators:
             required_length=slow)
 
     # ==================== OVERLAP INDICATORS ====================
-    
+
     def ema(self, data_series: np.ndarray, length: int = 10) -> np.ndarray:
         return self._base.calculate_indicator(
             ema_numba,
@@ -279,7 +281,7 @@ class TechnicalIndicators:
         )
 
     # ==================== PRICE TRANSFORM INDICATORS ====================
-    
+
     def log_return(self, length: int = 1, cumulative: bool = False) -> np.ndarray:
         return self._base.calculate_indicator(
             log_return_numba,
@@ -310,7 +312,7 @@ class TechnicalIndicators:
         )
 
     # ==================== SENTIMENT INDICATORS ====================
-    
+
     def fear_and_greed_index(
             self,
             rsi_length: int = 14,
@@ -320,7 +322,6 @@ class TechnicalIndicators:
             mfi_length: int = 14,
             window_size: int = 60
     ) -> np.ndarray:
-        from ..sentiment.sentiment_indicators import FearGreedConfig
         config = FearGreedConfig(
             rsi_length=rsi_length,
             macd_fast_length=macd_fast_length,
@@ -340,7 +341,7 @@ class TechnicalIndicators:
         )
 
     # ==================== STATISTICAL INDICATORS ====================
-    
+
     def kurtosis(self, length: int = 30) -> np.ndarray:
         return self._base.calculate_indicator(
             kurtosis_numba,
@@ -451,7 +452,7 @@ class TechnicalIndicators:
         )
 
     # ==================== SUPPORT/RESISTANCE INDICATORS ====================
-    
+
     def support_resistance(self, length: int = 30) -> Tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             support_resistance_numba,
@@ -547,7 +548,10 @@ class TechnicalIndicators:
             required_length=lookback
         )
 
-    def pivot_points(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def pivot_points(self) -> Tuple[
+            np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+            np.ndarray, np.ndarray, np.ndarray, np.ndarray
+    ]:
         """Calculate standard pivot points and support/resistance levels
         
         Returns:
@@ -560,8 +564,11 @@ class TechnicalIndicators:
             self.close,
             required_length=1
         )
-    
-    def fibonacci_pivot_points(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+
+    def fibonacci_pivot_points(self) -> Tuple[
+            np.ndarray, np.ndarray, np.ndarray, np.ndarray,
+            np.ndarray, np.ndarray, np.ndarray
+    ]:
         """Calculate Fibonacci pivot points using Fibonacci ratios (0.382, 0.618, 1.0)
         
         Returns:
@@ -576,7 +583,7 @@ class TechnicalIndicators:
         )
 
     # ==================== TREND INDICATORS ====================
-    
+
     def adx(self, length: int = 14) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             adx_numba,
@@ -662,7 +669,7 @@ class TechnicalIndicators:
         )
 
     # ==================== VOLATILITY INDICATORS ====================
-    
+
     def atr(self, length: int = 14, mamode: str = 'rma', percent: bool = False) -> np.ndarray:
         return self._base.calculate_indicator(
             atr_numba,
@@ -736,7 +743,7 @@ class TechnicalIndicators:
 
     def choppiness_index(self, length: int = 14) -> np.ndarray:
         """Calculate Choppiness Index
-        
+
         Measures market choppiness vs trending behavior.
         Values > 61.8 indicate choppy/ranging market.
         Values < 38.2 indicate trending market.
@@ -751,7 +758,7 @@ class TechnicalIndicators:
         )
 
     # ==================== VOLUME INDICATORS ====================
-    
+
     def cci(self, length: int = 14, c: float = 0.015) -> np.ndarray:
         return self._base.calculate_indicator(
             cci_numba,
@@ -782,6 +789,16 @@ class TechnicalIndicators:
             length,
             initial,
             required_length=length
+        )
+
+    def obv_slope(self, length: int = 20, lookback: int = 10) -> np.ndarray:
+        """Calculate OBV slope - normalized rate of change indicating accumulation/distribution."""
+        obv = self.obv(length=length)
+        return self._base.calculate_indicator(
+            obv_slope_numba,
+            obv,
+            lookback,
+            required_length=length + lookback
         )
 
     def pvt(self, length: int = 14, drift: int = 1) -> np.ndarray:

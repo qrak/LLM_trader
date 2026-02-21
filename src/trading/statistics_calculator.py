@@ -17,7 +17,7 @@ from src.trading.dataclasses import ClosedTradeResult
 @dataclass(slots=True)
 class TradingStatistics(SerializableMixin):
     """All-time cumulative trading statistics.
-    
+
     Updated after every closed trade to provide the AI with
     performance context for position sizing decisions.
     """
@@ -51,7 +51,7 @@ class StatisticsCalculator:
         """Calculate all statistics from full trade history using numpy optimization."""
         if not trade_history:
             return TradingStatistics()
-            
+
         trades = StatisticsCalculator._extract_closed_trades(trade_history)
         if not trades:
             return TradingStatistics()
@@ -59,33 +59,34 @@ class StatisticsCalculator:
         # Convert to numpy arrays for vectorized operations
         pnl_percentages = np.array([t.pnl_pct for t in trades])
         pnl_amounts = np.array([t.pnl_quote for t in trades])
-        
+
         total_trades = len(trades)
         winning_trades = int(np.sum(pnl_percentages > 0))
         losing_trades = int(np.sum(pnl_percentages < 0))
-        
+
         win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
-        
-        total_pnl_pct = float(np.sum(pnl_percentages))
+
         total_pnl_quote = float(np.sum(pnl_amounts))
-        
-        avg_trade_pct = total_pnl_pct / total_trades if total_trades > 0 else 0.0
+        total_pnl_pct = (total_pnl_quote / initial_capital) * 100 if initial_capital > 0 else 0.0
+
+        sum_trade_pct = float(np.sum(pnl_percentages))
+        avg_trade_pct = sum_trade_pct / total_trades if total_trades > 0 else 0.0
         best_trade_pct = float(np.max(pnl_percentages)) if total_trades > 0 else 0.0
         worst_trade_pct = float(np.min(pnl_percentages)) if total_trades > 0 else 0.0
-        
+
         # Calculate equity curve and drawdowns
         equity_curve = np.zeros(len(pnl_amounts) + 1)
         equity_curve[0] = initial_capital
         equity_curve[1:] = np.cumsum(pnl_amounts) + initial_capital
-        
+
         max_dd, avg_dd = StatisticsCalculator._calculate_drawdowns(equity_curve)
-        
+
         sharpe = StatisticsCalculator._calculate_sharpe_ratio(pnl_percentages)
         sortino = StatisticsCalculator._calculate_sortino_ratio(pnl_percentages)
         profit_factor = StatisticsCalculator._calculate_profit_factor(pnl_amounts)
-        
+
         current_capital = initial_capital + total_pnl_quote
-        
+
         return TradingStatistics(
             total_trades=total_trades,
             winning_trades=winning_trades,
@@ -119,7 +120,7 @@ class StatisticsCalculator:
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
                 quantity = open_position.get("quantity", 0)
-                if open_position["action"].upper() == "BUY":
+                if open_position.get("action", "").upper() == "BUY":
                     pnl_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
                     pnl_quote = (exit_price - entry_price) * quantity
                 else:
@@ -131,7 +132,7 @@ class StatisticsCalculator:
                     pnl_pct=pnl_pct,
                     pnl_quote=pnl_quote,
                     quantity=quantity,
-                    direction="LONG" if open_position["action"].upper() == "BUY" else "SHORT",
+                    direction="LONG" if open_position.get("action", "").upper() == "BUY" else "SHORT",
                 ))
                 open_position = None
         return closed_trades
@@ -141,36 +142,37 @@ class StatisticsCalculator:
         """Calculate max and average drawdown from equity curve using numpy."""
         if len(equity_curve) < 2:
             return 0.0, 0.0
-            
+
         # Efficient peak calculation using accumulative maximum
         peaks = np.maximum.accumulate(equity_curve)
-        
+
         # Avoid division by zero
         with np.errstate(divide='ignore', invalid='ignore'):
             drawdowns = np.where(peaks > 0, (equity_curve - peaks) / peaks * 100, 0.0)
-            
+
         max_dd = float(np.min(drawdowns)) if len(drawdowns) > 0 else 0.0
-        
+
         negative_dds = drawdowns[drawdowns < 0]
         avg_dd = float(np.mean(negative_dds)) if len(negative_dds) > 0 else 0.0
-        
+
         return max_dd, avg_dd
 
     @staticmethod
     def _calculate_sharpe_ratio(
-        returns: np.ndarray, 
+        returns: np.ndarray,
         risk_free_rate: float = 0.0
     ) -> float:
         """Calculate Sharpe ratio using numpy."""
         if len(returns) < 2:
             return 0.0
-            
+
         mean_return = np.mean(returns)
         std_dev = np.std(returns)
-        
-        if std_dev == 0:
+
+        # Use isclose to handle floating point precision issues near zero
+        if np.isclose(std_dev, 0):
             return 0.0
-            
+
         sharpe = (mean_return - risk_free_rate) / std_dev
         return round(float(sharpe), 2)
 
@@ -182,21 +184,19 @@ class StatisticsCalculator:
         """Calculate Sortino ratio using numpy."""
         if len(returns) < 2:
             return 0.0
-            
+
         mean_return = np.mean(returns)
-        negative_returns = returns[returns < 0]
-        
-        if len(negative_returns) == 0:
-            return float('inf') if mean_return > 0 else 0.0
-            
-        np.std(negative_returns)
-        # Note: Standard Sortino uses sqrt(sum(r^2)/N), np.std uses sqrt(sum((r-mean)^2)/N)
-        # For true downside deviation relative to 0 target:
+
+        # Standard Sortino Calculation:
+        # Downside Deviation = sqrt(sum(min(0, r)^2) / N)
+        # We replace positive returns with 0, then calculate Root Mean Square
+        negative_returns = np.minimum(returns, 0)
         downside_deviation = np.sqrt(np.mean(negative_returns ** 2))
-        
-        if downside_deviation == 0:
-            return 0.0
-            
+
+        # Use isclose to handle floating point precision issues near zero
+        if np.isclose(downside_deviation, 0):
+            return float('inf') if mean_return > 0 else 0.0
+
         sortino = (mean_return - risk_free_rate) / downside_deviation
         return round(float(sortino), 2)
 
@@ -205,8 +205,8 @@ class StatisticsCalculator:
         """Calculate profit factor using numpy."""
         gross_profit = np.sum(pnl_amounts[pnl_amounts > 0])
         gross_loss = abs(np.sum(pnl_amounts[pnl_amounts < 0]))
-        
+
         if gross_loss == 0:
             return float('inf') if gross_profit > 0 else 0.0
-            
+
         return round(float(gross_profit / gross_loss), 2)

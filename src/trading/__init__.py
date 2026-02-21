@@ -22,4 +22,3 @@ __all__ = [
     'TradingStrategy',
     'VectorMemoryService',
 ]
-

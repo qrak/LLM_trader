@@ -1,0 +1,223 @@
+{
+  "timestamp": "2026-02-10T17:32:37.795503+00:00",
+  "categories": [
+    {
+      "categoryName": "1INCH",
+      "wordsAssociatedWithCategory": [
+        "1INCH"
+      ],
+      "includedPhrases": [
+        "1INCH NETWORK"
+      ]
+    },
+    {
+      "categoryName": "AAVE",
+      "wordsAssociatedWithCategory": [
+        "AAVE"
+      ],
+      "includedPhrases": [
+        "AAVE PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "ADA",
+      "wordsAssociatedWithCategory": [
+        "ADA",
+        "Cardano",
+        "cardano"
+      ]
+    },
+    {
+      "categoryName": "ADMINISTRATIVE EVENTS",
+      "wordsAssociatedWithCategory": [
+        "contract-migration",
+        "REBRAND",
+        "REBASE",
+        "RENAME",
+        "Rebrand",
+        "rebrand",
+        "Rename",
+        "rename"
+      ],
+      "excludedPhrases": [
+        "STOCK TICKER"
+      ],
+      "includedPhrases": [
+        "CHAIN MIGRATION",
+        "CHAIN MIGRATED",
+        "CONTRACT ADDRESS UPDATE",
+        "CONTRACT MIGRATION",
+        "CONTRACT MIGRATED",
+        "DESTINATION CHAIN",
+        "NEW CONTRACT ADDRESS",
+        "NETWORK CONTROL CHANGE",
+        "GOVERNANCE CHANGE",
+        "REVERSE TOKEN SPLIT",
+        "TOKEN CONSOLIDATION",
+        "TOKEN REVERSE SPLIT",
+        "TICKER CHANGE",
+        "TICKER CHANGED",
+        "SYMBOL CHANGE",
+        "SYMBOL CHANGED",
+        "TICKER UPDATE",
+        "SYMBOL UPDATE",
+        "TOKEN MERGE",
+        "TOKEN MERGED",
+        "TOKEN SPLIT",
+        "TOKEN SPLITTED",
+        "TOKEN DIVIDED",
+        "TOKEN SPLIT-UP",
+        "TOKEN SPLIT UP"
+      ]
+    },
+    {
+      "categoryName": "AEVO",
+      "wordsAssociatedWithCategory": [
+        "AEVO"
+      ],
+      "includedPhrases": [
+        "AEVO TOKEN"
+      ]
+    },
+    {
+      "categoryName": "AGX",
+      "wordsAssociatedWithCategory": [
+        "AGX",
+        "SingularityNET",
+        "singularityNET"
+      ]
+    },
+    {
+      "categoryName": "AIOZ",
+      "wordsAssociatedWithCategory": [
+        "AIOZ"
+      ],
+      "includedPhrases": [
+        "AIOZ NETWORK"
+      ]
+    },
+    {
+      "categoryName": "AIRDROP",
+      "wordsAssociatedWithCategory": [
+        "airdrop",
+        "Airdrop"
+      ],
+      "includedPhrases": [
+        "TOKEN AIRDROP",
+        "COIN AIRDROP",
+        "FREE TOKEN DISTRIBUTION",
+        "TOKEN GIVEAWAY",
+        "COIN GIVEAWAY"
+      ]
+    },
+    {
+      "categoryName": "AKT",
+      "wordsAssociatedWithCategory": [
+        "AKT"
+      ],
+      "includedPhrases": [
+        "AKASH NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ALGO",
+      "wordsAssociatedWithCategory": [
+        "ALGO",
+        "Algorand"
+      ]
+    },
+    {
+      "categoryName": "ALTCOIN",
+      "wordsAssociatedWithCategory": [
+        "Altcoin",
+        "Altcoins",
+        "altcoin",
+        "altcoins"
+      ]
+    },
+    {
+      "categoryName": "APE",
+      "wordsAssociatedWithCategory": [
+        "APE",
+        "Apecoin"
+      ]
+    },
+    {
+      "categoryName": "APT",
+      "wordsAssociatedWithCategory": [
+        "APT",
+        "Aptos",
+        "aptos"
+      ]
+    },
+    {
+      "categoryName": "AR",
+      "wordsAssociatedWithCategory": [
+        "AR",
+        "Arweave",
+        "arweave"
+      ]
+    },
+    {
+      "categoryName": "ARB",
+      "wordsAssociatedWithCategory": [
+        "ARB",
+        "Arbitrum",
+        "arbitrum"
+      ]
+    },
+    {
+      "categoryName": "ARKM",
+      "wordsAssociatedWithCategory": [
+        "ARKM",
+        "Arkham",
+        "arkham"
+      ],
+      "includedPhrases": [
+        "ARKHAM NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ASIA",
+      "wordsAssociatedWithCategory": [
+        "Asia",
+        "China",
+        "Korea",
+        "Japan",
+        "Hong",
+        "Singapore",
+        "Taiwan"
+      ]
+    },
+    {
+      "categoryName": "ASTR",
+      "wordsAssociatedWithCategory": [
+        "ASTR"
+      ],
+      "includedPhrases": [
+        "ASTAR NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ATOM",
+      "wordsAssociatedWithCategory": [
+        "ATOM"
+      ],
+      "excludedPhrases": [
+        "ATOMIC COIN"
+      ],
+      "includedPhrases": [
+        "COSMOS SDK"
+      ]
+    },
+    {
+      "categoryName": "AVAX",
+      "wordsAssociatedWithCategory": [
+        "AVAX"
+      ],
+      "includedPhrases": [
+        "AVALANCHE FOUNDATION"
+      ]
+    }
+  ]
+}

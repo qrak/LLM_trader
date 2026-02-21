@@ -3,20 +3,21 @@ Discord Notifier - Send-only notification service with message expiration.
 Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
-
 from typing import Optional, TYPE_CHECKING, List, Dict, Any
 
 import discord
 from aiohttp import ClientSession
 
+from src.utils.decorators import retry_async
+from .base_notifier import BaseNotifier
+from .filehandler import DiscordFileHandler
+
+ENTRY_ACTIONS = {'BUY', 'SELL'}
+
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
-
-from .base_notifier import BaseNotifier
-from .filehandler import DiscordFileHandler
-from src.utils.decorators import retry_async
 
 
 
@@ -95,8 +96,12 @@ class DiscordNotifier(BaseNotifier):
         if not self.bot:
             self.logger.error("Discord bot is not initialized.")
             return
+        token = self.config.BOT_TOKEN_DISCORD
+        if not token:
+            self.logger.error("BOT_TOKEN_DISCORD is not configured.")
+            return
         try:
-            await self.bot.start(self.config.BOT_TOKEN_DISCORD)
+            await self.bot.start(token)
         except discord.LoginFailure as e:
             self.logger.error(f"Discord Login Failure: {e}. Check your BOT_TOKEN_DISCORD.", exc_info=True)
         except Exception as e:
@@ -133,15 +138,22 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
-            # Hard limit at 4000 characters (2 chunks max)
-            content = message[:4000]
+            # Discord limit: 2000 chars per message. Set reasonable max total length.
+            MAX_TOTAL_LENGTH = 20000  # 10 chunks max
+
+            if len(message) > MAX_TOTAL_LENGTH:
+                self.logger.warning(f"Message length ({len(message)}) exceeds maximum ({MAX_TOTAL_LENGTH}). Truncating.")
+                content = message[:MAX_TOTAL_LENGTH]
+            else:
+                content = message
+
             chunks = [content[i:i+2000] for i in range(0, len(content), 2000)]
 
             sent_message = None
             for i, chunk in enumerate(chunks):
                 if i > 0:
                     await asyncio.sleep(1)
-                
+
                 delete_after = float(expire_after) if expire_after is not None else None
                 sent_message = await channel.send(
                     content=chunk,
@@ -154,7 +166,7 @@ class DiscordNotifier(BaseNotifier):
                     message_type="message",
                     expire_after=expire_after
                 )
-            
+
             self.logger.debug(f"Sent {len(chunks)} message chunk(s) (Last ID: {sent_message.id if sent_message else 'None'})")
             return sent_message
         except discord.HTTPException as e:
@@ -173,7 +185,7 @@ class DiscordNotifier(BaseNotifier):
             'blue': discord.Color.blue(),
         }
         return color_map.get(color_key, discord.Color.light_grey())
-    
+
     async def _send_embed(
         self,
         embed: discord.Embed,
@@ -181,26 +193,26 @@ class DiscordNotifier(BaseNotifier):
         expire_after: Optional[float] = None
     ) -> Optional[discord.Message]:
         """Send a Discord embed to a channel with expiration.
-        
+
         Args:
             embed: Discord embed to send
             channel_id: Discord channel ID
             expire_after: Message expiry time in seconds (defaults to FILE_MESSAGE_EXPIRY)
-        
+
         Returns:
             The sent message or None on failure
         """
         if expire_after is None:
             expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
-        
+
         channel = self.bot.get_channel(channel_id)
         if not channel:
             self.logger.error(f"Channel with ID {channel_id} not found.")
             return None
-        
+
         try:
             sent_message = await channel.send(embed=embed, delete_after=expire_after)
-            
+
             # Track message for persistent deletion
             await self.file_handler.track_message(
                 message_id=sent_message.id,
@@ -209,7 +221,7 @@ class DiscordNotifier(BaseNotifier):
                 message_type="embed",
                 expire_after=int(expire_after)
             )
-            
+
             return sent_message
         except Exception as e:
             self.logger.error(f"Error sending embed: {e}")
@@ -253,7 +265,7 @@ class DiscordNotifier(BaseNotifier):
                 embed.add_field(name="Invested", value=f"${decision.quote_amount:,.2f}", inline=True)
             if decision.quantity:
                 embed.add_field(name="Quantity", value=self.formatter.fmt(decision.quantity), inline=True)
-            if decision.action in ['BUY', 'SELL'] and decision.quantity:
+            if decision.action in ENTRY_ACTIONS and decision.quantity:
                 entry_fee = decision.price * decision.quantity * self.config.TRANSACTION_FEE_PERCENT
                 embed.add_field(name="Entry Fee", value=f"${entry_fee:.4f}", inline=True)
 
@@ -273,17 +285,20 @@ class DiscordNotifier(BaseNotifier):
         """Send full analysis notification with reasoning and JSON embed.
 
         Args:
-            result: Analysis result dict with raw_response
+            result: Analysis result dict with corrected analysis and raw_response
             symbol: Trading symbol
             timeframe: Trading timeframe
             channel_id: Discord channel ID
         """
         try:
-            raw_response = result.get("raw_response", "")
-            if not raw_response:
+            # Get the corrected analysis dict (has R/R correction and other validations applied)
+            analysis = result.get("analysis")
+            if not analysis:
                 return
 
-            reasoning, analysis_json = self.parse_analysis_response(raw_response)
+            # Get reasoning text from raw_response (narrative text, not data)
+            raw_response = result.get("raw_response", "")
+            reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
             if reasoning:
                 await self.send_message(
@@ -291,10 +306,10 @@ class DiscordNotifier(BaseNotifier):
                     channel_id=channel_id
                 )
 
-            if analysis_json:
-                embed = self._create_analysis_embed(analysis_json, symbol, timeframe)
-                if embed:
-                    await self._send_embed(embed, channel_id)
+            # Use the corrected analysis dict for the embed (not re-parsed raw JSON)
+            embed = self._create_analysis_embed(analysis, symbol, timeframe)
+            if embed:
+                await self._send_embed(embed, channel_id)
         except Exception as e:
             self.logger.error(f"Error sending analysis notification: {e}")
 
@@ -330,7 +345,7 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Quantity", value=self.formatter.fmt(position.size), inline=True)
             if hasattr(position, 'quote_amount') and position.quote_amount > 0:
                  embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
-            
+
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
             embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_quote:+,.2f}", inline=True)
             embed.add_field(name="Confidence", value=position.confidence, inline=True)
@@ -409,7 +424,10 @@ class DiscordNotifier(BaseNotifier):
             trend = fields['trend']
             if trend:
                 direction = trend.get('direction', 'N/A')
-                strength = trend.get('strength', 0)
+                # Try legacy 'strength' field first, then prefer daily (macro), fall back to 4h
+                strength = trend.get('strength')
+                if strength is None:
+                    strength = trend.get('strength_daily', trend.get('strength_4h', 0))
                 embed.add_field(name="Trend", value=f"{direction} ({strength}%)", inline=True)
 
             key_levels = fields['key_levels']

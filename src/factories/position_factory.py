@@ -6,10 +6,10 @@ from src.logger.logger import Logger
 
 class PositionFactory:
     """Factory for creating and updating Position objects."""
-    
+
     def __init__(self, logger: Logger):
         self.logger = logger
-        
+
     def create_position(
         self,
         symbol: str,
@@ -21,7 +21,7 @@ class PositionFactory:
     ) -> Position:
         """Create a new Position instance."""
         market_conditions = market_conditions or {}
-        
+
         return Position(
             entry_price=risk_assessment.entry_price,
             stop_loss=risk_assessment.stop_loss,
@@ -42,6 +42,11 @@ class PositionFactory:
             rr_ratio_at_entry=risk_assessment.rr_ratio,
             adx_at_entry=market_conditions.get('adx', 0.0),
             rsi_at_entry=market_conditions.get('rsi', 50.0),
+            trend_direction_at_entry=market_conditions.get('trend_direction', 'NEUTRAL'),
+            macd_signal_at_entry=market_conditions.get('macd_signal', 'NEUTRAL'),
+            bb_position_at_entry=market_conditions.get('bb_position', 'MIDDLE'),
+            volume_state_at_entry=market_conditions.get('volume_state', 'NORMAL'),
+            market_sentiment_at_entry=market_conditions.get('market_sentiment', 'NEUTRAL'),
             max_drawdown_pct=0.0,
             max_profit_pct=0.0
         )
@@ -75,6 +80,11 @@ class PositionFactory:
             rr_ratio_at_entry=original_position.rr_ratio_at_entry,
             adx_at_entry=original_position.adx_at_entry,
             rsi_at_entry=original_position.rsi_at_entry,
+            trend_direction_at_entry=original_position.trend_direction_at_entry,
+            macd_signal_at_entry=original_position.macd_signal_at_entry,
+            bb_position_at_entry=original_position.bb_position_at_entry,
+            volume_state_at_entry=original_position.volume_state_at_entry,
+            market_sentiment_at_entry=original_position.market_sentiment_at_entry,
             max_drawdown_pct=original_position.max_drawdown_pct,
             max_profit_pct=original_position.max_profit_pct
         )

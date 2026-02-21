@@ -54,7 +54,7 @@ from src.utils.format_utils import timestamps_from_ms_array
 
 
 @dataclass
-class TestCase:
+class ValidationCase:
     """Represents a single test case for AI comprehension validation."""
     name: str
     description: str
@@ -153,7 +153,7 @@ Begin your analysis:"""
     return prompt
 
 
-def validate_response(response: str, test_cases: list[TestCase]) -> tuple[int, int]:
+def validate_response(response: str, test_cases: list[ValidationCase]) -> tuple[int, int]:
     """Validate AI response against test cases."""
     passed = 0
     failed = 0
@@ -273,7 +273,7 @@ async def main():
 
     # Define test cases based on ground truth
     test_cases = [
-        TestCase(
+        ValidationCase(
             name="RSI Zone Recognition",
             description="AI correctly identifies RSI zone",
             expected_keywords=[
@@ -282,7 +282,7 @@ async def main():
             ],
             ground_truth=f"RSI={rsi:.2f} ({'overbought' if rsi > 70 else ('oversold' if rsi < 30 else 'neutral')})"
         ),
-        TestCase(
+        ValidationCase(
             name="MACD Direction",
             description="AI correctly identifies MACD direction",
             expected_keywords=[
@@ -291,7 +291,7 @@ async def main():
             ],
             ground_truth=f"MACD {'bullish' if macd_line > macd_signal else 'bearish'} (line {'>' if macd_line > macd_signal else '<'} signal)"
         ),
-        TestCase(
+        ValidationCase(
             name="ADX Trend Strength",
             description="AI correctly classifies trend strength",
             expected_keywords=[
@@ -300,7 +300,7 @@ async def main():
             ],
             ground_truth=f"ADX={adx:.2f} ({'strong' if adx > 25 else ('developing' if adx > 20 else 'weak')})"
         ),
-        TestCase(
+        ValidationCase(
             name="DI Direction",
             description="AI correctly identifies DI dominance",
             expected_keywords=[
@@ -309,7 +309,7 @@ async def main():
             ],
             ground_truth=f"{'+DI' if plus_di > minus_di else '-DI'} dominant ({'bullish' if plus_di > minus_di else 'bearish'})"
         ),
-        TestCase(
+        ValidationCase(
             name="MA Cross Recognition",
             description="AI correctly identifies Golden/Death Cross",
             expected_keywords=[
@@ -318,7 +318,7 @@ async def main():
             ],
             ground_truth=f"{'Golden Cross' if sma_50 > sma_200 else 'Death Cross'} (SMA50 {'>' if sma_50 > sma_200 else '<'} SMA200)"
         ),
-        TestCase(
+        ValidationCase(
             name="Pattern Acknowledgment",
             description="AI acknowledges detected patterns",
             expected_keywords=["MACD", "crossover", "stochastic", "cross", "Golden", "Death", "SMA"],

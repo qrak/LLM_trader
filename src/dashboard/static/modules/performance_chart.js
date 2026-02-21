@@ -64,7 +64,7 @@ export function initPerformanceChart() {
         },
         yaxis: {
             labels: {
-                formatter: (value) => "$" + value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}),
+                formatter: (value) => new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value),
                 style: { colors: '#c9d1d9', fontSize: '12px' }
             },
             tickAmount: 5
@@ -80,29 +80,31 @@ export function initPerformanceChart() {
 
                 const data = w.config.series[seriesIndex].data[dataPointIndex];
                 const value = series[seriesIndex][dataPointIndex];
-                const valueFormatted = value != null ? value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : 'N/A';
+                const valueFormatted = value != null ? new Intl.NumberFormat(navigator.language, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) : 'N/A';
                 const date = new Date(data.x);
-                const dateFormatted = date.toLocaleString('en-GB', { 
+                const dateFormatted = new Intl.DateTimeFormat('en-GB', { 
                     day: '2-digit', month: 'short', year: 'numeric', 
                     hour: '2-digit', minute: '2-digit' 
-                });
+                }).format(date);
 
                 let actionHtml = '';
                 // Check if extra data exists and has an action
                 if (data.extra && data.extra.action) {
                     const action = data.extra.action;
+                    // Security: Escape action text to prevent XSS
+                    const safeAction = escapeHtml(action);
                     let color = '#8b949e';
                     if (action === 'BUY') color = '#238636';
                     else if (action === 'SELL') color = '#1f6feb';
                     else if (action.includes('CLOSE')) color = '#a371f7';
                     
-                    const price = data.extra.price ? `$${data.extra.price.toLocaleString()}` : 'N/A';
+                    const price = data.extra.price ? new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.extra.price) : 'N/A';
 
                     actionHtml = `
                         <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #444;">
                             <div style="display: flex; align-items: center; margin-bottom: 4px;">
                                 <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${color}; margin-right: 6px;"></span>
-                                <span style="color: #eee; font-weight: 600; font-size: 13px;">${action}</span>
+                                <span style="color: #eee; font-weight: 600; font-size: 13px;">${safeAction}</span>
                             </div>
                             <div style="color: #aaa; font-size: 12px; margin-left: 14px;">Price: ${price}</div>
                         </div>
@@ -235,7 +237,7 @@ export async function updatePerformanceData() {
                 <span><strong>Trades:</strong> ${stats.total_trades || 0}</span>
                 <span><strong>Win Rate:</strong> <span style="color: ${winColor}">${(stats.win_rate || 0).toFixed(1)}%</span></span>
                 <span><strong>P&L:</strong> <span style="color: ${pnlColor}">${(stats.total_pnl_pct || 0) >= 0 ? '+' : ''}${(stats.total_pnl_pct || 0).toFixed(2)}%</span></span>
-                <span><strong>Capital:</strong> $${(stats.current_capital || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                <span><strong>Capital:</strong> ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.current_capital || 0)}</span>
             `;
         }
         
@@ -246,3 +248,15 @@ export async function updatePerformanceData() {
 
 // Expose refresh function specifically for fullscreen toggle or resize events
 window.refreshPerformanceAnnotations = updatePerformanceData;
+
+/**
+ * Escapes HTML characters to prevent XSS.
+ * @param {string} text - The text to escape.
+ * @returns {string} - The escaped text.
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

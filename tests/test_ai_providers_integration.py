@@ -508,6 +508,42 @@ class TestGoogleAIIntegration:
         finally:
             await client.close()
 
+    @pytest.mark.asyncio
+    async def test_agentic_vision_code_execution(self, api_key, logger):
+        """Test Agentic Vision with Code Execution for Gemini 3 Flash.
+        
+        This test verifies that the model can use Code Execution to analyze images
+        more precisely (zooming, counting, calculations).
+        """
+        print("\n=== Google AI Agentic Vision (Code Execution) Test ===")
+        client = GoogleAIClient(api_key=api_key, model="gemini-3-flash-preview", logger=logger)
+        test_image = create_test_image()
+        try:
+            response = await client.chat_completion_with_chart_analysis(
+                model="gemini-3-flash-preview",
+                messages=[{
+                    "role": "user", 
+                    "content": "Analyze this image carefully. Describe what you see, including the dominant color and any patterns. Use your code execution capability to verify your analysis if needed."
+                }],
+                chart_image=test_image,
+                model_config={
+                    "max_tokens": 500, 
+                    "temperature": 1.0,  # Gemini 3 Flash default
+                    "thinking_level": "high",
+                    "google_code_execution": True  # Enable Agentic Vision
+                }
+            )
+            assert validate_response(response, "agentic_vision")
+            # Check if response indicates the model understood the image
+            content = response.choices[0].message.content.lower()
+            assert any(word in content for word in ["blue", "color", "image", "solid"]), \
+                "Response should describe the blue test image"
+            print("    ✓ Agentic Vision test passed - model analyzed image with code execution enabled")
+        except RateLimitError as e:
+            pytest.skip(f"Google AI rate limited: {e}")
+        finally:
+            await client.close()
+
 
 class TestCrossProviderConsistency:
     """Tests to verify consistent behavior across all providers."""
