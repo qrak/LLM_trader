@@ -7,39 +7,25 @@
 # - "all": Use fallback system (tries primary providers first, then falls back)
 provider = googleai
 
-[dashboard]
-# Host to bind the dashboard server to
-# Use 127.0.0.1 for local access only (Recommended for security)
-# Use 0.0.0.0 to allow access from other devices on the network
-host = 127.0.0.1
-# Port to listen on
-port = 8000
-# Enable Cross-Origin Resource Sharing (CORS)
-# Set to true only if you need to access the API from a different domain/port (e.g. external tools)
-enable_cors = false
-# Comma-separated list of allowed origins (e.g. http://localhost:3000, http://example.com)
-# Use "*" to allow all origins (NOT recommended for production)
-cors_origins = *
-
 # Base URL for local LM Studio instance (e.g., http://localhost:1234/v1)
 lm_studio_base_url = http://localhost:1234/v1
 # Model identifier to use with LM Studio, leave empty for auto select
 lm_studio_model = 
 # Enable streaming for LM Studio (true/false)
-# lm_studio_streaming = true 
+lm_studio_streaming = false
 
 # Base URL for OpenRouter API
 openrouter_base_url = https://openrouter.ai/api/v1
 # Primary model to use with OpenRouter
-openrouter_base_model = google/gemini-2.0-flash-exp:free
+openrouter_base_model = google/gemini-3-flash-preview
 # Fallback model to use if the primary OpenRouter model fails
 openrouter_fallback_model = deepseek/deepseek-r1:free
 
 # Model identifier for Google AI Studio (e.g., gemini-flash-latest, gemini-2.5-flash)
 google_studio_model = gemini-3-flash-preview
-
 # BlockRun.AI Configuration
 # Base URL for BlockRun API
+
 blockrun_base_url = https://blockrun.ai/api
 # Model to use with BlockRun (format: provider/model)
 # Examples: openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash
@@ -53,9 +39,9 @@ timeframe = 4h
 # Number of candles to fetch for internal technical analysis calculation
 candle_limit = 999
 # Number of candles to visualize in the chart images sent to the AI
-ai_chart_candle_limit = 150
+ai_chart_candle_limit = 125
 # Master switch to enable or disable the Discord bot integration
-discord_bot = false
+discord_bot = true
 # Whether to include project description in coin details (useful for unknown tokens)
 include_coin_description = false
 
@@ -65,8 +51,7 @@ save_chart_images = false
 # Directory path to save debug chart images
 chart_save_path = chart_images
 # Enable detailed logic (DEBUG level) logging
-logger_debug = false
-
+logger_debug = true
 
 [directories]
 # Directory to store log files
@@ -75,20 +60,26 @@ log_dir = logs
 data_dir = data
 
 [rag]
-# Frequency (in hours) to update the RAG knowledge base
+# Cache validity duration (in hours).
+# - Automatic Analysis: ALWAYS fetches fresh news (ignores this).
+# - Manual Analysis ('a'): Uses cached news if younger than this interval. Set to 0 for always fresh.
 update_interval_hours = 4
 # Frequency (in hours) to update news categories
-categories_update_interval_hours = 24
+categories_update_interval_hours = 168
 # Frequency (in hours) to refresh the CoinGecko coin list
 coingecko_update_interval_hours = 24
+# Frequency (in hours) to refresh DefiLlama fundamentals data (0.25 = 15 minutes)
+defillama_update_interval_hours = 0.25
 # API endpoint for CoinGecko global market data
 coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 # Maximum number of news articles to include in the AI's context
 news_limit = 5
-# Maximum number of relevant sentences to extract per article
-article_max_sentences = 6
 # Maximum number of tokens per article chunk for processing
-article_max_tokens = 256
+article_max_tokens = 500
+# Filter news sources to reliable feeds only (prevents stale articles with current dates)
+news_filter_sources = true
+# Optional: Override default Tier 1 feeds (comma-separated: cointelegraph,coindesk,theblock,decrypt,bitcoinmagazine)
+news_allowed_feeds = seekingalpha,invezz,coinpaper,cryptopotato
 
 [exchanges]
 # List of exchanges to use for symbol lookup (in priority order)
@@ -105,7 +96,6 @@ transaction_fee_percent = 0.00075
 [cooldowns]
 # File message expiry is configured in hours; loader converts it to seconds at runtime.
 file_message_expiry = 168
-
 
 [model_config]
 # Default model configuration parameters
@@ -133,3 +123,22 @@ google_top_p = 0.95
 google_top_k = 64
 google_max_tokens = 32768
 google_thinking_level = high
+# Agentic Vision (Code Execution): Enables the model to generate and run Python code
+# to analyze images more precisely (e.g., zooming, counting, calculations).
+# Available for Gemini 3 Flash+ models via Google AI Studio API only (not OpenRouter).
+# May increase token usage slightly but improves accuracy for complex visual analysis.
+google_code_execution = false
+
+[dashboard]
+# Host to bind the dashboard server to
+# Use 127.0.0.1 for local access only (Recommended for security)
+# Use 0.0.0.0 to allow access from other devices on the network
+host = 0.0.0.0
+# Port to listen on
+port = 8000
+# Enable Cross-Origin Resource Sharing (CORS)
+# Set to true only if you need to access the API from a different domain/port (e.g. external tools)
+enable_cors = false
+# Comma-separated list of allowed origins (e.g. http://localhost:3000, http://example.com)
+# Use "*" to allow all origins (NOT recommended for production)
+cors_origins = *

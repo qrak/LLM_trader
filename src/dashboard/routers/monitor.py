@@ -1,25 +1,32 @@
-from fastapi import APIRouter, Request
-from typing import Dict, Any
 import json
 from pathlib import Path
+from typing import Dict, Any
+
+from fastapi import APIRouter, Request
+from src.utils.token_counter import CostStorage
 
 
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
+
+NEWS_FILES = ("crypto_news.json", "news_cache/recent_news.json")
 
 @router.get("/last_prompt")
 async def get_last_prompt(request: Request) -> Dict[str, Any]:
     """Get the last prompt sent to the LLM."""
     analysis_engine = request.app.state.analysis_engine
     logger = request.app.state.logger
-    last_prompt = getattr(analysis_engine, "last_generated_prompt", None)
-    if last_prompt:
-        return {"prompt": last_prompt, "source": "memory"}
+    if analysis_engine.last_generated_prompt:
+        return {
+            "prompt": analysis_engine.last_generated_prompt,
+            "source": "memory",
+            "timestamp": analysis_engine.last_prompt_timestamp
+        }
     config = request.app.state.config
     data_dir = getattr(config, "DATA_DIR", "data")
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
     if prev_response_file.exists():
         try:
-            with open(prev_response_file, "r") as f:
+            with open(prev_response_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 prompt = data.get("prompt")
                 if prompt:
@@ -37,20 +44,24 @@ async def get_last_response(request: Request) -> Dict[str, Any]:
     """Get the last response received from the LLM."""
     analysis_engine = request.app.state.analysis_engine
     logger = request.app.state.logger
-    last_response = getattr(analysis_engine, "last_llm_response", None)
-    if last_response:
-        return {"response": last_response}
+    if analysis_engine.last_llm_response:
+        return {
+            "response": analysis_engine.last_llm_response,
+            "source": "memory",
+            "timestamp": analysis_engine.last_response_timestamp
+        }
     config = request.app.state.config
     data_dir = getattr(config, "DATA_DIR", "data")
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
     if prev_response_file.exists():
         try:
-            with open(prev_response_file, "r") as f:
+            with open(prev_response_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 response = data.get("response", {})
                 text_analysis = response.get("text_analysis", "No analysis available")
                 return {
                     "response": text_analysis,
+                    "source": "disk",
                     "timestamp": data.get("timestamp"),
                     "indicators": {k: v for k, v in response.items() if k != "text_analysis"}
                 }
@@ -82,7 +93,6 @@ async def get_api_costs(request: Request) -> Dict[str, Any]:
     cached = dashboard_state.get_cached("costs", ttl_seconds=30.0)
     if cached:
         return cached
-    from src.utils.token_counter import CostStorage
     storage = CostStorage()
     openrouter_cost = storage.get_provider_costs("openrouter").total_cost
     google_cost = storage.get_provider_costs("google").total_cost
@@ -120,7 +130,7 @@ async def get_news(request: Request) -> Dict[str, Any]:
     if not articles:
         config = request.app.state.config
         data_dir = getattr(config, "DATA_DIR", "data")
-        for news_path in ["crypto_news.json", "news_cache/recent_news.json"]:
+        for news_path in NEWS_FILES:
             news_file = Path(data_dir) / news_path
             if news_file.exists():
                 try:

@@ -5,9 +5,11 @@ Coordinates all indicator pattern detection and returns unified results.
 Complements chart pattern engine by providing momentum and confirmation signals.
 """
 
-import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+
+import numpy as np
+
 from src.logger.logger import Logger
 from src.utils.format_utils import FormatUtils
 
@@ -55,24 +57,24 @@ from .volume_patterns import (
 class IndicatorPatternEngine:
     """
     Orchestrates indicator pattern detection across RSI, MACD, divergences, and volatility.
-    
+
     Pure NumPy/Numba implementation - no heavy classes, fast execution.
     """
-    
+
     def __init__(self, logger: Optional[Logger] = None, format_utils: Optional[FormatUtils] = None):
         """Initialize indicator pattern engine."""
         self.logger = logger
         self.format_utils = format_utils
-    
+
     def _format_pattern_time(self, periods_ago: int, index: int, timestamps: Optional[List]) -> str:
         """
         Format pattern timing with timestamp.
-        
+
         Args:
             periods_ago: Number of periods ago
             index: Index where pattern occurred
             timestamps: Optional list of datetime objects
-            
+
         Returns:
             Formatted string like "4 periods ago at 2025-10-30 12:00:00"
         """
@@ -84,14 +86,14 @@ class IndicatorPatternEngine:
                 timestamp_str = ""
         else:
             timestamp_str = ""
-        
+
         if periods_ago == 0:
             return "now" + timestamp_str
         elif periods_ago == 1:
             return "1 period ago" + timestamp_str
         else:
             return f"{periods_ago} periods ago" + timestamp_str
-    
+
     def detect_patterns(
         self,
         technical_history: Dict[str, np.ndarray],
@@ -101,7 +103,7 @@ class IndicatorPatternEngine:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Detect all indicator patterns from technical history.
-        
+
         Args:
             technical_history: Dict of indicator name -> numpy array
                 Expected keys: rsi, macd_line, macd_signal, macd_hist, stoch_k,
@@ -109,7 +111,7 @@ class IndicatorPatternEngine:
             ohlcv_data: Optional OHLCV array for price data (for divergences)
             long_term_sma_values: Optional dict of SMA period -> value for MA crossovers
             timestamps: Optional list of datetime objects for timestamp formatting
-            
+
         Returns:
             Dict with pattern categories:
             {
@@ -131,7 +133,7 @@ class IndicatorPatternEngine:
             'ma_crossover': [],
             'volume': []
         }
-        
+
         # Validate array alignment before pattern detection
         if ohlcv_data is not None:
             expected_length = len(ohlcv_data)
@@ -142,14 +144,14 @@ class IndicatorPatternEngine:
                             f"Array length mismatch: {key} has {len(arr)} elements, "
                             f"expected {expected_length}. May affect pattern indices."
                         )
-        
+
         # Extract price and volume data if available
         prices = None
         volume = None
         if ohlcv_data is not None and len(ohlcv_data) > 0:
             prices = ohlcv_data[:, 4]  # Close prices (column 4)
             volume = ohlcv_data[:, 5]  # Volume (column 5)
-        
+
         # RSI Patterns
         if 'rsi' in technical_history:
             rsi_patterns = self._detect_rsi_patterns(
@@ -158,7 +160,7 @@ class IndicatorPatternEngine:
                 timestamps
             )
             patterns['rsi'].extend(rsi_patterns)
-        
+
         # MACD Patterns
         if 'macd_line' in technical_history and 'macd_signal' in technical_history:
             macd_patterns = self._detect_macd_patterns(
@@ -168,7 +170,7 @@ class IndicatorPatternEngine:
                 timestamps
             )
             patterns['macd'].extend(macd_patterns)
-        
+
         # Divergence Patterns
         if prices is not None:
             divergence_patterns = self._detect_divergence_patterns(
@@ -177,24 +179,23 @@ class IndicatorPatternEngine:
                 timestamps
             )
             patterns['divergence'].extend(divergence_patterns)
-        
+
         # Volatility Patterns
         volatility_patterns = self._detect_volatility_patterns(
             technical_history,
             timestamps
         )
         patterns['volatility'].extend(volatility_patterns)
-        
+
         # Stochastic Patterns
         if 'stoch_k' in technical_history and 'stoch_d' in technical_history:
             stoch_patterns = self._detect_stochastic_patterns(
                 technical_history['stoch_k'],
                 technical_history['stoch_d'],
-                prices,
                 timestamps
             )
             patterns['stochastic'].extend(stoch_patterns)
-        
+
         # MA Crossover Patterns (uses SMA arrays from technical_history if available)
         if long_term_sma_values is not None or any(k in technical_history for k in ['sma_20', 'sma_50', 'sma_200']):
             ma_patterns = self._detect_ma_crossover_patterns(
@@ -203,7 +204,7 @@ class IndicatorPatternEngine:
                 timestamps
             )
             patterns['ma_crossover'].extend(ma_patterns)
-        
+
         # Volume Patterns
         if volume is not None and prices is not None:
             volume_patterns = self._detect_volume_patterns(
@@ -212,9 +213,9 @@ class IndicatorPatternEngine:
                 timestamps
             )
             patterns['volume'].extend(volume_patterns)
-        
+
         return patterns
-    
+
     def _detect_rsi_patterns(
         self,
         rsi: np.ndarray,
@@ -223,17 +224,17 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect RSI-based patterns"""
         patterns = []
-        
+
         # Oversold
         is_oversold, periods_ago, rsi_value = detect_rsi_oversold_numba(rsi)
         if is_oversold:
             pattern_index = len(rsi) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-            
+
             # Confidence based on how deep into oversold territory (30 threshold)
             # RSI 30 -> 50% confidence, RSI 20 -> 75%, RSI 10 -> 100%
             confidence = min(100, int(50 + (30 - rsi_value) * 2.5))
-            
+
             patterns.append({
                 'type': 'rsi_oversold',
                 'description': f'RSI oversold at {rsi_value:.2f} {timestamp_str}',
@@ -245,17 +246,17 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Overbought
         is_overbought, periods_ago, rsi_value = detect_rsi_overbought_numba(rsi)
         if is_overbought:
             pattern_index = len(rsi) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-            
+
             # Confidence based on how deep into overbought territory (70 threshold)
             # RSI 70 -> 50% confidence, RSI 80 -> 75%, RSI 90 -> 100%
             confidence = min(100, int(50 + (rsi_value - 70) * 2.5))
-            
+
             patterns.append({
                 'type': 'rsi_overbought',
                 'description': f'RSI overbought at {rsi_value:.2f} {timestamp_str}',
@@ -267,7 +268,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # W-Bottom (requires price data)
         if prices is not None and len(prices) == len(rsi):
             found, first_idx, second_idx, first_rsi, second_rsi = detect_rsi_w_bottom_numba(
@@ -285,7 +286,7 @@ class IndicatorPatternEngine:
                         'second_idx': int(second_idx)
                     }
                 })
-        
+
         # M-Top (requires price data)
         if prices is not None and len(prices) == len(rsi):
             found, first_idx, second_idx, first_rsi, second_rsi = detect_rsi_m_top_numba(
@@ -303,9 +304,9 @@ class IndicatorPatternEngine:
                         'second_idx': int(second_idx)
                     }
                 })
-        
+
         return patterns
-    
+
     def _detect_macd_patterns(
         self,
         macd_line: np.ndarray,
@@ -315,7 +316,7 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect MACD-based patterns"""
         patterns = []
-        
+
         # Crossover
         found, is_bullish, periods_ago, macd_val, signal_val = detect_macd_crossover_numba(
             macd_line, signal_line
@@ -324,12 +325,12 @@ class IndicatorPatternEngine:
             crossover_type = 'bullish' if is_bullish else 'bearish'
             pattern_index = len(macd_line) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-            
+
             # Calculate confidence based on crossover strength
             macd_diff = abs(macd_val - signal_val)
             macd_magnitude = abs(macd_val) + 0.0001  # Avoid division by zero
             confidence = min(100, int(50 + (macd_diff / macd_magnitude) * 50))
-            
+
             patterns.append({
                 'type': f'macd_{crossover_type}_crossover',
                 'description': f'MACD {crossover_type} crossover {timestamp_str}',
@@ -342,7 +343,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Zero-line cross
         found, is_bullish, periods_ago, macd_val = detect_macd_zero_cross_numba(macd_line)
         if found:
@@ -359,7 +360,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Histogram trend
         if macd_hist is not None:
             hist_trend = get_macd_histogram_trend_numba(macd_hist)
@@ -377,9 +378,9 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-        
+
         return patterns
-    
+
     def _create_divergence_pattern(
         self,
         pattern_type: str,
@@ -396,7 +397,7 @@ class IndicatorPatternEngine:
     ) -> Dict[str, Any]:
         """
         Create a divergence pattern dictionary (helper method).
-        
+
         Args:
             pattern_type: Pattern type string (e.g., 'rsi_bullish_divergence')
             indicator_name: Indicator name (e.g., 'rsi', 'macd')
@@ -409,7 +410,7 @@ class IndicatorPatternEngine:
             second_i: Second indicator value
             timestamps: Optional timestamp list
             data_length: Total length of data array for calculating periods_ago
-            
+
         Returns:
             Pattern dictionary
         """
@@ -419,7 +420,7 @@ class IndicatorPatternEngine:
         else:
             # Fallback: calculate from timestamps length if available
             periods_ago = (len(timestamps) - 1 - second_idx) if timestamps else 0
-        
+
         timestamp_str = self._format_pattern_time(periods_ago, second_idx, timestamps)
         if is_bullish:
             if indicator_name == 'rsi':
@@ -452,7 +453,7 @@ class IndicatorPatternEngine:
                 'periods_ago': periods_ago
             }
         }
-    
+
     def _detect_divergence_patterns(
         self,
         prices: np.ndarray,
@@ -462,11 +463,11 @@ class IndicatorPatternEngine:
         """Detect divergence patterns across multiple indicators"""
         patterns = []
         data_length = len(prices)
-        
+
         # RSI Divergences
         if 'rsi' in technical_history:
             rsi = technical_history['rsi']
-            
+
             # Bullish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bullish_divergence_numba(prices, rsi)
@@ -475,7 +476,7 @@ class IndicatorPatternEngine:
                     'rsi_bullish_divergence', 'rsi', True,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
-            
+
             # Bearish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bearish_divergence_numba(prices, rsi)
@@ -484,11 +485,11 @@ class IndicatorPatternEngine:
                     'rsi_bearish_divergence', 'rsi', False,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
-        
+
         # MACD Divergences
         if 'macd_line' in technical_history:
             macd = technical_history['macd_line']
-            
+
             # Bullish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bullish_divergence_numba(prices, macd)
@@ -497,7 +498,7 @@ class IndicatorPatternEngine:
                     'macd_bullish_divergence', 'macd', True,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
-            
+
             # Bearish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bearish_divergence_numba(prices, macd)
@@ -506,9 +507,9 @@ class IndicatorPatternEngine:
                     'macd_bearish_divergence', 'macd', False,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
-        
+
         return patterns
-    
+
     def _detect_volatility_patterns(
         self,
         technical_history: Dict[str, np.ndarray],
@@ -516,11 +517,11 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect volatility-based patterns"""
         patterns = []
-        
+
         # ATR Spike
         if 'atr' in technical_history:
             atr = technical_history['atr']
-            found, periods_ago, current_atr, avg_atr = detect_atr_spike_numba(atr)
+            found, _, current_atr, avg_atr = detect_atr_spike_numba(atr)
             if found:
                 pattern_index = len(atr) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
@@ -539,7 +540,7 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-            
+
             # Volatility trend
             vol_trend = detect_volatility_trend_numba(atr)
             if vol_trend != 0:
@@ -559,7 +560,7 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-        
+
         # Bollinger Band Squeeze
         if 'bb_upper' in technical_history and 'bb_lower' in technical_history:
             bb_upper = technical_history['bb_upper']
@@ -584,7 +585,7 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-        
+
         # TTM Squeeze (Bollinger Bands inside Keltner Channels)
         if all(k in technical_history for k in ['bb_upper', 'bb_lower', 'kc_upper', 'kc_lower']):
             found = detect_keltner_squeeze_numba(
@@ -608,19 +609,18 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-        
+
         return patterns
-    
+
     def _detect_stochastic_patterns(
         self,
         stoch_k: np.ndarray,
         stoch_d: np.ndarray,
-        prices: Optional[np.ndarray],
         timestamps: Optional[List]
     ) -> List[Dict[str, Any]]:
         """Detect Stochastic oscillator patterns"""
         patterns = []
-        
+
         # Oversold
         is_oversold, periods_ago, stoch_value = detect_stoch_oversold_numba(stoch_k)
         if is_oversold:
@@ -640,7 +640,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Overbought
         is_overbought, periods_ago, stoch_value = detect_stoch_overbought_numba(stoch_k)
         if is_overbought:
@@ -660,7 +660,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Bullish crossover
         found, periods_ago, k_val, d_val, in_oversold = detect_stoch_bullish_crossover_numba(stoch_k, stoch_d)
         if found:
@@ -683,7 +683,7 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         # Bearish crossover
         found, periods_ago, k_val, d_val, in_overbought = detect_stoch_bearish_crossover_numba(stoch_k, stoch_d)
         if found:
@@ -706,9 +706,9 @@ class IndicatorPatternEngine:
                     'periods_ago': int(periods_ago)
                 }
             })
-        
+
         return patterns
-    
+
     def _detect_ma_crossover_patterns(
         self,
         sma_values: Dict[int, float],
@@ -717,12 +717,12 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect Moving Average crossover patterns using arrays from technical_history"""
         patterns = []
-        
+
         # Try to use SMA arrays from technical_history first (preferred for crossover detection)
         sma_20_array = technical_history.get('sma_20')
         sma_50_array = technical_history.get('sma_50')
         sma_200_array = technical_history.get('sma_200')
-        
+
         # If sma_values not provided but we have arrays, populate from current array values
         if (sma_values is None or len(sma_values) == 0) and (sma_50_array is not None or sma_200_array is not None):
             sma_values = {}
@@ -732,7 +732,7 @@ class IndicatorPatternEngine:
                 sma_values[50] = float(sma_50_array[-1])
             if sma_200_array is not None and len(sma_200_array) > 0:
                 sma_values[200] = float(sma_200_array[-1])
-        
+
         # Detect actual crossovers if we have arrays
         if sma_50_array is not None and sma_200_array is not None:
             # Golden Cross (50 SMA crosses above 200 SMA)
@@ -740,11 +740,11 @@ class IndicatorPatternEngine:
             if found:
                 pattern_index = len(sma_50_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-                
+
                 # Confidence based on percentage distance between SMAs (stronger separation = higher confidence)
                 pct_separation = abs((sma_50_val - sma_200_val) / sma_200_val) * 100 if sma_200_val != 0 else 0
                 confidence = min(100, int(50 + pct_separation * 10))
-                
+
                 patterns.append({
                     'type': 'golden_cross',
                     'description': f'Golden Cross: 50 SMA crossed above 200 SMA {timestamp_str} (bullish long-term signal)',
@@ -756,17 +756,17 @@ class IndicatorPatternEngine:
                         'periods_ago': int(periods_ago)
                     }
                 })
-            
+
             # Death Cross (50 SMA crosses below 200 SMA)
             found, periods_ago, sma_50_val, sma_200_val = detect_death_cross_numba(sma_50_array, sma_200_array)
             if found:
                 pattern_index = len(sma_50_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-                
+
                 # Confidence based on percentage distance between SMAs
                 pct_separation = abs((sma_200_val - sma_50_val) / sma_200_val) * 100 if sma_200_val != 0 else 0
                 confidence = min(100, int(50 + pct_separation * 10))
-                
+
                 patterns.append({
                     'type': 'death_cross',
                     'description': f'Death Cross: 50 SMA crossed below 200 SMA {timestamp_str} (bearish long-term signal)',
@@ -778,7 +778,7 @@ class IndicatorPatternEngine:
                         'periods_ago': int(periods_ago)
                     }
                 })
-        
+
         # Short-term crossover (20 SMA vs 50 SMA) - NOT a Golden/Death Cross
         # Golden/Death Cross specifically refers to 50 vs 200 SMA crossovers
         if sma_20_array is not None and sma_50_array is not None:
@@ -798,13 +798,13 @@ class IndicatorPatternEngine:
                         'periods_ago': int(periods_ago)
                     }
                 })
-        
+
         # MA alignment detection (uses current values or falls back to arrays)
         if sma_values is not None and 20 in sma_values and 50 in sma_values and 200 in sma_values:
             sma_20 = sma_values[20]
             sma_50 = sma_values[50]
             sma_200 = sma_values[200]
-            
+
             # Bullish alignment: 20 > 50 > 200
             if sma_20 > sma_50 and sma_50 > sma_200:
                 patterns.append({
@@ -818,7 +818,7 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-            
+
             # Bearish alignment: 20 < 50 < 200
             elif sma_20 < sma_50 and sma_50 < sma_200:
                 patterns.append({
@@ -832,15 +832,15 @@ class IndicatorPatternEngine:
                         'periods_ago': 0
                     }
                 })
-        
+
         # Detect Golden/Death Cross potential (50 vs 200 relationship)
         if sma_values is not None and 50 in sma_values and 200 in sma_values:
             sma_50 = sma_values[50]
             sma_200 = sma_values[200]
-            
+
             # Calculate percentage distance
             pct_distance = abs((sma_50 / sma_200 - 1.0) * 100)
-            
+
             # If very close (<2%), potential crossover imminent
             if pct_distance < 2.0:
                 if sma_50 > sma_200:
@@ -867,9 +867,9 @@ class IndicatorPatternEngine:
                             'periods_ago': 0
                         }
                     })
-        
+
         return patterns
-    
+
     def _detect_volume_patterns(
         self,
         volume: np.ndarray,
@@ -878,7 +878,7 @@ class IndicatorPatternEngine:
     ) -> List[Dict[str, Any]]:
         """Detect volume-based patterns"""
         patterns = []
-        
+
         # Volume spike
         is_spike, current_vol, avg_vol, spike_ratio = detect_volume_spike_numba(volume)
         if is_spike:
@@ -898,7 +898,7 @@ class IndicatorPatternEngine:
                     'periods_ago': 0
                 }
             })
-        
+
         # Volume dry-up
         is_dryup, current_vol, avg_vol, dryup_ratio = detect_volume_dryup_numba(volume)
         if is_dryup:
@@ -918,7 +918,7 @@ class IndicatorPatternEngine:
                     'periods_ago': 0
                 }
             })
-        
+
         # Climax volume
         is_climax, current_vol, avg_vol, climax_ratio = detect_climax_volume_numba(volume)
         if is_climax:
@@ -938,7 +938,7 @@ class IndicatorPatternEngine:
                     'periods_ago': 0
                 }
             })
-        
+
         # Volume-price divergence
         found, is_bearish, price_chg, vol_chg = detect_volume_price_divergence_numba(volume, prices)
         if found:
@@ -950,7 +950,7 @@ class IndicatorPatternEngine:
                 desc += f' (price rising, volume falling - weak rally) {timestamp_str}'
             else:
                 desc += f' (price falling, volume falling - weak selloff) {timestamp_str}'
-            
+
             # Confidence based on divergence magnitude
             vol_divergence = abs(vol_chg)
             confidence = min(100, int(50 + vol_divergence * 2))
@@ -966,7 +966,7 @@ class IndicatorPatternEngine:
                     'periods_ago': 0
                 }
             })
-        
+
         # Accumulation/Distribution
         found, is_accumulation, strength, up_vol_ratio = detect_accumulation_distribution_numba(volume, prices)
         if found:
@@ -974,7 +974,7 @@ class IndicatorPatternEngine:
             pattern_index = len(volume) - 1
             timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
             desc = f'{phase} detected (strength: {strength:.2f}) over last 10 periods {timestamp_str}'
-            
+
             # Confidence based on strength metric (typically 0-1 scale)
             confidence = min(100, int(50 + strength * 50))
             patterns.append({
@@ -990,6 +990,5 @@ class IndicatorPatternEngine:
                     'periods_ago': 0
                 }
             })
-        
-        return patterns
 
+        return patterns

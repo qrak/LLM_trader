@@ -7,13 +7,13 @@ from typing import Set, Dict
 
 class CategoryCollisionResolver:
     """Handles priority-based collision resolution for category-word mappings."""
-    
-    def __init__(self, important_categories: Set[str] = None, ticker_categories: Set[str] = None, 
+
+    def __init__(self, important_categories: Set[str] = None, ticker_categories: Set[str] = None,
                  general_categories: Set[str] = None, generic_priorities: Dict[str, int] = None):
         self.important_categories = important_categories or set()
         self.ticker_categories = ticker_categories or set()
         self.general_categories = general_categories or set()
-        
+
         # Load generic priorities from config or use defaults
         self.generic_priorities = generic_priorities or {
             'cryptocurrency': 10,
@@ -24,14 +24,14 @@ class CategoryCollisionResolver:
             'token sale': 25,
             'digital asset treasury': 30
         }
-    
-    def resolve_collision(self, existing_category: str, new_category: str, word: str) -> str:
+
+    def resolve_collision(self, existing_category: str, new_category: str, _word: str) -> str:
         """
         Resolve mapping collision using priority-based rules.
-        
+
         Returns the category that should win based on priority hierarchy:
         1. Specific ticker categories (BTC, ETH, etc.) - Highest priority
-        2. Important categories - High priority  
+        2. Important categories - High priority
         3. Ticker categories - Medium-high priority
         4. Other specific categories - Medium priority
         5. General categories - Low priority
@@ -39,44 +39,46 @@ class CategoryCollisionResolver:
         """
         existing_priority = self._get_category_priority(existing_category)
         new_priority = self._get_category_priority(new_category)
-        
+
         # Return the category with higher priority
         if new_priority > existing_priority:
             return new_category
         else:
             return existing_category
-    
-    def update_category_sets(self, important_categories: Set[str], ticker_categories: Set[str], general_categories: Set[str]) -> None:
+
+    def update_category_sets(self, important_categories: Set[str], ticker_categories: Set[str], general_categories: Set[str], generic_priorities: Dict[str, int] = None) -> None:
         """Update category sets for priority calculation."""
         self.important_categories = important_categories
         self.ticker_categories = ticker_categories
         self.general_categories = general_categories
-    
+        if generic_priorities:
+            self.generic_priorities = generic_priorities
+
     def _get_category_priority(self, category: str) -> int:
         """Get priority score for a category (higher = more specific/important)."""
         category_upper = category.upper()
         category_lower = category.lower()
-        
+
         # Specific ticker categories get highest priority
         # Short uppercase categories are likely specific tickers (BTC, ETH, AAVE, etc.)
         if len(category_upper) <= 10 and category_upper.isupper() and '-' not in category_upper:
             return 100
-        
+
         # Important categories get high priority
         if category_lower in self.important_categories:
             return 80
-        
+
         # Ticker categories get medium-high priority
         if category_lower in self.ticker_categories:
             return 70
-        
+
         # Generic/broad categories get lower priority (from config)
         if category_lower in self.generic_priorities:
             return self.generic_priorities[category_lower]
-        
+
         # General categories get low-medium priority
         if category_lower in self.general_categories:
             return 50
-        
+
         # Default priority for unknown categories
         return 60

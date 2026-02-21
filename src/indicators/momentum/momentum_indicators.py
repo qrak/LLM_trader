@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 from numba import njit
 
-from src.indicators.overlap import ema_numba, ewma_numba
+from src.indicators.overlap import ema_numba
 
 
 @dataclass
@@ -167,41 +167,124 @@ def williams_r_numba(high, low, close, length):
 
 @njit(cache=True)
 def tsi_numba(close, long_length, short_length):
+    """
+    True Strength Index (TSI) - Optimized implementation.
+
+    Double smoothed momentum indicator.
+    1. Calculates momentum (m = close - prev_close)
+    2. Smoothes m with EMA (long_length) -> ema1
+    3. Smoothes ema1 with EMA (short_length) -> ema2
+    4. TSI = 100 * (ema2(m) / ema2(|m|))
+
+    Optimized for performance:
+    - Single pass execution (O(N))
+    - Minimal memory allocation
+    - Fixed off-by-one initialization error
+    """
     n = len(close)
     tsi = np.full(n, np.nan)
-    m = np.zeros(n)
-    abs_m = np.zeros(n)
-    ema1 = np.zeros(n)
-    abs_ema1 = np.zeros(n)
-    ema2 = np.zeros(n)
-    abs_ema2 = np.zeros(n)
 
-    for i in range(1, n):
-        m[i] = close[i] - close[i - 1]
-        abs_m[i] = abs(m[i])
+    # Pre-calculate alpha values
+    alpha_long = 2.0 / (long_length + 1)
+    alpha_short = 2.0 / (short_length + 1)
 
-    alpha_long = 2 / (long_length + 1)
-    alpha_short = 2 / (short_length + 1)
+    # Calculate initial window for EMA1 (momentum)
+    m_sum = 0.0
+    abs_m_sum = 0.0
 
-    ema1[long_length] = np.mean(m[1:long_length + 1])
-    abs_ema1[long_length] = np.mean(abs_m[1:long_length + 1])
+    # Calculate sum for initial EMA1
+    # We sum m[1]...m[long_length]
+    for i in range(1, long_length + 1):
+        if i < n:
+            val = close[i] - close[i - 1]
+            m_sum += val
+            abs_m_sum += abs(val)
 
-    for i in range(long_length + 1, n):
-        ema1[i] = ((m[i] - ema1[i - 1]) * alpha_long) + ema1[i - 1]
-        abs_ema1[i] = ((abs_m[i] - abs_ema1[i - 1]) * alpha_long) + abs_ema1[i - 1]
+    if n <= long_length:
+        return tsi
 
-    ema2[long_length + short_length - 1] = np.mean(ema1[long_length:long_length + short_length])
-    abs_ema2[long_length + short_length - 1] = np.mean(abs_ema1[long_length:long_length + short_length])
+    # Initial EMA1 values at index long_length
+    curr_ema1 = m_sum / long_length
+    curr_abs_ema1 = abs_m_sum / long_length
 
-    for i in range(long_length + short_length, n):
-        ema2[i] = ((ema1[i] - ema2[i - 1]) * alpha_short) + ema2[i - 1]
-        abs_ema2[i] = ((abs_ema1[i] - abs_ema2[i - 1]) * alpha_short) + abs_ema2[i - 1]
+    # Now we need to calculate EMA2.
+    # EMA2 is the EMA of EMA1.
+    # Its initial value is the mean of EMA1 from long_length to long_length + short_length - 1
 
-    for i in range(long_length + short_length, n):
-        if abs_ema2[i] != 0:
-            tsi[i] = (ema2[i] / abs_ema2[i]) * 100
+    # Accumulate sums for EMA2 initialization
+    ema1_sum = curr_ema1
+    abs_ema1_sum = curr_abs_ema1
+
+    # Store previous EMA1 values
+    prev_ema1 = curr_ema1
+    prev_abs_ema1 = curr_abs_ema1
+
+    # Calculate EMA1 for the window required to initialize EMA2
+    # Range: long_length + 1 to long_length + short_length - 1
+    start_ema2_init = long_length + 1
+    end_ema2_init = long_length + short_length - 1
+
+    if end_ema2_init >= n:
+        # Not enough data for full initialization
+        return tsi
+
+    for i in range(start_ema2_init, end_ema2_init + 1):
+        # Calculate m
+        m = close[i] - close[i - 1]
+        abs_m = abs(m)
+
+        # Calculate new EMA1
+        curr_ema1 = (m - prev_ema1) * alpha_long + prev_ema1
+        curr_abs_ema1 = (abs_m - prev_abs_ema1) * alpha_long + prev_abs_ema1
+
+        # Accumulate for EMA2 initialization
+        ema1_sum += curr_ema1
+        abs_ema1_sum += curr_abs_ema1
+
+        # Update prev
+        prev_ema1 = curr_ema1
+        prev_abs_ema1 = curr_abs_ema1
+
+    # Initial EMA2 values at index end_ema2_init
+    curr_ema2 = ema1_sum / short_length
+    curr_abs_ema2 = abs_ema1_sum / short_length
+
+    # Calculate TSI for the first valid point
+    if curr_abs_ema2 != 0:
+        tsi[end_ema2_init] = (curr_ema2 / curr_abs_ema2) * 100.0
+    else:
+        # If it's the very first point and denominator is 0, we can't use previous value.
+        # Default to 0.0 or keep NaN? Usually 0.0 is safer than NaN for indicators.
+        tsi[end_ema2_init] = 0.0
+
+    prev_ema2 = curr_ema2
+    prev_abs_ema2 = curr_abs_ema2
+
+    # Main loop for the rest of the data
+    for i in range(end_ema2_init + 1, n):
+        # Calculate m
+        m = close[i] - close[i - 1]
+        abs_m = abs(m)
+
+        # Calculate new EMA1
+        curr_ema1 = (m - prev_ema1) * alpha_long + prev_ema1
+        curr_abs_ema1 = (abs_m - prev_abs_ema1) * alpha_long + prev_abs_ema1
+
+        # Calculate new EMA2
+        curr_ema2 = (curr_ema1 - prev_ema2) * alpha_short + prev_ema2
+        curr_abs_ema2 = (curr_abs_ema1 - prev_abs_ema2) * alpha_short + prev_abs_ema2
+
+        # Calculate TSI
+        if curr_abs_ema2 != 0:
+            tsi[i] = (curr_ema2 / curr_abs_ema2) * 100.0
         else:
             tsi[i] = tsi[i - 1]
+
+        # Update prev
+        prev_ema1 = curr_ema1
+        prev_abs_ema1 = curr_abs_ema1
+        prev_ema2 = curr_ema2
+        prev_abs_ema2 = curr_abs_ema2
 
     return tsi
 
@@ -245,10 +328,11 @@ def ppo_numba(close, fast_length, slow_length):
 
 @njit(cache=True)
 def coppock_curve_numba(close, wl1=14, wl2=11, wma_length=10):
-    roc_long = ((close - np.roll(close, wl1)) / np.roll(close, wl1)) * 100
-    roc_short = ((close - np.roll(close, wl2)) / np.roll(close, wl2)) * 100
+    roc_long = roc_numba(close, wl1)
+    roc_short = roc_numba(close, wl2)
     coppock_arr = roc_long + roc_short
-    ewma_coppock = ewma_numba(coppock_arr, wma_length)
+    # Use ema_numba to handle NaNs correctly and avoid lookahead bias from np.roll
+    ewma_coppock = ema_numba(coppock_arr, wma_length)
     return ewma_coppock
 
 @njit(cache=True)
@@ -350,15 +434,111 @@ def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, dr
     return uo
 
 
+@njit(cache=True)
+def kst_numba(
+    close: np.ndarray,
+    roc1_length: int = 5,
+    roc2_length: int = 10,
+    roc3_length: int = 15,
+    roc4_length: int = 20,
+    sma1_length: int = 3,
+    sma2_length: int = 5,
+    sma3_length: int = 7,
+    sma4_length: int = 9
+) -> np.ndarray:
+    """
+    Know Sure Thing (KST) indicator - NaN-aware implementation.
+
+    Computes ROC for 4 periods, smooths each with SMA, and combines with weights.
+    Handles NaN values from ROC by starting SMA windows at first valid index.
+
+    Args:
+        close: Close prices
+        roc1_length: First ROC period (default 5)
+        roc2_length: Second ROC period (default 10)
+        roc3_length: Third ROC period (default 15)
+        roc4_length: Fourth ROC period (default 20)
+        sma1_length: SMA period for first ROC (default 3)
+        sma2_length: SMA period for second ROC (default 5)
+        sma3_length: SMA period for third ROC (default 7)
+        sma4_length: SMA period for fourth ROC (default 9)
+
+    Returns:
+        KST values (weighted sum of smoothed ROCs)
+    """
+    n = len(close)
+    kst = np.full(n, np.nan)
+
+    # Compute ROC for all 4 periods inline
+    roc1 = np.full(n, np.nan)
+    roc2 = np.full(n, np.nan)
+    roc3 = np.full(n, np.nan)
+    roc4 = np.full(n, np.nan)
+
+    roc1[roc1_length:] = ((close[roc1_length:] / close[:-roc1_length]) - 1) * 100
+    roc2[roc2_length:] = ((close[roc2_length:] / close[:-roc2_length]) - 1) * 100
+    roc3[roc3_length:] = ((close[roc3_length:] / close[:-roc3_length]) - 1) * 100
+    roc4[roc4_length:] = ((close[roc4_length:] / close[:-roc4_length]) - 1) * 100
+
+    # Compute NaN-aware SMA for each ROC
+    rcma1 = np.full(n, np.nan)
+    rcma2 = np.full(n, np.nan)
+    rcma3 = np.full(n, np.nan)
+    rcma4 = np.full(n, np.nan)
+
+    # Helper to compute SMA starting from first valid index
+    def compute_sma(roc_arr, roc_len, sma_len):
+        sma = np.full(n, np.nan)
+        # First valid ROC value is at index roc_len
+        start_idx = roc_len + sma_len - 1
+
+        if start_idx >= n:
+            return sma
+
+        # Initialize first window sum
+        window_sum = 0.0
+        for i in range(roc_len, start_idx + 1):
+            window_sum += roc_arr[i]
+
+        sma[start_idx] = window_sum / sma_len
+
+        # Sliding window for remaining values
+        for i in range(start_idx + 1, n):
+            window_sum += roc_arr[i] - roc_arr[i - sma_len]
+            sma[i] = window_sum / sma_len
+
+        return sma
+
+    rcma1 = compute_sma(roc1, roc1_length, sma1_length)
+    rcma2 = compute_sma(roc2, roc2_length, sma2_length)
+    rcma3 = compute_sma(roc3, roc3_length, sma3_length)
+    rcma4 = compute_sma(roc4, roc4_length, sma4_length)
+
+    # Determine the start index where all SMAs are valid
+    start_idx1 = roc1_length + sma1_length - 1
+    start_idx2 = roc2_length + sma2_length - 1
+    start_idx3 = roc3_length + sma3_length - 1
+    start_idx4 = roc4_length + sma4_length - 1
+
+    # Optimization: Only iterate over the valid range to avoid NaN checks inside the loop
+    valid_start = max(start_idx1, start_idx2, start_idx3, start_idx4)
+
+    if valid_start < n:
+        for i in range(valid_start, n):
+            kst[i] = rcma1[i] * 1 + rcma2[i] * 2 + rcma3[i] * 3 + rcma4[i] * 4
+
+    return kst
+
+
 def uo_numba(
-    high: np.ndarray, 
-    low: np.ndarray, 
-    close: np.ndarray, 
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
     config: Any
 ) -> np.ndarray:
     """
     Ultimate Oscillator (UO) - Simple interface using config object or dictionary.
-    
+
     Ultimate Oscillator using three timeframes: 7, 14 and 28 periods.
 
     Sources:
@@ -387,14 +567,14 @@ def uo_numba(
     """
     if isinstance(config, dict):
         return _uo_numba(
-            high, low, close, 
+            high, low, close,
             config['fast'], config['medium'], config['slow'],
             config['fast_w'], config['medium_w'], config['slow_w'],
             config['drift']
         )
     else:
         return _uo_numba(
-            high, low, close, 
+            high, low, close,
             config.fast, config.medium, config.slow,
             config.fast_w, config.medium_w, config.slow_w,
             config.drift

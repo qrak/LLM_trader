@@ -39,6 +39,12 @@ class Position(SerializableMixin):
     rr_ratio_at_entry: float = 0.0      # tp_distance / sl_distance
     adx_at_entry: float = 0.0           # ADX value at entry time
     rsi_at_entry: float = 50.0          # RSI value at entry time for threshold learning
+    # Extended market snapshot at entry for full brain context reconstruction
+    trend_direction_at_entry: str = "NEUTRAL"      # BULLISH/BEARISH/NEUTRAL
+    macd_signal_at_entry: str = "NEUTRAL"           # BULLISH/BEARISH/NEUTRAL
+    bb_position_at_entry: str = "MIDDLE"            # UPPER/MIDDLE/LOWER
+    volume_state_at_entry: str = "NORMAL"           # ACCUMULATION/NORMAL/DISTRIBUTION
+    market_sentiment_at_entry: str = "NEUTRAL"      # EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED
     # Performance metrics (MAE/MFE)
     max_drawdown_pct: float = 0.0       # Max adverse excursion (MAE)
     max_profit_pct: float = 0.0         # Max favorable excursion (MFE)
@@ -49,26 +55,26 @@ class Position(SerializableMixin):
             return ((current_price - self.entry_price) / self.entry_price) * 100
         else:  # SHORT
             return ((self.entry_price - current_price) / self.entry_price) * 100
-            
+
     def update_metrics(self, current_price: float) -> None:
         """Update live performance metrics (MAE/MFE)."""
         pnl = self.calculate_pnl(current_price)
-        
+
         # Update Maximum Adverse Excursion (lowest negative P&L)
         if pnl < 0 and pnl < self.max_drawdown_pct:
             self.max_drawdown_pct = pnl
-            
+
         # Update Maximum Favorable Excursion (highest positive P&L)
         if pnl > 0 and pnl > self.max_profit_pct:
             self.max_profit_pct = pnl
 
     def calculate_closing_fee(self, close_price: float, fee_percent: float) -> float:
         """Calculate the transaction fee for closing this position.
-        
+
         Args:
             close_price: Price at which position is closed
             fee_percent: Fee percentage (default 0.075% for limit orders)
-            
+
         Returns:
             Fee amount in USDT
         """
@@ -111,33 +117,35 @@ class TradingMemory(SerializableMixin):
     """Rolling memory of recent trading decisions for context."""
     decisions: List[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10
-    
+
     def add_decision(self, decision: TradeDecision) -> None:
         """Add a decision to memory, maintaining max size."""
         self.decisions.append(decision)
         if len(self.decisions) > self.max_decisions:
             self.decisions.pop(0)
-    
+
     def get_recent_decisions(self, n: int = 5) -> List[TradeDecision]:
         """Get the n most recent decisions."""
         return self.decisions[-n:]
-    
-    def get_context_summary(self, current_price: Optional[float] = None, full_history: Optional[List['TradeDecision']] = None) -> str:
+
+    def get_context_summary(self, full_history: Optional[List['TradeDecision']] = None) -> str:
         """Generate a concise summary for prompt injection.
-        
+
         Args:
-            current_price: Current market price for P&L calculation on open positions
             full_history: Complete trade history for calculating overall performance
-            
+
         Returns:
             Formatted summary of last 5 decisions with overall P&L data from all trades
         """
         if not self.decisions:
             return "No previous trading decisions."
-        
-        lines = ["## Recent Trading History (Last 5 Decisions):"]
-        recent = self.decisions[-5:]  # Last 5 decisions for context
-        
+
+        recent_source = full_history if full_history else self.decisions
+        recent = recent_source[-5:]  # Last 5 decisions for context
+        lines = []
+        if recent:
+            lines.append("## Recent Trading History (Last 5 Decisions):")
+
         # Calculate P&L from FULL trade history, not just recent decisions
         history_to_analyze = full_history if full_history else self.decisions
         # Helper to ensure timezone-aware timestamps for sorting
@@ -151,7 +159,7 @@ class TradingMemory(SerializableMixin):
         total_pnl_pct = 0.0
         closed_trades = 0
         winning_trades = 0
-        
+
         # Track open positions to calculate P&L across entire history
         open_position = None
         for decision in history_to_analyze:
@@ -165,7 +173,7 @@ class TradingMemory(SerializableMixin):
                 else:  # SELL
                     pnl_pct = ((open_position.price - decision.price) / open_position.price) * 100
                     pnl_quote = (open_position.price - decision.price) * open_position.quantity
-                
+
                 total_pnl_quote += pnl_quote
                 total_pnl_pct += pnl_pct
                 closed_trades += 1
@@ -181,7 +189,7 @@ class TradingMemory(SerializableMixin):
                 f"- [{time_str}] {decision.action} @ ${decision.price:,.2f} "
                 f"(Conf: {decision.confidence}) - {decision.reasoning}"
             )
-        
+
         # Add overall performance summary from ALL closed trades
         if closed_trades > 0:
             avg_pnl_pct = total_pnl_pct / closed_trades
@@ -191,13 +199,13 @@ class TradingMemory(SerializableMixin):
             lines.append(f"- Total P&L: ${total_pnl_quote:+,.2f} ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
             lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")
-        
+
         return "\n".join(lines)
-    
+
     def to_list(self) -> List[Dict[str, Any]]:
         """Convert to list of dictionaries for JSON serialization."""
         return [d.to_dict() for d in self.decisions]
-    
+
     @classmethod
     def from_list(cls, data: List[Dict[str, Any]], max_decisions: int = 10) -> 'TradingMemory':
         """Create TradingMemory from list of dictionaries."""

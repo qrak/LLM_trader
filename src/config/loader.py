@@ -19,10 +19,10 @@ VALID_PROVIDERS = {"local", "googleai", "openrouter", "blockrun", "all"}
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
-    
+
     Implements ConfigProtocol for type safety and dependency injection.
     """
-    
+
     def __init__(self):
         self._env_vars = {}
         self._config_data = {}
@@ -31,7 +31,7 @@ class Config:
         self._validate_provider()
         self._build_dynamic_urls()
         self._build_model_configs()
-    
+
     def _load_environment(self):
         """Load environment variables from keys.env file using python-dotenv."""
         if not KEYS_ENV_PATH.exists():
@@ -39,11 +39,11 @@ class Config:
                 f"Private keys file not found: {KEYS_ENV_PATH}. "
                 "Please create keys.env in the root directory with your API keys."
             )
-        
+
         try:
             # Use dotenv_values to parse the .env file
             env_vars = dotenv_values(KEYS_ENV_PATH)
-            
+
             # Convert values to appropriate types
             for key, value in env_vars.items():
                 if value is not None:
@@ -51,10 +51,10 @@ class Config:
                     if value.isdigit():
                         value = int(value)
                     self._env_vars[key] = value
-                    
+
         except Exception as e:
             raise RuntimeError(f"Error loading environment file {KEYS_ENV_PATH}: {e}") from e
-    
+
     def _load_ini_config(self):
         """Load configuration from config.ini file."""
         if not CONFIG_INI_PATH.exists():
@@ -62,11 +62,11 @@ class Config:
                 f"Configuration file not found: {CONFIG_INI_PATH}. "
                 "Please create config.ini in the config directory."
             )
-        
+
         try:
             config = configparser.ConfigParser()
             config.read(CONFIG_INI_PATH, encoding='utf-8')
-            
+
             for section_name in config.sections():
                 section_data = {}
                 for key, value in config.items(section_name):
@@ -75,7 +75,7 @@ class Config:
                 self._config_data[section_name] = section_data
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
-    
+
     def _validate_provider(self):
         """Validate that the configured AI provider is supported."""
         provider = self.PROVIDER.lower()
@@ -107,18 +107,20 @@ class Config:
         if ',' in value:
             return [item.strip() for item in value.split(',')]
         return value
-    
+
     def _build_dynamic_urls(self):
         """Build dynamic URLs that depend on API keys.
-        
+
         NOTE: API keys are intentionally NOT appended here to prevent leakage
         in logs if these URLs are printed. The key is appended at request time.
         """
         # Base URLs without API keys
         self.RAG_NEWS_API_URL = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=LLM_Trader_v2"
+        self.RAG_NEWS_FILTER_SOURCES = self.get_config('rag', 'news_filter_sources', True)
+        self.RAG_NEWS_ALLOWED_FEEDS = self.get_config('rag', 'news_allowed_feeds', None)
         self.RAG_CATEGORIES_API_URL = "https://min-api.cryptocompare.com/data/news/categories"
         self.RAG_PRICE_API_URL = "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD"
-    
+
     def _build_model_configs(self):
         """Build model configuration dictionaries as instance variables."""
         default_max_tokens = self.get_config('model_config', 'max_tokens', None)
@@ -135,7 +137,7 @@ class Config:
         }
 
         google_max_tokens = self.get_config('model_config', 'google_max_tokens', None)
-        
+
         # Only enforce Google config if we are actually using it
         if google_max_tokens is None and self.PROVIDER in ('googleai', 'all'):
             raise RuntimeError("`google_max_tokens` is required in [model_config] of config.ini when using Google models")
@@ -145,50 +147,51 @@ class Config:
             "top_p": self.get_config('model_config', 'google_top_p', None),
             "top_k": self.get_config('model_config', 'google_top_k', None),
             "max_tokens": google_max_tokens,
-            "thinking_level": self.get_config('model_config', 'google_thinking_level', 'high')
+            "thinking_level": self.get_config('model_config', 'google_thinking_level', 'high'),
+            "google_code_execution": self.get_config('model_config', 'google_code_execution', False)
         }
-    
+
     def get_env(self, key: str, default: Any = None) -> Any:
         """Get environment variable."""
         return self._env_vars.get(key, default)
-    
+
     def get_config(self, section: str, key: str, default: Any = None) -> Any:
         """Get configuration value from INI file."""
         return self._config_data.get(section, {}).get(key, default)
-    
+
     def get_section(self, section: str) -> Dict[str, Any]:
         """Get entire configuration section."""
         return self._config_data.get(section, {})
-    
+
     # Environment variables (private keys and sensitive data)
     @property
     def BOT_TOKEN_DISCORD(self):
         return self.get_env('BOT_TOKEN_DISCORD')
-    
+
     @property
     def GUILD_ID_DISCORD(self):
         return self.get_env('GUILD_ID_DISCORD')
-    
+
     @property
     def MAIN_CHANNEL_ID(self):
         return self.get_env('MAIN_CHANNEL_ID')
-    
+
     @property
     def TEMPORARY_CHANNEL_ID_DISCORD(self):
         return self.get_env('TEMPORARY_CHANNEL_ID_DISCORD')
-    
+
     @property
     def OPENROUTER_API_KEY(self):
         return self.get_env('OPENROUTER_API_KEY')
-    
+
     @property
     def GOOGLE_STUDIO_API_KEY(self):
         return self.get_env('GOOGLE_STUDIO_API_KEY')
-    
+
     @property
     def GOOGLE_STUDIO_PAID_API_KEY(self):
         return self.get_env('GOOGLE_STUDIO_PAID_API_KEY')
-    
+
     @property
     def CRYPTOCOMPARE_API_KEY(self):
         return self.get_env('CRYPTOCOMPARE_API_KEY')
@@ -196,11 +199,11 @@ class Config:
     @property
     def COINGECKO_API_KEY(self):
         return self.get_env('COINGECKO_API_KEY')
-    
+
     @property
     def BLOCKRUN_WALLET_KEY(self):
         return self.get_env('BLOCKRUN_WALLET_KEY')
-    
+
     @property
     def ADMIN_USER_IDS(self):
         """Get list of admin user IDs from environment."""
@@ -235,16 +238,16 @@ class Config:
             type(admin_ids).__name__
         )
         return []
-    
+
     # AI Provider Configuration
     @property
     def PROVIDER(self):
         return self.get_config('ai_providers', 'provider', 'googleai')
-    
+
     @property
     def LM_STUDIO_BASE_URL(self):
         return self.get_config('ai_providers', 'lm_studio_base_url', 'http://localhost:1234/v1')
-    
+
     @property
     def LM_STUDIO_MODEL(self):
         return self.get_config('ai_providers', 'lm_studio_model', 'local-model')
@@ -252,38 +255,38 @@ class Config:
     @property
     def LM_STUDIO_STREAMING(self):
         return self.get_config('ai_providers', 'lm_studio_streaming', True)
-    
+
     @property
     def OPENROUTER_BASE_URL(self):
         return self.get_config('ai_providers', 'openrouter_base_url', 'https://openrouter.ai/api/v1')
-    
+
     @property
     def OPENROUTER_BASE_MODEL(self):
         return self.get_config('ai_providers', 'openrouter_base_model', 'google/gemini-2.5-pro')
-    
+
     @property
     def OPENROUTER_FALLBACK_MODEL(self):
         return self.get_config('ai_providers', 'openrouter_fallback_model', 'deepseek/deepseek-r1:free')
-    
+
     @property
     def GOOGLE_STUDIO_MODEL(self):
         return self.get_config('ai_providers', 'google_studio_model', 'gemini-2.5-flash')
-    
+
     @property
     def BLOCKRUN_BASE_URL(self):
         return self.get_config('ai_providers', 'blockrun_base_url', 'https://blockrun.ai/api')
-    
+
     @property
     def BLOCKRUN_MODEL(self):
         return self.get_config('ai_providers', 'blockrun_model', 'openai/gpt-4o')
-    
+
     # General Configuration
     @property
     def LOGGER_DEBUG(self):
         return self.get_config('debug', 'logger_debug', False)
-    
 
-    
+
+
     @property
     def CRYPTO_PAIR(self):
         return self.get_config('general', 'crypto_pair', 'BTC/USDT')
@@ -291,11 +294,11 @@ class Config:
     @property
     def DISCORD_BOT_ENABLED(self):
         return self.get_config('general', 'discord_bot', False)
-    
+
     @property
     def TIMEFRAME(self):
         return self.get_config('general', 'timeframe', '1h')
-    
+
     @property
     def CANDLE_LIMIT(self):
         return self.get_config('general', 'candle_limit', 999)
@@ -309,25 +312,25 @@ class Config:
     def INCLUDE_COIN_DESCRIPTION(self) -> bool:
         """Whether to include project description in coin details section."""
         return self.get_config('general', 'include_coin_description', False)
-    
+
     # Debug Configuration
     @property
     def DEBUG_SAVE_CHARTS(self):
         return self.get_config('debug', 'save_chart_images', False)
-    
+
     @property
     def DEBUG_CHART_SAVE_PATH(self):
         return self.get_config('debug', 'chart_save_path', 'test_images')
-    
+
     # Directory Configuration
     @property
     def LOG_DIR(self):
         return self.get_config('directories', 'log_dir', 'logs')
-    
+
     @property
     def DATA_DIR(self):
         return self.get_config('directories', 'data_dir', 'data')
-    
+
     # Dashboard Configuration
     @property
     def DASHBOARD_HOST(self):
@@ -351,31 +354,29 @@ class Config:
         return origins
 
     # Cooldown Configuration
-
-    
     @property
     def FILE_MESSAGE_EXPIRY(self):
         """Get file message expiry time in seconds (configured in hours in config.ini)."""
         hours = self.get_config('cooldowns', 'file_message_expiry', 168)
         return hours * 3600
-    
+
     # RAG Configuration
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self):
         return self.get_config('rag', 'update_interval_hours', 4)
-    
+
     @property
     def RAG_CATEGORIES_UPDATE_INTERVAL_HOURS(self):
         return self.get_config('rag', 'categories_update_interval_hours', 24)
-    
+
     @property
     def RAG_COINGECKO_UPDATE_INTERVAL_HOURS(self):
         return self.get_config('rag', 'coingecko_update_interval_hours', 24)
-    
+
     @property
     def RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS(self):
         return float(self.get_config('rag', 'defillama_update_interval_hours', 0.25))
-    
+
     @property
     def RAG_COINGECKO_GLOBAL_API_URL(self):
         return self.get_config('rag', 'coingecko_global_api_url', 'https://api.coingecko.com/api/v3/global')
@@ -386,19 +387,39 @@ class Config:
         return int(self.get_config('rag', 'news_limit', 5))
 
     @property
-    def RAG_ARTICLE_MAX_SENTENCES(self):
-        """Maximum number of sentences per article (configurable via [rag] article_max_sentences)."""
-        return int(self.get_config('rag', 'article_max_sentences', 6))
-
-    @property
     def RAG_ARTICLE_MAX_TOKENS(self):
         """Maximum number of tokens per article (configurable via [rag] article_max_tokens)."""
         return int(self.get_config('rag', 'article_max_tokens', 256))
+
+    @property
+    def RAG_DENSITY_PENALTY_THRESHOLD(self):
+        """Body length below which articles are penalized (default 300 chars)."""
+        return int(self.get_config('rag', 'density_penalty_threshold', 300))
+
+    @property
+    def RAG_DENSITY_BOOST_THRESHOLD(self):
+        """Body length above which articles get a boost (default 1000 chars)."""
+        return int(self.get_config('rag', 'density_boost_threshold', 1000))
+
+    @property
+    def RAG_DENSITY_PENALTY_MULTIPLIER(self):
+        """Score multiplier for short articles (default 0.5)."""
+        return float(self.get_config('rag', 'density_penalty_multiplier', 0.5))
+
+    @property
+    def RAG_DENSITY_BOOST_MULTIPLIER(self):
+        """Score multiplier for long articles (default 1.2)."""
+        return float(self.get_config('rag', 'density_boost_multiplier', 1.2))
+
+    @property
+    def RAG_COOCCURRENCE_MULTIPLIER(self):
+        """Score multiplier when all query keywords appear in article (default 1.5)."""
+        return float(self.get_config('rag', 'cooccurrence_multiplier', 1.5))
     @property
     def SUPPORTED_EXCHANGES(self):
         """Returns list of supported exchanges in priority order."""
         return self.get_config('exchanges', 'supported', ['binance', 'kucoin', 'gateio'])
-    
+
     @property
     def MARKET_REFRESH_HOURS(self):
         return self.get_config('exchanges', 'market_refresh_hours', 24)
@@ -442,11 +463,11 @@ class Config:
     def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Get configuration parameters for a specific model.
-        
+
         Args:
             model_name: The name of the model
             overrides: Optional parameter overrides for this specific call
-            
+
         Returns:
             A dictionary with configuration parameters
         """
@@ -467,7 +488,7 @@ class Config:
 
     def reload(self):
         """Reload both keys.env and config.ini files.
-        
+
         This allows runtime configuration changes without restarting the application.
         """
         logging.info("Reloading configuration files...")

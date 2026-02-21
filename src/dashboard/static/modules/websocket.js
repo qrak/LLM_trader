@@ -104,13 +104,27 @@ function triggerRefreshAll() {
  */
 function updateConnectionStatus(status) {
     const indicator = document.getElementById('connection-status');
+    const statusDot = document.querySelector('.status-dot');
     if (!indicator) return;
+    
     if (status === 'connected') {
-        indicator.innerHTML = '🟢 Connected';
-        indicator.className = 'connected';
+        indicator.textContent = 'Connected';
+        indicator.classList.remove('status-text', 'disconnected');
+        indicator.classList.add('status-text', 'connected');
+        indicator.style.color = '';
+        if (statusDot) {
+            statusDot.classList.remove('disconnected');
+            statusDot.classList.add('connected');
+        }
     } else {
-        indicator.innerHTML = '🔴 Disconnected';
-        indicator.className = 'disconnected';
+        indicator.textContent = 'Disconnected';
+        indicator.classList.remove('status-text', 'connected');
+        indicator.classList.add('status-text', 'disconnected');
+        indicator.style.color = '';
+        if (statusDot) {
+            statusDot.classList.remove('connected');
+            statusDot.classList.add('disconnected');
+        }
     }
 }
 

@@ -73,31 +73,20 @@ async def check_exchange_time(exchange_id):
     finally:
         await exchange.close()
 
-async def simulator_verify_sleep_fix():
+async def verify_sleep_accuracy():
+    """
+    Verifies that the sleep logic using time.monotonic() is accurate
+    and does not suffer from drift accumulation.
+    """
     print("\n" + "="*80)
-    print("VERIFYING SLEEP LOGIC (SIMULATION)")
+    print("VERIFYING SLEEP ACCURACY")
     print("="*80)
-    print("Testing OLD vs NEW sleep (simulating 5 iterations of 0.1s)...")
     
-    # 1. Simulate OLD logic (Accumulating sleep)
-    start_old = time.monotonic()
-    elapsed_sim = 0.0
     iterations = 5
     target_sleep = 0.1
-    
-    # In reality sleeps contain overhead. Let's simulate overhead.
-    # We will just actually sleep and measure.
-    for _ in range(iterations):
-        await asyncio.sleep(target_sleep)
-        elapsed_sim += target_sleep # The bug: adding constant target, not real time
-    
-    real_duration_old = time.monotonic() - start_old
-    print(f"OLD Logic (Simulated):")
-    print(f"  - Target calculated elapsed: {elapsed_sim:.4f}s")
-    print(f"  - Actual wall-clock time:  {real_duration_old:.4f}s")
-    print(f"  - Drift: {real_duration_old - elapsed_sim:.4f}s (This accumulates over hours!)")
+    print(f"Testing monotonic sleep logic (simulating {iterations} iterations of {target_sleep}s)...")
 
-    # 2. Verify NEW logic (Monotonic)
+    # Verify NEW logic (Monotonic)
     start_new = time.monotonic()
     
     # Simulate the loop in _interruptible_sleep
@@ -113,15 +102,15 @@ async def simulator_verify_sleep_fix():
         await asyncio.sleep(to_sleep)
 
     real_duration_new = time.monotonic() - start_new
-    print(f"\nNEW Logic (Real Impl):")
+    print(f"\nMonotonic Sleep Logic Results:")
     print(f"  - Target duration: {total_target:.4f}s")
     print(f"  - Actual duration: {real_duration_new:.4f}s")
     print(f"  - Error: {abs(real_duration_new - total_target):.4f}s")
     
     if abs(real_duration_new - total_target) < 0.05:
-         print("  > PASS: New logic tracks time correctly.")
+         print("  > PASS: Monotonic sleep tracks time correctly.")
     else:
-         print("  > FAIL: New logic is still inaccurate.")
+         print("  > FAIL: Sleep logic is inaccurate.")
 
 async def main():
     print("="*80)
@@ -129,8 +118,8 @@ async def main():
     print(f"System Time: {datetime.now()}")
     print("="*80)
     
-    # 1. Verify Sleep Logic Fix
-    await simulator_verify_sleep_fix()
+    # 1. Verify Sleep Accuracy
+    await verify_sleep_accuracy()
     
     # 2. Check Exchanges
     print("\n" + "="*80)

@@ -1,6 +1,10 @@
 """Token counting and cost tracking for AI model usage."""
 import json
 import os
+import threading
+import time
+import atexit
+import tempfile
 from typing import Dict, Optional, Any
 
 import tiktoken
@@ -302,6 +306,12 @@ class CostStorage:
         self._ensure_directory()
         self._providers: Dict[str, ProviderCostStats] = {}
         self._last_reset: Optional[str] = None
+
+        self._lock = threading.RLock()
+        self._last_save_time = 0.0
+        self._dirty = False
+        atexit.register(self.save)
+
         self._load_or_create()
 
     def _ensure_directory(self) -> None:
@@ -340,11 +350,35 @@ class CostStorage:
 
     def save(self) -> None:
         """Save current costs to file."""
-        data = {"last_reset": self._last_reset}
-        for provider, stats in self._providers.items():
-            data[provider] = stats.to_dict()
-        with open(self.file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
+        with self._lock:
+            if not self._dirty:
+                return
+
+            data = {"last_reset": self._last_reset}
+            for provider, stats in self._providers.items():
+                data[provider] = stats.to_dict()
+
+            # Atomic write using temporary file
+            temp_path = None
+            try:
+                directory = os.path.dirname(self.file_path)
+                with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', dir=directory) as f:
+                    temp_path = f.name
+                    json.dump(data, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+                os.replace(temp_path, self.file_path)
+                self._last_save_time = time.time()
+                self._dirty = False
+            except Exception as e:
+                # Fallback to direct print if logging is not available here
+                print(f"Error saving cost storage: {e}")
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
 
     def record_usage(
         self,
@@ -354,7 +388,7 @@ class CostStorage:
         cost: Optional[float] = None
     ) -> None:
         """
-        Record usage for a provider and save to disk.
+        Record usage for a provider and save to disk (buffered).
 
         Args:
             provider: Provider name
@@ -362,14 +396,20 @@ class CostStorage:
             completion_tokens: Output tokens
             cost: Cost in dollars (for OpenRouter and Google)
         """
-        if provider not in self._providers:
-            self._providers[provider] = ProviderCostStats()
-        stats = self._providers[provider]
-        stats.total_input_tokens += prompt_tokens
-        stats.total_output_tokens += completion_tokens
-        if cost is not None:
-            stats.total_cost += cost
-        self.save()
+        with self._lock:
+            if provider not in self._providers:
+                self._providers[provider] = ProviderCostStats()
+            stats = self._providers[provider]
+            stats.total_input_tokens += prompt_tokens
+            stats.total_output_tokens += completion_tokens
+            if cost is not None:
+                stats.total_cost += cost
+
+            self._dirty = True
+
+            # Save if enough time has passed
+            if time.time() - self._last_save_time >= 5.0:
+                self.save()
 
     def get_costs(self) -> Dict[str, Any]:
         """Get all stored costs as dict (for backward compatibility)."""

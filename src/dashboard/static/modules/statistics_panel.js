@@ -65,8 +65,8 @@ function renderStatistics(stats) {
         },
         {
             title: "Current Capital",
-            value: `$${(stats.current_capital || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`,
-            subValue: `Started: $${(stats.initial_capital || 0).toLocaleString()}`,
+            value: new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.current_capital || 0),
+            subValue: `Started: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(stats.initial_capital || 0)}`,
             annotation: "Your current trading capital after all gains and losses.",
             colorClass: (stats.current_capital || 0) >= (stats.initial_capital || 0) ? "stat-positive" : "stat-negative"
         },
@@ -113,7 +113,7 @@ function renderStatistics(stats) {
             colorClass: "stat-negative"
         }
     ];
-    const lastUpdated = stats.last_updated ? new Date(stats.last_updated).toLocaleString() : 'Unknown';
+    const lastUpdated = stats.last_updated ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(stats.last_updated)) : 'Unknown';
     return `
         <div style="font-size: 11px; color: var(--text-dim); padding: 0 20px; margin-bottom: 10px;">
             Last updated: ${lastUpdated}

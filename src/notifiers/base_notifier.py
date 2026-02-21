@@ -3,13 +3,18 @@ Base Notifier - Abstract base class providing shared logic for notifiers.
 Subclasses implement rendering methods for their specific output medium.
 """
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
+
+
+# Define constant action sets for efficient membership testing
+ENTRY_ACTIONS = {'BUY', 'SELL'}
+EXIT_ACTIONS = {'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'}
 
 
 class BaseNotifier(ABC):
@@ -179,7 +184,6 @@ class BaseNotifier(ABC):
         Returns:
             Hours held as float
         """
-        from datetime import timezone
         now = datetime.now(timezone.utc)
         # Handle naive datetime by assuming UTC
         if entry_time.tzinfo is None:
@@ -214,9 +218,9 @@ class BaseNotifier(ABC):
             price = decision_dict.get('price', 0)
             quantity = decision_dict.get('quantity', 0.0)
 
-            if action in ['BUY', 'SELL']:
+            if action in ENTRY_ACTIONS:
                 open_position = decision_dict
-            elif action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
+            elif action in EXIT_ACTIONS and open_position:
                 open_action = open_position.get('action', '')
                 open_price = open_position.get('price', 0)
                 open_quantity = open_position.get('quantity', 0.0)
@@ -230,13 +234,13 @@ class BaseNotifier(ABC):
 
                 entry_fee = open_position.get('fee', 0.0)
                 exit_fee = decision_dict.get('fee', 0.0)
-                
+
                 # Fallback for old history if fee is 0.0 (though migration should have fixed this)
                 if entry_fee == 0.0 and open_quantity > 0:
                      entry_fee = open_price * open_quantity * self.config.TRANSACTION_FEE_PERCENT
                 if exit_fee == 0.0 and quantity > 0:
                      exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
-                     
+
                 total_fees += entry_fee + exit_fee
                 total_pnl_quote += pnl_quote
                 total_pnl_pct += pnl_pct

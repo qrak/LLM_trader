@@ -1,0 +1,18 @@
+{
+  "1469241518706397224": {
+    "channel_id": 1454227571095900313,
+    "user_id": null,
+    "message_type": "embed",
+    "tracked_at": "2026-02-06T09:01:15.665332",
+    "expire_after": 604800,
+    "expires_at": 1770969675.665332
+  },
+  "1469241644846026935": {
+    "channel_id": 1454227571095900313,
+    "user_id": null,
+    "message_type": "embed",
+    "tracked_at": "2026-02-06T09:01:45.754345",
+    "expire_after": 604800,
+    "expires_at": 1770969705.754345
+  }
+}

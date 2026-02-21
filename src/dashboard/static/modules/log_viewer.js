@@ -19,7 +19,7 @@ export async function updatePromptTab() {
         const response = await fetch('/api/monitor/last_prompt');
         const data = await response.json();
         const content = data.prompt || 'No prompt available';
-        const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
+        const timestamp = data.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.timestamp)) : 'N/A';
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
         if (meta) meta.textContent = `${source} | ${timestamp}`;
         // Render prompt with markdown and discord-content styling (same as response)
@@ -44,7 +44,7 @@ export async function updateResponseTab() {
         const response = await fetch('/api/monitor/last_response');
         const data = await response.json();
         const content = data.response || 'No response available';
-        const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
+        const timestamp = data.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.timestamp)) : 'N/A';
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
         if (meta) meta.textContent = `${source} | ${timestamp}`;
         // Process content for Discord-style display
@@ -59,7 +59,13 @@ export async function updateResponseTab() {
             // Clean up any double line breaks left by JSON removal
             processed = processed.replace(/\n{3,}/g, '\n\n');
             // Sanitize output to prevent XSS (prompts/responses may contain unsanitized data)
-            viewer.innerHTML = window.DOMPurify ? DOMPurify.sanitize(marked.parse(processed.trim())) : marked.parse(processed.trim());
+            if (window.DOMPurify) {
+                viewer.innerHTML = DOMPurify.sanitize(marked.parse(processed.trim()));
+            } else {
+                // Safe fallback if DOMPurify fails to load
+                console.warn('DOMPurify not loaded. Rendering as safe text.');
+                viewer.textContent = processed.trim();
+            }
         } else {
             viewer.innerHTML = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
         }
@@ -92,7 +98,7 @@ window.copyResponseContent = function() {
 function flashCopyButton(type) {
     const viewer = document.getElementById(`${type}-viewer`);
     const panel = viewer?.closest('.panel');
-    const btn = panel?.querySelector('button[onclick*="copy"]');
+    const btn = panel?.querySelector('.copy-btn');
     if (btn) {
         const originalText = btn.textContent;
         btn.textContent = '✓ Copied!';

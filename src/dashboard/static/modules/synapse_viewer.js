@@ -116,8 +116,8 @@ export async function updateSynapses() {
                     size = 8;
                 }
                 
-                const timestamp = trade.timestamp ? new Date(trade.timestamp).toLocaleString() : '';
-                const priceStr = trade.price ? `$${parseFloat(trade.price).toLocaleString()}` : '';
+                const timestamp = trade.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(trade.timestamp)) : '';
+                const priceStr = trade.price ? new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(parseFloat(trade.price)) : '';
                 
                 return {
                     id: trade.id || index,

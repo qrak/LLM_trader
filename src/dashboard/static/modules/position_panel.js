@@ -85,18 +85,18 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-symbol">${escapeHtml(data.symbol)}</div>
                 <div class="position-stat">
                     <span class="label">Entry</span>
-                    <span class="value">$${data.entry_price.toLocaleString()}</span>
+                    <span class="value">${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}</span>
                 </div>
                 <div class="position-stat">
                     <span class="label">Current</span>
-                <span class="value" id="current-price">${priceToUse ? '$' + priceToUse.toLocaleString() : '--'}</span>
+                <span class="value" id="current-price">${priceToUse ? new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(priceToUse) : '--'}</span>
                 </div>
                 <div class="position-pnl ${isProfit ? 'profit' : 'loss'}">
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
                 </div>
                 <div class="position-sl-tp">
-                    <div class="sl">SL: $${data.stop_loss.toLocaleString()} <span class="pct">(-${data.sl_distance_pct.toFixed(1)}%)</span></div>
-                    <div class="tp">TP: $${data.take_profit.toLocaleString()} <span class="pct">(+${data.tp_distance_pct.toFixed(1)}%)</span></div>
+                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${data.sl_distance_pct.toFixed(1)}%)</span></div>
+                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${data.tp_distance_pct.toFixed(1)}%)</span></div>
                 </div>
                 <div class="position-meta">
                     <span title="Time in position">⏱️ ${formatDuration(timeInPosition)}</span>
@@ -127,15 +127,15 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
 
                 <div class="position-gauge">
                     <div class="gauge-track">
-                        <div class="gauge-sl" style="left: 0;" title="Stop Loss: $${data.stop_loss.toLocaleString()}"></div>
-                        <div class="gauge-entry" style="left: ${calculateGaugePosition(data, data.entry_price)}%;" title="Entry: $${data.entry_price.toLocaleString()}"></div>
-                        <div class="gauge-tp" style="right: 0;" title="Take Profit: $${data.take_profit.toLocaleString()}"></div>
-                        ${priceToUse ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, priceToUse)}%;" title="Current: $${priceToUse.toLocaleString()} (${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%)"></div>` : ''}
+                        <div class="gauge-sl" style="left: 0;" title="Stop Loss: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)}"></div>
+                        <div class="gauge-entry" style="left: ${calculateGaugePosition(data, data.entry_price)}%;" title="Entry: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}"></div>
+                        <div class="gauge-tp" style="right: 0;" title="Take Profit: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)}"></div>
+                        ${priceToUse ? `<div class="gauge-current ${isProfit ? 'profit' : 'loss'}" style="left: ${calculateGaugePosition(data, priceToUse)}%;" title="Current: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(priceToUse)} (${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%)"></div>` : ''}
                     </div>
                     <div class="gauge-labels">
-                        <span title="Stop Loss: $${data.stop_loss.toLocaleString()}">SL</span>
-                        <span title="Entry: $${data.entry_price.toLocaleString()}">Entry</span>
-                        <span title="Take Profit: $${data.take_profit.toLocaleString()}">TP</span>
+                        <span title="Stop Loss: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)}">SL</span>
+                        <span title="Entry: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}">Entry</span>
+                        <span title="Take Profit: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)}">TP</span>
                     </div>
                 </div>
             </div>

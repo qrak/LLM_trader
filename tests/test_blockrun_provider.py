@@ -33,7 +33,7 @@ def blockrun_client(mock_logger):
 @pytest.fixture
 def mock_blockrun_sdk():
     """Mock the BlockRun SDK."""
-    with patch('blockrun_llm.AsyncLLMClient') as mock:
+    with patch('src.platforms.ai_providers.blockrun.AsyncLLMClient') as mock:
         yield mock
 
 
@@ -101,7 +101,7 @@ class TestBlockRunClientInitialization:
     @pytest.mark.asyncio
     async def test_initialize_client_missing_sdk(self, blockrun_client, mock_logger):
         """Test initialization with missing SDK."""
-        with patch('blockrun_llm.AsyncLLMClient', side_effect=ImportError("No module")):
+        with patch('src.platforms.ai_providers.blockrun.AsyncLLMClient', None):
             with pytest.raises(ImportError, match="blockrun-llm SDK is required"):
                 await blockrun_client._initialize_client()
 
@@ -244,7 +244,7 @@ class TestChatCompletion:
         """Test chat completion auto-initializes and raises ImportError when SDK missing."""
         # BlockRunClient uses lazy initialization via _ensure_client()
         # When SDK isn't installed, ImportError should be raised
-        with patch('blockrun_llm.AsyncLLMClient', side_effect=ImportError("No module")):
+        with patch('src.platforms.ai_providers.blockrun.AsyncLLMClient', None):
             with pytest.raises(ImportError, match="blockrun-llm SDK is required"):
                 await blockrun_client.chat_completion(
                     model="gpt-4o",

@@ -8,6 +8,7 @@
 let currentPanel = null;
 let originalParent = null;
 let originalNextSibling = null;
+let lastFocusedElement = null;
 
 export function initFullscreen() {
     createModalContainer();
@@ -19,20 +20,49 @@ function createModalContainer() {
     const modal = document.createElement('div');
     modal.id = 'fullscreen-modal';
     modal.className = 'fullscreen-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'fullscreen-title');
     modal.innerHTML = `
         <div class="fullscreen-backdrop"></div>
         <div class="fullscreen-content">
             <div class="fullscreen-header">
                 <h2 id="fullscreen-title"></h2>
-                <button class="fullscreen-close" onclick="window.closeFullscreen()">✕</button>
+                <button class="fullscreen-close" aria-label="Close fullscreen">✕</button>
             </div>
             <div id="fullscreen-body"></div>
         </div>
     `;
     document.body.appendChild(modal);
     modal.querySelector('.fullscreen-backdrop').addEventListener('click', closeFullscreen);
+    modal.querySelector('.fullscreen-close').addEventListener('click', closeFullscreen);
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeFullscreen();
+        if (!modal.classList.contains('active')) return;
+
+        if (e.key === 'Escape') {
+            closeFullscreen();
+            return;
+        }
+
+        if (e.key === 'Tab') {
+            const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        }
     });
 }
 
@@ -46,14 +76,21 @@ function attachPanelButtons() {
         if (header.querySelector('.panel-controls') || header.querySelector('.panel-toolbar')) return;
         const controls = document.createElement('div');
         controls.className = 'panel-controls';
-        controls.innerHTML = `
-            <button class="panel-btn expand-btn" onclick="window.openFullscreen('${panelId}')" title="Fullscreen">⛶</button>
-        `;
+
+        const btn = document.createElement('button');
+        btn.className = 'panel-btn expand-btn';
+        btn.title = 'Fullscreen';
+        btn.setAttribute('aria-label', 'Enter fullscreen');
+        btn.textContent = '⛶';
+        btn.addEventListener('click', () => openFullscreen(panelId));
+
+        controls.appendChild(btn);
         header.appendChild(controls);
     });
 }
 
 export function openFullscreen(panelId) {
+    lastFocusedElement = document.activeElement;
     const panel = document.getElementById(panelId);
     if (!panel) {
         console.error('Panel not found:', panelId);
@@ -80,6 +117,13 @@ export function openFullscreen(panelId) {
     }
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
+
+    // Trap focus and hide background
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) appContainer.setAttribute('aria-hidden', 'true');
+
+    const closeBtn = modal.querySelector('.fullscreen-close');
+    if (closeBtn) closeBtn.focus();
 }
 
 function getContentId(panelId) {
@@ -147,6 +191,15 @@ export function closeFullscreen() {
     }
     modal.classList.remove('active');
     document.body.style.overflow = '';
+
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) appContainer.removeAttribute('aria-hidden');
+
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
+
     currentPanel = null;
     originalParent = null;
     originalNextSibling = null;

@@ -36,22 +36,22 @@ class DataFetcher:
                 f"Timeframe {timeframe} may not be supported by {self.exchange.id}. "
                 f"Attempting fetch anyway..."
             )
-        
+
         if limit > 1000:
             self.logger.warning(f"Requested limit {limit} exceeds exchange standard limits, may be truncated")
-            
+
         ohlcv = await self.exchange.fetch_ohlcv(pair, timeframe, since=start_time, limit=limit + 1)
 
         if ohlcv is None or len(ohlcv) == 0:
             self.logger.warning(f"No data returned for {pair} on {self.exchange.id}")
             return None
-        
+
         # Sanitize data: Replace None with np.nan for float64 conversion
         ohlcv_sanitized = [
-            [x if x is not None else np.nan for x in candle] 
+            [x if x is not None else np.nan for x in candle]
             for candle in ohlcv
         ]
-        
+
         ohlcv_array = np.array(ohlcv_sanitized, dtype=np.float64)
         # Use only COMPLETED candles
         if len(ohlcv_array) < 2:
@@ -75,11 +75,11 @@ class DataFetcher:
                                          ) -> Dict[str, Any]:
         """
         Fetch historical daily data for a specified number of days.
-        
+
         Args:
             pair: The trading pair to fetch data for
             days: Number of days of historical data to retrieve (default: 365)
-            
+
         Returns:
             Dict containing:
                 'data': NDArray of OHLCV data if available, or None
@@ -87,14 +87,14 @@ class DataFetcher:
                 'available_days': Number of days of data actually available
                 'is_complete': Boolean indicating if we have full history for requested period
         """
-        
+
         try:
             result = await self.fetch_candlestick_data(
                 pair=pair,
                 timeframe="1d",
                 limit=days
             )
-            
+
             if result is None:
                 self.logger.warning(f"No daily historical data available for {pair}")
                 return {
@@ -104,16 +104,16 @@ class DataFetcher:
                     'is_complete': False,
                     'error': "No data returned from exchange"
                 }
-                
+
             ohlcv_data, latest_close = result
             available_days = len(ohlcv_data)
             is_complete = (available_days >= days - 1)  # Closed candles only (no incomplete)
-            
+
             if not is_complete:
                 self.logger.info(f"Limited historical data for {pair}: requested {days} days, got {available_days} days")
             else:
                 pass
-                
+
             return {
                 'data': ohlcv_data,
                 'latest_close': latest_close,
@@ -121,7 +121,7 @@ class DataFetcher:
                 'is_complete': is_complete,
                 'error': None
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching daily historical data for {pair}: {str(e)}")
             return {
@@ -136,11 +136,11 @@ class DataFetcher:
     async def fetch_weekly_historical_data(self, pair: str, target_weeks: int = 300) -> Dict[str, Any]:
         """
         Fetch weekly data for macro analysis. Wraps fetch_candlestick_data with weekly metadata.
-        
+
         Args:
             pair: The trading pair to fetch data for
             target_weeks: Number of weeks of historical data to retrieve (default: 300)
-            
+
         Returns:
             Dict containing:
                 'data': NDArray of OHLCV data if available, or None
@@ -152,7 +152,7 @@ class DataFetcher:
         try:
             # REUSE existing method - already supports '1w'
             result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)
-            
+
             if result is None:
                 return {
                     'data': None,
@@ -161,10 +161,10 @@ class DataFetcher:
                     'meets_200w_threshold': False,
                     'error': "No data returned"
                 }
-                
+
             ohlcv_data, latest_close = result
             available_weeks = len(ohlcv_data)
-            
+
             return {
                 'data': ohlcv_data,
                 'latest_close': latest_close,
@@ -186,28 +186,28 @@ class DataFetcher:
     async def fetch_multiple_tickers(self, symbols: List[str] = None) -> Dict[str, Any]:
         """
         Fetch price data for multiple trading pairs at once using CCXT with caching
-        
+
         Args:
             symbols: List of trading pair symbols (e.g., ["BTC/USDT", "ETH/USDT"])
                     If None, fetches all available tickers
-                    
+
         Returns:
             Dictionary with processed ticker data in a format similar to CryptoCompare API
         """
-        
+
         try:
             # Validate exchange capabilities
             if not self._validate_exchange_support():
                 return {}
-            
+
             # Fetch and process ticker data
             tickers = await self.exchange.fetch_tickers(symbols)
             if not tickers:
                 self.logger.warning("No ticker data returned from exchange")
                 return {}
-            
+
             return self._process_ticker_data(tickers)
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching multiple tickers: {e}")
             return {}
@@ -222,17 +222,17 @@ class DataFetcher:
     def _process_ticker_data(self, tickers: Dict[str, Any]) -> Dict[str, Any]:
         """Process ticker data into CryptoCompare-like format."""
         result = {"RAW": {}, "DISPLAY": {}}
-        
+
         for symbol, ticker in tickers.items():
             base_currency, quote_currency = self._extract_currencies(symbol)
             if not base_currency or not quote_currency:
                 continue
-                
+
             if not self._has_required_ticker_data(ticker):
                 continue
-                
+
             self._add_ticker_to_result(result, base_currency, quote_currency, ticker)
-        
+
         return result
 
     def _extract_currencies(self, symbol: str) -> Tuple[Optional[str], Optional[str]]:
@@ -246,7 +246,7 @@ class DataFetcher:
         """Check if ticker has required data fields."""
         return 'last' in ticker and ticker['last'] is not None
 
-    def _add_ticker_to_result(self, result: Dict[str, Any], base_currency: str, 
+    def _add_ticker_to_result(self, result: Dict[str, Any], base_currency: str,
                             quote_currency: str, ticker: Dict[str, Any]) -> None:
         """Add processed ticker data to result structure."""
         # Initialize structure if needed
@@ -254,10 +254,10 @@ class DataFetcher:
             result["RAW"][base_currency] = {}
         if base_currency not in result["DISPLAY"]:
             result["DISPLAY"][base_currency] = {}
-        
+
         # Add RAW data
         result["RAW"][base_currency][quote_currency] = self._create_raw_ticker_data(ticker)
-        
+
         # Add DISPLAY data
         result["DISPLAY"][base_currency][quote_currency] = self._create_display_ticker_data(
             ticker, quote_currency
@@ -272,29 +272,29 @@ class DataFetcher:
             "HIGH24HOUR": ticker.get('high', 0),
             "LOW24HOUR": ticker.get('low', 0),
             "PREVCLOSE": ticker.get('previousClose', 0),
-            
+
             # Price changes
             "CHANGE24HOUR": ticker.get('change', 0),
             "CHANGEPCT24HOUR": ticker.get('percentage', 0),
-            
+
             # Volume data
             "VOLUME24HOUR": ticker.get('baseVolume', 0),  # Volume in base currency (e.g., BTC)
             "QUOTEVOLUME24HOUR": ticker.get('quoteVolume', 0),  # Volume in quote currency (e.g., USDT)
-            
+
             # Price metrics
             "VWAP": ticker.get('vwap', 0),  # Volume-weighted average price
             "AVERAGE": ticker.get('average', 0),  # Simple average price
-            
+
             # Order book top-of-book
             "BID": ticker.get('bid', 0),  # Best bid price
             "ASK": ticker.get('ask', 0),  # Best ask price
             "BIDVOLUME": ticker.get('bidVolume', 0),  # Size at best bid
             "ASKVOLUME": ticker.get('askVolume', 0),  # Size at best ask
-            
+
             # Metadata
             "LASTUPDATE": ticker.get('timestamp', 0),
             "MKTCAP": None,  # Market cap not typically available in CCXT ticker
-            
+
             # Additional useful fields from CCXT
             "INFO": ticker.get('info', {}),  # Raw exchange data (for advanced analysis)
         }
@@ -302,12 +302,12 @@ class DataFetcher:
     def _create_display_ticker_data(self, ticker: Dict[str, Any], quote_currency: str) -> Dict[str, Any]:
         """Create display ticker data structure with formatted values."""
         is_usd_quote = quote_currency in ("USD", "USDT")
-        
+
         def format_price(value: float) -> str:
             if is_usd_quote:
                 return f"$ {value:,.2f}"
             return f"{value:,.8f}"
-        
+
         return {
             "PRICE": format_price(ticker.get('last', 0)),
             "CHANGEPCT24HOUR": f"{ticker.get('percentage', 0):,.2f}",
@@ -323,18 +323,18 @@ class DataFetcher:
     async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> Optional[Dict[str, Any]]:
         """
         Fetch order book depth for liquidity and support/resistance analysis.
-        
+
         Provides real-time market depth showing bid/ask walls and liquidity zones.
-        Useful for identifying: 
+        Useful for identifying:
         - Strong support/resistance levels (large order concentrations)
         - Market depth and liquidity
         - Buy/sell pressure imbalance
         - Potential manipulation (spoofing via large fake walls)
-        
+
         Args:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             limit: Maximum number of order book levels to fetch (default: 100)
-            
+
         Returns:
             Dict containing:
                 'bids': List of [price, amount] bid orders (buy side)
@@ -353,30 +353,30 @@ class DataFetcher:
             if not self.exchange.has.get('fetchOrderBook', False):
                 self.logger.debug(f"Exchange {self.exchange.id} does not support fetchOrderBook")
                 return None
-            
+
             order_book = await self.exchange.fetch_order_book(pair, limit=limit)
-            
+
             if not order_book or not order_book.get('bids') or not order_book.get('asks'):
                 self.logger.warning(f"Empty order book returned for {pair}")
                 return None
-            
+
             bids = np.array(order_book['bids'])
             asks = np.array(order_book['asks'])
-            
+
             if len(bids) == 0 or len(asks) == 0:
                 self.logger.warning(f"Order book has empty bids or asks for {pair}")
                 return None
-            
+
             best_bid = float(bids[0][0])
             best_ask = float(asks[0][0])
             spread = best_ask - best_bid
             spread_percent = (spread / best_bid * 100) if best_bid > 0 else 0
-            
+
             bid_depth = float(np.sum(bids[:, 1]))
             ask_depth = float(np.sum(asks[:, 1]))
             total_depth = bid_depth + ask_depth
             imbalance = (bid_depth - ask_depth) / total_depth if total_depth > 0 else 0
-            
+
             result = {
                 'bids': order_book['bids'],
                 'asks': order_book['asks'],
@@ -390,10 +390,10 @@ class DataFetcher:
                 'best_bid': best_bid,
                 'best_ask': best_ask
             }
-            
-            
+
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching order book for {pair}: {e}")
             return None
@@ -402,18 +402,18 @@ class DataFetcher:
     async def fetch_recent_trades(self, pair: str, limit: int = 1000) -> Optional[Dict[str, Any]]:
         """
         Fetch recent trades for order flow and momentum analysis.
-        
+
         Provides actual executed trades showing real market activity.
         Useful for identifying:
         - Order flow direction (aggressive buyers vs sellers)
         - Trade velocity and market activity
         - Average trade sizes (retail vs institutional flow)
         - Buy/sell pressure trends
-        
+
         Args:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             limit: Maximum number of recent trades to fetch (default: 1000)
-            
+
         Returns:
             Dict containing:
                 'trades': List of trade dicts with timestamp, price, amount, side
@@ -432,27 +432,27 @@ class DataFetcher:
             if not self.exchange.has.get('fetchTrades', False):
                 self.logger.debug(f"Exchange {self.exchange.id} does not support fetchTrades")
                 return None
-            
+
             trades = await self.exchange.fetch_trades(pair, limit=limit)
-            
+
             if not trades or len(trades) == 0:
                 self.logger.warning(f"No trades returned for {pair}")
                 return None
-            
+
             # Calculate buy/sell volumes
             buy_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'buy')
             sell_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'sell')
             total_volume = buy_volume + sell_volume
-            
+
             # Calculate time span and velocity
             time_span_ms = trades[-1]['timestamp'] - trades[0]['timestamp']
             time_span_minutes = time_span_ms / (1000 * 60) if time_span_ms > 0 else 1
             trade_velocity = len(trades) / time_span_minutes if time_span_minutes > 0 else 0
-            
+
             # Calculate buy/sell ratio
             buy_sell_ratio = buy_volume / sell_volume if sell_volume > 0 else float('inf')
             buy_pressure_percent = (buy_volume / total_volume * 100) if total_volume > 0 else 50
-            
+
             result = {
                 'trades': trades,
                 'buy_volume': buy_volume,
@@ -464,10 +464,10 @@ class DataFetcher:
                 'total_trades': len(trades),
                 'time_span_minutes': time_span_minutes
             }
-            
-            
+
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching trades for {pair}: {e}")
             return None
@@ -476,16 +476,16 @@ class DataFetcher:
     async def fetch_funding_rate(self, pair: str) -> Optional[Dict[str, Any]]:
         """
         Fetch current funding rate for perpetual futures contracts.
-        
+
         Funding rates represent periodic payments between long and short positions.
         Useful for identifying:
         - Market sentiment (positive rate = longs pay shorts = bullish sentiment)
         - Overleveraged positions (extreme rates signal potential reversals)
         - Cost of holding leveraged positions
-        
+
         Args:
             pair: Trading pair symbol for perpetual futures (e.g., "BTC/USDT:USDT")
-            
+
         Returns:
             Dict containing:
                 'funding_rate': Current funding rate (decimal, e.g., 0.0001 = 0.01%)
@@ -494,7 +494,7 @@ class DataFetcher:
                 'annualized_rate': Annualized funding rate percentage (assumes 3x daily)
                 'sentiment': Sentiment interpretation ('Bullish'/'Bearish'/'Neutral')
             Returns None if not a perpetual contract or exchange doesn't support funding rates
-            
+
         Note:
             - Only applicable to perpetual futures contracts (not spot markets)
             - Positive rate: Longs pay shorts (bullish sentiment)
@@ -506,17 +506,17 @@ class DataFetcher:
             if not self.exchange.has.get('fetchFundingRate', False):
                 self.logger.debug(f"Exchange {self.exchange.id} does not support fetchFundingRate")
                 return None
-            
+
             funding = await self.exchange.fetch_funding_rate(pair)
-            
+
             if not funding or 'fundingRate' not in funding:
                 self.logger.debug(f"No funding rate available for {pair}")
                 return None
-            
+
             rate = float(funding.get('fundingRate', 0))
             # Funding typically happens every 8 hours (3x daily), annualize it
             annualized_rate = rate * 3 * 365 * 100
-            
+
             # Interpret sentiment based on rate
             if rate > 0.01:  # > 1% per funding
                 sentiment = 'Strong Bullish'
@@ -528,7 +528,7 @@ class DataFetcher:
                 sentiment = 'Bearish'
             else:
                 sentiment = 'Neutral'
-            
+
             result = {
                 'funding_rate': rate,
                 'funding_rate_percent': rate * 100,
@@ -536,10 +536,10 @@ class DataFetcher:
                 'annualized_rate': annualized_rate,
                 'sentiment': sentiment
             }
-            
-            
+
+
             return result
-            
+
         except Exception as e:
             self.logger.debug(f"Funding rate not available for {pair}: {e}")
             return None
@@ -547,16 +547,16 @@ class DataFetcher:
     async def fetch_market_microstructure(self, pair: str, cached_ticker: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Fetch comprehensive market microstructure data for a trading pair.
-        
+
         Combines ticker statistics, order book depth, recent trades, and funding rate
         (for futures) into a single comprehensive market snapshot. This provides AI
         models with rich context about current market conditions, liquidity, and
         order flow dynamics.
-        
+
         Args:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             cached_ticker: Optional pre-fetched ticker data to avoid redundant API calls
-            
+
         Returns:
             Dict containing:
                 'ticker': 24h ticker statistics (price, volume, changes)
@@ -565,7 +565,7 @@ class DataFetcher:
                 'funding_rate': Funding rate data (futures only, None for spot)
                 'available_data': List of successfully fetched data types
                 'timestamp': Collection timestamp
-                
+
         Note:
             - Not all data may be available depending on exchange capabilities
             - Spot markets will have None for funding_rate
@@ -579,7 +579,7 @@ class DataFetcher:
             'available_data': [],
             'timestamp': int(time.time() * 1000)
         }
-        
+
         # Fetch ticker data (or use cached)
         try:
             if cached_ticker:
@@ -595,7 +595,7 @@ class DataFetcher:
                         result['available_data'].append('ticker')
         except Exception as e:
             self.logger.warning(f"Could not fetch ticker for {pair}: {e}")
-        
+
         # Fetch order book
         try:
             order_book = await self.fetch_order_book_depth(pair, limit=50)
@@ -604,7 +604,7 @@ class DataFetcher:
                 result['available_data'].append('order_book')
         except Exception as e:
             self.logger.warning(f"Could not fetch order book for {pair}: {e}")
-        
+
         # Fetch recent trades
         try:
             trades = await self.fetch_recent_trades(pair, limit=500)
@@ -613,7 +613,7 @@ class DataFetcher:
                 result['available_data'].append('recent_trades')
         except Exception as e:
             self.logger.warning(f"Could not fetch recent trades for {pair}: {e}")
-        
+
         # Fetch funding rate (for futures only)
         try:
             funding = await self.fetch_funding_rate(pair)
@@ -622,7 +622,6 @@ class DataFetcher:
                 result['available_data'].append('funding_rate')
         except Exception as e:
             self.logger.debug(f"Funding rate not available for {pair}: {e}")
-        
-        
-        return result
 
+
+        return result

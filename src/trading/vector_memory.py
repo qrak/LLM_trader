@@ -7,7 +7,6 @@ for recency-weighted retrieval.
 
 import math
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
@@ -16,20 +15,30 @@ from .dataclasses import VectorSearchResult
 
 class VectorMemoryService:
     """Service for storing and retrieving trading experiences via vector similarity.
-    
+
     Uses ChromaDB for local vector storage and sentence-transformers for CPU embeddings.
     Provides semantic search to find past trades similar to current market conditions.
     """
-    
+
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
     EMBEDDING_MODEL = "all-MiniLM-L6-v2"
     DEFAULT_DECAY_HALF_LIFE_DAYS = 90
-    
-    
+    RR_THRESHOLDS = (1.3, 1.5, 1.8)
+
+    FACTOR_BUCKETS = ("LOW", "MEDIUM", "HIGH")
+    FACTOR_NAMES = (
+        "trend_alignment",
+        "momentum_strength",
+        "volume_support",
+        "pattern_quality",
+        "support_resistance",
+    )
+
+
     def __init__(self, logger: Logger, chroma_client: Any, embedding_model: Any = None):
         """Initialize vector memory service.
-        
+
         Args:
             logger: Logger instance
             chroma_client: Injected ChromaDB client instance
@@ -41,19 +50,19 @@ class VectorMemoryService:
         self._semantic_rules_collection: Optional[Any] = None
         self._embedding_model = embedding_model
         self._initialized = False
-    
+
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).
-        
+
         Returns:
             True if initialization succeeded, False otherwise.
         """
         if self._initialized:
             return True
-        
+
         try:
             self.logger.info("Setting up VectorMemoryService collections...")
-            
+
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"}
@@ -62,13 +71,13 @@ class VectorMemoryService:
                 name=self.SEMANTIC_RULES_COLLECTION,
                 metadata={"hnsw:space": "cosine"}
             )
-            
+
             self._initialized = True
             self.logger.info(
                 f"VectorMemoryService collections ready: {self._collection.count()} experiences stored"
             )
             return True
-            
+
         except ImportError as e:
             self.logger.warning(
                 f"VectorMemoryService unavailable (missing dependency): {e}"
@@ -77,15 +86,15 @@ class VectorMemoryService:
         except Exception as e:
             self.logger.error(f"Failed to initialize VectorMemoryService: {e}", exc_info=True)
             return False
-    
+
     def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Remove None values from metadata dict.
-        
+
         ChromaDB rejects NoneType values in metadata. This filters them out
         while preserving all valid primitive values (str, int, float, bool).
         """
         return {k: v for k, v in metadata.items() if v is not None}
-    
+
     def store_experience(
         self,
         trade_id: str,
@@ -98,7 +107,7 @@ class VectorMemoryService:
         metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
         """Store a completed trade experience.
-        
+
         Args:
             trade_id: Unique identifier for the trade (e.g., "trade_2026-01-04T17:00:00")
             market_context: Description of market state (e.g., "High ADX + Uptrend + Low Vol")
@@ -108,23 +117,23 @@ class VectorMemoryService:
             confidence: "HIGH", "MEDIUM", or "LOW"
             reasoning: AI's reasoning for the trade
             metadata: Additional metadata to store
-            
+
         Returns:
             True if stored successfully, False otherwise.
         """
         if not self._ensure_initialized():
             self.logger.warning("VectorMemoryService not initialized, cannot store experience.")
             return False
-        
+
         try:
             document = (
                 f"{direction} trade. Market: {market_context}. "
                 f"Result: {outcome} ({pnl_pct:+.2f}%). "
                 f"Confidence: {confidence}. Reasoning: {reasoning}"
             )
-            
+
             embedding = self._embedding_model.encode(document).tolist()
-            
+
             trade_metadata = {
                 "outcome": outcome,
                 "pnl_pct": pnl_pct,
@@ -138,26 +147,26 @@ class VectorMemoryService:
                 market_regime = metadata.pop("market_regime", "NEUTRAL")
                 trade_metadata["market_regime"] = market_regime
                 trade_metadata.update(metadata)
-            
+
             # Sanitize metadata - ChromaDB rejects None values
             trade_metadata = self._sanitize_metadata(trade_metadata)
-            
+
             self._collection.upsert(
                 ids=[trade_id],
                 embeddings=[embedding],
                 documents=[document],
                 metadatas=[trade_metadata]
             )
-            
+
             self.logger.info(
                 f"Stored experience: {trade_id} ({outcome}, {pnl_pct:+.2f}%)"
             )
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Failed to store experience: {e}")
             return False
-    
+
     def _calculate_recency_score(
         self,
         trade_timestamp: str,
@@ -176,7 +185,7 @@ class VectorMemoryService:
             trade_dt = datetime.fromisoformat(trade_timestamp)
             if trade_dt.tzinfo is None:
                 trade_dt = trade_dt.replace(tzinfo=timezone.utc)
-            
+
             age_days = (datetime.now(timezone.utc) - trade_dt).days
             decay_rate = math.log(2) / half_life_days
             return math.exp(-decay_rate * age_days)
@@ -207,13 +216,13 @@ class VectorMemoryService:
         """
         if not self._ensure_initialized():
             return []
-        
+
         try:
             if self._collection.count() == 0:
                 return []
-            
+
             query_embedding = self._embedding_model.encode(current_context).tolist()
-            
+
             query_kwargs = {
                 "query_embeddings": [query_embedding],
                 "n_results": min(k, self._collection.count())
@@ -221,7 +230,7 @@ class VectorMemoryService:
             if where:
                 query_kwargs["where"] = where
             results = self._collection.query(**query_kwargs)
-            
+
             experiences = []
             if results and results["ids"] and results["ids"][0]:
                 for i, doc_id in enumerate(results["ids"][0]):
@@ -250,22 +259,22 @@ class VectorMemoryService:
                 experiences = experiences[:k]
 
             return experiences
-            
+
         except Exception as e:
             self.logger.error(f"Failed to retrieve experiences: {e}")
             return []
-    
+
     def get_context_for_prompt(
         self,
         current_context: str,
         k: int = 5
     ) -> str:
         """Get formatted context string for prompt injection.
-        
+
         Args:
             current_context: Current market context description
             k: Number of experiences to include
-            
+
         Returns:
             Formatted string ready for prompt injection
         """
@@ -273,10 +282,10 @@ class VectorMemoryService:
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
         )
-        
+
         if not experiences:
             return ""
-        
+
         max_similarity = max(exp.similarity for exp in experiences)
         if len(experiences) <= 2 and max_similarity < 50:
             lines = [
@@ -290,13 +299,13 @@ class VectorMemoryService:
                 f"RELEVANT PAST EXPERIENCES (Context: {current_context}):",
                 "",
             ]
-        
+
         for i, exp in enumerate(experiences, 1):
             meta = exp.metadata
             outcome = meta.get("outcome", "UNKNOWN")
             pnl = meta.get("pnl_pct", 0)
             direction = meta.get("direction", "?")
-            
+
             lines.append(
                 f"{i}. [SIMILARITY {exp.similarity:.0f}%] {direction} trade"
             )
@@ -318,25 +327,25 @@ class VectorMemoryService:
 
     def _generate_synthetic_insight(self, meta: Dict[str, Any]) -> str:
         """Generate synthetic insight from trade metadata when reasoning is unavailable.
-        
+
         Args:
             meta: Trade metadata containing market_context, close_reason, adx_at_entry, etc.
-            
+
         Returns:
             Contextual insight string describing the trade conditions and outcome.
         """
         parts = []
-        
+
         # Market context
         context = meta.get("market_context", "")
         if context:
             parts.append(f"Entry: {context}")
-        
+
         # Close reason
         close_reason = meta.get("close_reason", "")
         if close_reason:
             parts.append(f"Exit: {close_reason}")
-        
+
         # SL/TP distances (critical for learning)
         sl_dist = meta.get("sl_distance_pct")
         tp_dist = meta.get("tp_distance_pct")
@@ -344,12 +353,12 @@ class VectorMemoryService:
             parts.append(f"SL: {sl_dist:.2f}%")
         if tp_dist is not None:
             parts.append(f"TP: {tp_dist:.2f}%")
-        
+
         # R/R ratio
         rr = meta.get("rr_ratio")
         if rr is not None:
             parts.append(f"R/R: {rr:.1f}")
-        
+
         # Max profit/drawdown (shows how trade evolved)
         max_profit = meta.get("max_profit_pct")
         max_dd = meta.get("max_drawdown_pct")
@@ -357,7 +366,7 @@ class VectorMemoryService:
             parts.append(f"MaxProfit: +{max_profit:.1f}%")
         if max_dd is not None and max_dd > 0:
             parts.append(f"MaxDD: -{max_dd:.1f}%")
-        
+
         # Technical context
         adx = meta.get("adx_at_entry")
         rsi = meta.get("rsi_at_entry")
@@ -368,7 +377,7 @@ class VectorMemoryService:
             parts.append(f"RSI: {rsi:.0f}")
         if vol:
             parts.append(f"Vol: {vol}")
-        
+
         return " | ".join(parts) if parts else "No additional data"
 
     def get_stats_for_context(
@@ -377,37 +386,37 @@ class VectorMemoryService:
         k: int = 20
     ) -> Dict[str, Any]:
         """Calculate statistics from similar past experiences.
-        
+
         Args:
             current_context: Current market context description
             k: Number of experiences to analyze
-            
+
         Returns:
             Dict with win_rate, avg_pnl, total_trades for similar contexts
         """
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
         )
-        
+
         if not experiences:
             return {"win_rate": 0, "avg_pnl": 0, "total_trades": 0}
-        
+
         wins = sum(1 for e in experiences if e.metadata.get("outcome") == "WIN")
         pnls = [e.metadata.get("pnl_pct", 0) for e in experiences]
-        
+
         return {
             "win_rate": (wins / len(experiences)) * 100 if experiences else 0,
             "avg_pnl": sum(pnls) / len(pnls) if pnls else 0,
             "total_trades": len(experiences)
         }
-    
+
     @property
     def experience_count(self) -> int:
         """Get total number of stored entries (includes UPDATE)."""
         if not self._ensure_initialized():
             return 0
         return self._collection.count()
-    
+
     @property
     def trade_count(self) -> int:
         """Get count of actual trades (excludes UPDATE entries)."""
@@ -422,21 +431,21 @@ class VectorMemoryService:
 
     def get_direction_bias(self) -> Optional[Dict[str, Any]]:
         """Get count of LONG vs SHORT trades for bias detection.
-        
+
         Returns:
             Dict with long_count, short_count, and percentages, or None if no data.
         """
         metas = self._get_trade_metadatas(exclude_updates=True)
         if not metas:
             return None
-        
+
         long_count = sum(1 for m in metas if m.get("direction") == "LONG")
         short_count = sum(1 for m in metas if m.get("direction") == "SHORT")
         total = long_count + short_count
-        
+
         if total == 0:
             return None
-        
+
         return {
             "long_count": long_count,
             "short_count": short_count,
@@ -446,33 +455,33 @@ class VectorMemoryService:
 
     def get_all_experiences(self, limit: int = 100, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Retrieve all experiences without vector similarity search.
-        
+
         Args:
             limit: Maximum number of records to return.
             where: Optional metadata filter dict.
-            
+
         Returns:
             List of VectorSearchResult objects
         """
         if not self._ensure_initialized():
             return []
-            
+
         try:
             # Default filter to exclude UPDATE entries if not specified
             query_where = where if where else {"outcome": {"$ne": "UPDATE"}}
-            
+
             results = self._collection.get(
                 where=query_where,
                 limit=limit,
                 include=["metadatas", "documents"]
             )
-            
+
             experiences = []
             if results and results["ids"]:
                 for i, doc_id in enumerate(results["ids"]):
                     meta = results["metadatas"][i] if results["metadatas"] else {}
                     doc = results["documents"][i] if results["documents"] else ""
-                    
+
                     experiences.append(VectorSearchResult(
                         id=doc_id,
                         document=doc,
@@ -481,9 +490,9 @@ class VectorMemoryService:
                         hybrid_score=0,
                         metadata=meta
                     ))
-            
+
             return experiences
-            
+
         except Exception as e:
             self.logger.error(f"Failed to retrieve all experiences: {e}")
             return []
@@ -662,11 +671,11 @@ class VectorMemoryService:
         """Retrieve metadatas for all stored trades, handling filtering."""
         if not self._ensure_initialized():
             return []
-            
+
         all_experiences = self._collection.get(include=["metadatas"])
         if not all_experiences or not all_experiences["ids"] or not all_experiences["metadatas"]:
             return []
-            
+
         metas = all_experiences["metadatas"]
         if exclude_updates:
             return [m for m in metas if m.get("outcome") != "UPDATE"]
@@ -730,7 +739,7 @@ class VectorMemoryService:
         }
 
         for meta in metas:
-            
+
             adx = meta.get("adx_at_entry", meta.get("adx", 0))
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
@@ -771,17 +780,9 @@ class VectorMemoryService:
         if not metas:
             return {}
 
-        factor_names = [
-            "trend_alignment",
-            "momentum_strength",
-            "volume_support",
-            "pattern_quality",
-            "support_resistance",
-        ]
-
         factors: Dict[str, Dict[str, Any]] = {}
-        for name in factor_names:
-            for bucket in ["LOW", "MEDIUM", "HIGH"]:
+        for name in self.FACTOR_NAMES:
+            for bucket in self.FACTOR_BUCKETS:
                 key = f"{name}_{bucket}"
                 factors[key] = {
                     "factor_name": name,
@@ -794,7 +795,7 @@ class VectorMemoryService:
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
 
-            for name in factor_names:
+            for name in self.FACTOR_NAMES:
                 score_key = f"{name}_score"
                 score = meta.get(score_key, 0)
 
@@ -830,6 +831,52 @@ class VectorMemoryService:
                 "total_trades": total,
                 "winning_trades": wins,
                 "avg_score": sum(scores) / len(scores) if scores else 0.0,
+                "win_rate": (wins / total * 100) if total > 0 else 0.0,
+                "avg_pnl_pct": (pnl_sum / total) if total > 0 else 0.0,
+            }
+
+        # Collect categorical factors for UI (market_sentiment, volatility_level, trend_direction)
+        categorical_buckets = {}
+
+        def _add_to_cat(category_name, value, p_pnl, p_is_win):
+            if not value:
+                return
+            normalized = str(value).upper()
+            if "GREED" in normalized:
+                normalized = "GREED"
+            if "FEAR" in normalized:
+                normalized = "FEAR"
+            
+            key = f"{category_name}: {normalized}"
+            if "VOLATILITY" in category_name.upper() and "VOLATILITY" not in normalized:
+                key = f"{category_name}: {normalized} VOLATILITY"
+                
+            if key not in categorical_buckets:
+                categorical_buckets[key] = []
+            categorical_buckets[key].append({"pnl": p_pnl, "is_win": p_is_win})
+
+        for meta in metas:
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+            
+            _add_to_cat("Sentiment", meta.get("market_sentiment_at_entry", meta.get("market_sentiment")), pnl, is_win)
+            _add_to_cat("Volatility", meta.get("volatility_level", meta.get("volatility")), pnl, is_win)
+            _add_to_cat("Trend", meta.get("trend_direction_at_entry", meta.get("trend_direction")), pnl, is_win)
+
+        for cat_name, trades_list in categorical_buckets.items():
+            total = len(trades_list)
+            if total == 0:
+                continue
+
+            wins = sum(1 for t in trades_list if t["is_win"])
+            pnl_sum = sum(t["pnl"] for t in trades_list)
+
+            result[f"cat_{cat_name}"] = {
+                "factor_name": cat_name,
+                "bucket": cat_name.split(": ")[1] if ": " in cat_name else cat_name,
+                "total_trades": total,
+                "winning_trades": wins,
+                "avg_score": 0.0,
                 "win_rate": (wins / total * 100) if total > 0 else 0.0,
                 "avg_pnl_pct": (pnl_sum / total) if total > 0 else 0.0,
             }
@@ -902,12 +949,13 @@ class VectorMemoryService:
 
             # Learn rr_borderline_min - find R/R where win rate drops significantly
             if rr_wins and rr_losses:
-                all_rr = [(rr, "WIN") for rr in rr_wins] + [(rr, "LOSS") for rr in rr_losses]
-                # Count wins/losses below 1.5, 1.8, 2.0 R/R
-                for test_rr in [1.3, 1.5, 1.8]:
-                    below = [o for rr, o in all_rr if rr < test_rr]
-                    if len(below) >= 3:
-                        below_win_rate = sum(1 for o in below if o == "WIN") / len(below)
+                for test_rr in self.RR_THRESHOLDS:
+                    wins = sum(1 for rr in rr_wins if rr < test_rr)
+                    losses = sum(1 for rr in rr_losses if rr < test_rr)
+                    total = wins + losses
+
+                    if total >= 3:
+                        below_win_rate = wins / total
                         if below_win_rate < 0.40:
                             # Trades with R/R below this fail often - set as borderline
                             thresholds["rr_borderline_min"] = test_rr

@@ -38,16 +38,16 @@ def _auto_dom_imp(source, minlen, maxlen, avelen):
     """Simplified auto-dominant impulse using extracted utilities"""
     # Apply filtering
     filt = f_ess(f_hp(source, maxlen), minlen)
-    
+
     # Calculate correlation matrix
     corr = calculate_correlation_matrix(filt, maxlen, avelen)
-    
+
     # Calculate spectral components
     sqsum = calculate_spectral_components(corr, minlen, maxlen, avelen)
-    
+
     # Smooth power spectrum
     r1 = smooth_power_spectrum(sqsum, minlen, maxlen)
-    
+
     # Calculate dominant cycle
     return calculate_dominant_cycle(r1, minlen, maxlen, avelen)
 
@@ -264,49 +264,54 @@ def entropy_numba(close, length=10, base=2.0):
 def hurst_numba(ts: np.ndarray, max_lag: int = 20) -> np.ndarray:
     n = len(ts)
     hurst_values = np.full(n, np.nan, dtype=np.float64)
-    
-    # Start from index where we have enough data
-    for i in range(max_lag + 2, n):
-        # Use expanding window up to current position
-        window = ts[:i+1]
-        lags = np.arange(2, max_lag)
-        tau = np.zeros(len(lags))
 
-        # Calculate tau for each lag
-        for j, lag in enumerate(lags):
-            sum_diff_sq = 0.0
-            count = 0
-            for idx in range(lag, len(window)):
-                diff = window[idx] - window[idx - lag]
-                sum_diff_sq += diff * diff
-                count += 1
-            if count > 0:
-                tau[j] = np.sqrt(sum_diff_sq / count)
-            else:
-                tau[j] = 0.0
+    # Initialize state for O(N) update
+    # sum_diff_sq[k] will store sum of squared diffs for lag k
+    sum_diff_sq = np.zeros(max_lag)
 
-        # Filter out zero values
-        non_zero_tau = tau[tau > 0]
-        if len(non_zero_tau) < 2:
-            continue  # Skip calculation if not enough data
+    # Iterate through the time series once
+    for i in range(n):
+        # incremental update for all lags
+        # lags are 2, 3, ..., max_lag-1 (since range(2, max_lag) excludes max_lag)
+        for lag in range(2, max_lag):
+            if i >= lag:
+                diff = ts[i] - ts[i - lag]
+                sum_diff_sq[lag] += diff * diff
 
-        # Calculate slope using valid values
-        log_lags = np.log(lags[tau > 0])
-        log_tau = np.log(non_zero_tau)
-        
-        # Linear regression using method of moments
-        n_points = len(log_lags)
-        sum_xy = np.sum(log_lags * log_tau)
-        sum_x = np.sum(log_lags)
-        sum_y = np.sum(log_tau)
-        sum_x2 = np.sum(log_lags ** 2)
-        
-        denominator = n_points * sum_x2 - sum_x ** 2
-        if denominator == 0:
-            continue
-            
-        slope = (n_points * sum_xy - sum_x * sum_y) / denominator
-        hurst_values[i] = slope
+        # Calculate Hurst if we have enough data (matching original loop start)
+        if i >= max_lag + 2:
+            lags = np.arange(2, max_lag)
+            tau = np.zeros(len(lags))
+
+            for j, lag in enumerate(lags):
+                # count is the number of diffs accumulated so far
+                # terms are at indices: lag, lag+1, ..., i
+                count = i - lag + 1
+                if count > 0:
+                    tau[j] = np.sqrt(sum_diff_sq[lag] / count)
+                else:
+                    tau[j] = 0.0
+
+            # Filter out zero values
+            non_zero_tau = tau[tau > 0]
+            if len(non_zero_tau) < 2:
+                continue
+
+            # Calculate slope using valid values
+            log_lags = np.log(lags[tau > 0])
+            log_tau = np.log(non_zero_tau)
+
+            # Linear regression using method of moments
+            n_points = len(log_lags)
+            sum_xy = np.sum(log_lags * log_tau)
+            sum_x = np.sum(log_lags)
+            sum_y = np.sum(log_tau)
+            sum_x2 = np.sum(log_lags ** 2)
+
+            denominator = n_points * sum_x2 - sum_x ** 2
+            if denominator != 0:
+                slope = (n_points * sum_xy - sum_x * sum_y) / denominator
+                hurst_values[i] = slope
 
     return hurst_values
 

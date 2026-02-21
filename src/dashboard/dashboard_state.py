@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 import asyncio
+import time
+from src.dashboard.routers.ws_router import broadcast
 
 
 @dataclass
@@ -73,7 +75,6 @@ class DashboardState:
 
     async def _broadcast(self, data: Dict[str, Any]) -> None:
         """Broadcast data to all connected WebSocket clients."""
-        from src.dashboard.routers.ws_router import broadcast
         await broadcast(data)
 
     def get_countdown_data(self) -> Dict[str, Any]:
@@ -98,16 +99,12 @@ class DashboardState:
         }
 
     def get_cached(self, key: str, ttl_seconds: float = 30.0) -> Optional[Any]:
-        """Get cached value if not expired. Returns None if expired or missing."""
-        import time
         cached_time = self.cache_timestamps.get(key, 0)
         if time.time() - cached_time > ttl_seconds:
             return None
         return getattr(self, f"cached_{key}", None)
 
     def set_cached(self, key: str, value: Any) -> None:
-        """Store value in cache with timestamp."""
-        import time
         setattr(self, f"cached_{key}", value)
         self.cache_timestamps[key] = time.time()
 
@@ -118,4 +115,3 @@ class DashboardState:
 
 
 dashboard_state = DashboardState()
-

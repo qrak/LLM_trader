@@ -16,6 +16,7 @@ class BaseAIClient(ABC):
 
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
+        self.api_key: Optional[str] = None
         # Common unsupported parameters to pre-filter
         self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k'}
 
@@ -31,19 +32,16 @@ class BaseAIClient(ABC):
     @abstractmethod
     async def _initialize_client(self) -> None:
         """Initialize the underlying SDK client. Called by __aenter__."""
-        pass
 
     @abstractmethod
     async def close(self) -> None:
         """Close and cleanup the client."""
-        pass
 
     @abstractmethod
     async def chat_completion(
         self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
     ) -> Optional[ChatResponseModel]:
         """Send a chat completion request."""
-        pass
 
     @abstractmethod
     async def chat_completion_with_chart_analysis(
@@ -54,7 +52,6 @@ class BaseAIClient(ABC):
         model_config: Dict[str, Any]
     ) -> Optional[ChatResponseModel]:
         """Send a chat completion request with chart image analysis."""
-        pass
 
     def process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
         """
@@ -71,7 +68,7 @@ class BaseAIClient(ABC):
             img_data = chart_image.read()
             chart_image.seek(0)
             return img_data
-        elif isinstance(chart_image, str):
+        if isinstance(chart_image, str):
             with open(chart_image, 'rb') as f:
                 return f.read()
         return chart_image
@@ -88,7 +85,7 @@ class BaseAIClient(ABC):
         """
         sanitized = message
         # If the instance has an api_key attribute, try to redact it
-        if hasattr(self, 'api_key') and self.api_key:
+        if self.api_key:
             if isinstance(self.api_key, str) and len(self.api_key) > 5:
                 sanitized = sanitized.replace(self.api_key, "[REDACTED_API_KEY]")
 
@@ -111,16 +108,22 @@ class BaseAIClient(ABC):
         # Use sanitized message for logging and output to ensure security
         error_message_sanitized = self._sanitize_error_message(error_message_raw)
 
-        if "quota" in error_message_lower or "rate limit" in error_message_lower or "resource_exhausted" in error_message_lower:
+        if "quota" in error_message_lower or "rate limit" in error_message_lower or (
+            "resource_exhausted" in error_message_lower
+        ):
             self.logger.error(f"Rate limit or quota exceeded: {error_message_sanitized}")
             return ChatResponseModel.from_error(f"rate_limit: {error_message_sanitized}")
-        if "authentication" in error_message_lower or "api key" in error_message_lower or "invalid_api_key" in error_message_lower:
+        if "authentication" in error_message_lower or "api key" in error_message_lower or (
+            "invalid_api_key" in error_message_lower
+        ):
             self.logger.error(f"Authentication error: {error_message_sanitized}")
             return ChatResponseModel.from_error(f"authentication: {error_message_sanitized}")
         if "timeout" in error_message_lower:
             self.logger.error(f"Timeout error: {error_message_sanitized}")
             return ChatResponseModel.from_error(f"timeout: {error_message_sanitized}")
-        if "503" in error_message_raw or "overloaded" in error_message_lower or "unavailable" in error_message_lower:
+        if "503" in error_message_raw or "overloaded" in error_message_lower or (
+            "unavailable" in error_message_lower
+        ):
             self.logger.error(f"Service unavailable/overloaded: {error_message_sanitized}")
             return ChatResponseModel.from_error(f"overloaded: {error_message_sanitized}")
         if "connection" in error_message_lower or "econnreset" in error_message_lower:
@@ -188,22 +191,22 @@ class BaseAIClient(ABC):
         return None
 
     async def _execute_with_param_retry(
-        self, 
-        func: Callable[..., Any], 
-        config: Dict[str, Any], 
+        self,
+        func: Callable[..., Any],
+        config: Dict[str, Any],
         **fixed_args: Any
     ) -> Any:
         """
         Execute an SDK function with automatic retry handling for unsupported parameters.
-        
+
         Args:
             func: Async function to call (e.g., client.chat.completions.create)
             config: Configuration dictionary that might contain unsupported params (will be unpacked)
             **fixed_args: Fixed named arguments to pass to the function (e.g., model, messages)
-            
+
         Returns:
             The result of the function call
-            
+
         Raises:
             Exception: If the call fails after retries or for non-parameter reasons
         """
@@ -211,7 +214,7 @@ class BaseAIClient(ABC):
         current_config = {k: v for k, v in config.items() if k not in self._known_unsupported_params}
         rejected_params = set()
         max_retries = 3
-        
+
         for attempt in range(max_retries + 1):
             try:
                 # Call function with fixed args AND unpacked config
@@ -220,10 +223,10 @@ class BaseAIClient(ABC):
                 # Only retry if we haven't exhausted retries
                 if attempt == max_retries:
                     raise
-                
+
                 error_msg = str(e)
                 bad_param = self._detect_unsupported_param(error_msg)
-                
+
                 # If we found a bad parameter that is currently in our config
                 if bad_param and bad_param in current_config:
                     self.logger.warning(
@@ -234,7 +237,7 @@ class BaseAIClient(ABC):
                     # Create new config without the bad parameter
                     current_config = {k: v for k, v in current_config.items() if k not in rejected_params}
                     continue
-                
+
                 # If it's not a parameter error or we can't identify the parameter, re-raise
                 raise
 

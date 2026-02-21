@@ -4,7 +4,7 @@ Analyzer module with improved organization and structure.
 This module provides a clean, logical organization of analysis components:
 
 - core/: Main analysis engine, context management, and result processing
-- data/: Data collection, fetching, and processing components  
+- data/: Data collection, fetching, and processing components
 - calculations/: All calculation logic including indicators, metrics, and patterns
 - formatting/: Output formatting for AI prompts and console display
 - prompts/: Prompt building, context construction, and template management
@@ -21,7 +21,7 @@ from .analysis_engine import AnalysisEngine
 from .analysis_context import AnalysisContext
 from .analysis_result_processor import AnalysisResultProcessor
 
-# Data components  
+# Data components
 from .market_data_collector import MarketDataCollector
 from .data_fetcher import DataFetcher
 
@@ -30,7 +30,7 @@ from .market_metrics_calculator import MarketMetricsCalculator
 from .technical_calculator import TechnicalCalculator
 from .pattern_analyzer import PatternAnalyzer
 
-# Formatting components  
+# Formatting components
 from .formatters.technical_formatter import TechnicalFormatter
 from .formatters.market_formatter import MarketFormatter
 
@@ -40,22 +40,22 @@ from .prompts import PromptBuilder, ContextBuilder, TemplateManager
 __all__ = [
     # Core
     'AnalysisEngine',
-    'AnalysisContext', 
+    'AnalysisContext',
     'AnalysisResultProcessor',
-    
+
     # Data
     'MarketDataCollector',
     'DataFetcher',
-    
+
     # Calculations
-    'MarketMetricsCalculator', 
+    'MarketMetricsCalculator',
     'TechnicalCalculator',
     'PatternAnalyzer',
-    
+
     # Formatting
     'TechnicalFormatter',
     'MarketFormatter',
-    
+
     # Prompts
     'PromptBuilder',
     'ContextBuilder',

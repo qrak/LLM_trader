@@ -9,7 +9,7 @@ from .tracking_persistence import TrackingPersistence
 
 __all__ = [
     'MessageTracker',
-    'CleanupScheduler', 
+    'CleanupScheduler',
     'MessageDeleter',
     'TrackingPersistence'
 ]

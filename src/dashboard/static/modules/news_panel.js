@@ -31,7 +31,7 @@ function formatNewsDate(timestamp) {
     const diffMins = Math.floor(diffMs / (1000 * 60));
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString();
+    return new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short' }).format(date);
 }
 
 function renderNews(articles) {
@@ -41,7 +41,7 @@ function renderNews(articles) {
                 <div class="news-card">
                     <div class="news-header">
                         <div class="news-title">
-                            <a href="${escapeHtml(article.url || article.guid || '#')}" target="_blank" rel="noopener">
+                            <a href="${escapeHtml(sanitizeUrl(article.url || article.guid))}" target="_blank" rel="noopener">
                                 ${escapeHtml(article.title || 'Untitled')}
                             </a>
                         </div>
@@ -76,6 +76,16 @@ function renderTopics(article) {
 function truncateText(text, maxLength) {
     if (!text || text.length <= maxLength) return text;
     return text.substring(0, maxLength).trim() + '...';
+}
+
+function sanitizeUrl(url) {
+    if (!url) return '#';
+    const cleanUrl = url.trim();
+    // Only allow http and https protocols to prevent XSS (javascript:, data:, etc.)
+    if (/^https?:\/\//i.test(cleanUrl)) {
+        return cleanUrl;
+    }
+    return '#';
 }
 
 function escapeHtml(text) {

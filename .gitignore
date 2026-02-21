@@ -30,7 +30,7 @@ ENV/
 # IDE
 .idea/
 .vscode/
-.github/
+
 *.swp
 *.swo
 .devcontainer/

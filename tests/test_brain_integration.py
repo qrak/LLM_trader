@@ -7,6 +7,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import chromadb
+from sentence_transformers import SentenceTransformer
+
 from src.logger.logger import Logger
 from src.trading.vector_memory import VectorMemoryService
 from src.trading.brain import TradingBrainService
@@ -14,17 +17,23 @@ from src.trading.brain import TradingBrainService
 # Test data directory - ensures isolation from production data
 TEST_DATA_DIR = Path("data/brain_integration_test")
 
+@pytest.fixture(scope="session")
+def embedding_model():
+    """Load embedding model once for all tests."""
+    return SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+
 @pytest.fixture
 def logger():
     """Mock logger to avoid polluting stdout."""
     return MagicMock(spec=Logger)
 
 @pytest.fixture
-def vector_memory(logger, tmp_path):
+def vector_memory(logger, tmp_path, embedding_model):
     """Initialize VectorMemoryService with a test database."""
     # Use pytest's tmp_path for isolation and automatic cleanup
     data_dir = tmp_path / "brain_integration_test"
-    service = VectorMemoryService(logger, data_dir=str(data_dir))
+    client = chromadb.PersistentClient(path=str(data_dir))
+    service = VectorMemoryService(logger, chroma_client=client, embedding_model=embedding_model)
     
     yield service
     
@@ -286,6 +295,58 @@ class TestBrainIntegration:
         assert meta.get("fear_greed_index") == 25
         assert meta.get("market_regime") == "BULLISH"
         assert meta.get("is_weekend") == True
+
+    def test_missing_metadata_handling(self, brain_service, vector_memory):
+        """Verify that older trades with missing/empty metadata do not cause KeyErrors."""
+        # Insert a trade with completely empty metadata (simulates an old entry)
+        vector_memory.store_experience(
+            trade_id="trade_empty_meta",
+            market_context="NEUTRAL + Unknown ADX",
+            outcome="WIN",
+            pnl_pct=1.5,
+            direction="LONG",
+            confidence="MEDIUM",
+            reasoning="Old trade logic",
+            metadata={}  # Explicitly empty metadata
+        )
+
+        # Insert a trade with partial metadata
+        vector_memory.store_experience(
+            trade_id="trade_partial_meta",
+            market_context="BULLISH + High ADX",
+            outcome="LOSS",
+            pnl_pct=-2.0,
+            direction="SHORT",
+            confidence="HIGH",
+            reasoning="Old logic 2",
+            metadata={"timestamp": "2025-01-01T12:00:00"}
+        )
+
+        # 1. Retrieve Context (tests vector_memory.get_context_for_prompt and get_stats_for_context)
+        context = brain_service.get_context(
+            trend_direction="NEUTRAL"
+        )
+        assert context is not None
+        assert "trade" in context.lower()
+
+        # 2. Compute Stats (tests compute_confidence_stats)
+        conf_stats = vector_memory.compute_confidence_stats()
+        assert "MEDIUM" in conf_stats
+        assert "HIGH" in conf_stats
+
+        # 3. Compute ADX Performance (tests compute_adx_performance)
+        adx_stats = vector_memory.compute_adx_performance()
+        assert "LOW" in adx_stats  # Missing ADX defaults to 0 -> LOW
+
+        # 4. Compute Factor Performance (tests compute_factor_performance)
+        factor_stats = vector_memory.compute_factor_performance()
+        assert isinstance(factor_stats, dict)
+
+        # 5. Get Direction Bias
+        direction_bias = vector_memory.get_direction_bias()
+        assert direction_bias is not None
+        assert direction_bias["long_count"] >= 1
+        assert direction_bias["short_count"] >= 1
 
 
 class TestContextAwareRuleRetrieval:

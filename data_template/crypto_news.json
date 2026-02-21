@@ -1,0 +1,59 @@
+{
+  "last_updated": "2026-02-13T01:00:31.536755",
+  "count": 2,
+  "articles": [
+    {
+      "id": "57977116",
+      "guid": "https://cryptopotato.com/?p=1428572",
+      "published_on": 1770934596,
+      "imageurl": "https://resources.cryptocompare.com/news/27/57977116.jpeg",
+      "title": "Crypto Lender BlockFills Temporarily Freezes Transfers as Liquidity Pressures Emerge",
+      "url": "https://cryptopotato.com/crypto-lender-blockfills-temporarily-freezes-transfers-as-liquidity-pressures-emerge/",
+      "body": "Crypto lender BlockFills has temporarily suspended client deposits and withdrawals in response to recent market volatility and financial conditions, according to an official statement released by the firm. The decision was taken last week as a protective measure for both clients and the company. Suspending Client Transfers According to the official announcement, BlockFills said that while transfers in and out of the platform are paused, clients have continued access to trading services, including the ability to open and close positions in spot and derivatives markets, as well as in select other circumstances outlined by the firm. The suspension potentially affects around 2,000 institutional clients, such as asset managers and hedge funds. BlockFills operates exclusively with investors holding at least $10 million in crypto assets. These clients collectively generated more than $60 billion in trading volume on the platform in 2025. BlockFills stated that its management team has been working closely with investors and clients to resolve the situation and restore platform liquidity. “BlockFills is committed to transparency in its communications and to the protection of its clients. Management has been working hand in hand with investors and clients to bring this issue to a swift resolution and to restore liquidity to the platform. The firm has also been in active dialogue with our clients throughout this process, including information sessions and an opportunity to ask questions of senior management.” Crypto Market Turmoil The move comes amid a broader crypto market downturn and echoes previous periods of stress in the industry, including the 2022 collapse of FTX and other crypto lenders. Bitcoin prices began falling on October 10 following a social media post by US President Donald Trump on tariffs, which contributed to increased volatility and nearly $20 billion in liquidations across the market. Bitcoin continued to decline in the months that followed, as it fell under $65,000, over 45% below its October highs, and reached a year-to-date low of $60,008 on February 5. Stalled US crypto legislation has also continued to weigh on market sentiment. The post Crypto Lender BlockFills Temporarily Freezes Transfers as Liquidity Pressures Emerge appeared first on CryptoPotato .",
+      "tags": "AA News|Crypto News",
+      "lang": "EN",
+      "upvotes": "0",
+      "downvotes": "0",
+      "categories": "BTC|BUSINESS|MARKET|REGULATION|CRYPTOCURRENCY",
+      "source_info": {
+        "name": "Crypto Potato",
+        "img": "https://images.cryptocompare.com/news/default/cryptopotato.png",
+        "lang": "EN"
+      },
+      "source": "cryptopotato",
+      "detected_coins": [
+        "BTC"
+      ],
+      "detected_coins_str": "BTC"
+    },
+    {
+      "id": "57973045",
+      "guid": "https://coinpaper.com/14557/wbtc-taps-hyperlane-to-connect-ethereum-and-solana-as-sol-bulls-eye-100",
+      "published_on": 1770924082,
+      "imageurl": "https://resources.cryptocompare.com/news/93/default.png",
+      "title": "WBTC Taps Hyperlane to Connect Ethereum and Solana as SOL Bulls Eye $100",
+      "url": "https://coinpaper.com/14557/wbtc-taps-hyperlane-to-connect-ethereum-and-solana-as-sol-bulls-eye-100",
+      "body": "Wrapped Bitcoin will soon move between Ethereum and Solana through a new bridge powered by Hyperlane. The integration creates a direct path for Bitcoin-backed liquidity to enter Solana’s fast-growing ecosystem. Consequently, developers and traders gain a standardized route to deploy WBTC across chains. The move arrives as Solana trades inside a tight technical range, adding another catalyst to watch. Hyperlane Connects WBTC to Solana Open-source interoperability network Hyperlane will power the expansion through its Nexus Bridge. The infrastructure enables users to transfer native WBTC between Ethereum and Solana without relying on fragmented routes. Moreover, the bridge introduces a canonical method to move the asset into Solana’s DeFi markets. Wrapped Bitcoin launched in 2019 as the first ERC-20 token backed one-to-one by Bitcoin. It allows BTC holders to access decentralized finance on chains that do not support native Bitcoin transfers. Besides Ethereum, WBTC already circulates across multiple networks, reflecting sustained demand for tokenized Bitcoin exposure. However, the asset faced scrutiny in 2024 after BitGo shifted to a multi-jurisdictional custody structure with BiT Global. That restructuring prompted several platforms to reassess their exposure. Additionally, competition intensified when a rival tokenized Bitcoin product entered the market. Despite those challenges, WBTC remains one of the largest Bitcoin representations on-chain. Bitcoin Liquidity Meets Solana Speed The bridge positions Solana as a new venue for Bitcoin-based capital. Significantly, Solana’s high throughput and lower transaction costs may attract traders seeking efficient BTC liquidity. Consequently, decentralized exchanges and lending platforms on Solana could see deeper liquidity pools. This development also aligns with broader trends in cross-chain interoperability. Projects increasingly prioritize seamless capital movement rather than isolated ecosystems. Hence, Hyperlane’s integration strengthens Solana’s appeal to Bitcoin-focused investors. SOL Price Holds Range as Momentum Builds Meanwhile, Solana trades at $78.19, reflecting a 0.66% daily decline and an 8.43% weekly drop . The token records nearly $3.9 billion in 24-hour volume. With 570 million SOL in circulation, the network commands a market cap above $44 billion. According to Umair Crypto, SOL maintains a tight structure between $77 and $90. Price compresses within that band while momentum indicators attempt to break higher. Consequently, traders monitor the $85 level as a near-term pivot. A sustained move above $85 could open a path toward $100. However, bulls must reclaim $90 and convert it into support. Otherwise, upside attempts may remain temporary deviations. Failure to hold $77 could push SOL toward sub-$73 liquidity zones. Moreover, unstable volume structure adds uncertainty to the range. For now, range conditions dominate until a confirmed breakout reshapes the trend.",
+      "tags": "News|Crypto",
+      "lang": "EN",
+      "upvotes": "0",
+      "downvotes": "0",
+      "categories": "BTC|ETH|MARKET|SOL|CRYPTOCURRENCY",
+      "source_info": {
+        "name": "Coinpaper",
+        "img": "https://resources.cryptocompare.com/news/93/default.png",
+        "lang": "EN"
+      },
+      "source": "coinpaper",
+      "detected_coins": [
+        "BTC",
+        "NOT",
+        "SOL",
+        "NEAR",
+        "ETH",
+        "ONE"
+      ],
+      "detected_coins_str": "BTC|NOT|SOL|NEAR|ETH|ONE"
+    }
+  ]
+}

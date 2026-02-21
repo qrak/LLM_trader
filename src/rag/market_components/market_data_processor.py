@@ -9,25 +9,25 @@ from src.logger.logger import Logger
 
 class MarketDataProcessor:
     """Handles processing and normalization of market data."""
-    
+
     def __init__(self, logger: Logger, unified_parser=None, format_utils=None):
         if format_utils is None:
             format_utils = unified_parser.format_utils if unified_parser else None
 
         self.logger = logger
         self.format_utils = format_utils
-    
+
     def normalize_timestamp(self, timestamp_field) -> float:
         """Convert various timestamp formats to a float timestamp."""
         return self.format_utils.parse_timestamp(timestamp_field)
-    
+
     def extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
         """Extract top cryptocurrency symbols from CoinGecko data."""
         try:
             if not coingecko_data:
                 self.logger.warning("No CoinGecko data provided")
                 return []
-            
+
             # Check for direct dominance data (current format)
             if 'dominance' in coingecko_data:
                 dominance_data = coingecko_data['dominance']
@@ -36,61 +36,61 @@ class MarketDataProcessor:
             else:
                 self.logger.warning("No dominance data found in CoinGecko response")
                 return []
-            
+
             # Sort by dominance percentage and extract top symbols
             sorted_coins = sorted(
-                dominance_data.items(), 
-                key=lambda x: x[1], 
+                dominance_data.items(),
+                key=lambda x: x[1],
                 reverse=True
             )
-            
+
             # Get top 10 coins, excluding stablecoins from top positions
             stablecoins = {'usdt', 'usdc', 'busd', 'dai', 'tusd', 'usd', 'steth'}
             top_coins = []
-            
+
             for symbol, _ in sorted_coins:
                 symbol_upper = symbol.upper()
                 if symbol.lower() not in stablecoins:
                     top_coins.append(symbol_upper)
                 if len(top_coins) >= 10:
                     break
-            
+
             self.logger.debug(f"Extracted {len(top_coins)} top coins: {top_coins}")
             return top_coins
-            
+
         except Exception as e:
             self.logger.error(f"Error extracting top coins: {e}")
             return []
-    
+
     def process_coin_data(self, values: Dict) -> Optional[Dict]:
         """Process individual coin data from market sources."""
         try:
             processed_coin = {}
-            
+
             # Process basic information
             if 'symbol' in values:
                 processed_coin['symbol'] = values['symbol'].upper()
-            
+
             # Process price information
             for price_key in ['close', 'last', 'price']:
                 if price_key in values and values[price_key] is not None:
                     processed_coin['price'] = float(values[price_key])
                     break
-            
+
             # Process volume information
             for volume_key in ['volume', 'baseVolume', 'quoteVolume']:
                 if volume_key in values and values[volume_key] is not None:
                     processed_coin['volume'] = float(values[volume_key])
                     break
-            
+
             # Process percentage change
             for change_key in ['percentage', 'change', 'percentage_change']:
                 if change_key in values and values[change_key] is not None:
                     processed_coin['change_24h'] = float(values[change_key])
                     break
-            
+
             return processed_coin if processed_coin else None
-            
+
         except Exception as e:
             self.logger.error(f"Error processing coin data: {e}")
             return None

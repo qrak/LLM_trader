@@ -10,7 +10,7 @@ from .news_filter import NewsFilter
 
 __all__ = [
     'CryptoCompareNewsClient',
-    'NewsCache', 
+    'NewsCache',
     'NewsProcessor',
     'NewsFilter'
 ]

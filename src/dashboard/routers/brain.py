@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Request
-from typing import Dict, Any, List
 import json
 from pathlib import Path
+from typing import Dict, Any, List
+import re
+
+from fastapi import APIRouter, Request
 
 
 router = APIRouter(prefix="/api/brain", tags=["brain"])
@@ -40,7 +42,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> str:
     if not prev_response_file.exists():
         return ""
     try:
-        with open(prev_response_file, "r") as f:
+        with open(prev_response_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             status = _extract_market_status(data, unified_parser)
             adx = status["adx"] or 0
@@ -72,7 +74,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
     status = {"status": "active", "trend": "--", "confidence": "--", "action": "--", "adx": None, "rsi": None}
     if prev_response_file.exists():
         try:
-            with open(prev_response_file, "r") as f:
+            with open(prev_response_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 extracted = _extract_market_status(data, unified_parser)
                 status.update(extracted)
@@ -80,7 +82,7 @@ async def get_brain_status(request: Request) -> Dict[str, Any]:
             logger.error("Failed to load brain status", exc_info=True)
     if stats_file.exists():
         try:
-            with open(stats_file, "r") as f:
+            with open(stats_file, "r", encoding="utf-8") as f:
                 stats = json.load(f)
                 status.update({
                     "total_trades": stats.get("total_trades", 0),
@@ -115,7 +117,7 @@ async def get_vector_memory(request: Request, limit: int = 100) -> Dict[str, Any
     trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
     if trade_history_file.exists():
         try:
-            with open(trade_history_file, "r") as f:
+            with open(trade_history_file, "r", encoding="utf-8") as f:
                 trades = json.load(f)
                 result["trades"] = [
                     {
@@ -145,7 +147,17 @@ async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
     if not vector_memory:
         return []
     try:
-        rules = vector_memory.get_active_rules(n_results=20)
+        raw_rules = vector_memory.get_active_rules(n_results=20)
+        rules = []
+        for r in raw_rules:
+            # Frontend expects rule_text, win_rate, and source_trades at root level
+            mapped_rule = dict(r)
+            mapped_rule["rule_text"] = r.get("text", "")
+            meta = r.get("metadata", {})
+            mapped_rule["win_rate"] = meta.get("win_rate")
+            mapped_rule["source_trades"] = meta.get("source_trades")
+            rules.append(mapped_rule)
+            
         dashboard_state.set_cached("rules", rules)
         return rules
     except Exception:
@@ -155,10 +167,14 @@ async def get_active_rules(request: Request) -> List[Dict[str, Any]]:
 @router.get("/vectors")
 async def get_vector_details(request: Request, query: str = None, limit: int = 50) -> Dict[str, Any]:
     """Get detailed vector memory contents from ChromaDB."""
-    # We only cache if query is None (standard dashboard view)
     dashboard_state = request.app.state.dashboard_state
+    sort_by = request.query_params.get("sort_by", "date")
+    order = request.query_params.get("order", "desc")
+    cache_key = f"vectors_{limit}_{sort_by}_{order}"
+    
+    # We only cache if query is None (standard dashboard view)
     if not query:
-        cached = dashboard_state.get_cached("vectors", ttl_seconds=30.0)
+        cached = dashboard_state.get_cached(cache_key, ttl_seconds=30.0)
         if cached:
             return cached
     vector_memory = request.app.state.vector_memory
@@ -192,8 +208,6 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
             experiences = vector_memory.retrieve_similar_experiences(context_query, k=limit, where=where_filter)
         else:
             experiences = vector_memory.get_all_experiences(limit=limit, where=where_filter)
-        sort_by = request.query_params.get("sort_by", "date")
-        order = request.query_params.get("order", "desc")
         reverse = (order == "desc")
         def get_sort_key(item):
             meta = item.metadata
@@ -224,7 +238,7 @@ async def get_vector_details(request: Request, query: str = None, limit: int = 5
             })
         result["experiences"] = experiences_list
         if not query:
-            dashboard_state.set_cached("vectors", result)
+            dashboard_state.set_cached(cache_key, result)
     except Exception:
         logger.error("Failed to retrieve vector details", exc_info=True)
         result["error"] = "Internal error retrieving vector details"
@@ -237,7 +251,6 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
     cached = dashboard_state.get_cached("position", ttl_seconds=10.0)
     if cached:
         return cached
-    import re
     persistence = request.app.state.persistence
     config = request.app.state.config
     logger = request.app.state.logger
@@ -247,7 +260,7 @@ async def get_current_position(request: Request) -> Dict[str, Any]:
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         if prev_response_file.exists():
             try:
-                with open(prev_response_file, "r") as f:
+                with open(prev_response_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     prompt = data.get("prompt", "")
                     match = re.search(r"Current Price:\s*\$?([\d,]+\.?\d*)", prompt)

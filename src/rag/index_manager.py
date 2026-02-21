@@ -12,30 +12,30 @@ from src.logger.logger import Logger
 
 class IndexManager:
     """Manages search indices for efficient article lookup."""
-    
+
     def __init__(self, logger: Logger, article_processor=None):
 
         self.logger = logger
         self.article_processor = article_processor
-        
+
         # Search indices
         self.category_index: Dict[str, List[int]] = defaultdict(list)
         self.tag_index: Dict[str, List[int]] = defaultdict(list)
         self.coin_index: Dict[str, List[int]] = defaultdict(list)
         self.keyword_index: Dict[str, List[int]] = defaultdict(list)
-    
-    def build_indices(self, news_database: List[Dict[str, Any]], 
-                     known_crypto_tickers: Set[str], 
+
+    def build_indices(self, news_database: List[Dict[str, Any]],
+                     known_crypto_tickers: Set[str],
                      category_word_map: Dict[str, str]) -> None:
         """Build search indices from news database."""
         self._clear_indices()
-        
+
         for i, article in enumerate(news_database):
             self._index_article_categories(article, i, known_crypto_tickers)
             self._index_article_tags(article, i)
             self._index_article_coins(article, i, known_crypto_tickers)
             self._index_article_keywords(article, i, category_word_map)
-    
+
     def _clear_indices(self) -> None:
         """Clear all search indices."""
         self.category_index.clear()
@@ -49,7 +49,7 @@ class IndexManager:
         for category in categories:
             if not category:
                 continue
-                
+
             category_lower = category.lower()
             self.category_index[category_lower].append(index)
 
@@ -76,7 +76,7 @@ class IndexManager:
                 # Store as list internally
                 article['detected_coins'] = list(coins_mentioned)
                 article['detected_coins_str'] = '|'.join(coins_mentioned)
-            
+
         for coin in coins_mentioned:
             self.coin_index[coin.lower()].append(index)
 
@@ -87,7 +87,7 @@ class IndexManager:
 
         # Index category-associated words
         self._index_category_words(title, body, index, category_word_map)
-        
+
         # Index important title words
         self._index_title_words(title, index)
 
@@ -106,20 +106,20 @@ class IndexManager:
         """Index important words from article title with consistent lowercase normalization."""
         title_words = set(re.findall(r'\b[a-z0-9]{3,15}\b', title))
         stop_words = {'the', 'and', 'for', 'with'}
-        
+
         for word in title_words:
             if len(word) > 2 and word not in stop_words:
                 # Ensure consistent lowercase normalization and prevent duplicates
                 word_lower = word.lower()
                 if index not in self.keyword_index[word_lower]:
                     self.keyword_index[word_lower].append(index)
-    
-    
+
+
     def search_by_coin(self, coin: str) -> List[int]:
         """Search for articles mentioning a specific coin."""
         coin_lower = coin.lower()
         return self.coin_index.get(coin_lower, [])
-    
+
     def get_coin_indices(self) -> Dict[str, List[int]]:
         """Get the coin index."""
         return dict(self.coin_index)

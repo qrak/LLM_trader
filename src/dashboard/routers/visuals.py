@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Request
 import base64
 from datetime import datetime
 from typing import Dict, Any
+
+from fastapi import APIRouter, Request
 
 router = APIRouter(prefix="/api/visuals", tags=["visuals"])
 
@@ -31,4 +32,3 @@ async def get_latest_chart(request: Request) -> Dict[str, Any]:
             "buffer_value": str(type(last_chart_buffer)) if last_chart_buffer else "None"
         }
     }
-

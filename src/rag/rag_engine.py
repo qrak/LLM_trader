@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
+import re
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -31,7 +32,7 @@ class RagEngine:
         context_builder=None,
     ):
         """Initialize RagEngine with injected dependencies (DI pattern).
-        
+
         Args:
             logger: Logger instance
             token_counter: TokenCounter instance
@@ -49,11 +50,11 @@ class RagEngine:
             context_builder: ContextBuilder instance (injected from app.py)
         """
 
-        
+
         self.logger = logger
         self.config = config
         self.token_counter = token_counter
-        
+
         # Store injected components
         self.file_handler = file_handler
         self.news_manager = news_manager
@@ -76,7 +77,7 @@ class RagEngine:
 
         # Task management
         self._periodic_update_task = None
-        
+
         # Async lock to prevent concurrent updates
         self._update_lock = asyncio.Lock()
 
@@ -154,7 +155,7 @@ class RagEngine:
     async def refresh_market_data(self) -> None:
         """Refresh all market data from external sources"""
         await self._ensure_categories_updated()
-        
+
         # Fetch news
         try:
             articles = await self.news_manager.fetch_fresh_news(
@@ -163,13 +164,13 @@ class RagEngine:
         except Exception as e:
             self.logger.error(f"Error fetching crypto news: {e}")
             articles = []
-        
+
         # Update market overview if needed
         try:
             await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
         except Exception as e:
             self.logger.error(f"Error updating market overview: {e}")
-        
+
         # Process articles
         if articles:
             updated = self.news_manager.update_news_database(articles)
@@ -178,7 +179,7 @@ class RagEngine:
                 self.logger.debug("News database updated; rebuilt indices")
 
     @profile_performance
-    async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: int = 8096) -> str:
+    async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: Optional[int] = None) -> str:
         """Retrieve relevant context for a query with token limiting.
 
         If `k` is None, the configured RAG news limit (`[rag] news_limit`) will be used.
@@ -190,6 +191,14 @@ class RagEngine:
                 k = int(self.config.RAG_NEWS_LIMIT)
             except Exception:
                 k = 3
+
+        if max_tokens is None:
+            try:
+                # article_max_tokens is per-article budget, so multiply by number of articles
+                article_max = int(self.config.RAG_ARTICLE_MAX_TOKENS)
+                max_tokens = article_max * k
+            except Exception:
+                max_tokens = 250 * k  # Fallback: 250 tokens per article
 
         if self.news_manager.get_database_size() == 0:
             self.logger.warning("News database is empty")
@@ -204,7 +213,6 @@ class RagEngine:
                 await self.update_if_needed()
 
             # Extract keywords from query for smart sentence selection
-            import re
             keywords = set(re.findall(r'\b\w{3,15}\b', query.lower()))
 
             # Use context builder for keyword search
@@ -231,12 +239,7 @@ class RagEngine:
             context_text, total_tokens = self.context_builder.add_articles_to_context(
                 relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
-
-            len([idx for idx in relevant_indices
-                                if idx < self.news_manager.get_database_size()])
-
-            # self.logger.debug(f"Added {min(articles_added, k)} news articles to context (market overview handled separately)")
-            # self.logger.debug(f"Context tokens: {total_tokens}/{max_tokens}")
+            self.logger.debug(f"Retrieved context with {total_tokens} tokens")
 
             return context_text
         except Exception as e:
@@ -251,7 +254,7 @@ class RagEngine:
                  # Check/Update if needed
                  await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
                  return self.market_data_manager.get_current_overview()
-            
+
             return None
         except Exception as e:
             self.logger.error(f"Error getting market overview: {e}")
@@ -298,9 +301,9 @@ class RagEngine:
         """Close resources and mark as closed"""
         if self._is_closed:
             return
-            
+
         self._is_closed = True
-        
+
         # Cancel periodic update task if running
         if self._periodic_update_task and not self._periodic_update_task.done():
             self.logger.debug("Cancelling periodic update task")
@@ -309,19 +312,19 @@ class RagEngine:
                 await self._periodic_update_task
             except asyncio.CancelledError:
                 pass
-            
+
         # Close API clients if they have close methods
         if self.coingecko_api:
             try:
                 await self.coingecko_api.close()
             except Exception as e:
                 self.logger.error(f"Error closing CoinGecko API client: {e}")
-                    
+
         self.logger.info("RAG Engine resources released")
-    
+
     async def _ensure_categories_updated(self, force_refresh: bool = False) -> bool:
         """Ensure categories are loaded and up to date.
-        
+
         Returns:
             True if categories were updated, False otherwise
         """

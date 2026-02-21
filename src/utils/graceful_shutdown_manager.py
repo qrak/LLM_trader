@@ -1,7 +1,7 @@
 import asyncio
 import signal
 import sys
-from typing import Any, Optional, Callable
+from typing import Optional, Callable
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -44,14 +44,14 @@ class GracefulShutdownManager:
             self.logger.info(f"Signal {sig} received. Asking for confirmation...")
         else:
             print(f"Received signal {sig}, asking for confirmation...")
-        
+
         if self.confirmation_callback:
             if self.confirmation_callback():
                 if self.logger:
                     self.logger.info("User confirmed shutdown. Initiating graceful shutdown...")
                 else:
                     print("User confirmed shutdown, initiating...")
-                
+
                 if self.loop.is_running() and not self.loop.is_closed():
                     self.loop.create_task(self.shutdown_gracefully())
             else:
@@ -69,19 +69,19 @@ class GracefulShutdownManager:
         if self._shutting_down:
             return
         self._shutting_down = True
-        
+
         if self.logger:
             self.logger.info("Performing graceful shutdown...")
         else:
             print("Performing graceful shutdown...")
-        
+
         # Execute registered callbacks first
         if self._callbacks:
             if self.logger:
                 self.logger.info(f"Executing {len(self._callbacks)} shutdown callbacks...")
             else:
                 print(f"Executing {len(self._callbacks)} shutdown callbacks...")
-                
+
             for callback in self._callbacks:
                 try:
                     if asyncio.iscoroutinefunction(callback):
@@ -102,7 +102,7 @@ class GracefulShutdownManager:
                 self.logger.info(msg)
             else:
                 print(msg)
-                
+
             for task in pending_tasks:
                 task.cancel()
             try:
@@ -118,7 +118,7 @@ class GracefulShutdownManager:
                         else:
                             name = str(t)
                         task_details.append(name)
-                
+
                 timeout_msg = f"Some tasks didn't complete in time: {task_details}"
                 if self.logger:
                     self.logger.warning(timeout_msg)
@@ -132,12 +132,12 @@ class GracefulShutdownManager:
                 self.logger.error(err_msg)
             else:
                 print(err_msg)
-    
+
     @staticmethod
     def show_exit_confirmation() -> bool:
         """
         Show a confirmation dialog before closing the application.
-        
+
         Returns:
             True if user confirmed exit, False if they cancelled.
         """
@@ -147,7 +147,7 @@ class GracefulShutdownManager:
                 return response in ['y', 'yes']
             except (EOFError, KeyboardInterrupt):
                 return True
-        
+
         try:
             app = QApplication.instance()
             if app is None:
@@ -155,7 +155,7 @@ class GracefulShutdownManager:
                 QApplication.setHighDpiScaleFactorRoundingPolicy(
                     Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
                 )
-            
+
             result = QMessageBox.question(
                 None,
                 "Exit Confirmation",
@@ -163,7 +163,7 @@ class GracefulShutdownManager:
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
-            
+
             return result == QMessageBox.StandardButton.Yes
         except Exception as e:
             print(f"Warning: Could not show confirmation dialog: {e}. Proceeding with shutdown.")
