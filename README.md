@@ -8,8 +8,6 @@
 
 🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
 
-🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
-
 ![Semantic Signal LLM Dashboard - Overview](img/dashboard1.png)
 ![Semantic Signal LLM Dashboard - Brain Activity](img/dashboard2.png)
 ![Semantic Signal LLM Dashboard - Last Prompt](img/dashboard3.png)
