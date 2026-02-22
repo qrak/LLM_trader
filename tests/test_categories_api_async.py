@@ -1,14 +1,13 @@
 import pytest
 import asyncio
 import json
-import os
 import sys
 from unittest.mock import MagicMock, AsyncMock, patch
 
 # Mock src.config.loader before importing anything that uses it
 sys.modules['src.config.loader'] = MagicMock()
 
-from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
+from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI  # noqa: E402
 
 @pytest.mark.asyncio
 class TestCryptoCompareCategoriesAPIAsync:

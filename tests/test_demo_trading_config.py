@@ -1,11 +1,9 @@
 """Test demo trading configuration (capital and fees)."""
 
-import os
 import sys
 import importlib
 import pytest
-from unittest.mock import MagicMock, patch
-from typing import Any, Dict
+from unittest.mock import patch
 
 
 class MockConfig:

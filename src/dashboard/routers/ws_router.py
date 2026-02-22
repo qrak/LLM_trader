@@ -3,9 +3,7 @@
 from typing import Set, Dict, Any
 from collections import defaultdict
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
-
-router = APIRouter(tags=["websocket"])
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 
 class ConnectionManager:
@@ -68,28 +66,58 @@ manager = ConnectionManager()
 connected_clients = manager.active_connections
 
 
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time dashboard updates."""
-    if await manager.connect(websocket):
-        try:
-            while True:
-                await websocket.receive_text()
-        except WebSocketDisconnect:
-            manager.disconnect(websocket)
-        except Exception:
-            manager.disconnect(websocket)
-
-
 async def broadcast(data: Dict[str, Any]) -> None:
     """Broadcast data to all connected WebSocket clients."""
     await manager.broadcast(data)
 
 
-@router.get("/api/status/countdown")
-async def get_countdown(request: Request) -> Dict[str, Any]:
-    """Get countdown to next analysis (REST fallback for WebSocket)."""
-    dashboard_state = getattr(request.app.state, "dashboard_state", None)
-    if dashboard_state:
-        return dashboard_state.get_countdown_data()
-    return {"next_check_utc": None, "seconds_remaining": None}
+class WebSocketRouter:
+    """Router for WebSocket connections."""
+    def __init__(self, manager_instance, config, dashboard_state):
+        self.router = APIRouter(tags=["websocket"])
+        self.manager = manager_instance
+        self.config = config
+        self.dashboard_state = dashboard_state
+
+        self.router.add_api_websocket_route("/ws", self.websocket_endpoint)
+        self.router.add_api_route("/api/status/countdown", self.get_countdown, methods=["GET"])
+
+    async def websocket_endpoint(self, websocket: WebSocket):
+        """WebSocket endpoint for real-time dashboard updates."""
+        # Security: Validate Origin to prevent CSWSH
+        origin = websocket.headers.get("origin")
+        if origin:
+            allowed = False
+
+            # 1. Allow if matches Host (Same Origin)
+            host = websocket.headers.get("host")
+            if host:
+                # Strip scheme from origin (http://host:port -> host:port)
+                origin_host = origin.split("://")[-1]
+                if origin_host == host:
+                    allowed = True
+
+            # 2. Allow if explicitly configured in CORS
+            if not allowed and self.config and self.config.DASHBOARD_ENABLE_CORS:
+                cors_origins = self.config.DASHBOARD_CORS_ORIGINS
+                if "*" in cors_origins or origin in cors_origins:
+                    allowed = True
+
+            if not allowed:
+                await websocket.close(code=1008, reason="Invalid Origin")
+                return
+
+        if await self.manager.connect(websocket):
+            try:
+                while True:
+                    await websocket.receive_text()
+            except WebSocketDisconnect:
+                self.manager.disconnect(websocket)
+            except Exception:
+                self.manager.disconnect(websocket)
+
+    async def get_countdown(self) -> Dict[str, Any]:
+        """Get countdown to next analysis (REST fallback for WebSocket)."""
+        if self.dashboard_state:
+            return self.dashboard_state.get_countdown_data()
+        return {"next_check_utc": None, "seconds_remaining": None}

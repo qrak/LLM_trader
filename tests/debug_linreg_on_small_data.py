@@ -9,7 +9,7 @@ def ref_linreg_r(data):
     numerator = np.sum((x - np.mean(x)) * (y - np.mean(y)))
     denom = np.sqrt(np.sum((x - np.mean(x))**2)) * np.sqrt(np.sum((y - np.mean(y))**2))
     
-    if denom == 0: return 0.0
+    if denom == 0: return 0.0  # noqa: E701
     return numerator / denom
 
 def debug():

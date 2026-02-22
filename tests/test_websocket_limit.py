@@ -13,38 +13,36 @@ async def test_websocket_limits():
         ws = AsyncMock(spec=WebSocket)
         ws.client = MagicMock()
         ws.client.host = "127.0.0.1"
+        ws.headers = {}
         ws.accept = AsyncMock()
         ws.close = AsyncMock()
         # Keep connection alive until cancelled
         ws.receive_text = AsyncMock(side_effect=asyncio.CancelledError)
         websockets.append(ws)
 
-    # Clear existing state
-    if hasattr(ws_router, 'connected_clients'):
-        if isinstance(ws_router.connected_clients, set):
-            ws_router.connected_clients.clear()
-    if hasattr(ws_router, 'manager'):
-        ws_router.manager.active_connections.clear()
-        ws_router.manager.ip_counts.clear()
+    # Create router instance with mocked dependencies
+    mock_config = MagicMock()
+    mock_config.DASHBOARD_ENABLE_CORS = False
+    mock_dashboard = MagicMock()
+    router_instance = ws_router.WebSocketRouter(ws_router.manager, mock_config, mock_dashboard)
+
+    # Clear existing state cleanly
+    router_instance.manager.active_connections.clear()
+    router_instance.manager.ip_counts.clear()
 
     # Connect all
     tasks = []
     for ws in websockets:
-        task = asyncio.create_task(ws_router.websocket_endpoint(ws))
+        task = asyncio.create_task(router_instance.websocket_endpoint(ws))
         tasks.append(task)
 
     await asyncio.sleep(0.1)
 
     # Check results
-    if hasattr(ws_router, 'manager'):
-        # After fix: Should be capped at 10
-        assert len(ws_router.manager.active_connections) == 10
-        # The other 5 should have been closed
-        closed_count = sum(1 for ws in websockets if ws.close.called)
-        assert closed_count == 5
-    else:
-        # Before fix: Should be 15 (VULNERABILITY CONFIRMED)
-        assert len(ws_router.connected_clients) == 15
+    assert len(router_instance.manager.active_connections) == 10
+    # The other 5 should have been closed
+    closed_count = sum(1 for ws in websockets if ws.close.called)
+    assert closed_count == 5
 
     # Cleanup
     for task in tasks:

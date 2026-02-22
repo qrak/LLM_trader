@@ -8,13 +8,13 @@ def title(t):
 def ref_skewness_population(data):
     """Reference implementation of Population Skewness (bias=True in scipy)."""
     n = len(data)
-    if n < 3: return np.nan
+    if n < 3: return np.nan  # noqa: E701
     mean = np.mean(data)
     diffs = data - mean
     var_pop = np.mean(diffs**2)
     std_pop = np.sqrt(var_pop)
     moment3 = np.mean(diffs**3)
-    if std_pop == 0: return 0.0
+    if std_pop == 0: return 0.0  # noqa: E701
     return moment3 / (std_pop**3)
 
 def ref_skewness_sample(data):
@@ -22,7 +22,7 @@ def ref_skewness_sample(data):
     Fisher-Pearson coefficient of skewness.
     """
     n = len(data)
-    if n < 3: return np.nan
+    if n < 3: return np.nan  # noqa: E701
     # Use population mean for moments calculation, but adjust factor
     mean = np.mean(data)
     diffs = data - mean
@@ -43,7 +43,7 @@ def ref_skewness_sample(data):
 def ref_entropy(data, base=2.0):
     """Reference Price Entropy."""
     s = np.sum(data)
-    if s <= 0: return 0.0
+    if s <= 0: return 0.0  # noqa: E701
     probs = data / s
     # Avoid log(0)
     probs = probs[probs > 0]
@@ -60,7 +60,7 @@ def ref_linreg_r(data):
     numerator = np.sum((x - np.mean(x)) * (y - np.mean(y)))
     denom = np.sqrt(np.sum((x - np.mean(x))**2)) * np.sqrt(np.sum((y - np.mean(y))**2))
     
-    if denom == 0: return 0.0
+    if denom == 0: return 0.0  # noqa: E701
     r = numerator / denom
     return r
 

@@ -1,12 +1,5 @@
 import numpy as np
 from numba import njit
-from src.indicators.statistical.utils import (
-    f_ess, f_hp,
-    calculate_correlation_matrix,
-    calculate_spectral_components,
-    smooth_power_spectrum,
-    calculate_dominant_cycle
-)
 
 @njit(cache=True)
 def entropy_numba_legacy(close, length=10, base=2.0):
@@ -178,7 +171,7 @@ def variance_numba_legacy(close, length=30, ddof=1):
         return variance_values
 
     for i in range(length - 1, n):
-        window = close[i - length + 1:i + 1] - offset
+        window = close[i - length + 1:i + 1] - offset  # noqa: F821
         mean = np.mean(window)
         # var = sum((x - mean)^2) / (N - ddof)
         var_sum = np.sum((window - mean) ** 2)

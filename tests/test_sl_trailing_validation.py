@@ -4,7 +4,7 @@ Verifies that TradingStrategy._update_position_parameters correctly handles
 SL moves (including Full AI Autonomy widening).
 """
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, timezone
 from src.trading.dataclasses import Position
 

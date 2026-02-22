@@ -10,7 +10,7 @@ loader_mock = MagicMock()
 loader_mock.config = config_mock
 sys.modules['src.config.loader'] = loader_mock
 
-from src.parsing.unified_parser import UnifiedParser
+from src.parsing.unified_parser import UnifiedParser  # noqa: E402
 
 class TestUnifiedParserCorrectness:
     @pytest.fixture

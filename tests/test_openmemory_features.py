@@ -7,7 +7,6 @@ Usage:
 """
 
 if __name__ == "__main__":
-    import sys
     import math
     from datetime import datetime, timedelta
     import chromadb

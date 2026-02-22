@@ -58,7 +58,7 @@ async def test_news_filtering():
         return False
     else:
         logger.info("SUCCESS: All articles are from Tier 1 sources only!")
-        logger.info(f"No bitcoinworld or other unreliable sources detected ✓")
+        logger.info("No bitcoinworld or other unreliable sources detected ✓")
         return True
 
 

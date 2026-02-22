@@ -33,22 +33,22 @@ if sys.platform == 'win32':
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import asyncio
+import asyncio  # noqa: E402
 
-from src.logger.logger import Logger
-from src.config.loader import config
-from src.analyzer.prompts.prompt_builder import PromptBuilder
-from src.analyzer.analysis_context import AnalysisContext
-from src.analyzer.data_fetcher import DataFetcher
-from src.utils.format_utils import FormatUtils
-from src.platforms.ai_providers.mock import MockClient
-from src.managers.model_manager import ModelManager
-from src.parsing.unified_parser import UnifiedParser
-from src.analyzer.technical_calculator import TechnicalCalculator
-from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
-from src.analyzer.pattern_engine.chart_generator import ChartGenerator
-from src.platforms.exchange_manager import ExchangeManager
-from src.analyzer.formatters import (
+from src.logger.logger import Logger  # noqa: E402
+from src.config.loader import config  # noqa: E402
+from src.analyzer.prompts.prompt_builder import PromptBuilder  # noqa: E402
+from src.analyzer.analysis_context import AnalysisContext  # noqa: E402
+from src.analyzer.data_fetcher import DataFetcher  # noqa: E402
+from src.utils.format_utils import FormatUtils  # noqa: E402
+from src.platforms.ai_providers.mock import MockClient  # noqa: E402
+from src.managers.model_manager import ModelManager  # noqa: E402
+from src.parsing.unified_parser import UnifiedParser  # noqa: E402
+from src.analyzer.technical_calculator import TechnicalCalculator  # noqa: E402
+from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory  # noqa: E402
+from src.analyzer.pattern_engine.chart_generator import ChartGenerator  # noqa: E402
+from src.platforms.exchange_manager import ExchangeManager  # noqa: E402
+from src.analyzer.formatters import (  # noqa: E402
     MarketOverviewFormatter,
     LongTermFormatter,
     MarketFormatter,
@@ -73,7 +73,7 @@ async def main():
     logger = Logger("googleai_chart_test", logger_debug=True)
     
     print(f"\n{'='*60}")
-    print(f"GOOGLE AI CHART TEST - REAL CCXT DATA, MOCKED API")
+    print("GOOGLE AI CHART TEST - REAL CCXT DATA, MOCKED API")
     print(f"{'='*60}")
     print(f"Pair: {pair}")
     print(f"Timeframe: {timeframe}")
@@ -140,12 +140,12 @@ async def main():
     context.market_overview = {'coin_data': {pair.split('/')[0]: {'price': context.current_price}}}
 
     # Calculate technical indicators for chart visualization
-    print(f"\nCalculating technical indicators...")
+    print("\nCalculating technical indicators...")
     indicators = technical_calculator.get_indicators(ohlcv)
     print(f"Indicators calculated: {list(indicators.keys())[:10]}... ({len(indicators)} total)")
 
     # Generate chart image with real data and indicators
-    print(f"\nGenerating chart image with indicators (RSI, SMA 50/200, Volume, CMF, OBV)...")
+    print("\nGenerating chart image with indicators (RSI, SMA 50/200, Volume, CMF, OBV)...")
     chart_generator = ChartGenerator(
         logger=logger, 
         config=config, 
@@ -210,7 +210,7 @@ async def main():
     manager.provider = 'googleai'
 
     # Prepare messages
-    prepared_messages = [
+    [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": prompt + f"\n\nTEST_HINT: last_close={context.current_price}"}
     ]

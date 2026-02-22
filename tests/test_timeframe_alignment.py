@@ -1,5 +1,4 @@
 
-import pytest
 from datetime import datetime, timezone
 from src.utils.timeframe_validator import TimeframeValidator
 

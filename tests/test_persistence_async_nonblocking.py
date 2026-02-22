@@ -7,9 +7,7 @@ These tests mirror the pattern in test_chroma_async_nonblocking.py:
 """
 import asyncio
 import json
-import tempfile
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -80,7 +78,7 @@ class TestPersistenceAsyncNonBlocking:
 
         def slow_open(*args, **kwargs):
             time.sleep(delay_s)  # simulate blocking disk write
-            return open(*args, **kwargs)  # noqa: WPS515  (real open for cleanup)
+            return open(*args, **kwargs)  # noqa (real open for cleanup)
 
         async def concurrent_task():
             for _ in range(20):

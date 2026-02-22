@@ -1,6 +1,5 @@
 
 import pytest
-import re
 from unittest.mock import MagicMock
 from src.rag.context_builder import ContextBuilder
 from src.utils.token_counter import TokenCounter
@@ -290,7 +289,6 @@ async def test_single_keyword_no_cooccurrence_bonus():
     }
 
     # Single keyword - co-occurrence modifier should return 1.0
-    from collections import namedtuple
     content = builder._extract_article_content(article)
     modifier = builder._calculate_cooccurrence_modifier({'bitcoin'}, content)
     assert modifier == 1.0

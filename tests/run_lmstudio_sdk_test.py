@@ -103,7 +103,7 @@ async def test_lmstudio_vision():
         
         if response:
             content = response['choices'][0].get('message', {}).get('content', '')
-            print(f"✓ Response received")
+            print("✓ Response received")
             print(f"  Content: {content}")
             return True
         else:

@@ -294,7 +294,7 @@ class TestBrainIntegration:
         meta = experiences[0].metadata  # VectorSearchResult is a dataclass
         assert meta.get("fear_greed_index") == 25
         assert meta.get("market_regime") == "BULLISH"
-        assert meta.get("is_weekend") == True
+        assert meta.get("is_weekend")
 
     def test_missing_metadata_handling(self, brain_service, vector_memory):
         """Verify that older trades with missing/empty metadata do not cause KeyErrors."""

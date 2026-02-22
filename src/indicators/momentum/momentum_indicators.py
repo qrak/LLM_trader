@@ -447,10 +447,11 @@ def kst_numba(
     sma4_length: int = 9
 ) -> np.ndarray:
     """
-    Know Sure Thing (KST) indicator - NaN-aware implementation.
+    Know Sure Thing (KST) indicator - Optimized single-pass implementation.
 
     Computes ROC for 4 periods, smooths each with SMA, and combines with weights.
-    Handles NaN values from ROC by starting SMA windows at first valid index.
+    Uses sliding window sums to calculate SMAs and ROCs on-the-fly, avoiding
+    intermediate array allocations.
 
     Args:
         close: Close prices
@@ -469,63 +470,66 @@ def kst_numba(
     n = len(close)
     kst = np.full(n, np.nan)
 
-    # Compute ROC for all 4 periods inline
-    roc1 = np.full(n, np.nan)
-    roc2 = np.full(n, np.nan)
-    roc3 = np.full(n, np.nan)
-    roc4 = np.full(n, np.nan)
-
-    roc1[roc1_length:] = ((close[roc1_length:] / close[:-roc1_length]) - 1) * 100
-    roc2[roc2_length:] = ((close[roc2_length:] / close[:-roc2_length]) - 1) * 100
-    roc3[roc3_length:] = ((close[roc3_length:] / close[:-roc3_length]) - 1) * 100
-    roc4[roc4_length:] = ((close[roc4_length:] / close[:-roc4_length]) - 1) * 100
-
-    # Compute NaN-aware SMA for each ROC
-    rcma1 = np.full(n, np.nan)
-    rcma2 = np.full(n, np.nan)
-    rcma3 = np.full(n, np.nan)
-    rcma4 = np.full(n, np.nan)
-
-    # Helper to compute SMA starting from first valid index
-    def compute_sma(roc_arr, roc_len, sma_len):
-        sma = np.full(n, np.nan)
-        # First valid ROC value is at index roc_len
-        start_idx = roc_len + sma_len - 1
-
-        if start_idx >= n:
-            return sma
-
-        # Initialize first window sum
-        window_sum = 0.0
-        for i in range(roc_len, start_idx + 1):
-            window_sum += roc_arr[i]
-
-        sma[start_idx] = window_sum / sma_len
-
-        # Sliding window for remaining values
-        for i in range(start_idx + 1, n):
-            window_sum += roc_arr[i] - roc_arr[i - sma_len]
-            sma[i] = window_sum / sma_len
-
-        return sma
-
-    rcma1 = compute_sma(roc1, roc1_length, sma1_length)
-    rcma2 = compute_sma(roc2, roc2_length, sma2_length)
-    rcma3 = compute_sma(roc3, roc3_length, sma3_length)
-    rcma4 = compute_sma(roc4, roc4_length, sma4_length)
-
-    # Determine the start index where all SMAs are valid
+    # Calculate validity start indices for each component
+    # A component is valid when we have enough data for ROC + SMA window
     start_idx1 = roc1_length + sma1_length - 1
     start_idx2 = roc2_length + sma2_length - 1
     start_idx3 = roc3_length + sma3_length - 1
     start_idx4 = roc4_length + sma4_length - 1
 
-    # Optimization: Only iterate over the valid range to avoid NaN checks inside the loop
+    # KST is valid when all components are valid
     valid_start = max(start_idx1, start_idx2, start_idx3, start_idx4)
 
-    if valid_start < n:
-        for i in range(valid_start, n):
-            kst[i] = rcma1[i] * 1 + rcma2[i] * 2 + rcma3[i] * 3 + rcma4[i] * 4
+    # Running sums for SMAs
+    sum1 = 0.0
+    sum2 = 0.0
+    sum3 = 0.0
+    sum4 = 0.0
+
+    # Minimum index to start processing to avoid negative indexing
+    min_roc_len = min(roc1_length, roc2_length, roc3_length, roc4_length)
+
+    for i in range(min_roc_len, n):
+        # Component 1
+        if i >= roc1_length:
+            roc = ((close[i] / close[i - roc1_length]) - 1) * 100
+            sum1 += roc
+            if i >= roc1_length + sma1_length:
+                old_roc = ((close[i - sma1_length] / close[i - sma1_length - roc1_length]) - 1) * 100
+                sum1 -= old_roc
+
+        # Component 2
+        if i >= roc2_length:
+            roc = ((close[i] / close[i - roc2_length]) - 1) * 100
+            sum2 += roc
+            if i >= roc2_length + sma2_length:
+                old_roc = ((close[i - sma2_length] / close[i - sma2_length - roc2_length]) - 1) * 100
+                sum2 -= old_roc
+
+        # Component 3
+        if i >= roc3_length:
+            roc = ((close[i] / close[i - roc3_length]) - 1) * 100
+            sum3 += roc
+            if i >= roc3_length + sma3_length:
+                old_roc = ((close[i - sma3_length] / close[i - sma3_length - roc3_length]) - 1) * 100
+                sum3 -= old_roc
+
+        # Component 4
+        if i >= roc4_length:
+            roc = ((close[i] / close[i - roc4_length]) - 1) * 100
+            sum4 += roc
+            if i >= roc4_length + sma4_length:
+                old_roc = ((close[i - sma4_length] / close[i - sma4_length - roc4_length]) - 1) * 100
+                sum4 -= old_roc
+
+        # Calculate KST if all components are valid
+        if i >= valid_start:
+            rcma1 = sum1 / sma1_length
+            rcma2 = sum2 / sma2_length
+            rcma3 = sum3 / sma3_length
+            rcma4 = sum4 / sma4_length
+
+            kst[i] = rcma1 * 1 + rcma2 * 2 + rcma3 * 3 + rcma4 * 4
 
     return kst
 

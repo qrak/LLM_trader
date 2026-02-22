@@ -99,7 +99,6 @@ class TestFormatUtils:
         # ISO String input
         # Note: timestamp_from_iso uses datetime.fromisoformat which handles 'Z' if Python 3.11+
         # or standard formats.
-        iso_str = "2021-01-01T00:00:00+00:00"
         # datetime.fromisoformat("...").timestamp() returns local time if no timezone info?
         # Wait, if string has timezone, it returns aware datetime.
         # If not, naive.

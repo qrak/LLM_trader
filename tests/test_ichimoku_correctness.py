@@ -29,7 +29,7 @@ def test_ichimoku_correctness():
     expected_conv_idx = conversion_length - 1
     assert first_valid_conversion_idx == expected_conv_idx, \
         f"Expected valid conversion line data from index {expected_conv_idx}, but got {first_valid_conversion_idx}"
-    print(f"✅ PASS: Conversion line starts at correct index")
+    print("✅ PASS: Conversion line starts at correct index")
 
     # Check base line
     first_valid_base_idx = -1
@@ -42,7 +42,7 @@ def test_ichimoku_correctness():
     expected_base_idx = base_length - 1
     assert first_valid_base_idx == expected_base_idx, \
         f"Expected valid base line data from index {expected_base_idx}, but got {first_valid_base_idx}"
-    print(f"✅ PASS: Base line starts at correct index")
+    print("✅ PASS: Base line starts at correct index")
 
     # Check Spans
     span_a, span_b = calculate_ichimoku_spans(high, low, conversion_line, base_line, lagging_span2_length, displacement)
@@ -61,7 +61,7 @@ def test_ichimoku_correctness():
 
     assert first_valid_span_a == expected_span_a_idx, \
         f"Expected valid Span A data from index {expected_span_a_idx}, but got {first_valid_span_a}"
-    print(f"✅ PASS: Span A starts at correct index")
+    print("✅ PASS: Span A starts at correct index")
 
     # Span B depends on Lagging Span 2 (52). Valid from index 51.
     # Displaced by 26. Valid from 51 + 26 = 77.
@@ -77,7 +77,7 @@ def test_ichimoku_correctness():
 
     assert first_valid_span_b == expected_span_b_idx, \
         f"Expected valid Span B data from index {expected_span_b_idx}, but got {first_valid_span_b}"
-    print(f"✅ PASS: Span B starts at correct index")
+    print("✅ PASS: Span B starts at correct index")
 
 if __name__ == "__main__":
     test_ichimoku_correctness()

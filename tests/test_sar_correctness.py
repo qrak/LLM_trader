@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 from src.indicators.trend.trend_indicators import parabolic_sar_numba
 
 def test_parabolic_sar_lookahead_bullish():

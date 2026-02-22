@@ -2,24 +2,21 @@
 Crypto Trading Bot - Entry Point
 Automated trading with AI-powered decisions.
 """
-import warnings
-
-warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
-
-# pylint: disable=wrong-import-position
+# --- Standard Library ---
 import asyncio
 import atexit
 import os
 import sys
 import time
+import warnings
 from pathlib import Path
 from typing import Optional
 
-import torch  # pylint: disable=unused-import  # needed to initialize PyTorch before sentence-transformers
+# --- Third-party ---
 import aiohttp
+import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
 
+# --- Local ---
 from src.config.loader import config
 from src.app import CryptoTradingBot
 from src.logger.logger import Logger
@@ -42,7 +39,6 @@ from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.utils.format_utils import FormatUtils
-
 from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
 from src.factories import ProviderFactory
 from src.managers.persistence_manager import PersistenceManager
@@ -88,7 +84,11 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.prompts.context_builder import ContextBuilder as AnalyzerContextBuilder
 from src.analyzer.pattern_engine import ChartGenerator
 from src.utils.timeframe_validator import TimeframeValidator
-# pylint: enable=wrong-import-position
+
+# Suppress known deprecation warnings from third-party libraries at runtime
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -180,7 +180,7 @@ class CompositionRoot:
 
         end_time = time.perf_counter()
         init_duration = end_time - start_time
-        self.logger.info(f"All dependencies initialized successfully in {init_duration:.2f} seconds")
+        self.logger.info("All dependencies initialized successfully in %.2f seconds", init_duration)
 
         # Combine everything for the bot and dashboard
         deps = {
@@ -397,7 +397,7 @@ class CompositionRoot:
         try:
             pattern_analyzer.warmup()
         except Exception as warmup_error:
-            self.logger.warning(f"Pattern analyzer warm-up could not run: {warmup_error}")
+            self.logger.warning("Pattern analyzer warm-up could not run: %s", warmup_error)
 
         ctx_builder = AnalyzerContextBuilder(
             self.config.TIMEFRAME, self.logger, utils['format_utils'],

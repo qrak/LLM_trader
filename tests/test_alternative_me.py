@@ -1,7 +1,5 @@
-import asyncio
 import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
-import aiohttp
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.logger.logger import Logger
 
@@ -48,13 +46,13 @@ class TestAlternativeMeAPI(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(self.api.session, mock_session_instance)
 
             # Call get_fear_greed_index
-            result = await self.api.get_fear_greed_index(force_refresh=True)
+            await self.api.get_fear_greed_index(force_refresh=True)
 
             # Verify session used
             mock_session_instance.get.assert_called_once()
 
             # Call again
-            result2 = await self.api.get_fear_greed_index(force_refresh=True)
+            await self.api.get_fear_greed_index(force_refresh=True)
 
             # Verify session reused (get called twice, constructor still once)
             self.assertEqual(mock_session_instance.get.call_count, 2)

@@ -1,11 +1,9 @@
 import unittest
 import numpy as np
-from datetime import datetime
 from src.utils.data_utils import get_last_valid_value, get_last_n_valid, safe_array_to_scalar
-from src.trading.statistics_calculator import StatisticsCalculator, TradingStatistics
+from src.trading.statistics_calculator import StatisticsCalculator
 from src.analyzer.market_metrics_calculator import MarketMetricsCalculator
 from src.notifiers.base_notifier import BaseNotifier
-from src.trading.brain import TradingBrainService
 from collections import Counter
 
 from unittest.mock import MagicMock
@@ -94,7 +92,8 @@ class TestRefactoring(unittest.TestCase):
             {"metadata": {"type": "A"}},
         ]
         
-        key_builder = lambda m: m["type"]
+        def key_builder(m):
+            return m["type"]
         counter = Counter(key_builder(exp["metadata"]) for exp in experiences)
         
         self.assertEqual(counter["A"], 2)

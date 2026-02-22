@@ -1,8 +1,6 @@
 
 import numpy as np
-import time
 from numba import njit
-import sys
 
 @njit
 def simple_sma(close, length):
@@ -39,7 +37,7 @@ def check_pipeline():
     print("\n1b. None Handling Check")
     try:
         raw_none = [[160000000000, 100, 110, 90, 105, None]] # Vol is None
-        arr_none_safe = np.array(raw_none, dtype=np.float64)
+        np.array(raw_none, dtype=np.float64)
     except Exception as e:
         print(f"Error casting None to float64: {e}")
         print(">> WARNING: DataFetcher needs to handle None -> NaN conversion explicitly.")

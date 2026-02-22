@@ -7,9 +7,8 @@ import sys
 import os
 
 # Add src to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from src.utils.timeframe_validator import TimeframeValidator
+base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, base_dir)
 
 @dataclass
 class MockContext:

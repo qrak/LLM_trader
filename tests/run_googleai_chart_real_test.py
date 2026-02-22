@@ -32,22 +32,21 @@ if sys.platform == 'win32':
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import asyncio
-import numpy as np
-import io
+import asyncio  # noqa: E402
+import numpy as np  # noqa: E402
+import io  # noqa: E402
 
-from src.logger.logger import Logger
-from src.config.loader import config
-from src.analyzer.prompts.prompt_builder import PromptBuilder
-from src.analyzer.analysis_context import AnalysisContext
-from src.analyzer.data_fetcher import DataFetcher
-from src.utils.format_utils import FormatUtils
-from src.managers.model_manager import ModelManager
-from src.parsing.unified_parser import UnifiedParser
-from src.analyzer.technical_calculator import TechnicalCalculator
-from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
-from src.analyzer.pattern_engine.chart_generator import ChartGenerator
-from src.platforms.exchange_manager import ExchangeManager
+from src.logger.logger import Logger  # noqa: E402
+from src.config.loader import config  # noqa: E402
+from src.analyzer.analysis_context import AnalysisContext  # noqa: E402
+from src.analyzer.data_fetcher import DataFetcher  # noqa: E402
+from src.utils.format_utils import FormatUtils  # noqa: E402
+from src.managers.model_manager import ModelManager  # noqa: E402
+from src.parsing.unified_parser import UnifiedParser  # noqa: E402
+from src.analyzer.technical_calculator import TechnicalCalculator  # noqa: E402
+from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory  # noqa: E402
+from src.analyzer.pattern_engine.chart_generator import ChartGenerator  # noqa: E402
+from src.platforms.exchange_manager import ExchangeManager  # noqa: E402
 
 
 def create_chart_analysis_prompt(pair: str, timeframe: str, current_price: float) -> str:
@@ -109,15 +108,15 @@ async def main():
     logger = Logger("googleai_chart_real_test", logger_debug=True)
     
     print(f"\n{'='*60}")
-    print(f"GOOGLE AI CHART TEST - REAL CCXT DATA, REAL API CALLS")
+    print("GOOGLE AI CHART TEST - REAL CCXT DATA, REAL API CALLS")
     print(f"{'='*60}")
     print(f"Pair: {pair}")
     print(f"Timeframe: {timeframe}")
-    print(f"Model: gemini-3-flash-preview")
+    print("Model: gemini-3-flash-preview")
     print(f"Candle limit: {args.limit} (chart displays {config.AI_CHART_CANDLE_LIMIT})")
     print(f"Chart save path: {config.DEBUG_CHART_SAVE_PATH}")
     print(f"{'='*60}")
-    print(f"\n⚠️  WARNING: This test makes REAL API calls to Google AI!")
+    print("\n⚠️  WARNING: This test makes REAL API calls to Google AI!")
     print(f"{'='*60}\n")
 
     # Initialize core utilities
@@ -170,7 +169,7 @@ async def main():
     context.market_overview = {'coin_data': {pair.split('/')[0]: {'price': context.current_price}}}
 
     # Calculate technical indicators for chart visualization
-    print(f"\nCalculating technical indicators...")
+    print("\nCalculating technical indicators...")
     indicators = technical_calculator.get_indicators(ohlcv)
     print(f"Indicators calculated: {len(indicators)} total")
     
@@ -195,7 +194,7 @@ async def main():
     print("-------------------------------------------\n")
 
     # Generate chart image with real data and indicators
-    print(f"Generating chart image with indicators...")
+    print("Generating chart image with indicators...")
     chart_generator = ChartGenerator(
         logger=logger, 
         config=config, 
@@ -263,7 +262,7 @@ async def main():
         chart_bytes = chart_buffer.getvalue()
         
         # TEST 1: Code Execution OFF
-        print(f"\n[TEST 1] Code Execution: OFF")
+        print("\n[TEST 1] Code Execution: OFF")
         print("-" * 50)
         config_off = {**base_config, "google_code_execution": False}
         
@@ -289,7 +288,7 @@ async def main():
                 print(f"  Prompt tokens:     {results['off']['prompt_tokens']:,}")
                 print(f"  Completion tokens: {results['off']['completion_tokens']:,}")
                 print(f"  Total tokens:      {results['off']['total_tokens']:,}")
-                print(f"\n--- RESPONSE (Code Execution OFF) ---")
+                print("\n--- RESPONSE (Code Execution OFF) ---")
                 print(content_off[:1500] + "..." if len(content_off) > 1500 else content_off)
             else:
                 print(f"  ERROR: {response_off.error if response_off else 'No response'}")
@@ -303,7 +302,7 @@ async def main():
         await asyncio.sleep(5)
         
         # TEST 2: Code Execution ON
-        print(f"\n[TEST 2] Code Execution: ON (Agentic Vision)")
+        print("\n[TEST 2] Code Execution: ON (Agentic Vision)")
         print("-" * 50)
         config_on = {**base_config, "google_code_execution": True}
         
@@ -329,7 +328,7 @@ async def main():
                 print(f"  Prompt tokens:     {results['on']['prompt_tokens']:,}")
                 print(f"  Completion tokens: {results['on']['completion_tokens']:,}")
                 print(f"  Total tokens:      {results['on']['total_tokens']:,}")
-                print(f"\n--- RESPONSE (Code Execution ON) ---")
+                print("\n--- RESPONSE (Code Execution ON) ---")
                 print(content_on[:1500] + "..." if len(content_on) > 1500 else content_on)
             else:
                 print(f"  ERROR: {response_on.error if response_on else 'No response'}")
@@ -363,7 +362,7 @@ async def main():
             
             print(f"\n{'Estimated cost (USD)':<25} ${cost_off:>11.6f} ${cost_on:>11.6f} ${cost_diff:>+14.6f}")
             
-            print(f"\n  Response length:")
+            print("\n  Response length:")
             print(f"    - OFF: {len(results['off']['content']):,} chars")
             print(f"    - ON:  {len(results['on']['content']):,} chars")
             

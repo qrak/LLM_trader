@@ -90,51 +90,11 @@ class AnalysisResultProcessor:
                 "error": "Invalid response format",
                 "raw_response": cleaned_response
             }
-
-        # Recalculate R/R from the AI's own entry/SL/TP to prevent hallucinated ratios
-        if "analysis" in parsed_response:
-            self._recalculate_risk_reward(parsed_response["analysis"])
-
         # Log the analysis result
         self._log_analysis_result(parsed_response)
 
         # Format the final response
         return self._format_analysis_response(parsed_response, cleaned_response)
-
-
-
-    def _recalculate_risk_reward(self, analysis: Dict[str, Any]) -> None:
-        """Recalculate R/R from the AI's own entry/SL/TP to prevent hallucinated ratios.
-
-        For UPDATE signals, uses current_price as the reference point.
-        For new entries (BUY/SELL), uses entry_price.
-        """
-        entry = analysis.get("entry_price", 0)
-        sl = analysis.get("stop_loss", 0)
-        tp = analysis.get("take_profit", 0)
-        signal = analysis.get("signal", "")
-
-        if not all([entry, sl, tp]) or entry == 0:
-            return
-
-        if signal == "UPDATE" and self.context is not None:
-            ref_price = self.context.current_price
-        else:
-            ref_price = entry
-
-        risk = abs(ref_price - sl)
-        reward = abs(tp - ref_price)
-
-        if risk > 0:
-            corrected_rr = round(reward / risk, 2)
-            original_rr = analysis.get("risk_reward_ratio", 0)
-            if abs(corrected_rr - original_rr) > 0.1:
-                self.logger.warning(
-                    "Corrected AI R/R: %.2f -> %.2f (entry=%.2f, sl=%.2f, tp=%.2f, ref=%.2f)",
-                    original_rr, corrected_rr, entry, sl, tp, ref_price
-                )
-            analysis["risk_reward_ratio"] = corrected_rr
-
 
     def _log_analysis_result(self, parsed_response: Dict[str, Any]) -> None:
         """Log analysis result information"""
