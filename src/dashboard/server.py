@@ -1,20 +1,23 @@
+"""FastAPI server for the Trading Dashboard."""
 import asyncio
+import os
+import time as time_module
 from contextlib import asynccontextmanager
+from collections import defaultdict
 
+import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.gzip import GZipMiddleware
-from collections import defaultdict
-import time as time_module
-import os
-import uvicorn
 
 from .routers import brain, monitor, visuals, performance, ws_router
 from .dashboard_state import dashboard_state
 
 class DashboardServer:
+    """Main application server combining all API routers."""
+    # pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
     def __init__(self,
                  brain_service,
                  vector_memory,
@@ -43,6 +46,7 @@ class DashboardServer:
 
     def _create_app(self) -> FastAPI:
         """Create and configure the FastAPI application."""
+        # pylint: disable=too-many-statements
 
         @asynccontextmanager
         async def lifespan(_app: FastAPI):
@@ -75,15 +79,18 @@ class DashboardServer:
             # Cloudflare support: *.cloudflare.com added
             csp = (
                 "default-src 'self'; "
-                "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com https://*.cloudflare.com https://ajax.cloudflare.com https://static.cloudflareinsights.com; "
+                "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com "
+                "https://*.cloudflare.com https://ajax.cloudflare.com "
+                "https://static.cloudflareinsights.com; "
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
                 "img-src 'self' data: https:; "
-                "connect-src 'self' https://*.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net;"
+                "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
+                "https://cdn.jsdelivr.net;"
             )
             response.headers["Content-Security-Policy"] = csp
             path = request.url.path
-            
+
             # Restrict caching entirely for non-GET/HEAD methods (e.g. POST, PUT, DELETE)
             if request.method not in ("GET", "HEAD"):
                 response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
@@ -103,13 +110,13 @@ class DashboardServer:
 
         # Simple Rate Limiting (in-memory, per-IP)
         request_counts = defaultdict(list)
-        RATE_LIMIT = 300  # requests per minute
-        RATE_WINDOW = 60  # seconds
-        MAX_UNIQUE_IPS = 10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
+        rate_limit = 300  # requests per minute
+        rate_window = 60  # seconds
+        max_unique_ips = 10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
 
         # Security: State for rate limit cleanup
         state = {"last_cleanup_time": 0.0}
-        CLEANUP_INTERVAL = 10.0  # Seconds between full scans
+        cleanup_interval = 10.0  # Seconds between full scans
 
         @app.middleware("http")
         async def rate_limit_middleware(request, call_next):
@@ -120,13 +127,13 @@ class DashboardServer:
             current_time = time_module.monotonic()
 
             # Security: Prevent memory exhaustion from too many IPs
-            if len(request_counts) > MAX_UNIQUE_IPS:
+            if len(request_counts) > max_unique_ips:
                 # Optimized cleanup: Only scan at most once every CLEANUP_INTERVAL
-                if current_time - state["last_cleanup_time"] > CLEANUP_INTERVAL:
+                if current_time - state["last_cleanup_time"] > cleanup_interval:
                     # Remove inactive IPs
                     keys_to_remove = [
                         ip for ip, timestamps in request_counts.items()
-                        if not timestamps or current_time - timestamps[-1] > RATE_WINDOW
+                        if not timestamps or current_time - timestamps[-1] > rate_window
                     ]
                     for key in keys_to_remove:
                         del request_counts[key]
@@ -134,7 +141,7 @@ class DashboardServer:
 
                 # If still too large (active attack), drop the oldest entry (FIFO)
                 # This degrades gracefully rather than clearing everything (DoS risk)
-                while len(request_counts) > MAX_UNIQUE_IPS:
+                while len(request_counts) > max_unique_ips:
                     try:
                         # defaultdict preserves insertion order in Python 3.7+
                         oldest_ip = next(iter(request_counts))
@@ -148,10 +155,10 @@ class DashboardServer:
             if client_ip in request_counts:
                 request_counts[client_ip] = [
                     t for t in request_counts[client_ip]
-                    if current_time - t < RATE_WINDOW
+                    if current_time - t < rate_window
                 ]
 
-            if len(request_counts[client_ip]) >= RATE_LIMIT:
+            if len(request_counts[client_ip]) >= rate_limit:
                 return JSONResponse(
                     status_code=429,
                     content={"error": "Rate limit exceeded. Try again later."}
@@ -161,10 +168,10 @@ class DashboardServer:
 
         # CORS Configuration
         # Defaults to False for security. Can be enabled in config.ini.
-        enable_cors = getattr(self.config, 'DASHBOARD_ENABLE_CORS', False)
+        enable_cors = self.config.DASHBOARD_ENABLE_CORS
 
         if enable_cors:
-            allowed_origins = getattr(self.config, 'DASHBOARD_CORS_ORIGINS', [])
+            allowed_origins = self.config.DASHBOARD_CORS_ORIGINS
 
             # If enabled but empty, log a warning and default to strict (empty list)
             if not allowed_origins:
@@ -190,11 +197,41 @@ class DashboardServer:
         # Expose for testing/monitoring
         app.state.request_counts = request_counts
 
-        app.include_router(brain.router)
-        app.include_router(monitor.router)
-        app.include_router(visuals.router)
-        app.include_router(performance.router)
-        app.include_router(ws_router.router)
+        brain_router = brain.BrainRouter(
+            config=self.config,
+            logger=self.logger,
+            dashboard_state=self.dashboard_state,
+            vector_memory=self.vector_memory,
+            unified_parser=self.unified_parser,
+            persistence=self.persistence,
+            exchange_manager=self.exchange_manager
+        )
+        monitor_router = monitor.MonitorRouter(
+            config=self.config,
+            logger=self.logger,
+            dashboard_state=self.dashboard_state,
+            analysis_engine=self.analysis_engine,
+            rag_engine=getattr(self.brain_service, "rag_engine", None) if self.brain_service else None
+        )
+        performance_router = performance.PerformanceRouter(
+            config=self.config,
+            logger=self.logger,
+            dashboard_state=self.dashboard_state
+        )
+        visuals_router = visuals.VisualsRouter(
+            analysis_engine=self.analysis_engine
+        )
+        websocket_router = ws_router.WebSocketRouter(
+            manager_instance=ws_router.manager,
+            config=self.config,
+            dashboard_state=self.dashboard_state
+        )
+
+        app.include_router(brain_router.router)
+        app.include_router(monitor_router.router)
+        app.include_router(visuals_router.router)
+        app.include_router(performance_router.router)
+        app.include_router(websocket_router.router)
 
         # Mount Static Files (Frontend)
         # We assume the static folder is in the same directory as this file
@@ -217,7 +254,14 @@ class DashboardServer:
             ws="wsproto",
             proxy_headers=True,
             # Cloudflare IPv4 & IPv6 ranges (https://www.cloudflare.com/ips/)
-            forwarded_allow_ips="173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32",
+            forwarded_allow_ips=(
+                "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
+                "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
+                "197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,"
+                "104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,"
+                "2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,"
+                "2a06:98c0::/29,2c0f:f248::/32"
+            ),
         )
         self._server = uvicorn.Server(config)
 

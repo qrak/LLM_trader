@@ -10,24 +10,24 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 def test_managers_imports():
     """Verify that new manager classes can be imported from their new locations."""
     try:
-        from src.managers.model_manager import ModelManager
-        from src.managers.persistence_manager import PersistenceManager
-        from src.managers.risk_manager import RiskManager
+        from src.managers.model_manager import ModelManager  # noqa: F401
+        from src.managers.persistence_manager import PersistenceManager  # noqa: F401
+        from src.managers.risk_manager import RiskManager  # noqa: F401
     except ImportError as e:
         pytest.fail(f"Failed to import managers: {e}")
 
 def test_contracts_imports():
     """Verify that new contracts can be imported."""
     try:
-        from src.contracts.model_contract import ModelManagerProtocol
-        from src.contracts.risk_contract import RiskManagerProtocol
+        from src.contracts.model_contract import ModelManagerProtocol  # noqa: F401
+        from src.contracts.risk_contract import RiskManagerProtocol  # noqa: F401
     except ImportError as e:
         pytest.fail(f"Failed to import contracts: {e}")
 
 def test_dataclasses_imports():
     """Verify that new dataclasses can be imported."""
     try:
-        from src.trading.dataclasses import VectorSearchResult, RiskAssessment
+        from src.trading.dataclasses import VectorSearchResult, RiskAssessment  # noqa: F401
     except ImportError as e:
         pytest.fail(f"Failed to import new dataclasses: {e}")
 

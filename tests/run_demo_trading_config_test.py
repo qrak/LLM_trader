@@ -18,7 +18,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from src.config.loader import config
+from src.config.loader import config  # noqa: E402
 
 
 @pytest.fixture

@@ -6,7 +6,7 @@ All SDK calls are mocked for isolation; the retry decorator is bypassed.
 import base64
 import io
 from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -618,7 +618,7 @@ class TestLMStudioClient:
         with patch('src.platforms.ai_providers.lmstudio.lms.LlmPredictionConfig') as mock_config:
             mock_config.return_value = MagicMock()
             
-            result = lmstudio_client._build_prediction_config(sample_model_config)
+            lmstudio_client._build_prediction_config(sample_model_config)
             
             mock_config.assert_called()
             call_kwargs = mock_config.call_args.kwargs

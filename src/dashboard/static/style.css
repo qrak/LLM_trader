@@ -35,7 +35,7 @@ html, body {
     overflow: hidden;
     background-color: var(--bg-dark-0);
     color: var(--text-main);
-    font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    font-family: var(--font-body);
     font-size: 14px;
 }
 
@@ -103,7 +103,7 @@ html, body {
     flex: 1;
 }
 
-.nav-item {
+.tab-btn {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -116,32 +116,32 @@ html, body {
     cursor: pointer;
 }
 
-.nav-item .icon {
+.tab-btn .icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
     transition: transform 0.2s ease;
 }
 
-.nav-item:hover {
+.tab-btn:hover {
     background-color: var(--bg-dark-2);
     color: var(--text-main);
 }
 
-.nav-item:hover .icon {
+.tab-btn:hover .icon {
     transform: translateX(2px);
 }
 
-.nav-item.active {
+.tab-btn.active {
     background: linear-gradient(90deg, rgba(0, 240, 255, 0.1) 0%, transparent 100%);
     color: var(--accent-primary);
     border-left: 3px solid var(--accent-primary);
     box-shadow: inset 4px 0 12px -4px var(--glow-primary);
 }
 
-.nav-item.active .icon {
+.tab-btn.active .icon {
     filter: drop-shadow(0 0 4px var(--glow-primary));
 }
 
@@ -160,8 +160,8 @@ html, body {
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 0.5rem;
+    height: 0.5rem;
     border-radius: 50%;
     background-color: var(--text-muted);
     box-shadow: none;
@@ -292,7 +292,7 @@ html, body {
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 0.125rem;
     background: linear-gradient(90deg, var(--accent-primary), transparent 80%);
     opacity: 0.7;
 }
@@ -351,7 +351,7 @@ html, body {
     top: 0;
     left: 0;
     right: 0;
-    height: 1px;
+    height: 0.0625rem;
     background: linear-gradient(90deg, transparent 0%, var(--accent-primary) 50%, transparent 100%);
     opacity: 0.2;
     border-radius: 12px 12px 0 0;
@@ -392,8 +392,8 @@ html, body {
 }
 
 .panel-btn {
-    width: 28px;
-    height: 28px;
+    width: 1.75rem;
+    height: 1.75rem;
     padding: 0;
     display: flex;
     align-items: center;
@@ -470,8 +470,8 @@ html, body {
     flex-shrink: 0;
 }
 .lightbox-toolbar button {
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -494,13 +494,13 @@ html, body {
     color: #000;
 }
 .lightbox-toolbar .separator {
-    width: 1px;
-    height: 24px;
+    width: 0.0625rem;
+    height: 1.5rem;
     background: var(--border-subtle);
     margin: 0 8px;
 }
 .lightbox-toolbar .zoom-display {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     color: var(--text-muted);
     min-width: 50px;
@@ -510,8 +510,8 @@ html, body {
     position: absolute;
     top: 12px;
     right: 20px;
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -565,7 +565,7 @@ html, body {
     color: #000;
     padding: 4px 8px;
     border-radius: 4px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
@@ -578,8 +578,8 @@ html, body {
     gap: 4px;
 }
 .toolbar-btn {
-    width: 28px;
-    height: 28px;
+    width: 1.75rem;
+    height: 1.75rem;
     padding: 0;
     display: flex;
     align-items: center;
@@ -633,8 +633,8 @@ button:hover {
 }
 
 .icon-btn-xs {
-    width: 20px;
-    height: 20px;
+    width: 1.25rem;
+    height: 1.25rem;
     padding: 0;
     font-size: 12px;
     background: rgba(255, 255, 255, 0.05);
@@ -659,8 +659,8 @@ button:hover {
 
 .dot {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 0.5rem;
+    height: 0.5rem;
     border-radius: 50%;
     margin-right: 4px;
 }
@@ -695,7 +695,7 @@ button:hover {
     font-size: 28px;
     font-weight: 700;
     color: var(--accent-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .stat-card .stat-breakdown {
@@ -714,7 +714,7 @@ button:hover {
 .metric-bar-container {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
-    height: 8px;
+    height: 0.5rem;
     width: 100%;
     margin-top: 4px;
     overflow: hidden;
@@ -752,7 +752,7 @@ button:hover {
     color: var(--text-muted);
 }
 .stat-row .val {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-weight: 600;
 }
 
@@ -895,8 +895,8 @@ button:hover {
 }
 
 .spinner {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent-primary);
     border-radius: 50%;
@@ -906,9 +906,9 @@ button:hover {
 }
 
 .spinner-sm {
-    width: 16px;
-    height: 16px;
-    border-width: 2px;
+    width: 1.0rem;
+    height: 1.0rem;
+    border-width: 0.125rem;
     margin-bottom: 0;
     vertical-align: text-bottom;
 }
@@ -996,8 +996,8 @@ button:hover {
 }
 
 .fullscreen-close {
-    width: 36px;
-    height: 36px;
+    width: 2.25rem;
+    height: 2.25rem;
     font-size: 20px;
     background: transparent;
     border: 1px solid var(--border-subtle);
@@ -1086,13 +1086,13 @@ button:hover {
 .position-stat .value {
     font-size: 1.2em;
     font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .position-pnl {
     font-size: 1.8em;
     font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
 }
 
 .position-pnl.profit { color: var(--accent-secondary); }
@@ -1122,7 +1122,7 @@ button:hover {
 
 .gauge-track {
     position: relative;
-    height: 8px;
+    height: 0.5rem;
     background: var(--bg-dark-3);
     border-radius: 4px;
     margin-bottom: 8px;
@@ -1130,8 +1130,8 @@ button:hover {
 
 .gauge-sl, .gauge-entry, .gauge-tp, .gauge-current {
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
     border-radius: 50%;
     top: -2px;
     transform: translateX(-50%);
@@ -1240,7 +1240,7 @@ button:hover {
     background: var(--bg-dark-3);
     padding: 2px 6px;
     border-radius: 4px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
 }
 .discord-content pre {
@@ -1286,7 +1286,7 @@ button:hover {
 .stat-card-lg .stat-value-lg {
     font-size: 32px;
     font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--accent-primary);
 }
 .stat-card-lg .stat-annotation {
@@ -1375,8 +1375,8 @@ button:hover {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 0.5rem;
+    height: 0.5rem;
 }
 
 ::-webkit-scrollbar-track { background: var(--bg-dark-0); }
@@ -1460,8 +1460,8 @@ button:hover {
     #mobile-header #mobile-menu-toggle {
         display: flex;
         font-size: 20px;
-        width: 36px;
-        height: 36px;
+        width: 2.25rem;
+        height: 2.25rem;
         background: var(--bg-dark-3);
         border: 1px solid var(--border-subtle);
     }
@@ -1533,7 +1533,7 @@ button:hover {
 
 .contact-item .icon {
     font-size: 14px;
-    width: 16px; 
+    width: 1.0rem; 
     text-align: center;
 }
 
@@ -1565,7 +1565,7 @@ button:hover {
 }
 
 button:focus-visible,
-.nav-item:focus-visible,
+.tab-btn:focus-visible,
 .toolbar-btn:focus-visible,
 .panel-btn:focus-visible {
     outline: 2px solid var(--accent-primary);
@@ -1610,3 +1610,4 @@ a:focus-visible {
         scroll-behavior: auto !important;
     }
 }
+/* <label> */

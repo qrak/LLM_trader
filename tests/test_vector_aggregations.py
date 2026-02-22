@@ -10,7 +10,6 @@ Usage:
 if __name__ == "__main__":
     import chromadb
     from sentence_transformers import SentenceTransformer
-    import sys
 
     print("=" * 80)
     print("VECTOR AGGREGATION METHODS TEST")
@@ -24,7 +23,7 @@ if __name__ == "__main__":
         name='test_aggregations',
         metadata={"hnsw:space": "cosine"}
     )
-    print(f"✓ ChromaDB initialized")
+    print("✓ ChromaDB initialized")
 
     # Store test trades with rich metadata
     print("\n[2/5] Storing trades with enriched metadata...")

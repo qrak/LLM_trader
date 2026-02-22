@@ -10,12 +10,12 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Force UTF-8 output
-import io
+import io  # noqa: E402
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
-from unittest.mock import MagicMock
-from src.rag.context_builder import ContextBuilder
-import json
+from unittest.mock import MagicMock  # noqa: E402
+from src.rag.context_builder import ContextBuilder  # noqa: E402
+import json  # noqa: E402
 
 def main():
     print("=" * 80)
@@ -56,13 +56,14 @@ def main():
     
     processed_count = 0
     for article in articles:
-        if processed_count >= 5: break
+        if processed_count >= 5:
+            break
         
         # Test the new simple processing method
         # We give it a generous token limit to see the lead paragraph
         processed_text = builder._process_article_simple(article, max_tokens=100)
-        
-        if not processed_text: continue
+        if not processed_text:
+            continue
         
         print(f"\n{processed_text}")
         print("-" * 40)

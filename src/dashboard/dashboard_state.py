@@ -14,6 +14,7 @@ from src.dashboard.routers.ws_router import broadcast
 @dataclass
 class DashboardState:
     """Shared state between bot and dashboard."""
+    # pylint: disable=too-many-instance-attributes
     next_check_utc: Optional[datetime] = None
     bot_status: str = "running"
     last_analysis_time: Optional[datetime] = None
@@ -82,7 +83,9 @@ class DashboardState:
         if not self.next_check_utc:
             return {"next_check_utc": None, "seconds_remaining": None}
         now = datetime.now(timezone.utc)
-        remaining = (self.next_check_utc.replace(tzinfo=timezone.utc) if self.next_check_utc.tzinfo is None else self.next_check_utc - now).total_seconds()
+        remaining = (self.next_check_utc.replace(tzinfo=timezone.utc) 
+                     if self.next_check_utc.tzinfo is None 
+                     else self.next_check_utc - now).total_seconds()
         return {
             "next_check_utc": self.next_check_utc.isoformat(),
             "seconds_remaining": max(0, int(remaining))
@@ -99,12 +102,14 @@ class DashboardState:
         }
 
     def get_cached(self, key: str, ttl_seconds: float = 30.0) -> Optional[Any]:
+        """Retrieve a cached value if it is within TTL."""
         cached_time = self.cache_timestamps.get(key, 0)
         if time.time() - cached_time > ttl_seconds:
             return None
         return getattr(self, f"cached_{key}", None)
 
     def set_cached(self, key: str, value: Any) -> None:
+        """Store a value in cache with current timestamp."""
         setattr(self, f"cached_{key}", value)
         self.cache_timestamps[key] = time.time()
 

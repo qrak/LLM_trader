@@ -32,7 +32,7 @@ def verify_dm():
 
     dm_pos, dm_neg = calculate_directional_movement(high, low)
 
-    print(f"\nTest Case 1: Negative High Diff > More Negative Low Diff")
+    print("\nTest Case 1: Negative High Diff > More Negative Low Diff")
     print(f"High: {high}")
     print(f"Low: {low}")
     print(f"High Diff: {high[1] - high[0]}")
@@ -56,7 +56,7 @@ def verify_dm():
 
     dm_pos2, dm_neg2 = calculate_directional_movement(high2, low2)
 
-    print(f"\nTest Case 2: Standard Up Move")
+    print("\nTest Case 2: Standard Up Move")
     print(f"Calculated +DM: {dm_pos2[1]}")
 
     if dm_pos2[1] == 5.0:

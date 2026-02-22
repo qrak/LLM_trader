@@ -1,8 +1,6 @@
 import unittest
 import sys
-import importlib
 from unittest.mock import MagicMock, patch
-import json
 
 class TestUnifiedParser(unittest.TestCase):
     def setUp(self):

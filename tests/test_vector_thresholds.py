@@ -2,7 +2,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import sys
-import numpy # Ensure numpy is loaded before patching sys.modules so it is not unloaded/reloaded
 
 # Define a simple mock for VectorSearchResult if needed
 class MockVectorSearchResult:

@@ -1,9 +1,8 @@
 import asyncio
 import ccxt.async_support as ccxt
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 import sys
-import os
 
 # Hardcoded list from config.ini for robustness
 SUPPORTED_EXCHANGES = ['binance', 'kucoin', 'gateio', 'mexc', 'hyperliquid']
@@ -46,7 +45,7 @@ async def check_exchange_time(exchange_id):
             end_time = time.time()
             
             # RTT (Round Trip Time)
-            rtt_ms = (end_time - start_time) * 1000
+            (end_time - start_time) * 1000
             
             # Estimate "Now" at the server (midpoint of RTT)
             local_time_ms = ((start_time + end_time) / 2) * 1000
@@ -98,11 +97,11 @@ async def verify_sleep_accuracy():
             break
         remaining = total_target - elapsed
         to_sleep = min(0.1, remaining)
-        if to_sleep <= 0: break
+        if to_sleep <= 0: break  # noqa: E701
         await asyncio.sleep(to_sleep)
 
     real_duration_new = time.monotonic() - start_new
-    print(f"\nMonotonic Sleep Logic Results:")
+    print("\nMonotonic Sleep Logic Results:")
     print(f"  - Target duration: {total_target:.4f}s")
     print(f"  - Actual duration: {real_duration_new:.4f}s")
     print(f"  - Error: {abs(real_duration_new - total_target):.4f}s")
@@ -114,7 +113,7 @@ async def verify_sleep_accuracy():
 
 async def main():
     print("="*80)
-    print(f"TIME SYNC & SAFETY CHECK")
+    print("TIME SYNC & SAFETY CHECK")
     print(f"System Time: {datetime.now()}")
     print("="*80)
     

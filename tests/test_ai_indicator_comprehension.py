@@ -16,7 +16,6 @@ WARNING: Uses real Google AI API calls.
 import sys
 import os
 import argparse
-import re
 from pathlib import Path
 
 # Fix Windows console encoding
@@ -33,24 +32,24 @@ if sys.platform == 'win32':
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import asyncio
-import numpy as np
-import io
-from dataclasses import dataclass
-from typing import Optional
+import asyncio  # noqa: E402
+import numpy as np  # noqa: E402
+import io  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+from typing import Optional  # noqa: E402
 
-from src.logger.logger import Logger
-from src.config.loader import config
-from src.analyzer.data_fetcher import DataFetcher
-from src.utils.format_utils import FormatUtils
-from src.managers.model_manager import ModelManager
-from src.parsing.unified_parser import UnifiedParser
-from src.analyzer.technical_calculator import TechnicalCalculator
-from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory
-from src.analyzer.pattern_analyzer import PatternAnalyzer
-from src.analyzer.pattern_engine.chart_generator import ChartGenerator
-from src.platforms.exchange_manager import ExchangeManager
-from src.utils.format_utils import timestamps_from_ms_array
+from src.logger.logger import Logger  # noqa: E402
+from src.config.loader import config  # noqa: E402
+from src.analyzer.data_fetcher import DataFetcher  # noqa: E402
+from src.utils.format_utils import FormatUtils  # noqa: E402
+from src.managers.model_manager import ModelManager  # noqa: E402
+from src.parsing.unified_parser import UnifiedParser  # noqa: E402
+from src.analyzer.technical_calculator import TechnicalCalculator  # noqa: E402
+from src.factories.technical_indicators_factory import TechnicalIndicatorsFactory  # noqa: E402
+from src.analyzer.pattern_analyzer import PatternAnalyzer  # noqa: E402
+from src.analyzer.pattern_engine.chart_generator import ChartGenerator  # noqa: E402
+from src.platforms.exchange_manager import ExchangeManager  # noqa: E402
+from src.utils.format_utils import timestamps_from_ms_array  # noqa: E402
 
 
 @dataclass
@@ -175,7 +174,7 @@ def validate_response(response: str, test_cases: list[ValidationCase]) -> tuple[
             print(f"  ❌ {tc.name}: FAIL")
             print(f"     Ground Truth: {tc.ground_truth}")
             print(f"     Expected keywords: {tc.expected_keywords}")
-            print(f"     (Keywords not found in response)")
+            print("     (Keywords not found in response)")
     
     return passed, failed
 
@@ -200,10 +199,10 @@ async def main():
     print(f"{'='*70}")
     print(f"Pair: {pair}")
     print(f"Timeframe: {timeframe}")
-    print(f"Model: gemini-3-flash-preview")
+    print("Model: gemini-3-flash-preview")
     print(f"Chart Analysis: {'Disabled' if args.no_chart else 'Enabled'}")
     print(f"{'='*70}")
-    print(f"\n⚠️  WARNING: This test makes REAL API calls to Google AI!")
+    print("\n⚠️  WARNING: This test makes REAL API calls to Google AI!")
     print(f"{'='*70}\n")
 
     # Initialize components
@@ -229,7 +228,7 @@ async def main():
     print(f"Using exchange: {exchange_name}")
 
     # Fetch real data
-    print(f"Fetching OHLCV data...")
+    print("Fetching OHLCV data...")
     data_fetcher = DataFetcher(exchange, logger)
     result = await data_fetcher.fetch_candlestick_data(pair, timeframe, 999)
     

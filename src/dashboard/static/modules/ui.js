@@ -11,7 +11,7 @@ export function initUI() {
 }
 
 function setupSidebarNavigation() {
-    const navItems = document.querySelectorAll('.nav-item');
+    const navItems = document.querySelectorAll('.tab-btn');
     const navList = document.querySelector('.sidebar-nav');
     if (navList) {
         navList.setAttribute('role', 'tablist');

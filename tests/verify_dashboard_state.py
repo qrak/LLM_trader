@@ -1,7 +1,6 @@
 import asyncio
 import sys
 from pathlib import Path
-from dataclasses import dataclass, field
 
 # Add src to path
 sys.path.append(str(Path(__file__).parent.parent))

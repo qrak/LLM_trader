@@ -7,12 +7,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import io
+import io  # noqa: E402
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
-from unittest.mock import MagicMock
-from src.rag.context_builder import ContextBuilder
-import json
+from unittest.mock import MagicMock  # noqa: E402
+from src.rag.context_builder import ContextBuilder  # noqa: E402
+import json  # noqa: E402
 
 
 def main():

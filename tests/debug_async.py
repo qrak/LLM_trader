@@ -53,7 +53,7 @@ async def test():
     try:
         await strategy._update_position_parameters(stop_loss=85.0, take_profit=125.0)
         print("Success")
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
 

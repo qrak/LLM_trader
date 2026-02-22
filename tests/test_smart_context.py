@@ -79,7 +79,7 @@ class TestSimpleContextBuilder:
             }
         ]
 
-        context = builder.build_context(items, max_tokens=500)
+        builder.build_context(items, max_tokens=500)
 
         # Verify URLs are tracked
         urls = builder.get_latest_article_urls()

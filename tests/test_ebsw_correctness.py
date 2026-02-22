@@ -1,6 +1,5 @@
 
 import numpy as np
-import pytest
 from src.indicators.volatility.volatility_indicators import ebsw_numba
 
 def test_ebsw_initialization_bug():

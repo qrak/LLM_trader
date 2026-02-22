@@ -5,7 +5,7 @@ other coroutines to run concurrently while ChromaDB + embedding calls execute.
 """
 import asyncio
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

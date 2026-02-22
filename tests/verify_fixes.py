@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import sys
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from datetime import datetime, timezone
 
 # Add project root to path
@@ -16,7 +16,7 @@ from src.trading.dataclasses import TradingMemory
 from src.trading.memory import TradeDecision # Import TradeDecision from memory.py based on recent changes or dataclasses if acceptable. Check imports.
 
 # TradeDecision is in src.trading.dataclasses based on previous context
-from src.trading.dataclasses import TradeDecision
+from src.trading.dataclasses import TradeDecision  # noqa: F811
 
 class TestFixes(unittest.TestCase):
 
@@ -58,7 +58,7 @@ class TestFixes(unittest.TestCase):
              formatter._format_volume_analysis = MagicMock(return_value="Volume: Normal")
              formatter._format_support_resistance = MagicMock(return_value="S/R: None")
 
-             result = formatter.format_technical_analysis(mock_context, "1h")
+             formatter.format_technical_analysis(mock_context, "1h")
              
         except Exception as e:
             self.fail(f"TechnicalFormatter execution failed: {e}")

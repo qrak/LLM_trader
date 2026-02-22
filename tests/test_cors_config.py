@@ -1,6 +1,5 @@
 
 import sys
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,7 +12,7 @@ real_loader = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(real_loader)
 Config = real_loader.Config
 
-from src.dashboard.server import DashboardServer
+from src.dashboard.server import DashboardServer  # noqa: E402
 
 def test_config_loader_dashboard_defaults():
     # Mock configparser to return empty config
@@ -33,7 +32,7 @@ def test_config_loader_dashboard_defaults():
                 # Check defaults
                 assert config.DASHBOARD_HOST == "0.0.0.0"
                 assert config.DASHBOARD_PORT == 8000
-                assert config.DASHBOARD_ENABLE_CORS == False
+                assert not config.DASHBOARD_ENABLE_CORS
                 assert config.DASHBOARD_CORS_ORIGINS == []
 
 def test_config_loader_dashboard_custom():
@@ -65,7 +64,7 @@ def test_config_loader_dashboard_custom():
 
                 assert config.DASHBOARD_HOST == "127.0.0.1"
                 assert config.DASHBOARD_PORT == 9000
-                assert config.DASHBOARD_ENABLE_CORS == True
+                assert config.DASHBOARD_ENABLE_CORS
                 assert config.DASHBOARD_CORS_ORIGINS == ["http://localhost:3000", "http://test.com"]
 
 def test_config_loader_cors_star():

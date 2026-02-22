@@ -1,6 +1,5 @@
 
 import sys
-import pytest
 from unittest.mock import MagicMock
 
 # Create the mock config object

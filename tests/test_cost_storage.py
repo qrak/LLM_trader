@@ -2,10 +2,9 @@
 import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import os
-import json
 import time
 import tempfile
-from src.utils.token_counter import CostStorage, ProviderCostStats
+from src.utils.token_counter import CostStorage
 
 class TestCostStorage(unittest.TestCase):
     def setUp(self):

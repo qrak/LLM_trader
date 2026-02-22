@@ -96,16 +96,27 @@ window.copyResponseContent = function() {
 };
 
 function flashCopyButton(type) {
-    const viewer = document.getElementById(`${type}-viewer`);
-    const panel = viewer?.closest('.panel');
-    const btn = panel?.querySelector('.copy-btn');
+    // Buttons have IDs like btn-copy-prompt or btn-copy-response
+    const btn = document.getElementById(`btn-copy-${type}`);
     if (btn) {
-        const originalText = btn.textContent;
-        btn.textContent = '✓ Copied!';
+        const originalHTML = btn.innerHTML;
+        const originalAria = btn.getAttribute('aria-label');
+
+        // Use checkmark icon for feedback
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="20 6 9 17 4 12"/></svg>Copied!`;
+        btn.setAttribute('aria-label', 'Copied successfully');
         btn.style.background = '#238636';
+        btn.disabled = true;
+
         setTimeout(() => {
-            btn.textContent = originalText;
+            btn.innerHTML = originalHTML;
+            if (originalAria) {
+                btn.setAttribute('aria-label', originalAria);
+            } else {
+                btn.removeAttribute('aria-label');
+            }
             btn.style.background = '';
+            btn.disabled = false;
         }, 1500);
     }
 }

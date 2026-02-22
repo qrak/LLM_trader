@@ -6,7 +6,6 @@ Tests will be skipped if the required API keys or services are not available.
 Run with: python -m pytest tests/test_ai_providers_integration.py -v -s
 Use -s flag to see print output during tests.
 """
-import asyncio
 import io
 import os
 import sys
@@ -617,7 +616,7 @@ class TestCrossProviderConsistency:
                         results["google"] = response
                         print(f"  Google AI: {response.choices[0].message.content if response.choices else 'N/A'}")
                     else:
-                        print(f"  Google AI: Skipped (rate limited or error)")
+                        print("  Google AI: Skipped (rate limited or error)")
             if not results:
                 pytest.skip("No providers returned successful responses")
             for provider, response in results.items():

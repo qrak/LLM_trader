@@ -8,7 +8,7 @@ loader_mock = MagicMock()
 loader_mock.config = config_mock
 sys.modules['src.config.loader'] = loader_mock
 
-from src.rag.category_processor import CategoryProcessor
+from src.rag.category_processor import CategoryProcessor  # noqa: E402
 
 class TestCategoryProcessorCorrectness:
     @pytest.fixture
