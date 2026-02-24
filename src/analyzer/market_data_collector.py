@@ -62,10 +62,7 @@ class MarketDataCollector:
         if limit is None:
             target_days = 30
             self.limit = TimeframeValidator.get_candle_limit_for_days(timeframe, target_days)
-            self.logger.debug(
-                f"Calculated candle limit: {self.limit} for {timeframe} timeframe "
-                f"(~{target_days} days of data)"
-            )
+            self.logger.debug("Calculated candle limit: %s for %s timeframe (~%s days of data)", self.limit, timeframe, target_days)
         else:
             self.limit = limit
 
@@ -94,7 +91,7 @@ class MarketDataCollector:
             result["article_urls"] = {}
 
         except Exception as e:
-            self.logger.exception(f"Error collecting market data: {e}")
+            self.logger.exception("Error collecting market data: %s", e)
             result["success"] = False
             result["errors"].append(str(e))
 
@@ -123,13 +120,13 @@ class MarketDataCollector:
             try:
                 context.timestamps = timestamps_from_ms_array(context.ohlcv_candles[:, 0])
             except Exception as e:
-                self.logger.warning(f"Could not extract timestamps from OHLCV data: {e}")
+                self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
                 context.timestamps = None
 
             if len(context.ohlcv_candles) < 720:
                 hours_available = len(context.ohlcv_candles)
                 days_available = hours_available / 24
-                self.logger.warning(f"Insufficient data for full 30-day analysis. Have {hours_available} hours (~{days_available:.1f} days)")
+                self.logger.warning("Insufficient data for full 30-day analysis. Have %s hours (~%.1f days)", hours_available, days_available)
 
             # Fetch long-term historical data for additional context
             await self.fetch_long_term_historical_data(context)
@@ -143,7 +140,7 @@ class MarketDataCollector:
             return True
 
         except Exception as e:
-            self.logger.exception(f"OHLCV fetch failed: {str(e)}")
+            self.logger.exception("OHLCV fetch failed: %s", str(e))
             return False
 
     async def fetch_long_term_historical_data(self, context, days: int = 365) -> bool:
@@ -159,11 +156,11 @@ class MarketDataCollector:
             )
 
             if result['error'] is not None:
-                self.logger.error(f"Error fetching long-term data: {result['error']}")
+                self.logger.error("Error fetching long-term data: %s", result['error'])
                 return False
 
             if result['data'] is None or len(result['data']) == 0:
-                self.logger.warning(f"No long-term historical data available for {self.symbol}")
+                self.logger.warning("No long-term historical data available for %s", self.symbol)
                 context.long_term_data = {
                     'is_new_token': True,
                     'available_days': 0,
@@ -189,14 +186,14 @@ class MarketDataCollector:
             }
 
             if not is_complete:
-                self.logger.info(f"Note: {self.symbol} has limited historical data ({available_days}/{days} days)")
+                self.logger.info("Note: %s has limited historical data (%s/%s days)", self.symbol, available_days, days)
                 if available_days < 30:
-                    self.logger.warning(f"Very limited historical data for {self.symbol} - this may be a new token")
+                    self.logger.warning("Very limited historical data for %s - this may be a new token", self.symbol)
 
             return True
 
         except Exception as e:
-            self.logger.exception(f"Long-term data fetch failed: {str(e)}")
+            self.logger.exception("Long-term data fetch failed: %s", str(e))
             context.long_term_data = None
             return False
 
@@ -207,12 +204,12 @@ class MarketDataCollector:
                 self.logger.error("Cannot fetch weekly data: symbol, exchange, or data_fetcher not initialized")
                 return False
 
-            self.logger.info(f"Fetching weekly macro data for {self.symbol}")
+            self.logger.info("Fetching weekly macro data for %s", self.symbol)
 
             result = await self.data_fetcher.fetch_weekly_historical_data(self.symbol, target_weeks)
 
             if result['data'] is None:
-                self.logger.warning(f"Weekly data unavailable: {result.get('error', 'Unknown')}")
+                self.logger.warning("Weekly data unavailable: %s", result.get('error', 'Unknown'))
                 context.weekly_ohlcv = None
                 context.available_weeks = 0
                 context.meets_200w_threshold = False
@@ -222,13 +219,10 @@ class MarketDataCollector:
             context.available_weeks = result['available_weeks']
             context.meets_200w_threshold = result['meets_200w_threshold']
 
-            self.logger.info(
-                f"Weekly data: {result['available_weeks']} weeks, "
-                f"200W SMA: {'Available' if result['meets_200w_threshold'] else 'Insufficient'}"
-            )
+            self.logger.info("Weekly data: %s weeks, 200W SMA: %s", result['available_weeks'], 'Available' if result['meets_200w_threshold'] else 'Insufficient')
             return True
         except Exception as e:
-            self.logger.error(f"Error fetching weekly macro data: {e}")
+            self.logger.error("Error fetching weekly macro data: %s", e)
             context.weekly_ohlcv = None
             context.available_weeks = 0
             context.meets_200w_threshold = False
@@ -265,11 +259,11 @@ class MarketDataCollector:
                 'historical': historical
             }
 
-            # self.logger.debug(f"Set sentiment data: {context.sentiment}")
+            # self.logger.debug("Set sentiment data: %s", context.sentiment)
             return True
 
         except Exception as e:
-            self.logger.error(f"Error fetching sentiment data: {e}")
+            self.logger.error("Error fetching sentiment data: %s", e)
             return False
 
     async def _fetch_fear_greed_index(self, limit: int = 0) -> List[Dict[str, Any]]:
@@ -310,7 +304,7 @@ class MarketDataCollector:
                 return await self._fetch_fear_greed_from_api(session, params)
 
         except Exception as e:
-            self.logger.error(f"Fear & Greed index fetch failed: {e}")
+            self.logger.error("Fear & Greed index fetch failed: %s", e)
             return []
 
     async def _fetch_fear_greed_from_api(

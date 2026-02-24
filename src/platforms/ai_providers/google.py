@@ -66,31 +66,50 @@ class GoogleAIClient(BaseAIClient):
             non_text_parts = []
             for candidate in response.candidates:
                 for part in candidate.content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        text_parts.append(part.text)
-                    else:
+                    try:
+                        text = part.text
+                        if text is not None:
+                            text_parts.append(text)
+                        else:
+                            non_text_parts.append(type(part).__name__ + " (None)")
+                    except AttributeError:
                         non_text_parts.append(type(part).__name__)
             if non_text_parts:
-                self.logger.debug(
-                    f"Google AI response contains non-text parts: {non_text_parts}. Extracting text only."
-                )
+                self.logger.debug("Google AI response contains non-text parts: %s. Extracting text only.", non_text_parts)
             return "\n".join(text_parts)
         except Exception as e:
-            self.logger.error(f"Failed to extract text from Google AI response: {e}")
+            self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
     def _extract_usage_metadata(self, response) -> Optional[UsageModel]:
         """Extract token usage metadata from Google AI response."""
         try:
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                metadata = response.usage_metadata
+            metadata = response.usage_metadata
+            if metadata:
+                try:
+                    prompt = metadata.prompt_token_count
+                except AttributeError:
+                    prompt = 0
+                
+                try:
+                    completion = metadata.candidates_token_count
+                except AttributeError:
+                    completion = 0
+                
+                try:
+                    total = metadata.total_token_count
+                except AttributeError:
+                    total = 0
+                
                 return UsageModel(
-                    prompt_tokens=getattr(metadata, 'prompt_token_count', 0),
-                    completion_tokens=getattr(metadata, 'candidates_token_count', 0),
-                    total_tokens=getattr(metadata, 'total_token_count', 0),
+                    prompt_tokens=prompt,
+                    completion_tokens=completion,
+                    total_tokens=total,
                 )
+        except AttributeError:
+            pass
         except Exception as e:
-            self.logger.debug(f"Failed to extract usage metadata: {e}")
+            self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
     def _create_generation_config(
@@ -142,10 +161,7 @@ class GoogleAIClient(BaseAIClient):
                 generation_config = self._create_generation_config(
                     model_config, include_thinking=include_thinking
                 )
-                self.logger.debug(
-                    f"Sending request to Google AI with model: {effective_model} "
-                    f"(thinking={include_thinking})"
-                )
+                self.logger.debug("Sending request to Google AI with model: %s (thinking=%s)", effective_model, include_thinking)
                 response = await client.aio.models.generate_content(
                     model=effective_model,
                     contents=prompt,
@@ -158,11 +174,9 @@ class GoogleAIClient(BaseAIClient):
             except Exception as e: # pylint: disable=broad-exception-caught
                 error_str = str(e).lower()
                 if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
-                    self.logger.warning(
-                        f"Model may not support thinking_config, retrying without it: {e}"
-                    )
+                    self.logger.warning("Model may not support thinking_config, retrying without it: %s", e)
                     continue
-                self.logger.error(f"Error during Google AI request: {e}")
+                self.logger.error("Error during Google AI request: %s", e)
                 return self._handle_exception(e)
         return None
 
@@ -202,11 +216,7 @@ class GoogleAIClient(BaseAIClient):
                     include_thinking=include_thinking,
                     include_code_execution=include_code_execution
                 )
-                self.logger.debug(
-                    f"Sending chart analysis to Google AI: {effective_model} "
-                    f"(thinking={include_thinking}, code_execution={include_code_execution}, "
-                    f"{len(img_data)} bytes)"
-                )
+                self.logger.debug("Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)", effective_model, include_thinking, include_code_execution, len(img_data))
                 response = await client.aio.models.generate_content(
                     model=effective_model,
                     contents=contents,
@@ -219,11 +229,9 @@ class GoogleAIClient(BaseAIClient):
             except Exception as e: # pylint: disable=broad-exception-caught
                 error_str = str(e).lower()
                 if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
-                    self.logger.warning(
-                        f"Model may not support thinking_config for chart analysis, retrying without it: {e}"
-                    )
+                    self.logger.warning("Model may not support thinking_config for chart analysis, retrying without it: %s", e)
                     continue
-                self.logger.error(f"Error during Google AI chart analysis request: {e}")
+                self.logger.error("Error during Google AI chart analysis request: %s", e)
                 return self._handle_exception(e)
         return None
 
@@ -233,5 +241,5 @@ class GoogleAIClient(BaseAIClient):
         if result:
             return result
         sanitized_error = self._sanitize_error_message(str(exception))
-        self.logger.error(f"Unexpected Google AI error: {sanitized_error}")
+        self.logger.error("Unexpected Google AI error: %s", sanitized_error)
         return None

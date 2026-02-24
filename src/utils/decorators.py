@@ -26,13 +26,21 @@ _NETWORK_EXCEPTIONS = (
 def _log(logger, level: str, message: str):
     """Log a message using the provided logger or fallback to logging module."""
     if logger:
-        log_func = getattr(logger, level)
-        if hasattr(logger, 'findCaller'):
-            log_func(message, stacklevel=3)
-        else:
-            log_func(message)
+        try:
+            log_func = getattr(logger, level)
+            try:
+                # Duck-type: If it supports stacklevel (like standard logging)
+                log_func(message, stacklevel=3)
+            except TypeError:
+                # If wrapped or doesn't support stacklevel
+                log_func(message)
+        except AttributeError:
+            pass
     else:
-        getattr(logging, level)(message)
+        try:
+            getattr(logging, level)(message)
+        except AttributeError:
+            pass
 
 
 def _classify_retryable_error(e: Exception) -> str:
@@ -231,7 +239,7 @@ class _ApiRetryContext:
     def _check_dict_response(self, response: Dict[str, Any]) -> bool:
         """Check dict-based response for retryable errors."""
         if response.get('error') and _should_retry_api_error(response['error']):
-            self.logger.warning(f"Retryable top-level error for model {self.model}: {response['error']}")
+            self.logger.warning("Retryable top-level error for model %s: %s", self.model, response['error'])
             return True
         choices = response.get('choices', [])
         if choices and isinstance(choices, list):
@@ -242,56 +250,81 @@ class _ApiRetryContext:
                     error_code = choice_error.get('code', 'unknown')
                     error_msg = choice_error.get('message', 'unknown')
                     provider = choice_error.get('metadata', {}).get('provider_name', 'unknown')
-                    self.logger.warning(
-                        f"Retryable error from {provider} in response choices for model {self.model}: "
-                        f"[{error_code}] {error_msg}"
-                    )
+                    self.logger.warning("Retryable error from %s in response choices for model %s: [%s] %s", provider, self.model, error_code, error_msg)
                     return True
         return False
 
     def _check_sdk_response(self, response: Any) -> bool:
         """Check SDK Pydantic response object for retryable errors using duck-typing."""
-        error = getattr(response, 'error', None)
-        if error:
-            error_dict = error.model_dump() if hasattr(error, 'model_dump') else {'message': str(error)}
-            if _should_retry_api_error(error_dict):
-                self.logger.warning(f"Retryable SDK error for model {self.model}: {error}")
-                return True
-        choices = getattr(response, 'choices', None)
-        if choices and isinstance(choices, (list, tuple)) and len(choices) > 0:
-            first_choice = choices[0]
-            choice_error = getattr(first_choice, 'error', None)
-            if choice_error:
-                error_dict = choice_error.model_dump() if hasattr(choice_error, 'model_dump') else {}
+        try:
+            error = response.error
+            if error:
+                try:
+                    error_dict = error.model_dump()
+                except AttributeError:
+                    error_dict = {'message': str(error)}
+                    
                 if _should_retry_api_error(error_dict):
-                    error_code = getattr(choice_error, 'code', 'unknown')
-                    error_msg = getattr(choice_error, 'message', 'unknown')
-                    metadata = getattr(choice_error, 'metadata', None)
-                    provider = getattr(metadata, 'provider_name', 'unknown') if metadata else 'unknown'
-                    self.logger.warning(
-                        f"Retryable SDK error from {provider} in choices for model {self.model}: "
-                        f"[{error_code}] {error_msg}"
-                    )
+                    self.logger.warning("Retryable SDK error for model %s: %s", self.model, error)
                     return True
+        except AttributeError:
+            pass
+            
+        try:
+            choices = response.choices
+            if choices and len(choices) > 0:
+                first_choice = choices[0]
+                try:
+                    choice_error = first_choice.error
+                    if choice_error:
+                        try:
+                            error_dict = choice_error.model_dump()
+                        except AttributeError:
+                            error_dict = {}
+                            
+                        if _should_retry_api_error(error_dict):
+                            try:
+                                error_code = choice_error.code
+                            except AttributeError:
+                                error_code = 'unknown'
+                                
+                            try:
+                                error_msg = choice_error.message
+                            except AttributeError:
+                                error_msg = 'unknown'
+                                
+                            try:
+                                metadata = choice_error.metadata
+                                try:
+                                    provider = metadata.provider_name
+                                except AttributeError:
+                                    provider = 'unknown'
+                            except AttributeError:
+                                provider = 'unknown'
+                                
+                            self.logger.warning("Retryable SDK error from %s in choices for model %s: [%s] %s", provider, self.model, error_code, error_msg)
+                            return True
+                except AttributeError:
+                    pass
+        except AttributeError:
+            pass
+            
         return False
 
     def _should_retry(self, attempt: int) -> bool:
         """Determine if we should continue retrying."""
         if attempt >= self.max_retries:
-            self.logger.error(f"API call to model {self.model} failed after {self.max_retries} retries")
+            self.logger.error("API call to model %s failed after %s retries", self.model, self.max_retries)
             return False
         return True
 
     async def _wait_and_increment(self, attempt: int):
         """Wait before next retry attempt."""
         wait_time = min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay)
-        self.logger.warning(
-            f"API returned error for model {self.model}. "
-            f"Retrying in {wait_time:.2f}s ({attempt + 1}/{self.max_retries})"
-        )
+        self.logger.warning("API returned error for model %s. Retrying in %.2fs (%s/%s)", self.model, wait_time, attempt + 1, self.max_retries)
         await asyncio.sleep(wait_time)
 
     def _log_exception(self, e: Exception):
         """Log exception details."""
-        self.logger.error(f"Error in API call to model {self.model}: {type(e).__name__} - {e}")
-        self.logger.error(f"Traceback:\n{traceback.format_exc()}")
+        self.logger.error("Error in API call to model %s: %s - %s", self.model, type(e).__name__, e)
+        self.logger.error("Traceback:\n%s", traceback.format_exc())

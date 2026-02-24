@@ -43,11 +43,7 @@ class TradingStatisticsService:
         history = self.persistence.load_trade_history()
         self.statistics = StatisticsCalculator.calculate_from_history(history, initial_capital)
         self.persistence.save_statistics(self.statistics)
-        self.logger.info(
-            f"Recalculated statistics: {self.statistics.total_trades} trades, "
-            f"Win Rate: {self.statistics.win_rate:.1f}%, "
-            f"Sharpe: {self.statistics.sharpe_ratio:.2f}"
-        )
+        self.logger.info("Recalculated statistics: %s trades, Win Rate: %.1f%%, Sharpe: %.2f", self.statistics.total_trades, self.statistics.win_rate, self.statistics.sharpe_ratio)
 
     def get_current_capital(self, initial_capital: float) -> float:
         """Get current capital (initial + realized P&L).

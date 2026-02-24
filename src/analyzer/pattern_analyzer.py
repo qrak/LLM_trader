@@ -40,7 +40,7 @@ class PatternAnalyzer:
                 timestamps = timestamps_from_ms_array(ohlcv_data[:, 0])
             except Exception as e:
                 if self.logger:
-                    self.logger.warning(f"Could not extract timestamps from OHLCV data: {e}")
+                    self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
 
         # Detect chart patterns
         chart_patterns = self.pattern_engine.detect_patterns(ohlcv_data, timestamps)
@@ -58,7 +58,7 @@ class PatternAnalyzer:
             )
         except Exception as e:
             if self.logger:
-                self.logger.warning(f"Error detecting indicator patterns: {e}")
+                self.logger.warning("Error detecting indicator patterns: %s", e)
 
         # Combine both types of patterns
         patterns = {
@@ -85,7 +85,7 @@ class PatternAnalyzer:
                 self.logger.debug("PatternAnalyzer warm-up completed (Numba cache primed)")
         except Exception as exc:
             if self.logger:
-                self.logger.warning(f"PatternAnalyzer warm-up skipped: {exc}")
+                self.logger.warning("PatternAnalyzer warm-up skipped: %s", exc)
 
     def _build_dummy_ohlcv(self, sample_count: int) -> np.ndarray:
         """Create deterministic OHLCV data for warm-up."""
@@ -148,5 +148,5 @@ class PatternAnalyzer:
 
         except Exception as e:
             if self.logger:
-                self.logger.warning(f"Error in pattern detection: {e}")
+                self.logger.warning("Error in pattern detection: %s", e)
             return []

@@ -59,10 +59,10 @@ class CoinGeckoAPI:
             coins = await self._fetch_all_coins()
             if coins:
                 self._update_symbol_map(coins)
-                self.logger.debug(f"Loaded {len(self.symbol_to_id_map)} unique symbols from coingecko.")
+                self.logger.debug("Loaded %s unique symbols from coingecko.", len(self.symbol_to_id_map))
                 self._log_cache_info()
         except Exception as e:
-            self.logger.error(f"Error initializing coin mappings: {e}")
+            self.logger.error("Error initializing coin mappings: %s", e)
             self.symbol_to_id_map = {}
 
         # Check if we have cached global data
@@ -75,9 +75,9 @@ class CoinGeckoAPI:
                     if loaded_time.tzinfo is None:
                         loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                     self.last_update = loaded_time
-                    self.logger.debug(f"Loaded CoinGecko cache from {self.last_update.isoformat()}")
+                    self.logger.debug("Loaded CoinGecko cache from %s", self.last_update.isoformat())
             except Exception as e:
-                self.logger.error(f"Error loading CoinGecko cache: {e}")
+                self.logger.error("Error loading CoinGecko cache: %s", e)
 
     async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
         """Read cache file in a thread pool executor to avoid blocking the event loop"""
@@ -86,7 +86,7 @@ class CoinGeckoAPI:
                 loop = asyncio.get_running_loop()
                 return await loop.run_in_executor(None, self._read_json_sync)
         except Exception as e:
-            self.logger.error(f"Error reading cache file: {e}")
+            self.logger.error("Error reading cache file: %s", e)
             return None
 
     def _read_json_sync(self) -> Dict[str, Any]:
@@ -101,7 +101,7 @@ class CoinGeckoAPI:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, self._write_json_sync, data)
         except Exception as e:
-            self.logger.error(f"Error writing cache file: {e}")
+            self.logger.error("Error writing cache file: %s", e)
 
     def _write_json_sync(self, data: Dict[str, Any]) -> None:
         """Synchronous file write for executor"""
@@ -143,7 +143,7 @@ class CoinGeckoAPI:
                     return image_url
 
         except Exception as e:
-            self.logger.error(f"Error fetching coin image for {base_symbol} on {exchange_name}: {e}")
+            self.logger.error("Error fetching coin image for %s on %s: %s", base_symbol, exchange_name, e)
         return ''
 
     def _get_dominance_coin_ids(self, dominance_data: Optional[Dict[str, float]] = None) -> List[str]:
@@ -228,10 +228,10 @@ class CoinGeckoAPI:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    self.logger.error(f"Failed to fetch coins/markets. Status: {response.status}")
+                    self.logger.error("Failed to fetch coins/markets. Status: %s", response.status)
                     return []
         except Exception as e:
-            self.logger.error(f"Error fetching coins/markets: {e}")
+            self.logger.error("Error fetching coins/markets: %s", e)
             return []
 
     async def get_defi_market_data(self) -> Dict[str, Any]:
@@ -249,10 +249,10 @@ class CoinGeckoAPI:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    self.logger.error(f"Failed to fetch global/defi. Status: {response.status}")
+                    self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
                     return {}
         except Exception as e:
-            self.logger.error(f"Error fetching DeFi data: {e}")
+            self.logger.error("Error fetching DeFi data: %s", e)
             return {}
 
     async def get_derivatives(self) -> List[Dict[str, Any]]:
@@ -269,10 +269,10 @@ class CoinGeckoAPI:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    self.logger.error(f"Failed to fetch derivatives. Status: {response.status}")
+                    self.logger.error("Failed to fetch derivatives. Status: %s", response.status)
                     return []
         except Exception as e:
-            self.logger.error(f"Error fetching derivatives: {e}")
+            self.logger.error("Error fetching derivatives: %s", e)
             return []
 
     @retry_api_call(max_retries=3)
@@ -295,10 +295,10 @@ class CoinGeckoAPI:
             try:
                 cached_data = await self._read_cache_file()
                 if cached_data and "data" in cached_data:
-                    self.logger.debug(f"Using cached CoinGecko data from {self.last_update.isoformat()}")
+                    self.logger.debug("Using cached CoinGecko data from %s", self.last_update.isoformat())
                     return cached_data["data"]
             except Exception as e:
-                self.logger.warning(f"Failed to read cached data: {e}")
+                self.logger.warning("Failed to read cached data: %s", e)
 
         # Fetch fresh data from all endpoints in parallel
         self.logger.debug("Fetching fresh CoinGecko global, top coins, and DeFi data")
@@ -310,7 +310,7 @@ class CoinGeckoAPI:
             global_data = await self._fetch_global()
 
             if isinstance(global_data, Exception):
-                self.logger.error(f"Error fetching global data: {global_data}")
+                self.logger.error("Error fetching global data: %s", global_data)
                 return await self._get_cached_global_data()
 
             # Process global data to extract dominance
@@ -334,7 +334,7 @@ class CoinGeckoAPI:
             if top_coins and not isinstance(top_coins, Exception):
                 processed_data["top_coins"] = top_coins
             elif isinstance(top_coins, Exception):
-                self.logger.warning(f"Error fetching top coins: {top_coins}")
+                self.logger.warning("Error fetching top coins: %s", top_coins)
 
             # Add DeFi data if successful (with precision cleanup)
             if defi_data and not isinstance(defi_data, Exception):
@@ -351,7 +351,7 @@ class CoinGeckoAPI:
                                 pass
                 processed_data["defi"] = defi_dict
             elif isinstance(defi_data, Exception):
-                self.logger.warning(f"Error fetching DeFi data: {defi_data}")
+                self.logger.warning("Error fetching DeFi data: %s", defi_data)
 
             # Save to cache
             cache_data = {
@@ -364,7 +364,7 @@ class CoinGeckoAPI:
             self.logger.debug("Updated CoinGecko global data cache with top coins and DeFi metrics")
             return processed_data
         except Exception as e:
-            self.logger.error(f"Error fetching global market data: {e}")
+            self.logger.error("Error fetching global market data: %s", e)
             return await self._get_cached_global_data()
 
     async def _fetch_global(self) -> Dict[str, Any]:
@@ -374,10 +374,10 @@ class CoinGeckoAPI:
                 if response.status == 200:
                     return await response.json()
                 else:
-                    self.logger.error(f"Failed to fetch /global. Status: {response.status}")
+                    self.logger.error("Failed to fetch /global. Status: %s", response.status)
                     return {}
         except Exception as e:
-            self.logger.error(f"Error fetching /global: {e}")
+            self.logger.error("Error fetching /global: %s", e)
             return {}
 
     async def _get_cached_global_data(self) -> Dict[str, Any]:
@@ -389,7 +389,7 @@ class CoinGeckoAPI:
                     self.logger.warning("Using cached CoinGecko global data as fallback")
                     return cached_data["data"]
         except Exception as e:
-            self.logger.error(f"Error reading cached global data: {e}")
+            self.logger.error("Error reading cached global data: %s", e)
 
         # Return empty dict if cache read fails
         return {}
@@ -457,7 +457,7 @@ class CoinGeckoAPI:
             if response.status == 200:
                 return await response.json()
             else:
-                self.logger.error(f"Failed to fetch coin list. Status: {response.status}")
+                self.logger.error("Failed to fetch coin list. Status: %s", response.status)
                 return []
 
     @retry_api_call(max_retries=2)
@@ -494,7 +494,7 @@ class CoinGeckoAPI:
         if exists(cache_file_path):
             cache_size = getsize(cache_file_path)
             cache_size_mb = cache_size / (1024 * 1024)
-            self.logger.debug(f"Cache file size: {cache_size_mb:.2f} MB")
+            self.logger.debug("Cache file size: %.2f MB", cache_size_mb)
         else:
             self.logger.debug("Cache file does not exist yet.")
 
@@ -505,6 +505,6 @@ class CoinGeckoAPI:
             except asyncio.TimeoutError:
                 self.logger.error("CoinGecko session close timed out")
             except Exception as e:
-                self.logger.error(f"Error closing CoinGecko session: {e}")
+                self.logger.error("Error closing CoinGecko session: %s", e)
             finally:
                 self.session = None

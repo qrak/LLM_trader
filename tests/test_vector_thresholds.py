@@ -11,7 +11,7 @@ class MockVectorSearchResult:
 
 class TestVectorThresholds(unittest.TestCase):
     def setUp(self):
-        # Create a mock for src.trading.dataclasses
+        # Create a mock for src.trading.data_models
         mock_dataclasses = MagicMock()
         mock_dataclasses.VectorSearchResult = MockVectorSearchResult
 
@@ -21,7 +21,7 @@ class TestVectorThresholds(unittest.TestCase):
             'src.logger.logger': MagicMock(),
             'chromadb': MagicMock(),
             'sentence_transformers': MagicMock(),
-            'src.trading.dataclasses': mock_dataclasses
+            'src.trading.data_models': mock_dataclasses
         })
         self.modules_patcher.start()
 

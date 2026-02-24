@@ -32,7 +32,7 @@ class MarketDataFetcher:
         try:
             return await self.coingecko_api.get_global_market_data()
         except Exception as e:
-            self.logger.error(f"Error fetching global market data: {e}")
+            self.logger.error("Error fetching global market data: %s", e)
             return None
 
     async def fetch_macro_data(self) -> Optional[MacroMarketData]:
@@ -43,7 +43,7 @@ class MarketDataFetcher:
         try:
             return await self.defillama_client.get_macro_overview()
         except Exception as e:
-            self.logger.error(f"Error fetching macro data from DefiLlama: {e}")
+            self.logger.error("Error fetching macro data from DefiLlama: %s", e)
             return None
 
     async def fetch_defi_fundamentals(self) -> Optional['DeFiFundamentalsData']:
@@ -56,7 +56,7 @@ class MarketDataFetcher:
             return data
 
         except Exception as e:
-            self.logger.error(f"Error fetching DeFi fundamentals: {e}")
+            self.logger.error("Error fetching DeFi fundamentals: %s", e)
             return None
 
     async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
@@ -65,7 +65,7 @@ class MarketDataFetcher:
         try:
             price_data = await self._try_ccxt_price_data(top_coins)
         except Exception as e:
-            self.logger.error(f"Error fetching CCXT price data: {e}")
+            self.logger.error("Error fetching CCXT price data: %s", e)
 
         # Fallback to CryptoCompare
         if not price_data or not price_data.get("RAW"):
@@ -74,7 +74,7 @@ class MarketDataFetcher:
                 try:
                     price_data = await self.market_api.get_multi_price_data(coins=top_coins)
                 except Exception as e:
-                    self.logger.error(f"Error fetching CryptoCompare price data: {e}")
+                    self.logger.error("Error fetching CryptoCompare price data: %s", e)
 
 
         return price_data
@@ -96,13 +96,13 @@ class MarketDataFetcher:
 
             data_fetcher = DataFetcher(exchange=exchange, logger=self.logger)
             symbols = [f"{coin}/USDT" for coin in top_coins]
-            self.logger.debug(f"Fetching data for top coins: {symbols}")
+            self.logger.debug("Fetching data for top coins: %s", symbols)
 
             price_data = await data_fetcher.fetch_multiple_tickers(symbols)
-            self.logger.debug(f"Fetched price data for {len(symbols)} symbols using CCXT")
+            self.logger.debug("Fetched price data for %s symbols using CCXT", len(symbols))
             return price_data
         except Exception as e:
-            self.logger.warning(f"Failed to fetch ticker data via CCXT: {e}")
+            self.logger.warning("Failed to fetch ticker data via CCXT: %s", e)
             return None
 
     def _select_exchange(self):
@@ -115,7 +115,7 @@ class MarketDataFetcher:
         # Use first available exchange that supports fetch_tickers
         for exchange_id, exch in self.exchange_manager.exchanges.items():
             if exch.has.get('fetchTickers', False):
-                self.logger.debug(f"Using {exchange_id} exchange for market data")
+                self.logger.debug("Using %s exchange for market data", exchange_id)
                 return exch
 
         return None

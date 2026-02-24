@@ -57,7 +57,7 @@ class MarketMetricsCalculator:
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
         except Exception as e:
-            self.logger.error(f"Failed to calculate dynamic periods for timeframe {timeframe}: {e}")
+            self.logger.error("Failed to calculate dynamic periods for timeframe %s: %s", timeframe, e)
             # Fallback to 1h assumptions
             periods = {
                 "1D": 24,
@@ -72,25 +72,25 @@ class MarketMetricsCalculator:
         try:
             for period_name, required_candles in periods.items():
                 if n >= required_candles:
-                    # self.logger.debug(f"Calculating full {period_name} metrics with {required_candles} candles")
+                    # self.logger.debug("Calculating full %s metrics with %s candles", period_name, required_candles)
                     period_metrics[period_name] = self._calculate_period_metrics(ohlcv[-required_candles:], period_name, context)
                 else:
                     if period_name in ["1D", "2D", "3D"]:
-                        self.logger.warning(f"Insufficient data for {period_name} analysis. Need {required_candles}, have {n} candles")
+                        self.logger.warning("Insufficient data for %s analysis. Need %s, have %s candles", period_name, required_candles, n)
                         period_metrics[period_name] = self._calculate_period_metrics(ohlcv, f"{period_name} (Partial)", context)
                     elif period_name == "7D" and n >= periods["1D"]:  # Use dynamic 1D requirement
-                        self.logger.warning(f"Insufficient data for 7D metrics. Only {n} candles available, need {required_candles}")
+                        self.logger.warning("Insufficient data for 7D metrics. Only %s candles available, need %s", n, required_candles)
                         period_metrics["7D"] = self._calculate_period_metrics(ohlcv, "7D (Partial)", context)
                     elif period_name == "30D" and n >= periods["7D"]:  # Use dynamic 7D requirement
-                        self.logger.warning(f"Insufficient data for 30D metrics. Only {n} candles available, need {required_candles}")
+                        self.logger.warning("Insufficient data for 30D metrics. Only %s candles available, need %s", n, required_candles)
                         period_metrics["30D"] = self._calculate_period_metrics(ohlcv, "30D (Partial)", context)
                     else:
-                        self.logger.warning(f"Cannot calculate {period_name} metrics - not enough data (need {required_candles}, have {n})")
+                        self.logger.warning("Cannot calculate %s metrics - not enough data (need %s, have %s)", period_name, required_candles, n)
 
             context.market_metrics = period_metrics
 
         except Exception as e:
-            self.logger.error(f"Error updating period metrics: {e}")
+            self.logger.error("Error updating period metrics: %s", e)
             if not period_metrics and n > 0:
                 self.logger.warning("Setting fallback period metrics due to error")
                 period_metrics["1D"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "1D (Fallback)", context)
@@ -199,12 +199,12 @@ class MarketMetricsCalculator:
         """Calculate changes in technical indicators over the period"""
         indicator_changes = {}
 
-        if not hasattr(context, 'technical_history'):
+        try:
+            history = context.technical_history
+        except AttributeError:
             self.logger.debug("No technical_history available in context")
             return indicator_changes
-
-        history = context.technical_history
-        # self.logger.debug(f"Calculating indicator changes from index {start_idx} to {end_idx}")
+        # self.logger.debug("Calculating indicator changes from index %s to %s", start_idx, end_idx)
 
         relevant_keys = [key for key in self.INDICATOR_CHANGE_KEYS if key in history]
         if not relevant_keys:
@@ -228,15 +228,14 @@ class MarketMetricsCalculator:
 
                         # Log key indicators
                         # if ind_name in ['rsi', 'macd_line', 'adx']:
-                        #     self.logger.debug(f"{ind_name}: start={start_value:.2f}, end={end_value:.2f}, change={change:.2f}")
+                        #     self.logger.debug("%s: start=%s, end=%s, change=%s", ind_name, f"{start_value:.2f}", f"{end_value:.2f}", f"{change:.2f}")
                     except (IndexError, ValueError, TypeError) as e:
-                        self.logger.debug(f"Could not calculate change for {ind_name}: {e}")
+                        self.logger.debug("Could not calculate change for %s: %s", ind_name, e)
                 else:
-                    self.logger.debug(f"{ind_name} has only {len(values)} values, need {abs(start_idx)}")
+                    self.logger.debug("%s has only %s values, need %s", ind_name, len(values), abs(start_idx))
             except TypeError:
                 # values is a scalar numpy value, not an array
-                self.logger.debug(f"{ind_name} is scalar, skipping")
-                pass
+                self.logger.debug("%s is scalar, skipping", ind_name)
 
-        # self.logger.debug(f"Calculated {len(indicator_changes)} indicator change metrics across {len(relevant_keys)} indicators")
+        # self.logger.debug("Calculated %s indicator change metrics across %s indicators", len(indicator_changes), len(relevant_keys))
         return indicator_changes

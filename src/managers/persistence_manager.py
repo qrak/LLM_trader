@@ -12,7 +12,7 @@ from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
 from src.utils.data_utils import serialize_for_json
-from src.trading.dataclasses import Position, TradeDecision
+from src.trading.data_models import Position, TradeDecision
 from src.trading.statistics_calculator import TradingStatistics
 
 
@@ -85,9 +85,9 @@ class PersistenceManager:
             with open(self.positions_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
 
-            self.logger.debug(f"Saved position: {position.direction} {position.symbol}")
+            self.logger.debug("Saved position: %s %s", position.direction, position.symbol)
         except Exception as e:
-            self.logger.error(f"Error saving position: {e}")
+            self.logger.error("Error saving position: %s", e)
 
     async def async_save_position(self, position: Optional["Position"]) -> None:
         """Non-blocking save_position: runs on a thread-pool worker."""
@@ -126,7 +126,7 @@ class PersistenceManager:
                     max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
         except Exception as e:
-            self.logger.error(f"Error loading position: {e}")
+            self.logger.error("Error loading position: %s", e)
             return None
 
     def save_trade_decision(self, decision: "TradeDecision") -> None:
@@ -141,9 +141,9 @@ class PersistenceManager:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(history, f, indent=2)
 
-            self.logger.info(f"Saved trade decision: {decision.action} @ ${decision.price:,.2f}")
+            self.logger.info("Saved trade decision: %s @ $%s", decision.action, f"{decision.price:,.2f}")
         except Exception as e:
-            self.logger.error(f"Error saving trade decision: {e}")
+            self.logger.error("Error saving trade decision: %s", e)
 
     async def async_save_trade_decision(self, decision: "TradeDecision") -> None:
         """Non-blocking save_trade_decision: runs on a thread-pool worker."""
@@ -158,7 +158,7 @@ class PersistenceManager:
             with open(self.history_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            self.logger.error(f"Error loading trade history: {e}")
+            self.logger.error("Error loading trade history: %s", e)
             return []
 
     def load_last_n_decisions(self, n: int = 5) -> List[Dict[str, Any]]:
@@ -219,11 +219,11 @@ class PersistenceManager:
                             reasoning=decision_dict.get("reasoning", "")
                         )
 
-            self.logger.warning(f"Could not find entry decision for position at {entry_time}")
+            self.logger.warning("Could not find entry decision for position at %s", entry_time)
             return None
 
         except Exception as e:
-            self.logger.error(f"Error retrieving entry decision: {e}")
+            self.logger.error("Error retrieving entry decision: %s", e)
             return None
 
     def save_statistics(self, stats: "TradingStatistics") -> None:
@@ -231,9 +231,9 @@ class PersistenceManager:
         try:
             with open(self.statistics_file, 'w', encoding='utf-8') as f:
                 json.dump(stats.to_dict(), f, indent=2)
-            self.logger.debug(f"Saved statistics: {stats.total_trades} trades")
+            self.logger.debug("Saved statistics: %s trades", stats.total_trades)
         except Exception as e:
-            self.logger.error(f"Error saving statistics: {e}")
+            self.logger.error("Error saving statistics: %s", e)
 
     async def async_save_statistics(self, stats: "TradingStatistics") -> None:
         """Non-blocking save_statistics: runs on a thread-pool worker."""
@@ -248,7 +248,7 @@ class PersistenceManager:
                 data = json.load(f)
                 return TradingStatistics.from_dict(data)
         except Exception as e:
-            self.logger.error(f"Error loading statistics: {e}")
+            self.logger.error("Error loading statistics: %s", e)
             return TradingStatistics()
 
     def save_previous_response(
@@ -285,9 +285,9 @@ class PersistenceManager:
             with open(self.previous_response_file, 'w', encoding='utf-8') as f:
                 json.dump(data_to_save, f, indent=2)
 
-            self.logger.debug(f"Saved previous response with {len(technical_data) if technical_data else 0} indicators")
+            self.logger.debug("Saved previous response with %s indicators", len(technical_data) if technical_data else 0)
         except Exception as e:
-            self.logger.error(f"Error saving previous response: {e}")
+            self.logger.error("Error saving previous response: %s", e)
 
     async def async_save_previous_response(
         self,
@@ -322,7 +322,7 @@ class PersistenceManager:
                     "timestamp": data.get("timestamp")
                 }
         except Exception as e:
-            self.logger.error(f"Error loading previous response: {e}")
+            self.logger.error("Error loading previous response: %s", e)
             return None
 
     def save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
@@ -341,7 +341,7 @@ class PersistenceManager:
                 }, f, indent=2)
 
         except Exception as e:
-            self.logger.error(f"Error saving last analysis time: {e}")
+            self.logger.error("Error saving last analysis time: %s", e)
 
     async def async_save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
         """Non-blocking save_last_analysis_time: runs on a thread-pool worker."""
@@ -357,5 +357,5 @@ class PersistenceManager:
                 data = json.load(f)
                 return self._ensure_utc(datetime.fromisoformat(data["timestamp"]))
         except Exception as e:
-            self.logger.warning(f"Could not get last analysis time: {e}")
+            self.logger.warning("Could not get last analysis time: %s", e)
             return None

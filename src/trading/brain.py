@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from .vector_memory import VectorMemoryService
-from .dataclasses import Position, TradeDecision
+from .data_models import Position, TradeDecision
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -121,9 +121,7 @@ class TradingBrainService:
             }
         )
 
-        self.logger.info(
-            f"Updated brain from {position.direction} trade ({close_reason}, P&L: {pnl_pct:+.2f}%)"
-        )
+        self.logger.info("Updated brain from %s trade (%s, P&L: %s%%)", position.direction, close_reason, f"{pnl_pct:+.2f}")
 
         self._trade_count += 1
         if self._trade_count % self._reflection_interval == 0:
@@ -512,7 +510,7 @@ class TradingBrainService:
             best_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = best_pattern
             if count < 5:
-                self.logger.debug(f"Pattern {pattern_key} rejected: only {count} occurrences (need 5+)")
+                self.logger.debug("Pattern %s rejected: only %s occurrences (need 5+)", pattern_key, count)
                 return
 
             # Validate win rate before storing rule
@@ -529,10 +527,7 @@ class TradingBrainService:
             if pattern_total > 0:
                 win_rate = pattern_wins / pattern_total
                 if win_rate < 0.6:
-                    self.logger.debug(
-                        f"Pattern {pattern_key} rejected: win rate {win_rate:.0%} < 60% "
-                        f"({pattern_wins}/{pattern_total} trades)"
-                    )
+                    self.logger.debug("Pattern %s rejected: win rate %s < 60%% (%s/%s trades)", pattern_key, f"{win_rate:.0%}", pattern_wins, pattern_total)
                     return
 
             parts = pattern_key.split("_")
@@ -556,10 +551,10 @@ class TradingBrainService:
                 }
             )
 
-            self.logger.info(f"Reflection complete: stored rule '{rule_text}'")
+            self.logger.info("Reflection complete: stored rule '%s'", rule_text)
 
         except Exception as e:
-            self.logger.warning(f"Reflection failed: {e}")
+            self.logger.warning("Reflection failed: %s", e)
 
     def _trigger_loss_reflection(self) -> None:
         """Reflect on losing trades and synthesize anti-patterns.
@@ -591,7 +586,7 @@ class TradingBrainService:
             worst_pattern = pattern_counts.most_common(1)[0]
             pattern_key, count = worst_pattern
             if count < 3:
-                self.logger.debug(f"Anti-pattern {pattern_key} rejected: only {count} occurrences (need 3+)")
+                self.logger.debug("Anti-pattern %s rejected: only %s occurrences (need 3+)", pattern_key, count)
                 return
 
             parts = pattern_key.split("_")
@@ -615,10 +610,10 @@ class TradingBrainService:
                 }
             )
 
-            self.logger.info(f"Anti-pattern reflection complete: stored rule '{rule_text}'")
+            self.logger.info("Anti-pattern reflection complete: stored rule '%s'", rule_text)
 
         except Exception as e:
-            self.logger.warning(f"Loss reflection failed: {e}")
+            self.logger.warning("Loss reflection failed: %s", e)
 
     def track_position_update(
         self,
@@ -693,4 +688,4 @@ class TradingBrainService:
             }
         )
 
-        self.logger.debug(f"Tracked position update: {action_type} at {current_pnl_pct:+.1f}% PnL")
+        self.logger.debug("Tracked position update: %s at %s% PnL", action_type, f"{current_pnl_pct:+.1f}")

@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 
 from src.utils.data_utils import SerializableMixin
-from src.trading.dataclasses import ClosedTradeResult
+from src.trading.data_models import ClosedTradeResult
 
 
 

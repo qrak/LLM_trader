@@ -60,4 +60,3 @@ def test_ebsw_convergence():
     """
     Test that the indicator converges or behaves reasonably on normal data.
     """
-    pass

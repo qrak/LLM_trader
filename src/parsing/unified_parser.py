@@ -58,11 +58,11 @@ class UnifiedParser:
                 except json.JSONDecodeError:
                     pass
 
-            self.logger.warning(f"Unable to parse AI response, using fallback. Preview: {raw_text[:200]}")
+            self.logger.warning("Unable to parse AI response, using fallback. Preview: %s", raw_text[:200])
             return self._create_fallback_response(raw_text)
 
         except Exception as e:
-            self.logger.error(f"Failed to parse AI response: {e}")
+            self.logger.error("Failed to parse AI response: %s", e)
             return self._create_error_response(str(e), raw_text)
 
     def validate_ai_response(self, response: Dict[str, Any]) -> bool:
@@ -94,7 +94,7 @@ class UnifiedParser:
                     return data[unwrap_key]
                 return data
         except (json.JSONDecodeError, Exception) as e:
-            self.logger.debug(f"JSON block extraction failed: {e}")
+            self.logger.debug("JSON block extraction failed: %s", e)
         return None
 
     def extract_text_before_json(self, text: str) -> str:

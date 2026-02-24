@@ -2,6 +2,7 @@
 
 from typing import Set, Dict, Any
 from collections import defaultdict
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -92,8 +93,13 @@ class WebSocketRouter:
             # 1. Allow if matches Host (Same Origin)
             host = websocket.headers.get("host")
             if host:
-                # Strip scheme from origin (http://host:port -> host:port)
-                origin_host = origin.split("://")[-1]
+                # Robustly extract host from origin
+                try:
+                    parsed = urlparse(origin)
+                    origin_host = parsed.netloc
+                except Exception:
+                    origin_host = None
+
                 if origin_host == host:
                     allowed = True
 

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-from src.trading.dataclasses import Position, RiskAssessment
+from src.trading.data_models import Position, RiskAssessment
 from src.logger.logger import Logger
 
 class PositionFactory:

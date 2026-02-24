@@ -24,26 +24,22 @@ class DataFetcher:
                                      start_time: Optional[int] = None
                                      ) -> Optional[Tuple[NDArray, float]]:
         # Validate timeframe is supported by exchange
-        if hasattr(self.exchange, 'timeframes') and self.exchange.timeframes:
-            if timeframe not in self.exchange.timeframes:
-                self.logger.error(
-                    f"Timeframe {timeframe} not supported by {self.exchange.id}. "
-                    f"Supported: {', '.join(self.exchange.timeframes.keys())}"
-                )
+        try:
+            exchange_timeframes = self.exchange.timeframes
+            if exchange_timeframes and timeframe not in exchange_timeframes:
+                self.logger.error("Timeframe %s not supported by %s. Supported: %s", timeframe, self.exchange.id, ', '.join(exchange_timeframes.keys()))
                 return None
-        elif not TimeframeValidator.is_ccxt_compatible(timeframe):
-            self.logger.warning(
-                f"Timeframe {timeframe} may not be supported by {self.exchange.id}. "
-                f"Attempting fetch anyway..."
-            )
+        except AttributeError:
+            if not TimeframeValidator.is_ccxt_compatible(timeframe):
+                self.logger.warning("Timeframe %s may not be supported by %s. Attempting fetch anyway...", timeframe, self.exchange.id)
 
         if limit > 1000:
-            self.logger.warning(f"Requested limit {limit} exceeds exchange standard limits, may be truncated")
+            self.logger.warning("Requested limit %s exceeds exchange standard limits, may be truncated", limit)
 
         ohlcv = await self.exchange.fetch_ohlcv(pair, timeframe, since=start_time, limit=limit + 1)
 
         if ohlcv is None or len(ohlcv) == 0:
-            self.logger.warning(f"No data returned for {pair} on {self.exchange.id}")
+            self.logger.warning("No data returned for %s on %s", pair, self.exchange.id)
             return None
 
         # Sanitize data: Replace None with np.nan for float64 conversion
@@ -55,16 +51,16 @@ class DataFetcher:
         ohlcv_array = np.array(ohlcv_sanitized, dtype=np.float64)
         # Use only COMPLETED candles
         if len(ohlcv_array) < 2:
-             self.logger.warning(f"Not enough candles to exclude incomplete one. Received: {len(ohlcv_array)}")
+             self.logger.warning("Not enough candles to exclude incomplete one. Received: %s", len(ohlcv_array))
              return None
 
         closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
         actual_current_price = float(ohlcv_array[-1, 4])  # Real-time price from the unclosed candle
         # Verify we have enough data
         if len(closed_candles) < min(720, limit - 1):
-            self.logger.warning(f"Received fewer closed candles ({len(closed_candles)}) than expected ({min(720, limit - 1)})")
-            self.logger.debug(f"First candle timestamp: {closed_candles[0][0] if len(closed_candles) > 0 else 'N/A'}")
-            self.logger.debug(f"Last closed candle timestamp: {closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A'}")
+            self.logger.warning("Received fewer closed candles (%s) than expected (%s)", len(closed_candles), min(720, limit - 1))
+            self.logger.debug("First candle timestamp: %s", closed_candles[0][0] if len(closed_candles) > 0 else 'N/A')
+            self.logger.debug("Last closed candle timestamp: %s", closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A')
 
         return closed_candles, actual_current_price
 
@@ -96,7 +92,7 @@ class DataFetcher:
             )
 
             if result is None:
-                self.logger.warning(f"No daily historical data available for {pair}")
+                self.logger.warning("No daily historical data available for %s", pair)
                 return {
                     'data': None,
                     'latest_close': None,
@@ -110,7 +106,7 @@ class DataFetcher:
             is_complete = (available_days >= days - 1)  # Closed candles only (no incomplete)
 
             if not is_complete:
-                self.logger.info(f"Limited historical data for {pair}: requested {days} days, got {available_days} days")
+                self.logger.info("Limited historical data for %s: requested %s days, got %s days", pair, days, available_days)
             else:
                 pass
 
@@ -123,7 +119,7 @@ class DataFetcher:
             }
 
         except Exception as e:
-            self.logger.error(f"Error fetching daily historical data for {pair}: {str(e)}")
+            self.logger.error("Error fetching daily historical data for %s: %s", pair, str(e))
             return {
                 'data': None,
                 'latest_close': None,
@@ -173,7 +169,7 @@ class DataFetcher:
                 'error': None
             }
         except Exception as e:
-            self.logger.error(f"Error fetching weekly data: {e}")
+            self.logger.error("Error fetching weekly data: %s", e)
             return {
                 'data': None,
                 'latest_close': None,
@@ -209,13 +205,13 @@ class DataFetcher:
             return self._process_ticker_data(tickers)
 
         except Exception as e:
-            self.logger.error(f"Error fetching multiple tickers: {e}")
+            self.logger.error("Error fetching multiple tickers: %s", e)
             return {}
 
     def _validate_exchange_support(self) -> bool:
         """Validate that the exchange supports the required operations."""
         if not self.exchange.has.get('fetchTickers', False):
-            self.logger.warning(f"Exchange {self.exchange.id} does not support fetchTickers")
+            self.logger.warning("Exchange %s does not support fetchTickers", self.exchange.id)
             return False
         return True
 
@@ -351,20 +347,20 @@ class DataFetcher:
         try:
             # Check exchange support
             if not self.exchange.has.get('fetchOrderBook', False):
-                self.logger.debug(f"Exchange {self.exchange.id} does not support fetchOrderBook")
+                self.logger.debug("Exchange %s does not support fetchOrderBook", self.exchange.id)
                 return None
 
             order_book = await self.exchange.fetch_order_book(pair, limit=limit)
 
             if not order_book or not order_book.get('bids') or not order_book.get('asks'):
-                self.logger.warning(f"Empty order book returned for {pair}")
+                self.logger.warning("Empty order book returned for %s", pair)
                 return None
 
             bids = np.array(order_book['bids'])
             asks = np.array(order_book['asks'])
 
             if len(bids) == 0 or len(asks) == 0:
-                self.logger.warning(f"Order book has empty bids or asks for {pair}")
+                self.logger.warning("Order book has empty bids or asks for %s", pair)
                 return None
 
             best_bid = float(bids[0][0])
@@ -395,7 +391,7 @@ class DataFetcher:
             return result
 
         except Exception as e:
-            self.logger.error(f"Error fetching order book for {pair}: {e}")
+            self.logger.error("Error fetching order book for %s: %s", pair, e)
             return None
 
     @retry_async()
@@ -430,13 +426,13 @@ class DataFetcher:
         try:
             # Check exchange support
             if not self.exchange.has.get('fetchTrades', False):
-                self.logger.debug(f"Exchange {self.exchange.id} does not support fetchTrades")
+                self.logger.debug("Exchange %s does not support fetchTrades", self.exchange.id)
                 return None
 
             trades = await self.exchange.fetch_trades(pair, limit=limit)
 
             if not trades or len(trades) == 0:
-                self.logger.warning(f"No trades returned for {pair}")
+                self.logger.warning("No trades returned for %s", pair)
                 return None
 
             # Calculate buy/sell volumes
@@ -469,7 +465,7 @@ class DataFetcher:
             return result
 
         except Exception as e:
-            self.logger.error(f"Error fetching trades for {pair}: {e}")
+            self.logger.error("Error fetching trades for %s: %s", pair, e)
             return None
 
     @retry_async()
@@ -504,13 +500,13 @@ class DataFetcher:
         try:
             # Check exchange support
             if not self.exchange.has.get('fetchFundingRate', False):
-                self.logger.debug(f"Exchange {self.exchange.id} does not support fetchFundingRate")
+                self.logger.debug("Exchange %s does not support fetchFundingRate", self.exchange.id)
                 return None
 
             funding = await self.exchange.fetch_funding_rate(pair)
 
             if not funding or 'fundingRate' not in funding:
-                self.logger.debug(f"No funding rate available for {pair}")
+                self.logger.debug("No funding rate available for %s", pair)
                 return None
 
             rate = float(funding.get('fundingRate', 0))
@@ -541,7 +537,7 @@ class DataFetcher:
             return result
 
         except Exception as e:
-            self.logger.debug(f"Funding rate not available for {pair}: {e}")
+            self.logger.debug("Funding rate not available for %s: %s", pair, e)
             return None
 
     async def fetch_market_microstructure(self, pair: str, cached_ticker: Optional[Dict] = None) -> Dict[str, Any]:
@@ -594,7 +590,7 @@ class DataFetcher:
                         result['ticker'] = ticker_data['RAW'][base][quote]
                         result['available_data'].append('ticker')
         except Exception as e:
-            self.logger.warning(f"Could not fetch ticker for {pair}: {e}")
+            self.logger.warning("Could not fetch ticker for %s: %s", pair, e)
 
         # Fetch order book
         try:
@@ -603,7 +599,7 @@ class DataFetcher:
                 result['order_book'] = order_book
                 result['available_data'].append('order_book')
         except Exception as e:
-            self.logger.warning(f"Could not fetch order book for {pair}: {e}")
+            self.logger.warning("Could not fetch order book for %s: %s", pair, e)
 
         # Fetch recent trades
         try:
@@ -612,7 +608,7 @@ class DataFetcher:
                 result['recent_trades'] = trades
                 result['available_data'].append('recent_trades')
         except Exception as e:
-            self.logger.warning(f"Could not fetch recent trades for {pair}: {e}")
+            self.logger.warning("Could not fetch recent trades for %s: %s", pair, e)
 
         # Fetch funding rate (for futures only)
         try:
@@ -621,7 +617,7 @@ class DataFetcher:
                 result['funding_rate'] = funding
                 result['available_data'].append('funding_rate')
         except Exception as e:
-            self.logger.debug(f"Funding rate not available for {pair}: {e}")
+            self.logger.debug("Funding rate not available for %s: %s", pair, e)
 
 
         return result

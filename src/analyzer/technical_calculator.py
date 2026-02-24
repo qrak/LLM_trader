@@ -323,7 +323,7 @@ class TechnicalCalculator:
         # Skip if insufficient data
         if available_weeks < 50:
             if self.logger:
-                self.logger.debug(f"Insufficient weekly data: {available_weeks} weeks")
+                self.logger.debug("Insufficient weekly data: %s weeks", available_weeks)
             return analysis
 
         current_price = float(ti.close[-1])
@@ -363,7 +363,7 @@ class TechnicalCalculator:
                 cross_ts = ohlcv_data[-(golden_weeks_ago + 1), 0] / 1000
                 analysis['golden_cross_date'] = formatter.format_date_from_timestamp(cross_ts)
                 if self.logger:
-                    self.logger.info(f"🌟 Weekly Golden Cross: {golden_weeks_ago}w ago ({analysis['golden_cross_date']})")
+                    self.logger.info("🌟 Weekly Golden Cross: %sw ago (%s)", golden_weeks_ago, analysis['golden_cross_date'])
 
             death_found, death_weeks_ago, _, _ = detect_death_cross_numba(sma_50w_array, sma_200w_array)
             if death_found:
@@ -372,7 +372,7 @@ class TechnicalCalculator:
                 cross_ts = ohlcv_data[-(death_weeks_ago + 1), 0] / 1000
                 analysis['death_cross_date'] = formatter.format_date_from_timestamp(cross_ts)
                 if self.logger:
-                    self.logger.warning(f"⚠️ Weekly Death Cross: {death_weeks_ago}w ago ({analysis['death_cross_date']})")
+                    self.logger.warning("⚠️ Weekly Death Cross: %sw ago (%s)", death_weeks_ago, analysis['death_cross_date'])
 
             # SMA relationship
             if weekly_sma_values[50] > weekly_sma_values[200]:
@@ -442,7 +442,7 @@ class TechnicalCalculator:
 
         else:
             if self.logger:
-                self.logger.warning(f"Not enough data to calculate change metrics (only {available_days} days)")
+                self.logger.warning("Not enough data to calculate change metrics (only %s days)", available_days)
 
         return price_change_pct, volume_change_pct
 
@@ -472,7 +472,7 @@ class TechnicalCalculator:
 
         if available_days < 200:
             if self.logger:
-                self.logger.debug(f"Not enough data for macro trend analysis (need 200 days, have {available_days})")
+                self.logger.debug("Not enough data for macro trend analysis (need 200 days, have %s)", available_days)
             return analysis
 
         current_price = float(ti.close[-1])
@@ -480,7 +480,7 @@ class TechnicalCalculator:
         # Use already-calculated price change percentage (no redundant calculation)
         analysis['long_term_price_change_pct'] = price_change_pct
         if self.logger:
-            pass # self.logger.debug(f"Macro trend: {available_days}-day price change = {price_change_pct:.2f}%")
+            pass # self.logger.debug("Macro trend: %s-day price change = %s%", available_days, f"{price_change_pct:.2f}")
 
         # Check price position relative to key SMAs
         if 200 in sma_values:
@@ -556,7 +556,7 @@ class TechnicalCalculator:
         bullish_count = len(bullish_signals)
         bearish_count = len(bearish_signals)
 
-        # self.logger.debug(f"Macro trend bearish signals ({bearish_count}): {bearish_signals}")
+        # self.logger.debug("Macro trend bearish signals (%s): %s", bearish_count, bearish_signals)
 
         # Determine trend direction (need at least 2 signals for clear direction)
         if bullish_count >= 2 and bullish_count > bearish_count:

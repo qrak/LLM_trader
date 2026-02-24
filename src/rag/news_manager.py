@@ -35,9 +35,9 @@ class NewsManager:
                 for article in self.news_database:
                     if 'title_lower' not in article:
                         self._normalize_article(article)
-                self.logger.debug(f"Loaded {len(self.news_database)} cached news articles")
+                self.logger.debug("Loaded %s cached news articles", len(self.news_database))
         except Exception as e:
-            self.logger.exception(f"Error loading cached news: {e}")
+            self.logger.exception("Error loading cached news: %s", e)
             self.news_database = []
 
     async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> List[Dict[str, Any]]:
@@ -64,21 +64,21 @@ class NewsManager:
                         article['detected_coins'] = list(coins_mentioned)
                         article['detected_coins_str'] = '|'.join(coins_mentioned)
 
-                self.logger.debug(f"Fetched {len(articles)} recent news articles from CryptoCompare")
+                self.logger.debug("Fetched %s recent news articles from CryptoCompare", len(articles))
                 return articles
             else:
                 self.logger.warning("No articles returned from CryptoCompare API")
                 return self._get_fallback_articles()
 
         except Exception as e:
-            self.logger.error(f"Error fetching CryptoCompare news: {e}")
+            self.logger.error("Error fetching CryptoCompare news: %s", e)
             return self._get_fallback_articles()
 
     def _get_fallback_articles(self) -> List[Dict[str, Any]]:
         """Get fallback articles when fresh fetch fails."""
         fallback_articles = self.file_handler.load_fallback_articles(max_age_hours=72)
         if fallback_articles:
-            self.logger.info(f"Using {len(fallback_articles)} cached articles as fallback")
+            self.logger.info("Using %s cached articles as fallback", len(fallback_articles))
             return fallback_articles
         return []
 
@@ -98,7 +98,7 @@ class NewsManager:
             for article in unique_articles:
                 self._normalize_article(article)
 
-            self.logger.debug(f"Found {len(unique_articles)} new articles")
+            self.logger.debug("Found %s new articles", len(unique_articles))
             combined_articles = self.news_database + unique_articles
 
             # Sort by timestamp, newest first
@@ -110,7 +110,7 @@ class NewsManager:
             # Save updated database
             self.file_handler.save_news_articles(self.news_database)
 
-            self.logger.debug(f"Updated news database with {len(self.news_database)} recent articles")
+            self.logger.debug("Updated news database with %s recent articles", len(self.news_database))
             return True
         else:
             self.logger.debug("No new articles to add or only duplicates found")

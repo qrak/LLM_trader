@@ -132,6 +132,6 @@ class MonitorRouter:
                             if articles:
                                 break
                     except Exception:
-                        self.logger.error(f"Failed to load news from {news_path}", exc_info=True)
+                        self.logger.error("Failed to load news from %s", news_path, exc_info=True)
         self.dashboard_state.set_cached("news", articles)
         return {"articles": articles, "count": len(articles)}

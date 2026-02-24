@@ -129,8 +129,11 @@ class CryptoTradingBot:
 
             # API clients (if they have close method)
             for client in [self.alternative_me_api, self.coingecko_api, self.news_api, self.market_api, self.categories_api]:
-                if client and hasattr(client, 'close'):
-                    self.shutdown_manager.register_shutdown_callback(client.close)
+                if client:
+                    try:
+                        self.shutdown_manager.register_shutdown_callback(client.close)
+                    except AttributeError:
+                        pass
 
         # Register keyboard commands
         self.keyboard_handler.register_command('a', self._force_analysis_now, "Force immediate analysis")
@@ -157,7 +160,7 @@ class CryptoTradingBot:
         # Cancel active tasks managed by bot
         pending_tasks = list(self._active_tasks)
         if pending_tasks:
-            self.logger.info(f"Cancelling {len(pending_tasks)} bot-specific tasks...")
+            self.logger.info("Cancelling %s bot-specific tasks...", len(pending_tasks))
             for task in pending_tasks:
                 if not task.done():
                     task.cancel()
@@ -190,12 +193,12 @@ class CryptoTradingBot:
         # Find exchange that supports the symbol
         exchange, exchange_id = await self.exchange_manager.find_symbol_exchange(symbol)
         if not exchange:
-            self.logger.error(f"Symbol {symbol} not found on any configured exchange")
+            self.logger.error("Symbol %s not found on any configured exchange", symbol)
             return
 
         self.current_exchange = exchange
-        self.logger.info(f"Starting trading for {symbol} on {exchange_id}")
-        self.logger.info(f"Timeframe: {self.current_timeframe}")
+        self.logger.info("Starting trading for %s on %s", symbol, exchange_id)
+        self.logger.info("Timeframe: %s", self.current_timeframe)
 
         # Initialize analyzer for this symbol
         self.market_analyzer.initialize_for_symbol(
@@ -211,7 +214,7 @@ class CryptoTradingBot:
         # Log current position if any
         if self.trading_strategy.current_position:
             position = self.trading_strategy.current_position
-            self.logger.info(f"Existing position: {position.direction} @ ${position.entry_price:,.2f}")
+            self.logger.info("Existing position: %s @ $%s", position.direction, f"{position.entry_price:,.2f}")
             # Start hourly position updates for existing position
             if self.discord_notifier:
                 await self._start_position_status_updates()
@@ -224,7 +227,7 @@ class CryptoTradingBot:
         # Check if resuming from previous session (regardless of position status)
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
-            self.logger.info(f"Resuming from last analysis at {last_analysis_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+            self.logger.info("Resuming from last analysis at %s UTC", last_analysis_time.strftime('%Y-%m-%d %H:%M:%S'))
             await self._wait_until_next_timeframe_after(last_analysis_time)
         self.logger.info("Ready for next analysis after wait")
 
@@ -250,7 +253,7 @@ class CryptoTradingBot:
                 self.running = False
                 break
             except Exception as e:
-                self.logger.error(f"Error in trading loop: {e}")
+                self.logger.error("Error in trading loop: %s", e)
                 await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
     async def _execute_trading_check(self, check_count: int, force_news_update: bool = True, is_candle_close: bool = True):
@@ -266,7 +269,7 @@ class CryptoTradingBot:
         result = await self.market_analyzer.analyze_market(**context_data)
         
         if "error" in result:
-            self.logger.error(f"Analysis failed: {result['error']}")
+            self.logger.error("Analysis failed: %s", result['error'])
             return
         
         self.persistence.save_last_analysis_time()
@@ -285,7 +288,7 @@ class CryptoTradingBot:
         """Log trading check header"""
         current_time = datetime.now()
         self.logger.info("=" * 60)
-        self.logger.info(f"Trading Check #{check_count} at {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        self.logger.info("Trading Check #%s at %s", check_count, current_time.strftime('%Y-%m-%d %H:%M:%S'))
         self.logger.info("=" * 60)
     
     async def _fetch_ticker_data(self):
@@ -296,7 +299,7 @@ class CryptoTradingBot:
                 current_price = float(current_ticker.get('last', current_ticker.get('close', 0)))
                 return current_ticker, current_price
         except Exception as e:
-            self.logger.warning(f"Could not fetch current ticker: {e}")
+            self.logger.warning("Could not fetch current ticker: %s", e)
         return None, None
     
     async def _check_position_status(self, current_price: Optional[float], *, is_candle_close: bool = True):
@@ -316,7 +319,7 @@ class CryptoTradingBot:
         try:
             close_reason = await self.trading_strategy.check_position(current_price)
             if close_reason:
-                self.logger.info(f"Position closed: {close_reason}")
+                self.logger.info("Position closed: %s", close_reason)
                 await self._stop_position_status_updates()
                 if self.discord_notifier:
                     history = self.persistence.load_trade_history()
@@ -326,7 +329,7 @@ class CryptoTradingBot:
                         channel_id=self.config.MAIN_CHANNEL_ID
                     )
         except Exception as e:
-            self.logger.error(f"Error checking position: {e}")
+            self.logger.error("Error checking position: %s", e)
     
     async def _execute_market_knowledge_update(self, force_news_update: bool):
         """Update market knowledge based on analysis type"""
@@ -396,7 +399,7 @@ class CryptoTradingBot:
                 channel_id=self.config.MAIN_CHANNEL_ID
             )
         except Exception as e:
-            self.logger.warning(f"Error sending initial position status: {e}")
+            self.logger.warning("Error sending initial position status: %s", e)
         
         await self._start_position_status_updates()
     
@@ -428,7 +431,7 @@ class CryptoTradingBot:
                     await self.dashboard_state.update_price(price)
             return ticker
         except Exception as e:
-            self.logger.error(f"Error fetching current ticker: {e}")
+            self.logger.error("Error fetching current ticker: %s", e)
             return None
 
     async def _wait_for_next_timeframe(self):
@@ -442,13 +445,13 @@ class CryptoTradingBot:
             delay_seconds = max(0, delay_ms / 1000)
 
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
-            self.logger.info(f"Next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)")
+            self.logger.info("Next check at %s UTC (in %.0fs)", next_check_time.strftime('%Y-%m-%d %H:%M:%S'), delay_seconds)
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
             return await self._interruptible_sleep(delay_seconds)
 
         except Exception as e:
-            self.logger.error(f"Error calculating next timeframe: {e}")
+            self.logger.error("Error calculating next timeframe: %s", e)
             await self._interruptible_sleep(ERROR_WAIT_LONG)
             return False
 
@@ -471,10 +474,7 @@ class CryptoTradingBot:
 
             # Check if we're past the next candle boundary
             if current_time_ms >= next_candle_ms:
-                self.logger.info(
-                    f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
-                    f"Next candle already passed - proceeding immediately"
-                )
+                self.logger.info("Resuming from last check at %s. Next candle already passed - proceeding immediately", last_time.strftime('%Y-%m-%d %H:%M:%S'))
                 return
 
             # Wait for next candle
@@ -487,17 +487,14 @@ class CryptoTradingBot:
             is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)
 
             context_msg = "Still in same candle" if is_same else "Resuming wait"
-            self.logger.info(
-                f"Resuming from last check at {last_time.strftime('%Y-%m-%d %H:%M:%S')}. "
-                f"{context_msg} - next check at {next_check_time.strftime('%Y-%m-%d %H:%M:%S')} UTC (in {delay_seconds:.0f}s)"
-            )
+            self.logger.info("Resuming from last check at %s. %s - next check at %s UTC (in %.0fs)", last_time.strftime('%Y-%m-%d %H:%M:%S'), context_msg, next_check_time.strftime('%Y-%m-%d %H:%M:%S'), delay_seconds)
 
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
             await self._interruptible_sleep(delay_seconds)
 
         except Exception as e:
-            self.logger.error(f"Error calculating wait time: {e}")
+            self.logger.error("Error calculating wait time: %s", e)
             await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
     async def _interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True):
@@ -592,7 +589,7 @@ class CryptoTradingBot:
                         )
                         self.logger.debug("Sent hourly position status update to Discord")
                     except Exception as e:
-                        self.logger.warning(f"Error sending position status update: {e}")
+                        self.logger.warning("Error sending position status update: %s", e)
         except asyncio.CancelledError:
             self.logger.debug("Position status loop cancelled")
             raise

@@ -50,7 +50,7 @@ class LMStudioClient(BaseAIClient):
         loaded_models = await client.llm.list_loaded()
         if loaded_models:
             self._cached_model = loaded_models[0].identifier
-            self.logger.info(f"Auto-selected loaded model: {self._cached_model}")
+            self.logger.info("Auto-selected loaded model: %s", self._cached_model)
             return self._cached_model
         raise ValueError("No model specified and no models loaded in LM Studio")
 
@@ -63,7 +63,7 @@ class LMStudioClient(BaseAIClient):
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
                 model = await self._get_model_or_auto_select(client, model)
-                self.logger.debug(f"Sending request to LM Studio SDK with model: {model} (host={api_host})")
+                self.logger.debug("Sending request to LM Studio SDK with model: %s (host=%s)", model, api_host)
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -84,7 +84,7 @@ class LMStudioClient(BaseAIClient):
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
         except Exception as e:
-            self.logger.error(f"Error during LM Studio request: {str(e)}")
+            self.logger.error("Error during LM Studio request: %s", str(e))
             return self._handle_exception(e)
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
@@ -112,7 +112,7 @@ class LMStudioClient(BaseAIClient):
             img_data = self.process_chart_image(chart_image)
             async with lms.AsyncClient(api_host=api_host) as client:
                 model = await self._get_model_or_auto_select(client, model)
-                self.logger.debug(f"Sending chart analysis request to LM Studio SDK with model: {model} (host={api_host})")
+                self.logger.debug("Sending chart analysis request to LM Studio SDK with model: %s (host=%s)", model, api_host)
                 image_handle = await client.files.prepare_image(img_data)
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
@@ -134,7 +134,7 @@ class LMStudioClient(BaseAIClient):
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
         except Exception as e:
-            self.logger.error(f"Error during LM Studio chart analysis request: {str(e)}")
+            self.logger.error("Error during LM Studio chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
@@ -150,7 +150,7 @@ class LMStudioClient(BaseAIClient):
         try:
             async with lms.AsyncClient(api_host=api_host) as client:
                 model = await self._get_model_or_auto_select(client, model)
-                self.logger.debug(f"Sending streaming request to LM Studio SDK with model: {model} (host={api_host})")
+                self.logger.debug("Sending streaming request to LM Studio SDK with model: %s (host=%s)", model, api_host)
                 llm = await client.llm.model(model)
                 chat = lms.Chat()
                 for msg in messages:
@@ -180,7 +180,7 @@ class LMStudioClient(BaseAIClient):
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
         except Exception as e:
-            self.logger.error(f"Error during LM Studio streaming request: {str(e)}")
+            self.logger.error("Error during LM Studio streaming request: %s", str(e))
             return self._handle_exception(e)
 
     def _build_prediction_config(self, model_config: Dict[str, Any]) -> Optional[lms.LlmPredictionConfig]:
@@ -204,10 +204,10 @@ class LMStudioClient(BaseAIClient):
                         match = re.search(r"argument '([^']+)'", error_str)
                         if match:
                             bad_arg = match.group(1)
-                            self.logger.warning(f"LM Studio SDK rejected parameter '{bad_arg}', retrying without it.")
+                            self.logger.warning("LM Studio SDK rejected parameter '%s', retrying without it.", bad_arg)
                             del config_dict[bad_arg]
                             continue
-                    self.logger.warning(f"Failed to build LlmPredictionConfig: {e}. Falling back to default config.")
+                    self.logger.warning("Failed to build LlmPredictionConfig: %s. Falling back to default config.", e)
                     break
         return None
 
@@ -220,10 +220,10 @@ class LMStudioClient(BaseAIClient):
                 "Your GPU driver may have crashed or run out of memory. "
                 "Try using a smaller model or reducing 'n_gpu_layers' in LM Studio."
             )
-            self.logger.error(f"LM Studio GPU Crash: {friendly_msg}")
+            self.logger.error("LM Studio GPU Crash: %s", friendly_msg)
             return ChatResponseModel.from_error(f"gpu_crash: {friendly_msg}")
         result = self.handle_common_errors(exception)
         if result:
             return result
-        self.logger.error(f"LM Studio Error: {error_message}")
+        self.logger.error("LM Studio Error: %s", error_message)
         return None

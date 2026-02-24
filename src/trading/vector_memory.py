@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 from src.logger.logger import Logger
-from .dataclasses import VectorSearchResult
+from .data_models import VectorSearchResult
 
 
 class VectorMemoryService:
@@ -73,18 +73,14 @@ class VectorMemoryService:
             )
 
             self._initialized = True
-            self.logger.info(
-                f"VectorMemoryService collections ready: {self._collection.count()} experiences stored"
-            )
+            self.logger.info("VectorMemoryService collections ready: %s experiences stored", self._collection.count())
             return True
 
         except ImportError as e:
-            self.logger.warning(
-                f"VectorMemoryService unavailable (missing dependency): {e}"
-            )
+            self.logger.warning("VectorMemoryService unavailable (missing dependency): %s", e)
             return False
         except Exception as e:
-            self.logger.error(f"Failed to initialize VectorMemoryService: {e}", exc_info=True)
+            self.logger.error("Failed to initialize VectorMemoryService: %s", e, exc_info=True)
             return False
 
     def _sanitize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -158,13 +154,11 @@ class VectorMemoryService:
                 metadatas=[trade_metadata]
             )
 
-            self.logger.info(
-                f"Stored experience: {trade_id} ({outcome}, {pnl_pct:+.2f}%)"
-            )
+            self.logger.info("Stored experience: %s (%s, %s%%)", trade_id, outcome, f"{pnl_pct:+.2f}")
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to store experience: {e}")
+            self.logger.error("Failed to store experience: %s", e)
             return False
 
     def _calculate_recency_score(
@@ -261,7 +255,7 @@ class VectorMemoryService:
             return experiences
 
         except Exception as e:
-            self.logger.error(f"Failed to retrieve experiences: {e}")
+            self.logger.error("Failed to retrieve experiences: %s", e)
             return []
 
     def get_context_for_prompt(
@@ -494,7 +488,7 @@ class VectorMemoryService:
             return experiences
 
         except Exception as e:
-            self.logger.error(f"Failed to retrieve all experiences: {e}")
+            self.logger.error("Failed to retrieve all experiences: %s", e)
             return []
 
 
@@ -533,11 +527,11 @@ class VectorMemoryService:
                 metadatas=[rule_meta]
             )
 
-            self.logger.info(f"Stored semantic rule: {rule_id}")
+            self.logger.info("Stored semantic rule: %s", rule_id)
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to store semantic rule: {e}")
+            self.logger.error("Failed to store semantic rule: %s", e)
             return False
 
     def get_active_rules(self, n_results: int = 5) -> List[Dict[str, Any]]:
@@ -574,7 +568,7 @@ class VectorMemoryService:
             return rules
 
         except Exception as e:
-            self.logger.error(f"Failed to get active rules: {e}")
+            self.logger.error("Failed to get active rules: %s", e)
             return []
 
     def get_relevant_rules(
@@ -632,7 +626,7 @@ class VectorMemoryService:
             return rules[:n_results]
 
         except Exception as e:
-            self.logger.error(f"Failed to get relevant rules: {e}")
+            self.logger.error("Failed to get relevant rules: %s", e)
             return []
 
     @property

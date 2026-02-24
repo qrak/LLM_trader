@@ -7,7 +7,7 @@ import os
 # Add src to path if running directly
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.trading.dataclasses import Position
+from src.trading.data_models import Position
 from src.trading.statistics_calculator import StatisticsCalculator
 
 class TestTradeLifecycle(unittest.TestCase):

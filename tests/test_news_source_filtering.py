@@ -25,8 +25,8 @@ async def test_news_filtering():
     logger.info("=" * 60)
     logger.info("Testing News Source Filtering")
     logger.info("=" * 60)
-    logger.info(f"Filter enabled: {config.RAG_NEWS_FILTER_SOURCES}")
-    logger.info(f"Allowed feeds: {config.RAG_NEWS_ALLOWED_FEEDS or RELIABLE_NEWS_FEEDS}")
+    logger.info("Filter enabled: %s", config.RAG_NEWS_FILTER_SOURCES)
+    logger.info("Allowed feeds: %s", config.RAG_NEWS_ALLOWED_FEEDS or RELIABLE_NEWS_FEEDS)
     logger.info("")
 
     # Fetch news
@@ -36,7 +36,7 @@ async def test_news_filtering():
         logger.error("Failed to fetch news or empty response")
         return False
 
-    logger.info(f"Total articles fetched: {len(articles)}")
+    logger.info("Total articles fetched: %s", len(articles))
 
     # Analyze sources
     sources = {}
@@ -47,14 +47,14 @@ async def test_news_filtering():
     logger.info("\nArticle sources breakdown:")
     for source, count in sorted(sources.items(), key=lambda x: x[1], reverse=True):
         tier = "✓ TIER 1" if source in RELIABLE_NEWS_FEEDS else "✗ UNEXPECTED"
-        logger.info(f"  {source}: {count} articles [{tier}]")
+        logger.info("  %s: %s articles [%s]", source, count, tier)
 
     # Verify all sources are from whitelist
     unexpected_sources = [s for s in sources.keys() if s not in RELIABLE_NEWS_FEEDS]
 
     logger.info("\n" + "=" * 60)
     if unexpected_sources:
-        logger.error(f"FAILED: Found unexpected sources: {unexpected_sources}")
+        logger.error("FAILED: Found unexpected sources: %s", unexpected_sources)
         return False
     else:
         logger.info("SUCCESS: All articles are from Tier 1 sources only!")

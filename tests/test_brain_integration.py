@@ -243,7 +243,7 @@ class TestBrainIntegration:
 
     def test_update_tracking(self, brain_service, vector_memory):
         """Verify that position updates are tracked for learning."""
-        from src.trading.dataclasses import Position
+        from src.trading.data_models import Position
         from datetime import datetime
 
         position = Position(

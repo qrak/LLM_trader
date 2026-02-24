@@ -6,7 +6,7 @@ Handles short-term memory of trading decisions for AI context injection.
 from typing import Optional, List, Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from .dataclasses import TradingMemory, TradeDecision
+from .data_models import TradingMemory, TradeDecision
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -85,7 +85,7 @@ class TradingMemoryService:
                 decision = TradeDecision.from_dict(trade_data)
                 memory.add_decision(decision)
             except Exception as e:
-                self.logger.warning(f"Could not load decision from history: {e}")
+                self.logger.warning("Could not load decision from history: %s", e)
 
-        self.logger.info(f"Built memory with {len(memory.decisions)} decisions from history")
+        self.logger.info("Built memory with %s decisions from history", len(memory.decisions))
         return memory

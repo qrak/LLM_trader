@@ -94,7 +94,7 @@ class ModelManager(ModelManagerProtocol):
                 await self._clients.blockrun.close()
             self.logger.debug("All model clients closed successfully")
         except Exception as e:
-            self.logger.error(f"Error during model manager cleanup: {e}")
+            self.logger.error("Error during model manager cleanup: %s", e)
 
     async def send_prompt(
         self,
@@ -154,7 +154,7 @@ class ModelManager(ModelManagerProtocol):
                     return await self._process_result(result)
                 self.logger.warning("LM Studio streaming returned None. Falling back to non-streaming mode.")
             except Exception as e:
-                self.logger.warning(f"LM Studio streaming failed: {str(e)}. Falling back to non-streaming mode.")
+                self.logger.warning("LM Studio streaming failed: %s. Falling back to non-streaming mode.", str(e))
         return await self.send_prompt(prompt, system_message, prepared_messages=messages, provider=provider, model=model)
 
     async def send_prompt_with_chart_analysis(
@@ -231,13 +231,13 @@ class ModelManager(ModelManagerProtocol):
             messages.append({"role": "user", "content": combined_prompt})
             system_tokens = self.token_counter.count_tokens(system_message)
             prompt_tokens = self.token_counter.count_tokens(prompt)
-            self.logger.debug(f"Pre-call estimate: system={system_tokens:,}, prompt={prompt_tokens:,}")
-            self.logger.info(f"Full prompt content: {combined_prompt}")
+            self.logger.debug("Pre-call estimate: system=%s, prompt=%s", f"{system_tokens:,}", f"{prompt_tokens:,}")
+            self.logger.info("Full prompt content: %s", combined_prompt)
         else:
             messages.append({"role": "user", "content": prompt})
             prompt_tokens = self.token_counter.count_tokens(prompt)
-            self.logger.debug(f"Pre-call estimate: prompt={prompt_tokens:,}")
-            self.logger.info(f"Full prompt content: {prompt}")
+            self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
+            self.logger.info("Full prompt content: %s", prompt)
         return messages
 
     async def _process_result(self, result) -> str:
@@ -258,12 +258,12 @@ class ModelManager(ModelManagerProtocol):
         if response.error:
             return self.unified_parser.format_error_response(response.error)
         if not result.success:
-            self.logger.error(f"API response invalid: {response}")
+            self.logger.error("API response invalid: %s", response)
             return self.unified_parser.format_error_response("Invalid API response format")
         if not response.choices or not response.choices[0].message:
             return self.unified_parser.format_error_response("No content in response")
         content = response.choices[0].message.content
-        self.logger.info(f"Full response content: {content}")
+        self.logger.info("Full response content: %s", content)
         await self._track_cost(result, response, content)
         return content
 

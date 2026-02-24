@@ -2,7 +2,7 @@
 
 > **Status:** BETA / Research Edition
 >
-> **Note:** This is the public research branch. It is frequently experimentaly updated. The stable production version runs privately.
+> **Note:** This is the public research branch. It is frequently experimentally updated. The stable production version runs privately.
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
@@ -25,6 +25,7 @@ graph TD
         Ex["Exchanges (CCXT)"] --> |OHLCV/Trades| DC(Market Data Collector)
         News[CryptoCompare] --> |Articles| RAG(RAG Engine)
         Sent[Alternative.me] --> |Fear & Greed| DC
+        DeFi[DefiLlama] --> |TVL/Fundamentals| RAG
     end
 
     subgraph Analysis Core
@@ -47,10 +48,12 @@ graph TD
         %% Provider Selection Logic (Sequential / Fallback)
         MM -.-> |Primary| Google["Google Gemini (Text + Vision)"]
         MM -.-> |Fallback or Direct| OR["OpenRouter (Text + Vision)"]
+        MM -.-> |Pay-per-request| BR["BlockRun.AI (x402 Micropayments)"]
         MM -.-> |Local| Local["LM Studio (Text Only)"]
         
         Google --> |Response| ARP[Analysis Result Processor]
         OR --> |Response| ARP
+        BR --> |Response| ARP
         Local --> |Response| ARP
     end
 
@@ -83,19 +86,20 @@ graph TD
 - **Self-Learning Rules**: Semantic rules are stored persistently in a dedicated ChromaDB collection and injected into AI prompts to enforce learned behavior (e.g., "MANDATORY: If win rate <50%, reduce confidence").
 
 ### 🤖 AI & LLM Support
-- **Multi-Provider Support**: 
-  - **Google Gemini**: Configurable model selection. Optimized for `gemini-3-flash-preview` (Temp 1.0, TopK 64) via `config.ini`.
-  - **Claude 4.5 / Google Gemini 3 Pro**: Support for state-of-the-art reasoning models via OpenRouter.
-  - **BlockRun.AI**: Pay-per-request access to 28+ AI models (ChatGPT, Claude, Gemini, etc.) via x402 micropayments on Base blockchain. No subscriptions needed.
-  - **LM Studio**: Local LLM support verified via `lm_studio_base_url`.
-- **Fallback Logic**: Automatically switches providers if primary fails (Google AI -> OpenRouter -> BlockRun -> Local).
+- **Multi-Provider Support**:
+  - **Google Gemini**: Configurable model selection. Default: `gemini-3-flash-preview` (Temp 1.0, TopK 64, Thinking Level: high). Supports **Agentic Vision** (code execution for precise image analysis on Flash+).
+  - **OpenRouter**: Access to frontier models. Default: `google/gemini-3-flash-preview` with `deepseek/deepseek-r1:free` as fallback.
+  - **BlockRun.AI**: Pay-per-request access to 28+ AI models (ChatGPT, Claude, Gemini, etc.) via x402 micropayments on the Base blockchain. No subscriptions needed. Uses a dedicated local wallet for signing — funds never leave your machine.
+  - **LM Studio**: Local LLM support via `lm_studio_base_url` for fully offline inference.
+- **Fallback Logic**: Automatically switches providers if the primary fails: `Google AI → OpenRouter → BlockRun → Local`.
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 
 ### 📢 RAG Engine (News & Context)
-- **News Aggregator**: Requires a **CryptoCompare API Key**. The free tier typically offers ~150k lifetime requests, which is sufficient for continuous bot operation.
+- **News Aggregator**: Requires a **CryptoCompare API Key**. The free tier typically offers ~150k lifetime requests, sufficient for continuous bot operation.
 - **Smart Relevance Scoring**: Uses **keyword density**, **category matching**, and **coin-specific heuristics** to filter noise and prioritize data-rich content.
 - **Lead Paragraph Extraction**: Extracts coherent lead paragraphs from articles following the "Inverted Pyramid" structure, preserving narrative flow and context.
-- **Configurable Limits**: Adjustable token limits and article counts to manage context window.
+- **DefiLlama Fundamentals**: Fetches TVL and on-chain fundamentals at a configurable interval (default: every 15 minutes) for DeFi context.
+- **Configurable Limits**: Adjustable token limits, article counts, and news feed sources to manage context window and data quality.
 
 ### 🌍 Market Data & Exchanges
 - **Multi-Exchange Aggregation**: Fetches data via `ccxt` from **5+ exchanges**:
@@ -114,7 +118,7 @@ graph TD
 ### 📈 Trading Intelligence
 - **Realistic Capital Tracking**: Dynamic compounding of trading capital based on realized P&L. No static initial capital assumptions.
 - **Advanced Performance Metrics**: Real-time calculation of **Sharpe Ratio**, **Sortino Ratio**, **Max Drawdown**, and **Profit Factor**.
-- **Currency-Agnostic P&L**: Tracks profits and losses accurately in the relevant quote currency (e.g., USDT, ETH, BTC).
+- **Currency-Agnostic P&L**: Tracks profits and losses accurately in the relevant quote currency (e.g., USDC, ETH, BTC).
 - **Vision-Assisted Trading**: Generates technical charts with indicators and sends them to vision-capable models (e.g., Gemini Flash) for visual pattern confirmation.
 - **Weekend Awareness**: Automatic detection of weekend trading with explicit warnings about lower volume/liquidity and manipulation risks.
 
@@ -132,7 +136,7 @@ graph TD
   - **Collapsible Panels**: Minimize panels to save screen space with responsive sibling expansion.
   - **WebSocket Real-Time Updates**: Live connection status indicator and auto-reconnection.
 
-
+---
 
 ## 🗺️ Roadmap
 
@@ -143,16 +147,20 @@ graph TD
 - [x] **Discord Integration** (Real-time signals, positions, and performance stats)
 - [x] **Interactive CLI** (Hotkeys for manual control)
 - [x] **Web Dashboard**: Real-time visualization of synaptic pathways and neural state.
+- [x] **BlockRun.AI Integration**: Pay-per-request AI access via x402 micropayments.
+- [x] **DefiLlama Fundamentals**: On-chain TVL context in the RAG pipeline.
 - [ ] **Multiple Trading Agent Personalities**: Diverse strategist personalities (conservative, aggressive, contrarian, trend-following) that engage in cross-agent reasoning to refine market entry/exit precision.
 - [ ] **Multi-Model Consensus Decision-Making**: A "Council of Models" architecture where specialized agents—**Visual Cortex Analyst** (chart vision), **Technical Specialist** (indicators), **Sentiment Scout** (news/macro), and **Memory Historian** (vector experiences)—collaborate to reach a final consensus signal.
 - [ ] **Live Trading**: Execution Layer integration for verified order placement.
 - [ ] **Concurrent Multi-Asset Analysis**: Scaling the engine to analyze 10+ coins simultaneously, leveraging parallel LLM execution for broad market coverage.
 
+---
+
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
 - Python 3.13+
-- [LM Studio](https://lmstudio.ai/) (Optional, for local inference)
+- [LM Studio](https://lmstudio.ai/) *(Optional — for local offline inference)*
 
 ### 2. Installation
 
@@ -167,54 +175,85 @@ python -m venv .venv
 
 # Install Dependencies
 pip install -r requirements.txt
+
+# For development (linting, testing tools)
+pip install -r requirements-dev.txt
 ```
 
 ### 3. Configuration
 
-1. **Credentials**: Copy `keys.env.example` to `keys.env`.
-   ```ini
-   OPENROUTER_API_KEY=your_key_here
-   GOOGLE_STUDIO_API_KEY=your_key_here
-   # Optional but Recommended Keys
-   # -----------------------------
-   # CRYPTOCOMPARE_API_KEY: Increases rate limits and reliability.
-   # Free Tier available: https://min-api.cryptocompare.com/
-   CRYPTOCOMPARE_API_KEY=your_key_here
-   # COINGECKO_API_KEY: Increases rate limits (~30 req/min vs ~10 req/min public).
-   # Free Demo API Key available (header: x-cg-demo-api-key)
-   COINGECKO_API_KEY=your_key_here
-   ```
+**Step 1 — API Keys**: Copy `keys.env.example` to `keys.env` and fill in your credentials.
 
-2. **Bot Config**: Copy `config/config.ini.example` to `config/config.ini`. The default settings are "ready to go" for a standard setup, but you can edit it to customize your experience.
-   ```ini
-   [ai_providers]
-   # Options: "local", "googleai", "openrouter", "all"
-   provider = googleai
-   
-   [model_config]
-   # Critical for Gemini 3 Flash Preview
-   google_temperature = 1.0
-   google_thinking_level = high
-   
-   [general]
-   crypto_pair = BTC/USDT
-   timeframe = 1h
-   ```
+```ini
+# Required: At least one AI provider
+OPENROUTER_API_KEY=your_key_here
+GOOGLE_STUDIO_API_KEY=your_key_here          # Free tier
+GOOGLE_STUDIO_PAID_API_KEY=your_key_here     # Paid tier (higher rate limits)
+
+# Optional but Recommended
+CRYPTOCOMPARE_API_KEY=your_key_here          # ~150k lifetime free requests
+COINGECKO_API_KEY=your_key_here              # Free Demo key: ~30 req/min vs ~10 public
+
+# BlockRun.AI (x402 micropayments — Base chain wallet private key)
+# WARNING: Use a dedicated wallet with minimal funds only.
+# BLOCKRUN_WALLET_KEY=0x0000...
+```
+
+**Step 2 — Bot Config**: Copy `config/config.ini.example` to `config/config.ini`. The defaults are ready to run, but key sections are explained below.
+
+```ini
+[ai_providers]
+# Options: "local", "googleai", "openrouter", "blockrun", "all"
+# "all" enables automatic fallback: Google → OpenRouter → BlockRun → Local
+provider = googleai
+
+google_studio_model = gemini-3-flash-preview
+openrouter_base_model = google/gemini-3-flash-preview
+openrouter_fallback_model = deepseek/deepseek-r1:free
+blockrun_model = deepseek/deepseek-reasoner
+lm_studio_base_url = http://localhost:1234/v1
+
+[general]
+crypto_pair = BTC/USDC
+timeframe = 4h
+
+[model_config]
+# Critical for Gemini 3 Flash Preview
+google_temperature = 1.0
+google_thinking_level = high        # minimal | low | medium | high
+google_code_execution = false       # Agentic Vision (Flash+ only, Google API only)
+
+[dashboard]
+host = 0.0.0.0   # Use 127.0.0.1 for local-only access
+port = 8000
+enable_cors = false
+
+[demo_trading]
+demo_quote_capital = 10000          # Simulated starting capital
+transaction_fee_percent = 0.00075  # 0.075% limit order fee
+```
+
+> 💡 See `config/config.ini.example` for the full reference — it documents every setting including `[rag]`, `[exchanges]`, `[cooldowns]`, and `[debug]` sections.
+
+---
 
 ## 🎮 Usage
 
-Run the bot:
 ```powershell
-python start.py              # Default from config
+python start.py    # Reads all settings from config/config.ini
 ```
 
 ### ⌨️ Controls
+
 | Key | Action |
 | :--- | :--- |
 | **`a`** | **Force Analysis**: Run immediate market check |
 | **`h`** | **Help**: Show available commands |
 | **`q`** | **Quit**: Gracefully shutdown the bot |
 
+The dashboard will be available at `http://localhost:8000` (or the host/port configured in `config.ini`).
+
+---
 
 ## 💬 Community & Support
 - **Discord**: [Join our community](https://discord.gg/ZC48aTTqR2) for live signals, development chat, and support.

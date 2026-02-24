@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, AsyncMock
 
 async def test():
     from src.trading.trading_strategy import TradingStrategy
-    from src.trading.dataclasses import Position
+    from src.trading.data_models import Position
     from datetime import datetime, timezone
 
     mock_logger = MagicMock()

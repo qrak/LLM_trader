@@ -53,22 +53,91 @@ def _auto_dom_imp(source, minlen, maxlen, avelen):
 
 @njit(cache=True)
 def kurtosis_numba(arr, length):
+    """O(N) Sample Kurtosis using sliding window raw moments."""
     n = len(arr)
     kurtosis_values = np.full(n, np.nan)
+
+    if n < length or length <= 3:
+        return kurtosis_values
+
     length_reciprocal = 1.0 / length
 
-    for i in range(length - 1, n):
-        window = arr[i - length + 1:i + 1]
-        mean = np.sum(window) * length_reciprocal
-        variance = np.sum((window - mean) ** 2) * length_reciprocal
-        std_dev = np.sqrt(variance)
+    # Constants for unbiased estimator (matching original implementation)
+    n_val = float(length)
+    factor1 = (n_val * (n_val + 1)) / ((n_val - 1) * (n_val - 2) * (n_val - 3))
+    factor2 = 3 * (n_val - 1) / ((n_val - 2) * (n_val - 3))
 
-        kurtosis_sum = np.sum(((window - mean) / std_dev) ** 4)
-        kurtosis_constant = (length * (length + 1)) / ((length - 1) * (length - 2) * (length - 3))
-        kurtosis = kurtosis_constant * kurtosis_sum
-        kurtosis -= 3 * (length - 1) / ((length - 2) * (length - 3))
+    offset = arr[0]
+    s1 = 0.0
+    s2 = 0.0
+    s3 = 0.0
+    s4 = 0.0
 
-        kurtosis_values[i] = kurtosis
+    # Initialize first window
+    for i in range(length):
+        val = arr[i] - offset
+        val2 = val * val
+        s1 += val
+        s2 += val2
+        s3 += val2 * val
+        s4 += val2 * val2
+
+    # Compute for first window
+    mean = s1 * length_reciprocal
+    sum_sq_diff = s2 - length * mean * mean
+    if sum_sq_diff < 0:
+        sum_sq_diff = 0.0
+
+    variance = sum_sq_diff * length_reciprocal
+
+    if variance > 1e-20:
+        sum_fourth_diff = s4 - 4 * mean * s3 + 6 * mean * mean * s2 - 3 * length * mean * mean * mean * mean
+        kurtosis_sum = sum_fourth_diff / (variance * variance)
+        kurtosis = factor1 * kurtosis_sum - factor2
+        kurtosis_values[length - 1] = kurtosis
+
+    # Sliding window
+    for i in range(length, n):
+        old_val = arr[i - length] - offset
+        new_val = arr[i] - offset
+
+        # Re-calculate every 1000 steps to maintain precision
+        if i % 1000 == 0:
+            # Update offset to current window start to ensure numerical stability
+            offset = arr[i - length + 1]
+            window = arr[i - length + 1: i + 1] - offset
+            s1 = 0.0
+            s2 = 0.0
+            s3 = 0.0
+            s4 = 0.0
+            for j in range(length):
+                v = window[j]
+                v2 = v * v
+                s1 += v
+                s2 += v2
+                s3 += v2 * v
+                s4 += v2 * v2
+        else:
+            old_val2 = old_val * old_val
+            new_val2 = new_val * new_val
+
+            s1 += new_val - old_val
+            s2 += new_val2 - old_val2
+            s3 += new_val2 * new_val - old_val2 * old_val
+            s4 += new_val2 * new_val2 - old_val2 * old_val2
+
+        mean = s1 * length_reciprocal
+        sum_sq_diff = s2 - length * mean * mean
+        if sum_sq_diff < 0:
+            sum_sq_diff = 0.0
+
+        variance = sum_sq_diff * length_reciprocal
+
+        if variance > 1e-20:
+            sum_fourth_diff = s4 - 4 * mean * s3 + 6 * mean * mean * s2 - 3 * length * mean * mean * mean * mean
+            kurtosis_sum = sum_fourth_diff / (variance * variance)
+            kurtosis = factor1 * kurtosis_sum - factor2
+            kurtosis_values[i] = kurtosis
 
     return kurtosis_values
 

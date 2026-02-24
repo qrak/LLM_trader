@@ -139,7 +139,7 @@ class TechnicalFormatter:
 
         except Exception as e:
             if self.logger:
-                self.logger.debug(f"Error formatting price action with OHLCV: {e}")
+                self.logger.debug("Error formatting price action with OHLCV: %s", e)
             # Fallback to simple format
             return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
 
@@ -318,11 +318,11 @@ class TechnicalFormatter:
                     pattern_summaries.append(f"- {compressed_desc}")
                 if pattern_summaries:
                     if self.logger:
-                        self.logger.debug(f"Including {len(pattern_summaries)} recent patterns in technical analysis (dedup + recency filter)")
+                        self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
             except Exception as e:
                 if self.logger:
-                    self.logger.debug(f"Error using stored technical_patterns: {e}")
+                    self.logger.debug("Error using stored technical_patterns: %s", e)
 
         try:
             ohlcv_data = context.ohlcv_candles
@@ -331,7 +331,7 @@ class TechnicalFormatter:
             patterns = self.technical_calculator.get_all_patterns(ohlcv_data, technical_history)
 
             if self.logger:
-                self.logger.debug(f"Using fallback pattern detection, found {len(patterns)} patterns")
+                self.logger.debug("Using fallback pattern detection, found %s patterns", len(patterns))
 
             if patterns:
                 pattern_summaries = []
@@ -344,7 +344,7 @@ class TechnicalFormatter:
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries)
         except Exception as e:
             if self.logger:
-                self.logger.debug(f"Could not use fallback pattern detection: {e}")
+                self.logger.debug("Could not use fallback pattern detection: %s", e)
 
         return ""
 
@@ -494,7 +494,7 @@ class TechnicalFormatter:
             return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
         except Exception as e:
             if self.logger:
-                self.logger.debug(f"Error formatting SMA structure: {e}")
+                self.logger.debug("Error formatting SMA structure: %s", e)
             return ""
 
     def _format_ichimoku_signal(self, td: dict) -> str:
@@ -542,7 +542,7 @@ class TechnicalFormatter:
                 return " | Ichi:☁️="
         except Exception as e:
             if self.logger:
-                self.logger.debug(f"Error calculating ichimoku signal: {e}")
+                self.logger.debug("Error calculating ichimoku signal: %s", e)
             return ""
 
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:

@@ -6,7 +6,7 @@ SL moves (including Full AI Autonomy widening).
 import unittest
 from unittest.mock import MagicMock
 from datetime import datetime, timezone
-from src.trading.dataclasses import Position
+from src.trading.data_models import Position
 
 
 class TestSLTrailingValidation(unittest.IsolatedAsyncioTestCase):

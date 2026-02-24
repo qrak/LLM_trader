@@ -35,9 +35,9 @@ class NewsCache:
                         if loaded_time.tzinfo is None:
                             loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                         self.last_news_update = loaded_time
-                        self.logger.debug(f"Found cached news data from {self.last_news_update.isoformat()}")
+                        self.logger.debug("Found cached news data from %s", self.last_news_update.isoformat())
             except Exception as e:
-                self.logger.error(f"Error loading news cache: {e}")
+                self.logger.error("Error loading news cache: %s", e)
 
     def should_fetch_fresh_news(self, update_interval: timedelta) -> bool:
         """Determine if we should fetch fresh news from the API"""
@@ -66,7 +66,7 @@ class NewsCache:
                         # Return with limit
                         return filtered_articles[:limit] if limit > 0 else filtered_articles
         except Exception as e:
-            self.logger.error(f"Error reading cached news: {e}")
+            self.logger.error("Error reading cached news: %s", e)
 
         return []
 
@@ -86,6 +86,6 @@ class NewsCache:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
 
             self.last_news_update = datetime.now(timezone.utc)
-            self.logger.debug(f"Saved {len(articles)} news articles to cache")
+            self.logger.debug("Saved %s news articles to cache", len(articles))
         except Exception as e:
-            self.logger.error(f"Error saving news cache: {e}")
+            self.logger.error("Error saving news cache: %s", e)

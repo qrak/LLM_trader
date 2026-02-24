@@ -113,7 +113,7 @@ class TemplateManager:
                         window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
                     except Exception as e:  # pylint: disable=broad-exception-caught
                         if self.logger:
-                            self.logger.warning(f"Failed to calculate relevance window for {timeframe}: {e}")
+                            self.logger.warning("Failed to calculate relevance window for %s: %s", timeframe, e)
 
                 header_lines.extend([
                     "",

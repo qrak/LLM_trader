@@ -99,7 +99,7 @@ class RagEngine:
             if self.news_manager.get_database_size() > 0:
                 self.last_update = datetime.now(timezone.utc)
                 self._build_indices()
-                self.logger.debug(f"Loaded {self.news_manager.get_database_size()} recent news articles")
+                self.logger.debug("Loaded %s recent news articles", self.news_manager.get_database_size())
 
             await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
 
@@ -107,7 +107,7 @@ class RagEngine:
                 await self.refresh_market_data()
                 self.last_update = datetime.now(timezone.utc)
         except Exception as e:
-            self.logger.exception(f"Error initializing RAG engine: {e}")
+            self.logger.exception("Error initializing RAG engine: %s", e)
             self.news_manager.clear_database()
 
     def _build_indices(self) -> None:
@@ -128,19 +128,19 @@ class RagEngine:
                     self.last_update = datetime.now(timezone.utc)
                     return True
                 except Exception as e:
-                    self.logger.error(f"Failed to update market knowledge: {e}")
+                    self.logger.error("Failed to update market knowledge: %s", e)
                     return False
 
             time_since_update = datetime.now(timezone.utc) - self.last_update
             if force_update or time_since_update > self.update_interval:
                 reason = "forced update" if force_update else f"{time_since_update.total_seconds()/60:.1f} minutes since last update"
-                self.logger.debug(f"Refreshing market knowledge: {reason}")
+                self.logger.debug("Refreshing market knowledge: %s", reason)
                 try:
                     await self.refresh_market_data()
                     self.last_update = datetime.now(timezone.utc)
                     return True
                 except Exception as e:
-                    self.logger.error(f"Failed to update market knowledge: {e}")
+                    self.logger.error("Failed to update market knowledge: %s", e)
                     return False
 
             try:
@@ -148,7 +148,7 @@ class RagEngine:
                 if categories_updated:
                     self._build_indices()
             except Exception as e:
-                self.logger.error(f"Failed to update categories: {e}")
+                self.logger.error("Failed to update categories: %s", e)
 
             return False
 
@@ -162,14 +162,14 @@ class RagEngine:
                 self.ticker_manager.get_known_tickers()
             )
         except Exception as e:
-            self.logger.error(f"Error fetching crypto news: {e}")
+            self.logger.error("Error fetching crypto news: %s", e)
             articles = []
 
         # Update market overview if needed
         try:
             await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
         except Exception as e:
-            self.logger.error(f"Error updating market overview: {e}")
+            self.logger.error("Error updating market overview: %s", e)
 
         # Process articles
         if articles:
@@ -239,11 +239,11 @@ class RagEngine:
             context_text, total_tokens = self.context_builder.add_articles_to_context(
                 relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
-            self.logger.debug(f"Retrieved context with {total_tokens} tokens")
+            self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
             return context_text
         except Exception as e:
-            self.logger.error(f"Error retrieving context: {e}")
+            self.logger.error("Error retrieving context: %s", e)
             return "Error retrieving market context."
 
     async def get_market_overview(self) -> Optional[Dict[str, Any]]:
@@ -257,7 +257,7 @@ class RagEngine:
 
             return None
         except Exception as e:
-            self.logger.error(f"Error getting market overview: {e}")
+            self.logger.error("Error getting market overview: %s", e)
             return None
 
     async def update_known_tickers(self) -> None:
@@ -265,7 +265,7 @@ class RagEngine:
         try:
             await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
         except Exception as e:
-            self.logger.error(f"Error updating known tickers: {e}")
+            self.logger.error("Error updating known tickers: %s", e)
 
     async def start_periodic_updates(self) -> None:
         """Start periodic data update task"""
@@ -278,12 +278,13 @@ class RagEngine:
                     self.logger.debug("Periodic updates cancelled")
                     break
                 except Exception as e:
-                    self.logger.error(f"Error in periodic update: {e}")
+                    self.logger.error("Error in periodic update: %s", e)
                     await asyncio.sleep(60)
 
         if self._periodic_update_task is None:
             self._periodic_update_task = asyncio.create_task(update_loop())
-            self.logger.debug(f"Started periodic news updates every {self.update_interval.total_seconds()/60:.1f} minutes")
+            update_mins = self.update_interval.total_seconds() / 60
+            self.logger.debug("Started periodic news updates every %.1f minutes", update_mins)
 
     async def stop_periodic_updates(self) -> None:
         """Stop periodic data update task"""
@@ -318,7 +319,7 @@ class RagEngine:
             try:
                 await self.coingecko_api.close()
             except Exception as e:
-                self.logger.error(f"Error closing CoinGecko API client: {e}")
+                self.logger.error("Error closing CoinGecko API client: %s", e)
 
         self.logger.info("RAG Engine resources released")
 
@@ -335,5 +336,5 @@ class RagEngine:
                 return True
             return False
         except Exception as e:
-            self.logger.exception(f"Error ensuring categories updated: {e}")
+            self.logger.exception("Error ensuring categories updated: %s", e)
             return False

@@ -108,7 +108,7 @@ class DefiLlamaClient:
                     if "timestamp" in data:
                         self.last_update = datetime.fromisoformat(data["timestamp"])
         except Exception as e:
-            self.logger.debug(f"Could not read DefiLlama cache metadata: {e}")
+            self.logger.debug("Could not read DefiLlama cache metadata: %s", e)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None:
@@ -140,10 +140,10 @@ class DefiLlamaClient:
                         if item.get("circulating", {}).get("peggedUSD") is not None
                     ]
                 else:
-                    self.logger.error(f"DefiLlama Stablecoins API error: {response.status}")
+                    self.logger.error("DefiLlama Stablecoins API error: %s", response.status)
                     return []
         except Exception as e:
-            self.logger.error(f"Error fetching stablecoins: {e}")
+            self.logger.error("Error fetching stablecoins: %s", e)
             return []
 
     async def get_chains_tvl(self) -> List[ChainTVLData]:
@@ -156,10 +156,10 @@ class DefiLlamaClient:
                     data = await response.json()
                     return [ChainTVLData(**item) for item in data]
                 else:
-                    self.logger.error(f"DefiLlama Chains API error: {response.status}")
+                    self.logger.error("DefiLlama Chains API error: %s", response.status)
                     return []
         except Exception as e:
-            self.logger.error(f"Error fetching chain TVL: {e}")
+            self.logger.error("Error fetching chain TVL: %s", e)
             return []
 
     async def get_macro_overview(self) -> Optional[MacroMarketData]:
@@ -191,7 +191,7 @@ class DefiLlamaClient:
                 top_chains=top_chains
             )
         except Exception as e:
-            self.logger.error(f"Error building macro overview: {e}")
+            self.logger.error("Error building macro overview: %s", e)
             return None
 
     async def close(self):
@@ -231,10 +231,10 @@ class DefiLlamaClient:
                         top_protocols=top_protocols
                     )
                 else:
-                    self.logger.warning(f"DefiLlama DEX API error: {response.status}")
+                    self.logger.warning("DefiLlama DEX API error: %s", response.status)
                     return None
         except Exception as e:
-            self.logger.error(f"Error fetching DEX volumes: {e}")
+            self.logger.error("Error fetching DEX volumes: %s", e)
             return None
 
     async def get_fees_data(self) -> Optional[FeesData]:
@@ -262,10 +262,10 @@ class DefiLlamaClient:
                         top_earners=top_earners
                     )
                 else:
-                    self.logger.warning(f"DefiLlama Fees API error: {response.status}")
+                    self.logger.warning("DefiLlama Fees API error: %s", response.status)
                     return None
         except Exception as e:
-            self.logger.error(f"Error fetching fees data: {e}")
+            self.logger.error("Error fetching fees data: %s", e)
             return None
 
     async def get_options_data(self) -> Optional[OptionsData]:
@@ -290,10 +290,10 @@ class DefiLlamaClient:
                         top_protocols=top_protocols
                     )
                 else:
-                    self.logger.warning(f"DefiLlama Options API error: {response.status}")
+                    self.logger.warning("DefiLlama Options API error: %s", response.status)
                     return None
         except Exception as e:
-            self.logger.error(f"Error fetching options data: {e}")
+            self.logger.error("Error fetching options data: %s", e)
             return None
 
     async def get_defi_fundamentals(self) -> Optional[DeFiFundamentalsData]:
@@ -307,10 +307,10 @@ class DefiLlamaClient:
                     with open(self.cache_file_path, 'r', encoding='utf-8') as f:
                         cached_data = json.load(f)
                         if "data" in cached_data:
-                            self.logger.debug(f"Using cached DefiLlama data from {self.last_update.isoformat()}")
+                            self.logger.debug("Using cached DefiLlama data from %s", self.last_update.isoformat())
                             return DeFiFundamentalsData(**cached_data["data"])
                 except Exception as e:
-                    self.logger.warning(f"Failed to read DefiLlama cache: {e}")
+                    self.logger.warning("Failed to read DefiLlama cache: %s", e)
 
         self.logger.debug("Fetching fresh DefiLlama fundamentals...")
         try:
@@ -332,17 +332,17 @@ class DefiLlamaClient:
 
             # Handle exceptions in results
             if isinstance(macro, Exception) or not macro:
-                self.logger.error(f"Failed to fetch macro data: {macro}")
+                self.logger.error("Failed to fetch macro data: %s", macro)
                 return None  # Macro is critical
 
             if isinstance(dex, Exception):
-                self.logger.error(f"Failed to fetch DEX data: {dex}")
+                self.logger.error("Failed to fetch DEX data: %s", dex)
                 dex = None
             if isinstance(fees, Exception):
-                self.logger.error(f"Failed to fetch Fees data: {fees}")
+                self.logger.error("Failed to fetch Fees data: %s", fees)
                 fees = None
             if isinstance(options, Exception):
-                self.logger.error(f"Failed to fetch Options data: {options}")
+                self.logger.error("Failed to fetch Options data: %s", options)
                 options = None
 
             fundamentals = DeFiFundamentalsData(
@@ -374,10 +374,10 @@ class DefiLlamaClient:
                 self.last_update = current_time
                 self.logger.debug("Updated DefiLlama cache")
             except Exception as e:
-                self.logger.warning(f"Failed to save DefiLlama cache: {e}")
+                self.logger.warning("Failed to save DefiLlama cache: %s", e)
 
             return fundamentals
 
         except Exception as e:
-            self.logger.error(f"Error building DeFi fundamentals: {e}")
+            self.logger.error("Error building DeFi fundamentals: %s", e)
             return None

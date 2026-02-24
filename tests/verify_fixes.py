@@ -12,11 +12,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.analyzer.formatters.technical_formatter import TechnicalFormatter
 from src.indicators.volatility.volatility_indicators import keltner_channels_numba
 from src.rag.rag_engine import RagEngine
-from src.trading.dataclasses import TradingMemory
+from src.trading.data_models import TradingMemory
 from src.trading.memory import TradeDecision # Import TradeDecision from memory.py based on recent changes or dataclasses if acceptable. Check imports.
 
-# TradeDecision is in src.trading.dataclasses based on previous context
-from src.trading.dataclasses import TradeDecision  # noqa: F811
+# TradeDecision is in src.trading.data_models based on previous context
+from src.trading.data_models import TradeDecision  # noqa: F811
 
 class TestFixes(unittest.TestCase):
 

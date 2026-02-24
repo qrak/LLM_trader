@@ -59,7 +59,7 @@ class CryptoCompareCategoriesAPI:
                 with open(self.categories_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                self.logger.error(f"Error reading categories cache file: {e}")
+                self.logger.error("Error reading categories cache file: %s", e)
                 return None
         return None
 
@@ -69,7 +69,7 @@ class CryptoCompareCategoriesAPI:
             with open(self.categories_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            self.logger.error(f"Error writing categories cache file: {e}")
+            self.logger.error("Error writing categories cache file: %s", e)
 
     async def _load_cached_categories(self) -> None:
         """Load cached categories data - supports both list and object formats"""
@@ -85,7 +85,7 @@ class CryptoCompareCategoriesAPI:
                 # Direct list format
                 self.api_categories = cached_data
                 self._process_api_categories(self.api_categories)
-                self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (list format)")
+                self.logger.debug("Loaded %s categories from cache (list format)", len(self.api_categories))
             elif isinstance(cached_data, dict):
                 # Object format with timestamp and categories
                 if "timestamp" in cached_data:
@@ -101,11 +101,11 @@ class CryptoCompareCategoriesAPI:
                     self.api_categories = [cached_data]
 
                 self._process_api_categories(self.api_categories)
-                self.logger.debug(f"Loaded {len(self.api_categories)} categories from cache (object format)")
+                self.logger.debug("Loaded %s categories from cache (object format)", len(self.api_categories))
             else:
-                self.logger.warning(f"Unexpected cache format: {type(cached_data)}")
+                self.logger.warning("Unexpected cache format: %s", type(cached_data))
         except Exception as e:
-            self.logger.error(f"Error loading categories cache: {e}")
+            self.logger.error("Error loading categories cache: %s", e)
 
     @retry_api_call(max_retries=3)
     async def get_categories(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
@@ -123,7 +123,7 @@ class CryptoCompareCategoriesAPI:
         # Check if we need to refresh
         if not force_refresh and self.categories_last_update and \
            current_time - self.categories_last_update < self.categories_update_interval:
-            self.logger.debug(f"Using cached categories (last update: {self.categories_last_update}, expires in: {self.categories_update_interval - (current_time - self.categories_last_update)})")
+            self.logger.debug("Using cached categories (last update: %s, expires in: %s)", self.categories_last_update, self.categories_update_interval - (current_time - self.categories_last_update))
             return self.api_categories
         
         # Log why we are fetching
@@ -132,7 +132,7 @@ class CryptoCompareCategoriesAPI:
         elif not self.categories_last_update:
             self.logger.info("Fetching categories: No cache available")
         else:
-            self.logger.info(f"Fetching categories: Cache expired (last update: {self.categories_last_update})")
+            self.logger.info("Fetching categories: Cache expired (last update: %s)", self.categories_last_update)
 
         # We assume RAG_CATEGORIES_API_URL contains the base URL
         url = self.config.RAG_CATEGORIES_API_URL
@@ -143,15 +143,15 @@ class CryptoCompareCategoriesAPI:
              url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
 
         # Note: logging raw URL might leak API key, so we log the configured base URL instead
-        self.logger.debug(f"Fetching categories from CryptoCompare API: {self.config.RAG_CATEGORIES_API_URL}")
+        self.logger.debug("Fetching categories from CryptoCompare API: %s", self.config.RAG_CATEGORIES_API_URL)
 
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(url, timeout=30) as resp:
-                    self.logger.debug(f"Categories API response status: {resp.status}")
+                    self.logger.debug("Categories API response status: %s", resp.status)
                     if resp.status == 200:
                         data = await resp.json()
-                        self.logger.debug(f"Categories API raw response: {str(data)[:500]}...")
+                        self.logger.debug("Categories API raw response: %s...", str(data)[:500])
                         if data:
                             # Save to cache with proper structure
                             cache_data = {
@@ -169,10 +169,10 @@ class CryptoCompareCategoriesAPI:
 
                             return data
                     else:
-                        self.logger.error(f"Categories API request failed with status {resp.status}")
-                        self.logger.error(f"Response body: {await resp.text()}")
+                        self.logger.error("Categories API request failed with status %s", resp.status)
+                        self.logger.error("Response body: %s", await resp.text())
             except Exception as e:
-                self.logger.error(f"Error fetching CryptoCompare categories: {e}")
+                self.logger.error("Error fetching CryptoCompare categories: %s", e)
 
         # Return cached data as fallback if API call fails
         return self.api_categories
@@ -186,7 +186,7 @@ class CryptoCompareCategoriesAPI:
 
         try:
             # Debug logging for the received categories data
-            self.logger.debug(f"Processing categories data of type: {type(api_categories)}")
+            self.logger.debug("Processing categories data of type: %s", type(api_categories))
 
             # Normalize data format using the data processor
             normalized_data = self.data_processor.normalize_categories_data(api_categories)
@@ -197,7 +197,7 @@ class CryptoCompareCategoriesAPI:
             self._extract_category_mappings(normalized_data)
 
         except Exception as e:
-            self.logger.error(f"Error processing API categories: {e}")
+            self.logger.error("Error processing API categories: %s", e)
 
     def _extract_category_mappings(self, categories_list: List) -> None:
         """Extract word-to-category mappings from the categories list"""
@@ -208,11 +208,11 @@ class CryptoCompareCategoriesAPI:
                 self._process_category_dict(cat)
             elif isinstance(cat, str):
                 # For simple string categories, just log them
-                self.logger.debug(f"Adding string category: {cat}")
+                self.logger.debug("Adding string category: %s", cat)
             else:
-                self.logger.debug(f"Skipping category with unexpected structure: {type(cat)}")
+                self.logger.debug("Skipping category with unexpected structure: %s", type(cat))
 
-        self.logger.debug(f"Processed {len(self.category_word_map)} category-word associations")
+        self.logger.debug("Processed %s category-word associations", len(self.category_word_map))
 
     def _process_category_dict(self, cat: Dict) -> None:
         """Process a single category dictionary to extract word mappings"""

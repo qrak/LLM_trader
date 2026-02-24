@@ -60,10 +60,10 @@ class MessageTracker:
             success = await self.persistence.save_tracking_data(tracking_data)
 
             if success:
-                self.logger.debug(f"Tracking message {message_id} for deletion")
+                self.logger.debug("Tracking message %s for deletion", message_id)
             return success
         except Exception as e:
-            self.logger.error(f"Error tracking message {message_id}: {e}")
+            self.logger.error("Error tracking message %s: %s", message_id, e)
             return False
 
     async def get_expired_messages(self) -> List[Tuple[int, int]]:
@@ -81,7 +81,7 @@ class MessageTracker:
                     channel_id = data['channel_id']
                     expired_messages.append((message_id, channel_id))
                 except (ValueError, KeyError) as e:
-                    self.logger.warning(f"Invalid tracking data for message {message_id_str}: {e}")
+                    self.logger.warning("Invalid tracking data for message %s: %s", message_id_str, e)
 
         return expired_messages
 

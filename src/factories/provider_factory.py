@@ -95,7 +95,7 @@ class ProviderFactory:
             base_url=self.config.LM_STUDIO_BASE_URL,
             logger=self.logger
         )
-        self.logger.debug(f"LM Studio client initialized for URL: {self.config.LM_STUDIO_BASE_URL}")
+        self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
         return client
 
     def create_blockrun_client(self) -> Optional[BlockRunClient]:
