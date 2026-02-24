@@ -140,10 +140,7 @@ class IndicatorPatternEngine:
             for key, arr in technical_history.items():
                 if isinstance(arr, np.ndarray) and len(arr) != expected_length:
                     if self.logger:
-                        self.logger.warning(
-                            f"Array length mismatch: {key} has {len(arr)} elements, "
-                            f"expected {expected_length}. May affect pattern indices."
-                        )
+                        self.logger.warning("Array length mismatch: %s has %s elements, expected %s. May affect pattern indices.", key, len(arr), expected_length)
 
         # Extract price and volume data if available
         prices = None

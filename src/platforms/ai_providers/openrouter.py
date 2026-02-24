@@ -50,7 +50,7 @@ class OpenRouterClient(BaseAIClient):
         """Send a chat completion request to the OpenRouter API using the SDK."""
         client = self._ensure_client()
         try:
-            self.logger.debug(f"Sending request to OpenRouter SDK with model: {model}")
+            self.logger.debug("Sending request to OpenRouter SDK with model: %s", model)
 
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
@@ -95,7 +95,7 @@ class OpenRouterClient(BaseAIClient):
             multimodal_messages = self._prepare_multimodal_messages(
                 messages, multimodal_content
             )
-            self.logger.debug(f"Sending chart analysis request to OpenRouter SDK ({len(img_data)} bytes)")
+            self.logger.debug("Sending chart analysis request to OpenRouter SDK (%s bytes)", len(img_data))
 
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
@@ -108,7 +108,7 @@ class OpenRouterClient(BaseAIClient):
                 self.logger.debug("Received successful chart analysis response from OpenRouter SDK")
             return self.convert_pydantic_response(response)
         except Exception as e:
-            self.logger.error(f"Error during OpenRouter chart analysis request: {str(e)}")
+            self.logger.error("Error during OpenRouter chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
     async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> Optional[Dict[str, Any]]:
@@ -128,21 +128,46 @@ class OpenRouterClient(BaseAIClient):
             generation = client.generations.get_generation(id=generation_id)
             if generation and generation.data:
                 data = generation.data
+                try:
+                    model = data.model
+                except AttributeError:
+                    model = 'unknown'
+                try:
+                    total_cost = data.total_cost
+                except AttributeError:
+                    total_cost = 0
+                try:
+                    prompt_tokens = data.tokens_prompt
+                except AttributeError:
+                    prompt_tokens = 0
+                try:
+                    completion_tokens = data.tokens_completion
+                except AttributeError:
+                    completion_tokens = 0
+                try:
+                    native_prompt_tokens = data.native_tokens_prompt
+                except AttributeError:
+                    native_prompt_tokens = 0
+                try:
+                    native_completion_tokens = data.native_tokens_completion
+                except AttributeError:
+                    native_completion_tokens = 0
+                    
                 return {
-                    "model": getattr(data, 'model', 'unknown'),
-                    "total_cost": getattr(data, 'total_cost', 0),
-                    "prompt_tokens": getattr(data, 'tokens_prompt', 0),
-                    "completion_tokens": getattr(data, 'tokens_completion', 0),
-                    "native_prompt_tokens": getattr(data, 'native_tokens_prompt', 0),
-                    "native_completion_tokens": getattr(data, 'native_tokens_completion', 0),
+                    "model": model,
+                    "total_cost": total_cost,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "native_prompt_tokens": native_prompt_tokens,
+                    "native_completion_tokens": native_completion_tokens,
                 }
             return None
         except Exception as e:
             error_msg = str(e)
             if "not found" in error_msg.lower():
-                self.logger.debug(f"Generation stats not yet available for {generation_id[:20]}... (will be indexed shortly)")
+                self.logger.debug("Generation stats not yet available for %s... (will be indexed shortly)", generation_id[:20])
             else:
-                self.logger.warning(f"Could not retrieve generation stats: {error_msg}")
+                self.logger.warning("Could not retrieve generation stats: %s", error_msg)
             return None
 
     def _extract_user_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
@@ -187,5 +212,5 @@ class OpenRouterClient(BaseAIClient):
         result = self.handle_common_errors(exception)
         if result:
             return result
-        self.logger.error(f"Unexpected OpenRouter error: {exception}")
+        self.logger.error("Unexpected OpenRouter error: %s", exception)
         return None

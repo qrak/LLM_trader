@@ -29,28 +29,28 @@ class CryptoCompareDataProcessor:
 
         # Handle list data directly
         if isinstance(api_categories, list):
-            self.logger.debug(f"Processing list with {len(api_categories)} items")
+            self.logger.debug("Processing list with %s items", len(api_categories))
             return api_categories
 
-        self.logger.warning(f"Unexpected data type for api_categories: {type(api_categories)}")
+        self.logger.warning("Unexpected data type for api_categories: %s", type(api_categories))
         return None
 
     def _extract_data_from_dict(self, data_dict: Dict) -> Optional[List]:
         """Extract category data from dictionary structures"""
-        self.logger.debug(f"Processing dictionary with keys: {list(data_dict.keys())}")
+        self.logger.debug("Processing dictionary with keys: %s", list(data_dict.keys()))
 
         # Check CoinDesk format with Response, Message, Type, Data structure
         if "Response" in data_dict and "Data" in data_dict:
             if data_dict["Response"] in ("Success", "success"):
-                self.logger.debug(f"Using data from 'Data' key: {type(data_dict['Data'])}")
+                self.logger.debug("Using data from 'Data' key: %s", type(data_dict['Data']))
                 return data_dict["Data"]
             else:
-                self.logger.warning(f"API response not successful: {data_dict.get('Message', 'Unknown error')}")
+                self.logger.warning("API response not successful: %s", data_dict.get('Message', 'Unknown error'))
                 return None
 
         # Simple Data key structure
         elif "Data" in data_dict:
-            self.logger.debug(f"Using data from 'Data' key: {type(data_dict['Data'])}")
+            self.logger.debug("Using data from 'Data' key: %s", type(data_dict['Data']))
             return data_dict["Data"]
 
         return None

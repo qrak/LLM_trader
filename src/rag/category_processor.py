@@ -35,7 +35,7 @@ class CategoryProcessor:
             try:
                 return self.file_handler.load_rag_priorities() or {}
             except Exception as e:
-                self.logger.error(f"Failed to load RAG config: {e}")
+                self.logger.error("Failed to load RAG config: %s", e)
         return {}
 
 

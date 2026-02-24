@@ -22,17 +22,7 @@ class DashboardState:
     current_price: Optional[float] = None
     api_costs: Dict[str, float] = field(default_factory=lambda: {"openrouter": 0.0, "google": 0.0})
     last_request_cost: Optional[float] = None
-    cached_statistics: Optional[Dict[str, Any]] = None
-    cached_trade_history: Optional[list] = None
-    cached_news: Optional[list] = None
-    cached_last_response: Optional[Dict[str, Any]] = None
-    cached_brain_status: Optional[dict[str, Any]] = None
-    cached_performance_history: Optional[dict[str, Any]] = None
-    cached_memory: Optional[dict[str, Any]] = None
-    cached_rules: Optional[list[dict[str, Any]]] = None
-    cached_vectors: Optional[dict[str, Any]] = None
-    cached_position: Optional[dict[str, Any]] = None
-    cached_costs: Optional[dict[str, Any]] = None
+    _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
@@ -106,16 +96,16 @@ class DashboardState:
         cached_time = self.cache_timestamps.get(key, 0)
         if time.time() - cached_time > ttl_seconds:
             return None
-        return getattr(self, f"cached_{key}", None)
+        return self._cache.get(key)
 
     def set_cached(self, key: str, value: Any) -> None:
         """Store a value in cache with current timestamp."""
-        setattr(self, f"cached_{key}", value)
+        self._cache[key] = value
         self.cache_timestamps[key] = time.time()
 
     def invalidate_cache(self, key: str) -> None:
         """Remove cached value."""
-        setattr(self, f"cached_{key}", None)
+        self._cache.pop(key, None)
         self.cache_timestamps.pop(key, None)
 
 

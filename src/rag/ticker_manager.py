@@ -21,9 +21,9 @@ class TickerManager:
                 tickers_data = self.file_handler.load_known_tickers()
                 if tickers_data and isinstance(tickers_data, list):
                     self.known_tickers = set(tickers_data)
-                    self.logger.debug(f"Loaded {len(self.known_tickers)} known tickers")
+                    self.logger.debug("Loaded %s known tickers", len(self.known_tickers))
         except Exception as e:
-            self.logger.exception(f"Error loading known tickers: {e}")
+            self.logger.exception("Error loading known tickers: %s", e)
             self.known_tickers = set()
 
     async def update_known_tickers(self, news_database: List[Dict[str, Any]]) -> None:
@@ -40,7 +40,7 @@ class TickerManager:
             filtered_coins = {coin for coin in all_discovered_coins
                             if self._is_potential_valid_coin(coin)}
 
-            self.logger.debug(f"Found {len(filtered_coins)} potential new tickers")
+            self.logger.debug("Found %s potential new tickers", len(filtered_coins))
 
             # Validate and add new coins
             await self._validate_and_add_coins(filtered_coins)
@@ -49,7 +49,7 @@ class TickerManager:
             await self.save_tickers()
 
         except Exception as e:
-            self.logger.exception(f"Error updating known tickers: {e}")
+            self.logger.exception("Error updating known tickers: %s", e)
 
     def _extract_detected_coins(self, news_database: List[Dict[str, Any]]) -> set:
         """Extract coins that were detected in news articles."""
@@ -140,7 +140,7 @@ class TickerManager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
             except Exception as e:
-                self.logger.warning(f"Could not get exchange symbols for validation: {e}")
+                self.logger.warning("Could not get exchange symbols for validation: %s", e)
 
         new_coins_added = 0
         for coin in filtered_coins:
@@ -148,7 +148,7 @@ class TickerManager:
                 self.known_tickers.add(coin)
                 new_coins_added += 1
 
-        self.logger.debug(f"Added {new_coins_added} new tickers")
+        self.logger.debug("Added %s new tickers", new_coins_added)
 
     def _should_add_coin(self, coin: str, valid_exchange_symbols: set) -> bool:
         """Determine if a coin should be added to known tickers."""
@@ -171,9 +171,9 @@ class TickerManager:
             if self.file_handler:
                 tickers_list = sorted(list(self.known_tickers))
                 self.file_handler.save_known_tickers(tickers_list)
-                self.logger.debug(f"Saved {len(tickers_list)} known tickers")
+                self.logger.debug("Saved %s known tickers", len(tickers_list))
         except Exception as e:
-            self.logger.exception(f"Error saving tickers: {e}")
+            self.logger.exception("Error saving tickers: %s", e)
 
     def get_known_tickers(self) -> Set[str]:
         """Get the set of known cryptocurrency tickers."""

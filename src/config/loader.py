@@ -501,7 +501,7 @@ class Config:
             self._build_model_configs()
             logging.info("Configuration reloaded successfully")
         except Exception as e:
-            logging.error(f"Error reloading configuration: {e}")
+            logging.error("Error reloading configuration: %s", e)
             raise
 
 

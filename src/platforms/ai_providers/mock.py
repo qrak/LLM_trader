@@ -24,11 +24,9 @@ class MockClient(BaseAIClient):
 
     async def _initialize_client(self) -> None:
         """Mock client doesn't need initialization."""
-        pass
 
     async def close(self) -> None:
         """Mock client doesn't need cleanup."""
-        pass
 
     def _extract_last_close_hint(self, messages: List[Dict[str, Any]]) -> Optional[float]:
         """Try to find a TEST_HINT in messages with last_close value."""

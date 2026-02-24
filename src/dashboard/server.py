@@ -206,12 +206,17 @@ class DashboardServer:
             persistence=self.persistence,
             exchange_manager=self.exchange_manager
         )
+        try:
+            rag_engine = self.brain_service.rag_engine if self.brain_service else None
+        except AttributeError:
+            rag_engine = None
+            
         monitor_router = monitor.MonitorRouter(
             config=self.config,
             logger=self.logger,
             dashboard_state=self.dashboard_state,
             analysis_engine=self.analysis_engine,
-            rag_engine=getattr(self.brain_service, "rag_engine", None) if self.brain_service else None
+            rag_engine=rag_engine
         )
         performance_router = performance.PerformanceRouter(
             config=self.config,

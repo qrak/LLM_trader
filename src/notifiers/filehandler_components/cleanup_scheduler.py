@@ -26,7 +26,7 @@ class CleanupScheduler:
             name="MessageCleanupTask"
         )
         self.is_running = True
-        self.logger.debug(f"Started background message cleanup task (interval: {self.cleanup_interval}s)")
+        self.logger.debug("Started background message cleanup task (interval: %ss)", self.cleanup_interval)
 
     async def _periodic_cleanup_loop(self, cleanup_callback):
         """Main periodic cleanup loop."""
@@ -40,20 +40,20 @@ class CleanupScheduler:
                     self.logger.info("Message cleanup task cancelled")
                     break
                 except Exception as e:
-                    self.logger.error(f"Error in scheduled message cleanup: {e}")
+                    self.logger.error("Error in scheduled message cleanup: %s", e)
 
                 await self._sleep_with_cancellation_check()
 
         except asyncio.CancelledError:
             self.logger.info("Periodic message cleanup task cancelled")
         except Exception as e:
-            self.logger.error(f"Unexpected error in periodic message cleanup task: {e}")
+            self.logger.error("Unexpected error in periodic message cleanup task: %s", e)
 
     async def _run_cleanup_cycle(self, cleanup_callback):
         """Run a single cleanup cycle."""
         deleted_count = await cleanup_callback()
         if deleted_count > 0:
-            self.logger.debug(f"Cleaned up {deleted_count} expired messages")
+            self.logger.debug("Cleaned up %s expired messages", deleted_count)
 
     async def _sleep_with_cancellation_check(self):
         """Sleep with proper cancellation handling."""
@@ -74,7 +74,7 @@ class CleanupScheduler:
                 self.cleanup_task.cancel()
                 cancelled_tasks += 1
             except Exception as e:
-                self.logger.warning(f"Error cancelling cleanup task: {e}")
+                self.logger.warning("Error cancelling cleanup task: %s", e)
             self.cleanup_task = None
 
         # Cancel all deletion tasks
@@ -92,7 +92,7 @@ class CleanupScheduler:
                 )
 
         if cancelled_tasks > 0:
-            self.logger.info(f"Cancelled {cancelled_tasks} cleanup tasks during shutdown")
+            self.logger.info("Cancelled %s cleanup tasks during shutdown", cancelled_tasks)
 
     async def _wait_task_cancelled(self, task: asyncio.Task):
         """Wait for a task to be cancelled gracefully."""
@@ -101,7 +101,7 @@ class CleanupScheduler:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.logger.warning(f"Task raised exception during cancellation: {e}")
+            self.logger.warning("Task raised exception during cancellation: %s", e)
 
     def get_task_count(self) -> int:
         """Get the number of active deletion tasks."""

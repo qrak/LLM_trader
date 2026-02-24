@@ -111,23 +111,23 @@ class BaseAIClient(ABC):
         if "quota" in error_message_lower or "rate limit" in error_message_lower or (
             "resource_exhausted" in error_message_lower
         ):
-            self.logger.error(f"Rate limit or quota exceeded: {error_message_sanitized}")
+            self.logger.error("Rate limit or quota exceeded: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"rate_limit: {error_message_sanitized}")
         if "authentication" in error_message_lower or "api key" in error_message_lower or (
             "invalid_api_key" in error_message_lower
         ):
-            self.logger.error(f"Authentication error: {error_message_sanitized}")
+            self.logger.error("Authentication error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"authentication: {error_message_sanitized}")
         if "timeout" in error_message_lower:
-            self.logger.error(f"Timeout error: {error_message_sanitized}")
+            self.logger.error("Timeout error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"timeout: {error_message_sanitized}")
         if "503" in error_message_raw or "overloaded" in error_message_lower or (
             "unavailable" in error_message_lower
         ):
-            self.logger.error(f"Service unavailable/overloaded: {error_message_sanitized}")
+            self.logger.error("Service unavailable/overloaded: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"overloaded: {error_message_sanitized}")
         if "connection" in error_message_lower or "econnreset" in error_message_lower:
-            self.logger.error(f"Connection error: {error_message_sanitized}")
+            self.logger.error("Connection error: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"connection: {error_message_sanitized}")
         return None
 
@@ -139,36 +139,83 @@ class BaseAIClient(ABC):
         """
         Convert any Pydantic SDK response to ChatResponseModel.
         Used by: BlockRun (wrapper_attr='response'), OpenRouter (no wrapper)
-
+        
         Args:
             response: SDK response (Pydantic model)
             wrapper_attr: Unwrap attribute (e.g., 'response' for ChatResponseWithCost)
         """
         if response is None:
             return ChatResponseModel.from_error("Empty response from SDK")
-        inner = getattr(response, wrapper_attr, response) if wrapper_attr else response
+            
         try:
-            return ChatResponseModel(
-                choices=[
+            inner = getattr(response, wrapper_attr) if wrapper_attr else response
+        except AttributeError:
+            inner = response
+            
+        try:
+            choices_data = []
+            for choice in (inner.choices or []):
+                try:
+                    role = choice.message.role
+                except AttributeError:
+                    role = "assistant"
+                    
+                try:
+                    content = choice.message.content
+                except AttributeError:
+                    content = ""
+                    
+                try:
+                    finish_reason = choice.finish_reason
+                except AttributeError:
+                    finish_reason = None
+                    
+                choices_data.append(
                     ChoiceModel(
-                        message=MessageModel(
-                            role=getattr(choice.message, 'role', 'assistant') if choice.message else "assistant",
-                            content=getattr(choice.message, 'content', '') if choice.message else ""
-                        ),
-                        finish_reason=getattr(choice, 'finish_reason', None)
+                        message=MessageModel(role=role, content=content),
+                        finish_reason=finish_reason
                     )
-                    for choice in (inner.choices or [])
-                ],
-                usage=UsageModel(
-                    prompt_tokens=getattr(inner.usage, 'prompt_tokens', 0) or 0,
-                    completion_tokens=getattr(inner.usage, 'completion_tokens', 0) or 0,
-                    total_tokens=getattr(inner.usage, 'total_tokens', 0) or 0
-                ) if inner.usage else None,
-                id=getattr(inner, 'id', None),
-                model=getattr(inner, 'model', None)
+                )
+
+            try:
+                usage_obj = inner.usage
+            except AttributeError:
+                usage_obj = None
+
+            usage_model = None
+            if usage_obj:
+                try:
+                    prompt = usage_obj.prompt_tokens or 0
+                except AttributeError:
+                    prompt = 0
+                try:
+                    completion = usage_obj.completion_tokens or 0
+                except AttributeError:
+                    completion = 0
+                try:
+                    total = usage_obj.total_tokens or 0
+                except AttributeError:
+                    total = 0
+                usage_model = UsageModel(prompt_tokens=prompt, completion_tokens=completion, total_tokens=total)
+
+            try:
+                resp_id = inner.id
+            except AttributeError:
+                resp_id = None
+                
+            try:
+                resp_model = inner.model
+            except AttributeError:
+                resp_model = None
+
+            return ChatResponseModel(
+                choices=choices_data,
+                usage=usage_model,
+                id=resp_id,
+                model=resp_model
             )
         except (AttributeError, TypeError) as e:
-            self.logger.error(f"Failed to create response model: {e}")
+            self.logger.error("Failed to create response model: %s", e)
             return ChatResponseModel.from_error(f"Response creation error: {e}")
 
     def _detect_unsupported_param(self, error_msg: str) -> Optional[str]:
@@ -229,10 +276,7 @@ class BaseAIClient(ABC):
 
                 # If we found a bad parameter that is currently in our config
                 if bad_param and bad_param in current_config:
-                    self.logger.warning(
-                        f"Parameter '{bad_param}' not supported by provider/model. "
-                        f"Retrying without it (Attempt {attempt + 1}/{max_retries})"
-                    )
+                    self.logger.warning("Parameter '%s' not supported by provider/model. Retrying without it (Attempt %s/%s)", bad_param, attempt + 1, max_retries)
                     rejected_params.add(bad_param)
                     # Create new config without the bad parameter
                     current_config = {k: v for k, v in current_config.items() if k not in rejected_params}

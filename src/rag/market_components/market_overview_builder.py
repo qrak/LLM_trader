@@ -32,7 +32,7 @@ class MarketOverviewBuilder:
                     # Direct global data format
                     overview.update(coingecko_data)
                 else:
-                    self.logger.warning(f"Unexpected CoinGecko data format: {list(coingecko_data.keys())}")
+                    self.logger.warning("Unexpected CoinGecko data format: %s", list(coingecko_data.keys()))
 
             # 2. Add price data if available (Process BEFORE top_coins to use it for enrichment)
             overview['coin_data'] = {}
@@ -104,7 +104,7 @@ class MarketOverviewBuilder:
             return self._finalize_overview(overview)
 
         except Exception as e:
-            self.logger.error(f"Error building overview structure: {e}")
+            self.logger.error("Error building overview structure: %s", e)
             self.logger.exception("Traceback:")
             return overview
 
@@ -113,7 +113,7 @@ class MarketOverviewBuilder:
         try:
             return self.build_overview_structure(price_data, coingecko_data, top_coins)
         except Exception as e:
-            self.logger.error(f"Error building market overview: {e}")
+            self.logger.error("Error building market overview: %s", e)
             return {
                 "timestamp": datetime.now().isoformat(),
                 "summary": "CRYPTO MARKET OVERVIEW - Error occurred",
@@ -141,5 +141,5 @@ class MarketOverviewBuilder:
             return overview
 
         except Exception as e:
-            self.logger.error(f"Error finalizing overview: {e}")
+            self.logger.error("Error finalizing overview: %s", e)
             return overview

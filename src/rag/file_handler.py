@@ -63,7 +63,7 @@ class RagFileHandler:
                     return json.load(f)
             return None
         except Exception as e:
-            self.logger.error(f"Error loading JSON file {file_path}: {e}")
+            self.logger.error("Error loading JSON file %s: %s", file_path, e)
             return None
 
     def save_json_file(self, file_path: str, data: Dict):
@@ -83,7 +83,7 @@ class RagFileHandler:
                     os.remove(temp_path)
                 except OSError:
                     pass
-            self.logger.error(f"Error saving JSON file {file_path}: {e}")
+            self.logger.error("Error saving JSON file %s: %s", file_path, e)
 
     def filter_articles_by_age(self, articles: List[Dict], max_age_seconds: int) -> List[Dict]:
         """Filter articles by age in seconds."""
@@ -126,10 +126,10 @@ class RagFileHandler:
             }
 
             self.save_json_file(self.news_file_path, news_data)
-            self.logger.debug(f"Saved {len(recent_articles)} recent news articles")
+            self.logger.debug("Saved %s recent news articles", len(recent_articles))
 
         except Exception as e:
-            self.logger.error(f"Error saving news articles: {e}")
+            self.logger.error("Error saving news articles: %s", e)
 
     def load_news_articles(self) -> List[Dict]:
         try:
@@ -143,12 +143,12 @@ class RagFileHandler:
             recent_articles = self.filter_articles_by_age(articles, max_age_seconds=86400)
 
             if len(recent_articles) < len(articles):
-                self.logger.debug(f"Filtered out {len(articles) - len(recent_articles)} articles older than 24 hours")
+                self.logger.debug("Filtered out %s articles older than 24 hours", len(articles) - len(recent_articles))
 
             return recent_articles
 
         except Exception as e:
-            self.logger.error(f"Error loading news articles: {e}")
+            self.logger.error("Error loading news articles: %s", e)
             return []
 
     def load_fallback_articles(self, max_age_hours: int = 72) -> List[Dict]:
@@ -165,12 +165,12 @@ class RagFileHandler:
             )
 
             if fallback_articles:
-                self.logger.debug(f"Using {len(fallback_articles)} cached articles as fallback")
+                self.logger.debug("Using %s cached articles as fallback", len(fallback_articles))
 
             return fallback_articles
 
         except Exception as e:
-            self.logger.error(f"Error loading fallback news articles: {e}")
+            self.logger.error("Error loading fallback news articles: %s", e)
             return []
 
     def load_known_tickers(self) -> Optional[List[str]]:
@@ -181,7 +181,7 @@ class RagFileHandler:
                 return data['tickers']
             return None
         except Exception as e:
-            self.logger.error(f"Error loading known tickers: {e}")
+            self.logger.error("Error loading known tickers: %s", e)
             return None
 
     def save_known_tickers(self, tickers: List[str]) -> None:
@@ -190,20 +190,20 @@ class RagFileHandler:
             data = {"tickers": tickers}
             self.save_json_file(self.tickers_file, data)
         except Exception as e:
-            self.logger.error(f"Error saving known tickers: {e}")
+            self.logger.error("Error saving known tickers: %s", e)
 
     def load_rag_priorities(self) -> Optional[Dict]:
         """Load RAG priorities configuration from disk."""
         try:
-            self.logger.debug(f"Loading RAG priorities from: {self.rag_priorities_file}")
-            self.logger.debug(f"File exists: {os.path.exists(self.rag_priorities_file)}")
+            self.logger.debug("Loading RAG priorities from: %s", self.rag_priorities_file)
+            self.logger.debug("File exists: %s", os.path.exists(self.rag_priorities_file))
             data = self.load_json_file(self.rag_priorities_file)
             if data:
                 self.logger.debug("Loaded RAG priorities configuration")
                 return data
             else:
-                self.logger.warning(f"load_json_file returned None for {self.rag_priorities_file}")
+                self.logger.warning("load_json_file returned None for %s", self.rag_priorities_file)
             return None
         except Exception as e:
-            self.logger.error(f"Error loading RAG priorities: {e}", exc_info=True)
+            self.logger.error("Error loading RAG priorities: %s", e, exc_info=True)
             return None

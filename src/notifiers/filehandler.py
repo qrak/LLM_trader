@@ -61,13 +61,14 @@ class DiscordFileHandler:
         if not self.is_initialized:
             self.logger.debug("FileHandler not yet initialized, waiting for ready event...")
             # Wait for the bot to be ready and FileHandler to be initialized
-            if hasattr(self.bot, 'discord_notifier') and hasattr(self.bot.discord_notifier, 'wait_until_ready'):
+            try:
+                ready_coro = self.bot.discord_notifier.wait_until_ready()
                 try:
-                    await asyncio.wait_for(self.bot.discord_notifier.wait_until_ready(), timeout=10.0)
+                    await asyncio.wait_for(ready_coro, timeout=10.0)
                 except asyncio.TimeoutError:
                     self.logger.warning("Timeout waiting for FileHandler initialization, cannot track message")
                     return False
-            else:
+            except AttributeError:
                 self.logger.warning("FileHandler not initialized and no ready event available, cannot track message")
                 return False
 
@@ -83,11 +84,11 @@ class DiscordFileHandler:
             deleted_count = await self._delete_expired_messages(expired_messages)
 
             if deleted_count > 0:
-                self.logger.info(f"Successfully deleted {deleted_count} expired messages during cleanup")
+                self.logger.info("Successfully deleted %s expired messages during cleanup", deleted_count)
 
             return deleted_count
         except Exception as e:
-            self.logger.error(f"Error in check_and_delete_expired_messages: {e}")
+            self.logger.error("Error in check_and_delete_expired_messages: %s", e)
             return 0
 
     async def _delete_expired_messages(self, expired_messages) -> int:
@@ -109,7 +110,7 @@ class DiscordFileHandler:
                 await self.tracker.remove_message_tracking(message_id)
                 return True
         except Exception as e:
-            self.logger.error(f"Error processing deletion for message {message_id}: {e}")
+            self.logger.error("Error processing deletion for message %s: %s", message_id, e)
 
         return False
 
@@ -126,4 +127,4 @@ class DiscordFileHandler:
             self.is_initialized = False
             self.logger.info("DiscordFileHandler shutdown complete")
         except Exception as e:
-            self.logger.error(f"Error during DiscordFileHandler shutdown: {e}")
+            self.logger.error("Error during DiscordFileHandler shutdown: %s", e)

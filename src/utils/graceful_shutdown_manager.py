@@ -41,7 +41,7 @@ class GracefulShutdownManager:
 
     def handle_signal(self, sig: int):
         if self.logger:
-            self.logger.info(f"Signal {sig} received. Asking for confirmation...")
+            self.logger.info("Signal %s received. Asking for confirmation...", sig)
         else:
             print(f"Received signal {sig}, asking for confirmation...")
 
@@ -78,7 +78,7 @@ class GracefulShutdownManager:
         # Execute registered callbacks first
         if self._callbacks:
             if self.logger:
-                self.logger.info(f"Executing {len(self._callbacks)} shutdown callbacks...")
+                self.logger.info("Executing %s shutdown callbacks...", len(self._callbacks))
             else:
                 print(f"Executing {len(self._callbacks)} shutdown callbacks...")
 
@@ -111,11 +111,10 @@ class GracefulShutdownManager:
                 task_details = []
                 for t in pending_tasks:
                     if not t.done():
-                        if hasattr(t, 'get_name') and callable(t.get_name):
+                        try:
+                            # asyncio.Task has get_name() since Python 3.8
                             name = t.get_name()
-                        elif hasattr(t, 'name'):
-                            name = t.name
-                        else:
+                        except AttributeError:
                             name = str(t)
                         task_details.append(name)
 

@@ -1,6 +1,6 @@
 """Trading module for automated trading decisions and position management."""
 
-from .dataclasses import Position, TradeDecision, TradingMemory
+from .data_models import Position, TradeDecision, TradingMemory
 from .brain import TradingBrainService
 from .memory import TradingMemoryService
 from .statistics import TradingStatisticsService

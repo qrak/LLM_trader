@@ -9,8 +9,7 @@ from typing import Dict, Optional, Any
 
 import tiktoken
 
-from src.utils.dataclasses import ProviderCostStats, SessionCosts, TokenUsageStats
-
+from src.trading.data_models import ProviderCostStats, SessionCosts, TokenUsageStats
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
@@ -198,17 +197,17 @@ class TokenCounter:
             cost = usage.get("cost")
             self.record_api_usage(provider, prompt_tokens, completion_tokens, cost)
             if logger:
-                logger.info(f"Prompt token count: {prompt_tokens:,}")
-                logger.info(f"Response token count: {completion_tokens:,}")
-                logger.info(f"Total tokens used: {total_tokens:,}")
+                logger.info("Prompt token count: %s", f"{prompt_tokens:,}")
+                logger.info("Response token count: %s", f"{completion_tokens:,}")
+                logger.info("Total tokens used: %s", f"{total_tokens:,}")
                 if cost is not None:
-                    logger.info(f"Request cost: {self.format_cost(cost)}")
+                    logger.info("Request cost: %s", self.format_cost(cost))
         elif fallback_text:
             response_tokens = self.track_prompt_tokens(fallback_text, "completion")
             if logger:
-                logger.info(f"Response token count (estimated): {response_tokens}")
+                logger.info("Response token count (estimated): %s", response_tokens)
                 stats = self.get_usage_stats()
-                logger.info(f"Total tokens used: {stats['total']:,}")
+                logger.info("Total tokens used: %s", f"{stats['total']:,}")
 
     def record_cost(self, provider: str, cost: float) -> None:
         """

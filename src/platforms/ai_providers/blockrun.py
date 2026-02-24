@@ -72,7 +72,7 @@ class BlockRunClient(BaseAIClient):
         """
         client = await self._ensure_client()
         try:
-            self.logger.debug(f"Sending request to BlockRun SDK with model: {model}")
+            self.logger.debug("Sending request to BlockRun SDK with model: %s", model)
             effective_model = self._ensure_provider_prefix(model)
 
             # Use base class retry logic for unsupported parameters
@@ -118,7 +118,7 @@ class BlockRunClient(BaseAIClient):
             multimodal_messages = self._prepare_multimodal_messages(
                 messages, multimodal_content
             )
-            self.logger.debug(f"Sending chart analysis request to BlockRun SDK ({len(img_data)} bytes)")
+            self.logger.debug("Sending chart analysis request to BlockRun SDK (%s bytes)", len(img_data))
             effective_model = self._ensure_provider_prefix(model)
 
             # Use base class retry logic for unsupported parameters
@@ -132,7 +132,7 @@ class BlockRunClient(BaseAIClient):
                 self.logger.debug("Received successful chart analysis response from BlockRun SDK")
             return self.convert_pydantic_response(response, wrapper_attr='response')
         except Exception as e:
-            self.logger.error(f"Error during BlockRun chart analysis request: {self._redact_private_key(str(e))}")
+            self.logger.error("Error during BlockRun chart analysis request: %s", self._redact_private_key(str(e)))
             return self._handle_exception(e)
 
     def _ensure_provider_prefix(self, model: str) -> str:
@@ -176,7 +176,7 @@ class BlockRunClient(BaseAIClient):
     def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
         """Handle BlockRun specific exceptions, falling back to common handler."""
         redacted_error = self._redact_private_key(str(exception))
-        self.logger.error(f"BlockRun API error: {redacted_error}")
+        self.logger.error("BlockRun API error: %s", redacted_error)
         result = self.handle_common_errors(exception)
         if result:
             return result

@@ -49,7 +49,7 @@ class CryptoCompareNewsClient:
             self.logger.error("Timeout fetching news from CryptoCompare")
             articles = []
         except Exception as e:
-            self.logger.error(f"Error fetching CryptoCompare news: {e}")
+            self.logger.error("Error fetching CryptoCompare news: %s", e)
             articles = []
         finally:
             if use_temp_session:
@@ -100,10 +100,10 @@ class CryptoCompareNewsClient:
             data = await resp.json()
             if data and "Data" in data:
                 articles = data["Data"]
-                self.logger.debug(f"Fetched {len(articles)} news articles from CryptoCompare")
+                self.logger.debug("Fetched %s news articles from CryptoCompare", len(articles))
                 return articles
         else:
-            self.logger.error(f"News API request failed with status {resp.status}")
+            self.logger.error("News API request failed with status %s", resp.status)
         return []
 
     @staticmethod

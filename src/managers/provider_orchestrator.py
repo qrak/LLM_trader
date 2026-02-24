@@ -215,7 +215,7 @@ class ProviderOrchestrator:
             return result
         if self.is_available(effective_provider):
             effective_model = self.resolve_model(effective_provider, model)
-            self.logger.info(f"Using {self._providers[effective_provider].name} model: {effective_model}")
+            self.logger.info("Using %s model: %s", self._providers[effective_provider].name, effective_model)
             return await self.invoke(effective_provider, messages, model=model)
         self._log_unavailable_guidance(effective_provider)
         return InvocationResult(
@@ -257,7 +257,7 @@ class ProviderOrchestrator:
             )
         if self.is_available(effective_provider):
             effective_model = self.resolve_model(effective_provider, model)
-            self.logger.info(f"Using {self._providers[effective_provider].name} for chart analysis: {effective_model}")
+            self.logger.info("Using %s for chart analysis: %s", self._providers[effective_provider].name, effective_model)
             return await self.invoke(effective_provider, messages, chart=True, chart_image=chart_image, model=model)
         self._log_unavailable_guidance(effective_provider)
         return InvocationResult(
@@ -278,7 +278,7 @@ class ProviderOrchestrator:
         """Invoke Google AI with free/paid tier fallback logic."""
         is_free_tier_model = "flash" in effective_model.lower()
         tier_info = "free tier" if is_free_tier_model else "paid tier"
-        self.logger.info(f"Attempting with Google AI {tier_info} API (model: {effective_model})")
+        self.logger.info("Attempting with Google AI %s API (model: %s)", tier_info, effective_model)
         if chart and chart_image:
             response = await metadata.client.chat_completion_with_chart_analysis(
                 effective_model, messages, cast(Any, chart_image), metadata.config
@@ -288,7 +288,7 @@ class ProviderOrchestrator:
         error_type = response.error if response else None
         if error_type and ("overloaded" in error_type or "rate_limit" in error_type) and metadata.paid_client:
             error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
-            self.logger.warning(f"Google AI free tier {error_reason}, retrying with paid API key")
+            self.logger.warning("Google AI free tier %s, retrying with paid API key", error_reason)
             if chart and chart_image:
                 response = await metadata.paid_client.chat_completion_with_chart_analysis(
                     effective_model, messages, cast(Any, chart_image), metadata.config
@@ -296,7 +296,7 @@ class ProviderOrchestrator:
             else:
                 response = await metadata.paid_client.chat_completion(effective_model, messages, metadata.config)
             if self._is_valid_response(response):
-                self.logger.info(f"Successfully used paid Google AI API after free tier {error_reason}")
+                self.logger.info("Successfully used paid Google AI API after free tier %s", error_reason)
                 return InvocationResult(
                     success=True,
                     response=response,
@@ -305,7 +305,7 @@ class ProviderOrchestrator:
                     used_paid_tier=True
                 )
             paid_error = response.error if response else "no response"
-            self.logger.error(f"Paid Google AI API also failed: {paid_error}")
+            self.logger.error("Paid Google AI API also failed: %s", paid_error)
             return InvocationResult(
                 success=False,
                 response=response,
@@ -315,7 +315,7 @@ class ProviderOrchestrator:
             )
         if self._is_valid_response(response):
             tier_success = "free tier" if is_free_tier_model else "paid tier"
-            self.logger.info(f"Successfully used {tier_success} Google AI API")
+            self.logger.info("Successfully used %s Google AI API", tier_success)
             return InvocationResult(
                 success=True,
                 response=response,
@@ -397,12 +397,12 @@ class ProviderOrchestrator:
             error_code = error_detail.get('code', 'unknown') if isinstance(error_detail, dict) else 'unknown'
             error_msg = error_detail.get('message', 'unknown') if isinstance(error_detail, dict) else str(error_detail)
             provider = error_detail.get('metadata', {}).get('provider_name', 'unknown') if isinstance(error_detail, dict) else 'unknown'
-            self.logger.error(f"Error in API response choice from {provider}: [{error_code}] {error_msg}")
-            self.logger.debug(f"Full error details: {error_detail}")
+            self.logger.error("Error in API response choice from %s: [%s] %s", provider, error_code, error_msg)
+            self.logger.debug("Full error details: %s", error_detail)
             return False
         content = first_choice.message.content if first_choice.message else ""
         if not content:
-            self.logger.debug(f"Empty content in API response choice. Message: {first_choice.message}")
+            self.logger.debug("Empty content in API response choice. Message: %s", first_choice.message)
             return False
         return True
 
@@ -416,7 +416,7 @@ class ProviderOrchestrator:
         if not metadata:
             return
         noun = "chart analysis" if chart else "request"
-        self.logger.info(f"Attempting {noun} with {metadata.name} model: {model}")
+        self.logger.info("Attempting %s with %s model: %s", noun, metadata.name, model)
 
     def _log_failure(self, provider: str) -> None:
         """Log provider failure with appropriate message."""

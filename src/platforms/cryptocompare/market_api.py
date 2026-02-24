@@ -79,10 +79,10 @@ class CryptoCompareMarketAPI:
                             self.logger.warning("Price data response missing RAW field")
                             return {}
                     else:
-                        self.logger.error(f"Price API request failed with status {resp.status}")
+                        self.logger.error("Price API request failed with status %s", resp.status)
                         return {}
             except Exception as e:
-                self.logger.error(f"Error fetching price data: {e}")
+                self.logger.error("Error fetching price data: %s", e)
                 return {}
 
     @retry_api_call(max_retries=3)
@@ -130,16 +130,16 @@ class CryptoCompareMarketAPI:
                                     "is_trading": coin_data.get("IsTrading", True)
                                 }
                             else:
-                                self.logger.warning(f"No data found for symbol {symbol}")
+                                self.logger.warning("No data found for symbol %s", symbol)
                                 return {}
                         else:
-                            self.logger.warning(f"Coin details API response unsuccessful: {data.get('Message', 'Unknown error')}")
+                            self.logger.warning("Coin details API response unsuccessful: %s", data.get('Message', 'Unknown error'))
                             return {}
                     else:
-                        self.logger.error(f"Coin details API request failed with status {resp.status}")
+                        self.logger.error("Coin details API request failed with status %s", resp.status)
                         return {}
             except Exception as e:
-                self.logger.error(f"Error fetching coin details for {symbol}: {e}")
+                self.logger.error("Error fetching coin details for %s: %s", symbol, e)
                 return {}
 
     def get_ohlcv_url_template(self) -> str:
@@ -171,7 +171,7 @@ class CryptoCompareMarketAPI:
         try:
             endpoint_type, multiplier = TimeframeValidator.to_cryptocompare_format(timeframe)
         except ValueError as e:
-            self.logger.error(f"Failed to convert timeframe {timeframe} for CryptoCompare API: {e}")
+            self.logger.error("Failed to convert timeframe %s for CryptoCompare API: %s", timeframe, e)
             raise
 
 
@@ -191,9 +191,6 @@ class CryptoCompareMarketAPI:
             url = base_url
 
         # Note: We do NOT log the full URL here to avoid leaking the API key
-        self.logger.debug(
-            f"Built CryptoCompare OHLCV URL: endpoint={endpoint_type}, "
-            f"multiplier={multiplier}, timeframe={timeframe}, limit={limit}"
-        )
+        self.logger.debug("Built CryptoCompare OHLCV URL: endpoint=%s, multiplier=%s, timeframe=%s, limit=%s", endpoint_type, multiplier, timeframe, limit)
 
         return url

@@ -24,7 +24,10 @@ class PerformanceRouter:
         cached = self.dashboard_state.get_cached("performance_history", ttl_seconds=60.0)
         if cached:
             return cached
-        data_dir = getattr(self.config, "DATA_DIR", "data")
+        try:
+            data_dir = self.config.DATA_DIR
+        except AttributeError:
+            data_dir = "data"
         trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         equity_curve = []

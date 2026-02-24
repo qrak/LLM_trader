@@ -6,7 +6,7 @@ from src.contracts.risk_contract import RiskManagerProtocol
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
-    from src.trading.dataclasses import RiskAssessment
+    from src.trading.data_models import RiskAssessment
 
 class RiskManager(RiskManagerProtocol):
     """
@@ -36,7 +36,7 @@ class RiskManager(RiskManagerProtocol):
         """
         Calculate all risk parameters for a new position entry.
         """
-        from src.trading.dataclasses import RiskAssessment
+        from src.trading.data_models import RiskAssessment
         market_conditions = market_conditions or {}
         direction = "LONG" if signal == "BUY" else "SHORT"
 
@@ -67,30 +67,30 @@ class RiskManager(RiskManagerProtocol):
         # 3. Resolve Final SL/TP (AI vs Dynamic)
         if stop_loss and stop_loss > 0:
             final_sl = stop_loss
-            self.logger.debug(f"Using AI-provided SL: ${final_sl:,.2f}")
+            self.logger.debug("Using AI-provided SL: $%s", f"{final_sl:,.2f}")
         else:
             final_sl = dynamic_sl
-            self.logger.info(f"Using dynamic SL (2x ATR): ${final_sl:,.2f}")
+            self.logger.info("Using dynamic SL (2x ATR): $%s", f"{final_sl:,.2f}")
 
         if take_profit and take_profit > 0:
             final_tp = take_profit
-            self.logger.debug(f"Using AI-provided TP: ${final_tp:,.2f}")
+            self.logger.debug("Using AI-provided TP: $%s", f"{final_tp:,.2f}")
         else:
             final_tp = dynamic_tp
-            self.logger.info(f"Using dynamic TP (4x ATR): ${final_tp:,.2f}")
+            self.logger.info("Using dynamic TP (4x ATR): $%s", f"{final_tp:,.2f}")
 
         # 4. Circuit Breakers (Clamp Extreme Values)
         sl_distance_raw = abs(current_price - final_sl) / current_price
 
         # Clamp SL: min 0.5%, max 10%
         if sl_distance_raw > 0.10:
-            self.logger.warning(f"SL distance {sl_distance_raw:.1%} exceeds 10% max, clamping")
+            self.logger.warning("SL distance %s exceeds 10% max, clamping", f"{sl_distance_raw:.1%}")
             if direction == "LONG":
                 final_sl = current_price * 0.90
             else:
                 final_sl = current_price * 1.10
         elif sl_distance_raw < 0.005:
-            self.logger.warning(f"SL distance {sl_distance_raw:.1%} below 0.5% min, expanding")
+            self.logger.warning("SL distance %s below 0.5% min, expanding", f"{sl_distance_raw:.1%}")
             if direction == "LONG":
                 final_sl = current_price * 0.995
             else:
@@ -99,17 +99,17 @@ class RiskManager(RiskManagerProtocol):
         # Validate Logical Consistency
         if direction == "LONG":
             if final_sl >= current_price:
-                self.logger.warning(f"Invalid SL for LONG ({final_sl} >= {current_price}), using dynamic")
+                self.logger.warning("Invalid SL for LONG (%s >= %s), using dynamic", final_sl, current_price)
                 final_sl = dynamic_sl
             if final_tp <= current_price:
-                self.logger.warning(f"Invalid TP for LONG ({final_tp} <= {current_price}), using dynamic")
+                self.logger.warning("Invalid TP for LONG (%s <= %s), using dynamic", final_tp, current_price)
                 final_tp = dynamic_tp
         else:  # SHORT
             if final_sl <= current_price:
-                self.logger.warning(f"Invalid SL for SHORT ({final_sl} <= {current_price}), using dynamic")
+                self.logger.warning("Invalid SL for SHORT (%s <= %s), using dynamic", final_sl, current_price)
                 final_sl = dynamic_sl
             if final_tp >= current_price:
-                self.logger.warning(f"Invalid TP for SHORT ({final_tp} >= {current_price}), using dynamic")
+                self.logger.warning("Invalid TP for SHORT (%s >= %s), using dynamic", final_tp, current_price)
                 final_tp = dynamic_tp
 
         # 5. Position Sizing
@@ -119,7 +119,7 @@ class RiskManager(RiskManagerProtocol):
             # Dynamic sizing based on confidence
             confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
             final_size_pct = confidence_map.get(confidence.upper(), 0.02)
-            self.logger.info(f"Using confidence-based size: {final_size_pct*100:.1f}%")
+            self.logger.info("Using confidence-based size: %.1f%%", final_size_pct * 100)
 
         # 6. Calculate Financials
         allocation = capital * final_size_pct

@@ -132,24 +132,24 @@ class ChartGenerator:
         for attempt in range(max_retries):
             try:
                 if self.logger and attempt > 0:
-                    self.logger.debug(f"Retry attempt {attempt + 1}/{max_retries} for image export")
+                    self.logger.debug("Retry attempt %s/%s for image export", attempt + 1, max_retries)
 
                 img_bytes = self._image_export_with_timeout(fig, img_format, width, height, scale, timeout)
 
                 if self.logger and attempt > 0:
-                    self.logger.info(f"Image export succeeded on retry attempt {attempt + 1}")
+                    self.logger.info("Image export succeeded on retry attempt %s", attempt + 1)
 
                 return img_bytes
 
             except Exception as e:
                 last_exception = e
                 if self.logger:
-                    self.logger.warning(f"Image export attempt {attempt + 1}/{max_retries} failed: {str(e)}")
+                    self.logger.warning("Image export attempt %s/%s failed: %s", attempt + 1, max_retries, str(e))
 
                 if attempt < max_retries - 1:
                     wait_time = (2 ** attempt) * 0.5
                     if self.logger:
-                        self.logger.debug(f"Waiting {wait_time}s before retry...")
+                        self.logger.debug("Waiting %ss before retry...", wait_time)
                     time.sleep(wait_time)
 
         raise last_exception
@@ -226,7 +226,7 @@ class ChartGenerator:
                         first_time = first_time_dt.strftime('%Y-%m-%d %H:%M') if first_time_dt else 'N/A'
                         last_time = last_time_dt.strftime('%Y-%m-%d %H:%M') if last_time_dt else 'N/A'
                         current_price = ohlcv[-1][4]  # Close price of last candle
-                        self.logger.info(f"📈 Data range: {first_time} to {last_time} | Current price: {current_price}")
+                        self.logger.info("📈 Data range: %s to %s | Current price: %s", first_time, last_time, current_price)
 
                 return output_path
             else:
@@ -235,13 +235,13 @@ class ChartGenerator:
                 img_buffer.seek(0)
 
                 if self.logger:
-                    self.logger.debug(f"Generated chart image for {pair_symbol} ({len(img_bytes)} bytes)")
+                    self.logger.debug("Generated chart image for %s (%s bytes)", pair_symbol, len(img_bytes))
 
                 return img_buffer
 
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error generating chart image: {str(e)}")
+                self.logger.error("Error generating chart image: %s", str(e))
             raise
 
     def _create_simple_candlestick_chart(

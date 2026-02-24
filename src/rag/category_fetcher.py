@@ -23,7 +23,7 @@ class CategoryFetcher:
         response = await self.categories_api.get_categories(force_refresh=force_refresh)
 
         # Debug logging to inspect the returned data
-        self.logger.debug(f"Categories response type: {type(response)}")
+        self.logger.debug("Categories response type: %s", type(response))
 
         # Extract categories from the response structure
         categories = self._extract_categories_from_response(response)
@@ -43,7 +43,7 @@ class CategoryFetcher:
         # Handle direct list of categories
         if isinstance(response, list):
             categories = response
-            self.logger.debug(f"Found {len(categories)} categories in list format")
+            self.logger.debug("Found %s categories in list format", len(categories))
         # Handle dictionary with nested structure
         elif isinstance(response, dict):
             categories = self._extract_from_dict_response(response)
@@ -54,10 +54,10 @@ class CategoryFetcher:
         """Extract categories from dictionary response structure."""
         if "Response" in response and "Data" in response and response["Response"] == "Success":
             categories = response["Data"]
-            self.logger.debug(f"Found categories in Response/Data structure: {len(categories) if isinstance(categories, list) else 'dict'}")
+            self.logger.debug("Found categories in Response/Data structure: %s", len(categories) if isinstance(categories, list) else 'dict')
         elif "Data" in response:
             categories = response["Data"]
-            self.logger.debug(f"Found categories in Data key: {len(categories) if isinstance(categories, list) else 'dict'}")
+            self.logger.debug("Found categories in Data key: %s", len(categories) if isinstance(categories, list) else 'dict')
         else:
             categories = response
             self.logger.debug("Using response directly as categories")
@@ -75,5 +75,5 @@ class CategoryFetcher:
             return True
 
         except Exception as e:
-            self.logger.exception(f"Error ensuring categories updated: {e}")
+            self.logger.exception("Error ensuring categories updated: %s", e)
             return False

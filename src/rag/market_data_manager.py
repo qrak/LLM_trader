@@ -81,7 +81,7 @@ class MarketDataManager:
             return overview
 
         except Exception as e:
-            self.logger.error(f"Error fetching market overview: {e}")
+            self.logger.error("Error fetching market overview: %s", e)
             return None
 
     def _extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
@@ -162,7 +162,7 @@ class MarketDataManager:
                 current_time = datetime.now(timezone.utc)
 
                 if current_time - data_time > timedelta(hours=max_age_hours):
-                    self.logger.debug(f"Market overview data is older than {max_age_hours} hours, refreshing")
+                    self.logger.debug("Market overview data is older than %s hours, refreshing", max_age_hours)
                     should_update = True
 
         if should_update:
@@ -177,7 +177,7 @@ class MarketDataManager:
                     self.logger.warning("No market overview data was available from data sources")
                     return False
             except Exception as e:
-                self.logger.error(f"Error fetching market overview: {e}")
+                self.logger.error("Error fetching market overview: %s", e)
                 return False
 
         return False

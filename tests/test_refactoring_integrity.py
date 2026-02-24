@@ -27,7 +27,7 @@ def test_contracts_imports():
 def test_dataclasses_imports():
     """Verify that new dataclasses can be imported."""
     try:
-        from src.trading.dataclasses import VectorSearchResult, RiskAssessment  # noqa: F401
+        from src.trading.data_models import VectorSearchResult, RiskAssessment  # noqa: F401
     except ImportError as e:
         pytest.fail(f"Failed to import new dataclasses: {e}")
 

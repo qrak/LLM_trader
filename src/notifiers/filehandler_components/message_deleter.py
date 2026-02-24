@@ -14,26 +14,26 @@ class MessageDeleter:
         try:
             result = await self._delete_message(message_id, channel_id)
             if result:
-                self.logger.debug(f"Successfully deleted message {message_id}")
+                self.logger.debug("Successfully deleted message %s", message_id)
                 return True
             return False
         except discord.NotFound:
-            self.logger.debug(f"Message {message_id} already deleted (NotFound)")
+            self.logger.debug("Message %s already deleted (NotFound)", message_id)
             return True  # Message doesn't exist, which is our goal
         except Exception as e:
-            self.logger.error(f"Error deleting message {message_id}: {e}")
+            self.logger.error("Error deleting message %s: %s", message_id, e)
             return False
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _delete_message(self, message_id: int, channel_id: int) -> bool:
         """Core message deletion logic with retry."""
         if not self.bot or self.bot.is_closed():
-            self.logger.warning(f"Bot closed, cannot delete message {message_id}")
+            self.logger.warning("Bot closed, cannot delete message %s", message_id)
             return False
 
         channel = await self._get_channel(channel_id)
         if not channel:
-            self.logger.warning(f"Channel {channel_id} not found for message {message_id}; removing tracking entry")
+            self.logger.warning("Channel %s not found for message %s; removing tracking entry", channel_id, message_id)
             return True
 
         return await self._delete_from_channel(message_id, channel)
@@ -55,8 +55,8 @@ class MessageDeleter:
             # Message already deleted - this is actually success
             return True
         except discord.Forbidden:
-            self.logger.warning(f"Missing permissions to delete message {message_id}")
+            self.logger.warning("Missing permissions to delete message %s", message_id)
             return False
         except discord.HTTPException as e:
-            self.logger.error(f"Failed to delete message {message_id} due to HTTP error: {e}")
+            self.logger.error("Failed to delete message %s due to HTTP error: %s", message_id, e)
             return False

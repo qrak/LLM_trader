@@ -5,7 +5,7 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
-from .dataclasses import Position, TradeDecision
+from .data_models import Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
@@ -56,10 +56,7 @@ class TradingStrategy:
         self.current_position: Optional[Position] = self.persistence.load_position()
 
         if self.current_position:
-            self.logger.info(
-                f"Loaded existing position: {self.current_position.direction} "
-                f"{self.current_position.symbol} @ ${self.current_position.entry_price:,.2f}"
-            )
+            self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
 
     async def check_position(self, current_price: float) -> Optional[str]:
         """Check if current position hit stop loss or take profit.
@@ -128,10 +125,7 @@ class TradingStrategy:
             reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%. Fee: ${closing_fee:.4f}",
         )
 
-        self.logger.info(
-            f"Closing {self.current_position.direction} position ({reason}) "
-            f"@ ${current_price:,.2f}, P&L: {pnl:+.2f}%, Fee: ${closing_fee:.4f}"
-        )
+        self.logger.info("Closing %s position (%s) @ $%s, P&L: %s%%, Fee: $%.4f", self.current_position.direction, reason, f"{current_price:,.2f}", f"{pnl:+.2f}", closing_fee)
 
         # Retrieve entry decision from trade history for brain learning
         entry_decision = None
@@ -141,11 +135,11 @@ class TradingStrategy:
             )
             if entry_decision:
                 reasoning_preview = entry_decision.reasoning[:500] if entry_decision.reasoning else "(no reasoning)"
-                self.logger.debug(f"Retrieved entry decision with reasoning: {reasoning_preview}...")
+                self.logger.debug("Retrieved entry decision with reasoning: %s...", reasoning_preview)
             else:
                 self.logger.warning("Could not retrieve entry decision from trade history")
         except Exception as e:
-            self.logger.error(f"Error retrieving entry decision: {e}")
+            self.logger.error("Error retrieving entry decision: %s", e)
 
         # Update trading brain with closed trade insights
         try:
@@ -157,7 +151,7 @@ class TradingStrategy:
                 market_conditions=market_conditions
             )
         except Exception as e:
-            self.logger.error(f"Error updating trading brain: {e}")
+            self.logger.error("Error updating trading brain: %s", e)
         # Save close decision FIRST so statistics include this trade
         await self.persistence.async_save_trade_decision(decision)
 
@@ -165,7 +159,7 @@ class TradingStrategy:
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
         except Exception as e:
-            self.logger.error(f"Error recalculating statistics: {e}")
+            self.logger.error("Error recalculating statistics: %s", e)
         await self.persistence.async_save_position(None)
         self.current_position = None
 
@@ -195,11 +189,11 @@ class TradingStrategy:
             signal, confidence, stop_loss, take_profit, position_size, reasoning = \
                 self.extractor.extract_trading_info(raw_response)
 
-            self.logger.info(f"Extracted Signal: {signal}, Confidence: {confidence}")
+            self.logger.info("Extracted Signal: %s, Confidence: %s", signal, confidence)
 
             # Validate signal
             if not self.extractor.validate_signal(signal):
-                self.logger.warning(f"Invalid signal: {signal}")
+                self.logger.warning("Invalid signal: %s", signal)
                 return None
 
             # Extract market conditions for brain learning
@@ -225,13 +219,13 @@ class TradingStrategy:
 
             # HOLD or no action
             if reasoning:
-                self.logger.info(f"No action taken. Signal: {signal}. Reasoning: {reasoning[:200]}")
+                self.logger.info("No action taken. Signal: %s. Reasoning: %s", signal, reasoning[:200])
             else:
-                self.logger.info(f"No action taken. Signal: {signal}")
+                self.logger.info("No action taken. Signal: %s", signal)
             return None
 
         except Exception as e:
-            self.logger.error(f"Error processing analysis: {e}")
+            self.logger.error("Error processing analysis: %s", e)
             return None
 
     async def _handle_existing_position(
@@ -292,7 +286,7 @@ class TradingStrategy:
                     market_conditions=market_conditions
                 )
             except Exception as e:
-                self.logger.warning(f"Failed to track position update: {e}")
+                self.logger.warning("Failed to track position update: %s", e)
 
             decision = TradeDecision(
                 timestamp=datetime.now(timezone.utc),
@@ -306,7 +300,7 @@ class TradingStrategy:
                 reasoning=f"Updated position parameters. {reasoning}",
             )
             await self.persistence.async_save_trade_decision(decision)
-            self.logger.info(f"Position updated: New SL=${stop_loss:,.2f}, TP=${take_profit:,.2f}")
+            self.logger.info("Position updated: New SL=$%s, TP=$%s", f"{stop_loss:,.2f}", f"{take_profit:,.2f}")
             return decision
 
         return None
@@ -352,13 +346,8 @@ class TradingStrategy:
         tp_distance_pct = risk_assessment.tp_distance_pct
         rr_ratio = risk_assessment.rr_ratio
 
-        self.logger.info(
-            f"Position sizing: Capital=${capital:,.2f}, Size={final_size_pct*100:.2f}%, "
-            f"Allocation=${risk_assessment.quote_amount:,.2f}, Quantity={quantity:.6f}"
-        )
-        self.logger.info(
-            f"Risk metrics: SL={sl_distance_pct*100:.2f}%, TP={tp_distance_pct*100:.2f}%, R/R={rr_ratio:.2f}"
-        )
+        self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)
+        self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)
 
         # Create position using Factory
         self.current_position = self.position_factory.create_position(
@@ -371,10 +360,7 @@ class TradingStrategy:
         )
 
         await self.persistence.async_save_position(self.current_position)
-        self.logger.info(
-            f"Opened {direction} position @ ${current_price:,.2f} "
-            f"(SL: ${final_sl:,.2f}, TP: ${final_tp:,.2f}, Qty: {quantity:.6f}, Fee: ${entry_fee:.4f})"
-        )
+        self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
 
         # Create and save decision (store size_pct for history context)
         decision = TradeDecision(
@@ -437,12 +423,12 @@ class TradingStrategy:
                 updated = True
             else:
                 new_sl = stop_loss
-                self.logger.info(f"Updated Stop Loss: ${stop_loss:,.2f}")
+                self.logger.info("Updated Stop Loss: $%s", f"{stop_loss:,.2f}")
                 updated = True
 
         if take_profit and take_profit != self.current_position.take_profit:
             new_tp = take_profit
-            self.logger.info(f"Updated Take Profit: ${take_profit:,.2f}")
+            self.logger.info("Updated Take Profit: $%s", f"{take_profit:,.2f}")
             updated = True
 
         if updated:
@@ -474,7 +460,7 @@ class TradingStrategy:
 
         # Default fallback
         if self.logger:
-            self.logger.warning(f"Could not extract price from result keys: {list(result.keys())}")
+            self.logger.warning("Could not extract price from result keys: %s", list(result.keys()))
         return 0.0
 
     @staticmethod
@@ -596,7 +582,7 @@ class TradingStrategy:
                 else:
                     conditions["trend_direction"] = "NEUTRAL"
         except Exception as e:
-            self.logger.warning(f"Could not extract market conditions: {e}")
+            self.logger.warning("Could not extract market conditions: %s", e)
         return conditions
 
     def _extract_confluence_factors(self, result: dict) -> tuple:
@@ -624,7 +610,7 @@ class TradingStrategy:
                     except (ValueError, TypeError):
                         pass
         except Exception as e:
-            self.logger.warning(f"Could not extract confluence factors: {e}")
+            self.logger.warning("Could not extract confluence factors: %s", e)
         return tuple(factors)
 
     def get_position_context(self, current_price: Optional[float] = None) -> str:

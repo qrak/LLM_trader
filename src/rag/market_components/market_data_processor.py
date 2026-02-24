@@ -55,11 +55,11 @@ class MarketDataProcessor:
                 if len(top_coins) >= 10:
                     break
 
-            self.logger.debug(f"Extracted {len(top_coins)} top coins: {top_coins}")
+            self.logger.debug("Extracted %s top coins: %s", len(top_coins), top_coins)
             return top_coins
 
         except Exception as e:
-            self.logger.error(f"Error extracting top coins: {e}")
+            self.logger.error("Error extracting top coins: %s", e)
             return []
 
     def process_coin_data(self, values: Dict) -> Optional[Dict]:
@@ -92,5 +92,5 @@ class MarketDataProcessor:
             return processed_coin if processed_coin else None
 
         except Exception as e:
-            self.logger.error(f"Error processing coin data: {e}")
+            self.logger.error("Error processing coin data: %s", e)
             return None

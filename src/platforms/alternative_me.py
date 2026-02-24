@@ -51,9 +51,9 @@ class AlternativeMeAPI:
                         loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                     self.last_update = loaded_time
                     self.current_index = cached_data["data"]
-                    self.logger.debug(f"Loaded Fear & Greed cache from {self.last_update.isoformat()}")
+                    self.logger.debug("Loaded Fear & Greed cache from %s", self.last_update.isoformat())
             except Exception as e:
-                self.logger.error(f"Error loading Fear & Greed cache: {e}")
+                self.logger.error("Error loading Fear & Greed cache: %s", e)
 
     def _read_cache_file(self) -> Dict[str, Any]:
         """Read and parse the cache file. Executed in a thread."""
@@ -81,7 +81,7 @@ class AlternativeMeAPI:
         # Check if we should use cached data
         if not force_refresh and self.last_update and self.current_index and \
            current_time - self.last_update < self.update_interval:
-            self.logger.debug(f"Using cached Fear & Greed data from {self.last_update.isoformat()}")
+            self.logger.debug("Using cached Fear & Greed data from %s", self.last_update.isoformat())
             return self.current_index
 
         # Fetch fresh data
@@ -115,15 +115,15 @@ class AlternativeMeAPI:
 
                         self.last_update = current_time
                         self.current_index = result
-                        self.logger.debug(f"Updated Fear & Greed cache with value: {result['value']} - {result['value_classification']}")
+                        self.logger.debug("Updated Fear & Greed cache with value: %s - %s", result['value'], result['value_classification'])
 
                         return result
                     else:
                         self.logger.warning("Invalid Fear & Greed Index API response format")
                 else:
-                    self.logger.error(f"Fear & Greed API request failed with status {resp.status}")
+                    self.logger.error("Fear & Greed API request failed with status %s", resp.status)
         except Exception as e:
-            self.logger.error(f"Error fetching Fear & Greed data: {e}")
+            self.logger.error("Error fetching Fear & Greed data: %s", e)
 
         # If API call fails, try to use cached data
         if self.current_index:
@@ -177,9 +177,9 @@ class AlternativeMeAPI:
                     else:
                         self.logger.warning("Invalid Fear & Greed History API response format")
                 else:
-                    self.logger.error(f"Fear & Greed History API request failed with status {resp.status}")
+                    self.logger.error("Fear & Greed History API request failed with status %s", resp.status)
         except Exception as e:
-            self.logger.error(f"Error fetching Fear & Greed history: {e}")
+            self.logger.error("Error fetching Fear & Greed history: %s", e)
 
         # Return empty list if API call fails
         return []

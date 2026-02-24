@@ -120,8 +120,9 @@ class ContextBuilder:
         """Calculate score based on keyword frequency with log-normal smoothing."""
         score = 0.0
         for keyword in keywords:
+            content_dict = content._asdict()
             for field, weight in FIELD_WEIGHTS.items():
-                count = getattr(content, field).count(keyword)
+                count = content_dict.get(field, "").count(keyword)
                 if count > 0:
                     score += weight * (1 + math.log(1 + count))
         return score

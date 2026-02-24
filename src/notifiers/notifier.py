@@ -50,14 +50,14 @@ class DiscordNotifier(BaseNotifier):
     async def on_ready(self):
         """Called when bot is ready."""
         try:
-            self.logger.info(f"DiscordNotifier: Logged in as {self.bot.user.name}")
+            self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)
             self.file_handler.initialize()
             self.logger.debug("FileHandler initialized")
             self.is_initialized = True
             self._ready_event.set()
             self.logger.debug("DiscordNotifier ready")
         except Exception as e:
-            self.logger.error(f"Error in on_ready: {e}", exc_info=True)
+            self.logger.error("Error in on_ready: %s", e, exc_info=True)
 
     async def __aenter__(self):
         if self.session is None:
@@ -70,13 +70,13 @@ class DiscordNotifier(BaseNotifier):
                 await self.session.close()
                 self.session = None
             except Exception as e:
-                self.logger.warning(f"Session close error: {e}")
+                self.logger.warning("Session close error: %s", e)
 
         if self.file_handler:
             try:
                 await self.file_handler.shutdown()
             except Exception as e:
-                self.logger.warning(f"Error during file handler shutdown: {e}")
+                self.logger.warning("Error during file handler shutdown: %s", e)
 
         if self.bot:
             try:
@@ -87,7 +87,7 @@ class DiscordNotifier(BaseNotifier):
                 except asyncio.TimeoutError:
                     self.logger.warning("Bot close operation timed out")
             except Exception as e:
-                self.logger.warning(f"Error closing Discord bot: {e}")
+                self.logger.warning("Error closing Discord bot: %s", e)
 
         self.logger.info("Discord notifier resources released")
 
@@ -103,9 +103,9 @@ class DiscordNotifier(BaseNotifier):
         try:
             await self.bot.start(token)
         except discord.LoginFailure as e:
-            self.logger.error(f"Discord Login Failure: {e}. Check your BOT_TOKEN_DISCORD.", exc_info=True)
+            self.logger.error("Discord Login Failure: %s. Check your BOT_TOKEN_DISCORD.", e, exc_info=True)
         except Exception as e:
-            self.logger.error(f"Failed to start Discord bot: {e}", exc_info=True)
+            self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)
 
     async def wait_until_ready(self) -> None:
         """Wait for the bot to fully initialize."""
@@ -134,7 +134,7 @@ class DiscordNotifier(BaseNotifier):
         await self.wait_until_ready()
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            self.logger.error(f"Channel with ID {channel_id} not found.")
+            self.logger.error("Channel with ID %s not found.", channel_id)
             return None
 
         try:
@@ -142,7 +142,7 @@ class DiscordNotifier(BaseNotifier):
             MAX_TOTAL_LENGTH = 20000  # 10 chunks max
 
             if len(message) > MAX_TOTAL_LENGTH:
-                self.logger.warning(f"Message length ({len(message)}) exceeds maximum ({MAX_TOTAL_LENGTH}). Truncating.")
+                self.logger.warning("Message length (%s) exceeds maximum (%s). Truncating.", len(message), MAX_TOTAL_LENGTH)
                 content = message[:MAX_TOTAL_LENGTH]
             else:
                 content = message
@@ -167,12 +167,12 @@ class DiscordNotifier(BaseNotifier):
                     expire_after=expire_after
                 )
 
-            self.logger.debug(f"Sent {len(chunks)} message chunk(s) (Last ID: {sent_message.id if sent_message else 'None'})")
+            self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else 'None')
             return sent_message
         except discord.HTTPException as e:
-            self.logger.error(f"Discord HTTPException when sending message: {e}", exc_info=True)
+            self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)
         except Exception as e:
-            self.logger.error(f"Unexpected error when sending message: {e}", exc_info=True)
+            self.logger.error("Unexpected error when sending message: %s", e, exc_info=True)
         return None
 
     def _get_discord_color(self, color_key: str) -> discord.Color:
@@ -207,7 +207,7 @@ class DiscordNotifier(BaseNotifier):
 
         channel = self.bot.get_channel(channel_id)
         if not channel:
-            self.logger.error(f"Channel with ID {channel_id} not found.")
+            self.logger.error("Channel with ID %s not found.", channel_id)
             return None
 
         try:
@@ -224,7 +224,7 @@ class DiscordNotifier(BaseNotifier):
 
             return sent_message
         except Exception as e:
-            self.logger.error(f"Error sending embed: {e}")
+            self.logger.error("Error sending embed: %s", e)
             return None
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
@@ -239,7 +239,7 @@ class DiscordNotifier(BaseNotifier):
             await self.wait_until_ready()
             channel = self.bot.get_channel(channel_id)
             if not channel:
-                self.logger.error(f"Channel with ID {channel_id} not found.")
+                self.logger.error("Channel with ID %s not found.", channel_id)
                 return
 
             color_key, emoji = self.get_action_styling(decision.action)
@@ -272,7 +272,7 @@ class DiscordNotifier(BaseNotifier):
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
         except Exception as e:
-            self.logger.error(f"Error sending trading decision: {e}")
+            self.logger.error("Error sending trading decision: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_analysis_notification(
@@ -311,7 +311,7 @@ class DiscordNotifier(BaseNotifier):
             if embed:
                 await self._send_embed(embed, channel_id)
         except Exception as e:
-            self.logger.error(f"Error sending analysis notification: {e}")
+            self.logger.error("Error sending analysis notification: %s", e)
 
     async def send_position_status(
             self,
@@ -343,8 +343,11 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Entry Price", value=f"${position.entry_price:,.2f}", inline=True)
             embed.add_field(name="Current Price", value=f"${current_price:,.2f}", inline=True)
             embed.add_field(name="Quantity", value=self.formatter.fmt(position.size), inline=True)
-            if hasattr(position, 'quote_amount') and position.quote_amount > 0:
-                 embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
+            try:
+                if position.quote_amount > 0:
+                    embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
+            except AttributeError:
+                pass
 
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
             embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_quote:+,.2f}", inline=True)
@@ -357,7 +360,7 @@ class DiscordNotifier(BaseNotifier):
             embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
         except Exception as e:
-            self.logger.error(f"Error sending position status: {e}")
+            self.logger.error("Error sending position status: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_performance_stats(
@@ -394,7 +397,7 @@ class DiscordNotifier(BaseNotifier):
             embed.set_footer(text=f"Symbol: {symbol}")
             await self._send_embed(embed, channel_id)
         except Exception as e:
-            self.logger.error(f"Error sending performance stats: {e}")
+            self.logger.error("Error sending performance stats: %s", e)
 
     def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> Optional[discord.Embed]:
         """Create Discord embed from analysis JSON."""
@@ -444,5 +447,5 @@ class DiscordNotifier(BaseNotifier):
             embed.set_footer(text=f"Timeframe: {timeframe}")
             return embed
         except Exception as e:
-            self.logger.error(f"Error creating embed: {e}")
+            self.logger.error("Error creating embed: %s", e)
             return None

@@ -63,7 +63,7 @@ class AnalysisResultProcessor:
                     model=model
                 )
             except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught
-                self.logger.warning(f"Chart analysis failed: {chart_error}. Falling back to text-only analysis.")
+                self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
                 complete_response = await self.model_manager.send_prompt_streaming(
                     prompt=prompt,
                     system_message=system_prompt,
@@ -118,23 +118,15 @@ class AnalysisResultProcessor:
                 confluence_factors = analysis.get("confluence_factors", {})
                 if confluence_factors and isinstance(confluence_factors, dict):
                     cf_str = ", ".join([f"{k}={v}" for k, v in confluence_factors.items()])
-                    self.logger.debug(
-                        f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
-                        f"Trend {direction} ({strength}% strength) | Confluence: {cf_str}"
-                    )
+                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength) | Confluence: %s", signal, confidence, direction, strength, cf_str)
                 else:
-                    self.logger.debug(
-                        f"Trading analysis complete: Signal {signal}, Confidence {confidence}, "
-                        f"Trend {direction} ({strength}% strength)"
-                    )
+                    self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength)", signal, confidence, direction, strength)
             else:
                 # Legacy analysis format
                 bias = analysis.get("technical_bias", "UNKNOWN")
                 trend = analysis.get("observed_trend", "UNKNOWN")
                 confidence = analysis.get("confidence_score", 0)
-                self.logger.debug(
-                    f"Analysis complete: Technical bias {bias} with {trend} trend ({confidence}% confidence)"
-                )
+                self.logger.debug("Analysis complete: Technical bias %s with %s trend (%s%% confidence)", bias, trend, confidence)
         else:
             self.logger.warning("Analysis complete but response format may be incomplete")
 

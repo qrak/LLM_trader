@@ -35,16 +35,17 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
 
         # Normalize paths for consistent comparison across platforms
         current_filename_norm = os.path.normpath(current_filename)
-        basefilename_norm = os.path.normpath(self.baseFilename) if getattr(self, 'baseFilename', None) else None
+        try:
+            basefilename_norm = os.path.normpath(self.baseFilename)
+        except AttributeError:
+            basefilename_norm = None
 
         if basefilename_norm != current_filename_norm:
             # Close previous stream if it exists before opening a new one
             try:
-                if getattr(self, 'stream', None):
-                    try:
-                        self.stream.close()
-                    except Exception:
-                        pass
+                self.stream.close()
+            except AttributeError:
+                pass
             except Exception:
                 pass
 

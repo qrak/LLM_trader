@@ -57,7 +57,7 @@ class KeyboardHandler:
                 tty.setcbreak(fd)  # cbreak allows handling keys immediately but keeps signals like Ctrl+C
             except Exception as e:
                 if self.logger:
-                    self.logger.warning(f"Failed to set terminal mode: {e}")
+                    self.logger.warning("Failed to set terminal mode: %s", e)
 
         if self.logger:
             self.logger.debug("Keyboard handler started")
@@ -125,12 +125,12 @@ class KeyboardHandler:
             await callback()
         except Exception as e:
             if self.logger:
-                self.logger.error(f"Error executing keyboard command '{key}': {e}")
+                self.logger.error("Error executing keyboard command '%s': %s", key, e)
 
     async def _handle_keyboard_error(self, error: Exception) -> None:
         """Handle errors in keyboard processing."""
         if self.logger:
-            self.logger.error(f"Error in keyboard handler: {error}")
+            self.logger.error("Error in keyboard handler: %s", error)
         await asyncio.sleep(1)  # Longer sleep on error
 
     async def stop_listening(self) -> None:
@@ -152,7 +152,7 @@ class KeyboardHandler:
                 self._old_settings = None
             except Exception as e:
                 if self.logger:
-                    self.logger.warning(f"Failed to restore terminal settings: {e}")
+                    self.logger.warning("Failed to restore terminal settings: %s", e)
 
         if self.logger:
             self.logger.debug("Keyboard handler stopped")
@@ -161,6 +161,6 @@ class KeyboardHandler:
         """Display available keyboard commands"""
         for key, (_, description) in sorted(self._commands.items()):
             if self.logger:
-                self.logger.info(f"  '{key}' - {description}")
+                self.logger.info("  '%s' - %s", key, description)
             else:
                 print(f"  '{key}' - {description}")

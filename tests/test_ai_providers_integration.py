@@ -36,7 +36,6 @@ def create_test_image() -> bytes:
 
 class RateLimitError(Exception):
     """Raised when API returns rate limit error."""
-    pass
 
 
 def validate_response(response: Optional[ChatResponseModel], test_name: str) -> bool:

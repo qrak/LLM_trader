@@ -80,7 +80,10 @@ class BrainRouter:
         cached = self.dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
         if cached:
             return cached
-        data_dir = getattr(self.config, "DATA_DIR", "data")
+        try:
+            data_dir = self.config.DATA_DIR
+        except AttributeError:
+            data_dir = "data"
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         status = {"status": "active", "trend": "--", "confidence": "--", "action": "--", "adx": None, "rsi": None}

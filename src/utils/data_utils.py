@@ -1,7 +1,9 @@
+"""Utilities for data manipulation, serialization, and type conversion."""
 import dataclasses
-import numpy as np
 from datetime import datetime
-from typing import Any, Dict, Type, TypeVar, get_args, get_origin, List, Union, Optional
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_args, get_origin
+
+import numpy as np
 from numpy.typing import NDArray
 
 T = TypeVar("T")
@@ -122,49 +124,41 @@ def get_indicator_value(td: dict, key: str) -> Union[float, str]:
 def serialize_for_json(obj: Any) -> Any:
     """Recursively convert NumPy objects to JSON-serializable types."""
     if isinstance(obj, dict):
-        return {k: serialize_for_json(v) for k, v in obj.items()}
-
-    if isinstance(obj, (list, tuple)):
-        return [serialize_for_json(v) for v in obj]
-
-    if isinstance(obj, np.ndarray):
+        result = {k: serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        result = [serialize_for_json(v) for v in obj]
+    elif isinstance(obj, np.ndarray):
         try:
-            return obj.tolist()
+            result = obj.tolist()
         except Exception:
             # Fallback for complex/mixed arrays
-            return [serialize_for_json(v) for v in obj]
-
-    if isinstance(obj, np.generic):
+            result = [serialize_for_json(v) for v in obj]
+    elif isinstance(obj, np.generic):
         try:
-            return obj.item()
+            result = obj.item()
         except Exception:
-            return str(obj)
-
-    # Handle NaN/Inf float values which are standard in NumPy but invalid in JSON
-    if isinstance(obj, float):
-        if np.isnan(obj) or np.isinf(obj):
-            return None
-        return obj
-
-    # Primitive types pass through
-    if isinstance(obj, (str, int, bool)) or obj is None:
-        return obj
-
-    # Last resort fallback
-    try:
-        return str(obj)
-    except Exception:
-        return None
+            result = str(obj)
+    elif isinstance(obj, float):
+        # Handle NaN/Inf float values which are standard in NumPy but invalid in JSON
+        result = None if (np.isnan(obj) or np.isinf(obj)) else obj
+    elif isinstance(obj, (str, int, bool)) or obj is None:
+        # Primitive types pass through
+        result = obj
+    else:
+        # Last resort fallback
+        try:
+            result = str(obj)
+        except Exception:
+            result = None
+    return result
 
 
 def safe_tolist(obj: Any) -> Union[List, Any]:
-    """Safely convert an object to a list if it has a .tolist() method."""
-    if hasattr(obj, 'tolist'):
-        try:
-            return obj.tolist()
-        except Exception:
-            pass
-    return obj
+    """Safely convert an object to a list using duck-typing."""
+    try:
+        return obj.tolist()
+    except (AttributeError, Exception):
+        return obj
 
 
 class SerializableMixin:
@@ -216,29 +210,25 @@ class SerializableMixin:
         args = get_args(target_type)
 
         # Handle Optional[T] (Union[T, None])
-        if origin is Union and type(None) in args:
-            non_none_args = [arg for arg in args if arg is not type(None)]
+        if origin is Union and None.__class__ in args:
+            non_none_args = [arg for arg in args if arg is not None.__class__]
             if len(non_none_args) == 1:
                 return SerializableMixin._convert_value(value, non_none_args[0])
 
         # Handle List[T]
-        if origin is list or origin is List:
+        if (origin is list or origin is List) and isinstance(value, list):
             item_type = args[0]
-            if isinstance(value, list):
-                return [SerializableMixin._convert_value(item, item_type) for item in value]
+            return [SerializableMixin._convert_value(item, item_type) for item in value]
 
         # Handle datetime
         if target_type is datetime and isinstance(value, str):
             try:
-                return datetime.fromisoformat(value)
+                value = datetime.fromisoformat(value)
             except ValueError:
-                return value
+                pass
 
         # Handle nested dataclasses
         if dataclasses.is_dataclass(target_type) and isinstance(value, dict):
-            if issubclass(target_type, SerializableMixin):
-                return target_type.from_dict(value)
-            else:
-                return target_type(**value)
+            return target_type.from_dict(value) if issubclass(target_type, SerializableMixin) else target_type(**value)
 
         return value

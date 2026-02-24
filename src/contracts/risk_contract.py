@@ -3,7 +3,7 @@
 from typing import Protocol, Optional, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.trading.dataclasses import RiskAssessment
+    from src.trading.data_models import RiskAssessment
 
 class RiskManagerProtocol(Protocol):
     """

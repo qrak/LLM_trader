@@ -40,7 +40,7 @@ class ConsoleNotifier(BaseNotifier):
 
     async def wait_until_ready(self) -> None:
         """Console is always ready."""
-        pass
+        self.logger.debug("ConsoleNotifier: Console is always ready")
 
     async def send_message(
             self,
@@ -126,7 +126,7 @@ class ConsoleNotifier(BaseNotifier):
             # Use the corrected analysis dict (not re-parsed raw JSON)
             self._print_analysis_data(analysis, timeframe)
         except Exception as e:
-            self.logger.error(f"Error printing analysis notification: {e}")
+            self.logger.error("Error printing analysis notification: %s", e)
 
     async def send_position_status(
             self,
@@ -154,8 +154,11 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Entry Price:     ${position.entry_price:,.2f}")
             print(f"Current Price:   ${current_price:,.2f}")
             print(f"Quantity:        {self.formatter.fmt(position.size)}")
-            if hasattr(position, 'quote_amount') and position.quote_amount > 0:
-                print(f"Invested:        ${position.quote_amount:,.2f}")
+            try:
+                if position.quote_amount > 0:
+                    print(f"Invested:        ${position.quote_amount:,.2f}")
+            except AttributeError:
+                pass
             print("-" * 40)
             print(f"Unrealized P&L:  {pnl_pct:+.2f}%")
             print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_quote:+,.2f}")
@@ -169,7 +172,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Entry Time:      {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 60)
         except Exception as e:
-            self.logger.error(f"Error printing position status: {e}")
+            self.logger.error("Error printing position status: %s", e)
 
     async def send_performance_stats(
             self,
@@ -203,7 +206,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Net P&L (USDT):   ${stats['net_pnl']:+,.2f}")
             print("=" * 60)
         except Exception as e:
-            self.logger.error(f"Error printing performance stats: {e}")
+            self.logger.error("Error printing performance stats: %s", e)
 
     def _print_analysis_data(self, analysis: dict, timeframe: str) -> None:
         """Print analysis JSON data in formatted console output."""
@@ -243,4 +246,4 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Timeframe:       {timeframe}")
             print("=" * 60)
         except Exception as e:
-            self.logger.error(f"Error formatting analysis data: {e}")
+            self.logger.error("Error formatting analysis data: %s", e)

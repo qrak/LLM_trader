@@ -85,13 +85,9 @@ class AnalysisEngine:
 
             # Validate timeframe
             if not TimeframeValidator.validate(self.timeframe):
-                self.logger.warning(
-                    f"Timeframe '{self.timeframe}' is not fully supported. "
-                    f"Supported timeframes: {', '.join(TimeframeValidator.SUPPORTED_TIMEFRAMES)}. "
-                    f"Proceeding but expect potential calculation errors."
-                )
+                self.logger.warning("Timeframe '%s' is not fully supported. Supported timeframes: %s. Proceeding but expect potential calculation errors.", self.timeframe, ', '.join(TimeframeValidator.SUPPORTED_TIMEFRAMES))
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.exception(f"Error loading configuration values: {e}.")
+            self.logger.exception("Error loading configuration values: %s.", e)
             raise
         # Store injected components
         self.model_manager = model_manager
@@ -140,7 +136,7 @@ class AnalysisEngine:
         try:
             effective_timeframe = TimeframeValidator.validate_and_normalize(effective_timeframe)
         except ValueError as e:
-            self.logger.warning(f"Timeframe validation failed: {e}. Using config default: {self.timeframe}")
+            self.logger.warning("Timeframe validation failed: %s. Using config default: %s", e, self.timeframe)
             effective_timeframe = self.timeframe
 
         self.context = AnalysisContext(symbol)
@@ -183,7 +179,7 @@ class AnalysisEngine:
             if self.rag_engine is not None:
                 await self.rag_engine.close()
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.error(f"Error during MarketAnalyzer cleanup: {e}")
+            self.logger.error("Error during MarketAnalyzer cleanup: %s", e)
 
     @profile_performance
     async def analyze_market(
@@ -242,7 +238,7 @@ class AnalysisEngine:
                 try:
                     rag_urls = self.rag_engine.context_builder.get_latest_article_urls()
                 except Exception as e:  # pylint: disable=broad-exception-caught
-                    self.logger.warning(f"Could not retrieve article URLs from RAG engine: {e}")
+                    self.logger.warning("Could not retrieve article URLs from RAG engine: %s", e)
 
                 return market_context, rag_urls
 
@@ -260,7 +256,7 @@ class AnalysisEngine:
             if market_context:
                 self.prompt_builder.add_custom_instruction(market_context)
             else:
-                self.logger.warning(f"No market context available for {self.symbol}")
+                self.logger.warning("No market context available for %s", self.symbol)
 
             # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
             brain_context = None
@@ -286,14 +282,14 @@ class AnalysisEngine:
             return analysis_result
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.exception(f"Analysis failed: {e}")
+            self.logger.exception("Analysis failed: %s", e)
             return {"error": str(e), "recommendation": "HOLD"}
 
     async def _collect_market_data(self) -> bool:
         """Collect market data using data collector"""
         data_result = await self.data_collector.collect_data(self.context)
         if not data_result["success"]:
-            self.logger.error(f"Failed to collect market data: {data_result['errors']}")
+            self.logger.error("Failed to collect market data: %s", data_result['errors'])
             return False
 
         # Store article URLs (initial empty set, will be updated by parallel RAG task)
@@ -313,7 +309,7 @@ class AnalysisEngine:
             market_overview = await self.rag_engine.get_market_overview()
             self.context.market_overview = market_overview
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.warning(f"Failed to fetch market overview: {e}")
+            self.logger.warning("Failed to fetch market overview: %s", e)
             self.context.market_overview = {}
 
         # Fetch market microstructure
@@ -324,7 +320,7 @@ class AnalysisEngine:
             )
             self.context.market_microstructure = microstructure
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.warning(f"Failed to fetch market microstructure: {e}")
+            self.logger.warning("Failed to fetch market microstructure: %s", e)
             self.context.market_microstructure = {}
 
         # Fetch cryptocurrency details
@@ -333,12 +329,12 @@ class AnalysisEngine:
                 coin_details = await self.market_api.get_coin_details(self.base_symbol)
                 self.context.coin_details = coin_details
                 if coin_details:
-                    # self.logger.debug(f"Coin details for {self.base_symbol} fetched and added to context")
+                    # self.logger.debug("Coin details for %s fetched and added to context", self.base_symbol)
                     pass
                 else:
-                    self.logger.warning(f"No coin details found for {self.base_symbol}")
+                    self.logger.warning("No coin details found for %s", self.base_symbol)
             except Exception as e:  # pylint: disable=broad-exception-caught
-                self.logger.warning(f"Failed to fetch coin details for {self.base_symbol}: {e}")
+                self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
                 self.context.coin_details = {}
 
     async def _perform_technical_analysis(self) -> None:
@@ -456,7 +452,7 @@ class AnalysisEngine:
             Analysis result dictionary
         """
         if provider and model:
-            self.logger.info(f"Using admin-specified provider: {provider}, model: {model}")
+            self.logger.info("Using admin-specified provider: %s, model: %s", provider, model)
 
         # Give result processor access to context for current_price
         self.result_processor.context = self.context
@@ -519,7 +515,7 @@ class AnalysisEngine:
                 return chart_image
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.error(f"Failed to generate chart image: {e}")
+            self.logger.error("Failed to generate chart image: %s", e)
             return None
 
     async def _calculate_technical_indicators(self) -> None:
@@ -567,7 +563,7 @@ class AnalysisEngine:
                     technical_data[key] = float(values)
 
             except (IndexError, TypeError, ValueError) as e:
-                self.logger.warning(f"Could not process indicator '{key}': {e}")
+                self.logger.warning("Could not process indicator '%s': %s", key, e)
                 continue
 
         self.context.technical_data = technical_data
@@ -593,7 +589,7 @@ class AnalysisEngine:
             self.context.long_term_data.update(long_term_indicators)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.error(f"Error processing long-term data: {str(e)}")
+            self.logger.error("Error processing long-term data: %s", str(e))
 
         # Calculate weekly macro (if available)
         # Check for dynamic attribute attached in DataCollector (see MarketDataCollector.collect_data)
@@ -608,11 +604,11 @@ class AnalysisEngine:
 
                 if 'weekly_macro_trend' in weekly_macro:
                     trend = weekly_macro['weekly_macro_trend']
-                    self.logger.info(f"Weekly Macro: {trend.get('trend_direction')} ({trend.get('confidence_score')}%)")
+                    self.logger.info("Weekly Macro: %s (%s%%)", trend.get('trend_direction'), trend.get('confidence_score'))
                     if trend.get('cycle_phase'):
-                        self.logger.info(f"Cycle Phase: {trend['cycle_phase']}")
+                        self.logger.info("Cycle Phase: %s", trend['cycle_phase'])
             except Exception as e:  # pylint: disable=broad-exception-caught
-                self.logger.error(f"Error calculating weekly macro indicators: {str(e)}")
+                self.logger.error("Error calculating weekly macro indicators: %s", str(e))
                 self.context.weekly_macro_indicators = None
         else:
             self.context.weekly_macro_indicators = None

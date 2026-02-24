@@ -29,7 +29,7 @@ class TrackingPersistence:
             self.logger.warning("Corrupted tracking file. Creating new.")
             return {}
         except Exception as e:
-            self.logger.error(f"Error loading tracking data: {e}")
+            self.logger.error("Error loading tracking data: %s", e)
             return {}
 
     async def save_tracking_data(self, data: Dict[str, Any]) -> bool:
@@ -43,7 +43,7 @@ class TrackingPersistence:
                     json.dump({}, f)
             return True
         except Exception as e:
-            self.logger.error(f"Error saving tracking data: {e}")
+            self.logger.error("Error saving tracking data: %s", e)
             return False
 
     async def remove_message_tracking(self, message_id: int) -> None:
