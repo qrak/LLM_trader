@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     # Initialize
     print("\n[1/5] Initializing...")
-    model = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+    model = SentenceTransformer('BAAI/bge-small-en-v1.5', device='cpu')
     client = chromadb.PersistentClient(path='data/test_openmemory')
     collection = client.get_or_create_collection(
         name='test_experiences',

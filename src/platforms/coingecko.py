@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Literal, Optional
 from aiohttp_client_cache import CachedSession, SQLiteBackend
 
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_async
 
 
 class CoinGeckoAPI:
@@ -275,7 +275,7 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching derivatives: %s", e)
             return []
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_global_market_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Get global market data, top coins, and DeFi metrics from CoinGecko.
@@ -305,67 +305,62 @@ class CoinGeckoAPI:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
-        try:
-            # First fetch global data to get dominance info
-            global_data = await self._fetch_global()
+        # First fetch global data to get dominance info
+        global_data = await self._fetch_global()
 
-            if isinstance(global_data, Exception):
-                self.logger.error("Error fetching global data: %s", global_data)
-                return await self._get_cached_global_data()
-
-            # Process global data to extract dominance
-            processed_global = self._process_global_data(global_data)
-            dominance_data = processed_global.get("dominance", {})
-
-            # Get coin IDs based on current dominance
-            dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
-
-            # Now fetch top coins and DeFi in parallel
-            top_coins, defi_data = await asyncio.gather(
-                self.get_top_coins_by_dominance(dominance_coin_ids),
-                self.get_defi_market_data(),
-                return_exceptions=True
-            )
-
-            # Start with processed global data
-            processed_data = processed_global
-
-            # Add top coins if successful
-            if top_coins and not isinstance(top_coins, Exception):
-                processed_data["top_coins"] = top_coins
-            elif isinstance(top_coins, Exception):
-                self.logger.warning("Error fetching top coins: %s", top_coins)
-
-            # Add DeFi data if successful (with precision cleanup)
-            if defi_data and not isinstance(defi_data, Exception):
-                defi_dict = defi_data.get("data", {})
-                # Clean up precision on string numbers
-                if defi_dict:
-                    for key in ["defi_market_cap", "eth_market_cap", "defi_to_eth_ratio",
-                               "trading_volume_24h", "defi_dominance"]:
-                        if key in defi_dict and isinstance(defi_dict[key], str):
-                            try:
-                                # Convert to float and round to reasonable precision
-                                defi_dict[key] = round(float(defi_dict[key]), 2)
-                            except (ValueError, TypeError):
-                                pass
-                processed_data["defi"] = defi_dict
-            elif isinstance(defi_data, Exception):
-                self.logger.warning("Error fetching DeFi data: %s", defi_data)
-
-            # Save to cache
-            cache_data = {
-                "timestamp": current_time.isoformat(),
-                "data": processed_data
-            }
-            await self._write_cache_file(cache_data)
-
-            self.last_update = current_time
-            self.logger.debug("Updated CoinGecko global data cache with top coins and DeFi metrics")
-            return processed_data
-        except Exception as e:
-            self.logger.error("Error fetching global market data: %s", e)
+        if isinstance(global_data, Exception):
+            self.logger.error("Error fetching global data: %s", global_data)
             return await self._get_cached_global_data()
+
+        # Process global data to extract dominance
+        processed_global = self._process_global_data(global_data)
+        dominance_data = processed_global.get("dominance", {})
+
+        # Get coin IDs based on current dominance
+        dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
+
+        # Now fetch top coins and DeFi in parallel
+        top_coins, defi_data = await asyncio.gather(
+            self.get_top_coins_by_dominance(dominance_coin_ids),
+            self.get_defi_market_data(),
+            return_exceptions=True
+        )
+
+        # Start with processed global data
+        processed_data = processed_global
+
+        # Add top coins if successful
+        if top_coins and not isinstance(top_coins, Exception):
+            processed_data["top_coins"] = top_coins
+        elif isinstance(top_coins, Exception):
+            self.logger.warning("Error fetching top coins: %s", top_coins)
+
+        # Add DeFi data if successful (with precision cleanup)
+        if defi_data and not isinstance(defi_data, Exception):
+            defi_dict = defi_data.get("data", {})
+            # Clean up precision on string numbers
+            if defi_dict:
+                for key in ["defi_market_cap", "eth_market_cap", "defi_to_eth_ratio",
+                           "trading_volume_24h", "defi_dominance"]:
+                    if key in defi_dict and isinstance(defi_dict[key], str):
+                        try:
+                            defi_dict[key] = round(float(defi_dict[key]), 2)
+                        except (ValueError, TypeError):
+                            pass
+            processed_data["defi"] = defi_dict
+        elif isinstance(defi_data, Exception):
+            self.logger.warning("Error fetching DeFi data: %s", defi_data)
+
+        # Save to cache
+        cache_data = {
+            "timestamp": current_time.isoformat(),
+            "data": processed_data
+        }
+        await self._write_cache_file(cache_data)
+
+        self.last_update = current_time
+        self.logger.debug("Updated CoinGecko global data cache with top coins and DeFi metrics")
+        return processed_data
 
     async def _fetch_global(self) -> Dict[str, Any]:
         """Fetch /global endpoint."""
@@ -416,7 +411,6 @@ class CoinGeckoAPI:
             }
         }
 
-    @retry_api_call(max_retries=2)
     async def get_market_cap_data(self) -> Dict[str, Any]:
         """Get market cap specific data"""
         market_data = await self.get_global_market_data()
@@ -429,7 +423,6 @@ class CoinGeckoAPI:
             "total_volume_24h": market_data.get("volume", {}).get("total_usd", 0)
         }
 
-    @retry_api_call(max_retries=2)
     async def get_coin_dominance(self, limit: int = 5) -> Dict[str, float]:
         """
         Get coin dominance percentages
@@ -460,7 +453,7 @@ class CoinGeckoAPI:
                 self.logger.error("Failed to fetch coin list. Status: %s", response.status)
                 return []
 
-    @retry_api_call(max_retries=2)
+    @retry_async(max_retries=2, initial_delay=2, backoff_factor=2, max_delay=30)
     async def _fetch_coin_data(self, coin_id: str) -> Dict[str, Any]:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)

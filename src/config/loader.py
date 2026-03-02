@@ -333,6 +333,10 @@ class Config:
 
     # Dashboard Configuration
     @property
+    def DASHBOARD_ENABLED(self):
+        return self.get_config('dashboard', 'enabled', True)
+
+    @property
     def DASHBOARD_HOST(self):
         return self.get_config('dashboard', 'host', '0.0.0.0')
 

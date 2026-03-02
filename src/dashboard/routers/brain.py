@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[str, Any]:
     """Helper to extract market status from previous_response data."""
@@ -109,7 +109,7 @@ class BrainRouter:
         self.dashboard_state.set_cached("brain_status", status)
         return status
 
-    async def get_vector_memory(self, limit: int = 100) -> Dict[str, Any]:
+    async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> Dict[str, Any]:
         """Get recent vector memories (synapses)."""
         cached = self.dashboard_state.get_cached("memory", ttl_seconds=30.0)
         if cached:
@@ -167,7 +167,7 @@ class BrainRouter:
             self.logger.error("Failed to retrieve active rules", exc_info=True)
             return []
 
-    async def get_vector_details(self, request: Request, query: str = None, limit: int = 50) -> Dict[str, Any]:
+    async def get_vector_details(self, request: Request, query: str = None, limit: int = Query(default=50, ge=1, le=500)) -> Dict[str, Any]:
         """Get detailed vector memory contents from ChromaDB."""
         sort_by = request.query_params.get("sort_by", "date")
         order = request.query_params.get("order", "desc")

@@ -20,7 +20,7 @@ TEST_DATA_DIR = Path("data/brain_integration_test")
 @pytest.fixture(scope="session")
 def embedding_model():
     """Load embedding model once for all tests."""
-    return SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+    return SentenceTransformer('BAAI/bge-small-en-v1.5', device='cpu')
 
 @pytest.fixture
 def logger():

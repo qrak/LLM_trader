@@ -130,6 +130,9 @@ google_thinking_level = high
 google_code_execution = false
 
 [dashboard]
+# Enable or disable the web dashboard entirely (true/false)
+# Can also be toggled at runtime via keyboard: 'd'
+enabled = true
 # Host to bind the dashboard server to
 # Use 127.0.0.1 for local access only (Recommended for security)
 # Use 0.0.0.0 to allow access from other devices on the network

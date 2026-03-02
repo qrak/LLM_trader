@@ -16,13 +16,12 @@ from .data_models import VectorSearchResult
 class VectorMemoryService:
     """Service for storing and retrieving trading experiences via vector similarity.
 
-    Uses ChromaDB for local vector storage and sentence-transformers for CPU embeddings.
+    Uses ChromaDB for local vector storage and sentence-transformers for embeddings.
     Provides semantic search to find past trades similar to current market conditions.
     """
 
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
     DEFAULT_DECAY_HALF_LIFE_DAYS = 90
     RR_THRESHOLDS = (1.3, 1.5, 1.8)
 

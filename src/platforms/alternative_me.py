@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional
 import aiohttp
 
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_async
 
 
 class AlternativeMeAPI:
@@ -65,7 +65,7 @@ class AlternativeMeAPI:
         with open(self.fear_greed_cache_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_fear_greed_index(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Get current Fear & Greed Index data
@@ -84,53 +84,47 @@ class AlternativeMeAPI:
             self.logger.debug("Using cached Fear & Greed data from %s", self.last_update.isoformat())
             return self.current_index
 
-        # Fetch fresh data
         self.logger.debug("Fetching fresh Fear & Greed Index data")
 
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
 
-        try:
-            async with self.session.get(self.FEAR_GREED_INDEX_URL, timeout=30) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if data and "data" in data and len(data["data"]) > 0:
-                        index_data = data["data"][0]
+        client_timeout = aiohttp.ClientTimeout(total=30)
+        async with self.session.get(self.FEAR_GREED_INDEX_URL, timeout=client_timeout) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data and "data" in data and len(data["data"]) > 0:
+                    index_data = data["data"][0]
 
-                        # Format the data consistently
-                        result = {
-                            "value": int(index_data.get("value", 0)),
-                            "value_classification": index_data.get("value_classification", "Unknown"),
-                            "timestamp": int(index_data.get("timestamp", 0)),
-                            "time": datetime.fromtimestamp(int(index_data.get("timestamp", 0)), tz=timezone.utc).isoformat()
-                        }
+                    result = {
+                        "value": int(index_data.get("value", 0)),
+                        "value_classification": index_data.get("value_classification", "Unknown"),
+                        "timestamp": int(index_data.get("timestamp", 0)),
+                        "time": datetime.fromtimestamp(int(index_data.get("timestamp", 0)), tz=timezone.utc).isoformat()
+                    }
 
-                        # Cache the result
-                        cache_data = {
-                            "timestamp": current_time.isoformat(),
-                            "data": result
-                        }
+                    cache_data = {
+                        "timestamp": current_time.isoformat(),
+                        "data": result
+                    }
 
-                        await asyncio.to_thread(self._write_cache_file, cache_data)
+                    await asyncio.to_thread(self._write_cache_file, cache_data)
 
-                        self.last_update = current_time
-                        self.current_index = result
-                        self.logger.debug("Updated Fear & Greed cache with value: %s - %s", result['value'], result['value_classification'])
+                    self.last_update = current_time
+                    self.current_index = result
+                    self.logger.debug("Updated Fear & Greed cache with value: %s - %s", result['value'], result['value_classification'])
 
-                        return result
-                    else:
-                        self.logger.warning("Invalid Fear & Greed Index API response format")
-                else:
-                    self.logger.error("Fear & Greed API request failed with status %s", resp.status)
-        except Exception as e:
-            self.logger.error("Error fetching Fear & Greed data: %s", e)
+                    return result
 
-        # If API call fails, try to use cached data
+                self.logger.warning("Invalid Fear & Greed Index API response format")
+            else:
+                self.logger.error("Fear & Greed API request failed with status %s", resp.status)
+
+        # Non-200 or empty response: return cached data if available
         if self.current_index:
             self.logger.warning("Using cached Fear & Greed data as fallback after API failure")
             return self.current_index
 
-        # Return default data if cache is also unavailable
         return {
             "value": 0,
             "value_classification": "Unknown",
@@ -138,7 +132,7 @@ class AlternativeMeAPI:
             "time": current_time.isoformat()
         }
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_historical_fear_greed(self, days: int = 30) -> List[Dict[str, Any]]:
         """
         Get historical Fear & Greed Index data
@@ -155,33 +149,27 @@ class AlternativeMeAPI:
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession()
 
-        try:
-            async with self.session.get(url, timeout=45) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if data and "data" in data:
-                        # Format the data consistently
-                        history = []
-                        for item in data["data"]:
-                            history.append({
-                                "value": int(item.get("value", 0)),
-                                "value_classification": item.get("value_classification", "Unknown"),
-                                "timestamp": int(item.get("timestamp", 0)),
-                                "time": datetime.fromtimestamp(int(item.get("timestamp", 0)), tz=timezone.utc).isoformat()
-                            })
+        client_timeout = aiohttp.ClientTimeout(total=45)
+        async with self.session.get(url, timeout=client_timeout) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data and "data" in data:
+                    history = []
+                    for item in data["data"]:
+                        history.append({
+                            "value": int(item.get("value", 0)),
+                            "value_classification": item.get("value_classification", "Unknown"),
+                            "timestamp": int(item.get("timestamp", 0)),
+                            "time": datetime.fromtimestamp(int(item.get("timestamp", 0)), tz=timezone.utc).isoformat()
+                        })
 
-                        # Sort by timestamp (newest first)
-                        history.sort(key=lambda x: x["timestamp"], reverse=True)
+                    history.sort(key=lambda x: x["timestamp"], reverse=True)
+                    return history
 
-                        return history
-                    else:
-                        self.logger.warning("Invalid Fear & Greed History API response format")
-                else:
-                    self.logger.error("Fear & Greed History API request failed with status %s", resp.status)
-        except Exception as e:
-            self.logger.error("Error fetching Fear & Greed history: %s", e)
+                self.logger.warning("Invalid Fear & Greed History API response format")
+            else:
+                self.logger.error("Fear & Greed History API request failed with status %s", resp.status)
 
-        # Return empty list if API call fails
         return []
 
     async def close(self) -> None:

@@ -15,10 +15,12 @@ from typing import Optional
 # --- Third-party ---
 import aiohttp
 import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
+import chromadb
 
 # --- Local ---
 from src.config.loader import config
 from src.app import CryptoTradingBot
+from sentence_transformers import SentenceTransformer
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -89,6 +91,18 @@ from src.utils.timeframe_validator import TimeframeValidator
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
+
+
+def _get_best_device() -> str:
+    """Auto-detect best available hardware accelerator for embeddings.
+
+    Priority: CUDA (NVIDIA) > MPS (Apple Silicon) > CPU.
+    """
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 try:
     from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -204,7 +218,8 @@ class CompositionRoot:
             'memory_service': trading['memory_service'],
         }
 
-        # Initialize Dashboard Server
+        # Always instantiate DashboardServer so the 'd' keyboard toggle can start/stop it at runtime.
+        # The server socket is NOT opened until start() is called, so this is safe even when disabled.
         dashboard_server = DashboardServer(
             brain_service=trading['brain_service'],
             vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
@@ -435,12 +450,13 @@ class CompositionRoot:
         brain_path = os.path.join(self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
 
         # Create symbol-specific chroma client
-        import chromadb
         chroma_client = chromadb.PersistentClient(path=brain_path)
 
-        from sentence_transformers import SentenceTransformer
-        embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
-        
+        # Auto-detect best hardware accelerator; log for observability
+        embed_device = _get_best_device()
+        self.logger.info("Embedding device: %s", embed_device)
+        embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
+
         # Inject chroma_client into VectorMemoryService
         vector_memory = VectorMemoryService(self.logger, chroma_client, embedding_model=embedding_model)
         
@@ -520,32 +536,54 @@ class CompositionRoot:
     async def run_async(self):
         """Async entry point for the application."""
         dependencies = await self.build_dependencies()
-        
+
         # Extract dashboard_server before passing to bot (bot doesn't accept it)
         dashboard_server = dependencies.pop('dashboard_server', None)
-        
+
         bot = CryptoTradingBot(
             logger=self.logger,
             config=self.config,
             shutdown_manager=self.shutdown_manager,
             **dependencies
         )
-        
+
         try:
             await bot.initialize()
             symbol = self.config.CRYPTO_PAIR
             timeframe = self.config.TIMEFRAME
-            
-            # Create tasks
-            bot_task = asyncio.create_task(bot.run(symbol, timeframe))
-            
-            # Start dashboard if available
-            if dashboard_server:
-                dashboard_task = await dashboard_server.start()
-                await asyncio.gather(bot_task, dashboard_task, return_exceptions=True)
-            else:
-                await bot_task
-                
+
+            # Track whether dashboard is currently running
+            dashboard_running = False
+
+            async def _toggle_dashboard():
+                nonlocal dashboard_running
+                if not dashboard_server:
+                    return
+                if dashboard_running:
+                    self.logger.info("Dashboard: stopping (kill switch)...")
+                    await dashboard_server.stop()
+                    dashboard_running = False
+                    self.logger.info("Dashboard stopped. Press 'd' to restart.")
+                else:
+                    self.logger.info("Dashboard: starting...")
+                    await dashboard_server.start()
+                    dashboard_running = True
+                    self.logger.info("Dashboard live at http://localhost:%s", self.config.DASHBOARD_PORT)
+
+            bot.keyboard_handler.register_command('d', _toggle_dashboard, "Toggle dashboard on/off")
+
+            self.logger.info("Keyboard commands: 'a' = force analysis, 'd' = toggle dashboard, 'h' = help, 'q' = quit")
+
+            # Auto-start dashboard if enabled in config (fire-and-forget task)
+            if dashboard_server and self.config.DASHBOARD_ENABLED:
+                await dashboard_server.start()
+                dashboard_running = True
+            elif not self.config.DASHBOARD_ENABLED:
+                self.logger.info("Dashboard disabled (config). Press 'd' to start it.")
+
+            # Bot runs independently; dashboard is managed by _toggle_dashboard
+            await asyncio.create_task(bot.run(symbol, timeframe))
+
         except asyncio.CancelledError:
             self.logger.info("Trading cancelled, shutting down...")
         finally:
