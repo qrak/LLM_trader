@@ -35,8 +35,6 @@ class GracefulShutdownManager:
         if asyncio.iscoroutinefunction(callback):
             self._callbacks.append(callback)
         else:
-            # Wrap synchronous callbacks if necessary, or just append
-            # For now, assume coroutines or handle execution accordingly
             self._callbacks.append(callback)
 
     def handle_signal(self, sig: int):

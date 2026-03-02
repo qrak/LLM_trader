@@ -69,7 +69,6 @@ class DashboardServer:
             response.headers["X-XSS-Protection"] = "1; mode=block"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
             # Content Security Policy (CSP)
             # - script-src: 'self' (dashboard logic), CDNs
@@ -180,8 +179,8 @@ class DashboardServer:
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=allowed_origins,
-                allow_credentials=True,
-                allow_methods=["*"],
+                allow_credentials=False,  # Wildcard origins are incompatible with credentials
+                allow_methods=["GET"],
                 allow_headers=["*"],
             )
 
@@ -250,6 +249,10 @@ class DashboardServer:
 
     async def start(self):
         """Start the uvicorn server in an asyncio loop."""
+        # Guard against double-start: if already running, do nothing
+        if self.server_task and not self.server_task.done():
+            return self.server_task
+
         config = uvicorn.Config(
             app=self.app,
             host=self.host,
@@ -258,7 +261,9 @@ class DashboardServer:
             loop="asyncio",
             ws="wsproto",
             proxy_headers=True,
-            # Cloudflare IPv4 & IPv6 ranges (https://www.cloudflare.com/ips/)
+            # Cloudflare IPv4 & IPv6 ranges — verified 2026-03-02
+            # Source: https://www.cloudflare.com/ips-v4/ and /ips-v6/
+            # Update periodically: Cloudflare rarely changes these but does occasionally add ranges.
             forwarded_allow_ips=(
                 "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
                 "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
@@ -285,12 +290,30 @@ class DashboardServer:
             pass
 
     async def stop(self):
-        """Stop the dashboard server gracefully."""
-        if hasattr(self, '_server') and self._server:
+        """Stop the dashboard server gracefully.
+
+        Signals uvicorn to exit, then waits for the server task to finish
+        so the socket is fully released before returning.
+        """
+        if not self._server and not self.server_task:
+            return
+
+        # Signal uvicorn's serve() loop to exit cleanly
+        if self._server:
             self._server.should_exit = True
+
+        # Wait for the server task to finish naturally (socket release)
         if self.server_task and not self.server_task.done():
-            self.server_task.cancel()
             try:
-                await self.server_task
-            except asyncio.CancelledError:
-                pass
+                await asyncio.wait_for(self.server_task, timeout=5.0)
+            except asyncio.TimeoutError:
+                # Force-cancel if it doesn't stop within 5 seconds
+                self.server_task.cancel()
+                try:
+                    await self.server_task
+                except asyncio.CancelledError:
+                    pass
+
+        # Clear references so start() can create fresh instances
+        self._server = None
+        self.server_task = None

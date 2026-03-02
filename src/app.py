@@ -150,8 +150,6 @@ class CryptoTradingBot:
         self.tasks.append(keyboard_task)
 
         self.logger.info("Crypto Trading Bot ready")
-        self.logger.info("Keyboard commands: 'a' = force analysis, 'h' = help, 'q' = quit")
-
     async def shutdown(self):
         """Callback for graceful shutdown."""
         self.logger.info("Signaling trading loops to stop...")

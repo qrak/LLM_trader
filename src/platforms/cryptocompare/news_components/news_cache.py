@@ -72,6 +72,10 @@ class NewsCache:
 
     def save_news_data(self, articles: List[Dict[str, Any]]) -> None:
         """Save news data to cache file"""
+        # Always stamp the fetch time so should_fetch_fresh_news backs off correctly,
+        # even when the API returned no articles worth saving.
+        self.last_news_update = datetime.now(timezone.utc)
+
         if not articles:
             return
 
@@ -85,7 +89,6 @@ class NewsCache:
             with open(self.news_cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
 
-            self.last_news_update = datetime.now(timezone.utc)
             self.logger.debug("Saved %s news articles to cache", len(articles))
         except Exception as e:
             self.logger.error("Error saving news cache: %s", e)

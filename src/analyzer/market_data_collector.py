@@ -176,8 +176,6 @@ class MarketDataCollector:
             available_days = result['available_days']
             is_complete = result['is_complete']
 
-            # We'll calculate the indicators in MarketAnalyzer,
-            # we just store the raw data properties here
             context.long_term_data = {
                 'data': ohlcv_data,
                 'is_new_token': not is_complete and available_days < 100,

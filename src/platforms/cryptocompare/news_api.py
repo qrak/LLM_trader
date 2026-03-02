@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional, Set, TYPE_CHECKING
 import aiohttp
 
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_async
 from .news_components import CryptoCompareNewsClient, NewsCache, NewsProcessor, NewsFilter
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ class CryptoCompareNewsAPI:
         """Initialize the news API and load cached data"""
         self.cache.initialize()
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_latest_news(
         self,
         limit: int = 50,
@@ -76,7 +76,7 @@ class CryptoCompareNewsAPI:
             # Use cached data if it's recent enough
             return self.cache.get_cached_news(limit, cutoff_time)
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_news_by_category(
         self,
         category: str,
@@ -131,12 +131,15 @@ class CryptoCompareNewsAPI:
         self.logger.debug("Fetching fresh news data from CryptoCompare")
         articles = await self.client.fetch_news(session, api_categories)
 
-        if articles:
-            # Process fresh articles
-            return self._process_fresh_articles(articles, limit, cutoff_time)
-        else:
-            # If API fetch failed, try to use cached data
+        # Always process (and stamp the cache timestamp), even if API returned nothing.
+        # This prevents the cache from appearing permanently stale after empty responses.
+        processed = self._process_fresh_articles(articles, limit, cutoff_time)
+
+        if not processed:
+            # Fall back to cached data when the API returned nothing useful
             return self.cache.get_cached_news(limit, cutoff_time)
+
+        return processed
 
     def _process_fresh_articles(
         self,

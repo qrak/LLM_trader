@@ -8,7 +8,7 @@ import aiohttp
 
 from src.platforms.cryptocompare.data_processor import CryptoCompareDataProcessor
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_async
 from src.rag.collision_resolver import CategoryCollisionResolver
 
 from typing import TYPE_CHECKING
@@ -107,7 +107,7 @@ class CryptoCompareCategoriesAPI:
         except Exception as e:
             self.logger.error("Error loading categories cache: %s", e)
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_categories(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
         Get cryptocurrency categories data
@@ -120,12 +120,12 @@ class CryptoCompareCategoriesAPI:
         """
         current_time = datetime.now(timezone.utc)
 
-        # Check if we need to refresh
+        # Return cache if still fresh
         if not force_refresh and self.categories_last_update and \
            current_time - self.categories_last_update < self.categories_update_interval:
             self.logger.debug("Using cached categories (last update: %s, expires in: %s)", self.categories_last_update, self.categories_update_interval - (current_time - self.categories_last_update))
             return self.api_categories
-        
+
         # Log why we are fetching
         if force_refresh:
             self.logger.info("Fetching categories: Force refresh requested")
@@ -134,47 +134,36 @@ class CryptoCompareCategoriesAPI:
         else:
             self.logger.info("Fetching categories: Cache expired (last update: %s)", self.categories_last_update)
 
-        # We assume RAG_CATEGORIES_API_URL contains the base URL
         url = self.config.RAG_CATEGORIES_API_URL
-
-        # Append API key if available
         if self.config.CRYPTOCOMPARE_API_KEY and "api_key=" not in url:
              connector = "&" if "?" in url else "?"
              url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
 
-        # Note: logging raw URL might leak API key, so we log the configured base URL instead
         self.logger.debug("Fetching categories from CryptoCompare API: %s", self.config.RAG_CATEGORIES_API_URL)
 
+        client_timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(url, timeout=30) as resp:
-                    self.logger.debug("Categories API response status: %s", resp.status)
-                    if resp.status == 200:
-                        data = await resp.json()
-                        self.logger.debug("Categories API raw response: %s...", str(data)[:500])
-                        if data:
-                            # Save to cache with proper structure
-                            cache_data = {
-                                "timestamp": current_time.isoformat(),
-                                "categories": data
-                            }
+            async with session.get(url, timeout=client_timeout) as resp:
+                self.logger.debug("Categories API response status: %s", resp.status)
+                if resp.status == 200:
+                    data = await resp.json()
+                    self.logger.debug("Categories API raw response: %s...", str(data)[:500])
+                    if data:
+                        cache_data = {
+                            "timestamp": current_time.isoformat(),
+                            "categories": data
+                        }
+                        async with self._file_lock:
+                            await asyncio.to_thread(self._write_cache_file_sync, cache_data)
+                        self.api_categories = data
+                        self._process_api_categories(data)
+                        self.categories_last_update = current_time
+                        return data
+                else:
+                    self.logger.error("Categories API request failed with status %s", resp.status)
+                    self.logger.error("Response body: %s", await resp.text())
 
-                            async with self._file_lock:
-                                await asyncio.to_thread(self._write_cache_file_sync, cache_data)
-
-                            # Update internal data
-                            self.api_categories = data
-                            self._process_api_categories(data)
-                            self.categories_last_update = current_time
-
-                            return data
-                    else:
-                        self.logger.error("Categories API request failed with status %s", resp.status)
-                        self.logger.error("Response body: %s", await resp.text())
-            except Exception as e:
-                self.logger.error("Error fetching CryptoCompare categories: %s", e)
-
-        # Return cached data as fallback if API call fails
+        # Return cached data as fallback for non-200 responses
         return self.api_categories
 
     def _process_api_categories(self, api_categories: Any) -> None:

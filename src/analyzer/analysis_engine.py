@@ -627,9 +627,6 @@ class AnalysisEngine:
             Formatted brain context string
         """
         # pylint: disable=too-many-branches, too-many-statements, too-many-locals
-        # Note: All values from technical_data are guaranteed to be float (not list)
-        # because _calculate_technical_indicators() converts 1D numpy arrays via float(values[-1])
-
         # Extract trend direction from +DI/-DI
         trend_direction = self._get_trend_direction(technical_data)
 

@@ -8,7 +8,6 @@ from typing import Dict, List, Any, Optional, TYPE_CHECKING
 import aiohttp
 
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -30,7 +29,6 @@ class CryptoCompareNewsClient:
         self.logger = logger
         self.config = config
 
-    @retry_api_call(max_retries=3)
     async def fetch_news(
         self,
         session: Optional[aiohttp.ClientSession] = None,
@@ -42,20 +40,12 @@ class CryptoCompareNewsClient:
         use_temp_session = session is None
 
         try:
-            client_timeout = aiohttp.ClientTimeout(total=45)
+            client_timeout = aiohttp.ClientTimeout(total=90)
             async with session_to_use.get(url, timeout=client_timeout) as resp:
-                articles = await self._process_response(resp)
-        except asyncio.TimeoutError:
-            self.logger.error("Timeout fetching news from CryptoCompare")
-            articles = []
-        except Exception as e:
-            self.logger.error("Error fetching CryptoCompare news: %s", e)
-            articles = []
+                return await self._process_response(resp)
         finally:
             if use_temp_session:
                 await session_to_use.close()
-
-        return articles
 
     def _build_news_url(self, api_categories: Optional[List[Dict[str, Any]]] = None) -> str:
         """Build the news API URL with appropriate query parameters"""

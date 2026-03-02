@@ -4,7 +4,7 @@ import aiohttp
 
 from src.utils.timeframe_validator import TimeframeValidator
 from src.logger.logger import Logger
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_async
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -24,17 +24,10 @@ class CryptoCompareMarketAPI:
         """
         self.logger = logger
         self.config = config
-        # Build URL template without API key (it will be appended if needed)
-        # Note: This template might be used by external callers who expect it to be ready to use
-        # For now, we will NOT include the API key in the template to avoid logging it.
-        # Callers of get_ohlcv_url_template should be aware, or we should change the design.
-        # Looking at usage, get_ohlcv_url_template is used by chart_generator.
-
-        # We'll use a placeholder for the API key if it exists, or empty string
         api_key_param = f"&api_key={self.config.CRYPTOCOMPARE_API_KEY}" if self.config.CRYPTOCOMPARE_API_KEY else ""
         self.OHLCV_API_URL_TEMPLATE = f"https://min-api.cryptocompare.com/data/v2/histo{{timeframe}}?fsym={{base}}&tsym={{quote}}&limit={{limit}}{api_key_param}"
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_multi_price_data(
         self,
         coins: List[str] = None,
@@ -68,24 +61,19 @@ class CryptoCompareMarketAPI:
              connector = "&" if "?" in url else "?"
              url = f"{url}{connector}api_key={self.config.CRYPTOCOMPARE_API_KEY}"
 
+        client_timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(url, timeout=30) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data and "RAW" in data:
-                            return data
-                        else:
-                            self.logger.warning("Price data response missing RAW field")
-                            return {}
-                    else:
-                        self.logger.error("Price API request failed with status %s", resp.status)
-                        return {}
-            except Exception as e:
-                self.logger.error("Error fetching price data: %s", e)
+            async with session.get(url, timeout=client_timeout) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data and "RAW" in data:
+                        return data
+                    self.logger.warning("Price data response missing RAW field")
+                    return {}
+                self.logger.error("Price API request failed with status %s", resp.status)
                 return {}
 
-    @retry_api_call(max_retries=3)
+    @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_coin_details(self, symbol: str) -> Dict[str, Any]:
         """
         Get detailed coin information including description, taxonomy, and Weiss ratings
@@ -108,38 +96,31 @@ class CryptoCompareMarketAPI:
         if self.config.CRYPTOCOMPARE_API_KEY:
              url = f"{url}&api_key={self.config.CRYPTOCOMPARE_API_KEY}"
 
+        client_timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(url, timeout=30) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        if data and data.get("Response") == "Success" and "Data" in data:
-                            coin_data = data["Data"].get(symbol)
-                            if coin_data:
-                                # Extract the fields we need
-                                return {
-                                    "description": coin_data.get("Description", ""),
-                                    "algorithm": coin_data.get("Algorithm", "N/A"),
-                                    "proof_type": coin_data.get("ProofType", "N/A"),
-                                    "sponsored": coin_data.get("Sponsored", False),
-                                    "taxonomy": coin_data.get("Taxonomy", {}),
-                                    "rating": coin_data.get("Rating", {}),
-                                    "full_name": coin_data.get("FullName", ""),
-                                    "coin_name": coin_data.get("CoinName", ""),
-                                    "symbol": coin_data.get("Symbol", symbol),
-                                    "is_trading": coin_data.get("IsTrading", True)
-                                }
-                            else:
-                                self.logger.warning("No data found for symbol %s", symbol)
-                                return {}
-                        else:
-                            self.logger.warning("Coin details API response unsuccessful: %s", data.get('Message', 'Unknown error'))
-                            return {}
-                    else:
-                        self.logger.error("Coin details API request failed with status %s", resp.status)
+            async with session.get(url, timeout=client_timeout) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data and data.get("Response") == "Success" and "Data" in data:
+                        coin_data = data["Data"].get(symbol)
+                        if coin_data:
+                            return {
+                                "description": coin_data.get("Description", ""),
+                                "algorithm": coin_data.get("Algorithm", "N/A"),
+                                "proof_type": coin_data.get("ProofType", "N/A"),
+                                "sponsored": coin_data.get("Sponsored", False),
+                                "taxonomy": coin_data.get("Taxonomy", {}),
+                                "rating": coin_data.get("Rating", {}),
+                                "full_name": coin_data.get("FullName", ""),
+                                "coin_name": coin_data.get("CoinName", ""),
+                                "symbol": coin_data.get("Symbol", symbol),
+                                "is_trading": coin_data.get("IsTrading", True)
+                            }
+                        self.logger.warning("No data found for symbol %s", symbol)
                         return {}
-            except Exception as e:
-                self.logger.error("Error fetching coin details for %s: %s", symbol, e)
+                    self.logger.warning("Coin details API response unsuccessful: %s", data.get('Message', 'Unknown error'))
+                    return {}
+                self.logger.error("Coin details API request failed with status %s", resp.status)
                 return {}
 
     def get_ohlcv_url_template(self) -> str:

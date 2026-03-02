@@ -142,6 +142,36 @@ def test_dashboard_server_cors_enabled():
 
     assert has_cors
 
+def test_dashboard_enabled_default():
+    """DASHBOARD_ENABLED should default to True when not set in config."""
+    with patch("configparser.ConfigParser") as MockParser:
+        mock_parser_instance = MockParser.return_value
+        mock_parser_instance.sections.return_value = []
+        mock_parser_instance.items.return_value = []
+
+        with patch("src.config.loader.dotenv_values", return_value={}):
+            with patch("pathlib.Path.exists", return_value=True):
+                with patch.object(Config, "_build_model_configs"):
+                    config = Config()
+                assert config.DASHBOARD_ENABLED is True
+
+
+def test_dashboard_disabled_flag():
+    """DASHBOARD_ENABLED should be False when enabled = false in [dashboard]."""
+    with patch("configparser.ConfigParser") as MockParser:
+        mock_parser_instance = MockParser.return_value
+        mock_parser_instance.sections.return_value = ["dashboard"]
+
+        config_data = {"dashboard": {"enabled": "false"}}
+        mock_parser_instance.items.side_effect = lambda s: config_data.get(s, {}).items()
+
+        with patch("src.config.loader.dotenv_values", return_value={}):
+            with patch("pathlib.Path.exists", return_value=True):
+                with patch.object(Config, "_build_model_configs"):
+                    config = Config()
+                assert config.DASHBOARD_ENABLED is False
+
+
 if __name__ == "__main__":
     # Simple manual run if pytest fails
     try:
@@ -155,6 +185,10 @@ if __name__ == "__main__":
         print("test_dashboard_server_cors_disabled PASSED")
         test_dashboard_server_cors_enabled()
         print("test_dashboard_server_cors_enabled PASSED")
+        test_dashboard_enabled_default()
+        print("test_dashboard_enabled_default PASSED")
+        test_dashboard_disabled_flag()
+        print("test_dashboard_disabled_flag PASSED")
         print("ALL TESTS PASSED")
     except Exception as e:
         print(f"TEST FAILED: {e}")
