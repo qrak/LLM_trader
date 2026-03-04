@@ -688,4 +688,8 @@ class TradingBrainService:
             }
         )
 
+<<<<<<< HEAD
         self.logger.debug("Tracked position update: %s at %s% PnL", action_type, f"{current_pnl_pct:+.1f}")
+=======
+        self.logger.debug("Tracked position update: %s at %s%% PnL", action_type, f"{current_pnl_pct:+.1f}")
+>>>>>>> new_features

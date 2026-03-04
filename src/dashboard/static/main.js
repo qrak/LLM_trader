@@ -161,11 +161,16 @@ function updateLastUpdated() {
 function togglePanelMinimize(panelId) {
     const panel = document.getElementById(panelId);
     if (panel) {
-        panel.classList.toggle('minimized');
-        const btn = panel.querySelector('.toolbar-btn[title="Minimize"]');
+        const isMinimized = panel.classList.toggle('minimized');
+        const btn = panel.querySelector('.toolbar-btn[title="Minimize"], .toolbar-btn[title="Expand"]');
         if (btn) {
-            btn.textContent = panel.classList.contains('minimized') ? '+' : '−';
-            btn.title = panel.classList.contains('minimized') ? 'Expand' : 'Minimize';
+            btn.textContent = isMinimized ? '+' : '−';
+            btn.title = isMinimized ? 'Expand' : 'Minimize';
+            btn.setAttribute('aria-expanded', String(!isMinimized));
+
+            const titleEl = panel.querySelector('h3');
+            const panelName = titleEl ? titleEl.textContent.toLowerCase() : 'panel';
+            btn.setAttribute('aria-label', isMinimized ? `Expand ${panelName}` : `Minimize ${panelName}`);
         }
     }
 }
@@ -199,11 +204,17 @@ function initApp() {
     const sidebar = document.getElementById('sidebar');
     
     function toggleMobileMenu() {
-        sidebar.classList.toggle('mobile-open');
+        const isOpen = sidebar.classList.toggle('mobile-open');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', isOpen);
+        if (closeBtn) closeBtn.setAttribute('aria-expanded', isOpen);
     }
 
     if (toggleBtn) toggleBtn.addEventListener('click', toggleMobileMenu);
-    if (closeBtn) closeBtn.addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+    if (closeBtn) closeBtn.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+        if (closeBtn) closeBtn.setAttribute('aria-expanded', 'false');
+    });
 
     // Close on navigation
     document.querySelectorAll('.tab-btn').forEach(link => {
@@ -215,6 +226,8 @@ function initApp() {
 
             if (window.innerWidth <= 768) {
                 sidebar.classList.remove('mobile-open');
+                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
+                if (closeBtn) closeBtn.setAttribute('aria-expanded', 'false');
             }
         });
     });

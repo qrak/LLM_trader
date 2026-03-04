@@ -171,6 +171,43 @@ def test_dashboard_disabled_flag():
                     config = Config()
                 assert config.DASHBOARD_ENABLED is False
 
+<<<<<<< HEAD
+=======
+from fastapi.testclient import TestClient
+
+def test_dashboard_security_headers():
+    """Test that all required security headers are set, and HSTS conditionally on HTTPS."""
+    mock_config = MagicMock()
+    mock_config.DASHBOARD_ENABLE_CORS = False
+
+    server = DashboardServer(
+        brain_service=MagicMock(),
+        vector_memory=MagicMock(),
+        analysis_engine=MagicMock(),
+        config=mock_config,
+        logger=MagicMock()
+    )
+
+    client = TestClient(server.app)
+
+    # HTTP Request - Should NOT have HSTS
+    response_http = client.get("/api/monitor/costs")
+    assert response_http.headers.get("X-Content-Type-Options") == "nosniff"
+    assert response_http.headers.get("X-Frame-Options") == "DENY"
+    assert response_http.headers.get("X-XSS-Protection") == "1; mode=block"
+    assert "Content-Security-Policy" in response_http.headers
+    assert "Strict-Transport-Security" not in response_http.headers
+
+    # HTTPS Request (Simulated with X-Forwarded-Proto) - Should HAVE HSTS
+    response_https = client.get("/api/monitor/costs", headers={"X-Forwarded-Proto": "https"})
+    assert response_https.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+
+    # HTTPS Request via scheme (if TestClient uses base_url)
+    client_https = TestClient(server.app, base_url="https://testserver")
+    response_direct_https = client_https.get("/api/monitor/costs")
+    assert response_direct_https.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
+
+>>>>>>> new_features
 
 if __name__ == "__main__":
     # Simple manual run if pytest fails

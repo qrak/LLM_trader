@@ -80,7 +80,13 @@ function attachPanelButtons() {
         const btn = document.createElement('button');
         btn.className = 'panel-btn expand-btn';
         btn.title = 'Fullscreen';
+<<<<<<< HEAD
         btn.setAttribute('aria-label', 'Enter fullscreen');
+=======
+        const titleEl = header.querySelector('h3');
+        const panelName = titleEl ? titleEl.textContent.toLowerCase() : 'panel';
+        btn.setAttribute('aria-label', `Enter fullscreen for ${panelName}`);
+>>>>>>> new_features
         btn.textContent = '⛶';
         btn.addEventListener('click', () => openFullscreen(panelId));
 

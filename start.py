@@ -26,13 +26,7 @@ from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
-from src.platforms.cryptocompare.news_api import CryptoCompareNewsAPI
-from src.platforms.cryptocompare.news_components import (
-    CryptoCompareNewsClient,
-    NewsCache,
-    NewsProcessor,
-    NewsFilter
-)
+from src.platforms.cryptocompare.news_client import CryptoCompareNewsClient
 from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
 from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
 from src.platforms.cryptocompare.data_processor import CryptoCompareDataProcessor
@@ -174,6 +168,7 @@ class CompositionRoot:
     def __init__(self):
         self.config = config
         self.logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG)
+        self.logger.install_crash_handler()
         self.loop = None
         self.shutdown_manager = None
 
@@ -206,7 +201,7 @@ class CompositionRoot:
             'keyboard_handler': infra['keyboard_handler'],
             'rag_engine': rag,
             'coingecko_api': apis['coingecko'],
-            'news_api': apis['news'],
+            'news_client': apis['news'],
             'market_api': apis['market'],
             'categories_api': apis['categories'],
             'alternative_me_api': apis['alternative_me'],
@@ -303,6 +298,7 @@ class CompositionRoot:
         await coingecko.initialize()
 
         news_client = CryptoCompareNewsClient(self.logger, self.config)
+<<<<<<< HEAD
         news_cache = NewsCache('data/news_cache', self.logger)
         news_api = CryptoCompareNewsAPI(
             self.logger, self.config, client=news_client,
@@ -310,6 +306,8 @@ class CompositionRoot:
             news_filter=NewsFilter(self.logger)
         )
         await news_api.initialize()
+=======
+>>>>>>> new_features
 
         cc_data_processor = CryptoCompareDataProcessor(self.logger)
         categories = CryptoCompareCategoriesAPI(
@@ -329,7 +327,7 @@ class CompositionRoot:
 
         return {
             'coingecko': coingecko,
-            'news': news_api,
+            'news': news_client,
             'market': CryptoCompareMarketAPI(logger=self.logger, config=self.config),
             'categories': categories,
             'defillama': defillama,
@@ -345,7 +343,7 @@ class CompositionRoot:
 
         file_handler = RagFileHandler(logger=self.logger, config=self.config, unified_parser=utils['parser'])
         news_manager = NewsManager(
-            logger=self.logger, file_handler=file_handler, news_api=apis['news'],
+            logger=self.logger, file_handler=file_handler, news_client=apis['news'],
             categories_api=apis['categories'], session=infra['session'], article_processor=article_processor
         )
 
@@ -535,6 +533,20 @@ class CompositionRoot:
     
     async def run_async(self):
         """Async entry point for the application."""
+        def _asyncio_exception_handler(loop, context):
+            exc = context.get("exception")
+            msg = context.get("message", "Unknown asyncio error")
+            if exc is not None:
+                if isinstance(exc, KeyboardInterrupt):
+                    self.logger.debug("Asyncio task KeyboardInterrupt during shutdown: %s", msg)
+                    return
+                self.logger.error("Asyncio unhandled exception: %s", msg, exc_info=exc)
+            else:
+                self.logger.error("Asyncio error: %s", msg)
+
+        if self.loop:
+            self.loop.set_exception_handler(_asyncio_exception_handler)
+
         dependencies = await self.build_dependencies()
 
         # Extract dashboard_server before passing to bot (bot doesn't accept it)
@@ -632,10 +644,8 @@ class CompositionRoot:
         except KeyboardInterrupt:
             print("\nKeyboardInterrupt received - initiating graceful shutdown...")
             self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
-        except Exception as e:
-            print(f"Unhandled exception: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
+            self.logger.exception("Unhandled exception in main loop — shutting down")
             self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
         finally:
             self.loop.close()
