@@ -11,7 +11,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.config.loader import config
 from src.logger.logger import Logger
+<<<<<<< HEAD
 from src.platforms.cryptocompare.news_components.news_client import (
+=======
+from src.platforms.cryptocompare.news_client import (
+>>>>>>> new_features
     CryptoCompareNewsClient,
     RELIABLE_NEWS_FEEDS
 )

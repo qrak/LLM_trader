@@ -1,4 +1,8 @@
 """Router for dashboard monitoring and news endpoints."""
+<<<<<<< HEAD
+=======
+import asyncio
+>>>>>>> new_features
 import json
 from pathlib import Path
 from typing import Dict, Any
@@ -25,8 +29,13 @@ class MonitorRouter:
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
 
+<<<<<<< HEAD
     def _load_prev_response(self) -> Dict[str, Any]:
         """Helper to load previous response data."""
+=======
+    def _load_prev_response_sync(self) -> Dict[str, Any]:
+        """Helper to load previous response data synchronously."""
+>>>>>>> new_features
         data_dir = self.config.DATA_DIR
         path = Path(data_dir) / "trading" / "previous_response.json"
         if path.exists():
@@ -45,7 +54,11 @@ class MonitorRouter:
                 "source": "memory",
                 "timestamp": self.analysis_engine.last_prompt_timestamp
             }
+<<<<<<< HEAD
         data = self._load_prev_response()
+=======
+        data = await asyncio.to_thread(self._load_prev_response_sync)
+>>>>>>> new_features
         prompt = data.get("prompt")
         if prompt:
             return {
@@ -63,7 +76,11 @@ class MonitorRouter:
                 "source": "memory",
                 "timestamp": self.analysis_engine.last_response_timestamp
             }
+<<<<<<< HEAD
         data = self._load_prev_response()
+=======
+        data = await asyncio.to_thread(self._load_prev_response_sync)
+>>>>>>> new_features
         if data:
             response = data.get("response", {})
             text_analysis = response.get("text_analysis", "No analysis available")
@@ -110,6 +127,15 @@ class MonitorRouter:
         return result
 
 
+<<<<<<< HEAD
+=======
+    def _read_news_file_sync(self, file_path: Path) -> list:
+        """Synchronously read and parse a news JSON file."""
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("articles", data) if isinstance(data, dict) else data
+
+>>>>>>> new_features
     async def get_news(self) -> Dict[str, Any]:
         """Get cached news articles from RAG engine or disk."""
         cached = self.dashboard_state.get_cached("news", ttl_seconds=3600.0)
@@ -126,11 +152,18 @@ class MonitorRouter:
                 news_file = Path(data_dir) / news_path
                 if news_file.exists():
                     try:
+<<<<<<< HEAD
                         with open(news_file, "r", encoding="utf-8") as f:
                             data = json.load(f)
                             articles = data.get("articles", data) if isinstance(data, dict) else data
                             if articles:
                                 break
+=======
+                        parsed_articles = await asyncio.to_thread(self._read_news_file_sync, news_file)
+                        articles = parsed_articles
+                        if articles:
+                            break
+>>>>>>> new_features
                     except Exception:
                         self.logger.error("Failed to load news from %s", news_path, exc_info=True)
         self.dashboard_state.set_cached("news", articles)

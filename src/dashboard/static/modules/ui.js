@@ -42,6 +42,9 @@ function setupSidebarNavigation() {
                 e.preventDefault();
                 navItems[nextIndex].focus();
                 navItems[nextIndex].click();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                item.click();
             }
         });
 

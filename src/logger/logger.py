@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
@@ -165,3 +166,29 @@ class Logger(logging.Logger):
                 self.removeHandler(handler)
             except Exception:
                 pass
+
+    def install_crash_handler(self) -> None:
+        """Install sys.excepthook and threading.excepthook to route crashes to errors.log."""
+        logger_ref = self
+
+        def _handle_exception(exc_type, exc_value, exc_tb):
+            if issubclass(exc_type, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_tb)
+                return
+            logger_ref.critical(
+                "Unhandled exception (process crash)",
+                exc_info=(exc_type, exc_value, exc_tb),
+            )
+
+        sys.excepthook = _handle_exception
+
+        import threading
+        def _handle_thread_exception(args):
+            if args.exc_type is SystemExit:
+                return
+            logger_ref.critical(
+                "Unhandled exception in thread '%s'",
+                args.thread.name if args.thread else "unknown",
+                exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+            )
+        threading.excepthook = _handle_thread_exception

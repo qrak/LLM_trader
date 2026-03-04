@@ -67,6 +67,13 @@ class DashboardServer:
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["X-XSS-Protection"] = "1; mode=block"
+
+            # Conditionally add HSTS if the request originated over HTTPS.
+            # Uvicorn's ProxyHeadersMiddleware processes X-Forwarded-Proto,
+            # so request.url.scheme will correctly reflect 'https' if Cloudflare sent it.
+            if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
             response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
