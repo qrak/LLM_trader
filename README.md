@@ -64,6 +64,22 @@ graph TD
     end
 ```
 
+
+
+### 🧱 Codebase & Module Breakdown
+Inspired by our advanced Dependency Injection root in start.py, the execution flows seamlessly down through src/app.py dividing quantitative crunching from semantic synthesis:
+
+- **src/analyzer/**: Translates raw numerical bounds into semantic descriptors. Coordinates price parsing (market_data_collector.py), specialized formations (pattern_analyzer.py using pattern_engine/), and text integration (prompts/). Includes a Chart Generator mapping visuals for Vision LLMs.
+- **src/rag/**: Retrieval-Augmented Knowledge layer compiling live sentiment. Harvests articles via a CryptoCompare RAG pipeline (
+ag_engine.py), limits noise via collision_resolver.py, and maps macro indicators (DefiLlama fundamentals/Fear & Greed).
+- **src/trading/**: Orchestrates position management (	rading_strategy.py) and houses the biological simulated rain.py. Semantically checks active trading contexts against historical win/loss metrics embedded via ector_memory.py inside ChromaDB. 
+- **src/indicators/**: Pure mathematical arrays heavily utilizing NumPy/Numba optimizers mapped across multiple domains (momentum, volatility, trend, support_resistance).
+- **src/managers/ & src/platforms/**: Orchestrates state boundaries (LLM API fallbacks via model_manager.py, persistent risk limits via 
+isk_manager.py, and robust exchange execution paths mapping directly to CCXT or API providers).
+- **src/dashboard/**: The FastAPI websocket layer driving real-time HTML/JS state visuals providing live feedback from trading loops.
+- **	ests/**: Comprehensive suite masking network latency with heavy mocking to track algorithmic shifts securely across API logic paths.
+
+
 ## ✨ Verified Features
 
 ### 🧠 Vector-Only Trading Brain (Pure Vector Database)
@@ -266,4 +282,4 @@ The dashboard will be available at `http://localhost:8000` (or the host/port con
 - **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
 
 ## 📄 License
-Licensed under the PolyForm Noncommercial License 1.0.0. See [LICENSE.md](LICENSE.md) for details.
+Licensed under the [MIT License](LICENSE.md).
