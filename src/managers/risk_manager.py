@@ -84,21 +84,13 @@ class RiskManager(RiskManagerProtocol):
 
         # Clamp SL: min 0.5%, max 10%
         if sl_distance_raw > 0.10:
-<<<<<<< HEAD
-            self.logger.warning("SL distance %s exceeds 10% max, clamping", f"{sl_distance_raw:.1%}")
-=======
             self.logger.warning("SL distance %s exceeds 10%% max, clamping", f"{sl_distance_raw:.1%}")
->>>>>>> new_features
             if direction == "LONG":
                 final_sl = current_price * 0.90
             else:
                 final_sl = current_price * 1.10
         elif sl_distance_raw < 0.005:
-<<<<<<< HEAD
-            self.logger.warning("SL distance %s below 0.5% min, expanding", f"{sl_distance_raw:.1%}")
-=======
             self.logger.warning("SL distance %s below 0.5%% min, expanding", f"{sl_distance_raw:.1%}")
->>>>>>> new_features
             if direction == "LONG":
                 final_sl = current_price * 0.995
             else:

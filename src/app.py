@@ -128,11 +128,7 @@ class CryptoTradingBot:
                 self.shutdown_manager.register_shutdown_callback(self.cryptocompare_session.close)
 
             # API clients (if they have close method)
-<<<<<<< HEAD
-            for client in [self.alternative_me_api, self.coingecko_api, self.news_api, self.market_api, self.categories_api]:
-=======
             for client in [self.alternative_me_api, self.coingecko_api, self.news_client, self.market_api, self.categories_api]:
->>>>>>> new_features
                 if client:
                     try:
                         self.shutdown_manager.register_shutdown_callback(client.close)
