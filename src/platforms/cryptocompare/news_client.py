@@ -2,6 +2,7 @@
 CryptoCompare News Client
 Handles direct API interactions with the CryptoCompare news service.
 """
+import re
 import time
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -82,9 +83,21 @@ class CryptoCompareNewsClient:
     async def _fetch_once(self, session: aiohttp.ClientSession, url: str) -> List[Dict[str, Any]]:
         """Execute one HTTP request, returning the raw article list."""
         start = time.monotonic()
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=90)) as resp:
-            elapsed = time.monotonic() - start
-            return self._parse_response(resp.status, await resp.json(), elapsed)
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=90)) as resp:
+                elapsed = time.monotonic() - start
+                try:
+                    data = await resp.json(content_type=None)
+                except Exception as e:
+                    self.logger.error("News API JSON decode failed (status=%s): %s", resp.status, self._redact_error(e))
+                    data = None
+                return self._parse_response(resp.status, data, elapsed)
+        except asyncio.TimeoutError:
+            self.logger.error("Timeout fetching news from CryptoCompare")
+            return []
+        except Exception as e:
+            self.logger.error("HTTP error fetching CryptoCompare news: %s", self._redact_error(e))
+            return []
 
     def _parse_response(self, status: int, data: Any, elapsed: float) -> List[Dict[str, Any]]:
         if status != 200:
@@ -135,3 +148,8 @@ class CryptoCompareNewsClient:
             sep = "&" if "?" in url else "?"
             return f"{url}{sep}api_key={key}"
         return url
+
+    @staticmethod
+    def _redact_error(exc: Exception) -> str:
+        """Redact API keys from exception string representation to prevent logging leaks."""
+        return re.sub(r'api_key=[^&\s\'"]+', 'api_key=***', str(exc))

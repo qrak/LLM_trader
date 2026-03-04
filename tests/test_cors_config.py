@@ -171,8 +171,6 @@ def test_dashboard_disabled_flag():
                     config = Config()
                 assert config.DASHBOARD_ENABLED is False
 
-<<<<<<< HEAD
-=======
 from fastapi.testclient import TestClient
 
 def test_dashboard_security_headers():
@@ -207,7 +205,6 @@ def test_dashboard_security_headers():
     response_direct_https = client_https.get("/api/monitor/costs")
     assert response_direct_https.headers.get("Strict-Transport-Security") == "max-age=31536000; includeSubDomains"
 
->>>>>>> new_features
 
 if __name__ == "__main__":
     # Simple manual run if pytest fails

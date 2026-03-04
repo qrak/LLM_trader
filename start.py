@@ -298,16 +298,6 @@ class CompositionRoot:
         await coingecko.initialize()
 
         news_client = CryptoCompareNewsClient(self.logger, self.config)
-<<<<<<< HEAD
-        news_cache = NewsCache('data/news_cache', self.logger)
-        news_api = CryptoCompareNewsAPI(
-            self.logger, self.config, client=news_client,
-            cache=news_cache, processor=NewsProcessor(self.logger),
-            news_filter=NewsFilter(self.logger)
-        )
-        await news_api.initialize()
-=======
->>>>>>> new_features
 
         cc_data_processor = CryptoCompareDataProcessor(self.logger)
         categories = CryptoCompareCategoriesAPI(

@@ -6,10 +6,7 @@ Calculates technical indicators for market analysis.
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
 import numpy as np
-<<<<<<< HEAD
-=======
 import math
->>>>>>> new_features
 
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.logger.logger import Logger
@@ -486,11 +483,7 @@ class TechnicalCalculator:
         # Use already-calculated price change percentage (no redundant calculation)
         analysis['long_term_price_change_pct'] = price_change_pct
         if self.logger:
-<<<<<<< HEAD
-            pass # self.logger.debug("Macro trend: %s-day price change = %s%", available_days, f"{price_change_pct:.2f}")
-=======
             pass # self.logger.debug("Macro trend: %s-day price change = %s%%", available_days, f"{price_change_pct:.2f}")
->>>>>>> new_features
 
         # Check price position relative to key SMAs
         if 200 in sma_values:
@@ -641,11 +634,7 @@ class TechnicalCalculator:
         """Compute indicators that require 26 days of data."""
         macd_line, macd_signal, macd_hist = ti.macd()
 
-<<<<<<< HEAD
-        if macd_line is not None and not np.isnan(macd_line[-1]):
-=======
         if macd_line is not None and not math.isnan(macd_line[-1]):
->>>>>>> new_features
             out['daily_macd_line'] = float(macd_line[-1])
         if macd_signal is not None and not math.isnan(macd_signal[-1]):
             out['daily_macd_signal'] = float(macd_signal[-1])
@@ -656,11 +645,7 @@ class TechnicalCalculator:
         """Compute indicators that require 52 days of data."""
         conversion, base, span_a, span_b = ti.ichimoku_cloud()
 
-<<<<<<< HEAD
-        if conversion is not None and not np.isnan(conversion[-1]):
-=======
         if conversion is not None and not math.isnan(conversion[-1]):
->>>>>>> new_features
             out['daily_ichimoku_conversion'] = float(conversion[-1])
         if base is not None and not math.isnan(base[-1]):
             out['daily_ichimoku_base'] = float(base[-1])
