@@ -1,5 +1,6 @@
 from typing import Optional, Any, Dict, TYPE_CHECKING
 
+import math
 import numpy as np
 
 from src.logger.logger import Logger
@@ -138,9 +139,21 @@ class PromptBuilder:
         if context.market_microstructure:
             microstructure = context.market_microstructure
 
+            snapshot_notice = self.market_formatter.format_microstructure_snapshot_notice(
+                context.symbol,
+                self.timeframe,
+                microstructure
+            )
+            if snapshot_notice:
+                sections.append(snapshot_notice)
+
             # Add order book depth
             if "order_book" in microstructure and microstructure["order_book"]:
-                ob_section = self.market_formatter.format_order_book_depth(microstructure["order_book"], context.symbol)
+                ob_section = self.market_formatter.format_order_book_depth(
+                    microstructure["order_book"],
+                    context.symbol,
+                    self.timeframe
+                )
                 if ob_section:
                     sections.append(ob_section)
 
@@ -222,7 +235,8 @@ class PromptBuilder:
         brain_context: Optional[str] = None,
         last_analysis_time: Optional[str] = None,
         has_chart_analysis: bool = False,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None
+        dynamic_thresholds: Optional[Dict[str, Any]] = None,
+        previous_indicators: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build system prompt using template manager.
 
@@ -235,12 +249,20 @@ class PromptBuilder:
             last_analysis_time: Formatted timestamp of last analysis
             has_chart_analysis: Whether chart image analysis is available
             dynamic_thresholds: Brain-learned thresholds for response template
+            previous_indicators: Previous indicator values for delta alert computation
 
         Returns:
             str: Formatted system prompt with instructions
         """
         # Set context so _has_advanced_support_resistance can access it
         self.context = context
+
+        # Compute indicator delta alert for anchoring prevention
+        indicator_delta_alert = ""
+        if previous_response and previous_indicators and context.technical_data:
+            indicator_delta_alert = self.context_builder.compute_indicator_delta_alert(
+                previous_indicators, context.technical_data
+            )
 
         # Build base system prompt
         base_prompt = self.template_manager.build_system_prompt(
@@ -249,7 +271,8 @@ class PromptBuilder:
             previous_response,
             performance_context,
             brain_context,
-            last_analysis_time
+            last_analysis_time,
+            indicator_delta_alert=indicator_delta_alert
         )
 
         # Check if we have advanced support/resistance detected
@@ -310,4 +333,4 @@ class PromptBuilder:
             pass
 
         # Both values must be valid (not NaN)
-        return not np.isnan(adv_support) and not np.isnan(adv_resistance)
+        return not math.isnan(adv_support) and not math.isnan(adv_resistance)

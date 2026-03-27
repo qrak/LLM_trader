@@ -97,7 +97,12 @@ class ContextBuilder:
         density_mult = self._calculate_density_modifier(article)
         cooc_mult = self._calculate_cooccurrence_modifier(keywords, content)
 
-        final_score = base_score * density_mult * cooc_mult * (0.3 + 0.7 * recency)
+        # Demote articles with zero coin relevance when analyzing a specific symbol
+        coin_relevance_mult = 1.0
+        if coin and coin_score == 0 and article.get('id') != 'market_overview':
+            coin_relevance_mult = 0.3
+
+        final_score = base_score * density_mult * cooc_mult * coin_relevance_mult * (0.3 + 0.7 * recency)
 
         # Special boost for market overview
         if article.get('id') == 'market_overview':

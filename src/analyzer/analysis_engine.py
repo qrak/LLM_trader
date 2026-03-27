@@ -14,6 +14,16 @@ from src.utils.timeframe_validator import TimeframeValidator
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.coingecko import CoinGeckoAPI
 from src.utils.profiler import profile_performance
+from src.utils.indicator_classifier import (
+    classify_trend_direction,
+    classify_volatility_level,
+    classify_rsi_level,
+    classify_macd_signal,
+    classify_volume_state,
+    classify_bb_position,
+    classify_market_sentiment,
+    classify_order_book_bias,
+)
 from src.logger.logger import Logger
 from .analysis_context import AnalysisContext
 
@@ -77,6 +87,7 @@ class AnalysisEngine:
         self.context = None
         self.article_urls = {}
         self.last_analysis_result = None
+        self.previous_microstructure_snapshots: Dict[str, Dict[str, Any]] = {}
 
         # Load configuration
         try:
@@ -318,6 +329,7 @@ class AnalysisEngine:
                 self.symbol,
                 cached_ticker=current_ticker
             )
+            microstructure = self._apply_microstructure_snapshot_context(microstructure)
             self.context.market_microstructure = microstructure
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.warning("Failed to fetch market microstructure: %s", e)
@@ -336,6 +348,105 @@ class AnalysisEngine:
             except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
                 self.context.coin_details = {}
+
+    def _copy_comparison_bucket(self, bucket: Dict[str, Any]) -> Dict[str, float]:
+        """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
+        return {
+            'bid_depth': float(bucket.get('bid_depth', 0.0)),
+            'ask_depth': float(bucket.get('ask_depth', 0.0)),
+            'imbalance': float(bucket.get('imbalance', 0.0))
+        }
+
+    def _build_order_book_comparison_state(self, order_book: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist only compact order book metrics needed for the next-cycle delta."""
+        return {
+            'timestamp': order_book.get('timestamp'),
+            'spread': float(order_book.get('spread', 0.0)),
+            'spread_percent': float(order_book.get('spread_percent', 0.0)),
+            'bid_depth': float(order_book.get('bid_depth', 0.0)),
+            'ask_depth': float(order_book.get('ask_depth', 0.0)),
+            'imbalance': float(order_book.get('imbalance', 0.0)),
+            'best_bid_size': float(order_book.get('best_bid_size', 0.0)),
+            'best_ask_size': float(order_book.get('best_ask_size', 0.0)),
+            'depth_by_level': {
+                key: self._copy_comparison_bucket(bucket)
+                for key, bucket in order_book.get('depth_by_level', {}).items()
+            },
+            'liquidity_near_mid': {
+                key: self._copy_comparison_bucket(bucket)
+                for key, bucket in order_book.get('liquidity_near_mid', {}).items()
+            }
+        }
+
+    def _build_order_book_deltas(
+        self,
+        current_order_book: Dict[str, Any],
+        previous_order_book: Optional[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Build deltas versus the immediately previous analysis-cycle snapshot."""
+        if not previous_order_book:
+            return {}
+
+        current_timestamp = current_order_book.get('timestamp')
+        previous_timestamp = previous_order_book.get('timestamp')
+        snapshot_interval_seconds = None
+        if current_timestamp and previous_timestamp:
+            snapshot_interval_seconds = max(0.0, (current_timestamp - previous_timestamp) / 1000)
+
+        top_10_current = current_order_book.get('depth_by_level', {}).get('10', {})
+        top_10_previous = previous_order_book.get('depth_by_level', {}).get('10', {})
+        near_mid_current = current_order_book.get('liquidity_near_mid', {}).get('10bps', {})
+        near_mid_previous = previous_order_book.get('liquidity_near_mid', {}).get('10bps', {})
+
+        return {
+            'snapshot_interval_seconds': snapshot_interval_seconds,
+            'spread': float(current_order_book.get('spread', 0.0)) - float(previous_order_book.get('spread', 0.0)),
+            'spread_percent': float(current_order_book.get('spread_percent', 0.0)) - float(previous_order_book.get('spread_percent', 0.0)),
+            'bid_depth': float(current_order_book.get('bid_depth', 0.0)) - float(previous_order_book.get('bid_depth', 0.0)),
+            'ask_depth': float(current_order_book.get('ask_depth', 0.0)) - float(previous_order_book.get('ask_depth', 0.0)),
+            'imbalance': float(current_order_book.get('imbalance', 0.0)) - float(previous_order_book.get('imbalance', 0.0)),
+            'best_bid_size': float(current_order_book.get('best_bid_size', 0.0)) - float(previous_order_book.get('best_bid_size', 0.0)),
+            'best_ask_size': float(current_order_book.get('best_ask_size', 0.0)) - float(previous_order_book.get('best_ask_size', 0.0)),
+            'top_10': {
+                'bid_depth': float(top_10_current.get('bid_depth', 0.0)) - float(top_10_previous.get('bid_depth', 0.0)),
+                'ask_depth': float(top_10_current.get('ask_depth', 0.0)) - float(top_10_previous.get('ask_depth', 0.0)),
+                'imbalance': float(top_10_current.get('imbalance', 0.0)) - float(top_10_previous.get('imbalance', 0.0)),
+            },
+            'near_mid_10bps': {
+                'bid_depth': float(near_mid_current.get('bid_depth', 0.0)) - float(near_mid_previous.get('bid_depth', 0.0)),
+                'ask_depth': float(near_mid_current.get('ask_depth', 0.0)) - float(near_mid_previous.get('ask_depth', 0.0)),
+                'imbalance': float(near_mid_current.get('imbalance', 0.0)) - float(near_mid_previous.get('imbalance', 0.0)),
+            }
+        }
+
+    def _apply_microstructure_snapshot_context(self, microstructure: Dict[str, Any]) -> Dict[str, Any]:
+        """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
+        snapshot_context = {
+            'is_live_snapshot': True,
+            'configured_timeframe': self.context.timeframe if self.context else self.timeframe,
+            'comparison_basis': 'previous_analysis_cycle_snapshot',
+            'comparison_available': False
+        }
+
+        order_book = microstructure.get('order_book')
+        if not order_book:
+            microstructure['snapshot_context'] = snapshot_context
+            return microstructure
+
+        previous_snapshot = self.previous_microstructure_snapshots.get(self.symbol, {})
+        previous_order_book = previous_snapshot.get('order_book')
+        order_book_delta = self._build_order_book_deltas(order_book, previous_order_book)
+        if order_book_delta:
+            order_book['delta_from_previous_snapshot'] = order_book_delta
+            snapshot_context['comparison_available'] = True
+
+        microstructure['order_book'] = order_book
+        microstructure['snapshot_context'] = snapshot_context
+        self.previous_microstructure_snapshots[self.symbol] = {
+            'timestamp': microstructure.get('timestamp'),
+            'order_book': self._build_order_book_comparison_state(order_book)
+        }
+        return microstructure
 
     async def _perform_technical_analysis(self) -> None:
         """Perform all technical analysis steps"""
@@ -398,7 +509,8 @@ class AnalysisEngine:
             brain_context,
             last_analysis_time,
             has_chart_analysis,
-            dynamic_thresholds
+            dynamic_thresholds,
+            previous_indicators=previous_indicators
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
@@ -493,8 +605,7 @@ class AnalysisEngine:
 
             # Generate chart image using chart generator
             # The chart_generator will automatically limit candles based on AI_CHART_CANDLE_LIMIT
-            chart_image = await asyncio.to_thread(
-                self.chart_generator.create_chart_image,
+            chart_image = await self.chart_generator.create_chart_image(
                 ohlcv=self.context.ohlcv_candles,
                 technical_history=technical_history,
                 pair_symbol=self.symbol,
@@ -628,40 +739,44 @@ class AnalysisEngine:
         """
         # pylint: disable=too-many-branches, too-many-statements, too-many-locals
         # Extract trend direction from +DI/-DI
-        trend_direction = self._get_trend_direction(technical_data)
+        trend_direction = classify_trend_direction(technical_data)
 
         # Extract ADX
         adx_value = technical_data.get("adx", 0.0)
 
         # Extract volatility from ATR%
-        volatility_level = self._get_volatility_level(technical_data)
+        volatility_level = classify_volatility_level(technical_data)
 
         # Extract RSI level
-        rsi_level = self._get_rsi_level(technical_data)
+        rsi_level = classify_rsi_level(technical_data)
 
         # Extract MACD signal from macd_line vs macd_signal
-        macd_signal = self._get_macd_signal(technical_data)
+        macd_signal = classify_macd_signal(technical_data)
 
         # Extract volume state from obv_slope
-        volume_state = self._get_volume_state(technical_data)
+        volume_state = classify_volume_state(technical_data)
 
         # Extract BB position from bb_upper/bb_lower
-        bb_position = self._get_bb_position(technical_data)
+        bb_position = classify_bb_position(technical_data, self.context.current_price)
 
         # Extract weekend status (Saturday=5, Sunday=6)
         is_weekend = datetime.now().weekday() >= 5
 
         # Extract market sentiment from Fear & Greed data
-        market_sentiment = self._get_market_sentiment()
+        market_sentiment = classify_market_sentiment(self.context.sentiment)
 
-        # Extract order book bias from microstructure (thresholds from market_formatter.py)
-        order_book_bias = self._get_order_book_bias()
+        # Extract order book bias from microstructure
+        order_book_bias = classify_order_book_bias(self.context.market_microstructure)
+
+        # Extract raw RSI for numeric embedding in query document
+        rsi_value = technical_data.get("rsi", 50.0)
 
         # Offload blocking ChromaDB + embedding calls to a thread to free the event loop
         return await asyncio.to_thread(
             brain_service.get_context,
             trend_direction=trend_direction,
             adx=adx_value,
+            rsi=rsi_value,
             volatility_level=volatility_level,
             rsi_level=rsi_level,
             macd_signal=macd_signal,
@@ -672,92 +787,3 @@ class AnalysisEngine:
             order_book_bias=order_book_bias
         )
 
-    def _get_trend_direction(self, technical_data: Dict[str, Any]) -> str:
-        """Extract trend direction from +DI/-DI."""
-        di_plus = technical_data.get("plus_di", 0.0)
-        di_minus = technical_data.get("minus_di", 0.0)
-        if di_plus > di_minus + 5:
-            return "BULLISH"
-        if di_minus > di_plus + 5:
-            return "BEARISH"
-        return "NEUTRAL"
-
-    def _get_volatility_level(self, technical_data: Dict[str, Any]) -> str:
-        """Extract volatility from ATR%."""
-        atr_pct = technical_data.get("atr_percent", 2.0)
-        if atr_pct > 3.0:
-            return "HIGH"
-        if atr_pct < 1.5:
-            return "LOW"
-        return "MEDIUM"
-
-    def _get_rsi_level(self, technical_data: Dict[str, Any]) -> str:
-        """Extract RSI level."""
-        rsi = technical_data.get("rsi", 50.0)
-        if rsi >= 70:
-            return "OVERBOUGHT"
-        if rsi >= 60:
-            return "STRONG"
-        if rsi <= 30:
-            return "OVERSOLD"
-        if rsi <= 40:
-            return "WEAK"
-        return "NEUTRAL"
-
-    def _get_macd_signal(self, technical_data: Dict[str, Any]) -> str:
-        """Extract MACD signal."""
-        macd_line = technical_data.get("macd_line")
-        macd_signal_line = technical_data.get("macd_signal")
-        if macd_line is not None and macd_signal_line is not None:
-            if macd_line > macd_signal_line:
-                return "BULLISH"
-            if macd_line < macd_signal_line:
-                return "BEARISH"
-        return "NEUTRAL"
-
-    def _get_volume_state(self, technical_data: Dict[str, Any]) -> str:
-        """Extract volume state from obv_slope."""
-        obv_slope = technical_data.get("obv_slope", 0.0)
-        if obv_slope > 0.5:
-            return "ACCUMULATION"
-        if obv_slope < -0.5:
-            return "DISTRIBUTION"
-        return "NORMAL"
-
-    def _get_bb_position(self, technical_data: Dict[str, Any]) -> str:
-        """Extract BB position."""
-        bb_upper = technical_data.get("bb_upper")
-        bb_lower = technical_data.get("bb_lower")
-        current_price = self.context.current_price
-        if bb_upper is not None and bb_lower is not None and current_price:
-            if current_price >= bb_upper * 0.99:
-                return "UPPER"
-            if current_price <= bb_lower * 1.01:
-                return "LOWER"
-        return "MIDDLE"
-
-    def _get_market_sentiment(self) -> str:
-        """Extract market sentiment from Fear & Greed data."""
-        if self.context.sentiment:
-            fear_greed = self.context.sentiment.get("fear_greed_index", 50)
-            if isinstance(fear_greed, (int, float)):
-                if fear_greed <= 25:
-                    return "EXTREME_FEAR"
-                if fear_greed <= 45:
-                    return "FEAR"
-                if fear_greed >= 75:
-                    return "EXTREME_GREED"
-                if fear_greed >= 55:
-                    return "GREED"
-        return "NEUTRAL"
-
-    def _get_order_book_bias(self) -> str:
-        """Extract order book bias from microstructure."""
-        if self.context.market_microstructure:
-            order_book = self.context.market_microstructure.get("order_book", {})
-            imbalance = order_book.get("imbalance", 0) if isinstance(order_book, dict) else 0
-            if imbalance > 0.1:
-                return "BUY_PRESSURE"
-            if imbalance < -0.1:
-                return "SELL_PRESSURE"
-        return "BALANCED"

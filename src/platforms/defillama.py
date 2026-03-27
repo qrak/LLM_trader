@@ -110,6 +110,26 @@ class DefiLlamaClient:
         except Exception as e:
             self.logger.debug("Could not read DefiLlama cache metadata: %s", e)
 
+    def _read_cache_file_sync(self) -> Dict[str, Any]:
+        """Synchronous helper for reading cache file."""
+        if not os.path.exists(self.cache_file_path):
+            return {}
+        with open(self.cache_file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def _write_cache_file_sync(self, cache_payload: Dict[str, Any]) -> None:
+        """Synchronous helper for atomic writing cache file."""
+        temp_path = f"{self.cache_file_path}.tmp"
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump(cache_payload, f, ensure_ascii=False, indent=2)
+
+        if os.path.exists(self.cache_file_path):
+            try:
+                os.remove(self.cache_file_path)
+            except Exception:
+                pass
+        os.rename(temp_path, self.cache_file_path)
+
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None:
             self.session = aiohttp.ClientSession()
@@ -302,15 +322,13 @@ class DefiLlamaClient:
         # Check cache freshness
         current_time = datetime.now(timezone.utc)
         if self.last_update and (current_time - self.last_update < self.update_interval):
-            if os.path.exists(self.cache_file_path):
-                try:
-                    with open(self.cache_file_path, 'r', encoding='utf-8') as f:
-                        cached_data = json.load(f)
-                        if "data" in cached_data:
-                            self.logger.debug("Using cached DefiLlama data from %s", self.last_update.isoformat())
-                            return DeFiFundamentalsData(**cached_data["data"])
-                except Exception as e:
-                    self.logger.warning("Failed to read DefiLlama cache: %s", e)
+            try:
+                cached_data = await asyncio.to_thread(self._read_cache_file_sync)
+                if cached_data and "data" in cached_data:
+                    self.logger.debug("Using cached DefiLlama data from %s", self.last_update.isoformat())
+                    return DeFiFundamentalsData(**cached_data["data"])
+            except Exception as e:
+                self.logger.warning("Failed to read DefiLlama cache: %s", e)
 
         self.logger.debug("Fetching fresh DefiLlama fundamentals...")
         try:
@@ -358,18 +376,8 @@ class DefiLlamaClient:
                     "timestamp": current_time.isoformat(),
                     "data": fundamentals.model_dump()
                 }
-                # Write to temp file then rename for atomic write
-                temp_path = f"{self.cache_file_path}.tmp"
-                with open(temp_path, 'w', encoding='utf-8') as f:
-                    json.dump(cache_payload, f, ensure_ascii=False, indent=2)
 
-                # Windows atomic replace might need unlink first if exists, but os.replace usually handles it
-                if os.path.exists(self.cache_file_path):
-                     try:
-                         os.remove(self.cache_file_path)
-                     except Exception:
-                         pass
-                os.rename(temp_path, self.cache_file_path)
+                await asyncio.to_thread(self._write_cache_file_sync, cache_payload)
 
                 self.last_update = current_time
                 self.logger.debug("Updated DefiLlama cache")

@@ -53,3 +53,4 @@ config/config.ini
 keys.env
 *.env
 *.ps1
+node_modules/

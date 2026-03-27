@@ -255,10 +255,6 @@ class CryptoCompareCategoriesAPI:
 
         # Collision and exclusion counts are kept for internal use but not logged per user request
 
-    def get_category_word_map(self) -> Dict[str, str]:
-        """Get the current category word mapping"""
-        return self.category_word_map.copy()
-
     def get_api_categories(self) -> List[Dict[str, Any]]:
         """Get the current API categories list"""
         return self.api_categories.copy()

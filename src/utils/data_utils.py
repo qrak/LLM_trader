@@ -3,6 +3,7 @@ import dataclasses
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_args, get_origin
 
+import math
 import numpy as np
 from numpy.typing import NDArray
 
@@ -24,7 +25,7 @@ def get_last_valid_value(
     """
     # Handle scalar values directly
     if isinstance(arr, (int, float)):
-        return float(arr) if not np.isnan(arr) else default
+        return float(arr) if not math.isnan(arr) else default
 
     if len(arr) == 0:
         return default
@@ -90,7 +91,7 @@ def safe_array_to_scalar(
         val = arr[index]
         val_float = float(val)
 
-        if np.isnan(val_float):
+        if math.isnan(val_float):
             return default
 
         return val_float
@@ -140,7 +141,7 @@ def serialize_for_json(obj: Any) -> Any:
             result = str(obj)
     elif isinstance(obj, float):
         # Handle NaN/Inf float values which are standard in NumPy but invalid in JSON
-        result = None if (np.isnan(obj) or np.isinf(obj)) else obj
+        result = None if (math.isnan(obj) or np.isinf(obj)) else obj
     elif isinstance(obj, (str, int, bool)) or obj is None:
         # Primitive types pass through
         result = obj
@@ -151,14 +152,6 @@ def serialize_for_json(obj: Any) -> Any:
         except Exception:
             result = None
     return result
-
-
-def safe_tolist(obj: Any) -> Union[List, Any]:
-    """Safely convert an object to a list using duck-typing."""
-    try:
-        return obj.tolist()
-    except (AttributeError, Exception):
-        return obj
 
 
 class SerializableMixin:

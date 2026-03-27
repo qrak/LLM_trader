@@ -63,7 +63,7 @@ class NewsManager:
                 self.logger.warning("No articles returned from CryptoCompare API")
                 return self._fallback()
 
-            articles = self.news_client.filter_by_age(raw, max_age_hours=24)
+            articles = self.news_client.filter_by_age(raw, max_age_hours=72)
 
             for article in articles:
                 coins = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)

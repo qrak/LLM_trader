@@ -315,6 +315,81 @@ class DataFetcher:
             "ASK": format_price(ticker.get('ask', 0)),
         }
 
+    def _calculate_depth_imbalance(self, bid_depth: float, ask_depth: float) -> float:
+        """Calculate normalized bid/ask imbalance for comparable depth windows."""
+        total_depth = bid_depth + ask_depth
+        return (bid_depth - ask_depth) / total_depth if total_depth > 0 else 0.0
+
+    def _calculate_depth_bucket(self, bids: NDArray, asks: NDArray, level_count: int) -> Dict[str, float]:
+        """Summarize bid and ask depth for a fixed number of visible levels."""
+        bid_subset = bids[:level_count]
+        ask_subset = asks[:level_count]
+        bid_depth = float(np.sum(bid_subset[:, 1])) if len(bid_subset) else 0.0
+        ask_depth = float(np.sum(ask_subset[:, 1])) if len(ask_subset) else 0.0
+        bid_notional = float(np.sum(bid_subset[:, 0] * bid_subset[:, 1])) if len(bid_subset) else 0.0
+        ask_notional = float(np.sum(ask_subset[:, 0] * ask_subset[:, 1])) if len(ask_subset) else 0.0
+
+        return {
+            'levels_used': int(min(len(bid_subset), len(ask_subset))),
+            'bid_depth': bid_depth,
+            'ask_depth': ask_depth,
+            'bid_notional': bid_notional,
+            'ask_notional': ask_notional,
+            'imbalance': self._calculate_depth_imbalance(bid_depth, ask_depth)
+        }
+
+    def _calculate_near_mid_liquidity(
+        self,
+        bids: NDArray,
+        asks: NDArray,
+        mid_price: float,
+        basis_points: int
+    ) -> Dict[str, float]:
+        """Summarize liquidity close to the mid price within a basis-point band."""
+        if mid_price <= 0:
+            return {
+                'basis_points': basis_points,
+                'bid_depth': 0.0,
+                'ask_depth': 0.0,
+                'imbalance': 0.0
+            }
+
+        bid_threshold = mid_price * (1 - basis_points / 10000)
+        ask_threshold = mid_price * (1 + basis_points / 10000)
+        bid_subset = bids[bids[:, 0] >= bid_threshold]
+        ask_subset = asks[asks[:, 0] <= ask_threshold]
+        bid_depth = float(np.sum(bid_subset[:, 1])) if len(bid_subset) else 0.0
+        ask_depth = float(np.sum(ask_subset[:, 1])) if len(ask_subset) else 0.0
+
+        return {
+            'basis_points': basis_points,
+            'bid_depth': bid_depth,
+            'ask_depth': ask_depth,
+            'imbalance': self._calculate_depth_imbalance(bid_depth, ask_depth)
+        }
+
+    def _calculate_largest_wall(self, levels: NDArray, mid_price: float) -> Dict[str, float]:
+        """Find the largest visible resting order on one side of the book."""
+        if len(levels) == 0:
+            return {
+                'price': 0.0,
+                'amount': 0.0,
+                'notional': 0.0,
+                'distance_bps': 0.0
+            }
+
+        wall_index = int(np.argmax(levels[:, 1]))
+        wall_price = float(levels[wall_index][0])
+        wall_amount = float(levels[wall_index][1])
+        distance_bps = abs(wall_price - mid_price) / mid_price * 10000 if mid_price > 0 else 0.0
+
+        return {
+            'price': wall_price,
+            'amount': wall_amount,
+            'notional': wall_price * wall_amount,
+            'distance_bps': distance_bps
+        }
+
     @retry_async()
     async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> Optional[Dict[str, Any]]:
         """
@@ -356,8 +431,8 @@ class DataFetcher:
                 self.logger.warning("Empty order book returned for %s", pair)
                 return None
 
-            bids = np.array(order_book['bids'])
-            asks = np.array(order_book['asks'])
+            bids = np.array(order_book['bids'], dtype=np.float64)
+            asks = np.array(order_book['asks'], dtype=np.float64)
 
             if len(bids) == 0 or len(asks) == 0:
                 self.logger.warning("Order book has empty bids or asks for %s", pair)
@@ -365,26 +440,47 @@ class DataFetcher:
 
             best_bid = float(bids[0][0])
             best_ask = float(asks[0][0])
+            best_bid_size = float(bids[0][1])
+            best_ask_size = float(asks[0][1])
             spread = best_ask - best_bid
             spread_percent = (spread / best_bid * 100) if best_bid > 0 else 0
+            mid_price = (best_bid + best_ask) / 2
 
             bid_depth = float(np.sum(bids[:, 1]))
             ask_depth = float(np.sum(asks[:, 1]))
-            total_depth = bid_depth + ask_depth
-            imbalance = (bid_depth - ask_depth) / total_depth if total_depth > 0 else 0
+            imbalance = self._calculate_depth_imbalance(bid_depth, ask_depth)
+
+            depth_by_level = {
+                str(level): self._calculate_depth_bucket(bids, asks, min(level, len(bids), len(asks)))
+                for level in (5, 10, 20)
+            }
+            liquidity_near_mid = {
+                '10bps': self._calculate_near_mid_liquidity(bids, asks, mid_price, 10),
+                '25bps': self._calculate_near_mid_liquidity(bids, asks, mid_price, 25)
+            }
 
             result = {
                 'bids': order_book['bids'],
                 'asks': order_book['asks'],
                 'timestamp': order_book.get('timestamp'),
+                'levels_requested': limit,
+                'levels_analyzed': int(min(len(bids), len(asks))),
                 'spread': spread,
                 'spread_percent': spread_percent,
                 'bid_depth': bid_depth,
                 'ask_depth': ask_depth,
                 'imbalance': imbalance,
-                'mid_price': (best_bid + best_ask) / 2,
+                'mid_price': mid_price,
                 'best_bid': best_bid,
-                'best_ask': best_ask
+                'best_ask': best_ask,
+                'best_bid_size': best_bid_size,
+                'best_ask_size': best_ask_size,
+                'bid_notional': float(np.sum(bids[:, 0] * bids[:, 1])),
+                'ask_notional': float(np.sum(asks[:, 0] * asks[:, 1])),
+                'depth_by_level': depth_by_level,
+                'liquidity_near_mid': liquidity_near_mid,
+                'largest_bid_wall': self._calculate_largest_wall(bids, mid_price),
+                'largest_ask_wall': self._calculate_largest_wall(asks, mid_price)
             }
 
 
@@ -572,6 +668,11 @@ class DataFetcher:
             'order_book': None,
             'recent_trades': None,
             'funding_rate': None,
+            'snapshot_context': {
+                'is_live_snapshot': True,
+                'comparison_basis': 'previous_analysis_cycle_snapshot',
+                'comparison_available': False
+            },
             'available_data': [],
             'timestamp': int(time.time() * 1000)
         }

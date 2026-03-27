@@ -2,10 +2,18 @@
 import asyncio
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 
 from fastapi import APIRouter, Query, Request
+
+from src.utils.indicator_classifier import (
+    build_context_string_from_technical_data,
+    build_query_document_from_technical_data,
+    classify_adx_label,
+    classify_trend_direction,
+)
 
 
 def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]]]:
@@ -15,10 +23,28 @@ def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return persisted indicator values from new or legacy previous_response shapes."""
+    technical_data = data.get("technical_data")
+    if isinstance(technical_data, dict) and technical_data:
+        return technical_data
+
+    response = data.get("response", {})
+    if not isinstance(response, dict):
+        return {}
+
+    return {
+        key: value
+        for key, value in response.items()
+        if key != "text_analysis"
+    }
+
 def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[str, Any]:
     """Helper to extract market status from previous_response data."""
     response = data.get("response", {})
     text = response.get("text_analysis", "")
+    technical_data = _extract_persisted_technical_data(data)
     status = {
         "trend": "NEUTRAL",
         "action": "--",
@@ -26,14 +52,21 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
         "adx": response.get("adx"),
         "rsi": response.get("rsi")
     }
-    if unified_parser:
-        analysis = unified_parser.extract_json_block(text, unwrap_key='analysis')
-        if analysis:
-            trend_data = analysis.get("trend")
-            if isinstance(trend_data, dict):
-                status["trend"] = trend_data.get("direction", "NEUTRAL")
-            status["action"] = analysis.get("signal", "--")
-            status["confidence"] = analysis.get("confidence", "--")
+
+    if technical_data:
+        status["adx"] = technical_data.get("adx", status["adx"])
+        status["rsi"] = technical_data.get("rsi", status["rsi"])
+        status["trend"] = classify_trend_direction(technical_data)
+
+    signal_match = re.search(r'\bSIGNAL\s*:\s*([A-Z_]+)\b', text, re.IGNORECASE)
+    if signal_match:
+        status["action"] = signal_match.group(1).upper()
+
+    confidence_match = re.search(r'\bConfidence\s*:\s*(\d+(?:\.\d+)?)\s*%', text, re.IGNORECASE)
+    if confidence_match:
+        confidence_value = float(confidence_match.group(1))
+        status["confidence"] = int(confidence_value) if confidence_value.is_integer() else confidence_value
+
     if status["trend"] == "NEUTRAL":
         if "BEARISH" in text.upper():
             status["trend"] = "BEARISH"
@@ -41,28 +74,53 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
             status["trend"] = "BULLISH"
     return status
 
-def _build_current_market_context(config, logger, unified_parser=None) -> str:
-    """Build context query string from current market conditions."""
+def _build_current_market_context(config, logger, unified_parser=None) -> tuple[str, str]:
+    """Build rich context query string from current market conditions.
+
+    Reads ``technical_data`` from ``previous_response.json`` (persisted by the
+    analysis engine after each run) and applies the same indicator classification
+    logic used during live trading so that similarity queries are semantically
+    identical to the documents stored in vector memory.
+
+    Returns:
+        Tuple of (display_context, query_document). display_context is the
+        categorical string for display; query_document is the enriched string
+        for embedding search. Both are empty strings on failure.
+    """
     data_dir = config.DATA_DIR
     prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
     if not prev_response_file.exists():
-        return ""
+        return "", ""
     try:
         data = _read_json_file(prev_response_file)
-        if data:
+        if not data:
+            return "", ""
+        technical_data = _extract_persisted_technical_data(data)
+        if not technical_data:
             status = _extract_market_status(data, unified_parser)
             adx = status["adx"] or 0
-            adx_label = "High ADX" if adx >= 25 else ("Low ADX" if adx < 20 else "Medium ADX")
-            prompt = data.get("prompt", "")
-            vol = "MEDIUM Volatility"
-            if "HIGH" in prompt.upper() and "VOLATILITY" in prompt.upper():
-                vol = "HIGH Volatility"
-            elif "LOW" in prompt.upper() and "VOLATILITY" in prompt.upper():
-                vol = "LOW Volatility"
-            return f"{status['trend']} + {adx_label} + {vol}"
-    except Exception:
+            adx_label = classify_adx_label(adx)
+            fallback = f"{status['trend']} + {adx_label} + MEDIUM Volatility"
+            return fallback, fallback
+        current_price: Optional[float] = None
+        response = data.get("response", {})
+        if isinstance(response, dict):
+            current_price = response.get("current_price")
+        sentiment_data: Optional[Dict[str, Any]] = data.get("sentiment")
+        is_weekend = datetime.now().weekday() >= 5
+        shared_kwargs: Dict[str, Any] = {
+            "technical_data": technical_data,
+            "current_price": current_price,
+            "sentiment_data": sentiment_data,
+            "is_weekend": is_weekend,
+        }
+        display_context = build_context_string_from_technical_data(**shared_kwargs)
+        query_document = build_query_document_from_technical_data(**shared_kwargs)
+        return display_context, query_document
+    except Exception:  # pylint: disable=broad-exception-caught
         logger.error("Failed to build market context", exc_info=True)
-        return ""
+        return "", ""
+
 
 class BrainRouter:
     """Handles endpoints for the trading brain status, rules, and memory."""
@@ -211,16 +269,17 @@ class BrainRouter:
             result["adx_stats"] = self.vector_memory.compute_adx_performance()
             result["factor_stats"] = self.vector_memory.compute_factor_performance()
             where_filter = {"outcome": {"$ne": "UPDATE"}}
-            context_query = query
-            if not context_query:
-                context_query = await asyncio.to_thread(
+            embed_query = query
+            display_context = query
+            if not embed_query:
+                display_context, embed_query = await asyncio.to_thread(
                     _build_current_market_context, self.config, self.logger, self.unified_parser
                 )
-                if context_query:
-                    result["current_context"] = context_query
-            if context_query:
+                if display_context:
+                    result["current_context"] = display_context
+            if embed_query:
                 experiences = self.vector_memory.retrieve_similar_experiences(
-                    context_query, k=limit, where=where_filter
+                    embed_query, k=limit, where=where_filter
                 )
             else:
                 experiences = self.vector_memory.get_all_experiences(limit=limit, where=where_filter)

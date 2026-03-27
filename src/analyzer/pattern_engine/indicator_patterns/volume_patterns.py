@@ -5,6 +5,7 @@ Detects volume spikes, dry-ups, and abnormal volume conditions.
 Critical for confirming breakouts and identifying accumulation/distribution.
 """
 
+import math
 import numpy as np
 from numba import njit
 
@@ -29,7 +30,7 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
     # Use last closed candle (volume[-1]) - incomplete candle already excluded at fetch
     current_vol = volume[-1]
 
-    if np.isnan(current_vol) or current_vol < 0:
+    if math.isnan(current_vol) or current_vol < 0:
         return False, 0.0, 0
 
     # Calculate average volume from closed candles (excluding current closed candle)
@@ -39,7 +40,7 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
     valid_count = 0
     vol_sum = 0.0
     for i in range(len(recent_volume)):
-        if not np.isnan(recent_volume[i]) and recent_volume[i] > 0:
+        if not math.isnan(recent_volume[i]) and recent_volume[i] > 0:
             vol_sum += recent_volume[i]
             valid_count += 1
 
@@ -142,7 +143,7 @@ def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray,
 
     # Skip if any NaN values
     for i in range(len(recent_volume)):
-        if np.isnan(recent_volume[i]) or np.isnan(recent_prices[i]):
+        if math.isnan(recent_volume[i]) or math.isnan(recent_prices[i]):
             return False, False, 0.0, 0.0
 
     # Calculate price trend
@@ -200,7 +201,7 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
 
     # Skip if any NaN values
     for i in range(len(recent_volume)):
-        if np.isnan(recent_volume[i]) or np.isnan(recent_prices[i]):
+        if math.isnan(recent_volume[i]) or math.isnan(recent_prices[i]):
             return False, False, 0.0, 0.0
 
     up_volume = 0.0

@@ -99,7 +99,11 @@ class DashboardState:
         return self._cache.get(key)
 
     def set_cached(self, key: str, value: Any) -> None:
-        """Store a value in cache with current timestamp."""
+        """Store a value in cache with current timestamp, enforcing max size."""
+        if len(self._cache) >= 100 and key not in self._cache:
+            if self.cache_timestamps:
+                oldest_key = min(self.cache_timestamps, key=self.cache_timestamps.get)
+                self.invalidate_cache(oldest_key)
         self._cache[key] = value
         self.cache_timestamps[key] = time.time()
 

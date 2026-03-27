@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from numba import njit
 
@@ -16,7 +17,7 @@ def ema_numba(arr, length):
     multiplier = 2 / (length + 1)
 
     first_valid = 0
-    while first_valid < len(arr) and np.isnan(arr[first_valid]):
+    while first_valid < len(arr) and math.isnan(arr[first_valid]):
         first_valid += 1
 
     if first_valid == len(arr):
@@ -25,7 +26,7 @@ def ema_numba(arr, length):
     ema_arr[first_valid] = arr[first_valid]
 
     for i in range(first_valid + 1, len(arr)):
-        if np.isnan(arr[i]):
+        if math.isnan(arr[i]):
             ema_arr[i] = ema_arr[i - 1]
         else:
             ema_arr[i] = ((arr[i] - ema_arr[i - 1]) * multiplier) + ema_arr[i - 1]

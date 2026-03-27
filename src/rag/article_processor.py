@@ -42,14 +42,6 @@ class ArticleProcessor:
         published_on = article.get('published_on', 0)
         return self.format_utils.parse_timestamp(published_on)
 
-    def format_article_date(self, article: Dict[str, Any]) -> str:
-        """Format article date in a consistent way."""
-        timestamp = self.get_article_timestamp(article)
-        if timestamp <= 0:
-            return "Unknown Date"
-
-        return self.format_utils.format_date_from_timestamp(timestamp)
-
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
 

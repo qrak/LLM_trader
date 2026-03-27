@@ -273,24 +273,6 @@ class ContextBuilder:
 
         return self.period_formatter.format_market_period_metrics(market_metrics)
 
-    def build_long_term_analysis_section(self, long_term_data: Optional[Dict[str, Any]],
-                                        current_price: Optional[float],
-                                        _weekly_macro_indicators: Optional[Dict[str, Any]] = None) -> str:
-        """Build long-term analysis section (daily only - weekly handled by PromptBuilder).
-
-        Args:
-            long_term_data: Long-term historical data (daily)
-            current_price: Current asset price
-            weekly_macro_indicators: Weekly macro trend data (passed through, not used here)
-
-        Returns:
-            str: Formatted long-term analysis section (daily only)
-        """
-        if not long_term_data:
-            return ""
-
-        return self.long_term_formatter.format_long_term_analysis(long_term_data, current_price)
-
     def build_coin_details_section(self, coin_details: Optional[Dict[str, Any]]) -> str:
         """Build cryptocurrency details section.
 
@@ -304,6 +286,23 @@ class ContextBuilder:
             return ""
 
         return self.market_formatter.format_coin_details_section(coin_details)
+
+    @staticmethod
+    def _resolve_indicator_value(raw_val: Any) -> Optional[float]:
+        """Extract a scalar float from an indicator value that may be an array or scalar.
+
+        Returns None if the value is missing, empty, or not convertible to float.
+        """
+        if raw_val is None:
+            return None
+        if isinstance(raw_val, (list, tuple, np.ndarray)):
+            raw_val = raw_val[-1] if len(raw_val) > 0 else None
+        if raw_val is None:
+            return None
+        try:
+            return float(raw_val)
+        except (ValueError, TypeError):
+            return None
 
     def build_previous_indicators_section(self, previous_indicators: Dict[str, Any], current_indicators: Dict[str, Any]) -> str:
         """Build comparison section showing how key indicators changed since last analysis.
@@ -377,34 +376,18 @@ class ContextBuilder:
 
         changes = []
         for key, label in key_indicators:
-            prev_val = previous_indicators.get(key)
-            curr_val = current_indicators.get(key)
-
-            # Skip if either value is missing or invalid
-            if prev_val is None or curr_val is None:
-                continue
-
-            # Handle array values (take last element)
-            if isinstance(prev_val, (list, tuple, np.ndarray)):
-                prev_val = prev_val[-1] if len(prev_val) > 0 else None
-            if isinstance(curr_val, (list, tuple, np.ndarray)):
-                curr_val = curr_val[-1] if len(curr_val) > 0 else None
+            prev_val = self._resolve_indicator_value(previous_indicators.get(key))
+            curr_val = self._resolve_indicator_value(current_indicators.get(key))
 
             if prev_val is None or curr_val is None:
                 continue
 
-            try:
-                prev_val = float(prev_val)
-                curr_val = float(curr_val)
+            is_zero_cross_type = key in zero_cross_indicators
 
-                is_zero_cross_type = key in zero_cross_indicators
-                
-                line = self._format_indicator_change(label, prev_val, curr_val, is_zero_cross_type)
+            line = self._format_indicator_change(label, prev_val, curr_val, is_zero_cross_type)
 
-                if line:
-                    changes.append(line)
-            except (ValueError, TypeError):
-                continue
+            if line:
+                changes.append(line)
 
         # If no significant changes were found, but we did process valid indicators
         if not changes:
@@ -418,6 +401,52 @@ class ContextBuilder:
         lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
 
         return "\n".join(lines)
+
+    def compute_indicator_delta_alert(self, previous_indicators: Dict[str, Any],
+                                      current_indicators: Dict[str, Any],
+                                      change_threshold: float = 20.0,
+                                      min_count: int = 3) -> str:
+        """Compute a delta alert string when many indicators changed significantly.
+
+        Args:
+            previous_indicators: Previous technical indicator values.
+            current_indicators: Current technical indicator values.
+            change_threshold: Minimum percentage change to count as significant.
+            min_count: Minimum number of significant changes to trigger alert.
+
+        Returns:
+            Alert string (non-empty if triggered), or empty string.
+        """
+        if not previous_indicators or not current_indicators:
+            return ""
+
+        key_indicators = [
+            ('rsi', 'RSI'), ('macd_hist', 'MACD Hist'), ('roc_14', 'ROC'),
+            ('bb_percent_b', 'BB %B'), ('williams_r', 'Williams %R'),
+            ('obv_slope', 'OBV Slope'), ('mfi', 'MFI'), ('adx', 'ADX'),
+            ('stoch_k', 'Stoch %K'), ('cmf', 'CMF'),
+        ]
+
+        big_changes: list[str] = []
+        for key, label in key_indicators:
+            prev_f = self._resolve_indicator_value(previous_indicators.get(key))
+            curr_f = self._resolve_indicator_value(current_indicators.get(key))
+            if prev_f is None or curr_f is None:
+                continue
+            if abs(prev_f) > 0.0001:
+                pct = abs((curr_f - prev_f) / prev_f) * 100
+                if pct >= change_threshold:
+                    sign = "+" if curr_f > prev_f else ""
+                    big_changes.append(f"{label} {sign}{((curr_f - prev_f) / abs(prev_f) * 100):.0f}%")
+
+        if len(big_changes) >= min_count:
+            changes_str = ", ".join(big_changes[:5])
+            return (
+                f"⚠️ SIGNIFICANT DATA SHIFT: {len(big_changes)} indicators changed >{change_threshold:.0f}% "
+                f"since last analysis ({changes_str}). Re-derive conclusions from current data — "
+                "do not carry forward prior price levels or scenarios unchanged."
+            )
+        return ""
 
     def _format_indicator_change(self, label: str, prev_val: float, curr_val: float,
                                  is_zero_cross_type: bool) -> Optional[str]:

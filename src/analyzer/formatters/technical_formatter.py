@@ -545,6 +545,12 @@ class TechnicalFormatter:
                 self.logger.debug("Error calculating ichimoku signal: %s", e)
             return ""
 
+    BOUNDED_OSCILLATORS = frozenset([
+        'rsi', 'stoch_k', 'stoch_d', 'mfi', 'williams_r',
+        'cci', 'bb_percent_b', 'adx', 'plus_di', 'minus_di',
+        'choppiness', 'uo', 'rmi',
+    ])
+
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:
         """Format temporal array with text-based trend description.
 
@@ -567,7 +573,9 @@ class TechnicalFormatter:
             return ""
         delta = float(last_n[-1] - last_n[0])
         delta_sign = "+" if delta >= 0 else ""
-        if abs(last_n[0]) > 0.0001:
+        if key in self.BOUNDED_OSCILLATORS:
+            delta_pct = abs(delta)
+        elif abs(last_n[0]) > 0.0001:
             delta_pct = abs(delta / last_n[0]) * 100
         else:
             delta_pct = abs(delta) * 100

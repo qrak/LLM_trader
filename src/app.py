@@ -347,7 +347,7 @@ class CryptoTradingBot:
         if statistics_context:
             position_context = f"{position_context}\n\n{statistics_context}"
         
-        previous_data = self.persistence.load_previous_response()
+        previous_data = await self.persistence.async_load_previous_response()
         previous_response = previous_data.get("response") if previous_data else None
         previous_indicators = previous_data.get("technical_indicators") if previous_data else None
         

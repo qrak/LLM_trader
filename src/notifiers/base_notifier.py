@@ -285,16 +285,3 @@ class BaseNotifier(ABC):
             'trend': analysis.get('trend', {}),
             'key_levels': analysis.get('key_levels', {}),
         }
-
-    def parse_analysis_response(self, raw_response: str) -> Tuple[str, Optional[dict]]:
-        """Parse raw AI response to extract reasoning and JSON.
-
-        Args:
-            raw_response: Raw response string from AI
-
-        Returns:
-            Tuple of (reasoning_text, analysis_json or None)
-        """
-        reasoning = self.unified_parser.extract_text_before_json(raw_response)
-        analysis_json = self.unified_parser.extract_json_block(raw_response, unwrap_key='analysis')
-        return reasoning, analysis_json

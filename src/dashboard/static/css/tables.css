@@ -1,0 +1,47 @@
+/* Vector Table */
+.vector-table {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.vector-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.vector-table th {
+    background-color: var(--bg-dark-3);
+    color: var(--accent-primary);
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 500;
+    border-bottom: 2px solid var(--border-subtle);
+    position: sticky;
+    top: 0;
+}
+
+.sortable-header {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.sortable-header:hover {
+    background-color: rgba(0, 240, 255, 0.1);
+}
+
+.vector-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+}
+
+.vector-table tr:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.vector-table .win { color: var(--accent-success); font-weight: bold; }
+.vector-table .loss { color: var(--accent-danger); font-weight: bold; }
+.vector-table .positive { color: var(--accent-success); }
+.vector-table .negative { color: var(--accent-danger); }
+

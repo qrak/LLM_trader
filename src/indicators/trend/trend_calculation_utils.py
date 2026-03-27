@@ -3,6 +3,7 @@ Trend calculation utilities for trend indicators.
 Extracted to reduce complexity in trend_indicators.py
 """
 from typing import Tuple
+import math
 import numpy as np
 from numba import njit
 
@@ -65,14 +66,14 @@ def calculate_directional_indicators(dm_pos14: np.ndarray, dm_neg14: np.ndarray,
     dx = np.full(n, np.nan)
 
     for i in range(n):
-        if not np.isnan(tr14[i]) and tr14[i] != 0:
+        if not math.isnan(tr14[i]) and tr14[i] != 0:
             pdi[i] = 100 * (dm_pos14[i] / tr14[i])
             ndi[i] = 100 * (dm_neg14[i] / tr14[i])
         else:
             pdi[i] = 0
             ndi[i] = 0
 
-        if not np.isnan(pdi[i]) and not np.isnan(ndi[i]) and pdi[i] + ndi[i] != 0:
+        if not math.isnan(pdi[i]) and not math.isnan(ndi[i]) and pdi[i] + ndi[i] != 0:
             dx[i] = 100 * abs((pdi[i] - ndi[i]) / (pdi[i] + ndi[i]))
         else:
             dx[i] = 0
@@ -81,22 +82,65 @@ def calculate_directional_indicators(dm_pos14: np.ndarray, dm_neg14: np.ndarray,
 
 
 @njit(cache=True)
+def get_donchian_channels_o1(high: np.ndarray, low: np.ndarray, length: int) -> np.ndarray:
+    """Calculate the mid-point of the Donchian Channels ((Max High + Min Low) / 2)
+    using an O(N) amortized sliding window."""
+    n = len(high)
+    mid_line = np.full(n, np.nan)
+
+    if length > n or length <= 0:
+        return mid_line
+
+    # Initial window
+    max_h = -np.inf
+    min_l = np.inf
+    max_idx = -1
+    min_idx = -1
+
+    for j in range(length):
+        if high[j] >= max_h:
+            max_h = high[j]
+            max_idx = j
+        if low[j] <= min_l:
+            min_l = low[j]
+            min_idx = j
+
+    mid_line[length - 1] = (max_h + min_l) / 2
+
+    for i in range(length, n):
+        # Remove old element
+        if i - length == max_idx:
+            max_h = -np.inf
+            for j in range(i - length + 1, i + 1):
+                if high[j] >= max_h:
+                    max_h = high[j]
+                    max_idx = j
+        elif high[i] >= max_h:
+            max_h = high[i]
+            max_idx = i
+
+        if i - length == min_idx:
+            min_l = np.inf
+            for j in range(i - length + 1, i + 1):
+                if low[j] <= min_l:
+                    min_l = low[j]
+                    min_idx = j
+        elif low[i] <= min_l:
+            min_l = low[i]
+            min_idx = i
+
+        mid_line[i] = (max_h + min_l) / 2
+
+    return mid_line
+
+
+@njit(cache=True)
 def calculate_ichimoku_lines(high: np.ndarray, low: np.ndarray,
                            conversion_length: int, base_length: int) -> Tuple[np.ndarray, np.ndarray]:
     """Calculate Ichimoku conversion and base lines."""
-    n = len(high)
-    conversion_line = np.full(n, np.nan)
-    base_line = np.full(n, np.nan)
-
-    # Calculate Conversion Line (Tenkan-sen)
-    for i in range(conversion_length - 1, n):
-        conversion_line[i] = (np.max(high[i - conversion_length + 1: i + 1]) +
-                            np.min(low[i - conversion_length + 1: i + 1])) / 2
-
-    # Calculate Base Line (Kijun-sen)
-    for i in range(base_length - 1, n):
-        base_line[i] = (np.max(high[i - base_length + 1: i + 1]) +
-                       np.min(low[i - base_length + 1: i + 1])) / 2
+    # Calculate Conversion Line (Tenkan-sen) and Base Line (Kijun-sen)
+    conversion_line = get_donchian_channels_o1(high, low, conversion_length)
+    base_line = get_donchian_channels_o1(high, low, base_length)
 
     return conversion_line, base_line
 
@@ -114,14 +158,15 @@ def calculate_ichimoku_spans(high: np.ndarray, low: np.ndarray,
     # Span A = (Conversion Line + Base Line) / 2, shifted forward by displacement
     # It can be calculated as soon as both Conversion and Base lines are available
     for i in range(n - displacement):
-        if not np.isnan(conversion_line[i]) and not np.isnan(base_line[i]):
+        if not math.isnan(conversion_line[i]) and not math.isnan(base_line[i]):
             leading_span_a[i + displacement] = (conversion_line[i] + base_line[i]) / 2
 
     # Calculate Leading Span B (Senkou Span B)
     # Span B = (Max(High, lagging_span2_length) + Min(Low, lagging_span2_length)) / 2, shifted forward
+    span_b_mid_line = get_donchian_channels_o1(high, low, lagging_span2_length)
+
     for i in range(lagging_span2_length - 1, n - displacement):
-        leading_span_b[i + displacement] = (np.max(high[i - lagging_span2_length + 1: i + 1]) +
-                                          np.min(low[i - lagging_span2_length + 1: i + 1])) / 2
+        leading_span_b[i + displacement] = span_b_mid_line[i]
 
     return leading_span_a, leading_span_b
 

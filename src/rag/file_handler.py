@@ -58,8 +58,15 @@ class RagFileHandler:
 
     def load_json_file(self, file_path: str) -> Optional[Dict]:
         try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f:
+            # Security: Prevent path traversal including symlink resolution
+            abs_path = os.path.realpath(file_path)
+            abs_base_dir = os.path.realpath(self.base_dir)
+            if os.path.commonpath([abs_path, abs_base_dir]) != abs_base_dir:
+                self.logger.error("Path traversal attempt detected: %s", file_path)
+                return None
+
+            if os.path.exists(abs_path):
+                with open(abs_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
             return None
         except Exception as e:
@@ -68,16 +75,23 @@ class RagFileHandler:
 
     def save_json_file(self, file_path: str, data: Dict):
         try:
+            # Security: Prevent path traversal including symlink resolution
+            abs_path = os.path.realpath(file_path)
+            abs_base_dir = os.path.realpath(self.base_dir)
+            if os.path.commonpath([abs_path, abs_base_dir]) != abs_base_dir:
+                self.logger.error("Path traversal attempt detected: %s", file_path)
+                return
+
             # Atomic write: write to temporary file first, then rename
-            temp_path = f"{file_path}.tmp"
+            temp_path = f"{abs_path}.tmp"
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
             # Atomic operation: rename temp file to target
-            os.replace(temp_path, file_path)
+            os.replace(temp_path, abs_path)
         except Exception as e:
             # Clean up temp file if it exists
-            temp_path = f"{file_path}.tmp"
+            temp_path = f"{os.path.abspath(file_path)}.tmp"
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)

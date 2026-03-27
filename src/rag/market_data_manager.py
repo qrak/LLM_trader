@@ -84,25 +84,6 @@ class MarketDataManager:
             self.logger.error("Error fetching market overview: %s", e)
             return None
 
-    def _extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
-        """Extract top coins by dominance, excluding stablecoins - delegates to processor."""
-        return self.processor.extract_top_coins(coingecko_data)
-
-    def _build_overview_structure(self, overview: Dict, price_data: Optional[Dict], coingecko_data: Optional[Dict]):
-        """Build the overview data structure from fetched data."""
-        # Process price data
-        if price_data and "RAW" in price_data:
-            overview["top_coins"] = {}
-            for coin, values in price_data["RAW"].items():
-                coin_overview = self._process_coin_data(values)
-                if coin_overview:
-                    overview["top_coins"][coin] = coin_overview
-
-        # Add CoinGecko global market data
-        if coingecko_data:
-            overview.update(coingecko_data)
-            self.coingecko_last_update = datetime.now(timezone.utc)
-
     def _process_coin_data(self, values: Dict) -> Optional[Dict]:
         """Process individual coin data from price API response."""
         quote_data = None

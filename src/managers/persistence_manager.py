@@ -6,6 +6,7 @@ Follows Single Responsibility Principle by delegating calculations to other serv
 
 import asyncio
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -48,9 +49,19 @@ class PersistenceManager:
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
 
+        # In-memory caches to prevent blocking I/O on hot paths
+        self._position_cache: Optional["Position"] = None
+        self._position_cache_valid: bool = False
+        self._last_analysis_time_cache: Optional[datetime] = None
+        self._last_analysis_time_cache_valid: bool = False
+
     def save_position(self, position: Optional["Position"]) -> None:
         """Save current position to disk."""
         try:
+            # Update cache immediately
+            self._position_cache = position
+            self._position_cache_valid = True
+
             if position is None:
                 if self.positions_file.exists():
                     self.positions_file.unlink()
@@ -82,8 +93,10 @@ class PersistenceManager:
 
             data = serialize_for_json(data)
 
-            with open(self.positions_file, 'w', encoding='utf-8') as f:
+            temp_path = str(self.positions_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
+            os.replace(temp_path, self.positions_file)
 
             self.logger.debug("Saved position: %s %s", position.direction, position.symbol)
         except Exception as e:
@@ -95,14 +108,20 @@ class PersistenceManager:
 
     def load_position(self) -> Optional["Position"]:
         """Load current position from disk."""
+        if self._position_cache_valid:
+            return self._position_cache
+
         if not self.positions_file.exists():
+            self._position_cache = None
+            self._position_cache_valid = True
             return None
+
         try:
             with open(self.positions_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 cf_list = data.get("confluence_factors", [])
                 cf_tuple = tuple((name, score) for name, score in cf_list)
-                return Position(
+                position = Position(
                     entry_price=data["entry_price"],
                     stop_loss=data["stop_loss"],
                     take_profit=data["take_profit"],
@@ -125,6 +144,12 @@ class PersistenceManager:
                     max_drawdown_pct=data.get("max_drawdown_pct", 0.0),
                     max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
+
+                # Update cache
+                self._position_cache = position
+                self._position_cache_valid = True
+
+                return position
         except Exception as e:
             self.logger.error("Error loading position: %s", e)
             return None
@@ -138,8 +163,10 @@ class PersistenceManager:
             sanitized_decision = serialize_for_json(decision_dict)
             history.append(sanitized_decision)
 
-            with open(self.history_file, 'w', encoding='utf-8') as f:
+            temp_path = str(self.history_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(history, f, indent=2)
+            os.replace(temp_path, self.history_file)
 
             self.logger.info("Saved trade decision: %s @ $%s", decision.action, f"{decision.price:,.2f}")
         except Exception as e:
@@ -160,23 +187,6 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error loading trade history: %s", e)
             return []
-
-    def load_last_n_decisions(self, n: int = 5) -> List[Dict[str, Any]]:
-        """Load the last n trade decisions from history."""
-        history = self.load_trade_history()
-        valid_actions = {"BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
-
-        filtered = [
-            d for d in history
-            if d.get("action", "").upper() in valid_actions
-        ]
-
-        filtered.sort(
-            key=lambda x: self._ensure_utc(datetime.fromisoformat(x["timestamp"])),
-            reverse=True
-        )
-
-        return filtered[:n]
 
     def get_entry_decision_for_position(self, entry_time: datetime) -> Optional["TradeDecision"]:
         """Retrieve the entry decision from trade history for a given position.
@@ -229,8 +239,10 @@ class PersistenceManager:
     def save_statistics(self, stats: "TradingStatistics") -> None:
         """Save trading statistics to disk."""
         try:
-            with open(self.statistics_file, 'w', encoding='utf-8') as f:
+            temp_path = str(self.statistics_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(stats.to_dict(), f, indent=2)
+            os.replace(temp_path, self.statistics_file)
             self.logger.debug("Saved statistics: %s trades", stats.total_trades)
         except Exception as e:
             self.logger.error("Error saving statistics: %s", e)
@@ -250,6 +262,10 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error loading statistics: %s", e)
             return TradingStatistics()
+
+    async def async_load_statistics(self) -> "TradingStatistics":
+        """Non-blocking load_statistics: runs on a thread-pool worker."""
+        return await asyncio.to_thread(self.load_statistics)
 
     def save_previous_response(
         self,
@@ -282,8 +298,10 @@ class PersistenceManager:
 
             data_to_save = serialize_for_json(data_to_save)
 
-            with open(self.previous_response_file, 'w', encoding='utf-8') as f:
+            temp_path = str(self.previous_response_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data_to_save, f, indent=2)
+            os.replace(temp_path, self.previous_response_file)
 
             self.logger.debug("Saved previous response with %s indicators", len(technical_data) if technical_data else 0)
         except Exception as e:
@@ -297,6 +315,10 @@ class PersistenceManager:
     ) -> None:
         """Non-blocking save_previous_response: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
+
+    async def async_load_previous_response(self) -> Optional[Dict[str, Any]]:
+        """Non-blocking load_previous_response: runs on a thread-pool worker."""
+        return await asyncio.to_thread(self.load_previous_response)
 
     def load_previous_response(self) -> Optional[Dict[str, Any]]:
         """Load the previous AI response and technical indicators.
@@ -335,10 +357,15 @@ class PersistenceManager:
             if timestamp is None:
                 timestamp = datetime.now(timezone.utc)
 
-            with open(self.last_analysis_file, 'w', encoding='utf-8') as f:
+            self._last_analysis_time_cache = timestamp
+            self._last_analysis_time_cache_valid = True
+
+            temp_path = str(self.last_analysis_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump({
                     "timestamp": timestamp.isoformat()
                 }, f, indent=2)
+            os.replace(temp_path, self.last_analysis_file)
 
         except Exception as e:
             self.logger.error("Error saving last analysis time: %s", e)
@@ -349,13 +376,21 @@ class PersistenceManager:
 
     def get_last_analysis_time(self) -> Optional[datetime]:
         """Get timestamp of last successful analysis."""
+        if self._last_analysis_time_cache_valid:
+            return self._last_analysis_time_cache
+
         if not self.last_analysis_file.exists():
+            self._last_analysis_time_cache = None
+            self._last_analysis_time_cache_valid = True
             return None
 
         try:
             with open(self.last_analysis_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return self._ensure_utc(datetime.fromisoformat(data["timestamp"]))
+                dt = self._ensure_utc(datetime.fromisoformat(data["timestamp"]))
+                self._last_analysis_time_cache = dt
+                self._last_analysis_time_cache_valid = True
+                return dt
         except Exception as e:
             self.logger.warning("Could not get last analysis time: %s", e)
             return None

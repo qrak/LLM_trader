@@ -2,7 +2,7 @@
 Market Period Formatter - Formats period-based market metrics.
 Handles 1h, 4h, 24h, 7d, 30d period metrics and indicator changes.
 """
-from typing import List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -106,86 +106,3 @@ class MarketPeriodFormatter:
             parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change))}")
 
         return " ".join(parts) if parts else ""
-
-    def _format_period_price_section(self, metrics: dict) -> List[str]:
-        """Format price-related metrics for a period."""
-        price_sections = []
-
-        # Get basic metrics (from _calculate_basic_metrics structure)
-        highest_price = metrics.get('highest_price')
-        lowest_price = metrics.get('lowest_price')
-        price_change = metrics.get('price_change')
-        price_change_percent = metrics.get('price_change_percent')
-        avg_price = metrics.get('avg_price')
-
-        if avg_price is not None:
-            price_sections.append(f"  Average Price: ${self.format_utils.fmt(avg_price)}")
-
-        if highest_price and lowest_price:
-            price_sections.append(f"  Range: ${self.format_utils.fmt(lowest_price)} - ${self.format_utils.fmt(highest_price)}")
-
-        if price_change is not None and price_change_percent is not None:
-            direction = "UP" if price_change >= 0 else "DOWN"
-            price_sections.append(f"  Change ({direction}): ${self.format_utils.fmt(price_change)} ({self.format_utils.fmt(price_change_percent)}%)")
-
-        return price_sections
-
-    def _format_period_volume_section(self, metrics: dict) -> List[str]:
-        """Format volume-related metrics for a period."""
-        volume_sections = []
-
-        total_volume = metrics.get('total_volume')
-        avg_volume = metrics.get('avg_volume')
-
-        if total_volume is not None:
-            volume_sections.append(f"  Total Volume: {self.format_utils.fmt(total_volume)}")
-
-        if avg_volume is not None:
-            volume_sections.append(f"  Average Volume: {self.format_utils.fmt(avg_volume)}")
-
-        return volume_sections
-
-    def _format_indicator_changes_section(self, indicator_changes: dict, period_name: str) -> List[str]:
-        """Format indicator changes for a period."""
-        if not indicator_changes:
-            return []
-
-        changes_sections = [f"  {period_name.capitalize()} Indicator Changes:"]
-
-        # RSI changes
-        rsi_change = indicator_changes.get('rsi_change')
-        if rsi_change is not None:
-            rsi_direction = "UP" if rsi_change >= 0 else "DOWN"
-            changes_sections.append(f"    • RSI ({rsi_direction}): {self.format_utils.fmt(abs(rsi_change))} value change")
-
-        # MACD changes (use macd_line which is the main MACD indicator)
-        macd_change = indicator_changes.get('macd_line_change')
-        if macd_change is not None:
-            macd_direction = "UP" if macd_change >= 0 else "DOWN"
-            changes_sections.append(f"    • MACD ({macd_direction}): {self.format_utils.fmt(abs(macd_change))} value change")
-
-        # MACD Histogram changes
-        macd_hist_change = indicator_changes.get('macd_hist_change')
-        if macd_hist_change is not None:
-            macd_hist_direction = "UP" if macd_hist_change >= 0 else "DOWN"
-            changes_sections.append(f"    • MACD Histogram ({macd_hist_direction}): {self.format_utils.fmt(abs(macd_hist_change))}")
-
-        # ADX changes
-        adx_change = indicator_changes.get('adx_change')
-        if adx_change is not None:
-            adx_direction = "UP" if adx_change >= 0 else "DOWN"
-            changes_sections.append(f"    • ADX ({adx_direction}): {self.format_utils.fmt(abs(adx_change))} value change")
-
-        # Stochastic %K changes
-        stoch_k_change = indicator_changes.get('stoch_k_change')
-        if stoch_k_change is not None:
-            stoch_direction = "UP" if stoch_k_change >= 0 else "DOWN"
-            changes_sections.append(f"    • Stochastic %K ({stoch_direction}): {self.format_utils.fmt(abs(stoch_k_change))} value change")
-
-        # Bollinger Bands position changes
-        bb_position_change = indicator_changes.get('bb_position_change')
-        if bb_position_change is not None:
-            bb_direction = "UP" if bb_position_change >= 0 else "DOWN"
-            changes_sections.append(f"    • BB Position ({bb_direction}): {self.format_utils.fmt(abs(bb_position_change))}")
-
-        return changes_sections

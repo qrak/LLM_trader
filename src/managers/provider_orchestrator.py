@@ -207,11 +207,8 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
-                ["googleai", "local", "openrouter"], messages, model=model
+                ["googleai", "local", "openrouter", "blockrun"], messages, model=model
             )
-            if not result.success and self.is_available("openrouter"):
-                self.logger.warning("Google AI Studio and LM Studio failed. Final fallback to OpenRouter...")
-                result = await self.invoke("openrouter", messages, model=model)
             return result
         if self.is_available(effective_provider):
             effective_model = self.resolve_model(effective_provider, model)
@@ -246,7 +243,7 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "openrouter"], messages, chart=True, chart_image=chart_image, model=model
+                ["googleai", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
             )
         if effective_provider == "local":
             return InvocationResult(

@@ -54,8 +54,6 @@ function updateCostDisplay(data) {
 
 
 
-
-
 async function fetchBrainStatus() {
     try {
         const response = await fetch('/api/brain/status');
@@ -164,7 +162,9 @@ function togglePanelMinimize(panelId) {
         const isMinimized = panel.classList.toggle('minimized');
         const btn = panel.querySelector('.toolbar-btn[title="Minimize"], .toolbar-btn[title="Expand"]');
         if (btn) {
-            btn.textContent = isMinimized ? '+' : '−';
+            btn.innerHTML = isMinimized
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>'
+                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
             btn.title = isMinimized ? 'Expand' : 'Minimize';
             btn.setAttribute('aria-expanded', String(!isMinimized));
 
@@ -198,39 +198,7 @@ function initApp() {
 
     window.togglePanelMinimize = togglePanelMinimize;
 
-    // Mobile Menu Logic
-    const toggleBtn = document.getElementById('mobile-menu-toggle');
-    const closeBtn = document.getElementById('mobile-menu-close');
-    const sidebar = document.getElementById('sidebar');
-    
-    function toggleMobileMenu() {
-        const isOpen = sidebar.classList.toggle('mobile-open');
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', isOpen);
-        if (closeBtn) closeBtn.setAttribute('aria-expanded', isOpen);
-    }
-
-    if (toggleBtn) toggleBtn.addEventListener('click', toggleMobileMenu);
-    if (closeBtn) closeBtn.addEventListener('click', () => {
-        sidebar.classList.remove('mobile-open');
-        if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-        if (closeBtn) closeBtn.setAttribute('aria-expanded', 'false');
-    });
-
-    // Close on navigation
-    document.querySelectorAll('.tab-btn').forEach(link => {
-        link.addEventListener('click', function() {
-            // Update aria-selected for all tabs
-            document.querySelectorAll('.tab-btn').forEach(t => t.setAttribute('aria-selected', 'false'));
-            // Set current to true
-            this.setAttribute('aria-selected', 'true');
-
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('mobile-open');
-                if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-                if (closeBtn) closeBtn.setAttribute('aria-expanded', 'false');
-            }
-        });
-    });
+    // Mobile menu is fully managed by setupMobileMenu() in modules/ui.js
 
     try {
         // Event listeners for static buttons
@@ -292,4 +260,3 @@ if (document.readyState === 'loading') {
 } else {
     initApp();
 }
-

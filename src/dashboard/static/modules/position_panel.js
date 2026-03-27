@@ -32,8 +32,8 @@ function formatDuration(seconds) {
  */
 function calculatePnL(entryPrice, currentPrice, direction) {
     if (!entryPrice || !currentPrice) return 0;
-    const diff = direction === 'LONG' 
-        ? (currentPrice - entryPrice) / entryPrice 
+    const diff = direction === 'LONG'
+        ? (currentPrice - entryPrice) / entryPrice
         : (entryPrice - currentPrice) / entryPrice;
     return diff * 100;
 }
@@ -65,7 +65,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         if (!data.has_position) {
             container.innerHTML = `
                 <div class="no-position">
-                    <span class="no-position-icon">📭</span>
+                    <span class="no-position-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
                     <span>No active position</span>
                 </div>
             `;
@@ -77,10 +77,14 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const pnl = priceToUse ? calculatePnL(data.entry_price, priceToUse, data.direction) : null;
         const isProfit = pnl !== null && pnl >= 0;
         const directionClass = data.direction === 'LONG' ? 'long' : 'short';
+        const longIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
+        const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
+        const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
         container.innerHTML = `
             <div class="position-grid">
                 <div class="position-badge ${directionClass}">
-                    ${data.direction === 'LONG' ? '📈' : '📉'} ${data.direction}
+                    ${data.direction === 'LONG' ? longIcon : shortIcon} <span>${escapeHtml(data.direction)}</span>
                 </div>
                 <div class="position-symbol">${escapeHtml(data.symbol)}</div>
                 <div class="position-stat">
@@ -95,11 +99,11 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
                 </div>
                 <div class="position-sl-tp">
-                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${data.sl_distance_pct.toFixed(1)}%)</span></div>
-                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${data.tp_distance_pct.toFixed(1)}%)</span></div>
+                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${(data.sl_distance_pct * 100).toFixed(1)}%)</span></div>
+                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${(data.tp_distance_pct * 100).toFixed(1)}%)</span></div>
                 </div>
                 <div class="position-meta">
-                    <span title="Time in position">⏱️ ${formatDuration(timeInPosition)}</span>
+                    <span title="Time in position" class="meta-item">${timeIcon} <span>${formatDuration(timeInPosition)}</span></span>
                     <span title="Risk/Reward ratio">R:R ${data.rr_ratio.toFixed(1)}</span>
                     <span title="Confidence">${escapeHtml(String(data.confidence))}</span>
                 </div>
@@ -163,7 +167,7 @@ function calculateGaugePosition(position, currentPrice) {
     // The gauge logic depends on direction for SL/TP relationship
     // For LONG: SL < Entry < TP
     // For SHORT: TP < Entry < SL
-    
+
     if (direction === 'LONG') {
         if (currentPrice < entry) {
             // Scale in [0, 50] range between SL and Entry
