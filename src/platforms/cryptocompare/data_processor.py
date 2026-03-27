@@ -54,8 +54,3 @@ class CryptoCompareDataProcessor:
             return data_dict["Data"]
 
         return None
-
-    @staticmethod
-    def get_important_categories() -> List[str]:
-        """Get list of important categories to prioritize in API requests"""
-        return ["BTC", "ETH", "DeFi", "NFT", "Layer 2", "Stablecoin", "Altcoin"]

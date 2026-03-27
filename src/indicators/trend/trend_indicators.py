@@ -7,6 +7,7 @@ Vortex Indicator, PFE, and TD Sequential.
 """
 from typing import Tuple
 
+import math
 import numpy as np
 from numba import njit
 
@@ -57,7 +58,7 @@ def adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
         adx[length * 2 - 1] = np.nanmean(dx[length:length * 2])
 
     for i in range(length * 2, n):
-        if not np.isnan(adx[i - 1]) and not np.isnan(dx[i]):
+        if not math.isnan(adx[i - 1]) and not math.isnan(dx[i]):
             adx[i] = ((adx[i - 1] * (length - 1)) + dx[i]) * length_recip
 
     return adx, pdi, ndi
@@ -159,7 +160,11 @@ def trix_numba(close, length=18, scalar=100, drift=1):
 
 @njit(cache=True)
 def vortex_indicator_numba(high, low, close, length):
-    """Calculate Vortex Indicator using extracted utilities."""
+    """
+    Calculate Vortex Indicator using extracted utilities.
+    Performance Optimization: Replaced O(N*L) np.sum slicing with an O(N)
+    running sliding window sum to drastically improve calculation speed.
+    """
     n = len(high)
     vi_plus = np.full(n, np.nan)
     vi_minus = np.full(n, np.nan)
@@ -167,15 +172,34 @@ def vortex_indicator_numba(high, low, close, length):
     # Calculate components
     tr, vmp, vmm = calculate_vortex_components(high, low, close)
 
+    if n <= length:
+        return vi_plus, vi_minus
+
+    # Initial sums for the first window (up to length - 1)
+    tr_sum = 0.0
+    vmp_sum = 0.0
+    vmm_sum = 0.0
+
+    for i in range(1, length):
+        tr_sum += tr[i]
+        vmp_sum += vmp[i]
+        vmm_sum += vmm[i]
+
     # Calculate rolling sums and Vortex Indicator
     for i in range(length, n):
-        tr_sum = np.sum(tr[i - length + 1:i + 1])
-        vmp_sum = np.sum(vmp[i - length + 1:i + 1])
-        vmm_sum = np.sum(vmm[i - length + 1:i + 1])
+        # Add the newest element to the window
+        tr_sum += tr[i]
+        vmp_sum += vmp[i]
+        vmm_sum += vmm[i]
 
         if tr_sum != 0:
             vi_plus[i] = vmp_sum / tr_sum
             vi_minus[i] = vmm_sum / tr_sum
+
+        # Remove the oldest element that drops out of the window
+        tr_sum -= tr[i - length + 1]
+        vmp_sum -= vmp[i - length + 1]
+        vmm_sum -= vmm[i - length + 1]
 
     return vi_plus, vi_minus
 
@@ -245,12 +269,12 @@ def pfe_numba(close, n, m):
 
     # Initialize EMA with first valid p
     start_idx = n
-    if not np.isnan(p[start_idx]):
+    if not math.isnan(p[start_idx]):
         pfe[start_idx] = p[start_idx]
 
     for i in range(start_idx + 1, length):
-        if not np.isnan(p[i]):
-            if np.isnan(pfe[i-1]):
+        if not math.isnan(p[i]):
+            if math.isnan(pfe[i-1]):
                 pfe[i] = p[i]
             else:
                 pfe[i] = ((p[i] - pfe[i - 1]) * multiplier) + pfe[i - 1]
@@ -277,7 +301,7 @@ def td_sequential_numba(close, length=9):
 
         # Get previous state (handling start of sequence)
         prev = td_seq[i - 1]
-        if np.isnan(prev):
+        if math.isnan(prev):
             prev = 0.0
 
         if c > c4:

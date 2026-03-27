@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from numba import njit
 from src.indicators.overlap import sma_numba, ema_numba
@@ -87,7 +88,7 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode='rma'):
     
     # Needs valid ATR to calculate
     for i in range(length, n):
-        if not np.isnan(atr_values[i]):
+        if not math.isnan(atr_values[i]):
             period_high = np.max(high[i - length + 1:i + 1])
             period_low = np.min(low[i - length + 1:i + 1])
 
@@ -146,20 +147,32 @@ def vhf_numba(close, length=28, drift=1):
     vhf = np.full(n, np.nan)
 
     for i in range(length - 1 + drift, n):
-        hcp = np.max(close[i - length + 1:i + 1:drift])
-        lcp = np.min(close[i - length + 1:i + 1:drift])
+        # Optimization: Manual max/min finding and diff summing
+        # to avoid slice allocations inside the loop
+        start_idx = i - length + 1
+        end_idx = i + 1
 
-        sliced_close = close[i - length + 1:i + 1:drift]
+        hcp = close[start_idx]
+        lcp = close[start_idx]
+        sum_diff = 0.0
 
-        # Manually compute the differences
-        diff = np.abs(sliced_close[1:] - sliced_close[:-1])
-        sum_diff = np.sum(diff)
+        prev_val = close[start_idx]
+
+        for j in range(start_idx + drift, end_idx, drift):
+            val = close[j]
+            if val > hcp:
+                hcp = val
+            if val < lcp:
+                lcp = val
+
+            sum_diff += abs(val - prev_val)
+            prev_val = val
 
         # Handle division by zero
         if sum_diff != 0:
-            vhf[i] = np.abs(hcp - lcp) / sum_diff
+            vhf[i] = abs(hcp - lcp) / sum_diff
         else:
-            vhf[i] = 0
+            vhf[i] = 0.0
 
     return vhf
 
@@ -182,11 +195,77 @@ def donchian_channels_numba(high, low, length=20):
     lower_channel = np.full(n, np.nan)
     middle_channel = np.full(n, np.nan)
 
-    # Calculate rolling max and min
+    if n < length:
+        return upper_channel, middle_channel, lower_channel
+
+    current_max = high[0]
+    max_idx = 0
+    current_min = low[0]
+    min_idx = 0
+
+    nan_count_high = 0
+    nan_count_low = 0
+    for i in range(length - 1):
+        if math.isnan(high[i]):
+            nan_count_high += 1
+        if math.isnan(low[i]):
+            nan_count_low += 1
+
+    for i in range(1, length - 1):
+        if high[i] >= current_max or math.isnan(current_max):
+            current_max = high[i]
+            max_idx = i
+        if low[i] <= current_min or math.isnan(current_min):
+            current_min = low[i]
+            min_idx = i
+
+    # Calculate rolling max and min with O(N) amortized sliding window
     for i in range(length - 1, n):
-        upper_channel[i] = np.max(high[i - length + 1:i + 1])
-        lower_channel[i] = np.min(low[i - length + 1:i + 1])
+        if math.isnan(high[i]):
+            nan_count_high += 1
+        if math.isnan(low[i]):
+            nan_count_low += 1
+
+        old_idx = i - length + 1
+
+        if high[i] >= current_max or math.isnan(current_max):
+            current_max = high[i]
+            max_idx = i
+        elif max_idx < old_idx:
+            current_max = high[old_idx]
+            max_idx = old_idx
+            for j in range(old_idx + 1, i + 1):
+                if high[j] >= current_max or math.isnan(current_max):
+                    current_max = high[j]
+                    max_idx = j
+
+        if low[i] <= current_min or math.isnan(current_min):
+            current_min = low[i]
+            min_idx = i
+        elif min_idx < old_idx:
+            current_min = low[old_idx]
+            min_idx = old_idx
+            for j in range(old_idx + 1, i + 1):
+                if low[j] <= current_min or math.isnan(current_min):
+                    current_min = low[j]
+                    min_idx = j
+
+        if nan_count_high > 0:
+            upper_channel[i] = np.nan
+        else:
+            upper_channel[i] = current_max
+
+        if nan_count_low > 0:
+            lower_channel[i] = np.nan
+        else:
+            lower_channel[i] = current_min
+
         middle_channel[i] = (upper_channel[i] + lower_channel[i]) / 2.0
+
+        if math.isnan(high[old_idx]):
+            nan_count_high -= 1
+        if math.isnan(low[old_idx]):
+            nan_count_low -= 1
 
     return upper_channel, middle_channel, lower_channel
 
@@ -207,7 +286,7 @@ def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode='
     lower = np.full(n, np.nan)
 
     for i in range(n):
-        if not np.isnan(middle[i]) and not np.isnan(atr_val[i]):
+        if not math.isnan(middle[i]) and not math.isnan(atr_val[i]):
             upper[i] = middle[i] + multiplier * atr_val[i]
             lower[i] = middle[i] - multiplier * atr_val[i]
 
@@ -256,9 +335,13 @@ def choppiness_index_numba(high, low, close, length=14):
 
     for i in range(length, n):
         # Calculate highest high and lowest low over the period
-        # Note: Optimization opportunity: monotonic queue for O(1) min/max
-        period_high = np.max(high[i - length + 1:i + 1])
-        period_low = np.min(low[i - length + 1:i + 1])
+        period_high = high[i - length + 1]
+        period_low = low[i - length + 1]
+        for j in range(i - length + 2, i + 1):
+            if high[j] > period_high:
+                period_high = high[j]
+            if low[j] < period_low:
+                period_low = low[j]
 
         # Calculate Choppiness Index
         # CI = 100 * log10(sum(TR) / (highest_high - lowest_low)) / log10(length)

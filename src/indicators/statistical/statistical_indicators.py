@@ -245,18 +245,56 @@ def variance_numba(close, length=30, ddof=1):
 
 @njit(cache=True)
 def zscore_numba(close, length=30, std=1.0):
-    """Rolling Z-Score (O(N*L) - not yet optimized)."""
+    """Rolling Z-Score (O(N) optimized)."""
     n = len(close)
     zscore_values = np.full(n, np.nan)
 
-    for i in range(length - 1, n):
-        window = close[i - length + 1:i + 1]
-        mean = np.sum(window) / length
-        variance = np.sum((window - mean) ** 2) / (length - 1)
-        stdev = np.sqrt(variance)
+    if n < length:
+        return zscore_values
 
-        if i >= length:
-            zscore_values[i] = (close[i] - mean) / (std * stdev)
+    # To avoid precision loss on large values, shift by the first value
+    offset = close[0]
+
+    sum_x = 0.0
+    sum_x2 = 0.0
+
+    # Initial window setup
+    for i in range(length):
+        val = close[i] - offset
+        sum_x += val
+        sum_x2 += val * val
+
+    # Calculate initial values
+    if length > 0:
+        mean = sum_x / length
+        var = (sum_x2 - (sum_x * sum_x) / length) / (length - 1)
+        stdev = np.sqrt(max(0.0, var))
+        if stdev > 1e-10:
+            zscore_values[length - 1] = ((close[length - 1] - offset) - mean) / (std * stdev)
+        else:
+            zscore_values[length - 1] = 0.0
+
+    for i in range(length, n):
+        old_val = close[i - length] - offset
+        new_val = close[i] - offset
+
+        if i % 1000 == 0:
+            # Recalculate to prevent drift
+            window = close[i - length + 1 : i + 1] - offset
+            sum_x = np.sum(window)
+            sum_x2 = np.sum(window * window)
+        else:
+            sum_x += new_val - old_val
+            sum_x2 += new_val * new_val - old_val * old_val
+
+        mean = sum_x / length
+        var = (sum_x2 - (sum_x * sum_x) / length) / (length - 1)
+        stdev = np.sqrt(max(0.0, var))
+
+        if stdev > 1e-10:
+            zscore_values[i] = ((close[i] - offset) - mean) / (std * stdev)
+        else:
+            zscore_values[i] = 0.0
 
     return zscore_values
 
@@ -265,10 +303,21 @@ def mad_numba(close, length=30):
     n = len(close)
     mad_values = np.full(n, np.nan)
 
+    if n < length:
+        return mad_values
+
     for i in range(length - 1, n):
-        window = close[i - length + 1:i + 1]
-        mean = np.mean(window)
-        mad_values[i] = np.mean(np.abs(window - mean))
+        # Calculate mean manually to avoid np.mean on slices which allocates arrays
+        sum_val = 0.0
+        for j in range(i - length + 1, i + 1):
+            sum_val += close[j]
+        mean = sum_val / length
+
+        sum_abs_dev = 0.0
+        for j in range(i - length + 1, i + 1):
+            sum_abs_dev += abs(close[j] - mean)
+
+        mad_values[i] = sum_abs_dev / length
 
     return mad_values
 

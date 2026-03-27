@@ -199,14 +199,6 @@ class OpenRouterClient(BaseAIClient):
                 multimodal_messages.append(message)
         return multimodal_messages
 
-    def _process_image(self, image: Union[Image.Image, bytes, str]) -> bytes:
-        """Process PIL Image and return as bytes."""
-        if isinstance(image, Image.Image):
-            img_buffer = io.BytesIO()
-            image.save(img_buffer, format='PNG')
-            return img_buffer.getvalue()
-        return self.process_chart_image(image)
-
     def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
         """Handle OpenRouter specific exceptions, falling back to common handler."""
         result = self.handle_common_errors(exception)

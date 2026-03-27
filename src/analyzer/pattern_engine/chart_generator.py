@@ -9,6 +9,7 @@ import threading
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union, Callable
 
+import math
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -59,7 +60,7 @@ class ChartGenerator:
 
     def _default_formatter(self, val, _precision=8):
         """Default formatter for price values when no formatter is provided."""
-        if isinstance(val, (int, float)) and not np.isnan(val):
+        if isinstance(val, (int, float)) and not math.isnan(val):
             if abs(val) < 0.00001:
                 return f"{val:.8f}"
             elif abs(val) < 0.01:
@@ -109,7 +110,7 @@ class ChartGenerator:
 
         return result['img_bytes']
 
-    def _retry_image_export(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, max_retries: int = 3, timeout: int = 30) -> bytes:
+    async def _retry_image_export(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, max_retries: int = 3, timeout: int = 30) -> bytes:
         """Retry image export with exponential backoff to handle kaleido/choreographer issues.
 
         Args:
@@ -127,6 +128,7 @@ class ChartGenerator:
         Raises:
             Exception: If all retry attempts fail
         """
+        import asyncio
         last_exception = None
 
         for attempt in range(max_retries):
@@ -134,7 +136,7 @@ class ChartGenerator:
                 if self.logger and attempt > 0:
                     self.logger.debug("Retry attempt %s/%s for image export", attempt + 1, max_retries)
 
-                img_bytes = self._image_export_with_timeout(fig, img_format, width, height, scale, timeout)
+                img_bytes = await asyncio.to_thread(self._image_export_with_timeout, fig, img_format, width, height, scale, timeout)
 
                 if self.logger and attempt > 0:
                     self.logger.info("Image export succeeded on retry attempt %s", attempt + 1)
@@ -150,12 +152,12 @@ class ChartGenerator:
                     wait_time = (2 ** attempt) * 0.5
                     if self.logger:
                         self.logger.debug("Waiting %ss before retry...", wait_time)
-                    time.sleep(wait_time)
+                    await asyncio.sleep(wait_time)
 
         raise last_exception
 
     @profile_performance
-    def create_chart_image(
+    async def create_chart_image(
         self,
         ohlcv: np.ndarray,
         technical_history: Optional[Dict[str, np.ndarray]] = None,
@@ -186,10 +188,14 @@ class ChartGenerator:
             BytesIO object containing PNG image data, or file path if saved to disk
         """
         try:
-            fig = self._create_simple_candlestick_chart(ohlcv, pair_symbol, timeframe, height, width, timestamps, technical_history)
+            import asyncio
+            fig = await asyncio.to_thread(
+                self._create_simple_candlestick_chart,
+                ohlcv, pair_symbol, timeframe, height, width, timestamps, technical_history
+            )
 
             # Generate the image with retry logic to handle kaleido/choreographer issues
-            img_bytes = self._retry_image_export(fig, img_format="png", width=width, height=height, scale=1)
+            img_bytes = await self._retry_image_export(fig, img_format="png", width=width, height=height, scale=1)
 
             if save_to_disk:
                 # Save to disk for testing purposes
@@ -665,7 +671,7 @@ class ChartGenerator:
 
         # RSI interpretation annotation
         if rsi_data is not None:
-            current_rsi = rsi_data[-1] if not np.isnan(rsi_data[-1]) else 0
+            current_rsi = rsi_data[-1] if not math.isnan(rsi_data[-1]) else 0
             fig.add_annotation(
                 xref='x2 domain', yref='y2 domain', x=0.01, y=0.95,
                 xanchor='left', yanchor='top',
@@ -678,7 +684,7 @@ class ChartGenerator:
         # CMF/OBV interpretation annotation
         cmf_obv_legend = []
         if cmf_data is not None:
-            current_cmf = cmf_data[-1] if not np.isnan(cmf_data[-1]) else 0
+            current_cmf = cmf_data[-1] if not math.isnan(cmf_data[-1]) else 0
             cmf_status = "Buying Pressure" if current_cmf > 0 else "Selling Pressure"
             cmf_obv_legend.append(f"<span style='color:{self.ai_colors['cmf']}'>CMF: {current_cmf:.3f}</span> ({cmf_status})")
         if obv_data is not None:

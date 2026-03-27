@@ -27,17 +27,27 @@ export async function updateStatisticsData() {
         const response = await fetch('/api/performance/stats');
         const stats = await response.json();
         if (!stats || Object.keys(stats).length === 0) {
-            container.innerHTML = '<div class="empty-state">No statistics available yet. Start trading to see metrics.</div>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                    <p class="empty-state-text">No statistics available yet</p>
+                    <p style="font-size: 0.85em; margin-top: 8px; color: var(--text-muted);">
+                        Start trading to see metrics.
+                    </p>
+                </div>
+            `;
             return;
         }
         container.innerHTML = renderStatistics(stats);
     } catch (e) {
-        // Helper to escape HTML - reuse from other modules or define locally if needed,
-        // but since we don't have a shared util imported here, we'll do a simple replace or assume data is safe? 
-        // Better to be safe. We'll add a simple escaper or use textContent strategy if possible.
-        // Actually, let's use a safe text node insertion or basic replace.
-        const safeError = e.message.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-        container.innerHTML = `<div class="empty-state">Error loading statistics: ${safeError}</div>`;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                <p class="empty-state-text">Error loading statistics</p>
+                <p style="font-size: 0.85em; margin-top: 8px; color: var(--accent-danger);"></p>
+            </div>
+        `;
+        container.querySelector('p:last-child').textContent = e.message;
     }
 }
 
@@ -116,19 +126,29 @@ function renderStatistics(stats) {
     const lastUpdated = stats.last_updated ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(stats.last_updated)) : 'Unknown';
     return `
         <div style="font-size: 11px; color: var(--text-dim); padding: 0 20px; margin-bottom: 10px;">
-            Last updated: ${lastUpdated}
+            Last updated: ${escapeHtml(lastUpdated)}
         </div>
         <div class="stats-grid">
             ${cards.map(card => `
                 <div class="stat-card-lg">
                     <div class="stat-header">
-                        <span class="stat-title">${card.title}</span>
+                        <span class="stat-title">${escapeHtml(card.title)}</span>
                     </div>
-                    <div class="stat-value-lg ${card.colorClass}">${card.value}</div>
-                    ${card.subValue ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${card.subValue}</div>` : ''}
-                    <div class="stat-annotation">${card.annotation}</div>
+                    <div class="stat-value-lg ${escapeHtml(card.colorClass)}">${escapeHtml(card.value)}</div>
+                    ${card.subValue ? `<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${escapeHtml(card.subValue)}</div>` : ''}
+                    <div class="stat-annotation">${escapeHtml(card.annotation)}</div>
                 </div>
             `).join('')}
         </div>
     `;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }

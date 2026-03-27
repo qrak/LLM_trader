@@ -17,10 +17,6 @@ class MarketDataProcessor:
         self.logger = logger
         self.format_utils = format_utils
 
-    def normalize_timestamp(self, timestamp_field) -> float:
-        """Convert various timestamp formats to a float timestamp."""
-        return self.format_utils.parse_timestamp(timestamp_field)
-
     def extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
         """Extract top cryptocurrency symbols from CoinGecko data."""
         try:

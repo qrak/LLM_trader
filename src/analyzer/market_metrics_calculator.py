@@ -1,4 +1,5 @@
 from typing import Dict
+import math
 import numpy as np
 from src.utils.timeframe_validator import TimeframeValidator
 
@@ -140,12 +141,12 @@ class MarketMetricsCalculator:
                 pass
 
             # Use valid values or fallback to already-calculated values from basic_metrics
-            if not np.isnan(adv_support):
+            if not math.isnan(adv_support):
                 support_level = adv_support
             else:
                 support_level = basic_metrics["lowest_price"]
 
-            if not np.isnan(adv_resistance):
+            if not math.isnan(adv_resistance):
                 resistance_level = adv_resistance
             else:
                 resistance_level = basic_metrics["highest_price"]

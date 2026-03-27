@@ -81,10 +81,59 @@ function setupSidebarNavigation() {
                     }, 50);
                 }
             }
+
+            // Close mobile menu if open
+            if (window.closeMobileMenu) {
+                window.closeMobileMenu();
+            }
         });
     });
 }
 
 function setupMobileMenu() {
-    // Optional: Add hamburger menu logic here if needed later
+    const toggleBtn = document.getElementById('mobile-menu-toggle');
+    const closeBtn = document.getElementById('mobile-menu-close');
+    const sidebar = document.getElementById('sidebar');
+
+    if (!toggleBtn || !closeBtn || !sidebar) return;
+
+    function openMenu() {
+        sidebar.classList.add('mobile-open');
+        toggleBtn.setAttribute('aria-expanded', 'true');
+        toggleBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.setAttribute('aria-expanded', 'true');
+        closeBtn.setAttribute('aria-label', 'Close menu');
+        closeBtn.focus();
+    }
+
+    function closeMenu() {
+        sidebar.classList.remove('mobile-open');
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.setAttribute('aria-label', 'Open menu');
+        closeBtn.setAttribute('aria-expanded', 'false');
+        toggleBtn.focus();
+    }
+
+    toggleBtn.addEventListener('click', openMenu);
+    closeBtn.addEventListener('click', closeMenu);
+
+    // Click outside to close
+    document.addEventListener('click', (e) => {
+        if (sidebar.classList.contains('mobile-open') &&
+            !sidebar.contains(e.target) &&
+            !toggleBtn.contains(e.target)) {
+            closeMenu();
+        }
+    });
+
+    // Press Escape to close
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && sidebar.classList.contains('mobile-open')) {
+            closeMenu();
+            toggleBtn.focus();
+        }
+    });
+
+    // Make closeMenu available for navigation clicks
+    window.closeMobileMenu = closeMenu;
 }

@@ -1,6 +1,7 @@
 from typing import Tuple, Any
 from dataclasses import dataclass
 
+import math
 import numpy as np
 from numba import njit
 
@@ -111,10 +112,61 @@ def stochastic_numba(high, low, close, period_k, smooth_k, period_d):
             k_values[i] = 100 * (close[i] - low_min) / (high_max - low_min)
 
     smoothed_k = np.full(n, np.nan)
-    for i in range(period_k + smooth_k - 2, n):
-        smoothed_k[i] = np.mean(k_values[i - smooth_k + 1:i + 1])
-        if i >= period_k + smooth_k + period_d - 3:
-            d_values[i] = np.mean(smoothed_k[i - period_d + 1:i + 1])
+    sum_k = 0.0
+    nan_count_k = 0
+    start_k = period_k - 1
+
+    if n >= start_k + smooth_k:
+        for i in range(start_k, start_k + smooth_k - 1):
+            if math.isnan(k_values[i]):
+                nan_count_k += 1
+            else:
+                sum_k += k_values[i]
+
+        for i in range(start_k + smooth_k - 1, n):
+            if math.isnan(k_values[i]):
+                nan_count_k += 1
+            else:
+                sum_k += k_values[i]
+
+            if nan_count_k > 0:
+                smoothed_k[i] = np.nan
+            else:
+                smoothed_k[i] = sum_k / smooth_k
+
+            old_idx = i - smooth_k + 1
+            if math.isnan(k_values[old_idx]):
+                nan_count_k -= 1
+            else:
+                sum_k -= k_values[old_idx]
+
+    sum_d = 0.0
+    nan_count_d = 0
+    start_d = period_k + smooth_k - 2
+
+    if n >= start_d + period_d:
+        for i in range(start_d, start_d + period_d - 1):
+            if math.isnan(smoothed_k[i]):
+                nan_count_d += 1
+            else:
+                sum_d += smoothed_k[i]
+
+        for i in range(start_d + period_d - 1, n):
+            if math.isnan(smoothed_k[i]):
+                nan_count_d += 1
+            else:
+                sum_d += smoothed_k[i]
+
+            if nan_count_d > 0:
+                d_values[i] = np.nan
+            else:
+                d_values[i] = sum_d / period_d
+
+            old_idx = i - period_d + 1
+            if math.isnan(smoothed_k[old_idx]):
+                nan_count_d -= 1
+            else:
+                sum_d -= smoothed_k[old_idx]
 
     return smoothed_k, d_values
 
@@ -293,6 +345,9 @@ def rmi_numba(close, length, momentum_length):
     n = len(close)
     rmi = np.full(n, np.nan)
 
+    if n <= momentum_length:
+        return rmi
+
     momentum = np.zeros(n - momentum_length)
     for i in range(len(momentum)):
         momentum[i] = close[i + momentum_length] - close[i]
@@ -300,15 +355,32 @@ def rmi_numba(close, length, momentum_length):
     up = np.maximum(momentum, 0)
     down = np.maximum(-momentum, 0)
 
-    for i in range(length - 1, len(momentum)):
-        avg_up = np.mean(up[i - length + 1:i + 1])
-        avg_down = np.mean(down[i - length + 1:i + 1])
+    m_len = len(momentum)
+    if m_len < length:
+        return rmi
+
+    sum_up = 0.0
+    sum_down = 0.0
+
+    for i in range(length - 1):
+        sum_up += up[i]
+        sum_down += down[i]
+
+    for i in range(length - 1, m_len):
+        sum_up += up[i]
+        sum_down += down[i]
+
+        avg_up = sum_up / length
+        avg_down = sum_down / length
 
         if avg_down == 0:
             rmi[i + momentum_length] = 100
         else:
             rs = avg_up / avg_down
             rmi[i + momentum_length] = 100 - (100 / (1 + rs))
+
+        sum_up -= up[i - length + 1]
+        sum_down -= down[i - length + 1]
 
     return rmi
 
@@ -356,7 +428,7 @@ def calculate_relative_strength_numba(pair_close, benchmark_close, window=14):
     rs_array = np.zeros(n)
 
     for i in range(window, n):
-        if np.isnan(pair_close[i]) or np.isnan(benchmark_close[i]) or benchmark_close[i] == 0:
+        if math.isnan(pair_close[i]) or math.isnan(benchmark_close[i]) or benchmark_close[i] == 0:
             rs_array[i] = 0.0
             continue
 

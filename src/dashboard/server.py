@@ -85,6 +85,7 @@ class DashboardServer:
             # Cloudflare support: *.cloudflare.com added
             csp = (
                 "default-src 'self'; "
+                "frame-ancestors 'none'; "
                 "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com "
                 "https://*.cloudflare.com https://ajax.cloudflare.com "
                 "https://static.cloudflareinsights.com; "

@@ -71,7 +71,7 @@ export async function updateResponseTab() {
         }
         cachedResponse = content;
     } catch (e) {
-        viewer.innerHTML = "Error fetching response: " + e.message;
+        viewer.textContent = "Error fetching response: " + e.message;
     }
 }
 
@@ -107,10 +107,26 @@ function flashCopyButton(type) {
         const originalAria = btn.getAttribute('aria-label');
 
         // Use checkmark icon for feedback
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><polyline points="20 6 9 17 4 12"/></svg>Copied!`;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Copied!`;
         btn.setAttribute('aria-label', 'Copied successfully');
         btn.style.background = '#238636';
         btn.disabled = true;
+
+        // Ensure screen readers announce the copy action reliably
+        let announcer = document.getElementById('a11y-announcer');
+        if (!announcer) {
+            announcer = document.createElement('div');
+            announcer.id = 'a11y-announcer';
+            announcer.setAttribute('aria-live', 'polite');
+            announcer.className = 'sr-only';
+            announcer.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
+            document.body.appendChild(announcer);
+        }
+        // Force re-announcement by clearing text first
+        announcer.textContent = '';
+        setTimeout(() => {
+            announcer.textContent = 'Copied to clipboard';
+        }, 50);
 
         setTimeout(() => {
             btn.innerHTML = originalHTML;

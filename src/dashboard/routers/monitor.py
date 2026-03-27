@@ -94,7 +94,7 @@ class MonitorRouter:
         cached = self.dashboard_state.get_cached("costs", ttl_seconds=30.0)
         if cached:
             return cached
-        storage = CostStorage()
+        storage = await asyncio.to_thread(CostStorage)
         openrouter_cost = storage.get_provider_costs("openrouter").total_cost
         google_cost = storage.get_provider_costs("google").total_cost
         total = openrouter_cost + google_cost

@@ -71,11 +71,6 @@ class ModelPricing:
 
 class TokenCounter:
     """Handles token counting and tracking for AI model usage with cost support."""
-    PROVIDER_COST_MESSAGES = {
-        "openrouter": "Cost: ${cost:.4f}",
-        "google": "Cost: ${cost:.4f} (estimated)",
-        "lmstudio": "Free - local model",
-    }
 
     def __init__(self, encoding_name: str = "cl100k_base"):
         """
@@ -209,27 +204,6 @@ class TokenCounter:
                 stats = self.get_usage_stats()
                 logger.info("Total tokens used: %s", f"{stats['total']:,}")
 
-    def record_cost(self, provider: str, cost: float) -> None:
-        """
-        Record cost for a provider (used when fetching from separate API call).
-
-        Args:
-            provider: Provider name
-            cost: Cost in dollars
-        """
-        if provider == "openrouter":
-            self.session_costs.openrouter += cost
-        elif provider == "google":
-            self.session_costs.google += cost
-        elif provider == "lmstudio":
-            self.session_costs.lmstudio += cost
-        if self.request_usage:
-            self.request_usage.cost = cost
-
-    def get_last_request_usage(self) -> Optional[TokenUsageStats]:
-        """Get usage data from the last recorded API request."""
-        return self.request_usage
-
     def get_usage_stats(self) -> Dict[str, int]:
         """
         Get current token usage statistics.
@@ -238,41 +212,6 @@ class TokenCounter:
             Dictionary with token usage counts
         """
         return self.session_tokens.copy()
-
-    def get_session_costs(self) -> SessionCosts:
-        """
-        Get cumulative costs per provider for the session.
-
-        Returns:
-            SessionCosts dataclass with provider costs
-        """
-        return self.session_costs
-
-    def get_total_session_cost(self) -> float:
-        """Get total cost across all providers."""
-        return self.session_costs.total
-
-    def format_usage_display(self, provider: str, prompt_tokens: int, completion_tokens: int, cost: Optional[float] = None) -> str:
-        """
-        Format token usage and cost for display.
-
-        Args:
-            provider: Provider name
-            prompt_tokens: Input token count
-            completion_tokens: Output token count
-            cost: Optional cost (for OpenRouter or Google)
-
-        Returns:
-            Formatted string for display
-        """
-        token_str = f"Tokens: {prompt_tokens:,} in / {completion_tokens:,} out"
-        if cost is not None and provider in ("openrouter", "google"):
-            cost_str = self.PROVIDER_COST_MESSAGES[provider].format(cost=cost)
-        elif provider in self.PROVIDER_COST_MESSAGES:
-            cost_str = self.PROVIDER_COST_MESSAGES[provider]
-        else:
-            cost_str = "Cost: unknown provider"
-        return f"{token_str} │ {cost_str}"
 
     def reset_session_stats(self) -> None:
         """Reset session token tracking statistics."""
@@ -284,10 +223,6 @@ class TokenCounter:
         }
         self.session_costs = SessionCosts()
         self.request_usage = None
-
-    def reset_costs_only(self) -> None:
-        """Reset only cost tracking (for dashboard reset button)."""
-        self.session_costs = SessionCosts()
 
 
 class CostStorage:
@@ -410,20 +345,9 @@ class CostStorage:
             if time.time() - self._last_save_time >= 5.0:
                 self.save()
 
-    def get_costs(self) -> Dict[str, Any]:
-        """Get all stored costs as dict (for backward compatibility)."""
-        result: Dict[str, Any] = {"last_reset": self._last_reset}
-        for provider, stats in self._providers.items():
-            result[provider] = stats.to_dict()
-        return result
-
     def get_provider_costs(self, provider: str) -> ProviderCostStats:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
-
-    def get_total_openrouter_cost(self) -> float:
-        """Get total OpenRouter cost."""
-        return self._providers.get("openrouter", ProviderCostStats()).total_cost
 
     def reset(self) -> None:
         """Reset all costs and update last_reset timestamp."""

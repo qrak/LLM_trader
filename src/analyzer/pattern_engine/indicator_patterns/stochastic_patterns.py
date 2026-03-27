@@ -5,6 +5,7 @@ Detects oversold/overbought conditions and %K/%D crossovers.
 Excellent momentum indicator for identifying reversal points.
 """
 
+import math
 import numpy as np
 from numba import njit
 
@@ -28,14 +29,14 @@ def detect_stoch_oversold_numba(stoch_k: np.ndarray, threshold: float = 20.0) ->
 
     current_value = stoch_k[-1]
 
-    if np.isnan(current_value):
+    if math.isnan(current_value):
         return False, 0, 0.0
 
     if current_value < threshold:
         # Find how many periods ago we entered oversold
         periods_ago = 0
         for i in range(len(stoch_k) - 1, -1, -1):
-            if np.isnan(stoch_k[i]) or stoch_k[i] >= threshold:
+            if math.isnan(stoch_k[i]) or stoch_k[i] >= threshold:
                 break
             periods_ago = len(stoch_k) - i - 1
 
@@ -63,14 +64,14 @@ def detect_stoch_overbought_numba(stoch_k: np.ndarray, threshold: float = 80.0) 
 
     current_value = stoch_k[-1]
 
-    if np.isnan(current_value):
+    if math.isnan(current_value):
         return False, 0, 0.0
 
     if current_value > threshold:
         # Find how many periods ago we entered overbought
         periods_ago = 0
         for i in range(len(stoch_k) - 1, -1, -1):
-            if np.isnan(stoch_k[i]) or stoch_k[i] <= threshold:
+            if math.isnan(stoch_k[i]) or stoch_k[i] <= threshold:
                 break
             periods_ago = len(stoch_k) - i - 1
 
@@ -104,9 +105,9 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
         idx = len(stoch_k) - i - 1
 
         # Skip if any values are NaN
-        if np.isnan(stoch_k[idx]) or np.isnan(stoch_k[idx + 1]):
+        if math.isnan(stoch_k[idx]) or math.isnan(stoch_k[idx + 1]):
             continue
-        if np.isnan(stoch_d[idx]) or np.isnan(stoch_d[idx + 1]):
+        if math.isnan(stoch_d[idx]) or math.isnan(stoch_d[idx + 1]):
             continue
 
         # Detect crossover based on direction
@@ -200,7 +201,7 @@ def detect_stoch_divergence_numba(stoch_k: np.ndarray, prices: np.ndarray, lookb
 
     # Skip if any NaN values
     for i in range(len(recent_stoch)):
-        if np.isnan(recent_stoch[i]) or np.isnan(recent_prices[i]):
+        if math.isnan(recent_stoch[i]) or math.isnan(recent_prices[i]):
             return False, False, 0.0, 0.0
 
     # Find local extrema

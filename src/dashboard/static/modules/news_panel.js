@@ -13,12 +13,27 @@ export async function updateNewsData() {
         const response = await fetch('/api/monitor/news');
         const data = await response.json();
         if (!data.articles || data.articles.length === 0) {
-            container.innerHTML = '<div class="empty-state">No news articles available. News will appear after the next analysis cycle.</div>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg></div>
+                    <p class="empty-state-text">No news articles available</p>
+                    <p style="font-size: 0.85em; margin-top: 8px; color: var(--text-muted);">
+                        News will appear after the next analysis cycle.
+                    </p>
+                </div>
+            `;
             return;
         }
         container.innerHTML = renderNews(data.articles);
     } catch (e) {
-        container.innerHTML = `<div class="empty-state">Error loading news: ${escapeHtml(e.message)}</div>`;
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                <p class="empty-state-text">Error loading news</p>
+                <p style="font-size: 0.85em; margin-top: 8px; color: var(--accent-danger);"></p>
+            </div>
+        `;
+        container.querySelector('p:last-child').textContent = e.message;
     }
 }
 

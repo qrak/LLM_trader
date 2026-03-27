@@ -28,7 +28,7 @@ export async function updateVectorData() {
         ]);
         const data = await vectorResponse.json();
         const rulesData = rulesResponse.ok ? await rulesResponse.json() : [];
-        
+
         renderVectorPanel(data, rulesData);
     } catch (e) {
         console.error("Failed to fetch vector data", e);
@@ -50,8 +50,10 @@ function renderVectorPanel(data, rulesData) {
     // Build context indicator
     let readableContext = data.current_context || '';
     if (readableContext.includes('+')) {
-        const parts = readableContext.split('+').map(p => p.trim());
+        const parts = readableContext.split('+').map(p => escapeHtml(p.trim()));
         readableContext = `Searching for trades from similar markets: <span class="highlight">${parts.join(', ')}</span>`;
+    } else {
+        readableContext = escapeHtml(readableContext);
     }
 
     const contextHtml = data.current_context
@@ -62,7 +64,7 @@ function renderVectorPanel(data, rulesData) {
 
     // Build stats cards
     const statsHtml = renderStatsCards(data);
-    
+
     // Build rules section
     const rulesHtml = renderSemanticRules(rulesData);
 
@@ -119,11 +121,11 @@ function renderProgressRow(label, rawRate) {
             </div>
         `;
     }
-    
+
     let colorClass = 'danger';
     if (rate >= 60) colorClass = 'success';
     else if (rate >= 40) colorClass = 'warning';
-    
+
     return `
         <div class="stat-row" style="margin-top: 10px;">
             <span>${label}</span>
@@ -139,7 +141,7 @@ function renderStatsCards(data) {
     const confStats = data.confidence_stats || {};
     const adxStats = data.adx_stats || {};
     const factorStats = Array.isArray(data.factor_stats) ? data.factor_stats : Object.values(data.factor_stats || {});
-    
+
     // Fallback getter for factor stats if keys are strictly strings
     const getFactorWR = (keywords) => {
         const factor = factorStats.find(f => keywords.some(k => f.factor_name && f.factor_name.toUpperCase().includes(k)));
@@ -218,42 +220,92 @@ function renderExperienceTable(experiences) {
             </div>
         `;
     }
-    
-function formatContextPills(text) {
-    if (!text) return '--';
-    
-    // Basic heuristics to find contextual keywords and turn them into pills
-    let html = escapeHtml(text);
-    const keywords = [
-        { label: 'HIGH VOLATILITY', class: 'pill-high-vol' },
-        { label: 'LOW VOLATILITY', class: 'pill-low-vol' },
-        { label: 'BULLISH', class: 'pill-bullish' },
-        { label: 'BEARISH', class: 'pill-bearish' },
-        { label: 'STRONG TREND', class: 'pill-strong-trend' },
-        { label: 'WEAK TREND', class: 'pill-low-vol' },
-        { label: 'OVERSOLD', class: 'pill-bullish' },
-        { label: 'OVERBOUGHT', class: 'pill-bearish' }
-    ];
 
-    let replaced = false;
-    let pillHtml = '';
-    
-    keywords.forEach(kw => {
-        const regex = new RegExp(kw.label, 'gi');
-        if (regex.test(text)) {
-            pillHtml += `<span class="context-pill ${kw.class}">${kw.label}</span> `;
-            replaced = true;
+    function parseDocumentSections(doc) {
+        if (!doc) return {};
+        const sections = {};
+        // Split on recognisable section labels; the document is space-joined so we
+        // split on "Label:" patterns.
+        const pattern = /\b(Indicators|Structure|Confluences|Reasoning|Result|Post-trade):\s*/g;
+        let match;
+        let lastKey = '_header';
+        let lastIndex = 0;
+        sections['_header'] = '';
+        const hits = [];
+        while ((match = pattern.exec(doc)) !== null) {
+            hits.push({ key: match[1], start: match.index, contentStart: match.index + match[0].length });
         }
-    });
-
-    if (replaced) {
-        return pillHtml + `<div style="margin-top: 4px; opacity: 0.7; font-size: 0.9em;">${html.substring(0, 60)}${html.length > 60 ? '...' : ''}</div>`;
+        for (let i = 0; i < hits.length; i++) {
+            const end = i + 1 < hits.length ? hits[i + 1].start : doc.length;
+            sections[hits[i].key] = doc.slice(hits[i].contentStart, end).trim();
+        }
+        if (hits.length > 0) {
+            sections['_header'] = doc.slice(0, hits[0].start).trim();
+        } else {
+            sections['_header'] = doc.trim();
+        }
+        return sections;
     }
-    
-    return html.substring(0, 80) + (html.length > 80 ? '...' : '');
-}
 
-    // UPDATE entries are now filtered at backend query level
+    function formatContextPills(doc) {
+        if (!doc) return '--';
+        const sections = parseDocumentSections(doc);
+
+        // Keyword pills from header + indicators
+        const pillKeywords = [
+            { label: 'BULLISH', cls: 'pill-bullish' },
+            { label: 'BEARISH', cls: 'pill-bearish' },
+            { label: 'STRONG_TREND', cls: 'pill-strong-trend' },
+            { label: 'TRENDING', cls: 'pill-strong-trend' },
+            { label: 'RANGING', cls: 'pill-low-vol' },
+            { label: 'OVERSOLD', cls: 'pill-bullish' },
+            { label: 'OVERBOUGHT', cls: 'pill-bearish' },
+            { label: 'HIGH VOL', cls: 'pill-high-vol' },
+            { label: 'LOW VOL', cls: 'pill-low-vol' },
+        ];
+        const headerText = (sections['_header'] || '').toUpperCase();
+        const pillHtml = pillKeywords
+            .filter(kw => headerText.includes(kw.label))
+            .map(kw => `<span class="context-pill ${kw.cls}">${kw.label.replace('_', ' ')}</span>`)
+            .join(' ');
+
+        // Indicator mini-row: show ADX + RSI values if present
+        let indicatorsHtml = '';
+        const indText = sections['Indicators'] || '';
+        const adxM = indText.match(/ADX=(\d+\.?\d*)/);
+        const rsiM = indText.match(/RSI=(\d+\.?\d*)/);
+        const atrM = indText.match(/ATR=\$([\d]+)/);
+        const indParts = [];
+        if (adxM) indParts.push(`ADX&nbsp;${escapeHtml(adxM[1])}`);
+        if (rsiM) indParts.push(`RSI&nbsp;${escapeHtml(rsiM[1])}`);
+        if (atrM) indParts.push(`ATR&nbsp;$${escapeHtml(atrM[1])}`);
+        if (indParts.length) {
+            indicatorsHtml = `<div class="doc-section-row" style="color:var(--text-muted);font-size:0.78em;margin-top:3px;">${indParts.join(' &bull; ')}</div>`;
+        }
+
+        // Structure mini-row: RR + close_reason label appear here only as text
+        let structureHtml = '';
+        const strText = sections['Structure'] || '';
+        const rrM = strText.match(/RR=([\d.]+)/);
+        if (rrM) {
+            structureHtml = `<div class="doc-section-row" style="color:var(--text-muted);font-size:0.78em;">RR&nbsp;${escapeHtml(rrM[1])}</div>`;
+        }
+
+        // Post-trade: MFE / MAE
+        let postHtml = '';
+        const postText = sections['Post-trade'] || '';
+        const mfeM = postText.match(/MFE=([+\d.]+%)/);
+        const maeM = postText.match(/MAE=-([\d.]+%)/);
+        const postParts = [];
+        if (mfeM) postParts.push(`<span style="color:var(--accent-success);">MFE&nbsp;${escapeHtml(mfeM[1])}</span>`);
+        if (maeM) postParts.push(`<span style="color:var(--accent-danger);">MAE&nbsp;-${escapeHtml(maeM[1])}</span>`);
+        if (postParts.length) {
+            postHtml = `<div class="doc-section-row" style="font-size:0.78em;margin-top:2px;">${postParts.join(' ')}</div>`;
+        }
+
+        return `<div>${pillHtml}${indicatorsHtml}${structureHtml}${postHtml}</div>`;
+    }
+
     const rows = experiences.map(exp => {
         const meta = exp.metadata || {};
         const outcome = meta.outcome || '--';
@@ -262,16 +314,25 @@ function formatContextPills(text) {
         const pnlClass = meta.pnl_pct >= 0 ? 'positive' : 'negative';
         const confidence = meta.confidence || '--';
         const direction = meta.direction || '--';
+        const symbol = meta.symbol ? `<span style="font-size:0.8em;color:var(--text-muted);">${escapeHtml(meta.symbol)}</span>` : '';
         const similarity = (exp.similarity !== undefined && exp.similarity > 0) ? `${exp.similarity.toFixed(1)}%` : '--';
         const timestamp = meta.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(meta.timestamp)) : '--';
-        
+
+        const closeReason = meta.close_reason || '';
+        const closeColorMap = { stop_loss: 'var(--accent-danger)', take_profit: 'var(--accent-success)', analysis_signal: 'var(--accent-primary)', timeout: 'var(--accent-warning)' };
+        const closeColor = closeColorMap[closeReason] || 'var(--text-muted)';
+        const closeBadge = closeReason
+            ? `<br><span style="font-size:0.72em;color:${closeColor};opacity:0.85;">${escapeHtml(closeReason.replace('_', ' '))}</span>`
+            : '';
+
         const contextDisplay = formatContextPills(exp.document || '');
-        
+
         return `
             <tr title="${escapeHtml(exp.document || '')}">
-                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">${escapeHtml((exp.id || '').substring(0,8))}...</td>
+                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">${escapeHtml((exp.id || '').substring(0, 8))}...</td>
+                <td style="font-size:0.85em;">${symbol}</td>
                 <td class="context">${contextDisplay}</td>
-                <td class="${outcomeClass}">${escapeHtml(outcome)}</td>
+                <td class="${outcomeClass}">${escapeHtml(outcome)}${closeBadge}</td>
                 <td class="${pnlClass}">${pnl}</td>
                 <td>${escapeHtml(confidence)}</td>
                 <td>${escapeHtml(direction)}</td>
@@ -280,27 +341,33 @@ function formatContextPills(text) {
             </tr>
         `;
     }).join('');
-    
+
     const getSortIndicator = (field) => {
-        if (currentSort.by !== field) return '<span style="opacity: 0.3">↕</span>';
-        return currentSort.order === 'asc' ? '↑' : '↓';
+        if (currentSort.by !== field) {
+            return '<span style="opacity: 0.3;" class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span>';
+        }
+        return currentSort.order === 'asc'
+            ? '<span class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg></span>'
+            : '<span class="meta-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>';
     };
 
     const getAriaSort = (field) => {
         if (currentSort.by !== field) return 'none';
         return currentSort.order === 'asc' ? 'ascending' : 'descending';
     };
-    
+
     return `
         <style>
             .sortable-header { cursor: pointer; user-select: none; }
             .sortable-header:hover { background-color: rgba(255, 255, 255, 0.05); }
             .sortable-header:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: -2px; }
+            .doc-section-row { line-height: 1.4; margin-top: 2px; }
         </style>
         <table>
             <thead>
                 <tr>
                     <th scope="col">ID</th>
+                    <th scope="col">Symbol</th>
                     <th scope="col">Context</th>
                     <th scope="col" class="sortable-header" data-sort="outcome" tabindex="0" role="columnheader" aria-sort="${getAriaSort('outcome')}">
                         Outcome <span aria-hidden="true">${getSortIndicator('outcome')}</span>
@@ -332,7 +399,7 @@ function formatContextPills(text) {
 function renderEmptyState() {
     const container = document.getElementById('vector-content');
     if (!container) return;
-    
+
     container.innerHTML = `
         <div class="empty-state">
             <p>Vector memory service not available.</p>

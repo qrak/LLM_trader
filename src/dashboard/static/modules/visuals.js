@@ -14,6 +14,7 @@ export async function updateVisuals() {
             if (data.chart_base64) {
                 img.src = `data:image/png;base64,${data.chart_base64}`;
                 img.style.display = 'block';
+                img.alt = 'Analysis chart';
                 noChartMsg.style.display = 'none';
                 
                 // Add timestamp overlay
@@ -23,13 +24,36 @@ export async function updateVisuals() {
                 img.onclick = () => openLightbox(img.src);
                 img.style.cursor = 'pointer';
                 img.title = 'Click to enlarge';
+                img.setAttribute('role', 'button');
+                img.setAttribute('tabindex', '0');
+                img.setAttribute('aria-haspopup', 'dialog');
+                img.setAttribute('aria-controls', 'lightbox-overlay');
+                img.setAttribute('aria-label', 'Open full screen chart');
+                img.onkeydown = (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLightbox(img.src);
+                    }
+                };
             } else if (data.chart_url) {
                 img.src = data.chart_url + `?t=${timestamp}`;
                 img.style.display = 'block';
+                img.alt = 'Analysis chart';
                 noChartMsg.style.display = 'none';
                 img.onclick = () => openLightbox(img.src);
                 img.style.cursor = 'pointer';
                 img.title = 'Click to enlarge';
+                img.setAttribute('role', 'button');
+                img.setAttribute('tabindex', '0');
+                img.setAttribute('aria-haspopup', 'dialog');
+                img.setAttribute('aria-controls', 'lightbox-overlay');
+                img.setAttribute('aria-label', 'Open full screen chart');
+                img.onkeydown = (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLightbox(img.src);
+                    }
+                };
             } else {
                 img.style.display = 'none';
                 noChartMsg.textContent = 'No chart in memory - waiting for next analysis';
@@ -90,16 +114,16 @@ function openLightbox(src) {
     const toolbar = document.createElement('div');
     toolbar.className = 'lightbox-toolbar';
     toolbar.innerHTML = `
-        <button id="lb-zoom-in" title="Zoom In (+)" aria-label="Zoom In">🔍+</button>
-        <button id="lb-zoom-out" title="Zoom Out (-)" aria-label="Zoom Out">🔍−</button>
-        <button id="lb-reset" title="Reset View (0)" aria-label="Reset View">↺</button>
+        <button id="lb-zoom-in" title="Zoom In (+)" aria-label="Zoom In"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg></button>
+        <button id="lb-zoom-out" title="Zoom Out (-)" aria-label="Zoom Out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg></button>
+        <button id="lb-reset" title="Reset View (0)" aria-label="Reset View"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg></button>
         <span class="zoom-display" id="lb-zoom-display">100%</span>
     `;
 
     // Close button
     const closeBtn = document.createElement('button');
     closeBtn.className = 'lightbox-close';
-    closeBtn.innerHTML = '✕';
+    closeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
     closeBtn.title = 'Close (Esc)';
     closeBtn.setAttribute('aria-label', 'Close Image View');
 

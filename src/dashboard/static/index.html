@@ -7,7 +7,7 @@
     <meta name="description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
     <meta property="og:title" content="Semantic Signal LLM">
     <meta property="og:description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
-    <link rel="stylesheet" href="style.css?v=5.0">
+    <link rel="stylesheet" href="css/style.css?v=6.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -117,7 +117,7 @@
                     </div>
                     <div class="kpi-card">
                         <div class="label">Session Cost</div>
-                        <div class="value" id="overview-cost">$0.00</div>
+                        <div class="value" id="overview-cost" aria-live="polite">$0.00</div>
 
                     </div>
                 </div>
@@ -158,8 +158,8 @@
                             <h3>Visual Cortex Input</h3>
                             <div class="controls panel-toolbar panel-controls">
 
-                                <button class="toolbar-btn" id="btn-minimize-visuals" title="Minimize" aria-label="Minimize visual cortex input" aria-expanded="true">−</button>
-                                <button class="toolbar-btn" id="btn-lightbox-visuals" title="Fullscreen" aria-label="Fullscreen chart">⛶</button>
+                                <button class="toolbar-btn" id="btn-minimize-visuals" title="Minimize" aria-label="Minimize visual cortex input" aria-expanded="true" aria-controls="visual-container"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+                                <button class="toolbar-btn" id="btn-lightbox-visuals" title="Fullscreen" aria-label="Fullscreen chart" aria-haspopup="dialog" aria-controls="lightbox-overlay"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg></button>
                             </div>
                         </div>
                         <div id="visual-container" class="visual-box">
@@ -181,7 +181,7 @@
                         <h3>Trading Context Sent to LLM</h3>
                         <div class="controls">
                             <span id="prompt-meta" class="meta-info"></span>
-                            <button id="btn-copy-prompt" class="copy-btn" aria-label="Copy prompt to clipboard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
+                            <button id="btn-copy-prompt" class="copy-btn" aria-label="Copy prompt to clipboard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
                         </div>
                     </div>
                     <div id="prompt-viewer" class="discord-content">
@@ -204,7 +204,7 @@
                         <h3>LLM Analysis Output</h3>
                         <div class="controls">
                             <span id="response-meta" class="meta-info"></span>
-                            <button id="btn-copy-response" class="copy-btn" aria-label="Copy response to clipboard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
+                            <button id="btn-copy-response" class="copy-btn" aria-label="Copy response to clipboard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
                         </div>
                     </div>
                     <div id="response-viewer" class="discord-content">

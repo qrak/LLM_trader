@@ -5,9 +5,11 @@ Handles brain state management, learning from closed trades, and providing AI co
 
 from datetime import datetime
 from collections import Counter
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, TYPE_CHECKING
+from uuid import uuid4
 
 from src.logger.logger import Logger
+from src.utils.indicator_classifier import classify_adx_label, classify_rsi_label
 from .vector_memory import VectorMemoryService
 from .data_models import Position, TradeDecision
 
@@ -100,8 +102,9 @@ class TradingBrainService:
             direction=position.direction,
             confidence=position.confidence,
             reasoning=reasoning,
+            symbol=getattr(position, "symbol", ""),
+            close_reason=close_reason,
             metadata={
-                "close_reason": close_reason,
                 "adx_at_entry": position.adx_at_entry,
                 "rsi_at_entry": position.rsi_at_entry,
                 "atr_at_entry": position.atr_at_entry,
@@ -117,6 +120,10 @@ class TradingBrainService:
                 "position_size_pct": position.size_pct,
                 "confluence_count": self._count_strong_confluences(position.confluence_factors),
                 "timeframe_alignment": conditions.get("timeframe_alignment"),
+                "market_sentiment": conditions.get("market_sentiment", ""),
+                "order_book_bias": conditions.get("order_book_bias", ""),
+                "macd_signal": conditions.get("macd_signal", ""),
+                "bb_pos": conditions.get("bb_position", ""),
                 **self._extract_factor_scores(position.confluence_factors),
             }
         )
@@ -132,6 +139,7 @@ class TradingBrainService:
         self,
         trend_direction: str = "NEUTRAL",
         adx: float = 0,
+        rsi: float = 50.0,
         volatility_level: str = "MEDIUM",
         rsi_level: str = "NEUTRAL",
         macd_signal: str = "NEUTRAL",
@@ -146,6 +154,7 @@ class TradingBrainService:
         Args:
             trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
             adx: Current ADX value
+            rsi: Current RSI numeric value
             volatility_level: Current volatility (HIGH/MEDIUM/LOW)
             rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
             macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
@@ -199,6 +208,7 @@ class TradingBrainService:
         vector_context = self.get_vector_context(
             trend_direction=trend_direction,
             adx=adx,
+            rsi=rsi,
             volatility_level=volatility_level,
             rsi_level=rsi_level,
             macd_signal=macd_signal,
@@ -222,6 +232,7 @@ class TradingBrainService:
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
                 "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
+                "- REGIME MISMATCH: If a retrieved experience's Context or Match Factors show a fundamentally different regime (e.g., High ADX vs current Low ADX, different volatility level marked ⚠️), treat it as informational only — not as a statistical prior for confidence adjustment.",
                 "- Weight recent wins higher. Check for pattern repetition that led to losses.",
                 "",
             ])
@@ -233,7 +244,7 @@ class TradingBrainService:
             ])
 
         # Build context for semantic rule matching
-        adx_label = "High ADX" if adx >= 25 else "Low ADX" if adx < 20 else "Medium ADX"
+        adx_label = classify_adx_label(adx)
         rule_context = f"{trend_direction} + {adx_label} + {volatility_level} Volatility"
 
         semantic_rules = self.vector_memory.get_relevant_rules(
@@ -250,52 +261,6 @@ class TradingBrainService:
             lines.append("")
 
         return "\n".join(lines)
-
-    def get_parameter_suggestions(
-        self,
-        volatility_level: str = "MEDIUM",
-        confidence: str = "MEDIUM",
-        current_atr_pct: float = 2.0
-    ) -> Dict[str, float]:
-        """Get SL/TP/size suggestions from trading brain.
-
-        Args:
-            volatility_level: Current market volatility (HIGH/MEDIUM/LOW)
-            confidence: Current signal confidence level
-            current_atr_pct: Current ATR as percentage of price
-
-        Returns:
-            Dict with sl_pct, tp_pct, size_pct, min_rr, and source
-        """
-        # Volatility multipliers for SL/TP distances
-        # High volatility = wider stops to avoid premature exits
-        # Low volatility = tighter stops for better risk management
-        volatility_multipliers = {
-            "HIGH": {"sl": 2.5, "tp": 4.5},
-            "MEDIUM": {"sl": 2.0, "tp": 4.0},
-            "LOW": {"sl": 1.5, "tp": 3.0}
-        }
-        
-        multipliers = volatility_multipliers.get(volatility_level.upper(), volatility_multipliers["MEDIUM"])
-        
-        recommendations = {
-            "sl_pct": current_atr_pct * multipliers["sl"] / 100,
-            "tp_pct": current_atr_pct * multipliers["tp"] / 100,
-            "size_pct": 0.02,
-            "min_rr": 2.0,
-            "source": f"atr_fallback_vol_{volatility_level.lower()}"
-        }
-
-        # Adjust position size based on confidence AND volatility
-        # High volatility = reduce size even further for risk management
-        base_size = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
-        volatility_size_adj = {"HIGH": 0.8, "MEDIUM": 1.0, "LOW": 1.0}  # Reduce size in high vol
-        
-        base = base_size.get(confidence.upper(), 0.02)
-        vol_adj = volatility_size_adj.get(volatility_level.upper(), 1.0)
-        recommendations["size_pct"] = base * vol_adj
-
-        return recommendations
 
     def get_dynamic_thresholds(self) -> Dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
@@ -322,6 +287,9 @@ class TradingBrainService:
             "min_position_size": thresholds.get("min_position_size", 0.10),
             "rr_borderline_min": thresholds.get("rr_borderline_min", 1.5),
             "rr_strong_setup": thresholds.get("rr_strong_setup", 2.5),
+            # Metadata for origin labeling
+            "trade_count": self.vector_memory.trade_count,
+            "learned_keys": list(thresholds.keys()),
         }
 
     def _build_rich_context_string(
@@ -343,7 +311,7 @@ class TradingBrainService:
         the format of the context used for querying, maximizing vector similarity.
         """
         # Build rich semantic context string
-        adx_label = "High ADX" if adx >= 25 else "Low ADX" if adx < 20 else "Medium ADX"
+        adx_label = classify_adx_label(adx)
 
         # Build comprehensive context description
         context_parts = [
@@ -374,10 +342,77 @@ class TradingBrainService:
 
         return " + ".join(context_parts)
 
+    def _build_query_document(
+        self,
+        trend_direction: str,
+        adx: float,
+        rsi: float,
+        volatility_level: str,
+        rsi_level: str,
+        macd_signal: str,
+        volume_state: str,
+        bb_position: str,
+        market_sentiment: str,
+        order_book_bias: str,
+    ) -> str:
+        """Build a query document that mirrors _build_experience_document format.
+
+        Reduces embedding asymmetry between stored documents and query by using
+        the same structural format (Indicators line with numeric values).
+
+        Args:
+            trend_direction: Current trend direction
+            adx: Current ADX numeric value
+            rsi: Current RSI numeric value
+            volatility_level: Current volatility label
+            rsi_level: RSI label (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
+            macd_signal: MACD signal label
+            volume_state: Volume state label
+            bb_position: BB position label
+            market_sentiment: Fear & Greed label
+            order_book_bias: Order book bias label
+
+        Returns:
+            Query string formatted like stored experience documents.
+        """
+        adx_label = classify_adx_label(adx)
+        context_str = self._build_rich_context_string(
+            trend_direction=trend_direction,
+            adx=adx,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+        )
+
+        indicator_parts = [
+            f"ADX={adx:.1f} ({adx_label})",
+            f"RSI={rsi:.1f} ({rsi_level})",
+            f"Vol={volatility_level}",
+            f"MACD={macd_signal}",
+            f"BB={bb_position}",
+        ]
+        structure_parts = []
+        if market_sentiment not in ("NEUTRAL", ""):
+            structure_parts.append(f"Sentiment={market_sentiment}")
+        if order_book_bias not in ("BALANCED", ""):
+            structure_parts.append(f"OB={order_book_bias}")
+
+        lines = [context_str]
+        lines.append(f"Indicators: {' | '.join(indicator_parts)}")
+        if structure_parts:
+            lines.append(f"Structure: {' | '.join(structure_parts)}")
+
+        return " ".join(lines)
+
     def get_vector_context(
         self,
         trend_direction: str = "NEUTRAL",
         adx: float = 0,
+        rsi: float = 50.0,
         volatility_level: str = "MEDIUM",
         rsi_level: str = "NEUTRAL",
         macd_signal: str = "NEUTRAL",
@@ -395,6 +430,7 @@ class TradingBrainService:
         Args:
             trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
             adx: Current ADX value
+            rsi: Current RSI numeric value
             volatility_level: Current volatility (HIGH/MEDIUM/LOW)
             rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
             macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
@@ -421,12 +457,28 @@ class TradingBrainService:
             order_book_bias=order_book_bias
         )
 
-        vector_context = self.vector_memory.get_context_for_prompt(context_query, k)
+        # Use richer query document for embedding search (mirrors storage format)
+        query_document = self._build_query_document(
+            trend_direction=trend_direction,
+            adx=adx,
+            rsi=rsi,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+        )
+
+        vector_context = self.vector_memory.get_context_for_prompt(
+            query_document, k, display_context=context_query
+        )
 
         if not vector_context:
             return ""
 
-        stats = self.vector_memory.get_stats_for_context(context_query, k=20)
+        stats = self.vector_memory.get_stats_for_context(query_document, k=20)
         if stats["total_trades"] > 0:
             vector_context += (
                 f"### Learned Stats for This Context:\n"
@@ -475,10 +527,6 @@ class TradingBrainService:
             return 0
         return sum(1 for _, score in confluence_factors if score > 50)
 
-    def _count_patterns(self, experiences: List[Any], key_builder) -> Dict[str, int]:
-        """Helper to count patterns in experiences."""
-        return Counter(key_builder(exp.metadata) for exp in experiences)
-
     def _trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize semantic rules.
 
@@ -486,23 +534,21 @@ class TradingBrainService:
         and stores insights as reusable rules.
         """
         try:
-            experiences = self.vector_memory.retrieve_similar_experiences(
-                "recent trading experiences", k=20, use_decay=True, where={"outcome": "WIN"}
-            )
+            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            win_metas = [m for m in all_metas if m.get("outcome") == "WIN"]
 
-            wins = experiences  # Already filtered by DB
-            if len(wins) < 10:
+            if len(win_metas) < 10:
                 self.logger.debug("Not enough winning trades for reflection (need 10+)")
                 return
 
-            def build_win_key(meta):
+            def build_win_key(meta: Dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
                 adx = meta.get("adx_at_entry", 0)
                 direction = meta.get("direction", "UNKNOWN")
                 adx_label = "HIGH_ADX" if adx >= 25 else "LOW_ADX" if adx < 20 else "MED_ADX"
                 return f"{direction}_{regime}_{adx_label}"
 
-            pattern_counts = self._count_patterns(wins, build_win_key)
+            pattern_counts = Counter(build_win_key(m) for m in win_metas)
 
             if not pattern_counts:
                 return
@@ -513,27 +559,27 @@ class TradingBrainService:
                 self.logger.debug("Pattern %s rejected: only %s occurrences (need 5+)", pattern_key, count)
                 return
 
-            # Validate win rate before storing rule
-            # Get all experiences (wins + losses) for this pattern to calculate win rate
-            all_pattern_experiences = self.vector_memory.retrieve_similar_experiences(
-                "recent trading experiences", k=50, use_decay=True
-            )
-            pattern_wins = sum(1 for exp in all_pattern_experiences
-                             if exp.metadata.get("outcome") == "WIN"
-                             and build_win_key(exp.metadata) == pattern_key)
-            pattern_total = sum(1 for exp in all_pattern_experiences
-                              if build_win_key(exp.metadata) == pattern_key)
+            # Validate win rate: count all trades (wins + losses) matching this pattern
+            pattern_total = sum(1 for m in all_metas if build_win_key(m) == pattern_key)
+            pattern_wins = sum(1 for m in win_metas if build_win_key(m) == pattern_key)
 
-            if pattern_total > 0:
-                win_rate = pattern_wins / pattern_total
-                if win_rate < 0.6:
-                    self.logger.debug("Pattern %s rejected: win rate %s < 60%% (%s/%s trades)", pattern_key, f"{win_rate:.0%}", pattern_wins, pattern_total)
-                    return
+            win_rate = pattern_wins / pattern_total if pattern_total > 0 else 0.0
+            if win_rate < 0.6:
+                self.logger.debug("Pattern %s rejected: win rate %s < 60%% (%s/%s trades)", pattern_key, f"{win_rate:.0%}", pattern_wins, pattern_total)
+                return
 
-            parts = pattern_key.split("_")
-            direction = parts[0]
-            regime = parts[1]
-            adx_level = parts[2].replace("_", " ").title()
+            parts = pattern_key.split("_", 2)
+            if len(parts) != 3:
+                self.logger.debug("Pattern %s rejected: malformed key", pattern_key)
+                return
+
+            direction, regime, adx_bucket = parts
+            adx_level_map = {
+                "HIGH_ADX": "High ADX",
+                "MED_ADX": "Med ADX",
+                "LOW_ADX": "Low ADX",
+            }
+            adx_level = adx_level_map.get(adx_bucket, adx_bucket.replace("_", " ").title())
 
             rule_text = (
                 f"{direction} trades perform well in {regime} market with {adx_level}. "
@@ -541,13 +587,15 @@ class TradingBrainService:
             )
 
             rule_id = f"rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            stored_win_rate = round(win_rate * 100, 1) if pattern_total > 0 else 0.0
             self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata={
                     "source_pattern": pattern_key,
-                    "source_win_count": count,
-                    "total_analyzed": len(wins),
+                    "source_trades": pattern_total,
+                    "win_rate": stored_win_rate,
+                    "total_analyzed": len(win_metas),
                 }
             )
 
@@ -563,22 +611,20 @@ class TradingBrainService:
         conditions that consistently lead to losses so they can be avoided.
         """
         try:
-            experiences = self.vector_memory.retrieve_similar_experiences(
-                "recent trading experiences", k=20, use_decay=True, where={"outcome": "LOSS"}
-            )
+            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            loss_metas = [m for m in all_metas if m.get("outcome") == "LOSS"]
 
-            losses = experiences
-            if len(losses) < 5:
+            if len(loss_metas) < 5:
                 self.logger.debug("Not enough losing trades for anti-pattern reflection (need 5+)")
                 return
 
-            def build_loss_key(meta):
+            def build_loss_key(meta: Dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
                 close_reason = meta.get("close_reason", "unknown")
                 direction = meta.get("direction", "UNKNOWN")
                 return f"{direction}_{regime}_{close_reason}"
 
-            pattern_counts: Dict[str, int] = self._count_patterns(losses, build_loss_key)
+            pattern_counts = Counter(build_loss_key(m) for m in loss_metas)
 
             if not pattern_counts:
                 return
@@ -666,7 +712,7 @@ class TradingBrainService:
             order_book_bias=conditions.get("order_book_bias", "BALANCED")
         )
         
-        update_id = f"update_{int(datetime.now().timestamp())}"
+        update_id = f"update_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
         reasoning_str = f"Moved {action_type}: SL {old_sl:.2f}→{new_sl:.2f}, TP {old_tp:.2f}→{new_tp:.2f}"
 
         self.vector_memory.store_experience(

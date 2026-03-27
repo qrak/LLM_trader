@@ -27,7 +27,8 @@ class TemplateManager:
 
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None,
                             performance_context: Optional[str] = None, brain_context: Optional[str] = None,
-                            last_analysis_time: Optional[str] = None) -> str:
+                            last_analysis_time: Optional[str] = None,
+                            indicator_delta_alert: str = "") -> str:
         # pylint: disable=too-many-arguments
         """Build the system prompt for trading decision AI.
 
@@ -38,6 +39,7 @@ class TemplateManager:
             performance_context: Recent trading history and performance metrics
             brain_context: Distilled trading insights from closed trades
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
+            indicator_delta_alert: Alert string when many indicators changed significantly
 
         Returns:
             str: Formatted system prompt
@@ -47,9 +49,9 @@ class TemplateManager:
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
             "Provide exactly ONE decision (BUY/SELL/HOLD/CLOSE/UPDATE) with entry, stop loss, and take profit level reasoning.",
             "",
-            "## Analytical Framework (Chain of Thought)",
-            "Step through: (1) Market Structure phase, (2) Timeframe alignment, (3) Momentum/volatility state,",
-            "(4) Microstructure bias, (5) Risk/reward assessment, (6) Historical Evidence (Trading Brain insights).",
+            "## Analytical Framework",
+            "Follow the numbered **Analysis Steps** in the user prompt for internal reasoning.",
+            "Your written output MUST follow the **Response Format** sections exactly.",
             "",
         ]
 
@@ -87,9 +89,9 @@ class TemplateManager:
                 "",
                 "## Profit Maximization Strategy",
                 "- LEARN from closed trades: Why did stops get hit? Were entries premature? Was trend strength misjudged?",
-                "- IMPROVE win rate: Only trade when multiple factors align strongly (3+ confluences)",
+                "- IMPROVE win rate: Only trade when multiple factors align strongly (see confluence rules in Response Format)",
                 "- AVOID repeated mistakes: If recent trades failed due to weak setups, demand stronger confirmation",
-                "- HOLD discipline: Better to miss a trade than force a weak setup (HOLD is valid when confidence <70)",
+                "- HOLD discipline: Better to miss a trade than force a weak setup",
                 "- UPDATE positions actively: Move SL to breakeven after 1:1 or 1.5:1 gain, trail stops on strong trends, adjust TP if momentum extends",
                 "- CLOSE proactively: If your analysis at candle close shows the thesis is invalidated, signal CLOSE — don't wait for SL to be hit",
                 "- ADAPT to performance: If win rate is low, increase entry standards and risk/reward requirements",
@@ -118,6 +120,10 @@ class TemplateManager:
                 header_lines.extend([
                     "",
                     "## PREVIOUS ANALYSIS CONTEXT",
+                ])
+                if indicator_delta_alert:
+                    header_lines.append(indicator_delta_alert)
+                header_lines.extend([
                     "Your last analysis reasoning (for continuity):",
                     text_reasoning,
                     "",
@@ -157,20 +163,30 @@ class TemplateManager:
         min_pos_size = thresholds.get("min_position_size", 0.10)
         rr_borderline = thresholds.get("rr_borderline_min", 1.5)
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
+        # Threshold origin metadata
+        trade_count = thresholds.get("trade_count", 0)
+        learned_keys = set(thresholds.get("learned_keys", []))
         # Safe MAE line
         safe_mae_pct = thresholds.get("safe_mae_pct", 0)
         safe_mae_line = ""
         if safe_mae_pct > 0:
             safe_mae_line = (
                 f"\n- **Safe Drawdown**: Historical winning trades survived up to {safe_mae_pct*100:.2f}% "
-                "drawdown. Ensure stop isn't too tight."
+                "drawdown (brain-learned). Ensure stop isn't too tight."
+            )
+        elif trade_count > 0:
+            safe_mae_line = (
+                "\n- **Safe Drawdown**: Insufficient trade data for MAE baseline — rely on ATR-based stops only."
             )
 
         response_template = f'''## Response Format
 
 Structure your analysis before JSON:
-1. **MARKET STRUCTURE**: Current phase and trend state
+1. **MARKET STRUCTURE**: Current phase and trend state. Include **Multi-Timeframe Summary**: list each available timeframe (4h/12h/24h/3d/7d/Weekly/365D) with directional bias → state ALIGNED/MIXED/DIVERGENT and identify dominant timeframe.
 2. **INDICATOR ASSESSMENT**: Key technical signals and confluence
+2.5. **QUANTITATIVE & VISUAL VALIDATION** (required when data is present):
+    - **Statistical Signals**: Z-Score (mean-reversion risk if |Z|>1.5), Hurst exponent (trending >0.5 vs reverting <0.5), Kurtosis (tail risk if >3), Entropy, Skewness interpretation
+    - **Chart Validation** (only when chart image was provided): Summarize key observations from each panel — P1-PRICE (SMA alignment, key price levels), P2-RSI (zone + divergences), P3-VOLUME (trend + spikes), P4-CMF/OBV (flow direction). Flag any discrepancies between visual and numerical data.
 3. **CONTEXT & CATALYST**: Macro alignment, news, microstructure (if relevant)
 3.5. **SCENARIO ANALYSIS (Bull vs Bear)**:
     - **Bull Case Argument**: Strongest arguments for LONG (even if weak)
@@ -211,12 +227,19 @@ Before finalizing your signal, rate each factor (0-100) based on how strongly it
 - 50 = Neutral / Mixed signals
 - 100 = Factor strongly confirms the signal
 
-Factors to score:
+For BUY/SELL signals — score how strongly each factor supports the TRADE DIRECTION:
 1. **trend_alignment**: Multi-timeframe trend confluence (short/medium/long align with signal direction)
 2. **momentum_strength**: RSI, MACD, momentum oscillators supporting the signal
 3. **volume_support**: Volume profile confirms the move (buying volume for BUY, selling for SELL)
-4. **pattern_quality**: Score = (Number of patterns supporting the signal / Total patterns detected) * 100. Example: 1 bullish / 4 total = 25. For HOLD/CLOSE: score based on patterns confirming the decision (mixed signals for HOLD, invalidation for CLOSE). DO NOT INFLATE THIS SCORE.
+4. **pattern_quality**: Score = (Number of patterns supporting the signal / Total patterns detected) * 100. Example: 1 bullish / 4 total = 25. DO NOT INFLATE THIS SCORE.
 5. **support_resistance_strength**: Proximity and strength of S/R levels supporting the trade setup
+
+For HOLD (no position) — score how strongly each factor JUSTIFIES STAYING OUT:
+1. **trend_alignment**: No clear trend / conflicting timeframes = 60-80 (HOLD justified). Strong directional alignment = 10-30 (potential trade missed).
+2. **momentum_strength**: Conflicting momentum signals = 60-80. Strong uniform momentum = 10-30.
+3. **volume_support**: Low/declining volume = 60-80 (confirms indecision). High volume with direction = 10-30.
+4. **pattern_quality**: Mixed/conflicting patterns = 60-80 (HOLD justified). Clear directional pattern = 10-30. DO NOT INFLATE THIS SCORE.
+5. **support_resistance_strength**: Price in no-man's land between S/R = 60-80. Price at clear actionable level = 20-40.
 
 CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL". Make only the immediate action decision.
 
@@ -264,6 +287,12 @@ TRADING SIGNALS & CONFIDENCE:
 - CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
 - UPDATE: Adjust existing position SL/TP when market structure improves
 
+HOLD SIGNAL JSON FIELDS (no open position):
+- `entry_price`: Your conditional trigger price — the level where conditions would justify entry
+- `stop_loss` / `take_profit`: Levels relative to that conditional entry
+- `position_size`: 0.0 (no position opened)
+- `risk_reward_ratio`: Calculated from the conditional entry (shows the setup you are waiting for)
+
 RISK/REWARD GUIDELINES:
 - R/R < {rr_borderline:.1f}: Very unfavorable - strongly consider HOLD
 - R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline - only trade with exceptional confluence ({conf_weak}+)
@@ -274,6 +303,7 @@ R/R CALCULATION (MANDATORY - show your work):
 - For BUY/SELL signals: risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|
 - For UPDATE signals: risk = |Current Price - stop_loss|, reward = |take_profit - Current Price|
   (UPDATE adjusts an EXISTING position — R/R must reflect distance from where price IS, not original entry)
+- For HOLD (no position): Use your conditional `entry_price` (NOT current market price). risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|. This shows the quality of the setup you are waiting for.
 - risk_reward_ratio = reward / risk
 
 RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
@@ -287,6 +317,35 @@ SHORT trades:
 
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.'''
+
+        # Add threshold origin annotations if brain data is available
+        if trade_count > 0:
+            if learned_keys:
+                origin_parts = [f"min_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
+                                f"adx_strong={adx_strong}" if "adx_strong_threshold" in learned_keys else None,
+                                f"confidence={conf_threshold}" if "confidence_threshold" in learned_keys else None,
+                                f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None]
+                learned = [p for p in origin_parts if p]
+                if learned:
+                    response_template += (
+                        f"\n\nTHRESHOLD ORIGIN: {', '.join(learned)} are brain-learned from {trade_count} closed trades. "
+                        "Other thresholds use industry-standard defaults."
+                    )
+                else:
+                    response_template += (
+                        f"\n\nTHRESHOLD ORIGIN: All thresholds use industry-standard defaults "
+                        f"({trade_count} trades insufficient to learn custom values)."
+                    )
+            else:
+                response_template += (
+                    f"\n\nTHRESHOLD ORIGIN: All thresholds use industry-standard defaults "
+                    f"({trade_count} trades insufficient to learn custom values)."
+                )
+        else:
+            response_template += (
+                "\n\nTHRESHOLD ORIGIN: All thresholds use industry-standard defaults (no trade history)."
+            )
+
         return response_template
 
     def build_analysis_steps(self, symbol: str, has_advanced_support_resistance: bool = False, has_chart_analysis: bool = False, available_periods: dict = None) -> str:
@@ -316,6 +375,15 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
         analysis_steps = f"""
 ## Analysis Steps (use findings to determine trading signal):
+
+**Step-to-Output Mapping:**
+Steps 1-4 → Section 1 (MARKET STRUCTURE) + Section 2 (INDICATOR ASSESSMENT)
+Step 5 → Section 3 (CONTEXT & CATALYST)
+Step 5.5 → Section 3.5 (SCENARIO ANALYSIS)
+Step 6 → Sections 3 + 5 (NEWS & historical evidence in CONTEXT and DECISION)
+Step 7 → Section 2.5 (QUANTITATIVE & VISUAL VALIDATION)
+Step 8 (if chart) → Section 2.5 (chart sub-section)
+Synthesis → Sections 4 + 5 (RISK/REWARD + DECISION)
 
 1. MULTI-TIMEFRAME ASSESSMENT:
    {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA)

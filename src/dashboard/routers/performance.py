@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 from fastapi import APIRouter
 
-from src.trading.statistics_calculator import StatisticsCalculator
+from src.trading.statistics_calculator import StatisticsCalculator, TradingStatistics
 
 
 class PerformanceRouter:
@@ -24,6 +24,14 @@ class PerformanceRouter:
         """Load JSON from a file synchronously."""
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def _default_statistics(self) -> Dict[str, Any]:
+        """Return a default statistics payload seeded from configured capital."""
+        initial_capital = getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0)
+        return TradingStatistics(
+            initial_capital=initial_capital,
+            current_capital=initial_capital,
+        ).to_dict()
 
     def _process_trade_history(self, trades: list, stats: Dict[str, Any]) -> list:
         """Process trade history into an equity curve synchronously."""
@@ -70,7 +78,7 @@ class PerformanceRouter:
         trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         equity_curve = []
-        stats = {}
+        stats = self._default_statistics()
         if stats_file.exists():
             try:
                 stats = await asyncio.to_thread(self._load_json_file, stats_file)
@@ -105,4 +113,6 @@ class PerformanceRouter:
             except Exception:
                 self.logger.error("Failed to load statistics", exc_info=True)
                 return {"error": "Failed to load stats"}
-        return {}
+        result = self._default_statistics()
+        self.dashboard_state.set_cached("statistics", result)
+        return result

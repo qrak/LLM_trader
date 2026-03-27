@@ -2,6 +2,7 @@
 Consolidated Market Analysis Formatter - Main Coordinator.
 Delegates to specialized formatters.
 """
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from src.logger.logger import Logger
@@ -42,6 +43,49 @@ class MarketFormatter:
         self.overview_formatter = overview_formatter
         self.period_formatter = period_formatter
         self.long_term_formatter = long_term_formatter
+
+    def _format_snapshot_timestamp(self, timestamp_ms: Optional[int]) -> str:
+        """Format a millisecond timestamp for prompt display."""
+        if not timestamp_ms:
+            return "Unavailable"
+
+        snapshot_dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+        return snapshot_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    def _format_signed_number(self, value: Optional[float], precision: int = 3) -> str:
+        """Format signed numeric deltas consistently for prompts."""
+        if value is None:
+            return "N/A"
+        return f"{value:+.{precision}f}"
+
+    def _format_order_book_sentiment(self, imbalance: float) -> str:
+        """Translate imbalance into a short pressure label."""
+        if imbalance > 0.3:
+            return "Strong Buy Pressure"
+        if imbalance > 0.1:
+            return "Moderate Buy Pressure"
+        if imbalance < -0.3:
+            return "Strong Sell Pressure"
+        if imbalance < -0.1:
+            return "Moderate Sell Pressure"
+        return "Balanced"
+
+    def _format_quote_value(self, value: float, quote_currency: str) -> str:
+        """Format a quote-denominated value using the symbol quote convention."""
+        currency_symbol = "$" if quote_currency in ["USD", "USDT", "USDC"] else f"{quote_currency} "
+        return f"{currency_symbol}{self.format_utils.fmt(value, precision=2)}"
+
+    def format_microstructure_snapshot_notice(self, symbol: str, timeframe: str, microstructure: Dict[str, Any]) -> str:
+        """Explain that microstructure data is a live snapshot and not timeframe aggregation."""
+        snapshot_context = microstructure.get('snapshot_context', {})
+        if not snapshot_context.get('is_live_snapshot'):
+            return ""
+
+        lines = [f"## {symbol} Live Microstructure Snapshot Notice:"]
+        lines.append("  • Scope: Point-in-time exchange snapshot captured during this analysis cycle")
+        lines.append(f"  • Timeframe Guardrail: Not aggregated over the configured {timeframe} timeframe")
+        lines.append("  • Delta Basis: Changes compare only against the immediately previous analysis snapshot for this symbol")
+        return "\n".join(lines)
 
 
 
@@ -191,7 +235,7 @@ class MarketFormatter:
         return "\n".join(lines)
 
 
-    def format_order_book_depth(self, order_book: dict, symbol: str) -> str:
+    def format_order_book_depth(self, order_book: dict, symbol: str, timeframe: str) -> str:
         """
         Format order book depth data.
         Shows bid/ask imbalance, liquidity depth, and spread metrics.
@@ -209,39 +253,106 @@ class MarketFormatter:
         base_currency = symbol.split('/')[0] if '/' in symbol else ""
         quote_currency = symbol.split('/')[1] if '/' in symbol else ""
 
-        lines = [f"## {symbol} Order Book Depth:"]
+        lines = [f"## {symbol} Live Order Book Snapshot:"]
+        lines.append(f"  • Snapshot Timestamp: {self._format_snapshot_timestamp(order_book.get('timestamp'))}")
+        levels_analyzed = order_book.get('levels_analyzed')
+        if levels_analyzed:
+            lines.append(f"  • Visible Levels Analyzed: {levels_analyzed} per side (live snapshot, not {timeframe} aggregation)")
 
         # Spread metrics
         spread = order_book.get("spread")
         spread_pct = order_book.get("spread_percent")
         if spread is not None and spread_pct is not None:
-            # Spread is in quote currency (price difference)
-            currency_symbol = "$" if quote_currency in ["USD", "USDT", "USDC"] else f"{quote_currency} "
-            lines.append(f"  • Spread: {currency_symbol}{spread:.2f} ({spread_pct:.3f}%)")
+            lines.append(f"  • Spread: {self._format_quote_value(spread, quote_currency)} ({spread_pct:.3f}%)")
+
+        best_bid = order_book.get("best_bid")
+        best_ask = order_book.get("best_ask")
+        best_bid_size = order_book.get("best_bid_size")
+        best_ask_size = order_book.get("best_ask_size")
+        if best_bid is not None and best_ask is not None and best_bid_size is not None and best_ask_size is not None:
+            lines.append(
+                f"  • Top Of Book: Bid {self._format_quote_value(best_bid, quote_currency)} x {self.format_utils.fmt(best_bid_size)} {base_currency} | "
+                f"Ask {self._format_quote_value(best_ask, quote_currency)} x {self.format_utils.fmt(best_ask_size)} {base_currency}"
+            )
 
         # Liquidity depth
         bid_depth = order_book.get("bid_depth", 0)
         ask_depth = order_book.get("ask_depth", 0)
         total_depth = bid_depth + ask_depth
         if total_depth > 0:
-            lines.append(f"  • Total Liquidity (Top 20 levels): {self.format_utils.fmt(total_depth)} {base_currency}")
+            lines.append(f"  • Total Visible Liquidity: {self.format_utils.fmt(total_depth)} {base_currency}")
             lines.append(f"    - Bid Depth: {self.format_utils.fmt(bid_depth)} {base_currency}")
             lines.append(f"    - Ask Depth: {self.format_utils.fmt(ask_depth)} {base_currency}")
 
         # Imbalance (-1 to +1, positive = more bids)
         imbalance = order_book.get("imbalance")
         if imbalance is not None:
-            if imbalance > 0.3:
-                sentiment = "Strong Buy Pressure"
-            elif imbalance > 0.1:
-                sentiment = "Moderate Buy Pressure"
-            elif imbalance < -0.3:
-                sentiment = "Strong Sell Pressure"
-            elif imbalance < -0.1:
-                sentiment = "Moderate Sell Pressure"
-            else:
-                sentiment = "Balanced"
-            lines.append(f"  • Order Book Imbalance: {imbalance:+.3f} ({sentiment})")
+            lines.append(f"  • Order Book Imbalance: {imbalance:+.3f} ({self._format_order_book_sentiment(imbalance)})")
+
+        depth_by_level = order_book.get("depth_by_level", {})
+        top_10 = depth_by_level.get("10")
+        top_20 = depth_by_level.get("20")
+        if top_10:
+            lines.append(
+                f"  • Top 10 Level Imbalance: {top_10.get('imbalance', 0):+.3f} "
+                f"({self.format_utils.fmt(top_10.get('bid_depth', 0))} bid / {self.format_utils.fmt(top_10.get('ask_depth', 0))} ask {base_currency})"
+            )
+        if top_20:
+            lines.append(
+                f"  • Top 20 Level Imbalance: {top_20.get('imbalance', 0):+.3f} "
+                f"({self.format_utils.fmt(top_20.get('bid_depth', 0))} bid / {self.format_utils.fmt(top_20.get('ask_depth', 0))} ask {base_currency})"
+            )
+
+        near_mid = order_book.get("liquidity_near_mid", {}).get("10bps")
+        if near_mid:
+            lines.append(
+                f"  • Near-Mid Liquidity (10 bps): {self.format_utils.fmt(near_mid.get('bid_depth', 0))} bid / "
+                f"{self.format_utils.fmt(near_mid.get('ask_depth', 0))} ask {base_currency} "
+                f"(imbalance {near_mid.get('imbalance', 0):+.3f})"
+            )
+
+        largest_bid_wall = order_book.get("largest_bid_wall")
+        if largest_bid_wall:
+            lines.append(
+                f"  • Largest Bid Wall: {self.format_utils.fmt(largest_bid_wall.get('amount', 0))} {base_currency} at "
+                f"{self._format_quote_value(largest_bid_wall.get('price', 0), quote_currency)} "
+                f"({largest_bid_wall.get('distance_bps', 0):.1f} bps from mid)"
+            )
+
+        largest_ask_wall = order_book.get("largest_ask_wall")
+        if largest_ask_wall:
+            lines.append(
+                f"  • Largest Ask Wall: {self.format_utils.fmt(largest_ask_wall.get('amount', 0))} {base_currency} at "
+                f"{self._format_quote_value(largest_ask_wall.get('price', 0), quote_currency)} "
+                f"({largest_ask_wall.get('distance_bps', 0):.1f} bps from mid)"
+            )
+
+        delta = order_book.get("delta_from_previous_snapshot")
+        if delta:
+            interval_seconds = delta.get("snapshot_interval_seconds")
+            interval_text = f" after {interval_seconds:.0f}s" if interval_seconds is not None else ""
+            lines.append(f"  • Delta vs Previous Snapshot{interval_text}:")
+            lines.append(f"    - Spread: {self._format_signed_number(delta.get('spread'), precision=4)}")
+            lines.append(f"    - Spread %: {self._format_signed_number(delta.get('spread_percent'))}%")
+            lines.append(f"    - Bid Depth: {self._format_signed_number(delta.get('bid_depth'))} {base_currency}")
+            lines.append(f"    - Ask Depth: {self._format_signed_number(delta.get('ask_depth'))} {base_currency}")
+            lines.append(f"    - Imbalance: {self._format_signed_number(delta.get('imbalance'))}")
+
+            top_10_delta = delta.get("top_10", {})
+            if top_10_delta:
+                lines.append(
+                    f"    - Top 10 Imbalance: {self._format_signed_number(top_10_delta.get('imbalance'))} "
+                    f"({self._format_signed_number(top_10_delta.get('bid_depth'))} bid / "
+                    f"{self._format_signed_number(top_10_delta.get('ask_depth'))} ask {base_currency})"
+                )
+
+            near_mid_delta = delta.get("near_mid_10bps", {})
+            if near_mid_delta:
+                lines.append(
+                    f"    - Near-Mid 10 bps Imbalance: {self._format_signed_number(near_mid_delta.get('imbalance'))} "
+                    f"({self._format_signed_number(near_mid_delta.get('bid_depth'))} bid / "
+                    f"{self._format_signed_number(near_mid_delta.get('ask_depth'))} ask {base_currency})"
+                )
 
         return "\n".join(lines)
 

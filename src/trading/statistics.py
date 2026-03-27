@@ -32,6 +32,10 @@ class TradingStatisticsService:
         self.persistence = persistence
         self.statistics = persistence.load_statistics()
 
+    async def async_reload(self) -> None:
+        """Asynchronously reload statistics from persistence layer."""
+        self.statistics = await self.persistence.async_load_statistics()
+
     def recalculate(self, initial_capital: float = 10000.0) -> None:
         """Recalculate all statistics from trade history.
 

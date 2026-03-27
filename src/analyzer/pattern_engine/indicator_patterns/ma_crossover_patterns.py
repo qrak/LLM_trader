@@ -5,6 +5,7 @@ Detects Golden Cross, Death Cross, and short-term MA crossovers.
 Classic long-term trend reversal signals.
 """
 
+import math
 import numpy as np
 from numba import njit
 
@@ -32,9 +33,9 @@ def _detect_ma_crossover_numba(sma_50: np.ndarray, sma_200: np.ndarray, is_bulli
         idx = len(sma_50) - i - 1
 
         # Skip if any values are NaN
-        if np.isnan(sma_50[idx]) or np.isnan(sma_50[idx + 1]):
+        if math.isnan(sma_50[idx]) or math.isnan(sma_50[idx + 1]):
             continue
-        if np.isnan(sma_200[idx]) or np.isnan(sma_200[idx + 1]):
+        if math.isnan(sma_200[idx]) or math.isnan(sma_200[idx + 1]):
             continue
 
         # Detect crossover based on direction
@@ -115,9 +116,9 @@ def detect_short_term_crossover_numba(sma_20: np.ndarray, sma_50: np.ndarray) ->
         idx = len(sma_20) - i - 1
 
         # Skip if any values are NaN
-        if np.isnan(sma_20[idx]) or np.isnan(sma_20[idx + 1]):
+        if math.isnan(sma_20[idx]) or math.isnan(sma_20[idx + 1]):
             continue
-        if np.isnan(sma_50[idx]) or np.isnan(sma_50[idx + 1]):
+        if math.isnan(sma_50[idx]) or math.isnan(sma_50[idx + 1]):
             continue
 
         # Bullish crossover: 20 crosses above 50
@@ -164,7 +165,7 @@ def check_ma_alignment_numba(sma_20: np.ndarray, sma_50: np.ndarray, sma_200: np
     v50 = sma_50[-1]
     v200 = sma_200[-1]
 
-    if np.isnan(v20) or np.isnan(v50) or np.isnan(v200):
+    if math.isnan(v20) or math.isnan(v50) or math.isnan(v200):
         return False, False, 0.0, 0.0, 0.0
 
     # Bullish: 20 > 50 > 200

@@ -14,6 +14,7 @@ Formatting Strategy:
 from datetime import datetime
 from typing import List, Any, Optional
 
+import math
 import numpy as np
 import pandas as pd
 
@@ -115,7 +116,7 @@ class FormatUtils:
 
         effective_precision = precision if precision is not None else self.default_precision
 
-        if not np.isnan(val):
+        if not math.isnan(val):
             abs_val = abs(val)
 
             if 0 < abs_val < SCIENTIFIC_NOTATION_THRESHOLD:
@@ -153,24 +154,9 @@ class FormatUtils:
         """
         effective_precision = precision if precision is not None else self.default_precision
         val = get_indicator_value(td, key)
-        if isinstance(val, (int, float)) and not np.isnan(val):  # Polymorphic check - legitimate
+        if isinstance(val, (int, float)) and not math.isnan(val):  # Polymorphic check - legitimate
             return self.fmt(val, effective_precision)
         return default
-
-    def format_timestamp(self, timestamp_ms) -> str:
-        """Format a timestamp from milliseconds since epoch to a human-readable string
-
-        Args:
-            timestamp_ms: Timestamp in milliseconds
-
-        Returns:
-            Human-readable datetime string
-        """
-        try:
-            dt = datetime.fromtimestamp(timestamp_ms / 1000)
-            return dt.strftime("%Y-%m-%d %H:%M")
-        except (ValueError, TypeError, OSError):
-            return "N/A"
 
     def format_current_time(self, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
         """Format current time with specified format.
