@@ -40,6 +40,15 @@ def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
         if key != "text_analysis"
     }
 
+
+def _distance_pct_or_fallback(stored_pct: Optional[float], entry_price: float, target_price: float) -> float:
+    """Return stored distance percent or derive it from entry and target prices."""
+    if stored_pct and stored_pct > 0:
+        return stored_pct
+    if entry_price <= 0:
+        return 0.0
+    return abs(target_price - entry_price) / entry_price
+
 def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[str, Any]:
     """Helper to extract market status from previous_response data."""
     response = data.get("response", {})
@@ -346,6 +355,16 @@ class BrainRouter:
             res = {"has_position": False, "current_price": current_price}
             self.dashboard_state.set_cached("position", res)
             return res
+        sl_distance_pct = _distance_pct_or_fallback(
+            position.sl_distance_pct,
+            position.entry_price,
+            position.stop_loss,
+        )
+        tp_distance_pct = _distance_pct_or_fallback(
+            position.tp_distance_pct,
+            position.entry_price,
+            position.take_profit,
+        )
         res = {
             "has_position": True,
             "current_price": current_price,
@@ -355,8 +374,8 @@ class BrainRouter:
             "stop_loss": position.stop_loss,
             "take_profit": position.take_profit,
             "entry_time": position.entry_time.isoformat(),
-            "sl_distance_pct": position.sl_distance_pct,
-            "tp_distance_pct": position.tp_distance_pct,
+            "sl_distance_pct": sl_distance_pct,
+            "tp_distance_pct": tp_distance_pct,
             "rr_ratio": position.rr_ratio_at_entry,
             "confidence": position.confidence,
             "size": position.size,
