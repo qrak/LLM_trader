@@ -1,5 +1,6 @@
 """FastAPI server for the Trading Dashboard."""
 import asyncio
+import hashlib
 import os
 import time as time_module
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.middleware.gzip import GZipMiddleware
 
 from .routers import brain, monitor, visuals, performance, ws_router
@@ -60,6 +61,78 @@ class DashboardServer:
 
         app.add_middleware(GZipMiddleware, minimum_size=500)
 
+        def _set_cache_headers(response, browser_policy, edge_policy):
+            response.headers["Cache-Control"] = browser_policy
+            response.headers["CDN-Cache-Control"] = edge_policy
+            response.headers["Cloudflare-CDN-Cache-Control"] = edge_policy
+
+        def _is_no_store_response(response):
+            cache_control = response.headers.get("Cache-Control", "")
+            edge_control = response.headers.get("Cloudflare-CDN-Cache-Control", "")
+            return "no-store" in cache_control or "no-store" in edge_control
+
+        def _build_etag(request, response, path):
+            body = getattr(response, "body", b"")
+            if body:
+                digest = hashlib.sha256(body).hexdigest()
+                return f'W/"{digest}"'
+
+            # GZip/streaming responses may not expose `body` at middleware stage.
+            # Use short time-bucketed weak ETags aligned to cache windows.
+            if path.startswith('/api/'):
+                bucket_seconds = 15
+            elif path.endswith('.html') or path == '/':
+                bucket_seconds = 30
+            else:
+                return None
+
+            bucket = int(time_module.time() // bucket_seconds)
+            seed = f"{path}?{request.url.query}|{bucket}|{response.headers.get('Content-Type', '')}"
+            digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+            return f'W/"{digest}"'
+
+        def _is_not_modified(if_none_match_header, etag):
+            if not if_none_match_header or not etag:
+                return False
+            if if_none_match_header.strip() == "*":
+                return True
+            candidates = [part.strip() for part in if_none_match_header.split(",")]
+            return etag in candidates
+
+        def _is_static_asset(path):
+            return path.endswith((
+                ".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".svg",
+                ".webp", ".ico", ".gif", ".woff", ".woff2", ".ttf", ".eot",
+            ))
+
+        def _api_cache_policies(path, query_params):
+            """Return browser/edge cache policy pair for API routes."""
+            # Always bypass CDN cache for highly volatile or user-driven high-cardinality APIs.
+            if path.endswith("/refresh-price"):
+                return (
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
+
+            if path.endswith("/vectors") and query_params.get("query"):
+                return (
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
+
+            # Keep realtime countdown fresher than the rest of the API surface.
+            if path.endswith("/status/countdown"):
+                return (
+                    "public, max-age=5",
+                    "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
+                )
+
+            # Default policy for cache-safe GET APIs (<= 60 seconds staleness budget).
+            return (
+                "public, max-age=15",
+                "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
+            )
+
         # Security Headers Middleware
         @app.middleware("http")
         async def add_security_headers(request, call_next):
@@ -100,19 +173,56 @@ class DashboardServer:
 
             # Restrict caching entirely for non-GET/HEAD methods (e.g. POST, PUT, DELETE)
             if request.method not in ("GET", "HEAD"):
-                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate"
+                _set_cache_headers(
+                    response,
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
                 return response
 
-            if path.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.svg', '.webp', '.ico')):
-                # Browser: 1 hour | Edge: 1 day
-                response.headers["Cache-Control"] = "public, max-age=3600, s-maxage=86400"
+            if _is_static_asset(path):
+                if request.query_params.get("v"):
+                    _set_cache_headers(
+                        response,
+                        "public, max-age=31536000, immutable",
+                        "public, max-age=31536000, stale-while-revalidate=86400, stale-if-error=604800",
+                    )
+                else:
+                    _set_cache_headers(
+                        response,
+                        "public, max-age=3600",
+                        "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
+                    )
             elif path.startswith('/api/'):
-                # Most API data changes every ~60s due to internal TTL.
-                # Browser: 0 (always ask) | Edge: 30s cache
-                response.headers["Cache-Control"] = "public, max-age=0, s-maxage=30"
+                browser_policy, edge_policy = _api_cache_policies(path, request.query_params)
+                _set_cache_headers(
+                    response,
+                    browser_policy,
+                    edge_policy,
+                )
             elif path.endswith('.html') or path == '/':
-                # Browser: 0 | Edge: 60s
-                response.headers["Cache-Control"] = "public, max-age=0, s-maxage=60"
+                _set_cache_headers(
+                    response,
+                    "public, max-age=30, must-revalidate",
+                    "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
+                )
+
+            # Add conditional ETag handling for cacheable API/HTML responses.
+            # Skip static assets because FileResponse already manages validators.
+            if (
+                request.method in ("GET", "HEAD")
+                and response.status_code == 200
+                and not _is_static_asset(path)
+                and not _is_no_store_response(response)
+                and (path.startswith('/api/') or path.endswith('.html') or path == '/')
+            ):
+                etag = response.headers.get("ETag") or _build_etag(request, response, path)
+                if etag:
+                    response.headers["ETag"] = etag
+                    if _is_not_modified(request.headers.get("if-none-match"), etag):
+                        headers = dict(response.headers)
+                        headers.pop("content-length", None)
+                        return Response(status_code=304, headers=headers)
             return response
 
         # Simple Rate Limiting (in-memory, per-IP)

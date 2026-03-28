@@ -130,6 +130,8 @@ python start.py
 
 The dashboard will be available at `http://localhost:8000`.
 
+Cloudflare setup reference: `docs/cloudflare_free_cache_playbook.md`.
+
 ### 7. Controls
 
 | Key | Action |

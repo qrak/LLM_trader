@@ -1,8 +1,14 @@
 import json
 from types import SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
+
+from src.dashboard.dashboard_state import DashboardState
+from src.dashboard.routers.brain import BrainRouter
 from src.dashboard.routers.brain import _build_current_market_context, _extract_market_status
+from src.trading.data_models import Position
 
 
 def test_build_current_market_context_uses_legacy_response_indicators(tmp_path):
@@ -62,3 +68,38 @@ def test_extract_market_status_uses_text_and_indicators_without_json_parser():
     assert status["trend"] == "BEARISH"
     assert status["adx"] == 18.1
     assert status["rsi"] == 40.5
+
+
+@pytest.mark.asyncio
+async def test_get_current_position_recomputes_missing_distance_percentages():
+    position = Position(
+        entry_price=69009.78,
+        stop_loss=69350.00,
+        take_profit=65612.00,
+        size=0.1,
+        entry_time=MagicMock(isoformat=MagicMock(return_value="2026-03-27T00:00:00+00:00")),
+        confidence="HIGH",
+        direction="SHORT",
+        symbol="BTC/USDC",
+        sl_distance_pct=0.0,
+        tp_distance_pct=0.0,
+        rr_ratio_at_entry=2.2,
+    )
+    dashboard_state = DashboardState(current_price=68366.03)
+    persistence = MagicMock()
+    persistence.load_position.return_value = position
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=None,
+        unified_parser=None,
+        persistence=persistence,
+        exchange_manager=None,
+    )
+
+    result = await router.get_current_position()
+
+    assert result["has_position"] is True
+    assert result["sl_distance_pct"] == pytest.approx(abs(69350.00 - 69009.78) / 69009.78)
+    assert result["tp_distance_pct"] == pytest.approx(abs(65612.00 - 69009.78) / 69009.78)

@@ -12,7 +12,8 @@ import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.5';
 
 const state = {
     isConnected: false,
-    pollInterval: 10000,
+    fastPollInterval: 10000,
+    slowPollInterval: 30000,
     lastUpdateTime: null
 };
 
@@ -39,10 +40,10 @@ function updateCostDisplay(data) {
     const total = data.total_session_cost || 0;
     const orCost = costs.openrouter || 0;
     const googleCost = costs.google || 0;
-    
+
     // Update main total
     document.getElementById('overview-cost').textContent = formatCost(total);
-    
+
     // Update tooltip or detailed view if we add one, for now just ensures these elements exist if we want to show them
     // The user requested removing LM Studio (free) from costs.
     // We already have specific IDs in index.html for specific providers if we want to show them in a detail view, 
@@ -72,7 +73,7 @@ async function fetchBrainStatus() {
             statusDot.classList.remove('disconnected');
             statusDot.classList.add('connected');
         }
-        
+
         // Update Brain State Indicator
         // (Legacy indicator removed from UI, skipping update)
 
@@ -130,20 +131,20 @@ async function fetchRules() {
     try {
         const response = await fetch('/api/brain/rules');
         const rules = await response.json();
-        
+
         // Direct update to Rules Count KPI
         const countEl = document.getElementById('overview-rules-count');
         const hintEl = document.getElementById('overview-rules-hint');
-        
+
         if (countEl) {
-             const count = rules.length;
-             countEl.textContent = count;
-             
-             if (hintEl) {
-                 hintEl.style.display = count > 0 ? 'none' : 'block';
-             }
+            const count = rules.length;
+            countEl.textContent = count;
+
+            if (hintEl) {
+                hintEl.style.display = count > 0 ? 'none' : 'block';
+            }
         }
-        
+
     } catch (e) {
         console.error("Failed to fetch rules", e);
     }
@@ -176,7 +177,16 @@ function togglePanelMinimize(panelId) {
 }
 
 async function updateAll() {
+    await updateFastLane();
+    await updateSlowLane();
+}
+
+async function updateFastLane() {
     await fetchBrainStatus();
+    await updatePositionData();
+}
+
+async function updateSlowLane() {
     await fetchRules();
     await fetchCosts();
     await updatePerformanceData();
@@ -184,7 +194,6 @@ async function updateAll() {
     await updateLogs();
     await updateVisuals();
     await updateVectorData();
-    await updatePositionData();
     await updateStatisticsData();
     await updateNewsData();
 }
@@ -192,7 +201,7 @@ async function updateAll() {
 // Initialize application
 function initApp() {
     console.log('Initializing Dashboard App...');
-    
+
     // Make crucial functions global immediately
     window.updateAll = updateAll;
 
@@ -235,19 +244,21 @@ function initApp() {
         initWebSocket();
         initUI();
         startCountdownLoop();
-        
+
         // Initial update
         updateAll();
-        
-        // Start polling
-        setInterval(updateAll, state.pollInterval);
+
+        // Start polling lanes: fast for critical status/position, slow for heavier panels.
+        setInterval(updateFastLane, state.fastPollInterval);
+        setInterval(updateSlowLane, state.slowPollInterval);
 
         // Listen for WS analysis complete
         document.addEventListener('analysis-complete', () => {
             console.log('Analysis complete, refreshing...');
-            updateAll();
+            updateFastLane();
+            updateSlowLane();
         });
-        
+
         console.log('Dashboard App Initialized');
     } catch (e) {
         console.error('Error initializing dashboard:', e);
