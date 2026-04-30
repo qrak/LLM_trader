@@ -1,3 +1,0 @@
-"""
-CryptoCompare API integration package
-"""
