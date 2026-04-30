@@ -3,11 +3,8 @@
 > **Status:** BETA / Research Edition
 >
 > **Note:** This is the public research branch. It is frequently experimentally updated. The stable production version runs privately.
-<<<<<<< HEAD
-=======
 >
 > **News Pipeline Update (2026):** CryptoCompare free News API tier is being retired. News ingestion now uses free RSS sources with Crawl4AI-based page enrichment.
->>>>>>> main
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
@@ -17,11 +14,7 @@
 
 - **Vector-Only Trading Brain**: ChromaDB vector store for semantic trade retrieval and adaptive thresholds.
 - **Adaptive Memory System**: Temporal awareness, decay engine, and automated reflection loops generating persistent Semantic Rules.
-<<<<<<< HEAD
-- **RAG Engine**: Aggregates news from CryptoCompare and fundamentals from DefiLlama.
-=======
 - **RAG Engine**: Aggregates news from free RSS feeds with optional Crawl4AI enrichment, plus fundamentals from DefiLlama.
->>>>>>> main
 - **AI & LLM Support**: Multi-provider support (Google Gemini, OpenRouter, BlockRun.AI, LM Studio) with fallback logic and vision-assisted trading.
 - **Multi-Exchange Aggregation**: Fetches data via `ccxt` from Binance, KuCoin, Gate.io, MEXC, Hyperliquid.
 
@@ -41,11 +34,7 @@
 - **Dashboard Backend**: FastAPI, WebSockets
 - **Dashboard Frontend**: HTML, Vanilla JS, Vis.js, ApexCharts
 - **AI Integrations**: Google Gemini, OpenRouter, BlockRun.AI, LM Studio
-<<<<<<< HEAD
-- **Market Data**: CCXT, CryptoCompare, Alternative.me, DefiLlama
-=======
 - **Market Data**: CCXT, [CoinGecko](https://www.coingecko.com), Alternative.me, DefiLlama
->>>>>>> main
 - **Code Quality**: Ruff, Pylint, Mypy
 
 ## Prerequisites
@@ -76,12 +65,9 @@ python -m venv .venv
 # Install required dependencies
 pip install -r requirements.txt
 
-<<<<<<< HEAD
-=======
 # Optional but recommended for browser-grade news extraction
 crawl4ai-setup
 
->>>>>>> main
 # For development (linting, testing tools)
 pip install -r requirements-dev.txt
 ```
@@ -101,10 +87,6 @@ Configure the following variables in `keys.env`:
 | `OPENROUTER_API_KEY` | (Required) OpenRouter API key if used as a provider. |
 | `GOOGLE_STUDIO_API_KEY` | (Required) Google AI Studio API key (free tier). |
 | `GOOGLE_STUDIO_PAID_API_KEY` | (Optional) Google AI Studio API key (paid tier). |
-<<<<<<< HEAD
-| `CRYPTOCOMPARE_API_KEY` | (Optional but recommended) For News RAG (~150k free requests). |
-=======
->>>>>>> main
 | `COINGECKO_API_KEY` | (Optional) Free demo key for market metrics. |
 | `BLOCKRUN_WALLET_KEY` | (Optional) Private key for BlockRun.AI x402 micropayments. |
 
@@ -140,10 +122,6 @@ port = 8000
 [demo_trading]
 demo_quote_capital = 10000
 transaction_fee_percent = 0.00075
-<<<<<<< HEAD
-```
-
-=======
 
 [risk_management]
 # soft = candle-close checks, hard = bot-side interval checks on live ticker
@@ -162,7 +140,6 @@ news_crawl4ai_enabled = true
 
 Both exit check intervals must be less than or equal to `[general] timeframe`. Soft exits are evaluated only at candle close; hard exits are bot-side checks against live ticker price at the configured interval.
 
->>>>>>> main
 ### 6. Start the Bot
 
 Run the bot directly via Python:
