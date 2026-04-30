@@ -25,8 +25,6 @@ class TemplateManager:
         self.config = config
         self.timeframe_validator = timeframe_validator
 
-<<<<<<< HEAD
-=======
     def _build_exit_execution_guidance(self, timeframe: str) -> str:
         stop_type = self.config.STOP_LOSS_TYPE
         take_profit_type = self.config.TAKE_PROFIT_TYPE
@@ -43,7 +41,6 @@ class TemplateManager:
             describe("Take profit", take_profit_type, take_profit_interval),
         ])
 
->>>>>>> main
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None,
                             performance_context: Optional[str] = None, brain_context: Optional[str] = None,
                             last_analysis_time: Optional[str] = None,
@@ -72,10 +69,7 @@ class TemplateManager:
             "## Analytical Framework",
             "Follow the numbered **Analysis Steps** in the user prompt for internal reasoning.",
             "Your written output MUST follow the **Response Format** sections exactly.",
-<<<<<<< HEAD
-=======
             "Use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). Do NOT use Markdown headings (#, ##, ###, ####).",
->>>>>>> main
             "",
         ]
 
@@ -89,11 +83,7 @@ class TemplateManager:
         header_lines.extend([
             "## Core Principles",
             "- Indicators calculated on CLOSED CANDLES ONLY (no repaint). Current price is REAL-TIME (incomplete candle).",
-<<<<<<< HEAD
-            "- STOP EXECUTION: This bot uses SOFT STOPS evaluated ONLY at candle CLOSE. Intra-candle wicks below SL do NOT trigger exits. Set SL at levels where a CLOSE below invalidates the thesis, not where wicks might touch.",
-=======
             self._build_exit_execution_guidance(timeframe),
->>>>>>> main
             "- Decisions must be based on CONFIRMED signals, not speculation.",
             "- Risk management is paramount: SL and TP required for every trade.",
             "- Confidence must match signal strength: >70 required for trades (strong setups only).",
@@ -116,12 +106,8 @@ class TemplateManager:
                 "",
                 "",
                 "## Profit Maximization Strategy",
-<<<<<<< HEAD
-                "- LEARN from closed trades: Why did stops get hit? Were entries premature? Was trend strength misjudged?",
-=======
                 "- LEARN from closed trades: first classify the exit correctly. profitable stop-loss exits are successful risk management, while losing stop-loss exits show where the thesis or timing failed.",
                 "- DISTINGUISH stop types explicitly: a profit-protecting stop locks in gains, a loss-cutting stop limits damage, and a breakeven stop preserves capital.",
->>>>>>> main
                 "- IMPROVE win rate: Only trade when multiple factors align strongly (see confluence rules in Response Format)",
                 "- AVOID repeated mistakes: If recent trades failed due to weak setups, demand stronger confirmation",
                 "- HOLD discipline: Better to miss a trade than force a weak setup",
@@ -170,11 +156,7 @@ class TemplateManager:
 
         return "\n".join(header_lines)
 
-<<<<<<< HEAD
-    def build_response_template(self, _has_chart_analysis: bool = False,
-=======
     def build_response_template(self, has_chart_analysis: bool = False,
->>>>>>> main
                                 dynamic_thresholds: Optional[Dict[str, Any]] = None) -> str:
         """Build the response template for trading decision output.
 
@@ -219,21 +201,6 @@ class TemplateManager:
 
         response_template = f'''## Response Format
 
-<<<<<<< HEAD
-Structure your analysis before JSON:
-1. **MARKET STRUCTURE**: Current phase and trend state. Include **Multi-Timeframe Summary**: list each available timeframe (4h/12h/24h/3d/7d/Weekly/365D) with directional bias → state ALIGNED/MIXED/DIVERGENT and identify dominant timeframe.
-2. **INDICATOR ASSESSMENT**: Key technical signals and confluence
-2.5. **QUANTITATIVE & VISUAL VALIDATION** (required when data is present):
-    - **Statistical Signals**: Z-Score (mean-reversion risk if |Z|>1.5), Hurst exponent (trending >0.5 vs reverting <0.5), Kurtosis (tail risk if >3), Entropy, Skewness interpretation
-    - **Chart Validation** (only when chart image was provided): Summarize key observations from each panel — P1-PRICE (SMA alignment, key price levels), P2-RSI (zone + divergences), P3-VOLUME (trend + spikes), P4-CMF/OBV (flow direction). Flag any discrepancies between visual and numerical data.
-3. **CONTEXT & CATALYST**: Macro alignment, news, microstructure (if relevant)
-3.5. **SCENARIO ANALYSIS (Bull vs Bear)**:
-    - **Bull Case Argument**: Strongest arguments for LONG (even if weak)
-    - **Bear Case Argument**: Strongest arguments for SHORT (even if weak)
-    - **Verdict**: Why one side outweighs the other (weight historical data/anti-patterns)
-4. **RISK/REWARD**: Invalidation point, targets, R/R ratio
-5. **DECISION**: Signal with confidence justification
-=======
 Discord-optimized output style (mandatory):
 - Use compact plain-text labels only: "1) MARKET STRUCTURE:", "2) INDICATOR ASSESSMENT:", etc.
 - Use these exact label numbers in narrative: 1), 2), 2.5), 3), 3.5), 4), 5).
@@ -255,7 +222,6 @@ Structure your analysis before JSON using plain-text labels:
     - **Verdict**: Why one side outweighs the other (weight historical data/anti-patterns)
 4) RISK/REWARD: Invalidation point, targets, R/R ratio
 5) DECISION: Signal with confidence justification
->>>>>>> main
 
 Then output JSON:
 
@@ -410,13 +376,9 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
         return response_template
 
-<<<<<<< HEAD
-    def build_analysis_steps(self, symbol: str, has_advanced_support_resistance: bool = False, has_chart_analysis: bool = False, available_periods: dict = None) -> str:
-=======
     def build_analysis_steps(self, symbol: str, has_advanced_support_resistance: bool = False,
                              has_chart_analysis: bool = False,
                              available_periods: Optional[Dict[str, int]] = None) -> str:
->>>>>>> main
         """Build analysis steps instructions for the AI model.
 
         Args:

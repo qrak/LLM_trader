@@ -66,19 +66,6 @@ class MarketDataFetcher:
             price_data = await self._try_ccxt_price_data(top_coins)
         except Exception as e:
             self.logger.error("Error fetching CCXT price data: %s", e)
-<<<<<<< HEAD
-
-        # Fallback to CryptoCompare
-        if not price_data or not price_data.get("RAW"):
-            if self.market_api:
-                self.logger.debug("Falling back to CryptoCompare API for price data")
-                try:
-                    price_data = await self.market_api.get_multi_price_data(coins=top_coins)
-                except Exception as e:
-                    self.logger.error("Error fetching CryptoCompare price data: %s", e)
-
-=======
->>>>>>> main
 
         return price_data
 

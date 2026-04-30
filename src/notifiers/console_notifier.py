@@ -42,8 +42,6 @@ class ConsoleNotifier(BaseNotifier):
     async def wait_until_ready(self) -> None:
         """Console is always ready."""
         self.logger.debug("ConsoleNotifier: Console is always ready")
-<<<<<<< HEAD
-=======
 
     async def shutdown(self) -> None:
         """Shutdown the console notifier (no-op for console).
@@ -51,7 +49,6 @@ class ConsoleNotifier(BaseNotifier):
         Console notifier has no resources to clean up, so this is a no-op.
         """
         self.logger.debug("ConsoleNotifier: Shutdown complete (no-op for console)")
->>>>>>> main
 
     async def send_message(
             self,

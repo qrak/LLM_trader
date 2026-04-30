@@ -148,10 +148,7 @@ class VectorMemoryService(
                 max_profit_pct=meta.get("max_profit_pct"),
                 max_drawdown_pct=meta.get("max_drawdown_pct"),
                 factor_scores={k: v for k, v in meta.items() if k.endswith("_score")},
-<<<<<<< HEAD
-=======
                 exit_execution_context=meta,
->>>>>>> main
             )
 
             embedding = self._embedding_model.encode(document).tolist()

@@ -78,7 +78,6 @@ class CoinGeckoAPI:
                     self.logger.debug("Loaded CoinGecko cache from %s", self.last_update.isoformat())
             except Exception as e:
                 self.logger.error("Error loading CoinGecko cache: %s", e)
-<<<<<<< HEAD
 
     async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
         """Read cache file in a thread pool executor to avoid blocking the event loop"""
@@ -108,72 +107,6 @@ class CoinGeckoAPI:
         """Synchronous file write for executor"""
         with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-=======
->>>>>>> main
-
-    async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
-        """Read cache file in a thread pool executor to avoid blocking the event loop"""
-        try:
-<<<<<<< HEAD
-            base_symbol = base_symbol.upper()
-            coin_data_list = self.symbol_to_id_map.get(base_symbol, [])
-            if not coin_data_list:
-                return ''
-
-            if not self.session:
-                self.session = CachedSession(cache=self.cache_backend)
-                if self.api_key:
-                    self.session.headers.update({"x-cg-demo-api-key": self.api_key})
-
-            for coin_data in coin_data_list:
-                coin_info = await self._fetch_coin_data(coin_data['id'])
-                if self._coin_traded_on_exchange(coin_info, exchange_name):
-                    image_url = coin_info.get('image', {}).get(size, '')
-                    if image_url:
-                        coin_data['image'] = image_url
-                        return image_url
-
-            if coin_data_list:
-                first_coin_data = coin_data_list[0]
-                if first_coin_data.get('image'):
-                    return first_coin_data['image']
-
-                coin_info = await self._fetch_coin_data(first_coin_data['id'])
-                image_url = coin_info.get('image', {}).get(size, '')
-                if image_url:
-                    first_coin_data['image'] = image_url
-                    return image_url
-
-        except Exception as e:
-            self.logger.error("Error fetching coin image for %s on %s: %s", base_symbol, exchange_name, e)
-        return ''
-=======
-            async with self._file_lock:
-                loop = asyncio.get_running_loop()
-                return await loop.run_in_executor(None, self._read_json_sync)
-        except Exception as e:
-            self.logger.error("Error reading cache file: %s", e)
-            return None
-
-    def _read_json_sync(self) -> Dict[str, Any]:
-        """Synchronous file read for executor"""
-        with open(self.coingecko_cache_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-
-    async def _write_cache_file(self, data: Dict[str, Any]) -> None:
-        """Write cache file in a thread pool executor to avoid blocking the event loop"""
-        try:
-            async with self._file_lock:
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, self._write_json_sync, data)
-        except Exception as e:
-            self.logger.error("Error writing cache file: %s", e)
-
-    def _write_json_sync(self, data: Dict[str, Any]) -> None:
-        """Synchronous file write for executor"""
-        with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
->>>>>>> main
 
     def _get_dominance_coin_ids(self, dominance_data: Optional[Dict[str, float]] = None) -> List[str]:
         """
@@ -284,29 +217,6 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching DeFi data: %s", e)
             return {}
 
-<<<<<<< HEAD
-    async def get_derivatives(self) -> List[Dict[str, Any]]:
-        """
-        Fetch derivative tickers (Open Interest, Volume).
-        Useful for gauging market leverage/sentiment.
-        """
-        if not self.session:
-            self.session = CachedSession(cache=self.cache_backend)
-
-        url = "https://api.coingecko.com/api/v3/derivatives"
-        try:
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    return await response.json()
-                else:
-                    self.logger.error("Failed to fetch derivatives. Status: %s", response.status)
-                    return []
-        except Exception as e:
-            self.logger.error("Error fetching derivatives: %s", e)
-            return []
-
-=======
->>>>>>> main
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_global_market_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -443,40 +353,6 @@ class CoinGeckoAPI:
             }
         }
 
-<<<<<<< HEAD
-    async def get_market_cap_data(self) -> Dict[str, Any]:
-        """Get market cap specific data"""
-        market_data = await self.get_global_market_data()
-        if not market_data:
-            return {}
-
-        return {
-            "total_market_cap": market_data.get("market_cap", {}).get("total_usd", 0),
-            "market_cap_change_24h": market_data.get("market_cap", {}).get("change_24h", 0),
-            "total_volume_24h": market_data.get("volume", {}).get("total_usd", 0)
-        }
-
-    async def get_coin_dominance(self, limit: int = 5) -> Dict[str, float]:
-        """
-        Get coin dominance percentages
-
-        Args:
-            limit: Number of top coins to include
-
-        Returns:
-            Dictionary mapping coin symbols to dominance percentages
-        """
-        market_data = await self.get_global_market_data()
-        if not market_data or "dominance" not in market_data:
-            return {}
-
-        dominance = market_data["dominance"]
-        # Sort by dominance percentage and take top 'limit' coins
-        sorted_coins = sorted(dominance.items(), key=lambda x: x[1], reverse=True)
-        return dict(sorted_coins[:limit])
-
-=======
->>>>>>> main
     async def _fetch_all_coins(self) -> List[Dict[str, str]]:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)

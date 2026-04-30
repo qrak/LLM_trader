@@ -20,27 +20,16 @@ import chromadb
 
 # --- Local ---
 from src.config.loader import config
-<<<<<<< HEAD
-from src.app import CryptoTradingBot
-=======
 from src.app import CryptoTradingBot, POSITION_UPDATE_INTERVAL
->>>>>>> main
 from sentence_transformers import SentenceTransformer
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
-<<<<<<< HEAD
-from src.platforms.cryptocompare.news_client import CryptoCompareNewsClient
-from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
-from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
-from src.platforms.cryptocompare.data_processor import CryptoCompareDataProcessor
-=======
 from src.platforms.ccxt_market_api import CCXTMarketAPI
 from src.rag.news_ingestion import RSSCrawl4AINewsProvider
 from src.rag.local_taxonomy import LocalTaxonomyProvider
->>>>>>> main
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
@@ -123,12 +112,6 @@ class SingleInstanceLock:
     def __init__(self, app_name: str = ".llm_trader.lock"):
         self.lock_file_path = Path.home() / app_name
         self._lock_handle: Optional[int] = None
-<<<<<<< HEAD
-
-    def acquire(self) -> bool:
-        """Attempt to acquire the lock. Returns True if successful."""
-        try:
-=======
         self._mutex_handle = None
 
     def _acquire_windows_mutex(self) -> bool:
@@ -170,7 +153,6 @@ class SingleInstanceLock:
             if sys.platform == "win32" and not self._acquire_windows_mutex():
                 return False
 
->>>>>>> main
             self._lock_handle = os.open(str(self.lock_file_path), os.O_CREAT | os.O_RDWR)
 
             if sys.platform == "win32":
@@ -178,10 +160,7 @@ class SingleInstanceLock:
                 try:
                     msvcrt.locking(self._lock_handle, msvcrt.LK_NBLCK, 1)
                 except OSError:
-<<<<<<< HEAD
-=======
                     self._release_windows_mutex()
->>>>>>> main
                     return False
             else:
                 import fcntl  # pylint: disable=import-error
@@ -194,10 +173,7 @@ class SingleInstanceLock:
             return True
 
         except Exception as e:
-<<<<<<< HEAD
-=======
             self._release_windows_mutex()
->>>>>>> main
             print(f"Warning: Could not create lock file: {e}")
             return True
 
@@ -220,8 +196,6 @@ class SingleInstanceLock:
                 self.lock_file_path.unlink(missing_ok=True)
             except Exception:
                 pass
-<<<<<<< HEAD
-=======
 
         self._release_windows_mutex()
 
@@ -246,7 +220,6 @@ def _show_error_dialog(title: str, message: str) -> bool:
                 root.destroy()
             except Exception:
                 pass
->>>>>>> main
 
 
 class CompositionRoot:
@@ -292,10 +265,6 @@ class CompositionRoot:
             'keyboard_handler': infra['keyboard_handler'],
             'rag_engine': rag,
             'coingecko_api': apis['coingecko'],
-<<<<<<< HEAD
-            'news_client': apis['news'],
-=======
->>>>>>> main
             'market_api': apis['market'],
             'alternative_me_api': apis['alternative_me'],
             'http_session': infra['session'],
@@ -391,19 +360,7 @@ class CompositionRoot:
         )
         await coingecko.initialize()
 
-<<<<<<< HEAD
-        news_client = CryptoCompareNewsClient(self.logger, self.config)
-
-        cc_data_processor = CryptoCompareDataProcessor(self.logger)
-        categories = CryptoCompareCategoriesAPI(
-            logger=self.logger, config=self.config, data_processor=cc_data_processor,
-            collision_resolver=utils['collision_resolver'],
-            data_dir='data', categories_update_interval_hours=self.config.RAG_CATEGORIES_UPDATE_INTERVAL_HOURS
-        )
-        await categories.initialize()
-=======
         news_client = RSSCrawl4AINewsProvider(self.logger, self.config)
->>>>>>> main
 
         defillama = DefiLlamaClient(
             logger=self.logger, session=infra['session'], cache_dir='cache',
@@ -416,16 +373,11 @@ class CompositionRoot:
         return {
             'coingecko': coingecko,
             'news': news_client,
-<<<<<<< HEAD
-            'market': CryptoCompareMarketAPI(logger=self.logger, config=self.config),
-            'categories': categories,
-=======
             'market': CCXTMarketAPI(
                 logger=self.logger,
                 exchange_manager=infra['exchange_manager'],
                 data_fetcher_factory=utils['data_fetcher_factory'],
             ),
->>>>>>> main
             'defillama': defillama,
             'alternative_me': alternative_me
         }
@@ -437,20 +389,6 @@ class CompositionRoot:
 
         article_processor = ArticleProcessor(
             logger=self.logger, unified_parser=utils['parser'],
-<<<<<<< HEAD
-            format_utils=utils['format_utils']
-        )
-
-        file_handler = RagFileHandler(logger=self.logger, config=self.config, unified_parser=utils['parser'])
-        news_manager = NewsManager(
-            logger=self.logger, file_handler=file_handler, news_client=apis['news'],
-            categories_api=apis['categories'], session=infra['session'], article_processor=article_processor
-        )
-
-        marker_fetcher = MarketDataFetcher(
-            self.logger, apis['coingecko'], infra['exchange_manager'], apis['market'], apis['defillama']
-        )
-=======
             format_utils=utils['format_utils'],
             symbol_name_map=symbol_name_map,
         )
@@ -462,7 +400,6 @@ class CompositionRoot:
         marker_fetcher = MarketDataFetcher(
             self.logger, apis['coingecko'], infra['exchange_manager'], apis['market'], apis['defillama']
         )
->>>>>>> main
         market_processor = MarketDataProcessor(self.logger, utils['parser'])
         data_manager = MarketDataManager(
             self.logger, file_handler, apis['coingecko'], apis['market'],
@@ -481,10 +418,6 @@ class CompositionRoot:
             category_fetcher=LocalTaxonomyProvider(self.logger),
             category_processor=category_processor,
             ticker_manager=TickerManager(self.logger, file_handler, infra['exchange_manager']),
-<<<<<<< HEAD
-            news_category_analyzer=NewsCategoryAnalyzer(self.logger, category_processor, utils['parser']),
-            context_builder=ContextBuilder(self.logger, utils['token_counter'], self.config, article_processor)
-=======
             context_builder=ContextBuilder(
                 self.logger,
                 utils['token_counter'],
@@ -492,7 +425,6 @@ class CompositionRoot:
                 article_processor,
                 symbol_name_map=symbol_name_map,
             )
->>>>>>> main
         )
         await engine.initialize()
         return engine
@@ -665,11 +597,8 @@ class CompositionRoot:
             msg = context.get("message", "Unknown asyncio error")
             if exc is not None:
                 if isinstance(exc, KeyboardInterrupt):
-<<<<<<< HEAD
-=======
                     if self.shutdown_manager and getattr(self.shutdown_manager, "_shutting_down", False):
                         return
->>>>>>> main
                     self.logger.debug("Asyncio task KeyboardInterrupt during shutdown: %s", msg)
                     return
                 self.logger.error("Asyncio unhandled exception: %s", msg, exc_info=exc)
@@ -690,8 +619,6 @@ class CompositionRoot:
             shutdown_manager=self.shutdown_manager,
             **dependencies
         )
-<<<<<<< HEAD
-=======
         bot.set_position_monitor(PositionStatusMonitor(
             logger=self.logger,
             config=self.config,
@@ -705,7 +632,6 @@ class CompositionRoot:
             interruptible_sleep=bot._interruptible_sleep,
             get_symbol=lambda: bot.current_symbol,
         ))
->>>>>>> main
 
         try:
             await bot.initialize()
@@ -741,13 +667,8 @@ class CompositionRoot:
             elif not self.config.DASHBOARD_ENABLED:
                 self.logger.info("Dashboard disabled (config). Press 'd' to start it.")
 
-<<<<<<< HEAD
-            # Bot runs independently; dashboard is managed by _toggle_dashboard
-            await asyncio.create_task(bot.run(symbol, timeframe))
-=======
             # Bot runs in the foreground here; dashboard lifecycle is managed by _toggle_dashboard.
             await bot.run(symbol, timeframe)
->>>>>>> main
 
         except asyncio.CancelledError:
             self.logger.info("Trading cancelled, shutting down...")
@@ -762,28 +683,11 @@ class CompositionRoot:
         single_instance_lock = SingleInstanceLock()
         
         if not single_instance_lock.acquire():
-<<<<<<< HEAD
-            if PYQT_AVAILABLE:
-                app = QApplication.instance()
-                if app is None:
-                    app = QApplication(sys.argv)
-                    QApplication.setHighDpiScaleFactorRoundingPolicy(
-                        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-                    )
-                QMessageBox.critical(
-                    None,
-                    "Crypto Trading Bot",
-                    "Another instance of Crypto Trading Bot is already running.",
-                    QMessageBox.StandardButton.Ok
-                )
-            else:
-=======
             shown = _show_error_dialog(
                 "Crypto Trading Bot",
                 "Another instance of Crypto Trading Bot is already running."
             )
             if not shown:
->>>>>>> main
                 print("Another instance of Crypto Trading Bot is already running.")
             sys.exit(1)
         
@@ -801,15 +705,6 @@ class CompositionRoot:
         self.shutdown_manager.setup_signal_handlers()
         
         try:
-<<<<<<< HEAD
-            self.loop.run_until_complete(self.run_async())
-        except KeyboardInterrupt:
-            print("\nKeyboardInterrupt received - initiating graceful shutdown...")
-            self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
-        except Exception:
-            self.logger.exception("Unhandled exception in main loop — shutting down")
-            self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
-=======
             while True:
                 try:
                     self.loop.run_until_complete(self.run_async())
@@ -824,7 +719,6 @@ class CompositionRoot:
                     self.logger.exception("Unhandled exception in main loop — shutting down")
                     self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
                     break
->>>>>>> main
         finally:
             # Give any remaining threads time to clean up before closing the loop
             # This prevents RuntimeError when Discord or other background threads try to access the closed loop

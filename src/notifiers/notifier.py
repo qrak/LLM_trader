@@ -3,12 +3,8 @@ Discord Notifier - Send-only notification service with message expiration.
 Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
-<<<<<<< HEAD
-from typing import Optional, TYPE_CHECKING, List, Dict, Any
-=======
 import io
 from typing import Optional, TYPE_CHECKING, List, Dict, Any, Callable, Awaitable
->>>>>>> main
 
 import discord
 from aiohttp import ClientSession
@@ -246,13 +242,9 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
-<<<<<<< HEAD
-            sent_message = await channel.send(embed=embed, delete_after=expire_after)
-=======
             sent_message = await self._send_with_spacing(
                 lambda: channel.send(embed=embed, delete_after=expire_after)
             )
->>>>>>> main
 
             # Track message for persistent deletion
             await self.file_handler.track_message(
@@ -353,10 +345,6 @@ class DiscordNotifier(BaseNotifier):
             embed = self._create_analysis_embed(analysis, symbol, timeframe)
             if embed:
                 await self._send_embed(embed, channel_id)
-<<<<<<< HEAD
-        except Exception as e:
-            self.logger.error("Error sending analysis notification: %s", e)
-=======
 
             if chart_image is not None:
                 await self._send_analysis_chart(
@@ -417,7 +405,6 @@ class DiscordNotifier(BaseNotifier):
         except Exception as e:
             self.logger.error("Error sending analysis chart: %s", e)
             return None
->>>>>>> main
 
     async def send_position_status(
             self,

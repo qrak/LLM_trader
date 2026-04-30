@@ -151,22 +151,6 @@ class Config:
             return [item.strip() for item in value.split(',')]
         return value
 
-<<<<<<< HEAD
-    def _build_dynamic_urls(self):
-        """Build dynamic URLs that depend on API keys.
-
-        NOTE: API keys are intentionally NOT appended here to prevent leakage
-        in logs if these URLs are printed. The key is appended at request time.
-        """
-        # Base URLs without API keys
-        self.RAG_NEWS_API_URL = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&limit=200&extraParams=LLM_Trader_v2"
-        self.RAG_NEWS_FILTER_SOURCES = self.get_config('rag', 'news_filter_sources', True)
-        self.RAG_NEWS_ALLOWED_FEEDS = self.get_config('rag', 'news_allowed_feeds', None)
-        self.RAG_CATEGORIES_API_URL = "https://min-api.cryptocompare.com/data/news/categories"
-        self.RAG_PRICE_API_URL = "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD"
-
-=======
->>>>>>> main
     def _build_model_configs(self):
         """Build model configuration dictionaries as instance variables."""
         default_max_tokens = self.get_config('model_config', 'max_tokens', None)
@@ -205,13 +189,6 @@ class Config:
         """Get configuration value from INI file."""
         return self._config_data.get(section, {}).get(key, default)
 
-<<<<<<< HEAD
-    def get_section(self, section: str) -> Dict[str, Any]:
-        """Get entire configuration section."""
-        return self._config_data.get(section, {})
-
-=======
->>>>>>> main
     # Environment variables (private keys and sensitive data)
     @property
     def BOT_TOKEN_DISCORD(self):
@@ -240,13 +217,6 @@ class Config:
     @property
     def GOOGLE_STUDIO_PAID_API_KEY(self):
         return self.get_env('GOOGLE_STUDIO_PAID_API_KEY')
-<<<<<<< HEAD
-
-    @property
-    def CRYPTOCOMPARE_API_KEY(self):
-        return self.get_env('CRYPTOCOMPARE_API_KEY')
-=======
->>>>>>> main
 
     @property
     def COINGECKO_API_KEY(self):
@@ -471,8 +441,6 @@ class Config:
     def RAG_COOCCURRENCE_MULTIPLIER(self):
         """Score multiplier when all query keywords appear in article (default 1.5)."""
         return float(self.get_config('rag', 'cooccurrence_multiplier', 1.5))
-<<<<<<< HEAD
-=======
 
     # --- RSS / Crawl4AI ingestion settings ---
 
@@ -535,7 +503,6 @@ class Config:
     def RAG_NEWS_CRAWL_TIMEOUT(self) -> int:
         """Per-page timeout in seconds for Crawl4AI (default: same as fetch timeout)."""
         return int(self.get_config('rag', 'news_crawl_timeout', self.RAG_NEWS_FETCH_TIMEOUT))
->>>>>>> main
     @property
     def SUPPORTED_EXCHANGES(self):
         """Returns list of supported exchanges in priority order."""
@@ -647,27 +614,6 @@ class Config:
         """Determine if a model should use Google-specific configuration."""
         return model_name == self.GOOGLE_STUDIO_MODEL
 
-<<<<<<< HEAD
-    def reload(self):
-        """Reload both keys.env and config.ini files.
-
-        This allows runtime configuration changes without restarting the application.
-        """
-        logging.info("Reloading configuration files...")
-        try:
-            self._env_vars = {}
-            self._config_data = {}
-            self._load_environment()
-            self._load_ini_config()
-            self._build_dynamic_urls()
-            self._build_model_configs()
-            logging.info("Configuration reloaded successfully")
-        except Exception as e:
-            logging.error("Error reloading configuration: %s", e)
-            raise
-
-=======
->>>>>>> main
 
 # Create global config instance
 config = Config()
