@@ -45,13 +45,10 @@ class Position(SerializableMixin):
     bb_position_at_entry: str = "MIDDLE"            # UPPER/MIDDLE/LOWER
     volume_state_at_entry: str = "NORMAL"           # ACCUMULATION/NORMAL/DISTRIBUTION
     market_sentiment_at_entry: str = "NEUTRAL"      # EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED
-<<<<<<< HEAD
-=======
     stop_loss_type_at_entry: str = "unknown"        # soft/hard/unknown execution mode snapshot
     stop_loss_check_interval_at_entry: str = "unknown"
     take_profit_type_at_entry: str = "unknown"      # soft/hard/unknown execution mode snapshot
     take_profit_check_interval_at_entry: str = "unknown"
->>>>>>> main
     # Performance metrics (MAE/MFE)
     max_drawdown_pct: float = 0.0       # Max adverse excursion (MAE)
     max_profit_pct: float = 0.0         # Max favorable excursion (MFE)
@@ -125,8 +122,6 @@ class TradingMemory(SerializableMixin):
     decisions: List[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10
 
-<<<<<<< HEAD
-=======
     @staticmethod
     def _decision_key(decision: TradeDecision) -> str:
         """Build a stable key for pairing decision annotations."""
@@ -168,7 +163,6 @@ class TradingMemory(SerializableMixin):
             return reasoning
         return reasoning.replace(f"Position closed: {raw_reason}", f"Position closed: {display_reason}", 1)
 
->>>>>>> main
     def add_decision(self, decision: TradeDecision) -> None:
         """Add a decision to memory, maintaining max size."""
         self.decisions.append(decision)
@@ -210,10 +204,7 @@ class TradingMemory(SerializableMixin):
         total_pnl_pct = 0.0
         closed_trades = 0
         winning_trades = 0
-<<<<<<< HEAD
-=======
         close_pnl_by_key: Dict[str, float] = {}
->>>>>>> main
 
         # Track open positions to calculate P&L across entire history
         open_position = None
@@ -258,23 +249,6 @@ class TradingMemory(SerializableMixin):
             lines.append(f"- Total P&L: ${total_pnl_quote:+,.2f} ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
             lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")
-<<<<<<< HEAD
-
-        return "\n".join(lines)
-
-    def to_list(self) -> List[Dict[str, Any]]:
-        """Convert to list of dictionaries for JSON serialization."""
-        return [d.to_dict() for d in self.decisions]
-
-    @classmethod
-    def from_list(cls, data: List[Dict[str, Any]], max_decisions: int = 10) -> 'TradingMemory':
-        """Create TradingMemory from list of dictionaries."""
-        memory = cls(max_decisions=max_decisions)
-        for item in data:
-            memory.decisions.append(TradeDecision.from_dict(item))
-        return memory
-=======
->>>>>>> main
 
         return "\n".join(lines)
 

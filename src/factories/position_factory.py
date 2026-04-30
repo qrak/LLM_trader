@@ -23,10 +23,7 @@ class PositionFactory:
     ) -> Position:
         """Create a new Position instance."""
         market_conditions = market_conditions or {}
-<<<<<<< HEAD
-=======
         exit_execution = build_exit_execution_context(**(exit_execution_context or {}))
->>>>>>> main
 
         return Position(
             entry_price=risk_assessment.entry_price,
@@ -53,13 +50,10 @@ class PositionFactory:
             bb_position_at_entry=market_conditions.get('bb_position', 'MIDDLE'),
             volume_state_at_entry=market_conditions.get('volume_state', 'NORMAL'),
             market_sentiment_at_entry=market_conditions.get('market_sentiment', 'NEUTRAL'),
-<<<<<<< HEAD
-=======
             stop_loss_type_at_entry=exit_execution["stop_loss_type"],
             stop_loss_check_interval_at_entry=exit_execution["stop_loss_check_interval"],
             take_profit_type_at_entry=exit_execution["take_profit_type"],
             take_profit_check_interval_at_entry=exit_execution["take_profit_check_interval"],
->>>>>>> main
             max_drawdown_pct=0.0,
             max_profit_pct=0.0
         )
@@ -98,13 +92,10 @@ class PositionFactory:
             bb_position_at_entry=original_position.bb_position_at_entry,
             volume_state_at_entry=original_position.volume_state_at_entry,
             market_sentiment_at_entry=original_position.market_sentiment_at_entry,
-<<<<<<< HEAD
-=======
             stop_loss_type_at_entry=original_position.stop_loss_type_at_entry,
             stop_loss_check_interval_at_entry=original_position.stop_loss_check_interval_at_entry,
             take_profit_type_at_entry=original_position.take_profit_type_at_entry,
             take_profit_check_interval_at_entry=original_position.take_profit_check_interval_at_entry,
->>>>>>> main
             max_drawdown_pct=original_position.max_drawdown_pct,
             max_profit_pct=original_position.max_profit_pct
         )

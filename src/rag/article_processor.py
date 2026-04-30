@@ -10,9 +10,6 @@ import re
 class ArticleProcessor:
     """Utility class for common article processing operations."""
 
-<<<<<<< HEAD
-    def __init__(self, logger: logging.Logger, format_utils=None, unified_parser=None):
-=======
     def __init__(
         self,
         logger: logging.Logger,
@@ -20,13 +17,10 @@ class ArticleProcessor:
         unified_parser=None,
         symbol_name_map: Dict[str, str] | None = None,
     ):
->>>>>>> main
 
         self.logger = logger
         self.parser = unified_parser
         self.format_utils = format_utils
-<<<<<<< HEAD
-=======
         self.symbol_name_map = {
             str(symbol).upper(): str(name).lower().strip()
             for symbol, name in (symbol_name_map or {}).items()
@@ -38,7 +32,6 @@ class ArticleProcessor:
         """Normalize coin names/ids so token names match article text better."""
         normalized = re.sub(r"[-_]+", " ", name.lower())
         return re.sub(r"\s+", " ", normalized).strip()
->>>>>>> main
 
     def detect_coins_in_article(self, article: Dict[str, Any], known_crypto_tickers: Set[str]) -> Set[str]:
         """Detect cryptocurrency mentions in article content."""
@@ -60,8 +53,6 @@ class ArticleProcessor:
         coins_mentioned.update(title_coins)
         coins_mentioned.update(body_coins)
 
-<<<<<<< HEAD
-=======
         # Also resolve mentions through configured symbol_name_map entries.
         # This catches names that parser heuristics do not map yet.
         if self.symbol_name_map:
@@ -75,7 +66,6 @@ class ArticleProcessor:
                     if symbol in known_crypto_tickers:
                         coins_mentioned.add(symbol)
 
->>>>>>> main
         return coins_mentioned
 
     def get_article_timestamp(self, article: Dict[str, Any]) -> float:

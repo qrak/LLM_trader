@@ -186,8 +186,6 @@ class Logger(logging.Logger):
         def _handle_thread_exception(args):
             if args.exc_type is SystemExit:
                 return
-<<<<<<< HEAD
-=======
             # Suppress Discord keep-alive handler error during shutdown
             # This occurs when the keep-alive thread tries to access a closed event loop
             # It's harmless and expected behavior during graceful shutdown
@@ -197,7 +195,6 @@ class Logger(logging.Logger):
                 and "keep-alive-handler" in (args.thread.name if args.thread else "")
             ):
                 return
->>>>>>> main
             logger_ref.critical(
                 "Unhandled exception in thread '%s'",
                 args.thread.name if args.thread else "unknown",

@@ -48,10 +48,7 @@ class PersistenceManager:
         self.previous_response_file = self.data_dir / "previous_response.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
-<<<<<<< HEAD
-=======
         self.position_monitor_file = self.data_dir / "position_monitor.json"
->>>>>>> main
 
         # In-memory caches to prevent blocking I/O on hot paths
         self._position_cache: Optional["Position"] = None
@@ -269,13 +266,6 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving statistics: %s", e)
 
-<<<<<<< HEAD
-    async def async_save_statistics(self, stats: "TradingStatistics") -> None:
-        """Non-blocking save_statistics: runs on a thread-pool worker."""
-        await asyncio.to_thread(self.save_statistics, stats)
-
-=======
->>>>>>> main
     def load_statistics(self) -> "TradingStatistics":
         """Load trading statistics from disk."""
         if not self.statistics_file.exists():
@@ -292,8 +282,6 @@ class PersistenceManager:
         """Non-blocking load_statistics: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_statistics)
 
-<<<<<<< HEAD
-=======
     def save_position_monitor_state(self, state: Dict[str, Any]) -> None:
         """Save position monitor cadence state to disk."""
         try:
@@ -337,7 +325,6 @@ class PersistenceManager:
         """Non-blocking clear_position_monitor_state: runs on a thread-pool worker."""
         await asyncio.to_thread(self.clear_position_monitor_state)
 
->>>>>>> main
     def save_previous_response(
         self,
         response: str,
@@ -378,18 +365,6 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving previous response: %s", e)
 
-<<<<<<< HEAD
-    async def async_save_previous_response(
-        self,
-        response: str,
-        technical_data: Optional[Dict[str, Any]] = None,
-        prompt: Optional[str] = None
-    ) -> None:
-        """Non-blocking save_previous_response: runs on a thread-pool worker."""
-        await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
-
-=======
->>>>>>> main
     async def async_load_previous_response(self) -> Optional[Dict[str, Any]]:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_previous_response)
@@ -444,13 +419,6 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving last analysis time: %s", e)
 
-<<<<<<< HEAD
-    async def async_save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
-        """Non-blocking save_last_analysis_time: runs on a thread-pool worker."""
-        await asyncio.to_thread(self.save_last_analysis_time, timestamp)
-
-=======
->>>>>>> main
     def get_last_analysis_time(self) -> Optional[datetime]:
         """Get timestamp of last successful analysis."""
         if self._last_analysis_time_cache_valid:

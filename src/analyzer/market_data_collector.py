@@ -123,14 +123,7 @@ class MarketDataCollector:
                 self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
                 context.timestamps = None
 
-<<<<<<< HEAD
-            if len(context.ohlcv_candles) < 720:
-                hours_available = len(context.ohlcv_candles)
-                days_available = hours_available / 24
-                self.logger.warning("Insufficient data for full 30-day analysis. Have %s hours (~%.1f days)", hours_available, days_available)
-=======
             self._warn_if_insufficient_history(len(context.ohlcv_candles))
->>>>>>> main
 
             # Fetch long-term historical data for additional context
             await self.fetch_long_term_historical_data(context)
@@ -147,8 +140,6 @@ class MarketDataCollector:
             self.logger.exception("OHLCV fetch failed: %s", str(e))
             return False
 
-<<<<<<< HEAD
-=======
     def _warn_if_insufficient_history(self, candle_count: int, target_days: int = 30) -> None:
         try:
             required_candles = TimeframeValidator.get_candle_limit_for_days(self.timeframe, target_days)
@@ -167,7 +158,6 @@ class MarketDataCollector:
                 required_candles
             )
 
->>>>>>> main
     async def fetch_long_term_historical_data(self, context, days: int = 365) -> bool:
         """Fetch long-term (365 days by default) historical data"""
         try:

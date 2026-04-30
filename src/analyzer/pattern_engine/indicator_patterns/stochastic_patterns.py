@@ -127,24 +127,17 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
             k_val = float(stoch_k[idx + 1])
             d_val = float(stoch_d[idx + 1])
 
-<<<<<<< HEAD
-=======
             # Determine zone membership on the pre-crossover bar. This preserves
             # "cross from overbought/oversold" semantics even if the crossover
             # bar itself already moved out of the zone.
             k_pre = float(stoch_k[idx])
             d_pre = float(stoch_d[idx])
 
->>>>>>> main
             # Check if in oversold (bullish) or overbought (bearish) zone
             if is_bullish:
                 in_zone = k_pre < threshold or d_pre < threshold
             else:
-<<<<<<< HEAD
-                in_zone = k_val > threshold or d_val > threshold
-=======
                 in_zone = k_pre > threshold or d_pre > threshold
->>>>>>> main
 
             # periods_ago: crossover at idx+1, current bar is len-1
             # periods_ago = (len-1) - (idx+1) = len - idx - 2 = i - 1
@@ -188,73 +181,3 @@ def detect_stoch_bearish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarra
     """
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, False, overbought_threshold)
 
-<<<<<<< HEAD
-
-@njit
-def detect_stoch_divergence_numba(stoch_k: np.ndarray, prices: np.ndarray, lookback: int = 20) -> tuple:
-    """
-    Detect divergence between Stochastic and price.
-
-    Bullish divergence: Price makes lower low, Stochastic makes higher low
-    Bearish divergence: Price makes higher high, Stochastic makes lower high
-
-    Args:
-        stoch_k: Stochastic %K array
-        prices: Price array (typically close prices)
-        lookback: Periods to look back for divergence
-
-    Returns:
-        (found: bool, is_bullish: bool, price_change: float, stoch_change: float)
-    """
-    if len(stoch_k) < lookback or len(prices) < lookback:
-        return False, False, 0.0, 0.0
-
-    # Get recent segment
-    recent_stoch = stoch_k[-lookback:]
-    recent_prices = prices[-lookback:]
-
-    # Skip if any NaN values
-    for i in range(len(recent_stoch)):
-        if math.isnan(recent_stoch[i]) or math.isnan(recent_prices[i]):
-            return False, False, 0.0, 0.0
-
-    # Find local extrema
-    stoch_min_idx = np.argmin(recent_stoch)
-    stoch_max_idx = np.argmax(recent_stoch)
-    price_min_idx = np.argmin(recent_prices)
-    price_max_idx = np.argmax(recent_prices)
-
-    # Bullish divergence: price lower low, stoch higher low
-    if price_min_idx > 0 and stoch_min_idx > 0:
-        # Find previous low in first half
-        mid_point = len(recent_prices) // 2
-        if price_min_idx > mid_point:
-            prev_price_low = np.min(recent_prices[:mid_point])
-            prev_stoch_low = np.min(recent_stoch[:mid_point])
-
-            current_price_low = recent_prices[price_min_idx]
-            current_stoch_low = recent_stoch[stoch_min_idx]
-
-            if current_price_low < prev_price_low and current_stoch_low > prev_stoch_low:
-                price_change = float(current_price_low - prev_price_low)
-                stoch_change = float(current_stoch_low - prev_stoch_low)
-                return True, True, price_change, stoch_change
-
-    # Bearish divergence: price higher high, stoch lower high
-    if price_max_idx > 0 and stoch_max_idx > 0:
-        mid_point = len(recent_prices) // 2
-        if price_max_idx > mid_point:
-            prev_price_high = np.max(recent_prices[:mid_point])
-            prev_stoch_high = np.max(recent_stoch[:mid_point])
-
-            current_price_high = recent_prices[price_max_idx]
-            current_stoch_high = recent_stoch[stoch_max_idx]
-
-            if current_price_high > prev_price_high and current_stoch_high < prev_stoch_high:
-                price_change = float(current_price_high - prev_price_high)
-                stoch_change = float(current_stoch_high - prev_stoch_high)
-                return True, False, price_change, stoch_change
-
-    return False, False, 0.0, 0.0
-=======
->>>>>>> main

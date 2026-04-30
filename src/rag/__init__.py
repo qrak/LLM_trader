@@ -24,15 +24,6 @@ __all__ = [
     'RagEngine', 'ContextBuilder',
 
     # Data operations
-<<<<<<< HEAD
-    'MarketDataManager', 'NewsManager', 'RagFileHandler',
-
-    # Search operations
-    'IndexManager',
-
-    # Content processing
-    'ArticleProcessor', 'NewsCategoryAnalyzer',
-=======
     'MarketDataManager', 'NewsManager', 'NewsRepository', 'RagFileHandler',
 
     # Search operations
@@ -40,7 +31,6 @@ __all__ = [
 
     # Content processing
     'ArticleProcessor',
->>>>>>> main
 
     # Management operations
     'TickerManager', 'CategoryProcessor',

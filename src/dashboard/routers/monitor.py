@@ -124,13 +124,7 @@ class MonitorRouter:
             return {"articles": cached, "count": len(cached)}
         articles = []
         if self.rag_engine:
-<<<<<<< HEAD
-            news_manager = self.rag_engine.news_manager
-            if news_manager:
-                articles = news_manager.news_database
-=======
             articles = self.rag_engine.get_news_cache_snapshot()
->>>>>>> main
         if not articles:
             data_dir = self.config.DATA_DIR
             for news_path in NEWS_FILES:

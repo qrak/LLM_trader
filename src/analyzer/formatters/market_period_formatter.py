@@ -70,12 +70,8 @@ class MarketPeriodFormatter:
                     parts.append(ind_parts)
 
             if parts:
-<<<<<<< HEAD
-                sections.append(f"\n{period.upper()}: {' | '.join(parts)}")
-=======
                 period_label = str(metrics.get('period') or period).upper()
                 sections.append(f"\n{period_label}: {' | '.join(parts)}")
->>>>>>> main
 
         return "".join(sections)
 

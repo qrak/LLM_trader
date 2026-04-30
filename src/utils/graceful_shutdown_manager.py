@@ -64,21 +64,9 @@ class GracefulShutdownManager:
         else:
             print(f"Received signal {sig}, asking for confirmation...")
 
-<<<<<<< HEAD
-        if self.confirmation_callback:
-            if self.confirmation_callback():
-                if self.logger:
-                    self.logger.info("User confirmed shutdown. Initiating graceful shutdown...")
-                else:
-                    print("User confirmed shutdown, initiating...")
-
-                if self.loop.is_running() and not self.loop.is_closed():
-                    self.loop.create_task(self.shutdown_gracefully())
-=======
         if self._confirm_shutdown():
             if self.logger:
                 self.logger.info("User confirmed shutdown. Initiating graceful shutdown...")
->>>>>>> main
             else:
                 print("User confirmed shutdown, initiating...")
             self._request_shutdown()
@@ -155,13 +143,10 @@ class GracefulShutdownManager:
                 self.logger.error(err_msg)
             else:
                 print(err_msg)
-<<<<<<< HEAD
-=======
         
         # Final pause to allow background threads (e.g., Discord keep-alive handler) to fully terminate
         # before the event loop is closed. This prevents RuntimeError: Event loop is closed
         await asyncio.sleep(0.5)
->>>>>>> main
 
     @staticmethod
     def show_exit_confirmation() -> bool:
@@ -178,35 +163,17 @@ class GracefulShutdownManager:
             except (EOFError, KeyboardInterrupt):
                 return True
 
-<<<<<<< HEAD
-        try:
-            app = QApplication.instance()
-            if app is None:
-                app = QApplication(sys.argv)
-                QApplication.setHighDpiScaleFactorRoundingPolicy(
-                    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-                )
-
-            result = QMessageBox.question(
-                None,
-=======
         root = None
         try:
             root = tk.Tk()
             root.withdraw()
             root.attributes("-topmost", True)
             result = messagebox.askyesno(
->>>>>>> main
                 "Exit Confirmation",
                 "Are you sure you want to close the Crypto Trading Bot application?",
                 parent=root
             )
-<<<<<<< HEAD
-
-            return result == QMessageBox.StandardButton.Yes
-=======
             return bool(result)
->>>>>>> main
         except Exception as e:
             print(f"Warning: Could not show confirmation dialog: {e}. Proceeding with shutdown.")
             return True

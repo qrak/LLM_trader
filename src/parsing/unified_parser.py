@@ -15,11 +15,6 @@ class UnifiedParser:
     Replaces multiple scattered parsing components with a single, comprehensive solution.
     """
 
-<<<<<<< HEAD
-    _CATEGORY_SEPARATORS = (',', ';', '|')
-
-=======
->>>>>>> main
     def __init__(self, logger: Logger, format_utils=None):
         self.logger = logger
         self.format_utils = format_utils
@@ -136,62 +131,7 @@ class UnifiedParser:
             }
         }
         return f"```json\n{json.dumps(json_fallback, indent=2)}\n```\n\nThe analysis failed due to a technical issue. Please try again later."
-<<<<<<< HEAD
 
-    @staticmethod
-    def format_provider_error(provider: str, error_detail: str) -> Dict[str, Any]:
-        """Create a standardized provider error dictionary.
-
-        Args:
-            provider: Provider name that failed
-            error_detail: Details about the error
-
-        Returns:
-            Error dictionary for use in ChatResponseModel
-        """
-        return {"error": f"{provider} failed: {error_detail}"}
-
-    @staticmethod
-    def format_final_fallback_error(provider: str, error_detail: str) -> Dict[str, Any]:
-        """Create error response for final fallback failure.
-
-        Args:
-            provider: Last provider attempted
-            error_detail: Details about the error
-
-        Returns:
-            Error dictionary indicating all providers failed
-        """
-        return {"error": f"All models failed. Last attempt ({provider}): {error_detail}"}
-
-
-    def parse_article_categories(self, categories_string: str) -> Set[str]:
-        """Parse categories from article category string."""
-        if not categories_string:
-            return set()
-
-        categories = set()
-
-        # Split by common separators
-        for separator in self._CATEGORY_SEPARATORS:
-            if separator in categories_string:
-                parts = categories_string.split(separator)
-                for part in parts:
-                    clean_category = part.strip().lower()
-                    if clean_category and len(clean_category) > 2:
-                        categories.add(clean_category)
-                break
-        else:
-            # No separator found, use as single category
-            clean_category = categories_string.strip().lower()
-            if clean_category and len(clean_category) > 2:
-                categories.add(clean_category)
-
-        return categories
-
-=======
-
->>>>>>> main
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
         if not symbol:

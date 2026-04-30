@@ -255,14 +255,6 @@ class RagEngine:
         """
         k, max_tokens = self._resolve_retrieval_limits(k, max_tokens)
 
-        if max_tokens is None:
-            try:
-                # article_max_tokens is per-article budget, so multiply by number of articles
-                article_max = int(self.config.RAG_ARTICLE_MAX_TOKENS)
-                max_tokens = article_max * k
-            except Exception:
-                max_tokens = 250 * k  # Fallback: 250 tokens per article
-
         if self.news_manager.get_database_size() == 0:
             self.logger.warning("News database is empty")
             return ""
@@ -275,12 +267,7 @@ class RagEngine:
             if not self.last_update or datetime.now(timezone.utc) - self.last_update > timedelta(minutes=30):
                 await self.update_if_needed()
 
-<<<<<<< HEAD
-            # Extract keywords from query for smart sentence selection
-            keywords = set(re.findall(r'\b\w{3,15}\b', query.lower()))
-=======
             keywords = self._extract_query_keywords(query)
->>>>>>> main
 
             # Use context builder for keyword search
             scores = await self.context_builder.keyword_search(
@@ -299,19 +286,13 @@ class RagEngine:
             context_text, total_tokens = self.context_builder.add_articles_to_context(
                 relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
-<<<<<<< HEAD
-=======
             self._latest_article_urls = self.context_builder.get_latest_article_urls()
->>>>>>> main
             self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
             return context_text
         except Exception as e:
             self.logger.error("Error retrieving context: %s", e)
-<<<<<<< HEAD
-=======
             self._latest_article_urls = {}
->>>>>>> main
             return "Error retrieving market context."
 
     def get_news_cache_snapshot(self, limit: Optional[int] = None) -> list[Dict[str, Any]]:
@@ -343,47 +324,6 @@ class RagEngine:
             self.logger.error("Error getting market overview: %s", e)
             return None
 
-<<<<<<< HEAD
-    async def update_known_tickers(self) -> None:
-        """Update known cryptocurrency ticker symbols"""
-        try:
-            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
-        except Exception as e:
-            self.logger.error("Error updating known tickers: %s", e)
-
-    async def start_periodic_updates(self) -> None:
-        """Start periodic data update task"""
-        async def update_loop():
-            while True:
-                try:
-                    await asyncio.sleep(self.update_interval.total_seconds())
-                    await self.update_if_needed()
-                except asyncio.CancelledError:
-                    self.logger.debug("Periodic updates cancelled")
-                    break
-                except Exception as e:
-                    self.logger.error("Error in periodic update: %s", e)
-                    await asyncio.sleep(60)
-
-        if self._periodic_update_task is None:
-            self._periodic_update_task = asyncio.create_task(update_loop())
-            update_mins = self.update_interval.total_seconds() / 60
-            self.logger.debug("Started periodic news updates every %.1f minutes", update_mins)
-
-    async def stop_periodic_updates(self) -> None:
-        """Stop periodic data update task"""
-        if self._periodic_update_task:
-            self._periodic_update_task.cancel()
-            try:
-                await self._periodic_update_task
-            except asyncio.CancelledError:
-                pass
-            self._periodic_update_task = None
-            self.logger.debug("Stopped periodic news updates")
-
-
-=======
->>>>>>> main
     async def close(self) -> None:
         """Close resources and mark as closed"""
         if self._is_closed:

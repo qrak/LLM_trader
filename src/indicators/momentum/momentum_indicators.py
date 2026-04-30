@@ -5,21 +5,6 @@ import numpy as np
 from numba import njit
 
 from src.indicators.overlap import ema_numba
-<<<<<<< HEAD
-
-
-@dataclass
-class UltimateOscillatorConfig:
-    """Configuration for Ultimate Oscillator."""
-    fast: int = 7
-    medium: int = 14
-    slow: int = 28
-    fast_w: float = 4.0
-    medium_w: float = 2.0
-    slow_w: float = 1.0
-    drift: int = 1
-=======
->>>>>>> main
 
 
 @njit(cache=True)

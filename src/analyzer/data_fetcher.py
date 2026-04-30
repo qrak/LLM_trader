@@ -57,10 +57,6 @@ class DataFetcher:
         closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
         actual_current_price = float(ohlcv_array[-1, 4])  # Real-time price from the unclosed candle
         # Verify we have enough data
-<<<<<<< HEAD
-        if len(closed_candles) < min(720, limit - 1):
-            self.logger.warning("Received fewer closed candles (%s) than expected (%s)", len(closed_candles), min(720, limit - 1))
-=======
         expected_candles = self._expected_closed_candles(timeframe, limit)
         if len(closed_candles) < expected_candles:
             coverage_days = self._coverage_days(timeframe, len(closed_candles))
@@ -71,7 +67,6 @@ class DataFetcher:
                 timeframe,
                 coverage_days
             )
->>>>>>> main
             self.logger.debug("First candle timestamp: %s", closed_candles[0][0] if len(closed_candles) > 0 else 'N/A')
             self.logger.debug("Last closed candle timestamp: %s", closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A')
 

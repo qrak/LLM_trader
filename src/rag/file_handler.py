@@ -228,8 +228,6 @@ class RagFileHandler:
         except Exception as e:
             self.logger.error("Error saving known tickers: %s", e)
 
-<<<<<<< HEAD
-=======
     def load_symbol_name_map(self) -> Dict[str, str]:
         """Load optional symbol -> full coin name mapping from data JSON."""
         try:
@@ -244,7 +242,6 @@ class RagFileHandler:
             self.logger.error("Error loading symbol name map: %s", e)
             return {}
 
->>>>>>> main
     def load_rag_priorities(self) -> Optional[Dict]:
         """Load RAG priorities configuration from disk."""
         try:

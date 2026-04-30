@@ -77,8 +77,6 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const pnl = priceToUse ? calculatePnL(data.entry_price, priceToUse, data.direction) : null;
         const isProfit = pnl !== null && pnl >= 0;
         const directionClass = data.direction === 'LONG' ? 'long' : 'short';
-<<<<<<< HEAD
-=======
         const exitManagement = data.exit_management_at_entry || data.exit_management || {};
         const stopLossMode = exitManagement.stop_loss_type
             ? `${escapeHtml(exitManagement.stop_loss_type)} / ${escapeHtml(exitManagement.stop_loss_check_interval || '--')}`
@@ -86,7 +84,6 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const takeProfitMode = exitManagement.take_profit_type
             ? `${escapeHtml(exitManagement.take_profit_type)} / ${escapeHtml(exitManagement.take_profit_check_interval || '--')}`
             : '--';
->>>>>>> main
         const longIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
@@ -111,13 +108,10 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                 <div class="position-sl-tp">
                     <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${(data.sl_distance_pct * 100).toFixed(1)}%)</span></div>
                     <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${(data.tp_distance_pct * 100).toFixed(1)}%)</span></div>
-<<<<<<< HEAD
-=======
                 </div>
                 <div class="position-exit-management">
                     <div><span class="label">SL Execution</span><span class="value">${stopLossMode}</span></div>
                     <div><span class="label">TP Execution</span><span class="value">${takeProfitMode}</span></div>
->>>>>>> main
                 </div>
                 <div class="position-meta">
                     <span title="Time in position" class="meta-item">${timeIcon} <span>${formatDuration(timeInPosition)}</span></span>
