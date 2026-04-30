@@ -45,6 +45,13 @@ class Position(SerializableMixin):
     bb_position_at_entry: str = "MIDDLE"            # UPPER/MIDDLE/LOWER
     volume_state_at_entry: str = "NORMAL"           # ACCUMULATION/NORMAL/DISTRIBUTION
     market_sentiment_at_entry: str = "NEUTRAL"      # EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED
+<<<<<<< HEAD
+=======
+    stop_loss_type_at_entry: str = "unknown"        # soft/hard/unknown execution mode snapshot
+    stop_loss_check_interval_at_entry: str = "unknown"
+    take_profit_type_at_entry: str = "unknown"      # soft/hard/unknown execution mode snapshot
+    take_profit_check_interval_at_entry: str = "unknown"
+>>>>>>> main
     # Performance metrics (MAE/MFE)
     max_drawdown_pct: float = 0.0       # Max adverse excursion (MAE)
     max_profit_pct: float = 0.0         # Max favorable excursion (MFE)
@@ -118,6 +125,50 @@ class TradingMemory(SerializableMixin):
     decisions: List[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10
 
+<<<<<<< HEAD
+=======
+    @staticmethod
+    def _decision_key(decision: TradeDecision) -> str:
+        """Build a stable key for pairing decision annotations."""
+        return f"{decision.timestamp.isoformat()}|{decision.action}|{decision.price:.8f}"
+
+    @staticmethod
+    def _extract_close_reason(reasoning: str) -> Optional[str]:
+        """Extract the raw close reason from persisted close reasoning text."""
+        prefix = "Position closed: "
+        if not reasoning.startswith(prefix):
+            return None
+        remainder = reasoning[len(prefix):]
+        return remainder.split(".", 1)[0].strip() or None
+
+    @staticmethod
+    def _describe_close_reason(reason: Optional[str], pnl_pct: Optional[float]) -> Optional[str]:
+        """Convert close reasons into explicit outcome-aware wording for prompts."""
+        if not reason:
+            return None
+
+        normalized = reason.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized != "stop_loss":
+            return reason.replace("_", " ")
+
+        if pnl_pct is None:
+            return reason
+        if pnl_pct > 0:
+            return "profit-protecting stop"
+        if pnl_pct < 0:
+            return "loss-cutting stop"
+        return "breakeven stop"
+
+    @classmethod
+    def _format_recent_reasoning(cls, reasoning: str, pnl_pct: Optional[float]) -> str:
+        """Make close reasoning explicit about whether a stop protected profit or cut loss."""
+        raw_reason = cls._extract_close_reason(reasoning)
+        display_reason = cls._describe_close_reason(raw_reason, pnl_pct)
+        if not raw_reason or not display_reason or display_reason == raw_reason:
+            return reasoning
+        return reasoning.replace(f"Position closed: {raw_reason}", f"Position closed: {display_reason}", 1)
+
+>>>>>>> main
     def add_decision(self, decision: TradeDecision) -> None:
         """Add a decision to memory, maintaining max size."""
         self.decisions.append(decision)
@@ -159,6 +210,10 @@ class TradingMemory(SerializableMixin):
         total_pnl_pct = 0.0
         closed_trades = 0
         winning_trades = 0
+<<<<<<< HEAD
+=======
+        close_pnl_by_key: Dict[str, float] = {}
+>>>>>>> main
 
         # Track open positions to calculate P&L across entire history
         open_position = None
@@ -179,15 +234,19 @@ class TradingMemory(SerializableMixin):
                 closed_trades += 1
                 if pnl_pct > 0:
                     winning_trades += 1
+                close_pnl_by_key[self._decision_key(decision)] = pnl_pct
                 open_position = None
         
         # Format each recent decision for context
         for decision in recent:
             time_str = decision.timestamp.strftime("%Y-%m-%d %H:%M")
-            # Keep full reasoning for better AI context (no truncation)
+            reasoning = self._format_recent_reasoning(
+                decision.reasoning,
+                close_pnl_by_key.get(self._decision_key(decision)),
+            )
             lines.append(
                 f"- [{time_str}] {decision.action} @ ${decision.price:,.2f} "
-                f"(Conf: {decision.confidence}) - {decision.reasoning}"
+                f"(Conf: {decision.confidence}) - {reasoning}"
             )
 
         # Add overall performance summary from ALL closed trades
@@ -199,6 +258,7 @@ class TradingMemory(SerializableMixin):
             lines.append(f"- Total P&L: ${total_pnl_quote:+,.2f} ({total_pnl_pct:+.2f}%)")
             lines.append(f"- Average P&L per Trade: {avg_pnl_pct:+.2f}%")
             lines.append(f"- Win Rate: {win_rate:.1f}% ({winning_trades}/{closed_trades} trades)")
+<<<<<<< HEAD
 
         return "\n".join(lines)
 
@@ -213,7 +273,10 @@ class TradingMemory(SerializableMixin):
         for item in data:
             memory.decisions.append(TradeDecision.from_dict(item))
         return memory
+=======
+>>>>>>> main
 
+        return "\n".join(lines)
 
 @dataclass(slots=True)
 class VectorSearchResult(SerializableMixin):

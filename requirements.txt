@@ -2,6 +2,7 @@ ccxt
 tiktoken==0.11.0
 aiohttp==3.13.3
 aiodns==3.6.1
+chardet<6
 aiosqlite==0.21.0
 aiohttp-client-cache==0.13.0
 rich==14.1.0
@@ -21,8 +22,8 @@ kaleido==1.1.0
 torch>=2.0.0
 chromadb>=1.0.0
 sentence-transformers>=5.2.0
-PyQt6==6.9.1
 fastapi==0.128.0
 uvicorn==0.40.0
 wsproto>=1.2.0
 jinja2>=3.1.2
+crawl4ai>=0.5.0

@@ -2,6 +2,7 @@
 Base Notifier - Abstract base class providing shared logic for notifiers.
 Subclasses implement rendering methods for their specific output medium.
 """
+import io
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
@@ -35,6 +36,24 @@ class BaseNotifier(ABC):
         self.formatter = formatter
         self.is_initialized = False
 
+    def format_exit_monitoring(self) -> str:
+        """Format configured SL/TP execution modes for operator status messages."""
+        timeframe = self.config.TIMEFRAME
+        stop_type = self.config.STOP_LOSS_TYPE
+        take_profit_type = self.config.TAKE_PROFIT_TYPE
+        stop_interval = self.config.STOP_LOSS_CHECK_INTERVAL
+        take_profit_interval = self.config.TAKE_PROFIT_CHECK_INTERVAL
+
+        def label(short_name: str, exit_type: str, interval: str) -> str:
+            if exit_type == "hard":
+                return f"{short_name}: hard / {interval}"
+            return f"{short_name}: soft / {timeframe} close"
+
+        return " | ".join([
+            label("SL", stop_type, stop_interval),
+            label("TP", take_profit_type, take_profit_interval),
+        ])
+
     @abstractmethod
     async def start(self) -> None:
         """Start the notifier service."""
@@ -62,7 +81,8 @@ class BaseNotifier(ABC):
             result: dict,
             symbol: str,
             timeframe: str,
-            channel_id: int
+            channel_id: int,
+            chart_image: Optional[io.BytesIO] = None
     ) -> None:
         """Send full analysis notification."""
 
@@ -191,6 +211,28 @@ class BaseNotifier(ABC):
         time_held = now - entry_time
         return time_held.total_seconds() / 3600
 
+    @staticmethod
+    def _extract_close_reason(decision_dict: Dict[str, Any]) -> Optional[str]:
+        """Extract close reason from decision metadata or legacy reasoning text."""
+        close_reason = decision_dict.get('close_reason')
+        if close_reason:
+            return str(close_reason)
+
+        reasoning = str(decision_dict.get('reasoning', ''))
+        prefix = "Position closed: "
+        if reasoning.startswith(prefix):
+            parsed_reason = reasoning[len(prefix):].split('.', 1)[0].strip()
+            return parsed_reason or None
+
+        return None
+
+    @staticmethod
+    def _format_close_reason(close_reason: Optional[str]) -> Optional[str]:
+        """Normalize close reason for user-facing notifications."""
+        if not close_reason:
+            return None
+        return close_reason.replace('_', ' ').strip().lower()
+
     def calculate_performance_stats(
             self,
             trade_history: List[Dict[str, Any]]
@@ -212,6 +254,7 @@ class BaseNotifier(ABC):
         closed_trades = 0
         winning_trades = 0
         open_position = None
+        last_closed_trade = None
 
         for decision_dict in trade_history:
             action = decision_dict.get('action', '')
@@ -248,6 +291,13 @@ class BaseNotifier(ABC):
 
                 if pnl_pct > 0:
                     winning_trades += 1
+
+                last_closed_trade = {
+                    'outcome': 'WIN' if pnl_pct > 0 else 'LOSS' if pnl_pct < 0 else 'BREAKEVEN',
+                    'close_reason': self._format_close_reason(self._extract_close_reason(decision_dict)),
+                    'pnl_pct': pnl_pct,
+                    'pnl_quote': pnl_quote,
+                }
                 open_position = None
 
         if closed_trades == 0:
@@ -262,6 +312,7 @@ class BaseNotifier(ABC):
             'avg_pnl_pct': total_pnl_pct / closed_trades,
             'win_rate': (winning_trades / closed_trades) * 100,
             'net_pnl': total_pnl_quote - total_fees,
+            'last_closed_trade': last_closed_trade,
         }
 
     @staticmethod

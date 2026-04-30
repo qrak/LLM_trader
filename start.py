@@ -10,6 +10,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
+import hashlib
 from typing import Optional
 
 # --- Third-party ---
@@ -19,17 +20,27 @@ import chromadb
 
 # --- Local ---
 from src.config.loader import config
+<<<<<<< HEAD
 from src.app import CryptoTradingBot
+=======
+from src.app import CryptoTradingBot, POSITION_UPDATE_INTERVAL
+>>>>>>> main
 from sentence_transformers import SentenceTransformer
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
+<<<<<<< HEAD
 from src.platforms.cryptocompare.news_client import CryptoCompareNewsClient
 from src.platforms.cryptocompare.market_api import CryptoCompareMarketAPI
 from src.platforms.cryptocompare.categories_api import CryptoCompareCategoriesAPI
 from src.platforms.cryptocompare.data_processor import CryptoCompareDataProcessor
+=======
+from src.platforms.ccxt_market_api import CCXTMarketAPI
+from src.rag.news_ingestion import RSSCrawl4AINewsProvider
+from src.rag.local_taxonomy import LocalTaxonomyProvider
+>>>>>>> main
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
@@ -41,7 +52,8 @@ from src.managers.persistence_manager import PersistenceManager
 from src.managers.risk_manager import RiskManager
 from src.trading import (
     TradingStrategy, TradingBrainService,
-    TradingStatisticsService, TradingMemoryService, PositionExtractor
+    TradingStatisticsService, TradingMemoryService, PositionExtractor,
+    ExitMonitor, PositionStatusMonitor
 )
 from src.trading.vector_memory import VectorMemoryService
 from src.dashboard.server import DashboardServer
@@ -61,8 +73,8 @@ from src.analyzer.formatters import (
 )
 from src.rag import (
     RagFileHandler, NewsManager, MarketDataManager,
-    IndexManager, ContextBuilder, CategoryFetcher,
-    CategoryProcessor, TickerManager, NewsCategoryAnalyzer
+    IndexManager, ContextBuilder,
+    CategoryProcessor, TickerManager
 )
 from src.rag.market_components import (
     MarketDataFetcher,
@@ -99,11 +111,11 @@ def _get_best_device() -> str:
     return "cpu"
 
 try:
-    from PyQt6.QtWidgets import QApplication, QMessageBox
-    from PyQt6.QtCore import Qt
-    PYQT_AVAILABLE = True
+    import tkinter as tk
+    from tkinter import messagebox
+    TKINTER_AVAILABLE = True
 except ImportError:
-    PYQT_AVAILABLE = False
+    TKINTER_AVAILABLE = False
 
 class SingleInstanceLock:
     """Manages a single instance lock file to prevent multiple application instances."""
@@ -111,10 +123,54 @@ class SingleInstanceLock:
     def __init__(self, app_name: str = ".llm_trader.lock"):
         self.lock_file_path = Path.home() / app_name
         self._lock_handle: Optional[int] = None
+<<<<<<< HEAD
 
     def acquire(self) -> bool:
         """Attempt to acquire the lock. Returns True if successful."""
         try:
+=======
+        self._mutex_handle = None
+
+    def _acquire_windows_mutex(self) -> bool:
+        """Use a named mutex on Windows to guarantee single process instance."""
+        try:
+            import ctypes
+
+            lock_key = hashlib.sha1(str(self.lock_file_path).encode("utf-8")).hexdigest()[:16]
+            mutex_name = f"Local\\LLMTraderSingleInstance_{lock_key}"
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            handle = kernel32.CreateMutexW(None, False, mutex_name)
+            if not handle:
+                return True  # Fall back to file lock path below.
+
+            self._mutex_handle = handle
+            ERROR_ALREADY_EXISTS = 183
+            if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
+                kernel32.CloseHandle(handle)
+                self._mutex_handle = None
+                return False
+            return True
+        except Exception:
+            return True  # Fall back to file lock path below.
+
+    def _release_windows_mutex(self) -> None:
+        if self._mutex_handle:
+            try:
+                import ctypes
+
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                kernel32.CloseHandle(self._mutex_handle)
+            except Exception:
+                pass
+            self._mutex_handle = None
+
+    def acquire(self) -> bool:
+        """Attempt to acquire the lock. Returns True if successful."""
+        try:
+            if sys.platform == "win32" and not self._acquire_windows_mutex():
+                return False
+
+>>>>>>> main
             self._lock_handle = os.open(str(self.lock_file_path), os.O_CREAT | os.O_RDWR)
 
             if sys.platform == "win32":
@@ -122,6 +178,10 @@ class SingleInstanceLock:
                 try:
                     msvcrt.locking(self._lock_handle, msvcrt.LK_NBLCK, 1)
                 except OSError:
+<<<<<<< HEAD
+=======
+                    self._release_windows_mutex()
+>>>>>>> main
                     return False
             else:
                 import fcntl  # pylint: disable=import-error
@@ -134,6 +194,10 @@ class SingleInstanceLock:
             return True
 
         except Exception as e:
+<<<<<<< HEAD
+=======
+            self._release_windows_mutex()
+>>>>>>> main
             print(f"Warning: Could not create lock file: {e}")
             return True
 
@@ -156,6 +220,33 @@ class SingleInstanceLock:
                 self.lock_file_path.unlink(missing_ok=True)
             except Exception:
                 pass
+<<<<<<< HEAD
+=======
+
+        self._release_windows_mutex()
+
+
+def _show_error_dialog(title: str, message: str) -> bool:
+    """Show a best-effort GUI error dialog and return True if displayed."""
+    if not TKINTER_AVAILABLE:
+        return False
+
+    root = None
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        messagebox.showerror(title, message, parent=root)
+        return True
+    except Exception:
+        return False
+    finally:
+        if root is not None:
+            try:
+                root.destroy()
+            except Exception:
+                pass
+>>>>>>> main
 
 
 class CompositionRoot:
@@ -201,16 +292,19 @@ class CompositionRoot:
             'keyboard_handler': infra['keyboard_handler'],
             'rag_engine': rag,
             'coingecko_api': apis['coingecko'],
+<<<<<<< HEAD
             'news_client': apis['news'],
+=======
+>>>>>>> main
             'market_api': apis['market'],
-            'categories_api': apis['categories'],
             'alternative_me_api': apis['alternative_me'],
-            'cryptocompare_session': infra['session'],
+            'http_session': infra['session'],
             'persistence': trading['persistence'],
             'model_manager': models['manager'],
             'brain_service': trading['brain_service'],
             'statistics_service': trading['statistics_service'],
             'memory_service': trading['memory_service'],
+            'exit_monitor': trading['exit_monitor'],
         }
 
         # Always instantiate DashboardServer so the 'd' keyboard toggle can start/stop it at runtime.
@@ -297,6 +391,7 @@ class CompositionRoot:
         )
         await coingecko.initialize()
 
+<<<<<<< HEAD
         news_client = CryptoCompareNewsClient(self.logger, self.config)
 
         cc_data_processor = CryptoCompareDataProcessor(self.logger)
@@ -306,6 +401,9 @@ class CompositionRoot:
             data_dir='data', categories_update_interval_hours=self.config.RAG_CATEGORIES_UPDATE_INTERVAL_HOURS
         )
         await categories.initialize()
+=======
+        news_client = RSSCrawl4AINewsProvider(self.logger, self.config)
+>>>>>>> main
 
         defillama = DefiLlamaClient(
             logger=self.logger, session=infra['session'], cache_dir='cache',
@@ -318,16 +416,28 @@ class CompositionRoot:
         return {
             'coingecko': coingecko,
             'news': news_client,
+<<<<<<< HEAD
             'market': CryptoCompareMarketAPI(logger=self.logger, config=self.config),
             'categories': categories,
+=======
+            'market': CCXTMarketAPI(
+                logger=self.logger,
+                exchange_manager=infra['exchange_manager'],
+                data_fetcher_factory=utils['data_fetcher_factory'],
+            ),
+>>>>>>> main
             'defillama': defillama,
             'alternative_me': alternative_me
         }
 
     async def _provision_rag_layer(self, infra: dict, apis: dict, utils: dict) -> RagEngine:
         """Provision the RAG (Retrieval Augmented Generation) engine."""
+        file_handler = RagFileHandler(logger=self.logger, config=self.config, unified_parser=utils['parser'])
+        symbol_name_map = file_handler.load_symbol_name_map()
+
         article_processor = ArticleProcessor(
             logger=self.logger, unified_parser=utils['parser'],
+<<<<<<< HEAD
             format_utils=utils['format_utils']
         )
 
@@ -340,6 +450,19 @@ class CompositionRoot:
         marker_fetcher = MarketDataFetcher(
             self.logger, apis['coingecko'], infra['exchange_manager'], apis['market'], apis['defillama']
         )
+=======
+            format_utils=utils['format_utils'],
+            symbol_name_map=symbol_name_map,
+        )
+        news_manager = NewsManager(
+            logger=self.logger, file_handler=file_handler, news_client=apis['news'],
+            session=infra['session'], article_processor=article_processor
+        )
+
+        marker_fetcher = MarketDataFetcher(
+            self.logger, apis['coingecko'], infra['exchange_manager'], apis['market'], apis['defillama']
+        )
+>>>>>>> main
         market_processor = MarketDataProcessor(self.logger, utils['parser'])
         data_manager = MarketDataManager(
             self.logger, file_handler, apis['coingecko'], apis['market'],
@@ -352,14 +475,24 @@ class CompositionRoot:
         category_processor = CategoryProcessor(self.logger, utils['collision_resolver'], file_handler)
         engine = RagEngine(
             logger=self.logger, token_counter=utils['token_counter'], config=self.config,
-            coingecko_api=apis['coingecko'], exchange_manager=infra['exchange_manager'],
+            coingecko_api=apis['coingecko'],
             file_handler=file_handler, news_manager=news_manager, market_data_manager=data_manager,
             index_manager=IndexManager(self.logger, article_processor),
-            category_fetcher=CategoryFetcher(self.logger, apis['categories']),
+            category_fetcher=LocalTaxonomyProvider(self.logger),
             category_processor=category_processor,
             ticker_manager=TickerManager(self.logger, file_handler, infra['exchange_manager']),
+<<<<<<< HEAD
             news_category_analyzer=NewsCategoryAnalyzer(self.logger, category_processor, utils['parser']),
             context_builder=ContextBuilder(self.logger, utils['token_counter'], self.config, article_processor)
+=======
+            context_builder=ContextBuilder(
+                self.logger,
+                utils['token_counter'],
+                self.config,
+                article_processor,
+                symbol_name_map=symbol_name_map,
+            )
+>>>>>>> main
         )
         await engine.initialize()
         return engine
@@ -454,6 +587,9 @@ class CompositionRoot:
         
         memory_service = TradingMemoryService(self.logger, persistence, max_memory=10, vector_memory=vector_memory)
         statistics_service = TradingStatisticsService(self.logger, persistence)
+        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
+        exit_monitor = ExitMonitor(self.config, timeframe, POSITION_UPDATE_INTERVAL)
+        exit_monitor.validate()
         
         from src.factories.position_factory import PositionFactory
         strategy = TradingStrategy(
@@ -467,7 +603,8 @@ class CompositionRoot:
             'persistence': persistence,
             'brain_service': brain_service,
             'memory_service': memory_service,
-            'statistics_service': statistics_service
+            'statistics_service': statistics_service,
+            'exit_monitor': exit_monitor
         }
 
     async def _provision_notifiers(self, utils: dict) -> dict:
@@ -528,6 +665,11 @@ class CompositionRoot:
             msg = context.get("message", "Unknown asyncio error")
             if exc is not None:
                 if isinstance(exc, KeyboardInterrupt):
+<<<<<<< HEAD
+=======
+                    if self.shutdown_manager and getattr(self.shutdown_manager, "_shutting_down", False):
+                        return
+>>>>>>> main
                     self.logger.debug("Asyncio task KeyboardInterrupt during shutdown: %s", msg)
                     return
                 self.logger.error("Asyncio unhandled exception: %s", msg, exc_info=exc)
@@ -548,6 +690,22 @@ class CompositionRoot:
             shutdown_manager=self.shutdown_manager,
             **dependencies
         )
+<<<<<<< HEAD
+=======
+        bot.set_position_monitor(PositionStatusMonitor(
+            logger=self.logger,
+            config=self.config,
+            persistence=dependencies['persistence'],
+            trading_strategy=dependencies['trading_strategy'],
+            exit_monitor=dependencies['exit_monitor'],
+            notifier=dependencies['discord_notifier'],
+            active_tasks=bot.active_tasks,
+            is_running=lambda: bot.running,
+            fetch_current_ticker=bot._fetch_current_ticker,
+            interruptible_sleep=bot._interruptible_sleep,
+            get_symbol=lambda: bot.current_symbol,
+        ))
+>>>>>>> main
 
         try:
             await bot.initialize()
@@ -583,8 +741,13 @@ class CompositionRoot:
             elif not self.config.DASHBOARD_ENABLED:
                 self.logger.info("Dashboard disabled (config). Press 'd' to start it.")
 
+<<<<<<< HEAD
             # Bot runs independently; dashboard is managed by _toggle_dashboard
             await asyncio.create_task(bot.run(symbol, timeframe))
+=======
+            # Bot runs in the foreground here; dashboard lifecycle is managed by _toggle_dashboard.
+            await bot.run(symbol, timeframe)
+>>>>>>> main
 
         except asyncio.CancelledError:
             self.logger.info("Trading cancelled, shutting down...")
@@ -599,6 +762,7 @@ class CompositionRoot:
         single_instance_lock = SingleInstanceLock()
         
         if not single_instance_lock.acquire():
+<<<<<<< HEAD
             if PYQT_AVAILABLE:
                 app = QApplication.instance()
                 if app is None:
@@ -613,6 +777,13 @@ class CompositionRoot:
                     QMessageBox.StandardButton.Ok
                 )
             else:
+=======
+            shown = _show_error_dialog(
+                "Crypto Trading Bot",
+                "Another instance of Crypto Trading Bot is already running."
+            )
+            if not shown:
+>>>>>>> main
                 print("Another instance of Crypto Trading Bot is already running.")
             sys.exit(1)
         
@@ -630,6 +801,7 @@ class CompositionRoot:
         self.shutdown_manager.setup_signal_handlers()
         
         try:
+<<<<<<< HEAD
             self.loop.run_until_complete(self.run_async())
         except KeyboardInterrupt:
             print("\nKeyboardInterrupt received - initiating graceful shutdown...")
@@ -637,8 +809,30 @@ class CompositionRoot:
         except Exception:
             self.logger.exception("Unhandled exception in main loop — shutting down")
             self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
+=======
+            while True:
+                try:
+                    self.loop.run_until_complete(self.run_async())
+                    break
+                except KeyboardInterrupt:
+                    print("\nKeyboardInterrupt received.")
+                    if GracefulShutdownManager.show_exit_confirmation():
+                        self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
+                        break
+                    print("Shutdown cancelled. Continuing operation...")
+                except Exception:
+                    self.logger.exception("Unhandled exception in main loop — shutting down")
+                    self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
+                    break
+>>>>>>> main
         finally:
-            self.loop.close()
+            # Give any remaining threads time to clean up before closing the loop
+            # This prevents RuntimeError when Discord or other background threads try to access the closed loop
+            try:
+                if not self.loop.is_closed():
+                    self.loop.close()
+            except Exception as e:
+                self.logger.error("Error closing event loop: %s", e)
 
 
 if __name__ == "__main__":

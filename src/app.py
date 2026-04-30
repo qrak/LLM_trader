@@ -4,6 +4,7 @@ This module defines the `CryptoTradingBot` class, which orchestrates the interac
 between various components like the market analyzer, trading strategy, and external APIs.
 """
 import asyncio
+import io
 import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
@@ -13,6 +14,8 @@ from src.utils.timeframe_validator import TimeframeValidator
 from src.managers.persistence_manager import PersistenceManager
 from src.contracts.model_contract import ModelManagerProtocol
 from src.trading import (
+    ExitMonitor,
+    PositionStatusMonitor,
     TradingBrainService,
     TradingStatisticsService,
     TradingMemoryService
@@ -30,6 +33,20 @@ ERROR_WAIT_LONG = 300   # Seconds to wait after major error
 class CryptoTradingBot:
     """Automated crypto trading bot - TRADING MODE ONLY."""
 
+<<<<<<< HEAD
+=======
+    @staticmethod
+    def _format_utc_and_local(dt: datetime, local_tz=None) -> str:
+        """Format a timestamp with both UTC and local time for operator-facing logs."""
+        utc_dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+        local_dt = utc_dt.astimezone(local_tz)
+        local_zone = local_dt.tzname() or "local"
+        return (
+            f"{utc_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC "
+            f"/ {local_dt.strftime('%Y-%m-%d %H:%M:%S')} {local_zone}"
+        )
+
+>>>>>>> main
     def __init__(
         self,
         logger: Logger,
@@ -42,16 +59,19 @@ class CryptoTradingBot:
         keyboard_handler,
         rag_engine,
         coingecko_api,
+<<<<<<< HEAD
         news_client,
+=======
+>>>>>>> main
         market_api,
-        categories_api,
         alternative_me_api,
-        cryptocompare_session,
+        http_session,
         persistence: PersistenceManager,
         model_manager: ModelManagerProtocol,
         brain_service: TradingBrainService,
         statistics_service: TradingStatisticsService,
         memory_service: TradingMemoryService,
+        exit_monitor: ExitMonitor,
         dashboard_state = None,
         discord_task: Optional[asyncio.Task] = None
     ):
@@ -76,11 +96,17 @@ class CryptoTradingBot:
 
         # Injected API clients
         self.coingecko_api = coingecko_api
+<<<<<<< HEAD
         self.news_client = news_client
+=======
+>>>>>>> main
         self.market_api = market_api
-        self.categories_api = categories_api
         self.alternative_me_api = alternative_me_api
+<<<<<<< HEAD
         self.cryptocompare_session = cryptocompare_session
+=======
+        self.http_session = http_session
+>>>>>>> main
 
         # Injected trading services
         self.persistence = persistence
@@ -88,6 +114,7 @@ class CryptoTradingBot:
         self.brain_service = brain_service
         self.statistics_service = statistics_service
         self.memory_service = memory_service
+        self.exit_monitor = exit_monitor
         self.dashboard_state = dashboard_state
 
         # Runtime state
@@ -96,12 +123,30 @@ class CryptoTradingBot:
         self._active_tasks = set()
         self._force_analysis = asyncio.Event()
         self._discord_task = discord_task
+<<<<<<< HEAD
         self._position_status_task: Optional[asyncio.Task] = None
+=======
+        self.position_monitor: Optional[PositionStatusMonitor] = None
+>>>>>>> main
 
         # Trading state
         self.current_exchange = None
         self.current_symbol: Optional[str] = None
         self.current_timeframe: Optional[str] = None
+
+    @property
+    def active_tasks(self) -> set[asyncio.Task]:
+        """Return bot-managed background tasks for composition-root wiring."""
+        return self._active_tasks
+
+    def set_position_monitor(self, position_monitor: PositionStatusMonitor) -> None:
+        """Inject the position monitor after bot-bound callbacks are available."""
+        self.position_monitor = position_monitor
+
+    def _require_position_monitor(self) -> PositionStatusMonitor:
+        if self.position_monitor is None:
+            raise RuntimeError("Position monitor dependency is not configured")
+        return self.position_monitor
 
     async def initialize(self):
         """Initialize all components."""
@@ -124,11 +169,19 @@ class CryptoTradingBot:
             if self.exchange_manager:
                 self.shutdown_manager.register_shutdown_callback(self.exchange_manager.shutdown)
 
+<<<<<<< HEAD
             if self.cryptocompare_session:
                 self.shutdown_manager.register_shutdown_callback(self.cryptocompare_session.close)
 
             # API clients (if they have close method)
             for client in [self.alternative_me_api, self.coingecko_api, self.news_client, self.market_api, self.categories_api]:
+=======
+            if self.http_session:
+                self.shutdown_manager.register_shutdown_callback(self.http_session.close)
+
+            # API clients (if they have close method)
+            for client in [self.alternative_me_api, self.coingecko_api, self.market_api]:
+>>>>>>> main
                 if client:
                     try:
                         self.shutdown_manager.register_shutdown_callback(client.close)
@@ -167,18 +220,35 @@ class CryptoTradingBot:
             except asyncio.TimeoutError:
                 self.logger.warning("Bot tasks shutdown timed out")
 
-        # Discord task cleanup
-        if self._discord_task and not self._discord_task.done():
-            self._discord_task.cancel()
+        # Discord notifier cleanup (properly closes the bot)
+        if self.discord_notifier:
             try:
+<<<<<<< HEAD
                 await asyncio.wait_for(self._discord_task, timeout=1.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
+=======
+                await self.discord_notifier.shutdown()
+            except Exception as e:
+                self.logger.warning("Error shutting down Discord notifier: %s", e)
+
+        # Let the Discord start task exit naturally after bot.close().
+        if self._discord_task and not self._discord_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(self._discord_task), timeout=5.0)
+            except asyncio.TimeoutError:
+                self.logger.warning("Discord task did not exit after bot shutdown; cancelling it")
+                self._discord_task.cancel()
+                try:
+                    await self._discord_task
+                except asyncio.CancelledError:
+                    pass
+>>>>>>> main
 
         self.logger.info("Bot shutdown signaling complete.")
 
 
-    async def run(self, symbol: str, timeframe: str = None):
+    async def run(self, symbol: str, timeframe: Optional[str] = None):
         """Run the trading bot in continuous mode.
 
         Args:
@@ -186,7 +256,18 @@ class CryptoTradingBot:
             timeframe: Optional timeframe override
         """
         self.current_symbol = symbol
+<<<<<<< HEAD
         self.current_timeframe = timeframe or self.config.TIMEFRAME
+=======
+        requested_timeframe = timeframe or self.config.TIMEFRAME
+        try:
+            self.current_timeframe = TimeframeValidator.validate_and_normalize(requested_timeframe)
+            self.exit_monitor.timeframe = self.current_timeframe
+            self.exit_monitor.validate()
+        except ValueError as e:
+            self.logger.error("Invalid timeframe or exit monitoring config '%s': %s", requested_timeframe, e)
+            return
+>>>>>>> main
 
         # Find exchange that supports the symbol
         exchange, exchange_id = await self.exchange_manager.find_symbol_exchange(symbol)
@@ -213,9 +294,13 @@ class CryptoTradingBot:
         if self.trading_strategy.current_position:
             position = self.trading_strategy.current_position
             self.logger.info("Existing position: %s @ $%s", position.direction, f"{position.entry_price:,.2f}")
+<<<<<<< HEAD
             # Start hourly position updates for existing position
             if self.discord_notifier:
                 await self._start_position_status_updates()
+=======
+            await self._require_position_monitor().start()
+>>>>>>> main
         else:
             self.logger.info("No existing position")
 
@@ -225,7 +310,14 @@ class CryptoTradingBot:
         # Check if resuming from previous session (regardless of position status)
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
+<<<<<<< HEAD
             self.logger.info("Resuming from last analysis at %s UTC", last_analysis_time.strftime('%Y-%m-%d %H:%M:%S'))
+=======
+            self.logger.info(
+                "Resuming from last analysis at %s",
+                self._format_utc_and_local(last_analysis_time)
+            )
+>>>>>>> main
             await self._wait_until_next_timeframe_after(last_analysis_time)
         self.logger.info("Ready for next analysis after wait")
 
@@ -303,6 +395,7 @@ class CryptoTradingBot:
     async def _check_position_status(self, current_price: Optional[float], *, is_candle_close: bool = True):
         """Check if existing position hit stop/target.
 
+<<<<<<< HEAD
         Soft stop mode: SL/TP evaluation only runs on candle close.
         Forced analysis (keyboard 'a') skips automated stop checks
         but the AI can still consciously signal CLOSE.
@@ -328,6 +421,13 @@ class CryptoTradingBot:
                     )
         except Exception as e:
             self.logger.error("Error checking position: %s", e)
+=======
+        Soft exit mode: SL/TP evaluation only runs on candle close.
+        Forced analysis (keyboard 'a') skips automated stop checks
+        but the AI can still consciously signal CLOSE.
+        """
+        await self._require_position_monitor().check_soft_exit_status(current_price, is_candle_close=is_candle_close)
+>>>>>>> main
     
     async def _execute_market_knowledge_update(self, force_news_update: bool):
         """Update market knowledge based on analysis type"""
@@ -370,18 +470,28 @@ class CryptoTradingBot:
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
         if not last_analysis_time_obj:
             return None
+<<<<<<< HEAD
         
         if last_analysis_time_obj.tzinfo is None:
             last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
         else:
             last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
         
+=======
+
+        if last_analysis_time_obj.tzinfo is None:
+            last_analysis_time_obj = last_analysis_time_obj.replace(tzinfo=timezone.utc)
+        else:
+            last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
+
+>>>>>>> main
         return last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
     
     async def _handle_new_position(self, decision, current_price: Optional[float]):
         """Handle new position creation and status updates"""
         if decision.action not in ('BUY', 'SELL') or not self.trading_strategy.current_position:
             return
+<<<<<<< HEAD
         
         if not self.discord_notifier:
             return
@@ -400,15 +510,30 @@ class CryptoTradingBot:
             self.logger.warning("Error sending initial position status: %s", e)
         
         await self._start_position_status_updates()
+=======
+
+        await self._require_position_monitor().handle_new_position(current_price)
+>>>>>>> main
     
     async def _send_discord_notification(self, result: Dict[str, Any]):
         """Send Discord notification with analysis results"""
         if self.discord_notifier:
+            chart_image = None
+            last_chart_buffer = self.market_analyzer.last_chart_buffer if self.market_analyzer else None
+            if last_chart_buffer is not None:
+                try:
+                    last_chart_buffer.seek(0)
+                    chart_image = io.BytesIO(last_chart_buffer.getvalue())
+                    chart_image.seek(0)
+                except Exception as e:
+                    self.logger.warning("Failed to prepare chart image for Discord notification: %s", e)
+
             await self.discord_notifier.send_analysis_notification(
                 result=result,
                 symbol=self.current_symbol,
                 timeframe=self.current_timeframe,
-                channel_id=self.config.MAIN_CHANNEL_ID
+                channel_id=self.config.MAIN_CHANNEL_ID,
+                chart_image=chart_image
             )
     
     def _save_analysis_data(self, result: Dict[str, Any]):
@@ -422,6 +547,8 @@ class CryptoTradingBot:
     async def _fetch_current_ticker(self) -> Optional[Dict[str, Any]]:
         """Fetch current ticker from exchange."""
         try:
+            if self.current_exchange is None or self.current_symbol is None:
+                return None
             ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
             if ticker and self.dashboard_state:
                 price = float(ticker.get('last', ticker.get('close', 0)))
@@ -435,15 +562,30 @@ class CryptoTradingBot:
     async def _wait_for_next_timeframe(self):
         """Wait until the next timeframe candle starts."""
         try:
+            if self.current_timeframe is None:
+                raise ValueError("current timeframe is not set")
+            timeframe = self.current_timeframe
             current_time_ms = int(time.time() * 1000)
 
             # Calculate next candle start using validator (handles alignment)
+<<<<<<< HEAD
             next_candle_ms = TimeframeValidator.calculate_next_candle_time(current_time_ms, self.current_timeframe)
+=======
+            next_candle_ms = TimeframeValidator.calculate_next_candle_time(current_time_ms, timeframe)
+>>>>>>> main
             delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
             delay_seconds = max(0, delay_ms / 1000)
 
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
+<<<<<<< HEAD
             self.logger.info("Next check at %s UTC (in %.0fs)", next_check_time.strftime('%Y-%m-%d %H:%M:%S'), delay_seconds)
+=======
+            self.logger.info(
+                "Next check at %s (in %.0fs)",
+                self._format_utc_and_local(next_check_time),
+                delay_seconds
+            )
+>>>>>>> main
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
             return await self._interruptible_sleep(delay_seconds)
@@ -460,6 +602,9 @@ class CryptoTradingBot:
             last_time: Timestamp of last analysis
         """
         try:
+            if self.current_timeframe is None:
+                raise ValueError("current timeframe is not set")
+            timeframe = self.current_timeframe
             # Ensure last_time is timezone-aware (assume UTC if naive)
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
@@ -468,11 +613,22 @@ class CryptoTradingBot:
             last_time_ms = int(last_time.timestamp() * 1000)
 
             # Calculate next candle after last analysis using validator (handles alignment)
+<<<<<<< HEAD
             next_candle_ms = TimeframeValidator.calculate_next_candle_time(last_time_ms, self.current_timeframe)
 
             # Check if we're past the next candle boundary
             if current_time_ms >= next_candle_ms:
                 self.logger.info("Resuming from last check at %s. Next candle already passed - proceeding immediately", last_time.strftime('%Y-%m-%d %H:%M:%S'))
+=======
+            next_candle_ms = TimeframeValidator.calculate_next_candle_time(last_time_ms, timeframe)
+
+            # Check if we're past the next candle boundary
+            if current_time_ms >= next_candle_ms:
+                self.logger.info(
+                    "Resuming from last check at %s. Next candle already passed - proceeding immediately",
+                    self._format_utc_and_local(last_time)
+                )
+>>>>>>> main
                 return
 
             # Wait for next candle
@@ -482,10 +638,23 @@ class CryptoTradingBot:
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
 
             # Check if we're still within the same candle as the last analysis (for logging context)
+<<<<<<< HEAD
             is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)
 
             context_msg = "Still in same candle" if is_same else "Resuming wait"
             self.logger.info("Resuming from last check at %s. %s - next check at %s UTC (in %.0fs)", last_time.strftime('%Y-%m-%d %H:%M:%S'), context_msg, next_check_time.strftime('%Y-%m-%d %H:%M:%S'), delay_seconds)
+=======
+            is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, timeframe)
+
+            context_msg = "Still in same candle" if is_same else "Resuming wait"
+            self.logger.info(
+                "Resuming from last check at %s. %s - next check at %s (in %.0fs)",
+                self._format_utc_and_local(last_time),
+                context_msg,
+                self._format_utc_and_local(next_check_time),
+                delay_seconds
+            )
+>>>>>>> main
 
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
@@ -499,6 +668,10 @@ class CryptoTradingBot:
         """Sleep in small chunks to allow responsive shutdown and force analysis.
 
         Uses SLEEP_CHUNK_SIZE to check for interruptions periodically.
+<<<<<<< HEAD
+=======
+        Properly handles cancellation for graceful shutdown.
+>>>>>>> main
 
         Args:
             seconds: Duration to sleep
@@ -513,6 +686,7 @@ class CryptoTradingBot:
         if respect_force_analysis:
             self._force_analysis.clear()
 
+<<<<<<< HEAD
         while self.running:
             elapsed = time.monotonic() - start_time
             if elapsed >= seconds:
@@ -527,6 +701,27 @@ class CryptoTradingBot:
             remaining = seconds - elapsed
             sleep_time = min(SLEEP_CHUNK_SIZE, remaining)
             await asyncio.sleep(sleep_time)
+=======
+        try:
+            while self.running:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= seconds:
+                    break
+
+                # Check for force analysis (only if this sleep respects it)
+                if respect_force_analysis and self._force_analysis.is_set():
+                    self._force_analysis.clear()
+                    self.logger.info("Force analysis triggered - interrupting wait")
+                    return True
+
+                remaining = seconds - elapsed
+                sleep_time = min(SLEEP_CHUNK_SIZE, remaining)
+                await asyncio.sleep(sleep_time)
+        except asyncio.CancelledError:
+            # Exit immediately on cancellation (graceful shutdown)
+            self.logger.debug("Interruptible sleep cancelled during shutdown")
+            return False
+>>>>>>> main
 
         return False
 
@@ -535,6 +730,7 @@ class CryptoTradingBot:
         self.logger.info("Forcing immediate analysis...")
         self._force_analysis.set()
 
+<<<<<<< HEAD
     async def _start_position_status_updates(self):
         """Start periodic position status updates to Discord (every hour)."""
         if self._position_status_task and not self._position_status_task.done():
@@ -592,6 +788,8 @@ class CryptoTradingBot:
             self.logger.debug("Position status loop cancelled")
             raise
 
+=======
+>>>>>>> main
     async def _show_help(self):
         """Show help information about available commands."""
         self.keyboard_handler.display_help()

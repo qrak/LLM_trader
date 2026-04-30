@@ -17,7 +17,10 @@ from src.utils.indicator_classifier import (
     classify_bb_position,
     classify_market_sentiment,
     classify_order_book_bias,
+    build_exit_execution_context,
     build_context_string_from_technical_data,
+    build_query_document_from_technical_data,
+    format_exit_execution_context,
 )
 
 
@@ -227,3 +230,37 @@ class TestBuildContextString:
         td = {"adx": 30, "plus_di": 30, "minus_di": 10, "atr_percent": 2.0}
         ctx = build_context_string_from_technical_data(td)
         assert " + " in ctx
+
+    def test_exit_execution_context_is_included(self):
+        td = {"adx": 30, "plus_di": 30, "minus_di": 10, "atr_percent": 2.0}
+        exit_execution = build_exit_execution_context(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        )
+
+        ctx = build_context_string_from_technical_data(td, exit_execution_context=exit_execution)
+
+        assert "Exit Execution: SL hard/15m | TP hard/15m" in ctx
+
+    def test_unknown_exit_execution_context_is_omitted_by_default(self):
+        assert format_exit_execution_context(build_exit_execution_context()) == ""
+
+
+class TestBuildQueryDocument:
+    """Verify enriched query documents carry the same risk execution phrase."""
+
+    def test_exit_execution_context_is_in_structure(self):
+        td = {"adx": 30, "rsi": 61, "plus_di": 30, "minus_di": 10, "atr_percent": 2.0}
+        exit_execution = build_exit_execution_context(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="soft",
+            take_profit_check_interval="4h",
+        )
+
+        query = build_query_document_from_technical_data(td, exit_execution_context=exit_execution)
+
+        assert "Indicators: ADX=30.0 (High ADX)" in query
+        assert "Structure: Exit Execution: SL hard/15m | TP soft/4h" in query

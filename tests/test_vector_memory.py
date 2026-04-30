@@ -98,6 +98,17 @@ class TestBuildExperienceDocument:
         doc = self._build_doc(adx=None)
         assert "ADX=" not in doc
 
+    def test_exit_execution_context_in_structure(self):
+        doc = self._build_doc(
+            exit_execution_context={
+                "stop_loss_type": "hard",
+                "stop_loss_check_interval": "15m",
+                "take_profit_type": "hard",
+                "take_profit_check_interval": "15m",
+            }
+        )
+        assert "Exit Execution: SL hard/15m | TP hard/15m" in doc
+
 
 # ── _adx_label finer granularity ────────────────────────────────
 
@@ -156,6 +167,37 @@ class TestStoreExperience:
 
         assert stored is True
         assert metadata == original_metadata
+
+    def test_store_experience_persists_exit_execution_metadata_and_document(self):
+        svc = _make_service()
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+
+        stored = svc.store_experience(
+            trade_id="trade-risk-1",
+            market_context="BULLISH + High ADX",
+            outcome="WIN",
+            pnl_pct=2.5,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="Momentum continuation",
+            metadata={
+                "stop_loss_type": "hard",
+                "stop_loss_check_interval": "15m",
+                "take_profit_type": "hard",
+                "take_profit_check_interval": "15m",
+            },
+            symbol="BTC/USDC",
+            close_reason="take_profit",
+        )
+
+        assert stored is True
+        upsert_kwargs = svc._collection.upsert.call_args.kwargs
+        metadata = upsert_kwargs["metadatas"][0]
+        assert metadata["stop_loss_type"] == "hard"
+        assert metadata["stop_loss_check_interval"] == "15m"
+        assert metadata["take_profit_type"] == "hard"
+        assert metadata["take_profit_check_interval"] == "15m"
+        assert "Exit Execution: SL hard/15m | TP hard/15m" in upsert_kwargs["documents"][0]
 
 
 class TestComputeFactorPerformance:

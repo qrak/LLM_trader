@@ -3,22 +3,61 @@ import numpy as np
 import pytest
 
 from src.analyzer.prompts.context_builder import ContextBuilder
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 # ── Minimal ContextBuilder for static / pure methods ────────────
 
 
-def _make_builder():
+def _make_builder(timeframe="1h", timeframe_validator=None):
     """Build a minimal ContextBuilder with mocked dependencies."""
     from unittest.mock import MagicMock
 
     return ContextBuilder(
-        timeframe="1h",
+        timeframe=timeframe,
         format_utils=MagicMock(),
         market_formatter=MagicMock(),
         period_formatter=MagicMock(),
         long_term_formatter=MagicMock(),
+        timeframe_validator=timeframe_validator,
     )
+
+
+class TestSubHourTimeframes:
+    """Verify prompt context calculations understand sub-hour timeframes."""
+
+    @pytest.mark.parametrize(
+        ("timeframe", "expected_minutes"),
+        [
+            ("5m", 5),
+            ("15m", 15),
+            ("30m", 30),
+        ]
+    )
+    def test_trading_context_reports_sub_hour_candle_minutes(self, timeframe, expected_minutes):
+        from unittest.mock import MagicMock
+
+        builder = _make_builder(timeframe=timeframe, timeframe_validator=TimeframeValidator)
+        context = MagicMock(symbol="BTC/USDT", current_price=50000)
+
+        result = builder.build_trading_context(context)
+
+        assert f"Primary Timeframe: {timeframe} ({expected_minutes} min/candle)" in result
+        assert "Next Candle Close" in result
+
+    def test_market_data_summary_uses_5m_period_candle_counts(self):
+        builder = _make_builder(timeframe="5m", timeframe_validator=TimeframeValidator)
+        builder.format_utils.fmt.side_effect = lambda value: f"{value:.2f}"
+        ohlcv_candles = np.array([
+            [index * 300000, 100 + index, 101 + index, 99 + index, 100 + index, 1000]
+            for index in range(100)
+        ], dtype=np.float64)
+
+        result = builder.build_market_data_section(ohlcv_candles)
+
+        assert "Multi-Timeframe Price Summary (Based on 5m candles):" in result
+        assert "4h:" in result
+        assert "12h:" not in result
 
 
 # ── _resolve_indicator_value ─────────────────────────────────────

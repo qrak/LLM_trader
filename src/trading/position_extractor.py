@@ -129,7 +129,12 @@ class PositionExtractor:
 
         position_size = data.get("position_size")
         if position_size is not None:
+<<<<<<< HEAD
             position_size = float(str(position_size).replace("%", "")) / 100
+=======
+            size = float(str(position_size).replace("%", ""))
+            position_size = size / 100 if size > 1 else size
+>>>>>>> main
 
         reasoning = str(data.get("reasoning", data.get("rationale", "")))
 
@@ -189,6 +194,7 @@ class PositionExtractor:
 
         return signal, confidence, stop_loss, take_profit, position_size, reasoning
 
+<<<<<<< HEAD
     def extract_position_size(self, text: str) -> Optional[float]:
         """Extract just the position size from text.
 
@@ -208,6 +214,8 @@ class PositionExtractor:
         except (ValueError, IndexError):
             return None
 
+=======
+>>>>>>> main
     def validate_signal(self, signal: str) -> bool:
         """Validate if signal is a recognized trading action.
 

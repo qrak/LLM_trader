@@ -6,6 +6,8 @@ from .memory import TradingMemoryService
 from .statistics import TradingStatisticsService
 from .position_extractor import PositionExtractor
 from .trading_strategy import TradingStrategy
+from .exit_monitor import ExitMonitor
+from .position_status_monitor import PositionStatusMonitor
 from .statistics_calculator import TradingStatistics, StatisticsCalculator
 from .vector_memory import VectorMemoryService
 
@@ -20,5 +22,7 @@ __all__ = [
     'TradingStatisticsService',
     'PositionExtractor',
     'TradingStrategy',
+    'ExitMonitor',
+    'PositionStatusMonitor',
     'VectorMemoryService',
 ]

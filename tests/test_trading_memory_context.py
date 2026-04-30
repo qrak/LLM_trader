@@ -1,0 +1,67 @@
+"""Regression tests for trading history context formatting."""
+
+from datetime import datetime, timezone
+
+from src.trading.data_models import TradeDecision, TradingMemory
+
+
+def _decision(**overrides):
+    base = {
+        "timestamp": datetime(2026, 4, 14, 0, 0, tzinfo=timezone.utc),
+        "symbol": "BTC/USDC",
+        "action": "HOLD",
+        "confidence": "HIGH",
+        "price": 74000.0,
+        "quantity": 0.0,
+        "reasoning": "",
+    }
+    base.update(overrides)
+    return TradeDecision(**base)
+
+
+def test_profitable_stop_loss_is_labeled_as_profit_protection():
+    history = [
+        _decision(
+            timestamp=datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc),
+            action="BUY",
+            price=72000.0,
+            quantity=0.001,
+            reasoning="Entered long on breakout.",
+        ),
+        _decision(
+            timestamp=datetime(2026, 4, 14, 20, 0, tzinfo=timezone.utc),
+            action="CLOSE_LONG",
+            price=74286.53,
+            quantity=0.001,
+            reasoning="Position closed: stop_loss. P&L: +3.30%. Fee: $0.0426",
+        ),
+    ]
+
+    summary = TradingMemory(decisions=history).get_context_summary(full_history=history)
+
+    assert "profit-protecting stop" in summary
+    assert "+3.18%" in summary
+
+
+def test_losing_stop_loss_is_labeled_as_loss_cut():
+    history = [
+        _decision(
+            timestamp=datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc),
+            action="SELL",
+            price=72000.0,
+            quantity=0.001,
+            reasoning="Entered short on breakdown.",
+        ),
+        _decision(
+            timestamp=datetime(2026, 4, 14, 20, 0, tzinfo=timezone.utc),
+            action="CLOSE_SHORT",
+            price=72720.0,
+            quantity=0.001,
+            reasoning="Position closed: stop_loss. P&L: -1.00%. Fee: $0.0426",
+        ),
+    ]
+
+    summary = TradingMemory(decisions=history).get_context_summary(full_history=history)
+
+    assert "loss-cutting stop" in summary
+    assert "-1.00%" in summary

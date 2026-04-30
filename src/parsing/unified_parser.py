@@ -15,8 +15,11 @@ class UnifiedParser:
     Replaces multiple scattered parsing components with a single, comprehensive solution.
     """
 
+<<<<<<< HEAD
     _CATEGORY_SEPARATORS = (',', ';', '|')
 
+=======
+>>>>>>> main
     def __init__(self, logger: Logger, format_utils=None):
         self.logger = logger
         self.format_utils = format_utils
@@ -133,6 +136,7 @@ class UnifiedParser:
             }
         }
         return f"```json\n{json.dumps(json_fallback, indent=2)}\n```\n\nThe analysis failed due to a technical issue. Please try again later."
+<<<<<<< HEAD
 
     @staticmethod
     def format_provider_error(provider: str, error_detail: str) -> Dict[str, Any]:
@@ -185,6 +189,9 @@ class UnifiedParser:
 
         return categories
 
+=======
+
+>>>>>>> main
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
         if not symbol:

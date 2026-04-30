@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict
 from dotenv import dotenv_values
 
+from src.utils.timeframe_validator import TimeframeValidator
+
 # Get the root directory (where keys.env is located) and config directory (where config.ini is located)
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
 CONFIG_DIR = ROOT_DIR / "config"
@@ -16,6 +18,7 @@ KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
 VALID_PROVIDERS = {"local", "googleai", "openrouter", "blockrun", "all"}
+VALID_EXIT_TYPES = {"soft", "hard"}
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
@@ -29,7 +32,7 @@ class Config:
         self._load_environment()
         self._load_ini_config()
         self._validate_provider()
-        self._build_dynamic_urls()
+        self._validate_exit_monitoring()
         self._build_model_configs()
 
     def _load_environment(self):
@@ -90,6 +93,46 @@ class Config:
             logging.critical(error_msg)
             raise ValueError(error_msg)
 
+    def _validate_exit_monitoring(self):
+        """Validate configurable SL/TP execution settings against the timeframe."""
+        timeframe = TimeframeValidator.validate_and_normalize(str(self.TIMEFRAME))
+        timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
+
+        for label, type_key, interval_key in (
+            ("stop loss", "stop_loss_type", "stop_loss_check_interval"),
+            ("take profit", "take_profit_type", "take_profit_check_interval"),
+        ):
+            self._normalize_exit_type(self.get_config('risk_management', type_key, 'soft'), type_key)
+            interval = self.get_config('risk_management', interval_key, timeframe)
+            interval_minutes = self._parse_exit_interval_minutes(interval, interval_key)
+            if interval_minutes > timeframe_minutes:
+                error_msg = (
+                    f"Invalid {label} check interval '{interval}' in config.ini. "
+                    f"It must not be greater than timeframe '{timeframe}'."
+                )
+                logging.critical(error_msg)
+                raise ValueError(error_msg)
+
+    @staticmethod
+    def _normalize_exit_type(value: Any, key: str) -> str:
+        """Normalize and validate an exit execution type."""
+        normalized = str(value).strip().lower()
+        if normalized not in VALID_EXIT_TYPES:
+            valid_options = ", ".join(f'"{item}"' for item in sorted(VALID_EXIT_TYPES))
+            raise ValueError(f"Invalid {key} '{value}' in config.ini. Supported values are: {valid_options}.")
+        return normalized
+
+    @staticmethod
+    def _parse_exit_interval_minutes(value: Any, key: str) -> int:
+        """Parse an exit monitor interval and require a positive duration."""
+        try:
+            minutes = TimeframeValidator.parse_period_to_minutes(str(value).strip().lower())
+        except ValueError as exc:
+            raise ValueError(f"Invalid {key} '{value}' in config.ini: {exc}") from exc
+        if minutes <= 0:
+            raise ValueError(f"Invalid {key} '{value}' in config.ini. Interval must be positive.")
+        return minutes
+
     @staticmethod
     def _convert_value(value: str) -> Any:
         """Convert string values to appropriate Python types."""
@@ -108,6 +151,7 @@ class Config:
             return [item.strip() for item in value.split(',')]
         return value
 
+<<<<<<< HEAD
     def _build_dynamic_urls(self):
         """Build dynamic URLs that depend on API keys.
 
@@ -121,6 +165,8 @@ class Config:
         self.RAG_CATEGORIES_API_URL = "https://min-api.cryptocompare.com/data/news/categories"
         self.RAG_PRICE_API_URL = "https://min-api.cryptocompare.com/data/pricemultifull?fsyms=BTC,ETH,BNB,SOL,XRP&tsyms=USD"
 
+=======
+>>>>>>> main
     def _build_model_configs(self):
         """Build model configuration dictionaries as instance variables."""
         default_max_tokens = self.get_config('model_config', 'max_tokens', None)
@@ -159,10 +205,13 @@ class Config:
         """Get configuration value from INI file."""
         return self._config_data.get(section, {}).get(key, default)
 
+<<<<<<< HEAD
     def get_section(self, section: str) -> Dict[str, Any]:
         """Get entire configuration section."""
         return self._config_data.get(section, {})
 
+=======
+>>>>>>> main
     # Environment variables (private keys and sensitive data)
     @property
     def BOT_TOKEN_DISCORD(self):
@@ -191,10 +240,13 @@ class Config:
     @property
     def GOOGLE_STUDIO_PAID_API_KEY(self):
         return self.get_env('GOOGLE_STUDIO_PAID_API_KEY')
+<<<<<<< HEAD
 
     @property
     def CRYPTOCOMPARE_API_KEY(self):
         return self.get_env('CRYPTOCOMPARE_API_KEY')
+=======
+>>>>>>> main
 
     @property
     def COINGECKO_API_KEY(self):
@@ -419,6 +471,71 @@ class Config:
     def RAG_COOCCURRENCE_MULTIPLIER(self):
         """Score multiplier when all query keywords appear in article (default 1.5)."""
         return float(self.get_config('rag', 'cooccurrence_multiplier', 1.5))
+<<<<<<< HEAD
+=======
+
+    # --- RSS / Crawl4AI ingestion settings ---
+
+    @property
+    def RAG_NEWS_SOURCES(self):
+        """Enabled RSS source keys (list or comma-separated string; None = all)."""
+        return self.get_config('rag', 'news_sources', None)
+
+    @property
+    def RAG_NEWS_SOURCE_URLS(self) -> Dict[str, str]:
+        """Configured RSS source URL mapping keyed by source name."""
+        return {
+            'coindesk': self.get_config('rag', 'news_source_coindesk_url', 'https://www.coindesk.com/arc/outboundfeeds/rss/'),
+            'cointelegraph': self.get_config('rag', 'news_source_cointelegraph_url', 'https://cointelegraph.com/rss'),
+            'decrypt': self.get_config('rag', 'news_source_decrypt_url', 'https://decrypt.co/feed'),
+            'cryptoslate': self.get_config('rag', 'news_source_cryptoslate_url', 'https://cryptoslate.com/feed/'),
+        }
+
+    @property
+    def RAG_NEWS_PAGE_ENRICHMENT(self) -> bool:
+        """Whether to enrich short RSS bodies by fetching article pages."""
+        val = self.get_config('rag', 'news_page_enrichment', True)
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() not in ('false', '0', 'no')
+
+    @property
+    def RAG_NEWS_ENRICH_MIN_CHARS(self) -> int:
+        """Minimum body length before attempting page enrichment."""
+        return int(self.get_config('rag', 'news_min_body_chars', 400))
+
+    @property
+    def RAG_NEWS_FETCH_TIMEOUT(self) -> int:
+        """Timeout in seconds for RSS feed and article-page requests."""
+        return int(self.get_config('rag', 'news_timeout_seconds', 20))
+
+    @property
+    def RAG_NEWS_CRAWL_CONCURRENCY(self) -> int:
+        """Max concurrent page-enrichment / Crawl4AI sessions."""
+        return int(self.get_config('rag', 'news_max_concurrency', 6))
+
+    @property
+    def RAG_NEWS_MAX_ITEMS_PER_SOURCE(self) -> int:
+        """Maximum number of articles fetched per RSS source."""
+        return int(self.get_config('rag', 'news_max_items_per_source', 50))
+
+    @property
+    def RAG_NEWS_CRAWL4AI_ENABLED(self) -> bool:
+        """Use Crawl4AI browser-based enrichment instead of plain HTTP.
+
+        Defaults to *False* so the pipeline works without Playwright installed.
+        Set ``news_crawl4ai_enabled = true`` in ``[rag]`` to opt in.
+        """
+        val = self.get_config('rag', 'news_crawl4ai_enabled', False)
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() in ('true', '1', 'yes')
+
+    @property
+    def RAG_NEWS_CRAWL_TIMEOUT(self) -> int:
+        """Per-page timeout in seconds for Crawl4AI (default: same as fetch timeout)."""
+        return int(self.get_config('rag', 'news_crawl_timeout', self.RAG_NEWS_FETCH_TIMEOUT))
+>>>>>>> main
     @property
     def SUPPORTED_EXCHANGES(self):
         """Returns list of supported exchanges in priority order."""
@@ -456,6 +573,46 @@ class Config:
         return float(self.get_config('risk_management', 'default_take_profit_pct', 0.04))
 
     @property
+    def STOP_LOSS_TYPE(self) -> str:
+        """Stop-loss execution type: soft candle-close or hard ticker-polled."""
+        return self._normalize_exit_type(self.get_config('risk_management', 'stop_loss_type', 'soft'), 'stop_loss_type')
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL(self) -> str:
+        """Configured stop-loss monitor interval."""
+        return str(self.get_config('risk_management', 'stop_loss_check_interval', self.TIMEFRAME)).strip().lower()
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL_MINUTES(self) -> int:
+        """Stop-loss monitor interval in minutes."""
+        return self._parse_exit_interval_minutes(self.STOP_LOSS_CHECK_INTERVAL, 'stop_loss_check_interval')
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL_SECONDS(self) -> int:
+        """Stop-loss monitor interval in seconds."""
+        return self.STOP_LOSS_CHECK_INTERVAL_MINUTES * 60
+
+    @property
+    def TAKE_PROFIT_TYPE(self) -> str:
+        """Take-profit execution type: soft candle-close or hard ticker-polled."""
+        return self._normalize_exit_type(self.get_config('risk_management', 'take_profit_type', 'soft'), 'take_profit_type')
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL(self) -> str:
+        """Configured take-profit monitor interval."""
+        return str(self.get_config('risk_management', 'take_profit_check_interval', self.TIMEFRAME)).strip().lower()
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL_MINUTES(self) -> int:
+        """Take-profit monitor interval in minutes."""
+        return self._parse_exit_interval_minutes(self.TAKE_PROFIT_CHECK_INTERVAL, 'take_profit_check_interval')
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL_SECONDS(self) -> int:
+        """Take-profit monitor interval in seconds."""
+        return self.TAKE_PROFIT_CHECK_INTERVAL_MINUTES * 60
+
+    @property
     def QUOTE_CURRENCY(self):
         """Extract quote currency from CRYPTO_PAIR (e.g., 'USDC' from 'BTC/USDC')."""
         pair = self.CRYPTO_PAIR
@@ -490,6 +647,7 @@ class Config:
         """Determine if a model should use Google-specific configuration."""
         return model_name == self.GOOGLE_STUDIO_MODEL
 
+<<<<<<< HEAD
     def reload(self):
         """Reload both keys.env and config.ini files.
 
@@ -508,6 +666,8 @@ class Config:
             logging.error("Error reloading configuration: %s", e)
             raise
 
+=======
+>>>>>>> main
 
 # Create global config instance
 config = Config()

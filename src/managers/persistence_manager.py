@@ -48,6 +48,10 @@ class PersistenceManager:
         self.previous_response_file = self.data_dir / "previous_response.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
+<<<<<<< HEAD
+=======
+        self.position_monitor_file = self.data_dir / "position_monitor.json"
+>>>>>>> main
 
         # In-memory caches to prevent blocking I/O on hot paths
         self._position_cache: Optional["Position"] = None
@@ -87,6 +91,15 @@ class PersistenceManager:
                 "rr_ratio_at_entry": position.rr_ratio_at_entry,
                 "adx_at_entry": position.adx_at_entry,
                 "rsi_at_entry": position.rsi_at_entry,
+                "trend_direction_at_entry": position.trend_direction_at_entry,
+                "macd_signal_at_entry": position.macd_signal_at_entry,
+                "bb_position_at_entry": position.bb_position_at_entry,
+                "volume_state_at_entry": position.volume_state_at_entry,
+                "market_sentiment_at_entry": position.market_sentiment_at_entry,
+                "stop_loss_type_at_entry": position.stop_loss_type_at_entry,
+                "stop_loss_check_interval_at_entry": position.stop_loss_check_interval_at_entry,
+                "take_profit_type_at_entry": position.take_profit_type_at_entry,
+                "take_profit_check_interval_at_entry": position.take_profit_check_interval_at_entry,
                 "max_drawdown_pct": position.max_drawdown_pct,
                 "max_profit_pct": position.max_profit_pct,
             }
@@ -141,6 +154,15 @@ class PersistenceManager:
                     rr_ratio_at_entry=data.get("rr_ratio_at_entry", 0.0),
                     adx_at_entry=data.get("adx_at_entry", 0.0),
                     rsi_at_entry=data.get("rsi_at_entry", 50.0),
+                    trend_direction_at_entry=data.get("trend_direction_at_entry", "NEUTRAL"),
+                    macd_signal_at_entry=data.get("macd_signal_at_entry", "NEUTRAL"),
+                    bb_position_at_entry=data.get("bb_position_at_entry", "MIDDLE"),
+                    volume_state_at_entry=data.get("volume_state_at_entry", "NORMAL"),
+                    market_sentiment_at_entry=data.get("market_sentiment_at_entry", "NEUTRAL"),
+                    stop_loss_type_at_entry=data.get("stop_loss_type_at_entry", "unknown"),
+                    stop_loss_check_interval_at_entry=data.get("stop_loss_check_interval_at_entry", "unknown"),
+                    take_profit_type_at_entry=data.get("take_profit_type_at_entry", "unknown"),
+                    take_profit_check_interval_at_entry=data.get("take_profit_check_interval_at_entry", "unknown"),
                     max_drawdown_pct=data.get("max_drawdown_pct", 0.0),
                     max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
@@ -247,10 +269,13 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving statistics: %s", e)
 
+<<<<<<< HEAD
     async def async_save_statistics(self, stats: "TradingStatistics") -> None:
         """Non-blocking save_statistics: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_statistics, stats)
 
+=======
+>>>>>>> main
     def load_statistics(self) -> "TradingStatistics":
         """Load trading statistics from disk."""
         if not self.statistics_file.exists():
@@ -267,6 +292,52 @@ class PersistenceManager:
         """Non-blocking load_statistics: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_statistics)
 
+<<<<<<< HEAD
+=======
+    def save_position_monitor_state(self, state: Dict[str, Any]) -> None:
+        """Save position monitor cadence state to disk."""
+        try:
+            data = serialize_for_json(state)
+            temp_path = str(self.position_monitor_file) + ".tmp"
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, self.position_monitor_file)
+        except Exception as e:
+            self.logger.error("Error saving position monitor state: %s", e)
+
+    async def async_save_position_monitor_state(self, state: Dict[str, Any]) -> None:
+        """Non-blocking save_position_monitor_state: runs on a thread-pool worker."""
+        await asyncio.to_thread(self.save_position_monitor_state, state)
+
+    def load_position_monitor_state(self) -> Dict[str, Any]:
+        """Load position monitor cadence state from disk."""
+        if not self.position_monitor_file.exists():
+            return {}
+        try:
+            with open(self.position_monitor_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+        except Exception as e:
+            self.logger.error("Error loading position monitor state: %s", e)
+            return {}
+
+    async def async_load_position_monitor_state(self) -> Dict[str, Any]:
+        """Non-blocking load_position_monitor_state: runs on a thread-pool worker."""
+        return await asyncio.to_thread(self.load_position_monitor_state)
+
+    def clear_position_monitor_state(self) -> None:
+        """Remove persisted position monitor cadence state."""
+        try:
+            if self.position_monitor_file.exists():
+                self.position_monitor_file.unlink()
+        except Exception as e:
+            self.logger.error("Error clearing position monitor state: %s", e)
+
+    async def async_clear_position_monitor_state(self) -> None:
+        """Non-blocking clear_position_monitor_state: runs on a thread-pool worker."""
+        await asyncio.to_thread(self.clear_position_monitor_state)
+
+>>>>>>> main
     def save_previous_response(
         self,
         response: str,
@@ -307,6 +378,7 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving previous response: %s", e)
 
+<<<<<<< HEAD
     async def async_save_previous_response(
         self,
         response: str,
@@ -316,6 +388,8 @@ class PersistenceManager:
         """Non-blocking save_previous_response: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
 
+=======
+>>>>>>> main
     async def async_load_previous_response(self) -> Optional[Dict[str, Any]]:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_previous_response)
@@ -370,10 +444,13 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving last analysis time: %s", e)
 
+<<<<<<< HEAD
     async def async_save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
         """Non-blocking save_last_analysis_time: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_last_analysis_time, timestamp)
 
+=======
+>>>>>>> main
     def get_last_analysis_time(self) -> Optional[datetime]:
         """Get timestamp of last successful analysis."""
         if self._last_analysis_time_cache_valid:

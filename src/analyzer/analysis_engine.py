@@ -23,6 +23,10 @@ from src.utils.indicator_classifier import (
     classify_bb_position,
     classify_market_sentiment,
     classify_order_book_bias,
+<<<<<<< HEAD
+=======
+    build_exit_execution_context_from_config,
+>>>>>>> main
 )
 from src.logger.logger import Logger
 from .analysis_context import AnalysisContext
@@ -63,7 +67,11 @@ class AnalysisEngine:
             coingecko_api: CoinGecko API client
             model_manager: AI model manager (Protocol-based)
             _alternative_me_api: AlternativeMeAPI (Unused)
+<<<<<<< HEAD
             market_api: CryptoCompare Market API client
+=======
+            market_api: Market metadata API client
+>>>>>>> main
             format_utils: Formatting utilities
             data_processor: Data processing utilities
             config: Configuration instance (Protocol-based)
@@ -86,17 +94,26 @@ class AnalysisEngine:
         self.base_symbol = None
         self.context = None
         self.article_urls = {}
+<<<<<<< HEAD
         self.last_analysis_result = None
+=======
+>>>>>>> main
         self.previous_microstructure_snapshots: Dict[str, Dict[str, Any]] = {}
 
         # Load configuration
         try:
-            self.timeframe = self.config.TIMEFRAME
+            self.timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
             self.limit = self.config.CANDLE_LIMIT
+<<<<<<< HEAD
 
             # Validate timeframe
             if not TimeframeValidator.validate(self.timeframe):
                 self.logger.warning("Timeframe '%s' is not fully supported. Supported timeframes: %s. Proceeding but expect potential calculation errors.", self.timeframe, ', '.join(TimeframeValidator.SUPPORTED_TIMEFRAMES))
+=======
+        except ValueError as e:
+            self.logger.error("Invalid configured timeframe: %s", e)
+            raise
+>>>>>>> main
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.exception("Error loading configuration values: %s.", e)
             raise
@@ -147,7 +164,11 @@ class AnalysisEngine:
         try:
             effective_timeframe = TimeframeValidator.validate_and_normalize(effective_timeframe)
         except ValueError as e:
+<<<<<<< HEAD
             self.logger.warning("Timeframe validation failed: %s. Using config default: %s", e, self.timeframe)
+=======
+            self.logger.warning("Timeframe validation failed: %s. Falling back to config default: %s", e, self.timeframe)
+>>>>>>> main
             effective_timeframe = self.timeframe
 
         self.context = AnalysisContext(symbol)
@@ -173,7 +194,10 @@ class AnalysisEngine:
 
         # Reset analysis state
         self.article_urls = {}
+<<<<<<< HEAD
         self.last_analysis_result = None
+=======
+>>>>>>> main
 
         # Reset token counter for new analysis using the model manager's token counter
         self.token_counter.reset_session_stats()
@@ -239,15 +263,21 @@ class AnalysisEngine:
                 return None, False
 
             async def run_rag_analysis():
+                query = self.rag_engine.build_context_query(self.symbol)
+                
                 market_context = await self.rag_engine.retrieve_context(
-                    "current market news analysis trends",
+                    query,
                     self.symbol,
                     k=self.rag_engine.config.RAG_NEWS_LIMIT
                 )
 
                 rag_urls = {}
                 try:
+<<<<<<< HEAD
                     rag_urls = self.rag_engine.context_builder.get_latest_article_urls()
+=======
+                    rag_urls = self.rag_engine.get_latest_article_urls_snapshot()
+>>>>>>> main
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     self.logger.warning("Could not retrieve article URLs from RAG engine: %s", e)
 
@@ -284,9 +314,12 @@ class AnalysisEngine:
                 precomputed_chart=(chart_image, has_chart_analysis) # Pass precomputed chart
             )
 
+<<<<<<< HEAD
             # Store the result for later publication
             self.last_analysis_result = analysis_result
 
+=======
+>>>>>>> main
             # Reset custom instructions for next run
             self.prompt_builder.custom_instructions = []
 
@@ -770,6 +803,13 @@ class AnalysisEngine:
 
         # Extract raw RSI for numeric embedding in query document
         rsi_value = technical_data.get("rsi", 50.0)
+<<<<<<< HEAD
+=======
+        exit_execution_context = build_exit_execution_context_from_config(
+            self.config,
+            self.timeframe,
+        )
+>>>>>>> main
 
         # Offload blocking ChromaDB + embedding calls to a thread to free the event loop
         return await asyncio.to_thread(
@@ -784,6 +824,7 @@ class AnalysisEngine:
             bb_position=bb_position,
             is_weekend=is_weekend,
             market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
         )
 

@@ -9,7 +9,17 @@ from typing import Optional, Dict, Any, TYPE_CHECKING
 from uuid import uuid4
 
 from src.logger.logger import Logger
+<<<<<<< HEAD
 from src.utils.indicator_classifier import classify_adx_label, classify_rsi_label
+=======
+from src.utils.indicator_classifier import (
+    build_context_string_from_classified_values,
+    build_exit_execution_context_from_position,
+    build_query_document_from_classified_values,
+    classify_adx_label,
+    classify_rsi_label,
+)
+>>>>>>> main
 from .vector_memory import VectorMemoryService
 from .data_models import Position, TradeDecision
 
@@ -74,6 +84,10 @@ class TradingBrainService:
         is_win = pnl_pct > 0
 
         conditions = market_conditions or {}
+<<<<<<< HEAD
+=======
+        exit_execution_context = build_exit_execution_context_from_position(position)
+>>>>>>> main
 
         # Use rich context builder for consistent vector keys
         condition_str = self._build_rich_context_string(
@@ -86,7 +100,12 @@ class TradingBrainService:
             bb_position=conditions.get("bb_position", "MIDDLE"),
             is_weekend=conditions.get("is_weekend", False),
             market_sentiment=conditions.get("market_sentiment", "NEUTRAL"),
+<<<<<<< HEAD
             order_book_bias=conditions.get("order_book_bias", "BALANCED")
+=======
+            order_book_bias=conditions.get("order_book_bias", "BALANCED"),
+            exit_execution_context=exit_execution_context,
+>>>>>>> main
         )
 
         # Invalidate stats cache (new trade added)
@@ -102,7 +121,11 @@ class TradingBrainService:
             direction=position.direction,
             confidence=position.confidence,
             reasoning=reasoning,
+<<<<<<< HEAD
             symbol=getattr(position, "symbol", ""),
+=======
+            symbol=position.symbol,
+>>>>>>> main
             close_reason=close_reason,
             metadata={
                 "adx_at_entry": position.adx_at_entry,
@@ -124,6 +147,10 @@ class TradingBrainService:
                 "order_book_bias": conditions.get("order_book_bias", ""),
                 "macd_signal": conditions.get("macd_signal", ""),
                 "bb_pos": conditions.get("bb_position", ""),
+<<<<<<< HEAD
+=======
+                **exit_execution_context,
+>>>>>>> main
                 **self._extract_factor_scores(position.confluence_factors),
             }
         )
@@ -147,7 +174,8 @@ class TradingBrainService:
         bb_position: str = "MIDDLE",
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED"
+        order_book_bias: str = "BALANCED",
+        exit_execution_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval.
 
@@ -217,6 +245,7 @@ class TradingBrainService:
             is_weekend=is_weekend,
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
             k=5
         )
 
@@ -304,12 +333,17 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
+<<<<<<< HEAD
+=======
+        exit_execution_context: Optional[Dict[str, Any]] = None,
+>>>>>>> main
     ) -> str:
         """Build rich semantic context string for vector storage and retrieval.
 
         This unified method ensures that the context stored in memory matches
         the format of the context used for querying, maximizing vector similarity.
         """
+<<<<<<< HEAD
         # Build rich semantic context string
         adx_label = classify_adx_label(adx)
 
@@ -341,6 +375,21 @@ class TradingBrainService:
             context_parts.append(f"OrderBook {order_book_bias}")
 
         return " + ".join(context_parts)
+=======
+        return build_context_string_from_classified_values(
+            trend_direction=trend_direction,
+            adx=adx,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position,
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+        )
+>>>>>>> main
 
     def _build_query_document(
         self,
@@ -352,8 +401,15 @@ class TradingBrainService:
         macd_signal: str,
         volume_state: str,
         bb_position: str,
+<<<<<<< HEAD
         market_sentiment: str,
         order_book_bias: str,
+=======
+        is_weekend: bool = False,
+        market_sentiment: str = "NEUTRAL",
+        order_book_bias: str = "BALANCED",
+        exit_execution_context: Optional[Dict[str, Any]] = None,
+>>>>>>> main
     ) -> str:
         """Build a query document that mirrors _build_experience_document format.
 
@@ -369,21 +425,33 @@ class TradingBrainService:
             macd_signal: MACD signal label
             volume_state: Volume state label
             bb_position: BB position label
+<<<<<<< HEAD
+=======
+            is_weekend: Whether current day is Saturday or Sunday
+>>>>>>> main
             market_sentiment: Fear & Greed label
             order_book_bias: Order book bias label
 
         Returns:
             Query string formatted like stored experience documents.
         """
+<<<<<<< HEAD
         adx_label = classify_adx_label(adx)
         context_str = self._build_rich_context_string(
             trend_direction=trend_direction,
             adx=adx,
+=======
+        return build_query_document_from_classified_values(
+            trend_direction=trend_direction,
+            adx=adx,
+            rsi=rsi,
+>>>>>>> main
             volatility_level=volatility_level,
             rsi_level=rsi_level,
             macd_signal=macd_signal,
             volume_state=volume_state,
             bb_position=bb_position,
+<<<<<<< HEAD
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
         )
@@ -408,6 +476,14 @@ class TradingBrainService:
 
         return " ".join(lines)
 
+=======
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+        )
+
+>>>>>>> main
     def get_vector_context(
         self,
         trend_direction: str = "NEUTRAL",
@@ -421,6 +497,10 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
+<<<<<<< HEAD
+=======
+        exit_execution_context: Optional[Dict[str, Any]] = None,
+>>>>>>> main
         k: int = 5
     ) -> str:
         """Get context from similar past experiences via vector retrieval.
@@ -454,7 +534,12 @@ class TradingBrainService:
             bb_position=bb_position,
             is_weekend=is_weekend,
             market_sentiment=market_sentiment,
+<<<<<<< HEAD
             order_book_bias=order_book_bias
+=======
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+>>>>>>> main
         )
 
         # Use richer query document for embedding search (mirrors storage format)
@@ -467,8 +552,15 @@ class TradingBrainService:
             macd_signal=macd_signal,
             volume_state=volume_state,
             bb_position=bb_position,
+<<<<<<< HEAD
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
+=======
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+>>>>>>> main
         )
 
         vector_context = self.vector_memory.get_context_for_prompt(
@@ -685,6 +777,7 @@ class TradingBrainService:
             market_conditions: Market state at time of update
         """
         conditions = market_conditions or {}
+        exit_execution_context = build_exit_execution_context_from_position(position)
 
         sl_moved = new_sl != old_sl
         tp_moved = new_tp != old_tp
@@ -709,7 +802,12 @@ class TradingBrainService:
             bb_position=conditions.get("bb_position", "MIDDLE"),
             is_weekend=conditions.get("is_weekend", False),
             market_sentiment=conditions.get("market_sentiment", "NEUTRAL"),
+<<<<<<< HEAD
             order_book_bias=conditions.get("order_book_bias", "BALANCED")
+=======
+            order_book_bias=conditions.get("order_book_bias", "BALANCED"),
+            exit_execution_context=exit_execution_context,
+>>>>>>> main
         )
         
         update_id = f"update_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
@@ -731,6 +829,7 @@ class TradingBrainService:
                 "pnl_at_update": current_pnl_pct,
                 "adx_at_update": conditions.get("adx", 0),
                 "volatility": conditions.get("volatility", "MEDIUM"),
+                **exit_execution_context,
             }
         )
 

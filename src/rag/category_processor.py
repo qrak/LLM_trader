@@ -113,19 +113,20 @@ class CategoryProcessor:
         """Process category words and create mappings with priority-based collision resolution."""
         # Extract words from category for search mapping
         words = category_name.replace('-', ' ').split()
+<<<<<<< HEAD
         collision_count = 0
         excluded_count = 0
 
+=======
+>>>>>>> main
         for word in words:
             word_stripped = word.strip()
             if len(word_stripped) < 2:
                 # Skip single-character tokens
-                excluded_count += 1
                 continue
             elif len(word_stripped) == 2:
                 # Allow 2-character tokens if they are uppercase (likely tickers) or contain digits
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
-                    excluded_count += 1
                     continue
 
             word_lower = word_stripped.lower()
@@ -137,8 +138,11 @@ class CategoryProcessor:
                 if winner != existing_category:
                     # New category wins, update mapping
                     self.category_word_map[word_lower] = winner
+<<<<<<< HEAD
 
                 collision_count += 1
+=======
+>>>>>>> main
             else:
                 self.category_word_map[word_lower] = category_name
 
@@ -157,6 +161,7 @@ class CategoryProcessor:
             generic_priorities=self.generic_priorities
         )
 
+<<<<<<< HEAD
     def get_api_categories(self, base_coin: str) -> set:
         """Get categories for a coin from the API category data."""
         matching_categories = set()
@@ -175,6 +180,8 @@ class CategoryProcessor:
 
         return matching_categories
 
+=======
+>>>>>>> main
     def extract_base_coin(self, symbol: str) -> str:
         """Extract base coin from trading pair symbol."""
         if not symbol:

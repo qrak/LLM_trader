@@ -5,6 +5,10 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
+<<<<<<< HEAD
+=======
+from src.utils.indicator_classifier import build_exit_execution_context_from_config
+>>>>>>> main
 from .data_models import Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
@@ -58,6 +62,17 @@ class TradingStrategy:
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
 
+<<<<<<< HEAD
+=======
+    async def _update_live_metrics(self, current_price: float) -> bool:
+        """Update live position metrics before evaluating an exit."""
+        if not self.current_position:
+            return False
+        self.current_position.update_metrics(current_price)
+        await self.persistence.async_save_position(self.current_position)
+        return True
+
+>>>>>>> main
     async def check_position(self, current_price: float) -> Optional[str]:
         """Check if current position hit stop loss or take profit.
 
@@ -67,13 +82,16 @@ class TradingStrategy:
         Returns:
             Reason for closing position if hit, else None
         """
-        if not self.current_position:
+        if not await self._update_live_metrics(current_price):
             return None
 
+<<<<<<< HEAD
         # Update live performance metrics (MAE/MFE)
         self.current_position.update_metrics(current_price)
         await self.persistence.async_save_position(self.current_position)
 
+=======
+>>>>>>> main
         if self.current_position.is_stop_hit(current_price):
             conditions = self._build_conditions_from_position(self.current_position)
             await self.close_position("stop_loss", current_price, conditions)
@@ -86,6 +104,33 @@ class TradingStrategy:
 
         return None
 
+<<<<<<< HEAD
+=======
+    async def check_stop_loss(self, current_price: float) -> Optional[str]:
+        """Check only the configured stop loss exit."""
+        if not await self._update_live_metrics(current_price):
+            return None
+
+        if self.current_position.is_stop_hit(current_price):
+            conditions = self._build_conditions_from_position(self.current_position)
+            await self.close_position("stop_loss", current_price, conditions)
+            return "stop_loss"
+
+        return None
+
+    async def check_take_profit(self, current_price: float) -> Optional[str]:
+        """Check only the configured take profit exit."""
+        if not await self._update_live_metrics(current_price):
+            return None
+
+        if self.current_position.is_target_hit(current_price):
+            conditions = self._build_conditions_from_position(self.current_position)
+            await self.close_position("take_profit", current_price, conditions)
+            return "take_profit"
+
+        return None
+
+>>>>>>> main
     async def close_position(
         self,
         reason: str,
@@ -356,8 +401,20 @@ class TradingStrategy:
             confidence=confidence,
             risk_assessment=risk_assessment,
             confluence_factors=confluence_factors,
+<<<<<<< HEAD
             market_conditions=market_conditions
         )
+
+        await self.persistence.async_save_position(self.current_position)
+        self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
+=======
+            market_conditions=market_conditions,
+            exit_execution_context=build_exit_execution_context_from_config(
+                self.config,
+                self.config.TIMEFRAME,
+            ),
+        )
+>>>>>>> main
 
         await self.persistence.async_save_position(self.current_position)
         self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)

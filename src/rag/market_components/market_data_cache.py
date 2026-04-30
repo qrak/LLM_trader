@@ -16,11 +16,17 @@ class MarketDataCache:
         self.logger = logger
         self.file_handler = file_handler
         self.current_market_overview: Optional[Dict[str, Any]] = None
+<<<<<<< HEAD
         self.coingecko_last_update: Optional[datetime] = None
 
 
 
 
+=======
+
+
+
+>>>>>>> main
     def get_current_overview(self) -> Optional[Dict[str, Any]]:
         """Get the current market overview data."""
         return self.current_market_overview

@@ -127,11 +127,24 @@ def _detect_stochastic_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarray,
             k_val = float(stoch_k[idx + 1])
             d_val = float(stoch_d[idx + 1])
 
+<<<<<<< HEAD
+=======
+            # Determine zone membership on the pre-crossover bar. This preserves
+            # "cross from overbought/oversold" semantics even if the crossover
+            # bar itself already moved out of the zone.
+            k_pre = float(stoch_k[idx])
+            d_pre = float(stoch_d[idx])
+
+>>>>>>> main
             # Check if in oversold (bullish) or overbought (bearish) zone
             if is_bullish:
-                in_zone = k_val < threshold or d_val < threshold
+                in_zone = k_pre < threshold or d_pre < threshold
             else:
+<<<<<<< HEAD
                 in_zone = k_val > threshold or d_val > threshold
+=======
+                in_zone = k_pre > threshold or d_pre > threshold
+>>>>>>> main
 
             # periods_ago: crossover at idx+1, current bar is len-1
             # periods_ago = (len-1) - (idx+1) = len - idx - 2 = i - 1
@@ -175,6 +188,7 @@ def detect_stoch_bearish_crossover_numba(stoch_k: np.ndarray, stoch_d: np.ndarra
     """
     return _detect_stochastic_crossover_numba(stoch_k, stoch_d, False, overbought_threshold)
 
+<<<<<<< HEAD
 
 @njit
 def detect_stoch_divergence_numba(stoch_k: np.ndarray, prices: np.ndarray, lookback: int = 20) -> tuple:
@@ -242,3 +256,5 @@ def detect_stoch_divergence_numba(stoch_k: np.ndarray, prices: np.ndarray, lookb
                 return True, False, price_change, stoch_change
 
     return False, False, 0.0, 0.0
+=======
+>>>>>>> main
