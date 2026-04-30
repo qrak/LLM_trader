@@ -188,24 +188,63 @@ class RagFileHandler:
             return []
 
     def load_known_tickers(self) -> Optional[List[str]]:
-        """Load known tickers from disk."""
+        """Load known tickers from symbol_name_map keys in data JSON."""
         try:
-            data = self.load_json_file(self.tickers_file)
-            if data and 'tickers' in data:
-                return data['tickers']
-            return None
+            data = self.load_json_file(self.tickers_file) or {}
+            mapping = data.get("symbol_name_map", {})
+            return sorted({str(symbol).upper() for symbol in mapping.keys() if symbol})
         except Exception as e:
             self.logger.error("Error loading known tickers: %s", e)
             return None
 
     def save_known_tickers(self, tickers: List[str]) -> None:
-        """Save known tickers to disk."""
+        """Persist known tickers by syncing symbol_name_map keys.
+
+        We keep data/known_tickers.json as the single source of truth. New
+        symbols get a lowercase placeholder name until a curated mapping is
+        provided.
+        """
         try:
-            data = {"tickers": tickers}
+            data = self.load_json_file(self.tickers_file) or {}
+            mapping = data.get("symbol_name_map", {})
+
+            normalized_tickers = {
+                str(ticker).upper()
+                for ticker in tickers
+                if ticker
+            }
+
+            synced_map: Dict[str, str] = {}
+            for ticker in sorted(normalized_tickers):
+                existing = mapping.get(ticker)
+                if isinstance(existing, str) and existing.strip():
+                    synced_map[ticker] = existing.strip().lower()
+                else:
+                    synced_map[ticker] = ticker.lower()
+
+            data["symbol_name_map"] = synced_map
+            data.pop("tickers", None)
             self.save_json_file(self.tickers_file, data)
         except Exception as e:
             self.logger.error("Error saving known tickers: %s", e)
 
+<<<<<<< HEAD
+=======
+    def load_symbol_name_map(self) -> Dict[str, str]:
+        """Load optional symbol -> full coin name mapping from data JSON."""
+        try:
+            data = self.load_json_file(self.tickers_file) or {}
+            mapping = data.get("symbol_name_map", {})
+            return {
+                str(symbol).upper(): str(name).lower().strip()
+                for symbol, name in mapping.items()
+                if symbol and name
+            }
+        except Exception as e:
+            self.logger.error("Error loading symbol name map: %s", e)
+            return {}
+
+>>>>>>> main
     def load_rag_priorities(self) -> Optional[Dict]:
         """Load RAG priorities configuration from disk."""
         try:

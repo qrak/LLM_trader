@@ -7,7 +7,6 @@ import io
 import base64
 from typing import Optional, Dict, Any, List, Union
 
-from PIL import Image
 from openrouter import OpenRouter
 
 from src.logger.logger import Logger

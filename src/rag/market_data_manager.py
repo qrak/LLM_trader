@@ -1,11 +1,7 @@
-"""
-Market Data Management Module for RAG Engine
+"""Market data management for fetching and serving market overview."""
 
-Handles fetching and processing of cryptocurrency market overview data.
-"""
-
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, List
+from datetime import datetime
+from typing import Dict, Any, Optional
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
 from .market_components import (
@@ -39,17 +35,28 @@ class MarketDataManager:
         # Initialize specialized components
         self.fetcher = fetcher
         self.processor = processor
-        self.cache = cache
+        self.cache = cache or MarketDataCache(logger=logger, file_handler=file_handler)
         self.overview_builder = overview_builder
 
         self.coingecko_api = coingecko_api
         self.market_api = market_api
         self.exchange_manager = exchange_manager
+<<<<<<< HEAD
 
         # Market data storage
         self.current_market_overview: Optional[Dict[str, Any]] = None
         self.coingecko_last_update: Optional[datetime] = None
 
+=======
+    @property
+    def current_market_overview(self) -> Optional[Dict[str, Any]]:
+        """Backward-compatible alias for cache-backed overview state."""
+        return self.cache.current_market_overview
+
+    @current_market_overview.setter
+    def current_market_overview(self, value: Optional[Dict[str, Any]]) -> None:
+        self.cache.current_market_overview = value
+>>>>>>> main
 
     async def fetch_market_overview(self) -> Optional[Dict[str, Any]]:
         """Fetch overall market data from various sources concurrently."""
@@ -84,6 +91,7 @@ class MarketDataManager:
             self.logger.error("Error fetching market overview: %s", e)
             return None
 
+<<<<<<< HEAD
     def _process_coin_data(self, values: Dict) -> Optional[Dict]:
         """Process individual coin data from price API response."""
         quote_data = None
@@ -145,26 +153,49 @@ class MarketDataManager:
                 if current_time - data_time > timedelta(hours=max_age_hours):
                     self.logger.debug("Market overview data is older than %s hours, refreshing", max_age_hours)
                     should_update = True
+=======
+    async def update_market_overview_if_needed(self, max_age_hours: int = 24) -> bool:
+        """Update market overview if needed based on cache staleness policy."""
+        normalize_timestamp = None
+        if self.unified_parser:
+            normalize_timestamp = self.unified_parser.format_utils.parse_timestamp
+
+        should_update = self.cache.is_overview_stale(
+            max_age_hours=max_age_hours,
+            normalize_timestamp_func=normalize_timestamp,
+        )
+        if should_update and self.current_market_overview is not None:
+            self.logger.debug("Market overview data is older than %s hours, refreshing", max_age_hours)
+>>>>>>> main
 
         if should_update:
             try:
                 self.logger.debug("Fetching market overview data")
                 market_overview = await self.fetch_market_overview()
                 if market_overview:
-                    self.current_market_overview = market_overview
+                    self.cache.current_market_overview = market_overview
                     self.logger.debug("Market overview updated successfully.")
                     return True
+<<<<<<< HEAD
                 else:
                     self.logger.warning("No market overview data was available from data sources")
                     return False
             except Exception as e:
                 self.logger.error("Error fetching market overview: %s", e)
                 return False
+=======
+                self.logger.warning("No market overview data was available from data sources")
+                return False
+            except Exception as e:
+                self.logger.error("Error fetching market overview: %s", e)
+                return False
+>>>>>>> main
 
         return False
 
     def get_current_overview(self) -> Optional[Dict[str, Any]]:
         """Get the current market overview data."""
+<<<<<<< HEAD
         return self.current_market_overview
 
     def is_overview_stale(self, max_age_hours: int = 1) -> bool:
@@ -182,3 +213,13 @@ class MarketDataManager:
             return current_time - data_time > timedelta(hours=max_age_hours)
 
         return True
+=======
+        return self.cache.get_current_overview()
+
+    def is_overview_stale(self, max_age_hours: int = 1) -> bool:
+        """Check if the current market overview is stale."""
+        normalize_timestamp = None
+        if self.unified_parser:
+            normalize_timestamp = self.unified_parser.format_utils.parse_timestamp
+        return self.cache.is_overview_stale(max_age_hours=max_age_hours, normalize_timestamp_func=normalize_timestamp)
+>>>>>>> main

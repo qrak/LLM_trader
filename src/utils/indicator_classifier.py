@@ -8,6 +8,90 @@ between the AnalysisEngine (live trading) and the dashboard router.
 from typing import Any, Dict, Optional
 
 
+EXIT_EXECUTION_UNKNOWN = "unknown"
+EXIT_EXECUTION_KEYS = (
+    "stop_loss_type",
+    "stop_loss_check_interval",
+    "take_profit_type",
+    "take_profit_check_interval",
+)
+EXIT_EXECUTION_TYPES = {"soft", "hard", EXIT_EXECUTION_UNKNOWN}
+
+
+def _normalize_exit_execution_value(value: Any, default: str = EXIT_EXECUTION_UNKNOWN) -> str:
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    return normalized or default
+
+
+def build_exit_execution_context(
+    stop_loss_type: Any = EXIT_EXECUTION_UNKNOWN,
+    stop_loss_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
+    take_profit_type: Any = EXIT_EXECUTION_UNKNOWN,
+    take_profit_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
+) -> Dict[str, str]:
+    """Return normalized SL/TP execution settings for brain memory/query context."""
+    stop_type = _normalize_exit_execution_value(stop_loss_type)
+    take_profit_exit_type = _normalize_exit_execution_value(take_profit_type)
+    if stop_type not in EXIT_EXECUTION_TYPES:
+        stop_type = EXIT_EXECUTION_UNKNOWN
+    if take_profit_exit_type not in EXIT_EXECUTION_TYPES:
+        take_profit_exit_type = EXIT_EXECUTION_UNKNOWN
+
+    return {
+        "stop_loss_type": stop_type,
+        "stop_loss_check_interval": _normalize_exit_execution_value(stop_loss_check_interval),
+        "take_profit_type": take_profit_exit_type,
+        "take_profit_check_interval": _normalize_exit_execution_value(take_profit_check_interval),
+    }
+
+
+def build_exit_execution_context_from_config(
+    config: Any,
+    timeframe: str = EXIT_EXECUTION_UNKNOWN,
+) -> Dict[str, str]:
+    """Build risk-execution context from config attributes."""
+    interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
+    return build_exit_execution_context(
+        stop_loss_type=config.STOP_LOSS_TYPE,
+        stop_loss_check_interval=config.STOP_LOSS_CHECK_INTERVAL or interval_default,
+        take_profit_type=config.TAKE_PROFIT_TYPE,
+        take_profit_check_interval=config.TAKE_PROFIT_CHECK_INTERVAL or interval_default,
+    )
+
+
+def build_exit_execution_context_from_position(position: Any) -> Dict[str, str]:
+    """Build risk-execution context from a position entry snapshot."""
+    return build_exit_execution_context(
+        stop_loss_type=position.stop_loss_type_at_entry,
+        stop_loss_check_interval=position.stop_loss_check_interval_at_entry,
+        take_profit_type=position.take_profit_type_at_entry,
+        take_profit_check_interval=position.take_profit_check_interval_at_entry,
+    )
+
+
+def format_exit_execution_context(
+    exit_execution_context: Optional[Dict[str, Any]] = None,
+    *,
+    include_unknown: bool = False,
+) -> str:
+    """Format SL/TP execution settings for vector documents and query strings."""
+    raw_context = exit_execution_context or {}
+    context = build_exit_execution_context(
+        stop_loss_type=raw_context.get("stop_loss_type", EXIT_EXECUTION_UNKNOWN),
+        stop_loss_check_interval=raw_context.get("stop_loss_check_interval", EXIT_EXECUTION_UNKNOWN),
+        take_profit_type=raw_context.get("take_profit_type", EXIT_EXECUTION_UNKNOWN),
+        take_profit_check_interval=raw_context.get("take_profit_check_interval", EXIT_EXECUTION_UNKNOWN),
+    )
+    if not include_unknown and all(value == EXIT_EXECUTION_UNKNOWN for value in context.values()):
+        return ""
+    return (
+        f"Exit Execution: SL {context['stop_loss_type']}/{context['stop_loss_check_interval']} | "
+        f"TP {context['take_profit_type']}/{context['take_profit_check_interval']}"
+    )
+
+
 def classify_trend_direction(technical_data: Dict[str, Any]) -> str:
     """Classify trend direction from +DI/-DI crossover."""
     di_plus = technical_data.get("plus_di", 0.0)
@@ -134,6 +218,7 @@ def build_context_string_from_technical_data(
     sentiment_data: Optional[Dict[str, Any]] = None,
     microstructure_data: Optional[Dict[str, Any]] = None,
     is_weekend: bool = False,
+    exit_execution_context: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Build the rich context string from raw technical indicators.
 
@@ -147,13 +232,13 @@ def build_context_string_from_technical_data(
         sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
         microstructure_data: Optional order book microstructure dict.
         is_weekend: Whether the current day is Saturday or Sunday.
+        exit_execution_context: Optional SL/TP execution settings snapshot.
 
     Returns:
         Space-and-plus-separated categorical context string.
     """
     trend_direction = classify_trend_direction(technical_data)
     adx = technical_data.get("adx", 0.0)
-    adx_label = classify_adx_label(adx)
     volatility_level = classify_volatility_level(technical_data)
     rsi_level = classify_rsi_level(technical_data)
     macd_signal = classify_macd_signal(technical_data)
@@ -161,6 +246,37 @@ def build_context_string_from_technical_data(
     bb_position = classify_bb_position(technical_data, current_price)
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
+
+    return build_context_string_from_classified_values(
+        trend_direction=trend_direction,
+        adx=adx,
+        volatility_level=volatility_level,
+        rsi_level=rsi_level,
+        macd_signal=macd_signal,
+        volume_state=volume_state,
+        bb_position=bb_position,
+        is_weekend=is_weekend,
+        market_sentiment=market_sentiment,
+        order_book_bias=order_book_bias,
+        exit_execution_context=exit_execution_context,
+    )
+
+
+def build_context_string_from_classified_values(
+    trend_direction: str,
+    adx: float,
+    volatility_level: str,
+    rsi_level: str,
+    macd_signal: str,
+    volume_state: str,
+    bb_position: str,
+    is_weekend: bool = False,
+    market_sentiment: str = "NEUTRAL",
+    order_book_bias: str = "BALANCED",
+    exit_execution_context: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Build the rich context string from already classified market values."""
+    adx_label = classify_adx_label(adx)
 
     context_parts = [trend_direction, adx_label, f"{volatility_level} Volatility"]
 
@@ -178,6 +294,9 @@ def build_context_string_from_technical_data(
         context_parts.append(f"Sentiment {market_sentiment}")
     if order_book_bias not in ("BALANCED", ""):
         context_parts.append(f"OrderBook {order_book_bias}")
+    exit_execution_text = format_exit_execution_context(exit_execution_context)
+    if exit_execution_text:
+        context_parts.append(exit_execution_text)
 
     return " + ".join(context_parts)
 
@@ -188,6 +307,7 @@ def build_query_document_from_technical_data(
     sentiment_data: Optional[Dict[str, Any]] = None,
     microstructure_data: Optional[Dict[str, Any]] = None,
     is_weekend: bool = False,
+    exit_execution_context: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Build an enriched query document for vector similarity search.
 
@@ -201,20 +321,12 @@ def build_query_document_from_technical_data(
         sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
         microstructure_data: Optional order book microstructure dict.
         is_weekend: Whether the current day is Saturday or Sunday.
+        exit_execution_context: Optional SL/TP execution settings snapshot.
 
     Returns:
         Enriched query string with Indicators and Structure lines.
     """
-    context_str = build_context_string_from_technical_data(
-        technical_data=technical_data,
-        current_price=current_price,
-        sentiment_data=sentiment_data,
-        microstructure_data=microstructure_data,
-        is_weekend=is_weekend,
-    )
-
     adx = technical_data.get("adx", 0.0)
-    adx_label = classify_adx_label(adx)
     rsi = technical_data.get("rsi", 50.0)
     rsi_level = classify_rsi_level(technical_data)
     volatility_level = classify_volatility_level(technical_data)
@@ -222,6 +334,52 @@ def build_query_document_from_technical_data(
     bb_position = classify_bb_position(technical_data, current_price)
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
+
+    return build_query_document_from_classified_values(
+        trend_direction=classify_trend_direction(technical_data),
+        adx=adx,
+        rsi=rsi,
+        volatility_level=volatility_level,
+        rsi_level=rsi_level,
+        macd_signal=macd_signal,
+        volume_state=classify_volume_state(technical_data),
+        bb_position=bb_position,
+        is_weekend=is_weekend,
+        market_sentiment=market_sentiment,
+        order_book_bias=order_book_bias,
+        exit_execution_context=exit_execution_context,
+    )
+
+
+def build_query_document_from_classified_values(
+    trend_direction: str,
+    adx: float,
+    rsi: float,
+    volatility_level: str,
+    rsi_level: str,
+    macd_signal: str,
+    volume_state: str,
+    bb_position: str,
+    is_weekend: bool = False,
+    market_sentiment: str = "NEUTRAL",
+    order_book_bias: str = "BALANCED",
+    exit_execution_context: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Build an enriched vector query document from already classified values."""
+    context_str = build_context_string_from_classified_values(
+        trend_direction=trend_direction,
+        adx=adx,
+        volatility_level=volatility_level,
+        rsi_level=rsi_level,
+        macd_signal=macd_signal,
+        volume_state=volume_state,
+        bb_position=bb_position,
+        is_weekend=is_weekend,
+        market_sentiment=market_sentiment,
+        order_book_bias=order_book_bias,
+        exit_execution_context=exit_execution_context,
+    )
+    adx_label = classify_adx_label(adx)
 
     indicator_parts = [
         f"ADX={adx:.1f} ({adx_label})",
@@ -235,6 +393,9 @@ def build_query_document_from_technical_data(
         structure_parts.append(f"Sentiment={market_sentiment}")
     if order_book_bias not in ("BALANCED", ""):
         structure_parts.append(f"OB={order_book_bias}")
+    exit_execution_text = format_exit_execution_context(exit_execution_context)
+    if exit_execution_text:
+        structure_parts.append(exit_execution_text)
 
     lines = [context_str, f"Indicators: {' | '.join(indicator_parts)}"]
     if structure_parts:

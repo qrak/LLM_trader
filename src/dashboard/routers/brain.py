@@ -9,10 +9,19 @@ from typing import Dict, Any, List, Optional, Union
 from fastapi import APIRouter, Query, Request
 
 from src.utils.indicator_classifier import (
+<<<<<<< HEAD
+=======
+    build_exit_execution_context_from_config,
+    build_exit_execution_context_from_position,
+>>>>>>> main
     build_context_string_from_technical_data,
     build_query_document_from_technical_data,
     classify_adx_label,
     classify_trend_direction,
+<<<<<<< HEAD
+=======
+    format_exit_execution_context,
+>>>>>>> main
 )
 
 
@@ -22,6 +31,35 @@ def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]
         return None
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
+<<<<<<< HEAD
+=======
+
+
+def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return persisted indicator values from new or legacy previous_response shapes."""
+    technical_data = data.get("technical_data")
+    if isinstance(technical_data, dict) and technical_data:
+        return technical_data
+
+    response = data.get("response", {})
+    if not isinstance(response, dict):
+        return {}
+
+    return {
+        key: value
+        for key, value in response.items()
+        if key != "text_analysis"
+    }
+
+
+def _distance_pct_or_fallback(stored_pct: Optional[float], entry_price: float, target_price: float) -> float:
+    """Return stored distance percent or derive it from entry and target prices."""
+    if stored_pct and stored_pct > 0:
+        return stored_pct
+    if entry_price <= 0:
+        return 0.0
+    return abs(target_price - entry_price) / entry_price
+>>>>>>> main
 
 
 def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -67,6 +105,7 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
         status["rsi"] = technical_data.get("rsi", status["rsi"])
         status["trend"] = classify_trend_direction(technical_data)
 
+<<<<<<< HEAD
     signal_match = re.search(r'\bSIGNAL\s*:\s*([A-Z_]+)\b', text, re.IGNORECASE)
     if signal_match:
         status["action"] = signal_match.group(1).upper()
@@ -75,6 +114,30 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
     if confidence_match:
         confidence_value = float(confidence_match.group(1))
         status["confidence"] = int(confidence_value) if confidence_value.is_integer() else confidence_value
+=======
+    parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis") if unified_parser else None
+
+    if parsed_analysis:
+        signal = parsed_analysis.get("signal")
+        if signal:
+            status["action"] = str(signal).upper()
+        confidence_raw = parsed_analysis.get("confidence")
+        if confidence_raw is not None:
+            try:
+                confidence_value = float(confidence_raw)
+                status["confidence"] = int(confidence_value) if confidence_value == int(confidence_value) else confidence_value
+            except (TypeError, ValueError):
+                pass
+    else:
+        signal_match = re.search(r'\bSIGNAL\s*:\s*([A-Z_]+)\b', text, re.IGNORECASE)
+        if signal_match:
+            status["action"] = signal_match.group(1).upper()
+
+        confidence_match = re.search(r'\bConfidence\s*:\s*(\d+(?:\.\d+)?)\s*%', text, re.IGNORECASE)
+        if confidence_match:
+            confidence_value = float(confidence_match.group(1))
+            status["confidence"] = int(confidence_value) if confidence_value.is_integer() else confidence_value
+>>>>>>> main
 
     if status["trend"] == "NEUTRAL":
         if "BEARISH" in text.upper():
@@ -105,11 +168,21 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
         if not data:
             return "", ""
         technical_data = _extract_persisted_technical_data(data)
+<<<<<<< HEAD
+=======
+        exit_execution_context = build_exit_execution_context_from_config(config, config.TIMEFRAME)
+>>>>>>> main
         if not technical_data:
             status = _extract_market_status(data, unified_parser)
             adx = status["adx"] or 0
             adx_label = classify_adx_label(adx)
             fallback = f"{status['trend']} + {adx_label} + MEDIUM Volatility"
+<<<<<<< HEAD
+=======
+            exit_execution_text = format_exit_execution_context(exit_execution_context)
+            if exit_execution_text:
+                fallback = f"{fallback} + {exit_execution_text}"
+>>>>>>> main
             return fallback, fallback
         current_price: Optional[float] = None
         response = data.get("response", {})
@@ -122,6 +195,10 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
             "current_price": current_price,
             "sentiment_data": sentiment_data,
             "is_weekend": is_weekend,
+<<<<<<< HEAD
+=======
+            "exit_execution_context": exit_execution_context,
+>>>>>>> main
         }
         display_context = build_context_string_from_technical_data(**shared_kwargs)
         query_document = build_query_document_from_technical_data(**shared_kwargs)
@@ -162,7 +239,19 @@ class BrainRouter:
             data_dir = "data"
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
+<<<<<<< HEAD
         status = {"status": "active", "trend": "--", "confidence": "--", "action": "--", "adx": None, "rsi": None}
+=======
+        status = {
+            "status": "active",
+            "trend": "--",
+            "confidence": "--",
+            "action": "--",
+            "adx": None,
+            "rsi": None,
+            "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
+        }
+>>>>>>> main
         try:
             prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
             if prev_data is not None:
@@ -189,7 +278,11 @@ class BrainRouter:
         cached = self.dashboard_state.get_cached(f"memory_{limit}", ttl_seconds=30.0)
         if cached:
             return cached
+<<<<<<< HEAD
         data_dir = getattr(self.config, "DATA_DIR", "data")
+=======
+        data_dir = self.config.DATA_DIR
+>>>>>>> main
         result = {
             "experience_count": 0,
             "trades": [],
@@ -352,7 +445,15 @@ class BrainRouter:
             return {"has_position": False, "error": "Persistence not available"}
         position = self.persistence.load_position()
         if not position:
+<<<<<<< HEAD
             res = {"has_position": False, "current_price": current_price}
+=======
+            res = {
+                "has_position": False,
+                "current_price": current_price,
+                "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
+            }
+>>>>>>> main
             self.dashboard_state.set_cached("position", res)
             return res
         sl_distance_pct = _distance_pct_or_fallback(
@@ -385,7 +486,13 @@ class BrainRouter:
             "rsi_at_entry": position.rsi_at_entry,
             "max_drawdown_pct": position.max_drawdown_pct,
             "max_profit_pct": position.max_profit_pct,
+<<<<<<< HEAD
             "confluence_factors": position.confluence_factors
+=======
+            "confluence_factors": position.confluence_factors,
+            "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
+            "exit_management_at_entry": build_exit_execution_context_from_position(position),
+>>>>>>> main
         }
         self.dashboard_state.set_cached("position", res)
         return res

@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from os.path import exists, getsize
-from typing import Dict, List, Any, Literal, Optional
+from typing import Dict, List, Any, Optional
 
 from aiohttp_client_cache import CachedSession, SQLiteBackend
 
@@ -78,6 +78,7 @@ class CoinGeckoAPI:
                     self.logger.debug("Loaded CoinGecko cache from %s", self.last_update.isoformat())
             except Exception as e:
                 self.logger.error("Error loading CoinGecko cache: %s", e)
+<<<<<<< HEAD
 
     async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
         """Read cache file in a thread pool executor to avoid blocking the event loop"""
@@ -107,12 +108,13 @@ class CoinGeckoAPI:
         """Synchronous file write for executor"""
         with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+=======
+>>>>>>> main
 
-    async def get_coin_image(self,
-                             base_symbol: str,
-                             exchange_name: str,
-                             size: Literal['thumb', 'small', 'large'] = 'small') -> str:
+    async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
+        """Read cache file in a thread pool executor to avoid blocking the event loop"""
         try:
+<<<<<<< HEAD
             base_symbol = base_symbol.upper()
             coin_data_list = self.symbol_to_id_map.get(base_symbol, [])
             if not coin_data_list:
@@ -145,6 +147,33 @@ class CoinGeckoAPI:
         except Exception as e:
             self.logger.error("Error fetching coin image for %s on %s: %s", base_symbol, exchange_name, e)
         return ''
+=======
+            async with self._file_lock:
+                loop = asyncio.get_running_loop()
+                return await loop.run_in_executor(None, self._read_json_sync)
+        except Exception as e:
+            self.logger.error("Error reading cache file: %s", e)
+            return None
+
+    def _read_json_sync(self) -> Dict[str, Any]:
+        """Synchronous file read for executor"""
+        with open(self.coingecko_cache_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    async def _write_cache_file(self, data: Dict[str, Any]) -> None:
+        """Write cache file in a thread pool executor to avoid blocking the event loop"""
+        try:
+            async with self._file_lock:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, self._write_json_sync, data)
+        except Exception as e:
+            self.logger.error("Error writing cache file: %s", e)
+
+    def _write_json_sync(self, data: Dict[str, Any]) -> None:
+        """Synchronous file write for executor"""
+        with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+>>>>>>> main
 
     def _get_dominance_coin_ids(self, dominance_data: Optional[Dict[str, float]] = None) -> List[str]:
         """
@@ -255,6 +284,7 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching DeFi data: %s", e)
             return {}
 
+<<<<<<< HEAD
     async def get_derivatives(self) -> List[Dict[str, Any]]:
         """
         Fetch derivative tickers (Open Interest, Volume).
@@ -275,6 +305,8 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching derivatives: %s", e)
             return []
 
+=======
+>>>>>>> main
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
     async def get_global_market_data(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
@@ -411,6 +443,7 @@ class CoinGeckoAPI:
             }
         }
 
+<<<<<<< HEAD
     async def get_market_cap_data(self) -> Dict[str, Any]:
         """Get market cap specific data"""
         market_data = await self.get_global_market_data()
@@ -442,6 +475,8 @@ class CoinGeckoAPI:
         sorted_coins = sorted(dominance.items(), key=lambda x: x[1], reverse=True)
         return dict(sorted_coins[:limit])
 
+=======
+>>>>>>> main
     async def _fetch_all_coins(self) -> List[Dict[str, str]]:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
@@ -474,13 +509,6 @@ class CoinGeckoAPI:
                 'name': coin['name'],
                 'image': ''
             })
-
-    @staticmethod
-    def _coin_traded_on_exchange(coin_data: Dict[str, Any], exchange_name: str) -> bool:
-        return any(
-            ticker.get('market', {}).get('name') == exchange_name
-            for ticker in coin_data.get('tickers', [])
-        )
 
     def _log_cache_info(self) -> None:
         cache_file_path = self.cache_backend.name

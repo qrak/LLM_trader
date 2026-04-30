@@ -1,11 +1,11 @@
 from typing import Tuple, Any
-from dataclasses import dataclass
 
 import math
 import numpy as np
 from numba import njit
 
 from src.indicators.overlap import ema_numba
+<<<<<<< HEAD
 
 
 @dataclass
@@ -18,6 +18,8 @@ class UltimateOscillatorConfig:
     medium_w: float = 2.0
     slow_w: float = 1.0
     drift: int = 1
+=======
+>>>>>>> main
 
 
 @njit(cache=True)

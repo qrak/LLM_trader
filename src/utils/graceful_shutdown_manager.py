@@ -4,11 +4,11 @@ import sys
 from typing import Optional, Callable
 
 try:
-    from PyQt6.QtWidgets import QApplication, QMessageBox
-    from PyQt6.QtCore import Qt
-    PYQT_AVAILABLE = True
+    import tkinter as tk
+    from tkinter import messagebox
+    TKINTER_AVAILABLE = True
 except ImportError:
-    PYQT_AVAILABLE = False
+    TKINTER_AVAILABLE = False
 
 class GracefulShutdownManager:
     def __init__(
@@ -24,11 +24,29 @@ class GracefulShutdownManager:
         self._shutting_down = False
 
     def setup_signal_handlers(self):
-        # Only set up signal handlers on Unix systems
-        # On Windows, let KeyboardInterrupt propagate naturally
-        if sys.platform != 'win32':
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                self.loop.add_signal_handler(sig, lambda s=sig, *args: self.handle_signal(s))
+        if sys.platform == 'win32':
+            # On Windows, let Ctrl+C propagate as KeyboardInterrupt so start.py can
+            # await shutdown synchronously before the event loop is closed.
+            return
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            self.loop.add_signal_handler(sig, lambda s=sig, *args: self.handle_signal(s))
+
+    def _request_shutdown(self):
+        if self.loop.is_running() and not self.loop.is_closed():
+            self.loop.call_soon_threadsafe(
+                lambda: self.loop.create_task(self.shutdown_gracefully())
+            )
+
+    def _confirm_shutdown(self) -> bool:
+        if not self.confirmation_callback:
+            return True
+        try:
+            return bool(self.confirmation_callback())
+        except Exception as exc:
+            if self.logger:
+                self.logger.warning("Confirmation callback failed: %s", exc)
+            return True
 
     def register_shutdown_callback(self, callback):
         """Register a callback to be executed during graceful shutdown."""
@@ -38,11 +56,15 @@ class GracefulShutdownManager:
             self._callbacks.append(callback)
 
     def handle_signal(self, sig: int):
+        if self._shutting_down:
+            return
+
         if self.logger:
             self.logger.info("Signal %s received. Asking for confirmation...", sig)
         else:
             print(f"Received signal {sig}, asking for confirmation...")
 
+<<<<<<< HEAD
         if self.confirmation_callback:
             if self.confirmation_callback():
                 if self.logger:
@@ -52,15 +74,19 @@ class GracefulShutdownManager:
 
                 if self.loop.is_running() and not self.loop.is_closed():
                     self.loop.create_task(self.shutdown_gracefully())
+=======
+        if self._confirm_shutdown():
+            if self.logger:
+                self.logger.info("User confirmed shutdown. Initiating graceful shutdown...")
+>>>>>>> main
             else:
-                if self.logger:
-                    self.logger.info("User cancelled shutdown. Continuing operation...")
-                else:
-                    print("User cancelled shutdown. Continuing operation...")
+                print("User confirmed shutdown, initiating...")
+            self._request_shutdown()
         else:
-            print(f"Received signal {sig}, initiating shutdown...")
-            if self.loop.is_running() and not self.loop.is_closed():
-                self.loop.create_task(self.shutdown_gracefully())
+            if self.logger:
+                self.logger.info("User cancelled shutdown. Continuing operation...")
+            else:
+                print("User cancelled shutdown. Continuing operation...")
 
     async def shutdown_gracefully(self):
         """Execute all registered shutdown callbacks and cancel pending tasks."""
@@ -129,6 +155,13 @@ class GracefulShutdownManager:
                 self.logger.error(err_msg)
             else:
                 print(err_msg)
+<<<<<<< HEAD
+=======
+        
+        # Final pause to allow background threads (e.g., Discord keep-alive handler) to fully terminate
+        # before the event loop is closed. This prevents RuntimeError: Event loop is closed
+        await asyncio.sleep(0.5)
+>>>>>>> main
 
     @staticmethod
     def show_exit_confirmation() -> bool:
@@ -138,13 +171,14 @@ class GracefulShutdownManager:
         Returns:
             True if user confirmed exit, False if they cancelled.
         """
-        if not PYQT_AVAILABLE:
+        if not TKINTER_AVAILABLE:
             try:
                 response = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
                 return response in ['y', 'yes']
             except (EOFError, KeyboardInterrupt):
                 return True
 
+<<<<<<< HEAD
         try:
             app = QApplication.instance()
             if app is None:
@@ -155,13 +189,30 @@ class GracefulShutdownManager:
 
             result = QMessageBox.question(
                 None,
+=======
+        root = None
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            result = messagebox.askyesno(
+>>>>>>> main
                 "Exit Confirmation",
                 "Are you sure you want to close the Crypto Trading Bot application?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
+                parent=root
             )
+<<<<<<< HEAD
 
             return result == QMessageBox.StandardButton.Yes
+=======
+            return bool(result)
+>>>>>>> main
         except Exception as e:
             print(f"Warning: Could not show confirmation dialog: {e}. Proceeding with shutdown.")
             return True
+        finally:
+            if root is not None:
+                try:
+                    root.destroy()
+                except Exception:
+                    pass

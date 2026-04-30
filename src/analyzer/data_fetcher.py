@@ -57,12 +57,40 @@ class DataFetcher:
         closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
         actual_current_price = float(ohlcv_array[-1, 4])  # Real-time price from the unclosed candle
         # Verify we have enough data
+<<<<<<< HEAD
         if len(closed_candles) < min(720, limit - 1):
             self.logger.warning("Received fewer closed candles (%s) than expected (%s)", len(closed_candles), min(720, limit - 1))
+=======
+        expected_candles = self._expected_closed_candles(timeframe, limit)
+        if len(closed_candles) < expected_candles:
+            coverage_days = self._coverage_days(timeframe, len(closed_candles))
+            self.logger.warning(
+                "Received fewer closed candles (%s) than expected (%s) for %s target coverage (~%.1f days available)",
+                len(closed_candles),
+                expected_candles,
+                timeframe,
+                coverage_days
+            )
+>>>>>>> main
             self.logger.debug("First candle timestamp: %s", closed_candles[0][0] if len(closed_candles) > 0 else 'N/A')
             self.logger.debug("Last closed candle timestamp: %s", closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A')
 
         return closed_candles, actual_current_price
+
+    @staticmethod
+    def _expected_closed_candles(timeframe: str, limit: int, target_days: int = 30) -> int:
+        try:
+            desired_candles = TimeframeValidator.get_candle_limit_for_days(timeframe, target_days)
+        except ValueError:
+            desired_candles = 720
+        return min(desired_candles, max(0, limit - 1))
+
+    @staticmethod
+    def _coverage_days(timeframe: str, candle_count: int) -> float:
+        try:
+            return TimeframeValidator.calculate_coverage_days(timeframe, candle_count)
+        except ValueError:
+            return 0.0
 
     @retry_async()
     async def fetch_daily_historical_data(self,
@@ -188,7 +216,7 @@ class DataFetcher:
                     If None, fetches all available tickers
 
         Returns:
-            Dictionary with processed ticker data in a format similar to CryptoCompare API
+            Dictionary with processed ticker data in a RAW/DISPLAY-compatible shape
         """
 
         try:
@@ -216,7 +244,7 @@ class DataFetcher:
         return True
 
     def _process_ticker_data(self, tickers: Dict[str, Any]) -> Dict[str, Any]:
-        """Process ticker data into CryptoCompare-like format."""
+        """Process ticker data into a RAW/DISPLAY-compatible format."""
         result = {"RAW": {}, "DISPLAY": {}}
 
         for symbol, ticker in tickers.items():

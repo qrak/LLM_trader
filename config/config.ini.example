@@ -34,14 +34,20 @@ blockrun_model = deepseek/deepseek-reasoner
 [general]
 # Default cryptocurrency pair to analyze if none specified
 crypto_pair = BTC/USDC
-# Default timeframe for technical analysis (e.g., 1h, 4h, 1d)
+# Default timeframe for technical analysis (e.g., 5m, 15m, 30m, 1h, 4h, 1d).
+# Lower timeframes than 1h are supported, but a fixed candle_limit covers fewer days of history.
 timeframe = 4h
 # Number of candles to fetch for internal technical analysis calculation
 candle_limit = 999
 # Number of candles to visualize in the chart images sent to the AI
 ai_chart_candle_limit = 125
 # Master switch to enable or disable the Discord bot integration
+<<<<<<< HEAD
 discord_bot = true
+=======
+discord_bot = false
+
+>>>>>>> main
 # Whether to include project description in coin details (useful for unknown tokens)
 include_coin_description = false
 
@@ -75,11 +81,48 @@ coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 # Maximum number of news articles to include in the AI's context
 news_limit = 5
 # Maximum number of tokens per article chunk for processing
+<<<<<<< HEAD
 article_max_tokens = 500
 # Filter news sources to reliable feeds only (prevents stale articles with current dates)
 news_filter_sources = true
 # Optional: Override default Tier 1 feeds (comma-separated: cointelegraph,coindesk,theblock,decrypt,bitcoinmagazine)
 news_allowed_feeds = seekingalpha,invezz,coinpaper,cryptopotato
+=======
+article_max_tokens = 1500
+# Enabled RSS source keys (comma-separated).
+# This is a FILTER over the URL registry below. Leave empty to enable all
+# configured news_source_*_url entries.
+news_sources =
+# RSS source URL registry (key -> URL).
+# Keys here must match values used in `news_sources`.
+news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
+news_source_cointelegraph_url = https://cointelegraph.com/rss
+news_source_decrypt_url = https://decrypt.co/feed
+news_source_cryptoslate_url = https://cryptoslate.com/feed/
+# Enrich short RSS bodies by fetching article pages
+news_page_enrichment = true
+# Minimum body length before attempting page enrichment
+news_min_body_chars = 400
+# Timeout for RSS/page requests in seconds
+news_timeout_seconds = 20
+# Max concurrent page-enrichment requests
+news_max_concurrency = 6
+# Cap articles fetched per source
+news_max_items_per_source = 100
+# Smart scoring: content density thresholds
+density_penalty_threshold = 300
+density_boost_threshold = 1000
+density_penalty_multiplier = 0.5
+density_boost_multiplier = 1.2
+# Smart scoring: co-occurrence bonus when all query terms appear
+cooccurrence_multiplier = 1.5
+# Use Crawl4AI browser-based enrichment (true/false)
+# Requires: pip install crawl4ai && crawl4ai-setup
+# Default false - uses plain aiohttp HTML extraction instead
+news_crawl4ai_enabled = true
+# Per-page timeout for Crawl4AI in seconds (defaults to news_timeout_seconds)
+news_crawl_timeout = 60
+>>>>>>> main
 
 [exchanges]
 # List of exchanges to use for symbol lookup (in priority order)
@@ -92,6 +135,14 @@ market_refresh_hours = 24
 demo_quote_capital = 10000
 # Transaction fee percentage for limit orders (0.00075 = 0.075%)
 transaction_fee_percent = 0.00075
+
+[risk_management]
+# Exit execution type: soft = candle-close checks, hard = bot-side interval checks on live ticker
+stop_loss_type = hard
+take_profit_type = hard
+# Hard-exit check intervals. Must be <= [general] timeframe.
+stop_loss_check_interval = 15m
+take_profit_check_interval = 15m
 
 [cooldowns]
 # File message expiry is configured in hours; loader converts it to seconds at runtime.

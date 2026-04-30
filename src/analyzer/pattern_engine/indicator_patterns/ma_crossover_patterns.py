@@ -141,6 +141,7 @@ def detect_short_term_crossover_numba(sma_20: np.ndarray, sma_50: np.ndarray) ->
 
     return False, False, 0, 0.0, 0.0
 
+<<<<<<< HEAD
 
 @njit
 def check_ma_alignment_numba(sma_20: np.ndarray, sma_50: np.ndarray, sma_200: np.ndarray) -> tuple:
@@ -175,3 +176,5 @@ def check_ma_alignment_numba(sma_20: np.ndarray, sma_50: np.ndarray, sma_200: np
     is_bearish = v20 < v50 and v50 < v200
 
     return is_bullish, is_bearish, float(v20), float(v50), float(v200)
+=======
+>>>>>>> main

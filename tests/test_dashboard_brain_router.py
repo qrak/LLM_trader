@@ -38,7 +38,14 @@ def test_build_current_market_context_uses_legacy_response_indicators(tmp_path):
         encoding="utf-8",
     )
 
-    config = SimpleNamespace(DATA_DIR=str(tmp_path))
+    config = SimpleNamespace(
+        DATA_DIR=str(tmp_path),
+        TIMEFRAME="4h",
+        STOP_LOSS_TYPE="hard",
+        STOP_LOSS_CHECK_INTERVAL="15m",
+        TAKE_PROFIT_TYPE="hard",
+        TAKE_PROFIT_CHECK_INTERVAL="15m",
+    )
     logger = MagicMock()
 
     display_context, query_document = _build_current_market_context(config, logger)
@@ -46,6 +53,41 @@ def test_build_current_market_context_uses_legacy_response_indicators(tmp_path):
     assert display_context.startswith("BEARISH + Low ADX + LOW Volatility")
     assert "MACD BEARISH" in display_context
     assert "Indicators: ADX=18.1 (Low ADX)" in query_document
+
+
+def test_build_current_market_context_includes_exit_execution_settings(tmp_path):
+    trading_dir = tmp_path / "trading"
+    trading_dir.mkdir()
+    previous_response = trading_dir / "previous_response.json"
+    previous_response.write_text(
+        json.dumps(
+            {
+                "technical_data": {
+                    "adx": 28.0,
+                    "rsi": 61.0,
+                    "atr_percent": 2.1,
+                    "plus_di": 30.0,
+                    "minus_di": 10.0,
+                },
+                "response": {"current_price": 70000.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = SimpleNamespace(
+        DATA_DIR=str(tmp_path),
+        TIMEFRAME="4h",
+        STOP_LOSS_TYPE="hard",
+        STOP_LOSS_CHECK_INTERVAL="15m",
+        TAKE_PROFIT_TYPE="soft",
+        TAKE_PROFIT_CHECK_INTERVAL="4h",
+    )
+
+    display_context, query_document = _build_current_market_context(config, MagicMock())
+
+    assert "Exit Execution: SL hard/15m | TP soft/4h" in display_context
+    assert "Exit Execution: SL hard/15m | TP soft/4h" in query_document
 
 
 def test_extract_market_status_uses_text_and_indicators_without_json_parser():
@@ -84,12 +126,23 @@ async def test_get_current_position_recomputes_missing_distance_percentages():
         sl_distance_pct=0.0,
         tp_distance_pct=0.0,
         rr_ratio_at_entry=2.2,
+        stop_loss_type_at_entry="hard",
+        stop_loss_check_interval_at_entry="15m",
+        take_profit_type_at_entry="hard",
+        take_profit_check_interval_at_entry="15m",
     )
     dashboard_state = DashboardState(current_price=68366.03)
     persistence = MagicMock()
     persistence.load_position.return_value = position
     router = BrainRouter(
-        config=SimpleNamespace(DATA_DIR="unused"),
+        config=SimpleNamespace(
+            DATA_DIR="unused",
+            TIMEFRAME="4h",
+            STOP_LOSS_TYPE="hard",
+            STOP_LOSS_CHECK_INTERVAL="15m",
+            TAKE_PROFIT_TYPE="hard",
+            TAKE_PROFIT_CHECK_INTERVAL="15m",
+        ),
         logger=MagicMock(),
         dashboard_state=dashboard_state,
         vector_memory=None,
@@ -103,3 +156,10 @@ async def test_get_current_position_recomputes_missing_distance_percentages():
     assert result["has_position"] is True
     assert result["sl_distance_pct"] == pytest.approx(abs(69350.00 - 69009.78) / 69009.78)
     assert result["tp_distance_pct"] == pytest.approx(abs(65612.00 - 69009.78) / 69009.78)
+    assert result["exit_management"] == {
+        "stop_loss_type": "hard",
+        "stop_loss_check_interval": "15m",
+        "take_profit_type": "hard",
+        "take_profit_check_interval": "15m",
+    }
+    assert result["exit_management_at_entry"] == result["exit_management"]

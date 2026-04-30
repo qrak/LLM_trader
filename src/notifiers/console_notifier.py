@@ -2,6 +2,7 @@
 Console Notifier - Fallback notification service when Discord is disabled.
 Prints AI trading analysis to console with colored and formatted output.
 """
+import io
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from .base_notifier import BaseNotifier
@@ -41,11 +42,21 @@ class ConsoleNotifier(BaseNotifier):
     async def wait_until_ready(self) -> None:
         """Console is always ready."""
         self.logger.debug("ConsoleNotifier: Console is always ready")
+<<<<<<< HEAD
+=======
+
+    async def shutdown(self) -> None:
+        """Shutdown the console notifier (no-op for console).
+        
+        Console notifier has no resources to clean up, so this is a no-op.
+        """
+        self.logger.debug("ConsoleNotifier: Shutdown complete (no-op for console)")
+>>>>>>> main
 
     async def send_message(
             self,
             message: str,
-            channel_id: int = None,
+            channel_id: Optional[int] = None,
             expire_after: Optional[int] = None
     ) -> None:
         """Print a text message to console.
@@ -57,7 +68,7 @@ class ConsoleNotifier(BaseNotifier):
         """
         print(f"\n{message}")
 
-    async def send_trading_decision(self, decision: Any, channel_id: int = None) -> None:
+    async def send_trading_decision(self, decision: Any, channel_id: Optional[int] = None) -> None:
         """Print a trading decision to console.
 
         Args:
@@ -96,7 +107,8 @@ class ConsoleNotifier(BaseNotifier):
             result: dict,
             symbol: str,
             timeframe: str,
-            channel_id: int = None
+            channel_id: Optional[int] = None,
+            chart_image: Optional[io.BytesIO] = None
     ) -> None:
         """Print full analysis notification with reasoning and JSON data.
 
@@ -132,7 +144,7 @@ class ConsoleNotifier(BaseNotifier):
             self,
             position: Any,
             current_price: float,
-            channel_id: int = None
+            channel_id: Optional[int] = None
     ) -> None:
         """Print current open position status.
 
@@ -167,6 +179,7 @@ class ConsoleNotifier(BaseNotifier):
             print("-" * 40)
             print(f"Stop Loss:       ${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)")
             print(f"Take Profit:     ${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)")
+            print(f"Exit Monitoring: {self.format_exit_monitoring()}")
             print(f"Entry Fee:       ${position.entry_fee:.4f}")
             print(f"Time Held:       {hours_held:.1f}h")
             print(f"Entry Time:      {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -178,7 +191,7 @@ class ConsoleNotifier(BaseNotifier):
             self,
             trade_history: List[Dict[str, Any]],
             symbol: str,
-            channel_id: int = None
+            channel_id: Optional[int] = None
     ) -> None:
         """Print overall performance statistics.
 
@@ -204,6 +217,20 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Win Rate:         {stats['win_rate']:.1f}% ({stats['winning_trades']}/{stats['closed_trades']})")
             print(f"Total Fees:       ${stats['total_fees']:.4f}")
             print(f"Net P&L (USDT):   ${stats['net_pnl']:+,.2f}")
+
+            last_closed_trade = stats.get('last_closed_trade')
+            if last_closed_trade:
+                outcome = last_closed_trade.get('outcome', 'UNKNOWN')
+                close_reason = last_closed_trade.get('close_reason')
+                print("-" * 40)
+                print(f"Last Outcome:     {outcome}")
+                if close_reason:
+                    print(f"Close Reason:     {close_reason}")
+                print(
+                    f"Last Trade P&L ({self.config.QUOTE_CURRENCY}): "
+                    f"${last_closed_trade['pnl_quote']:+,.2f} ({last_closed_trade['pnl_pct']:+.2f}%)"
+                )
+
             print("=" * 60)
         except Exception as e:
             self.logger.error("Error printing performance stats: %s", e)

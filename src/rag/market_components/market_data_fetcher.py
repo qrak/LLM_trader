@@ -60,12 +60,13 @@ class MarketDataFetcher:
             return None
 
     async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
-        """Fetch price data for top coins using CCXT or fallback to CryptoCompare."""
+        """Fetch price data for top coins using CCXT."""
         price_data = None
         try:
             price_data = await self._try_ccxt_price_data(top_coins)
         except Exception as e:
             self.logger.error("Error fetching CCXT price data: %s", e)
+<<<<<<< HEAD
 
         # Fallback to CryptoCompare
         if not price_data or not price_data.get("RAW"):
@@ -76,6 +77,8 @@ class MarketDataFetcher:
                 except Exception as e:
                     self.logger.error("Error fetching CryptoCompare price data: %s", e)
 
+=======
+>>>>>>> main
 
         return price_data
 

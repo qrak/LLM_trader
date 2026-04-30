@@ -1,0 +1,2158 @@
+{
+  "timestamp": "2026-04-22T08:00:01.889397+00:00",
+  "categories": [
+    {
+      "categoryName": "1INCH",
+      "wordsAssociatedWithCategory": [
+        "1INCH"
+      ],
+      "includedPhrases": [
+        "1INCH NETWORK"
+      ]
+    },
+    {
+      "categoryName": "AAVE",
+      "wordsAssociatedWithCategory": [
+        "AAVE"
+      ],
+      "includedPhrases": [
+        "AAVE PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "ADA",
+      "wordsAssociatedWithCategory": [
+        "ADA",
+        "Cardano",
+        "cardano"
+      ]
+    },
+    {
+      "categoryName": "ADMINISTRATIVE EVENTS",
+      "wordsAssociatedWithCategory": [
+        "contract-migration",
+        "REBRAND",
+        "REBASE",
+        "RENAME",
+        "Rebrand",
+        "rebrand",
+        "Rename",
+        "rename"
+      ],
+      "excludedPhrases": [
+        "STOCK TICKER"
+      ],
+      "includedPhrases": [
+        "CHAIN MIGRATION",
+        "CHAIN MIGRATED",
+        "CONTRACT ADDRESS UPDATE",
+        "CONTRACT MIGRATION",
+        "CONTRACT MIGRATED",
+        "DESTINATION CHAIN",
+        "NEW CONTRACT ADDRESS",
+        "NETWORK CONTROL CHANGE",
+        "GOVERNANCE CHANGE",
+        "REVERSE TOKEN SPLIT",
+        "TOKEN CONSOLIDATION",
+        "TOKEN REVERSE SPLIT",
+        "TICKER CHANGE",
+        "TICKER CHANGED",
+        "SYMBOL CHANGE",
+        "SYMBOL CHANGED",
+        "TICKER UPDATE",
+        "SYMBOL UPDATE",
+        "TOKEN MERGE",
+        "TOKEN MERGED",
+        "TOKEN SPLIT",
+        "TOKEN SPLITTED",
+        "TOKEN DIVIDED",
+        "TOKEN SPLIT-UP",
+        "TOKEN SPLIT UP"
+      ]
+    },
+    {
+      "categoryName": "AEVO",
+      "wordsAssociatedWithCategory": [
+        "AEVO"
+      ],
+      "includedPhrases": [
+        "AEVO TOKEN"
+      ]
+    },
+    {
+      "categoryName": "AGX",
+      "wordsAssociatedWithCategory": [
+        "AGX",
+        "SingularityNET",
+        "singularityNET"
+      ]
+    },
+    {
+      "categoryName": "AIOZ",
+      "wordsAssociatedWithCategory": [
+        "AIOZ"
+      ],
+      "includedPhrases": [
+        "AIOZ NETWORK"
+      ]
+    },
+    {
+      "categoryName": "AIRDROP",
+      "wordsAssociatedWithCategory": [
+        "airdrop",
+        "Airdrop"
+      ],
+      "includedPhrases": [
+        "TOKEN AIRDROP",
+        "COIN AIRDROP",
+        "FREE TOKEN DISTRIBUTION",
+        "TOKEN GIVEAWAY",
+        "COIN GIVEAWAY"
+      ]
+    },
+    {
+      "categoryName": "AKT",
+      "wordsAssociatedWithCategory": [
+        "AKT"
+      ],
+      "includedPhrases": [
+        "AKASH NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ALGO",
+      "wordsAssociatedWithCategory": [
+        "ALGO",
+        "Algorand"
+      ]
+    },
+    {
+      "categoryName": "ALTCOIN",
+      "wordsAssociatedWithCategory": [
+        "Altcoin",
+        "Altcoins",
+        "altcoin",
+        "altcoins"
+      ]
+    },
+    {
+      "categoryName": "APE",
+      "wordsAssociatedWithCategory": [
+        "APE",
+        "Apecoin"
+      ]
+    },
+    {
+      "categoryName": "APT",
+      "wordsAssociatedWithCategory": [
+        "APT",
+        "Aptos",
+        "aptos"
+      ]
+    },
+    {
+      "categoryName": "AR",
+      "wordsAssociatedWithCategory": [
+        "AR",
+        "Arweave",
+        "arweave"
+      ]
+    },
+    {
+      "categoryName": "ARB",
+      "wordsAssociatedWithCategory": [
+        "ARB",
+        "Arbitrum",
+        "arbitrum"
+      ]
+    },
+    {
+      "categoryName": "ARKM",
+      "wordsAssociatedWithCategory": [
+        "ARKM",
+        "Arkham",
+        "arkham"
+      ],
+      "includedPhrases": [
+        "ARKHAM NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ASIA",
+      "wordsAssociatedWithCategory": [
+        "Asia",
+        "China",
+        "Korea",
+        "Japan",
+        "Hong",
+        "Singapore",
+        "Taiwan"
+      ]
+    },
+    {
+      "categoryName": "ASTR",
+      "wordsAssociatedWithCategory": [
+        "ASTR"
+      ],
+      "includedPhrases": [
+        "ASTAR NETWORK"
+      ]
+    },
+    {
+      "categoryName": "ATOM",
+      "wordsAssociatedWithCategory": [
+        "ATOM"
+      ],
+      "excludedPhrases": [
+        "ATOMIC COIN"
+      ],
+      "includedPhrases": [
+        "COSMOS SDK"
+      ]
+    },
+    {
+      "categoryName": "AVAX",
+      "wordsAssociatedWithCategory": [
+        "AVAX"
+      ],
+      "includedPhrases": [
+        "AVALANCHE FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "AXL",
+      "wordsAssociatedWithCategory": [
+        "AXL"
+      ],
+      "includedPhrases": [
+        "AXELAR NETWORK"
+      ]
+    },
+    {
+      "categoryName": "AXS",
+      "wordsAssociatedWithCategory": [
+        "AXS"
+      ],
+      "includedPhrases": [
+        "AXIE INFINITY"
+      ]
+    },
+    {
+      "categoryName": "BAL",
+      "wordsAssociatedWithCategory": [
+        "BAL",
+        "Balancer"
+      ],
+      "includedPhrases": [
+        "BALANCER PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "BAT",
+      "wordsAssociatedWithCategory": [
+        "BAT"
+      ],
+      "includedPhrases": [
+        "BASIC ATTENTION TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BCH",
+      "wordsAssociatedWithCategory": [
+        "BCH",
+        "Bitcoincash",
+        "bitcoincash"
+      ],
+      "includedPhrases": [
+        "BITCOIN CASH"
+      ]
+    },
+    {
+      "categoryName": "BEAM",
+      "wordsAssociatedWithCategory": [
+        "BEAM"
+      ],
+      "includedPhrases": [
+        "BEAM NETWORK"
+      ]
+    },
+    {
+      "categoryName": "BGB",
+      "wordsAssociatedWithCategory": [
+        "BGB"
+      ],
+      "includedPhrases": [
+        "BITGET TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BITTENSOR",
+      "wordsAssociatedWithCategory": [
+        "TAO",
+        "Bittensor",
+        "bittensor"
+      ]
+    },
+    {
+      "categoryName": "BLOCKCHAIN",
+      "wordsAssociatedWithCategory": [
+        "Blockchain",
+        "blockchain",
+        "Protocol",
+        "protocol",
+        "Scaling",
+        "scaling"
+      ]
+    },
+    {
+      "categoryName": "BLUR",
+      "wordsAssociatedWithCategory": [
+        "BLUR"
+      ],
+      "includedPhrases": [
+        "BLUR TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BNB",
+      "wordsAssociatedWithCategory": [
+        "BNB",
+        "Binance",
+        "binance"
+      ]
+    },
+    {
+      "categoryName": "BNX",
+      "wordsAssociatedWithCategory": [
+        "BNX",
+        "Binaryx",
+        "bynarix"
+      ]
+    },
+    {
+      "categoryName": "BOME",
+      "wordsAssociatedWithCategory": [
+        "BOME"
+      ],
+      "includedPhrases": [
+        "BOME TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BONK",
+      "wordsAssociatedWithCategory": [
+        "BONK"
+      ],
+      "includedPhrases": [
+        "BONK TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BRETT",
+      "wordsAssociatedWithCategory": [
+        "BRETT"
+      ],
+      "includedPhrases": [
+        "BRETT COIN"
+      ]
+    },
+    {
+      "categoryName": "BSV",
+      "wordsAssociatedWithCategory": [
+        "BSV"
+      ],
+      "includedPhrases": [
+        "BITCON SV"
+      ]
+    },
+    {
+      "categoryName": "BTC",
+      "wordsAssociatedWithCategory": [
+        "BTC",
+        "Bitcoin",
+        "bitcoin"
+      ],
+      "excludedPhrases": [
+        "BITCOIN CASH"
+      ],
+      "includedPhrases": [
+        "SATOSHI NAKAMOTO"
+      ]
+    },
+    {
+      "categoryName": "BTG",
+      "wordsAssociatedWithCategory": [
+        "BTG"
+      ],
+      "includedPhrases": [
+        "BITCOIN GOLD"
+      ]
+    },
+    {
+      "categoryName": "BTT",
+      "wordsAssociatedWithCategory": [
+        "BTT"
+      ],
+      "includedPhrases": [
+        "BITTORRENT TOKEN"
+      ]
+    },
+    {
+      "categoryName": "BUSINESS",
+      "wordsAssociatedWithCategory": [
+        "Business",
+        "business",
+        "Investor",
+        "investor",
+        "investors",
+        "Investors",
+        "revenue",
+        "Revenue",
+        "Profit",
+        "profit",
+        "enterprise",
+        "Enterprise",
+        "Commerce",
+        "commerce",
+        "stock",
+        "Stock"
+      ]
+    },
+    {
+      "categoryName": "CAKE",
+      "wordsAssociatedWithCategory": [
+        "CAKE",
+        "Pancakeswap",
+        "pancakeswap"
+      ]
+    },
+    {
+      "categoryName": "CFX",
+      "wordsAssociatedWithCategory": [
+        "CFX",
+        "Conflux",
+        "conflux"
+      ],
+      "includedPhrases": [
+        "CONFLUX FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "CHZ",
+      "wordsAssociatedWithCategory": [
+        "CHZ"
+      ],
+      "includedPhrases": [
+        "CHILIZ CHAIN"
+      ]
+    },
+    {
+      "categoryName": "CKB",
+      "wordsAssociatedWithCategory": [
+        "CKB"
+      ],
+      "includedPhrases": [
+        "NERVOS NETWORK"
+      ]
+    },
+    {
+      "categoryName": "COMMODITY",
+      "wordsAssociatedWithCategory": [
+        "Oil",
+        "oil",
+        "oil-backed",
+        "Oil-backed",
+        "Commodity",
+        "Commodities"
+      ]
+    },
+    {
+      "categoryName": "COMP",
+      "wordsAssociatedWithCategory": [
+        "COMP",
+        "cETH",
+        "cTokens"
+      ],
+      "includedPhrases": [
+        "COMPOUND PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "CORE",
+      "wordsAssociatedWithCategory": [
+        "CORE"
+      ],
+      "includedPhrases": [
+        "CORE DAO"
+      ]
+    },
+    {
+      "categoryName": "CRO",
+      "wordsAssociatedWithCategory": [
+        "CRO",
+        "Cronos",
+        "cronos"
+      ]
+    },
+    {
+      "categoryName": "CRV",
+      "wordsAssociatedWithCategory": [
+        "CRV"
+      ],
+      "includedPhrases": [
+        "CURVE DAO"
+      ]
+    },
+    {
+      "categoryName": "CRYPTOCURRENCY",
+      "wordsAssociatedWithCategory": [
+        "crypto",
+        "cryptocurrency",
+        "cryptocurrencies",
+        "Aave",
+        "AAVE",
+        "ADA",
+        "ALGO",
+        "Algorand",
+        "APT",
+        "Aptos",
+        "ARB",
+        "Arbitrum",
+        "Avalanche",
+        "AVAX",
+        "BCH",
+        "BGB",
+        "Binance",
+        "BingX",
+        "Bitcoin",
+        "bitcoin",
+        "Bitfinex",
+        "Bitget",
+        "Bithumb",
+        "BitMart",
+        "Bitstamp",
+        "Bittensor",
+        "BNB",
+        "BONK",
+        "BTC",
+        "Bybit",
+        "Cardano",
+        "Chainlink",
+        "Coinbase",
+        "CRO",
+        "Cronos",
+        "Curve",
+        "Dai",
+        "DAI",
+        "DOGE",
+        "Dogecoin",
+        "DOT",
+        "ENA",
+        "ETC",
+        "ETH",
+        "Ethena",
+        "Ethereum",
+        "ethereum",
+        "Gate",
+        "HBAR",
+        "Hedera",
+        "HTX",
+        "HYPE",
+        "Hyperliquid",
+        "ICP",
+        "KAS",
+        "Kaspa",
+        "Kraken",
+        "KuCoin",
+        "LBank",
+        "LEO",
+        "LINK",
+        "Litecoin",
+        "LTC",
+        "Mantle",
+        "MEXC",
+        "Monero",
+        "NEAR",
+        "OKB",
+        "OKX",
+        "Ondo",
+        "ONDO",
+        "PancakeSwap",
+        "PENGU",
+        "PEPE",
+        "Pepe",
+        "PI",
+        "POL",
+        "Polkadot",
+        "Polygon",
+        "Raydium",
+        "SHIB",
+        "SOL",
+        "Solana",
+        "Stellar",
+        "Sui",
+        "SUI",
+        "TAO",
+        "Tether",
+        "TON",
+        "Toncoin",
+        "TRON",
+        "TRX",
+        "UNI",
+        "Uniswap",
+        "Upbit",
+        "USD1",
+        "USDC",
+        "USDE",
+        "USDS",
+        "USDT",
+        "VeChain",
+        "WBT",
+        "XLM",
+        "XMR",
+        "XRP",
+        "Ripple",
+        "Crypto.com",
+        "WhiteBIT",
+        "cryptocompare.com",
+        "coindesk.com",
+        "coinedition.com",
+        "bitcoinist.com",
+        "bitcoin.com",
+        "cointelegraph.com",
+        "newsbtc.com",
+        "trustnodes.com",
+        "nulltx.com",
+        "cryptopotato.com",
+        "blokt.com",
+        "ambcrypto.com",
+        "cryptonewsz.com",
+        "diariobitcoin.com",
+        "cryptopolitan.com",
+        "decrypt.co",
+        "cryptocoin.news",
+        "zycrypto.com",
+        "cryptonews.com",
+        "blockworks.co",
+        "thecoinrise.com",
+        "finbold.com",
+        "u.today",
+        "thecryptobasic.com",
+        "bitdegree.org",
+        "timestabloid.com",
+        "chainwire.org",
+        "invezz.com/cryptocurrency/",
+        "cryptodaily.co.uk",
+        "coinotag.com",
+        "cointurk.com",
+        "cointurk.news",
+        "coinpaprika.com",
+        "bitcoinsistemi.com",
+        "btcpulse.com",
+        "coinpaper.com",
+        "cryptointelligence.co.uk",
+        "blog.kraken.com",
+        "blog.bitfinex.com",
+        "blog.huobi.com",
+        "bloomberg.com/crypto",
+        "bitzo.com"
+      ],
+      "excludedPhrases": [
+        "CRYPTO QUOTE PUZZLE",
+        "CRYPTOGRAM PUZZLE",
+        "CRYPTOGRAPHY COMPETITION",
+        "ENCRYPTION TECHNOLOGY",
+        "CRYPTOGRAPHY CONFERENCE",
+        "CRYPTOGRAPHY METHOD"
+      ],
+      "includedPhrases": [
+        "DIGITAL ASSET",
+        "DIGITAL ASSETS",
+        "TOKEN SALE",
+        "TOKEN LAUNCH",
+        "TOKEN LISTING",
+        "INITIAL COIN OFFERING",
+        "INITIAL DEX OFFERING",
+        "SECURITY TOKEN OFFERING",
+        "DECENTRALIZED EXCHANGE",
+        "DECENTRALIZED FINANCE",
+        "NON-FUNGIBLE TOKEN",
+        "METAVERSE PLATFORM",
+        "METAVERSE PROJECT",
+        "NEAR PROTOCOL",
+        "CONVEX FINANCE",
+        "YEARN FINANCE",
+        "KYBER NETWORK",
+        "PUDGY PENGUINS",
+        "WORLD LIBERTY FINANCIAL",
+        "SHIBA INU",
+        "PI TOKEN",
+        "ETHENA USDE"
+      ]
+    },
+    {
+      "categoryName": "DAI",
+      "wordsAssociatedWithCategory": [
+        "DAI"
+      ]
+    },
+    {
+      "categoryName": "DASH",
+      "wordsAssociatedWithCategory": [
+        "DASH",
+        "Digitalcash",
+        "digitalcash"
+      ]
+    },
+    {
+      "categoryName": "DIGITAL ASSET TREASURY",
+      "wordsAssociatedWithCategory": [
+        "treasury",
+        "Treasury",
+        "treasuries",
+        "Treasuries"
+      ],
+      "excludedPhrases": [
+        "US TREASURY",
+        "TREASURY YIELDS",
+        "TREASURY CURVE",
+        "TREASURY FUTURES"
+      ]
+    },
+    {
+      "categoryName": "DOGE",
+      "wordsAssociatedWithCategory": [
+        "DOGE",
+        "Dogecoin",
+        "dogecoin"
+      ]
+    },
+    {
+      "categoryName": "DOT",
+      "wordsAssociatedWithCategory": [
+        "DOT",
+        "Polkadot",
+        "polkadot"
+      ]
+    },
+    {
+      "categoryName": "DYDX",
+      "wordsAssociatedWithCategory": [
+        "DYDX"
+      ],
+      "includedPhrases": [
+        "DYDX EXCHANGE"
+      ]
+    },
+    {
+      "categoryName": "EGLD",
+      "wordsAssociatedWithCategory": [
+        "EGLD",
+        "MultiversX",
+        "multiversX"
+      ]
+    },
+    {
+      "categoryName": "ENA",
+      "wordsAssociatedWithCategory": [
+        "ENA"
+      ],
+      "includedPhrases": [
+        "ETHENA LABS"
+      ]
+    },
+    {
+      "categoryName": "ENJ",
+      "wordsAssociatedWithCategory": [
+        "ENJ",
+        "Enjin",
+        "enjin"
+      ]
+    },
+    {
+      "categoryName": "ENS",
+      "wordsAssociatedWithCategory": [
+        "ENS"
+      ],
+      "includedPhrases": [
+        "ETHEREUM NAME SERVICE"
+      ]
+    },
+    {
+      "categoryName": "ETC",
+      "wordsAssociatedWithCategory": [
+        "ETC"
+      ],
+      "includedPhrases": [
+        "ETHEREUM CLASSIC"
+      ]
+    },
+    {
+      "categoryName": "ETH",
+      "wordsAssociatedWithCategory": [
+        "ETH",
+        "Ethereum",
+        "ethereum",
+        "Vitalik",
+        "vitalik"
+      ],
+      "excludedPhrases": [
+        "ETHEREUM CLASSIC"
+      ]
+    },
+    {
+      "categoryName": "ETHFI",
+      "wordsAssociatedWithCategory": [
+        "ETHFI"
+      ],
+      "includedPhrases": [
+        "ETHERFI PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "EXCHANGE",
+      "wordsAssociatedWithCategory": [
+        "Exchange",
+        "exchange",
+        "bitfinex",
+        "poloniex",
+        "binance",
+        "kraken",
+        "coinbase",
+        "bybit",
+        "upbit",
+        "gate.io",
+        "huobi",
+        "kucoin",
+        "bitget",
+        "crypto.com",
+        "Bitfinex",
+        "Poloniex",
+        "Binance",
+        "Kraken",
+        "Coinbase",
+        "Bybit",
+        "Upbit",
+        "Gate.io",
+        "Huobi",
+        "Kucoin",
+        "Bitget",
+        "Crypto.com"
+      ],
+      "includedPhrases": [
+        "GEMINI EXCHANGE",
+        "GEMINI.COM"
+      ]
+    },
+    {
+      "categoryName": "FDUSD",
+      "wordsAssociatedWithCategory": [
+        "FDUSD"
+      ]
+    },
+    {
+      "categoryName": "FET",
+      "wordsAssociatedWithCategory": [
+        "FET"
+      ],
+      "includedPhrases": [
+        "FETCH.AI"
+      ]
+    },
+    {
+      "categoryName": "FIAT",
+      "wordsAssociatedWithCategory": [
+        "Fiat",
+        "fiat",
+        "Reserve",
+        "reserve",
+        "Gold",
+        "gold",
+        "Gold-backed",
+        "gold-backed",
+        "bank",
+        "Bank",
+        "Dollar",
+        "Euro",
+        "Yen",
+        "Pound"
+      ]
+    },
+    {
+      "categoryName": "FIL",
+      "wordsAssociatedWithCategory": [
+        "FIL",
+        "Filecoin",
+        "filecoin"
+      ]
+    },
+    {
+      "categoryName": "FLOKI",
+      "wordsAssociatedWithCategory": [
+        "FLOKI"
+      ],
+      "includedPhrases": [
+        "FLOKI COIN"
+      ]
+    },
+    {
+      "categoryName": "FLOW",
+      "wordsAssociatedWithCategory": [
+        "FLOW"
+      ],
+      "includedPhrases": [
+        "FLOW BLOCKCHAIN"
+      ]
+    },
+    {
+      "categoryName": "FLR",
+      "wordsAssociatedWithCategory": [
+        "FLR"
+      ],
+      "includedPhrases": [
+        "FLARE NETWORK"
+      ]
+    },
+    {
+      "categoryName": "FORKS",
+      "wordsAssociatedWithCategory": [
+        "softfork",
+        "Softfork",
+        "hardfork",
+        "Hardfork"
+      ],
+      "includedPhrases": [
+        "SOFT FORK",
+        "PROTOCOL UPGRADE",
+        "BACKWARD-COMPATIBLE UPGRADE",
+        "HARD FORK",
+        "CHAIN SPLIT"
+      ]
+    },
+    {
+      "categoryName": "FTM",
+      "wordsAssociatedWithCategory": [
+        "FTM"
+      ],
+      "includedPhrases": [
+        "FANTOM FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "FTT",
+      "wordsAssociatedWithCategory": [
+        "FTT"
+      ],
+      "includedPhrases": [
+        "FTX TOKEN"
+      ]
+    },
+    {
+      "categoryName": "GALA",
+      "wordsAssociatedWithCategory": [
+        "GALA"
+      ],
+      "includedPhrases": [
+        "GALA GAMES"
+      ]
+    },
+    {
+      "categoryName": "GMO",
+      "wordsAssociatedWithCategory": [
+        "GMO",
+        "Gnosisdao",
+        "gnosisdao",
+        "gnosisDAO",
+        "GnosisDAO"
+      ]
+    },
+    {
+      "categoryName": "GRT",
+      "wordsAssociatedWithCategory": [
+        "GRT"
+      ],
+      "includedPhrases": [
+        "GRAPH FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "GT",
+      "wordsAssociatedWithCategory": [
+        "GT"
+      ],
+      "includedPhrases": [
+        "GATE TOKEN"
+      ]
+    },
+    {
+      "categoryName": "HBAR",
+      "wordsAssociatedWithCategory": [
+        "HBAR"
+      ],
+      "includedPhrases": [
+        "HEDERA COUNCIL"
+      ]
+    },
+    {
+      "categoryName": "HNT",
+      "wordsAssociatedWithCategory": [
+        "HNT"
+      ],
+      "includedPhrases": [
+        "HELIUM FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "ICP",
+      "wordsAssociatedWithCategory": [
+        "ICP"
+      ],
+      "includedPhrases": [
+        "INTERNET COMPUTER PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "IMX",
+      "wordsAssociatedWithCategory": [
+        "IMX",
+        "ImmutableX",
+        "immutableX"
+      ]
+    },
+    {
+      "categoryName": "INJ",
+      "wordsAssociatedWithCategory": [
+        "INJ"
+      ],
+      "includedPhrases": [
+        "INJECTIVE PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "IOTA",
+      "wordsAssociatedWithCategory": [
+        "IOTA"
+      ],
+      "includedPhrases": [
+        "IOTA FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "IOTX",
+      "wordsAssociatedWithCategory": [
+        "IOTX"
+      ],
+      "includedPhrases": [
+        "IOTEX PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "JASMY",
+      "wordsAssociatedWithCategory": [
+        "JASMY"
+      ],
+      "includedPhrases": [
+        "JASMY COIN"
+      ]
+    },
+    {
+      "categoryName": "JUP",
+      "wordsAssociatedWithCategory": [
+        "JUP"
+      ],
+      "includedPhrases": [
+        "JUPITER AGGREGATOR"
+      ]
+    },
+    {
+      "categoryName": "KASPA",
+      "wordsAssociatedWithCategory": [
+        "KASPA"
+      ],
+      "includedPhrases": [
+        "KASPA PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "KAVA",
+      "wordsAssociatedWithCategory": [
+        "KAVA"
+      ],
+      "includedPhrases": [
+        "KAVA LEND"
+      ]
+    },
+    {
+      "categoryName": "KLAY",
+      "wordsAssociatedWithCategory": [
+        "KLAY"
+      ],
+      "includedPhrases": [
+        "KLAYTN FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "KNC",
+      "wordsAssociatedWithCategory": [
+        "KNC"
+      ],
+      "includedPhrases": [
+        "KYBER NETWORK",
+        "KYBERNETWORK"
+      ]
+    },
+    {
+      "categoryName": "KSC",
+      "wordsAssociatedWithCategory": [
+        "KSC"
+      ],
+      "includedPhrases": [
+        "KUCOIN EXCHANGE"
+      ]
+    },
+    {
+      "categoryName": "LDO",
+      "wordsAssociatedWithCategory": [
+        "LDO"
+      ],
+      "includedPhrases": [
+        "LIDO DAO"
+      ]
+    },
+    {
+      "categoryName": "LEO",
+      "wordsAssociatedWithCategory": [
+        "LEO"
+      ],
+      "includedPhrases": [
+        "UNUS SED LEO"
+      ]
+    },
+    {
+      "categoryName": "LINK",
+      "wordsAssociatedWithCategory": [
+        "LINK",
+        "Chainlink",
+        "chainlink"
+      ]
+    },
+    {
+      "categoryName": "LPT",
+      "wordsAssociatedWithCategory": [
+        "LPT"
+      ],
+      "includedPhrases": [
+        "LIVEPEER NETWORK"
+      ]
+    },
+    {
+      "categoryName": "LRC",
+      "wordsAssociatedWithCategory": [
+        "LRC",
+        "Loopring",
+        "loopring"
+      ]
+    },
+    {
+      "categoryName": "LTC",
+      "wordsAssociatedWithCategory": [
+        "LTC",
+        "Litecoin",
+        "litecoin"
+      ]
+    },
+    {
+      "categoryName": "LUNA",
+      "wordsAssociatedWithCategory": [
+        "LUNA",
+        "TERRA",
+        "UST"
+      ],
+      "excludedPhrases": [
+        "LUNC",
+        "LUNA CLASSIC"
+      ],
+      "includedPhrases": [
+        "TERRAFORM LABS"
+      ]
+    },
+    {
+      "categoryName": "LUNC",
+      "wordsAssociatedWithCategory": [
+        "LUNC"
+      ],
+      "includedPhrases": [
+        "TERRA CLASSIC",
+        "LUNA CLASSIC"
+      ]
+    },
+    {
+      "categoryName": "MACROECONOMICS",
+      "wordsAssociatedWithCategory": [
+        "inflation",
+        "Inflation",
+        "deflation",
+        "Deflation",
+        "stagflation",
+        "Stagflation",
+        "recession",
+        "Recession",
+        "slowdown",
+        "CPI",
+        "PPI",
+        "PCE",
+        "GDP",
+        "PMI",
+        "jobless",
+        "Jobless",
+        "unemployment",
+        "Unemployment",
+        "treasury",
+        "Treasury",
+        "DXY",
+        "QE",
+        "QT",
+        "taper",
+        "stimulus",
+        "Stimulus",
+        "deficit",
+        "Deficit",
+        "downgrade",
+        "tariff",
+        "Tariff",
+        "tariffs",
+        "Tariffs",
+        "sanction",
+        "sanctions",
+        "WTI",
+        "FED",
+        "FOMC",
+        "ECB",
+        "BOE",
+        "BOJ",
+        "PBOC"
+      ],
+      "excludedPhrases": [
+        "DOLLAR TREE",
+        "DOLLAR GENERAL",
+        "DOLLAR STORE",
+        "FEDERAL EXPRESS",
+        "PIXELS PER INCH",
+        "PPI DISPLAY",
+        "PPI RESOLUTION",
+        "CPU CPI",
+        "QT FRAMEWORK",
+        "QT CREATOR",
+        "QT GUI"
+      ],
+      "includedPhrases": [
+        "CONSUMER PRICE INDEX",
+        "PRODUCER PRICE INDEX",
+        "CORE PCE",
+        "NON-FARM PAYROLLS",
+        "JOBS REPORT",
+        "INITIAL JOBLESS CLAIMS",
+        "INTEREST-RATE HIKE",
+        "RATE CUT",
+        "YIELD-CURVE INVERSION",
+        "QUANTITATIVE EASING",
+        "QUANTITATIVE TIGHTENING",
+        "FISCAL STIMULUS",
+        "GOVERNMENT SHUTDOWN",
+        "DEBT-CEILING STANDOFF",
+        "CREDIT-RATING DOWNGRADE",
+        "TRADE TARIFFS",
+        "TRADE SANCTIONS",
+        "GLOBAL SUPPLY-CHAIN",
+        "MIDDLE EAST CONFLICT",
+        "UKRAINE WAR",
+        "OIL PRODUCTION CUT",
+        "OPEC+ MEETING",
+        "DOLLAR INDEX STRENGTH",
+        "FX INTERVENTION",
+        "MONETARY POLICY MEETING",
+        "CENTRAL-BANK DECISION",
+        "INFLATION EXPECTATIONS",
+        "CORE INFLATION",
+        "HEADLINE INFLATION",
+        "IMPORT/EXPORT DATA",
+        "BALANCE OF TRADE",
+        "MANUFACTURING PMI",
+        "SERVICES PMI",
+        "FEDERAL RESERVE",
+        "CENTRAL BANK",
+        "TRADE WAR"
+      ]
+    },
+    {
+      "categoryName": "MANA",
+      "wordsAssociatedWithCategory": [
+        "MANA",
+        "Decentraland",
+        "decentraland"
+      ],
+      "excludedPhrases": [
+        "GENESIS MANA"
+      ]
+    },
+    {
+      "categoryName": "MARKET",
+      "wordsAssociatedWithCategory": [
+        "index",
+        "Index",
+        "Prices",
+        "prices",
+        "market",
+        "Market",
+        "markets",
+        "Markets",
+        "analysis",
+        "Analysis"
+      ]
+    },
+    {
+      "categoryName": "MATIC",
+      "wordsAssociatedWithCategory": [
+        "MATIC",
+        "Polygon"
+      ]
+    },
+    {
+      "categoryName": "MEME",
+      "wordsAssociatedWithCategory": [
+        "MEME",
+        "Memeland"
+      ]
+    },
+    {
+      "categoryName": "MIGRATION",
+      "wordsAssociatedWithCategory": [
+        "contract-migration"
+      ],
+      "includedPhrases": [
+        "CHAIN MIGRATION",
+        "CHAIN MIGRATED",
+        "CONTRACT ADDRESS UPDATE",
+        "CONTRACT MIGRATION",
+        "CONTRACT MIGRATED",
+        "DESTINATION CHAIN",
+        "NEW CONTRACT ADDRESS"
+      ]
+    },
+    {
+      "categoryName": "MINA",
+      "wordsAssociatedWithCategory": [
+        "MINA"
+      ],
+      "includedPhrases": [
+        "MINA PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "MINING",
+      "wordsAssociatedWithCategory": [
+        "Mining",
+        "mining",
+        "Hashrate",
+        "hashrate",
+        "Hashing",
+        "hashing",
+        "Pools",
+        "pools",
+        "Reward",
+        "reward"
+      ]
+    },
+    {
+      "categoryName": "MKR",
+      "wordsAssociatedWithCategory": [
+        "MKR",
+        "MakerDAO",
+        "makerDAO"
+      ]
+    },
+    {
+      "categoryName": "MNT",
+      "wordsAssociatedWithCategory": [
+        "MNT"
+      ]
+    },
+    {
+      "categoryName": "MOG",
+      "wordsAssociatedWithCategory": [
+        "MOG"
+      ],
+      "includedPhrases": [
+        "MOG COIN"
+      ]
+    },
+    {
+      "categoryName": "MX",
+      "wordsAssociatedWithCategory": [
+        "MX"
+      ],
+      "includedPhrases": [
+        "MX TOKEN"
+      ]
+    },
+    {
+      "categoryName": "NEAR",
+      "wordsAssociatedWithCategory": [
+        "NEAR"
+      ],
+      "includedPhrases": [
+        "NEAR PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "NEO",
+      "wordsAssociatedWithCategory": [
+        "NEO"
+      ],
+      "includedPhrases": [
+        "NEO BLOCKCHAIN"
+      ]
+    },
+    {
+      "categoryName": "NEXO",
+      "wordsAssociatedWithCategory": [
+        "NEXO"
+      ],
+      "includedPhrases": [
+        "NEXO EXCHANGE"
+      ]
+    },
+    {
+      "categoryName": "NOT",
+      "wordsAssociatedWithCategory": [
+        "NOTCOIN",
+        "Notcoin",
+        "notcoin"
+      ]
+    },
+    {
+      "categoryName": "OKB",
+      "wordsAssociatedWithCategory": [
+        "OKB"
+      ]
+    },
+    {
+      "categoryName": "OM",
+      "wordsAssociatedWithCategory": [
+        "OM"
+      ],
+      "includedPhrases": [
+        "MANTRA FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "ONDO",
+      "wordsAssociatedWithCategory": [
+        "ONDO"
+      ],
+      "includedPhrases": [
+        "ONDO FINANCE"
+      ]
+    },
+    {
+      "categoryName": "OP",
+      "wordsAssociatedWithCategory": [
+        "OP"
+      ]
+    },
+    {
+      "categoryName": "ORDI",
+      "wordsAssociatedWithCategory": [
+        "ORDI"
+      ],
+      "includedPhrases": [
+        "ORDINALS PLATFORM"
+      ]
+    },
+    {
+      "categoryName": "OTHER"
+    },
+    {
+      "categoryName": "PAXG",
+      "wordsAssociatedWithCategory": [
+        "PAXG"
+      ],
+      "includedPhrases": [
+        "PAXOS GOLD"
+      ]
+    },
+    {
+      "categoryName": "PENDLE",
+      "wordsAssociatedWithCategory": [
+        "PENDLE"
+      ],
+      "includedPhrases": [
+        "PENDLE FINANCE"
+      ]
+    },
+    {
+      "categoryName": "PEOPLE",
+      "wordsAssociatedWithCategory": [
+        "PEOPLE",
+        "ConstitutionalDAO",
+        "constitutionalDAO"
+      ]
+    },
+    {
+      "categoryName": "PEPE",
+      "wordsAssociatedWithCategory": [
+        "PEPE"
+      ]
+    },
+    {
+      "categoryName": "PYTH",
+      "wordsAssociatedWithCategory": [
+        "PYTH"
+      ],
+      "includedPhrases": [
+        "PYTH NETWORK"
+      ]
+    },
+    {
+      "categoryName": "PYUSD",
+      "wordsAssociatedWithCategory": [
+        "PYUSD"
+      ],
+      "includedPhrases": [
+        "PAYPAL USD"
+      ]
+    },
+    {
+      "categoryName": "QNT",
+      "wordsAssociatedWithCategory": [
+        "QNT"
+      ],
+      "includedPhrases": [
+        "QUANT NETWORK"
+      ]
+    },
+    {
+      "categoryName": "RAI",
+      "wordsAssociatedWithCategory": [
+        "RAI"
+      ],
+      "includedPhrases": [
+        "REFLEXER LABS"
+      ]
+    },
+    {
+      "categoryName": "RAY",
+      "wordsAssociatedWithCategory": [
+        "RAY",
+        "Raydium",
+        "raydium"
+      ]
+    },
+    {
+      "categoryName": "REGULATION",
+      "wordsAssociatedWithCategory": [
+        "Regulation",
+        "regulation",
+        "Legal",
+        "legal",
+        "Law",
+        "law",
+        "tax",
+        "Tax",
+        "Taxes",
+        "taxes",
+        "senate",
+        "Senate",
+        "Legislation",
+        "legislation",
+        "President",
+        "president",
+        "treasury",
+        "Treasury",
+        "SEC",
+        "BOE"
+      ]
+    },
+    {
+      "categoryName": "REN",
+      "wordsAssociatedWithCategory": [
+        "REN",
+        "RenVM",
+        "renVM",
+        "Renbridge",
+        "renbridge"
+      ]
+    },
+    {
+      "categoryName": "RESEARCH",
+      "wordsAssociatedWithCategory": [
+        "research",
+        "Research"
+      ]
+    },
+    {
+      "categoryName": "REVERSE TOKEN SPLIT",
+      "wordsAssociatedWithCategory": [
+        "reverse-split",
+        "Reverse-split",
+        "REVERSE-SPLIT"
+      ],
+      "excludedPhrases": [
+        "FORWARD SPLIT",
+        "STOCK SPLIT",
+        "STANDARD SPLIT",
+        "NORMAL SPLIT"
+      ],
+      "includedPhrases": [
+        "REVERSE TOKEN SPLIT",
+        "TOKEN CONSOLIDATION",
+        "TOKEN REVERSE SPLIT",
+        "REVERSE COIN SPLIT"
+      ]
+    },
+    {
+      "categoryName": "RNDR",
+      "wordsAssociatedWithCategory": [
+        "RNDR"
+      ],
+      "includedPhrases": [
+        "RENDER FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "RON",
+      "wordsAssociatedWithCategory": [
+        "RON"
+      ],
+      "includedPhrases": [
+        "RONIN BLOCKCHAIN"
+      ]
+    },
+    {
+      "categoryName": "ROSE",
+      "wordsAssociatedWithCategory": [
+        "ROSE"
+      ],
+      "includedPhrases": [
+        "OASIS PROTOCOL"
+      ]
+    },
+    {
+      "categoryName": "RPL",
+      "wordsAssociatedWithCategory": [
+        "RPL"
+      ],
+      "includedPhrases": [
+        "ROCKET POOL"
+      ]
+    },
+    {
+      "categoryName": "RUNE",
+      "wordsAssociatedWithCategory": [
+        "RUNE",
+        "Thorchain",
+        "thorchain"
+      ]
+    },
+    {
+      "categoryName": "SAFE",
+      "wordsAssociatedWithCategory": [
+        "SAFE"
+      ],
+      "includedPhrases": [
+        "SAFE SMART ACCOUNTS"
+      ]
+    },
+    {
+      "categoryName": "SAND",
+      "wordsAssociatedWithCategory": [
+        "SAND"
+      ],
+      "includedPhrases": [
+        "SANDBOX FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "SECURITY INCIDENTS",
+      "wordsAssociatedWithCategory": [
+        "hack",
+        "Hack",
+        "HACK",
+        "hacked",
+        "HACKED",
+        "Hacked",
+        "exploit",
+        "EXPLOIT",
+        "Exploit",
+        "Vulnerability",
+        "VULNERABILITY",
+        "vulnerability",
+        "rugpull",
+        "RUGPULL",
+        "Rugpull",
+        "rug-pull"
+      ],
+      "excludedPhrases": [
+        "LIFE HACK",
+        "GROWTH HACK"
+      ],
+      "includedPhrases": [
+        "PRIVATE KEY COMPROMISED",
+        "EXIT SCAM",
+        "FLASH LOAN ATTACK",
+        "REENTRANCY ATTACK",
+        "FUNDS STOLEN",
+        "FUNDS DRAINED",
+        "WALLET COMPROMISED",
+        "SMART CONTRACT BREACH",
+        "SECURITY BREACH"
+      ]
+    },
+    {
+      "categoryName": "SEI",
+      "wordsAssociatedWithCategory": [
+        "SEI"
+      ],
+      "includedPhrases": [
+        "SEI NETWORK"
+      ]
+    },
+    {
+      "categoryName": "SHIB",
+      "wordsAssociatedWithCategory": [
+        "SHIB"
+      ],
+      "includedPhrases": [
+        "SHIBA INU"
+      ]
+    },
+    {
+      "categoryName": "SNX",
+      "wordsAssociatedWithCategory": [
+        "SNX"
+      ],
+      "includedPhrases": [
+        "SYNTHETIX ECOSYSTEM"
+      ]
+    },
+    {
+      "categoryName": "SOL",
+      "wordsAssociatedWithCategory": [
+        "SOL",
+        "Solana",
+        "solana"
+      ]
+    },
+    {
+      "categoryName": "SPONSORED",
+      "wordsAssociatedWithCategory": [
+        "Sponsored",
+        "sponsored",
+        "featured",
+        "Featured"
+      ],
+      "includedPhrases": [
+        "PRESS RELEASE",
+        "PRESS RELEASES"
+      ]
+    },
+    {
+      "categoryName": "SSV",
+      "wordsAssociatedWithCategory": [
+        "SSV"
+      ],
+      "includedPhrases": [
+        "SSV NETWORK"
+      ]
+    },
+    {
+      "categoryName": "STRK",
+      "wordsAssociatedWithCategory": [
+        "STRK"
+      ],
+      "includedPhrases": [
+        "STARKNET FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "STX",
+      "wordsAssociatedWithCategory": [
+        "STX"
+      ],
+      "includedPhrases": [
+        "STACKS FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "SUI",
+      "wordsAssociatedWithCategory": [
+        "SUI"
+      ],
+      "includedPhrases": [
+        "SUI BLOCKCHAIN",
+        "SUI FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "SUSHI",
+      "wordsAssociatedWithCategory": [
+        "SUSHI",
+        "Sushiswap",
+        "sushiswap"
+      ]
+    },
+    {
+      "categoryName": "TECHNOLOGY",
+      "wordsAssociatedWithCategory": [
+        "Software",
+        "software",
+        "technology",
+        "Technology",
+        "TECH"
+      ]
+    },
+    {
+      "categoryName": "TFUEL",
+      "wordsAssociatedWithCategory": [
+        "TFUEL"
+      ],
+      "includedPhrases": [
+        "THETA FUEL"
+      ]
+    },
+    {
+      "categoryName": "THETA",
+      "wordsAssociatedWithCategory": [
+        "THETA"
+      ],
+      "includedPhrases": [
+        "THETA NETWORK"
+      ]
+    },
+    {
+      "categoryName": "TIA",
+      "wordsAssociatedWithCategory": [
+        "TIA",
+        "Celestia",
+        "celestia"
+      ]
+    },
+    {
+      "categoryName": "TICKER CHANGE",
+      "wordsAssociatedWithCategory": [
+        "REBRAND",
+        "rebrand",
+        "Rebrand",
+        "rename",
+        "Rename",
+        "RENAME"
+      ],
+      "excludedPhrases": [
+        "STOCK TICKER"
+      ],
+      "includedPhrases": [
+        "TICKER CHANGE",
+        "TICKER CHANGED",
+        "SYMBOL CHANGE",
+        "SYMBOL CHANGED",
+        "TICKER UPDATE",
+        "SYMBOL UPDATE"
+      ]
+    },
+    {
+      "categoryName": "TOKEN LISTING AND DELISTING",
+      "wordsAssociatedWithCategory": [
+        "tokenlisting"
+      ],
+      "includedPhrases": [
+        "TOKEN LISTING",
+        "COIN LISTING",
+        "NEW TOKEN LISTED",
+        "NEW COIN LISTED",
+        "TOKEN ADDED",
+        "COIN ADDED",
+        "TOKEN DELISTING",
+        "TOKEN REMOVED",
+        "TOKEN DELISTED"
+      ]
+    },
+    {
+      "categoryName": "TOKEN SALE",
+      "wordsAssociatedWithCategory": [
+        "ICO"
+      ],
+      "includedPhrases": [
+        "INITIAL COIN OFFERING",
+        "TOKEN SALE",
+        "TOKEN OFFERING",
+        "COIN OFFERING",
+        "INITIAL TOKEN SALE"
+      ]
+    },
+    {
+      "categoryName": "TOKEN SPLIT",
+      "wordsAssociatedWithCategory": [
+        "REBASE",
+        "Rebase",
+        "rebase"
+      ],
+      "excludedPhrases": [
+        "PROFIT SPLIT",
+        "REVENUE SPLIT",
+        "FEE SPLIT",
+        "LIQUIDITY SPLIT",
+        "AIRDROP SPLIT",
+        "REWARD SPLIT",
+        "DIVIDEND SPLIT"
+      ],
+      "includedPhrases": [
+        "TOKEN SPLIT",
+        "TOKEN SPLITTED",
+        "TOKEN DIVIDED",
+        "TOKEN SPLIT-UP",
+        "TOKEN SPLIT UP"
+      ]
+    },
+    {
+      "categoryName": "TON",
+      "wordsAssociatedWithCategory": [
+        "TON"
+      ]
+    },
+    {
+      "categoryName": "TRADING",
+      "wordsAssociatedWithCategory": [
+        "Technical",
+        "technical",
+        "trading",
+        "Trading",
+        "Fundamentals",
+        "fundamentals",
+        "Price",
+        "price",
+        "Bull",
+        "bull",
+        "bear",
+        "Bear",
+        "Bullish",
+        "bullish",
+        "Bearish",
+        "bearish",
+        "Rally",
+        "rally"
+      ]
+    },
+    {
+      "categoryName": "TRX",
+      "wordsAssociatedWithCategory": [
+        "TRX",
+        "TronDAO",
+        "tronDAO"
+      ]
+    },
+    {
+      "categoryName": "TUSD",
+      "wordsAssociatedWithCategory": [
+        "TUSD",
+        "TrueUSD",
+        "trueUSD"
+      ]
+    },
+    {
+      "categoryName": "TWT",
+      "wordsAssociatedWithCategory": [
+        "TWT"
+      ],
+      "includedPhrases": [
+        "TRUST WALLET TOKEN"
+      ]
+    },
+    {
+      "categoryName": "UMA",
+      "wordsAssociatedWithCategory": [
+        "UMA"
+      ],
+      "includedPhrases": [
+        "Universal Market Access"
+      ]
+    },
+    {
+      "categoryName": "UNI",
+      "wordsAssociatedWithCategory": [
+        "UNI",
+        "Uniswap",
+        "uniswap"
+      ]
+    },
+    {
+      "categoryName": "USDC",
+      "wordsAssociatedWithCategory": [
+        "USDC"
+      ]
+    },
+    {
+      "categoryName": "USDD",
+      "wordsAssociatedWithCategory": [
+        "USDD"
+      ],
+      "includedPhrases": [
+        "USDD STABLECOIN"
+      ]
+    },
+    {
+      "categoryName": "USDT",
+      "wordsAssociatedWithCategory": [
+        "USDT",
+        "Tether",
+        "tether"
+      ]
+    },
+    {
+      "categoryName": "VET",
+      "wordsAssociatedWithCategory": [
+        "VET",
+        "Vechain",
+        "vechain"
+      ]
+    },
+    {
+      "categoryName": "WALLET",
+      "wordsAssociatedWithCategory": [
+        "Ledger",
+        "ledger",
+        "Trezor",
+        "trezor",
+        "Keepkey",
+        "keepkey",
+        "Coinomi",
+        "coinomi",
+        "Jaxx",
+        "Myetherwallet",
+        "myeterhwallet",
+        "metamask",
+        "Metamask"
+      ]
+    },
+    {
+      "categoryName": "WIF",
+      "wordsAssociatedWithCategory": [
+        "WIF"
+      ]
+    },
+    {
+      "categoryName": "WLD",
+      "wordsAssociatedWithCategory": [
+        "WLD",
+        "Worldcoin",
+        "worldcoin"
+      ]
+    },
+    {
+      "categoryName": "WOO",
+      "wordsAssociatedWithCategory": [
+        "WOO"
+      ],
+      "includedPhrases": [
+        "WOO NETWORK"
+      ]
+    },
+    {
+      "categoryName": "XAUT",
+      "wordsAssociatedWithCategory": [
+        "XAUt"
+      ],
+      "includedPhrases": [
+        "TETHER GOLD"
+      ]
+    },
+    {
+      "categoryName": "XDC",
+      "wordsAssociatedWithCategory": [
+        "XDC"
+      ],
+      "includedPhrases": [
+        "XDC NETWORK"
+      ]
+    },
+    {
+      "categoryName": "XEC",
+      "wordsAssociatedWithCategory": [
+        "XEC"
+      ],
+      "includedPhrases": [
+        "ECASH FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "XLM",
+      "wordsAssociatedWithCategory": [
+        "XLM"
+      ],
+      "includedPhrases": [
+        "STELLAR NETWORK"
+      ]
+    },
+    {
+      "categoryName": "XMR",
+      "wordsAssociatedWithCategory": [
+        "XMR",
+        "Monero",
+        "monero"
+      ]
+    },
+    {
+      "categoryName": "XRP",
+      "wordsAssociatedWithCategory": [
+        "XRP"
+      ],
+      "includedPhrases": [
+        "RIPPLE FOUNDATION"
+      ]
+    },
+    {
+      "categoryName": "XTZ",
+      "wordsAssociatedWithCategory": [
+        "XTZ"
+      ],
+      "includedPhrases": [
+        "TEZOS BLOCKCHAIN"
+      ]
+    },
+    {
+      "categoryName": "YFI",
+      "wordsAssociatedWithCategory": [
+        "YFI"
+      ],
+      "includedPhrases": [
+        "YEARN FINANCE",
+        "YEARN.FINANCE"
+      ]
+    },
+    {
+      "categoryName": "ZEC",
+      "wordsAssociatedWithCategory": [
+        "ZEC",
+        "Zcash",
+        "zcash"
+      ]
+    },
+    {
+      "categoryName": "ZK",
+      "wordsAssociatedWithCategory": [
+        "ZK",
+        "Zksync",
+        "zksync",
+        "ZKsync"
+      ]
+    },
+    {
+      "categoryName": "ZRX",
+      "wordsAssociatedWithCategory": [
+        "ZRX"
+      ],
+      "includedPhrases": [
+        "0X"
+      ]
+    }
+  ]
+}

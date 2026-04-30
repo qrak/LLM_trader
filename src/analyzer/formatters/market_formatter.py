@@ -93,7 +93,7 @@ class MarketFormatter:
         """Format coin details into a compressed section (removed low-trading-value data)
 
         Args:
-            coin_details: Dictionary containing coin details from CryptoCompare API
+            coin_details: Dictionary containing coin details from market metadata provider
             max_description_tokens: Maximum tokens allowed for description (default: 256)
 
         Returns:

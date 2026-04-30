@@ -38,9 +38,12 @@ class ConfigProtocol(Protocol):
     @property
     def GOOGLE_STUDIO_PAID_API_KEY(self) -> str | None: ...
 
+<<<<<<< HEAD
     @property
     def CRYPTOCOMPARE_API_KEY(self) -> str | None: ...
 
+=======
+>>>>>>> main
     @property
     def BLOCKRUN_WALLET_KEY(self) -> str | None: ...
 
@@ -152,11 +155,41 @@ class ConfigProtocol(Protocol):
     @property
     def RAG_COOCCURRENCE_MULTIPLIER(self) -> float: ...
 
+<<<<<<< HEAD
     RAG_NEWS_API_URL: str
     RAG_NEWS_FILTER_SOURCES: bool
     RAG_NEWS_ALLOWED_FEEDS: list[str] | None
     RAG_CATEGORIES_API_URL: str
     RAG_PRICE_API_URL: str
+=======
+    # RSS / Crawl4AI ingestion
+    @property
+    def RAG_NEWS_SOURCES(self) -> list[str] | str | None: ...
+
+    @property
+    def RAG_NEWS_SOURCE_URLS(self) -> Dict[str, str]: ...
+
+    @property
+    def RAG_NEWS_PAGE_ENRICHMENT(self) -> bool: ...
+
+    @property
+    def RAG_NEWS_ENRICH_MIN_CHARS(self) -> int: ...
+
+    @property
+    def RAG_NEWS_FETCH_TIMEOUT(self) -> int: ...
+
+    @property
+    def RAG_NEWS_CRAWL_CONCURRENCY(self) -> int: ...
+
+    @property
+    def RAG_NEWS_MAX_ITEMS_PER_SOURCE(self) -> int: ...
+
+    @property
+    def RAG_NEWS_CRAWL4AI_ENABLED(self) -> bool: ...
+
+    @property
+    def RAG_NEWS_CRAWL_TIMEOUT(self) -> int: ...
+>>>>>>> main
 
     # Demo Trading
     @property
@@ -174,14 +207,45 @@ class ConfigProtocol(Protocol):
     @property
     def MARKET_REFRESH_HOURS(self) -> int: ...
 
+<<<<<<< HEAD
+=======
+    @property
+    def STOP_LOSS_TYPE(self) -> str: ...
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL(self) -> str: ...
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL_MINUTES(self) -> int: ...
+
+    @property
+    def STOP_LOSS_CHECK_INTERVAL_SECONDS(self) -> int: ...
+
+    @property
+    def TAKE_PROFIT_TYPE(self) -> str: ...
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL(self) -> str: ...
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL_MINUTES(self) -> int: ...
+
+    @property
+    def TAKE_PROFIT_CHECK_INTERVAL_SECONDS(self) -> int: ...
+
+>>>>>>> main
 
 
     def get_env(self, key: str, default: Any = None) -> Any: ...
 
     def get_config(self, section: str, key: str, default: Any = None) -> Any: ...
 
+<<<<<<< HEAD
     def get_section(self, section: str) -> Dict[str, Any]: ...
 
     def get_model_config(self, model_name: str, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]: ...
 
     def reload(self) -> None: ...
+=======
+    def get_model_config(self, model_name: str, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]: ...
+>>>>>>> main

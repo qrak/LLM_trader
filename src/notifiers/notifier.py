@@ -3,7 +3,12 @@ Discord Notifier - Send-only notification service with message expiration.
 Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
+<<<<<<< HEAD
 from typing import Optional, TYPE_CHECKING, List, Dict, Any
+=======
+import io
+from typing import Optional, TYPE_CHECKING, List, Dict, Any, Callable, Awaitable
+>>>>>>> main
 
 import discord
 from aiohttp import ClientSession
@@ -40,11 +45,29 @@ class DiscordNotifier(BaseNotifier):
         super().__init__(logger, config, unified_parser, formatter)
         self.session: Optional[ClientSession] = None
         self._ready_event = asyncio.Event()
+        self._shutdown_started = False
 
         self.bot = bot
         self.bot.discord_notifier = self
         self.bot.event(self.on_ready)
         self.file_handler = file_handler
+
+        # Small pacing gap between Discord API sends to reduce burst rate-limit pressure.
+        self._send_lock = asyncio.Lock()
+        self._last_send_timestamp = 0.0
+        self._discord_send_interval_seconds = 0.4
+
+    async def _send_with_spacing(self, send_operation: Callable[[], Awaitable[discord.Message]]) -> discord.Message:
+        """Serialize and pace Discord sends with a minimal delay between requests."""
+        async with self._send_lock:
+            now = asyncio.get_running_loop().time()
+            elapsed = now - self._last_send_timestamp
+            if elapsed < self._discord_send_interval_seconds:
+                await asyncio.sleep(self._discord_send_interval_seconds - elapsed)
+
+            sent_message = await send_operation()
+            self._last_send_timestamp = asyncio.get_running_loop().time()
+            return sent_message
 
 
     async def on_ready(self):
@@ -65,6 +88,10 @@ class DiscordNotifier(BaseNotifier):
         return self
 
     async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+        if self._shutdown_started:
+            return
+        self._shutdown_started = True
+
         if self.session:
             try:
                 await self.session.close()
@@ -80,12 +107,11 @@ class DiscordNotifier(BaseNotifier):
 
         if self.bot:
             try:
-                self.logger.info("Closing Discord bot connection...")
-                await asyncio.sleep(0.5)
-                try:
-                    await asyncio.wait_for(self.bot.close(), timeout=2.0)
-                except asyncio.TimeoutError:
-                    self.logger.warning("Bot close operation timed out")
+                if not self.bot.is_closed():
+                    self.logger.info("Closing Discord bot connection...")
+                    await self.bot.close()
+                    # Allow discord.py's keep-alive thread to observe the closed websocket.
+                    await asyncio.sleep(0.25)
             except Exception as e:
                 self.logger.warning("Error closing Discord bot: %s", e)
 
@@ -110,6 +136,13 @@ class DiscordNotifier(BaseNotifier):
     async def wait_until_ready(self) -> None:
         """Wait for the bot to fully initialize."""
         await self._ready_event.wait()
+
+    async def shutdown(self) -> None:
+        """Shutdown the Discord notifier and cleanup resources."""
+        try:
+            await self.__aexit__(None, None, None)
+        except Exception as e:
+            self.logger.warning("Error during Discord notifier shutdown: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_message(
@@ -155,9 +188,11 @@ class DiscordNotifier(BaseNotifier):
                     await asyncio.sleep(1)
 
                 delete_after = float(expire_after) if expire_after is not None else None
-                sent_message = await channel.send(
-                    content=chunk,
-                    delete_after=delete_after
+                sent_message = await self._send_with_spacing(
+                    lambda: channel.send(
+                        content=chunk,
+                        delete_after=delete_after
+                    )
                 )
                 await self.file_handler.track_message(
                     message_id=sent_message.id,
@@ -211,7 +246,13 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
+<<<<<<< HEAD
             sent_message = await channel.send(embed=embed, delete_after=expire_after)
+=======
+            sent_message = await self._send_with_spacing(
+                lambda: channel.send(embed=embed, delete_after=expire_after)
+            )
+>>>>>>> main
 
             # Track message for persistent deletion
             await self.file_handler.track_message(
@@ -280,7 +321,8 @@ class DiscordNotifier(BaseNotifier):
             result: dict,
             symbol: str,
             timeframe: str,
-            channel_id: int
+            channel_id: int,
+            chart_image: Optional[io.BytesIO] = None
     ) -> None:
         """Send full analysis notification with reasoning and JSON embed.
 
@@ -289,6 +331,7 @@ class DiscordNotifier(BaseNotifier):
             symbol: Trading symbol
             timeframe: Trading timeframe
             channel_id: Discord channel ID
+            chart_image: Optional PNG chart image buffer to attach
         """
         try:
             # Get the corrected analysis dict (has R/R correction and other validations applied)
@@ -310,8 +353,71 @@ class DiscordNotifier(BaseNotifier):
             embed = self._create_analysis_embed(analysis, symbol, timeframe)
             if embed:
                 await self._send_embed(embed, channel_id)
+<<<<<<< HEAD
         except Exception as e:
             self.logger.error("Error sending analysis notification: %s", e)
+=======
+
+            if chart_image is not None:
+                await self._send_analysis_chart(
+                    chart_image=chart_image,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    channel_id=channel_id
+                )
+        except Exception as e:
+            self.logger.error("Error sending analysis notification: %s", e)
+
+    async def _send_analysis_chart(
+            self,
+            chart_image: io.BytesIO,
+            symbol: str,
+            timeframe: str,
+            channel_id: int,
+            expire_after: Optional[float] = None
+    ) -> Optional[discord.Message]:
+        """Send analysis chart image to Discord and track it for cleanup."""
+        if expire_after is None:
+            expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
+
+        channel = self.bot.get_channel(channel_id)
+        if not channel:
+            self.logger.error("Channel with ID %s not found for chart upload.", channel_id)
+            return None
+
+        try:
+            chart_image.seek(0)
+            chart_bytes = chart_image.getvalue()
+            chart_image.seek(0)
+
+            if not chart_bytes:
+                self.logger.warning("Chart image buffer is empty; skipping Discord chart upload")
+                return None
+
+            safe_symbol = symbol.replace('/', '_')
+            filename = f"{safe_symbol}_{timeframe}_analysis_chart.png"
+            discord_file = discord.File(io.BytesIO(chart_bytes), filename=filename)
+
+            sent_message = await self._send_with_spacing(
+                lambda: channel.send(
+                    content=f"📈 {symbol} {timeframe} chart snapshot",
+                    file=discord_file,
+                    delete_after=expire_after
+                )
+            )
+
+            await self.file_handler.track_message(
+                message_id=sent_message.id,
+                channel_id=channel_id,
+                user_id=None,
+                message_type="chart",
+                expire_after=int(expire_after)
+            )
+            return sent_message
+        except Exception as e:
+            self.logger.error("Error sending analysis chart: %s", e)
+            return None
+>>>>>>> main
 
     async def send_position_status(
             self,
@@ -355,6 +461,7 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Position Size %", value=f"{position.size_pct * 100:.2f}%", inline=True)
             embed.add_field(name="Stop Loss", value=f"${position.stop_loss:,.2f} ({stop_distance_pct:+.2f}%)", inline=True)
             embed.add_field(name="Take Profit", value=f"${position.take_profit:,.2f} ({target_distance_pct:+.2f}%)", inline=True)
+            embed.add_field(name="Exit Monitoring", value=self.format_exit_monitoring(), inline=False)
             embed.add_field(name="Entry Fee", value=f"${position.entry_fee:.4f}", inline=True)
             embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
             embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -394,6 +501,19 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Total Trades", value=str(stats['closed_trades']), inline=True)
             embed.add_field(name="Total Fees", value=f"${stats['total_fees']:.4f}", inline=True)
             embed.add_field(name=f"Net P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['net_pnl']:+,.2f}", inline=True)
+
+            last_closed_trade = stats.get('last_closed_trade')
+            if last_closed_trade:
+                outcome = last_closed_trade.get('outcome', 'UNKNOWN')
+                close_reason = last_closed_trade.get('close_reason')
+                outcome_value = f"{outcome}\n{close_reason}" if close_reason else outcome
+                embed.add_field(name="Last Outcome", value=outcome_value, inline=True)
+                embed.add_field(
+                    name=f"Last Trade P&L ({self.config.QUOTE_CURRENCY})",
+                    value=f"${last_closed_trade['pnl_quote']:+,.2f} ({last_closed_trade['pnl_pct']:+.2f}%)",
+                    inline=True
+                )
+
             embed.set_footer(text=f"Symbol: {symbol}")
             await self._send_embed(embed, channel_id)
         except Exception as e:

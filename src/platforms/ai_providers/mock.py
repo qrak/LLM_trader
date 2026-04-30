@@ -131,7 +131,3 @@ class MockClient(BaseAIClient):
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close, has_chart=True)
         return self.create_response(content)
-
-    async def console_stream(self, model: str, messages: list, model_config: Dict[str, Any]) -> Optional[ChatResponseModel]:
-        """Simulate streaming by returning the full content immediately."""
-        return await self.chat_completion(model, messages, model_config)

@@ -1,13 +1,20 @@
 """Tests for template_manager.py changes: system prompt and response template."""
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 import pytest
 
 from src.analyzer.prompts.template_manager import TemplateManager
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 def _make_manager(**overrides):
     """Create a TemplateManager with mocked config."""
-    config = MagicMock()
+    config = SimpleNamespace(
+        STOP_LOSS_TYPE="soft",
+        STOP_LOSS_CHECK_INTERVAL="1h",
+        TAKE_PROFIT_TYPE="soft",
+        TAKE_PROFIT_CHECK_INTERVAL="1h",
+    )
     defaults = dict(config=config, logger=MagicMock(), timeframe_validator=MagicMock())
     defaults.update(overrides)
     return TemplateManager(**defaults)
@@ -28,10 +35,39 @@ class TestBuildSystemPrompt:
         assert "Death Cross" in prompt
         assert "50 SMA crosses ABOVE 200 SMA" in prompt
 
-    def test_soft_stops_mentioned(self):
+    def test_soft_exits_mentioned(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT")
-        assert "SOFT STOPS" in prompt
+        assert "Stop loss: SOFT" in prompt
+        assert "Take profit: SOFT" in prompt
         assert "candle CLOSE" in prompt
+
+    def test_hard_exit_intervals_mentioned(self):
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="hard",
+            STOP_LOSS_CHECK_INTERVAL="5m",
+            TAKE_PROFIT_TYPE="hard",
+            TAKE_PROFIT_CHECK_INTERVAL="15m",
+        )
+        mgr = _make_manager(config=config)
+
+        prompt = mgr.build_system_prompt("BTC/USDT", timeframe="1h")
+
+        assert "Stop loss: HARD bot-side interval check on live ticker every 5m" in prompt
+        assert "Take profit: HARD bot-side interval check on live ticker every 15m" in prompt
+
+    def test_mixed_exit_modes_are_explicit(self):
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="hard",
+            STOP_LOSS_CHECK_INTERVAL="5m",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="15m",
+        )
+        mgr = _make_manager(config=config)
+
+        prompt = mgr.build_system_prompt("BTC/USDT", timeframe="4h")
+
+        assert "Stop loss: HARD bot-side interval check on live ticker every 5m" in prompt
+        assert "Take profit: SOFT, evaluated only at 4h candle CLOSE" in prompt
 
     def test_temporal_context_with_last_analysis_time(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT", last_analysis_time="2025-12-26 14:30:00")
@@ -71,6 +107,12 @@ class TestBuildSystemPrompt:
         assert "Win Rate: 60%" in prompt
         assert "Profit Maximization Strategy" in prompt
 
+    def test_profitable_stop_loss_guidance_is_explicit(self):
+        prompt = self.mgr.build_system_prompt("BTC/USDT", performance_context="Recent trades available")
+        assert "profit-protecting stop" in prompt
+        assert "loss-cutting stop" in prompt
+        assert "profitable stop-loss exits" in prompt
+
     def test_brain_context_included(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT", brain_context="Brain insights here")
         assert "Brain insights here" in prompt
@@ -79,6 +121,25 @@ class TestBuildSystemPrompt:
         prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response="test analysis")
         assert "DETERMINISTIC TIME CHECK" in prompt
         assert "Relevance Window" in prompt
+
+    @pytest.mark.parametrize(
+        ("timeframe", "expected_window"),
+        [
+            ("5m", 10),
+            ("15m", 30),
+            ("30m", 60),
+        ]
+    )
+    def test_relevance_window_uses_sub_hour_timeframes(self, timeframe, expected_window):
+        mgr = _make_manager(timeframe_validator=TimeframeValidator)
+
+        prompt = mgr.build_system_prompt(
+            "BTC/USDT",
+            timeframe=timeframe,
+            previous_response="Previous reasoning text",
+        )
+
+        assert f"Window: {expected_window} minutes" in prompt
 
 
 # ── build_response_template ──────────────────────────────────────

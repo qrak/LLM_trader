@@ -20,7 +20,6 @@ class RagEngine:
         token_counter: TokenCounter,
         config: "ConfigProtocol",
         coingecko_api: Optional["CoinGeckoAPI"] = None,
-        exchange_manager=None,
         file_handler=None,
         news_manager=None,
         market_data_manager=None,
@@ -28,7 +27,6 @@ class RagEngine:
         category_fetcher=None,
         category_processor=None,
         ticker_manager=None,
-        news_category_analyzer=None,
         context_builder=None,
     ):
         """Initialize RagEngine with injected dependencies (DI pattern).
@@ -38,15 +36,13 @@ class RagEngine:
             token_counter: TokenCounter instance
             config: ConfigProtocol instance for RAG update intervals
             coingecko_api: CoinGecko API client (optional)
-            exchange_manager: Exchange manager (optional)
             file_handler: RagFileHandler instance (injected from app.py)
             news_manager: NewsManager instance (injected from app.py)
             market_data_manager: MarketDataManager instance (injected from app.py)
             index_manager: IndexManager instance (injected from app.py)
-            category_fetcher: CategoryFetcher instance (injected from app.py)
+            category_fetcher: LocalTaxonomyProvider instance (injected from start.py)
             category_processor: CategoryProcessor instance (injected from app.py)
             ticker_manager: TickerManager instance (injected from app.py)
-            news_category_analyzer: NewsCategoryAnalyzer instance (injected from app.py)
             context_builder: ContextBuilder instance (injected from app.py)
         """
 
@@ -63,11 +59,9 @@ class RagEngine:
         self.category_fetcher = category_fetcher
         self.category_processor = category_processor
         self.ticker_manager = ticker_manager
-        self.news_category_analyzer = news_category_analyzer
         self.context_builder = context_builder
 
         self.coingecko_api = coingecko_api
-        self.exchange_manager = exchange_manager
 
         # Update timestamps
         self.last_update: Optional[datetime] = None
@@ -83,6 +77,9 @@ class RagEngine:
 
         # Closure flag
         self._is_closed = False
+
+        # Last retrieval metadata snapshot for external consumers.
+        self._latest_article_urls: Dict[str, str] = {}
 
     async def initialize(self) -> None:
         """Initialize RAG engine and load cached data"""
@@ -178,6 +175,76 @@ class RagEngine:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
 
+    def _resolve_retrieval_limits(self, k: Optional[int], max_tokens: Optional[int]) -> tuple[int, int]:
+        """Resolve retrieval limits from explicit values or config with safe fallbacks."""
+        resolved_k = k
+        if resolved_k is None:
+            try:
+                resolved_k = int(self.config.RAG_NEWS_LIMIT)
+            except Exception:
+                resolved_k = 3
+
+        resolved_max_tokens = max_tokens
+        if resolved_max_tokens is None:
+            try:
+                article_max = int(self.config.RAG_ARTICLE_MAX_TOKENS)
+                resolved_max_tokens = article_max * resolved_k
+            except Exception:
+                resolved_max_tokens = 250 * resolved_k
+
+        return resolved_k, resolved_max_tokens
+
+    @staticmethod
+    def _extract_query_keywords(query: str) -> set[str]:
+        """Extract query keywords used by context selection heuristics."""
+        return set(re.findall(r'\b\w{3,15}\b', query.lower()))
+
+    def _expand_candidate_indices_for_symbol(
+        self,
+        symbol: str,
+        k: int,
+        relevant_indices: list[int],
+    ) -> list[int]:
+        """Add symbol-linked candidates when ranked results are sparse."""
+        if not symbol or len(relevant_indices) >= k:
+            return relevant_indices
+
+        coin = self.category_processor.extract_base_coin(symbol)
+        coin_indices = self.index_manager.search_by_coin(coin)
+        for idx in coin_indices:
+            if idx not in relevant_indices:
+                relevant_indices.append(idx)
+                if len(relevant_indices) >= k * 10:
+                    break
+
+        return relevant_indices
+
+    def _prioritize_full_body_candidates(self, relevant_indices: list[int]) -> list[int]:
+        """Move full-body articles ahead of short summaries while preserving relative order."""
+        min_body_chars = int(getattr(self.config, 'RAG_NEWS_ENRICH_MIN_CHARS', 400))
+        full_body_indices = [
+            idx for idx in relevant_indices
+            if len(str(self.news_manager.news_database[idx].get('body', ''))) >= min_body_chars
+        ]
+        short_body_indices = [idx for idx in relevant_indices if idx not in full_body_indices]
+        return full_body_indices + short_body_indices
+
+    def build_context_query(self, symbol: str) -> str:
+        """Build a default semantic query string for RAG retrieval based on the trading symbol."""
+        base_coin = symbol
+        if self.category_processor:
+            base_coin = self.category_processor.extract_base_coin(symbol).upper()
+        elif '/' in symbol:
+            base_coin = symbol.split('/')[0].upper()
+        else:
+            base_coin = symbol.upper()
+
+        coin_name = base_coin.lower()
+        if self.context_builder:
+            coin_name = self.context_builder.symbol_name_map.get(base_coin, coin_name)
+
+        return f"{coin_name} price analysis market trends"
+
     @profile_performance
     async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: Optional[int] = None) -> str:
         """Retrieve relevant context for a query with token limiting.
@@ -186,11 +253,7 @@ class RagEngine:
         Note: Market overview data is handled separately by PromptBuilder._build_market_overview_section()
         This method only returns news articles and market context to avoid redundancy.
         """
-        if k is None:
-            try:
-                k = int(self.config.RAG_NEWS_LIMIT)
-            except Exception:
-                k = 3
+        k, max_tokens = self._resolve_retrieval_limits(k, max_tokens)
 
         if max_tokens is None:
             try:
@@ -212,8 +275,12 @@ class RagEngine:
             if not self.last_update or datetime.now(timezone.utc) - self.last_update > timedelta(minutes=30):
                 await self.update_if_needed()
 
+<<<<<<< HEAD
             # Extract keywords from query for smart sentence selection
             keywords = set(re.findall(r'\b\w{3,15}\b', query.lower()))
+=======
+            keywords = self._extract_query_keywords(query)
+>>>>>>> main
 
             # Use context builder for keyword search
             scores = await self.context_builder.keyword_search(
@@ -222,29 +289,45 @@ class RagEngine:
                 self.category_processor.category_word_map,
                 self.category_processor.important_categories
             )
-            relevant_indices = [idx for idx, _ in scores[:k*2]]
+            relevant_indices = [idx for idx, _ in scores[:k*10]]
             scores_dict = {idx: score for idx, score in scores}
 
-            # Add coin-specific articles if needed
-            if symbol and len(relevant_indices) < k:
-                coin = self.category_processor.extract_base_coin(symbol)
-                coin_indices = self.index_manager.search_by_coin(coin)
-                for idx in coin_indices:
-                    if idx not in relevant_indices:
-                        relevant_indices.append(idx)
-                        if len(relevant_indices) >= k*2:
-                            break
+            relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices)
+            relevant_indices = self._prioritize_full_body_candidates(relevant_indices)
 
             # Build context using context builder (pass keywords and scores for smart selection)
             context_text, total_tokens = self.context_builder.add_articles_to_context(
                 relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
             )
+<<<<<<< HEAD
+=======
+            self._latest_article_urls = self.context_builder.get_latest_article_urls()
+>>>>>>> main
             self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
             return context_text
         except Exception as e:
             self.logger.error("Error retrieving context: %s", e)
+<<<<<<< HEAD
+=======
+            self._latest_article_urls = {}
+>>>>>>> main
             return "Error retrieving market context."
+
+    def get_news_cache_snapshot(self, limit: Optional[int] = None) -> list[Dict[str, Any]]:
+        """Return a copy of cached news articles for read-only external consumption."""
+        if not self.news_manager:
+            return []
+
+        articles = self.news_manager.news_database
+        if limit is not None and limit > 0:
+            articles = articles[:limit]
+
+        return [dict(article) for article in articles if isinstance(article, dict)]
+
+    def get_latest_article_urls_snapshot(self) -> Dict[str, str]:
+        """Return a copy of article URLs captured during the latest retrieve_context call."""
+        return dict(self._latest_article_urls)
 
     async def get_market_overview(self) -> Optional[Dict[str, Any]]:
         """Get current market overview data using MarketDataManager (aggregates CoinGecko + DefiLlama)"""
@@ -260,6 +343,7 @@ class RagEngine:
             self.logger.error("Error getting market overview: %s", e)
             return None
 
+<<<<<<< HEAD
     async def update_known_tickers(self) -> None:
         """Update known cryptocurrency ticker symbols"""
         try:
@@ -298,6 +382,8 @@ class RagEngine:
             self.logger.debug("Stopped periodic news updates")
 
 
+=======
+>>>>>>> main
     async def close(self) -> None:
         """Close resources and mark as closed"""
         if self._is_closed:
@@ -330,7 +416,7 @@ class RagEngine:
             True if categories were updated, False otherwise
         """
         try:
-            categories = await self.category_fetcher.fetch_cryptocompare_categories(force_refresh)
+            categories = await self.category_fetcher.fetch_categories(force_refresh)
             if categories:
                 self.category_processor.process_api_categories(categories)
                 return True

@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.utils.indicator_classifier import classify_rsi_label
+from src.utils.indicator_classifier import classify_rsi_label, format_exit_execution_context
 
 from .data_models import VectorSearchResult
 
@@ -36,6 +36,7 @@ class VectorMemoryContextMixin:
         max_profit_pct: Optional[float],
         max_drawdown_pct: Optional[float],
         factor_scores: Dict[str, float],
+        exit_execution_context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Build the discriminative text document embedded for semantic search."""
         symbol_str = f" [{symbol}]" if symbol else ""
@@ -67,6 +68,9 @@ class VectorMemoryContextMixin:
             structure_parts.append(f"Sentiment={market_sentiment}")
         if order_book_bias:
             structure_parts.append(f"OB={order_book_bias}")
+        exit_execution_text = format_exit_execution_context(exit_execution_context)
+        if exit_execution_text:
+            structure_parts.append(exit_execution_text)
         structure_str = " | ".join(structure_parts)
 
         factor_parts: List[str] = []
@@ -271,6 +275,10 @@ class VectorMemoryContextMixin:
         if rr is not None:
             parts.append(f"R/R: {rr:.1f}")
 
+        exit_execution_text = format_exit_execution_context(meta)
+        if exit_execution_text:
+            parts.append(exit_execution_text)
+
         max_profit = meta.get("max_profit_pct")
         max_dd = meta.get("max_drawdown_pct")
         if max_profit is not None and max_profit > 0:
@@ -344,6 +352,10 @@ class VectorMemoryContextMixin:
 
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")
+
+        exit_execution_text = format_exit_execution_context(meta)
+        if exit_execution_text:
+            parts.append(exit_execution_text)
 
         return " | ".join(parts)
 

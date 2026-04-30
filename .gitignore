@@ -43,7 +43,8 @@ htmlcov/
 
 # Project specific
 *.log
-/data/
+/data/*
+!/data/categories.json
 /cache/
 /logs/
 /research_papers/
