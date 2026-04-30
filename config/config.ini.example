@@ -42,12 +42,8 @@ candle_limit = 999
 # Number of candles to visualize in the chart images sent to the AI
 ai_chart_candle_limit = 125
 # Master switch to enable or disable the Discord bot integration
-<<<<<<< HEAD
-discord_bot = true
-=======
 discord_bot = false
 
->>>>>>> main
 # Whether to include project description in coin details (useful for unknown tokens)
 include_coin_description = false
 
@@ -81,13 +77,6 @@ coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 # Maximum number of news articles to include in the AI's context
 news_limit = 5
 # Maximum number of tokens per article chunk for processing
-<<<<<<< HEAD
-article_max_tokens = 500
-# Filter news sources to reliable feeds only (prevents stale articles with current dates)
-news_filter_sources = true
-# Optional: Override default Tier 1 feeds (comma-separated: cointelegraph,coindesk,theblock,decrypt,bitcoinmagazine)
-news_allowed_feeds = seekingalpha,invezz,coinpaper,cryptopotato
-=======
 article_max_tokens = 1500
 # Enabled RSS source keys (comma-separated).
 # This is a FILTER over the URL registry below. Leave empty to enable all
@@ -122,7 +111,6 @@ cooccurrence_multiplier = 1.5
 news_crawl4ai_enabled = true
 # Per-page timeout for Crawl4AI in seconds (defaults to news_timeout_seconds)
 news_crawl_timeout = 60
->>>>>>> main
 
 [exchanges]
 # List of exchanges to use for symbol lookup (in priority order)
