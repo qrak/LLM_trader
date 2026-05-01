@@ -66,7 +66,7 @@ class ContextBuilder:
             }
             coin_full_name = self.symbol_name_map.get(coin)
             coin_patterns['coin_name_pattern'] = (
-                re.compile(rf"\b{re.escape(coin_full_name).replace('\\ ', r'[-\\s]+')}\b") if coin_full_name else None
+                re.compile(r'\b' + r'[-\s]+'.join(re.escape(p) for p in coin_full_name.split()) + r'\b') if coin_full_name else None
             )
 
         # Pre-calculate relevant categories based on query
