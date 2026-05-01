@@ -5,7 +5,7 @@ Handles brain state management, learning from closed trades, and providing AI co
 
 from datetime import datetime
 from collections import Counter
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from uuid import uuid4
 
 from src.logger.logger import Logger
@@ -15,6 +15,7 @@ from src.utils.indicator_classifier import (
     build_query_document_from_classified_values,
     classify_adx_label,
     classify_rsi_label,
+    format_exit_execution_context,
 )
 from .vector_memory import VectorMemoryService
 from .data_models import Position, TradeDecision
@@ -53,7 +54,7 @@ class TradingBrainService:
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}
         self._cache_trade_count: int = 0
-        self._reflection_interval: int = 10
+        self._reflection_interval: int = 5
 
         # Initialize trade count from persistent storage
         # This ensures reflection triggers consistently across restarts
@@ -81,6 +82,9 @@ class TradingBrainService:
 
         conditions = market_conditions or {}
         exit_execution_context = build_exit_execution_context_from_position(position)
+        entry_confidence = entry_decision.confidence if entry_decision else position.confidence
+        entry_action = entry_decision.action if entry_decision else position.direction
+        reasoning = entry_decision.reasoning if entry_decision else "N/A"
 
         # Use rich context builder for consistent vector keys
         condition_str = self._build_rich_context_string(
@@ -101,18 +105,20 @@ class TradingBrainService:
         self._stats_cache = {}
 
         trade_id = f"trade_{position.entry_time.isoformat()}"
-        reasoning = entry_decision.reasoning if entry_decision else "N/A"
         self.vector_memory.store_experience(
             trade_id=trade_id,
             market_context=condition_str,
             outcome="WIN" if is_win else "LOSS",
             pnl_pct=pnl_pct,
             direction=position.direction,
-            confidence=position.confidence,
+            confidence=entry_confidence,
             reasoning=reasoning,
             symbol=position.symbol,
             close_reason=close_reason,
             metadata={
+                "entry_action": entry_action,
+                "entry_confidence": entry_confidence,
+                "ai_reasoning": reasoning if reasoning != "N/A" else "",
                 "adx_at_entry": position.adx_at_entry,
                 "rsi_at_entry": position.rsi_at_entry,
                 "atr_at_entry": position.atr_at_entry,
@@ -143,6 +149,7 @@ class TradingBrainService:
         if self._trade_count % self._reflection_interval == 0:
             self._trigger_reflection()
             self._trigger_loss_reflection()
+            self._trigger_ai_mistake_reflection()
 
     def get_context(
         self,
@@ -243,8 +250,10 @@ class TradingBrainService:
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
                 "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
+                "- AI MISTAKE MEMORY: If an AI-mistake rule matches, compare the current setup to the failed assumption and downgrade confidence unless the missing confirmation is now present.",
+                "- EXIT EXECUTION MEMORY: Treat hard/soft SL/TP settings as part of the setup. Do not reuse a rule learned under a different exit profile without explaining the mismatch.",
                 "- REGIME MISMATCH: If a retrieved experience's Context or Match Factors show a fundamentally different regime (e.g., High ADX vs current Low ADX, different volatility level marked ⚠️), treat it as informational only — not as a statistical prior for confidence adjustment.",
-                "- Weight recent wins higher. Check for pattern repetition that led to losses.",
+                "- OUTCOME BALANCE: Weight both wins AND losses. If a corrective or anti-pattern rule matches, explicitly state the adjustment you are applying (e.g. stricter confluences, higher R/R, reduced position size) before finalising your decision.",
                 "",
             ])
         elif lines and has_limited_data:
@@ -268,7 +277,21 @@ class TradingBrainService:
             ])
             for rule in semantic_rules:
                 similarity = rule.get("similarity", 0)
-                lines.append(f"- [{similarity:.0f}% match] {rule['text']}")
+                meta = rule.get("metadata", {})
+                rule_type = meta.get("rule_type", "best_practice")
+                type_tags = {
+                    "anti_pattern": " [⚠️ AVOID]",
+                    "corrective": " [⚡ IMPROVE]",
+                    "ai_mistake": " [🧠 AI MISTAKE]",
+                }
+                type_tag = type_tags.get(rule_type, "")
+                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule['text']}")
+                failure = meta.get("failure_reason")
+                if failure:
+                    lines.append(f"  → Why it failed: {failure}")
+                recommended = meta.get("recommended_adjustment")
+                if recommended:
+                    lines.append(f"  → Apply: {recommended}")
             lines.append("")
 
         return "\n".join(lines)
@@ -472,8 +495,6 @@ class TradingBrainService:
 
         return vector_context
 
-
-
     def _get_cached_stats(self, key: str, compute_fn) -> Dict[str, Any]:
         """Get stats from cache or compute and cache them.
 
@@ -510,26 +531,302 @@ class TradingBrainService:
             return 0
         return sum(1 for _, score in confluence_factors if score > 50)
 
-    def _trigger_reflection(self) -> None:
-        """Reflect on recent trades and synthesize semantic rules.
+    @staticmethod
+    def _as_float(value: Any, default: float = 0.0) -> float:
+        """Return a float for optional numeric metadata values."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
-        Called automatically every N trades. Analyzes winning trade patterns
-        and stores insights as reusable rules.
+    @staticmethod
+    def _safe_key_part(value: Any, default: str = "unknown") -> str:
+        """Normalize metadata values for deterministic semantic rule IDs."""
+        if value is None:
+            return default
+        normalized = str(value).strip().lower().replace(" ", "_").replace("-", "_").replace("/", "_")
+        return normalized or default
+
+    def _sanitize_rule_key(self, value: str) -> str:
+        """Create a stable Chroma ID suffix from a composite rule key."""
+        return self._safe_key_part(value.replace("|", "_"))
+
+    def _normalize_close_reason(self, reason: Any) -> str:
+        """Normalize exit reasons while preserving stop-loss semantics."""
+        normalized = self._safe_key_part(reason)
+        stop_aliases = {
+            "stop_loss",
+            "stop_loss_hit",
+            "hard_stop",
+            "hard_stop_loss",
+            "soft_stop",
+            "soft_stop_loss",
+            "emergency_stop",
+        }
+        if normalized in stop_aliases or ("stop" in normalized and "loss" in normalized):
+            return "stop_loss"
+        return normalized
+
+    def _is_stop_loss_reason(self, reason: Any) -> bool:
+        """Return whether a close reason represents any stop-loss style exit."""
+        return self._normalize_close_reason(reason) == "stop_loss"
+
+    def _adx_bucket_for_meta(self, meta: Dict[str, Any]) -> str:
+        """Classify ADX into the reflection buckets used for rule keys."""
+        adx = self._as_float(meta.get("adx_at_entry"), 0.0)
+        if adx >= 25:
+            return "HIGH_ADX"
+        if adx < 20:
+            return "LOW_ADX"
+        return "MED_ADX"
+
+    @staticmethod
+    def _adx_level_from_bucket(adx_bucket: str) -> str:
+        """Format an ADX bucket for rule text."""
+        adx_level_map = {
+            "HIGH_ADX": "High ADX",
+            "MED_ADX": "Med ADX",
+            "LOW_ADX": "Low ADX",
+        }
+        return adx_level_map.get(adx_bucket, adx_bucket.replace("_", " ").title())
+
+    def _build_exit_profile_key(self, meta: Dict[str, Any]) -> str:
+        """Build a deterministic key for hard/soft SL/TP execution settings."""
+        stop_type = self._safe_key_part(meta.get("stop_loss_type"))
+        stop_interval = self._safe_key_part(meta.get("stop_loss_check_interval"))
+        take_profit_type = self._safe_key_part(meta.get("take_profit_type"))
+        take_profit_interval = self._safe_key_part(meta.get("take_profit_check_interval"))
+        return f"sl_{stop_type}_{stop_interval}|tp_{take_profit_type}_{take_profit_interval}"
+
+    @staticmethod
+    def _format_exit_profile(
+        stop_type: str,
+        stop_interval: str,
+        take_profit_type: str,
+        take_profit_interval: str,
+    ) -> str:
+        """Format a hard/soft SL/TP profile for rules and dashboard metadata."""
+        profile = format_exit_execution_context(
+            {
+                "stop_loss_type": stop_type,
+                "stop_loss_check_interval": stop_interval,
+                "take_profit_type": take_profit_type,
+                "take_profit_check_interval": take_profit_interval,
+            },
+            include_unknown=True,
+        )
+        return profile.removeprefix("Exit Execution: ")
+
+    def _dominant_meta_value(
+        self,
+        metas: List[Dict[str, Any]],
+        key: str,
+        default: str = "unknown",
+    ) -> str:
+        """Return the most common normalized metadata value for a trade group."""
+        values = [self._safe_key_part(meta.get(key), default) for meta in metas if meta.get(key) is not None]
+        if not values:
+            return default
+        return Counter(values).most_common(1)[0][0]
+
+    def _meta_values(
+        self,
+        metas: List[Dict[str, Any]],
+        key: str,
+        *,
+        absolute: bool = False,
+        positive_only: bool = False,
+        non_zero: bool = False,
+    ) -> List[float]:
+        """Return normalized numeric metadata values with optional filtering."""
+        values: List[float] = []
+        for meta in metas:
+            if meta.get(key) is None:
+                continue
+            value = self._as_float(meta.get(key), 0.0)
+            if absolute:
+                value = abs(value)
+            if positive_only and value <= 0.0:
+                continue
+            if non_zero and value == 0.0:
+                continue
+            values.append(value)
+        return values
+
+    def _average_meta(self, metas: List[Dict[str, Any]], key: str, **filters: Any) -> float:
+        """Average a numeric metadata field after applying optional filters."""
+        values = self._meta_values(metas, key, **filters)
+        return sum(values) / len(values) if values else 0.0
+
+    def _compute_loss_diagnostics(self, losses: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Compute reused diagnostic averages for losing trades."""
+        alignment_values = [m.get("timeframe_alignment") for m in losses if m.get("timeframe_alignment")]
+        mixed_count = sum(1 for value in alignment_values if value in ("MIXED", "DIVERGENT"))
+        return {
+            "avg_adx": self._average_meta(losses, "adx_at_entry"),
+            "avg_rr": self._average_meta(losses, "rr_ratio"),
+            "avg_confluence": self._average_meta(losses, "confluence_count"),
+            "avg_loss_mfe": self._average_meta(losses, "max_profit_pct", positive_only=True),
+            "mixed_alignment_ratio": mixed_count / len(alignment_values) if alignment_values else 0.0,
+        }
+
+    def _build_rule_metadata(
+        self,
+        rule_type: str,
+        source_pattern: str,
+        metrics: Dict[str, Any],
+        **extra: Any,
+    ) -> Dict[str, Any]:
+        """Build common semantic-rule metadata for best, loss, and AI-mistake rules."""
+        metadata = {
+            "rule_type": rule_type,
+            "source_pattern": source_pattern,
+            "source_trades": metrics["total"],
+            "wins": metrics["wins"],
+            "losses": metrics["losses"],
+            "win_rate": round(metrics["win_rate"] * 100, 1),
+            "loss_rate": round(metrics["loss_rate"] * 100, 1),
+            "avg_pnl_pct": round(metrics["avg_pnl"], 2),
+            "profit_factor": round(min(metrics["profit_factor"], 99.0), 2),
+            "expectancy_pct": round(metrics["expectancy_pct"], 2),
+            "avg_mae_pct": round(metrics["avg_mae"], 2),
+            "avg_mfe_pct": round(metrics["avg_mfe"], 2),
+            "dominant_close_reason": metrics["dominant_close_reason"],
+            "dominant_exit_profile": metrics["dominant_exit_profile"],
+            "dominant_stop_loss_type": metrics["dominant_stop_loss_type"],
+            "dominant_take_profit_type": metrics["dominant_take_profit_type"],
+        }
+        metadata.update(extra)
+        return metadata
+
+    def _is_sideways_failure(self, meta: Dict[str, Any]) -> bool:
+        """Identify losses or flat outcomes where the market failed to trend."""
+        pnl = self._as_float(meta.get("pnl_pct"), 0.0)
+        if pnl > 0.2:
+            return False
+
+        regime = str(meta.get("market_regime", "")).upper()
+        volatility = str(meta.get("volatility_level", "")).upper()
+        close_reason = self._normalize_close_reason(meta.get("close_reason", ""))
+        reasoning = str(meta.get("reasoning") or meta.get("ai_reasoning") or "").lower()
+        adx = self._as_float(meta.get("adx_at_entry"), 0.0)
+
+        return (
+            regime in ("NEUTRAL", "SIDEWAYS", "RANGING")
+            or volatility == "LOW"
+            or 0 < adx < 20
+            or close_reason in ("sideways", "range_exit", "timeout", "time_exit", "flat_exit")
+            or "sideways" in reasoning
+            or "range" in reasoning
+            or "chop" in reasoning
+        )
+
+    def _classify_ai_mistake(self, meta: Dict[str, Any]) -> str:
+        """Classify whether an outcome contradicts the AI's entry confidence."""
+        confidence = str(meta.get("entry_confidence") or meta.get("confidence") or "").upper()
+        if confidence not in ("HIGH", "MEDIUM"):
+            return ""
+
+        pnl = self._as_float(meta.get("pnl_pct"), 0.0)
+        outcome = meta.get("outcome")
+        sideways_failure = self._is_sideways_failure(meta)
+
+        if confidence == "HIGH" and sideways_failure:
+            return "sideways_overconfidence"
+        if confidence == "HIGH" and outcome == "LOSS":
+            return "overconfident_loss"
+        if sideways_failure and outcome == "LOSS":
+            return "sideways_failure"
+        if confidence == "HIGH" and pnl <= 0.2:
+            return "low_follow_through_overconfidence"
+        return ""
+
+    def _derive_ai_assumption(self, metas: List[Dict[str, Any]]) -> str:
+        """Summarize the failed assumption from stored AI reasoning text."""
+        joined_reasoning = " ".join(
+            str(meta.get("reasoning") or meta.get("ai_reasoning") or "") for meta in metas
+        ).lower()
+        if any(token in joined_reasoning for token in ("breakout", "break out", "breakdown", "break down")):
+            return "expected breakout continuation"
+        if any(token in joined_reasoning for token in ("trend", "momentum", "continuation")):
+            return "expected trend or momentum follow-through"
+        if any(token in joined_reasoning for token in ("reversal", "mean reversion", "bounce")):
+            return "expected reversal follow-through"
+        if any(token in joined_reasoning for token in ("support", "resistance")):
+            return "expected support/resistance reaction"
+        return "AI confidence exceeded realised market follow-through"
+
+    def _derive_ai_mistake_reason(
+        self,
+        mistake_metas: List[Dict[str, Any]],
+        mistake_type: str,
+        failed_assumption: str,
+    ) -> str:
+        """Explain what the AI got wrong for a repeated mistake cluster."""
+        reasons: List[str] = []
+        high_confidence_count = sum(
+            1 for meta in mistake_metas
+            if str(meta.get("entry_confidence") or meta.get("confidence") or "").upper() == "HIGH"
+        )
+        sideways_count = sum(1 for meta in mistake_metas if self._is_sideways_failure(meta))
+
+        if high_confidence_count:
+            reasons.append(f"AI used HIGH confidence on {high_confidence_count} failed or flat trade(s)")
+        if sideways_count:
+            reasons.append(f"market stayed sideways/choppy on {sideways_count} trade(s)")
+        if mistake_type == "low_follow_through_overconfidence":
+            reasons.append("trade produced too little follow-through for HIGH confidence")
+        reasons.append(f"failed assumption: {failed_assumption}")
+        return "; ".join(reasons)
+
+    def _derive_ai_mistake_adjustment(
+        self,
+        mistake_metas: List[Dict[str, Any]],
+        mistake_type: str,
+    ) -> str:
+        """Generate prompt-ready corrections for repeated AI judgment mistakes."""
+        suggestions: List[str] = []
+        if "sideways" in mistake_type or any(self._is_sideways_failure(meta) for meta in mistake_metas):
+            suggestions.append(
+                "downgrade confidence in neutral/low-ADX markets and HOLD unless expansion volume or ADX >= 20 confirms follow-through"
+            )
+        if "overconfidence" in mistake_type:
+            suggestions.append("cap confidence one level lower until the missing confirmation is present")
+
+        stop_type = self._dominant_meta_value(mistake_metas, "stop_loss_type")
+        if stop_type == "hard":
+            suggestions.append("with hard SL, reduce size or place invalidation beyond structure because chop can force exits")
+        elif stop_type == "soft":
+            suggestions.append("with soft SL, require a clear invalidation rule and shorter monitoring interval in chop")
+
+        if not suggestions:
+            suggestions.append("require stronger confirmation before repeating this AI reasoning pattern")
+        return "; ".join(suggestions)
+
+    def _trigger_reflection(self) -> None:
+        """Reflect on recent trades and synthesize best-practice semantic rules.
+
+        Called automatically every N trades. Identifies profitable patterns from
+        win/loss history and stores outcome-aware rules with richer diagnostics.
         """
         try:
             all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
             win_metas = [m for m in all_metas if m.get("outcome") == "WIN"]
 
-            if len(win_metas) < 10:
-                self.logger.debug("Not enough winning trades for reflection (need 10+)")
+            if len(win_metas) < 5:
+                self.logger.debug("Not enough winning trades for reflection (need 5+)")
                 return
 
             def build_win_key(meta: Dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
-                adx = meta.get("adx_at_entry", 0)
                 direction = meta.get("direction", "UNKNOWN")
-                adx_label = "HIGH_ADX" if adx >= 25 else "LOW_ADX" if adx < 20 else "MED_ADX"
-                return f"{direction}_{regime}_{adx_label}"
+                adx_label = self._adx_bucket_for_meta(meta)
+                return "|".join([
+                    self._safe_key_part(direction).upper(),
+                    self._safe_key_part(regime).upper(),
+                    adx_label,
+                    self._build_exit_profile_key(meta),
+                ])
 
             pattern_counts = Counter(build_win_key(m) for m in win_metas)
 
@@ -537,75 +834,77 @@ class TradingBrainService:
                 return
 
             best_pattern = pattern_counts.most_common(1)[0]
-            pattern_key, count = best_pattern
-            if count < 5:
-                self.logger.debug("Pattern %s rejected: only %s occurrences (need 5+)", pattern_key, count)
+            pattern_key, win_count = best_pattern
+            if win_count < 3:
+                self.logger.debug(
+                    "Pattern %s rejected: only %s win occurrences (need 3+)", pattern_key, win_count
+                )
                 return
 
-            # Validate win rate: count all trades (wins + losses) matching this pattern
-            pattern_total = sum(1 for m in all_metas if build_win_key(m) == pattern_key)
-            pattern_wins = sum(1 for m in win_metas if build_win_key(m) == pattern_key)
+            group_metas = [m for m in all_metas if build_win_key(m) == pattern_key]
+            metrics = self._compute_group_metrics(group_metas)
 
-            win_rate = pattern_wins / pattern_total if pattern_total > 0 else 0.0
-            if win_rate < 0.6:
-                self.logger.debug("Pattern %s rejected: win rate %s < 60%% (%s/%s trades)", pattern_key, f"{win_rate:.0%}", pattern_wins, pattern_total)
+            if metrics["win_rate"] < 0.6:
+                self.logger.debug(
+                    "Pattern %s rejected: win rate %s < 60%% (%s/%s trades)",
+                    pattern_key, f"{metrics['win_rate']:.0%}", metrics["wins"], metrics["total"],
+                )
                 return
 
-            parts = pattern_key.split("_", 2)
-            if len(parts) != 3:
-                self.logger.debug("Pattern %s rejected: malformed key", pattern_key)
-                return
+            sample_meta = group_metas[0] if group_metas else {}
+            direction = sample_meta.get("direction", "UNKNOWN")
+            regime = sample_meta.get("market_regime", "NEUTRAL")
+            adx_level = self._adx_level_from_bucket(self._adx_bucket_for_meta(sample_meta))
+            exit_profile = metrics["dominant_exit_profile"]
 
-            direction, regime, adx_bucket = parts
-            adx_level_map = {
-                "HIGH_ADX": "High ADX",
-                "MED_ADX": "Med ADX",
-                "LOW_ADX": "Low ADX",
-            }
-            adx_level = adx_level_map.get(adx_bucket, adx_bucket.replace("_", " ").title())
-
+            losses = metrics["losses"]
             rule_text = (
                 f"{direction} trades perform well in {regime} market with {adx_level}. "
-                f"({count} recent wins follow this pattern)"
+                f"Exit profile: {exit_profile}. "
+                f"({win_count} wins, {losses} losses — {metrics['win_rate']:.0%} win rate)"
             )
 
-            rule_id = f"rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            stored_win_rate = round(win_rate * 100, 1) if pattern_total > 0 else 0.0
+            rule_id = f"rule_best_{self._sanitize_rule_key(pattern_key)}"
             self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
-                metadata={
-                    "source_pattern": pattern_key,
-                    "source_trades": pattern_total,
-                    "win_rate": stored_win_rate,
-                    "total_analyzed": len(win_metas),
-                }
+                metadata=self._build_rule_metadata(
+                    "best_practice",
+                    pattern_key,
+                    metrics,
+                    total_analyzed=len(win_metas),
+                ),
             )
 
-            self.logger.info("Reflection complete: stored rule '%s'", rule_text)
+            self.logger.info("Reflection complete: stored best-practice rule '%s'", rule_text)
 
         except Exception as e:
             self.logger.warning("Reflection failed: %s", e)
 
     def _trigger_loss_reflection(self) -> None:
-        """Reflect on losing trades and synthesize anti-patterns.
+        """Reflect on losing trades and synthesize anti-pattern and corrective rules.
 
-        Called automatically every N trades. Analyzes LOSS trades to identify
-        conditions that consistently lead to losses so they can be avoided.
+        Called automatically every N trades. Analyzes LOSS and mixed-outcome patterns
+        to identify conditions that hurt profitability, storing actionable guidance.
         """
         try:
             all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
             loss_metas = [m for m in all_metas if m.get("outcome") == "LOSS"]
 
-            if len(loss_metas) < 5:
-                self.logger.debug("Not enough losing trades for anti-pattern reflection (need 5+)")
+            if len(loss_metas) < 3:
+                self.logger.debug("Not enough losing trades for anti-pattern reflection (need 3+)")
                 return
 
             def build_loss_key(meta: Dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
-                close_reason = meta.get("close_reason", "unknown")
+                close_reason = self._normalize_close_reason(meta.get("close_reason", "unknown"))
                 direction = meta.get("direction", "UNKNOWN")
-                return f"{direction}_{regime}_{close_reason}"
+                return "|".join([
+                    self._safe_key_part(direction).upper(),
+                    self._safe_key_part(regime).upper(),
+                    close_reason,
+                    self._build_exit_profile_key(meta),
+                ])
 
             pattern_counts = Counter(build_loss_key(m) for m in loss_metas)
 
@@ -613,36 +912,289 @@ class TradingBrainService:
                 return
 
             worst_pattern = pattern_counts.most_common(1)[0]
-            pattern_key, count = worst_pattern
-            if count < 3:
-                self.logger.debug("Anti-pattern %s rejected: only %s occurrences (need 3+)", pattern_key, count)
+            pattern_key, loss_count = worst_pattern
+            if loss_count < 2:
+                self.logger.debug(
+                    "Anti-pattern %s rejected: only %s occurrences (need 2+)", pattern_key, loss_count
+                )
                 return
 
-            parts = pattern_key.split("_")
-            direction = parts[0]
-            regime = parts[1]
-            close_reason = "_".join(parts[2:])
+            group_metas = [m for m in all_metas if build_loss_key(m) == pattern_key]
+            metrics = self._compute_group_metrics(group_metas)
 
+            failure_reason = self._derive_failure_reason(metrics)
+            recommended_adjustment = self._derive_recommended_adjustment(metrics)
+
+            sample_meta = group_metas[0] if group_metas else {}
+            direction = sample_meta.get("direction", "UNKNOWN")
+            regime = sample_meta.get("market_regime", "NEUTRAL")
+            close_reason = metrics["dominant_close_reason"]
+            exit_profile = metrics["dominant_exit_profile"]
+
+            rule_type = "anti_pattern" if metrics["loss_rate"] >= 0.6 else "corrective"
+            type_label = "⚠️ AVOID" if rule_type == "anti_pattern" else "⚡ IMPROVE"
             rule_text = (
-                f"⚠️ AVOID: {direction} trades in {regime} market often hit {close_reason}. "
-                f"({count} recent losses follow this pattern)"
+                f"{type_label}: {direction} trades in {regime} market often exit via {close_reason}. "
+                f"Exit profile: {exit_profile}. "
+                f"({loss_count} losses, {metrics['wins']} wins — {metrics['win_rate']:.0%} win rate)"
             )
 
-            rule_id = f"anti_rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            rule_id = f"rule_{rule_type}_{self._sanitize_rule_key(pattern_key)}"
             self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
-                metadata={
-                    "rule_type": "anti_pattern",
-                    "source_pattern": pattern_key,
-                    "source_loss_count": count,
-                }
+                metadata=self._build_rule_metadata(
+                    rule_type,
+                    pattern_key,
+                    metrics,
+                    source_loss_count=loss_count,
+                    failure_reason=failure_reason,
+                    recommended_adjustment=recommended_adjustment,
+                ),
             )
 
-            self.logger.info("Anti-pattern reflection complete: stored rule '%s'", rule_text)
+            self.logger.info(
+                "Loss reflection complete: stored %s rule '%s'", rule_type, rule_text
+            )
 
         except Exception as e:
             self.logger.warning("Loss reflection failed: %s", e)
+
+    def _trigger_ai_mistake_reflection(self) -> None:
+        """Reflect on cases where the AI's confidence or premise was wrong."""
+        try:
+            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            mistake_metas = [meta for meta in all_metas if self._classify_ai_mistake(meta)]
+
+            if len(mistake_metas) < 2:
+                self.logger.debug("Not enough AI mistake samples for reflection (need 2+)")
+                return
+
+            def build_mistake_key(meta: Dict[str, Any]) -> str:
+                mistake_type = self._classify_ai_mistake(meta)
+                confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
+                direction = meta.get("direction", "UNKNOWN")
+                regime = meta.get("market_regime", "NEUTRAL")
+                return "|".join([
+                    mistake_type,
+                    self._safe_key_part(confidence).upper(),
+                    self._safe_key_part(direction).upper(),
+                    self._safe_key_part(regime).upper(),
+                    self._build_exit_profile_key(meta),
+                ])
+
+            pattern_counts = Counter(build_mistake_key(meta) for meta in mistake_metas)
+            pattern_key, mistake_count = pattern_counts.most_common(1)[0]
+            if mistake_count < 2:
+                self.logger.debug(
+                    "AI mistake pattern %s rejected: only %s occurrence(s) (need 2+)",
+                    pattern_key, mistake_count,
+                )
+                return
+
+            matched_mistakes = [meta for meta in mistake_metas if build_mistake_key(meta) == pattern_key]
+            sample_meta = matched_mistakes[0]
+            base_parts = pattern_key.split("|")
+            mistake_type = base_parts[0]
+            confidence = sample_meta.get("entry_confidence") or sample_meta.get("confidence") or "UNKNOWN"
+            direction = sample_meta.get("direction", "UNKNOWN")
+            regime = sample_meta.get("market_regime", "NEUTRAL")
+
+            def build_base_key(meta: Dict[str, Any]) -> str:
+                meta_confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
+                return "|".join([
+                    self._safe_key_part(meta_confidence).upper(),
+                    self._safe_key_part(meta.get("direction", "UNKNOWN")).upper(),
+                    self._safe_key_part(meta.get("market_regime", "NEUTRAL")).upper(),
+                    self._build_exit_profile_key(meta),
+                ])
+
+            base_key = "|".join(base_parts[1:])
+            comparison_group = [meta for meta in all_metas if build_base_key(meta) == base_key]
+            metrics = self._compute_group_metrics(comparison_group or matched_mistakes)
+            failed_assumption = self._derive_ai_assumption(matched_mistakes)
+            failure_reason = self._derive_ai_mistake_reason(
+                matched_mistakes, mistake_type, failed_assumption
+            )
+            recommended_adjustment = self._derive_ai_mistake_adjustment(matched_mistakes, mistake_type)
+
+            rule_text = (
+                f"🧠 AI MISTAKE: {confidence} confidence {direction} calls in {regime} market repeated "
+                f"{mistake_type.replace('_', ' ')}. Exit profile: {metrics['dominant_exit_profile']}. "
+                f"Failed assumption: {failed_assumption}. "
+                f"({mistake_count} mistake(s), {metrics['win_rate']:.0%} win rate in comparable trades)"
+            )
+
+            rule_id = f"rule_ai_mistake_{self._sanitize_rule_key(pattern_key)}"
+            self.vector_memory.store_semantic_rule(
+                rule_id=rule_id,
+                rule_text=rule_text,
+                metadata=self._build_rule_metadata(
+                    "ai_mistake",
+                    pattern_key,
+                    metrics,
+                    source_mistake_count=mistake_count,
+                    mistake_type=mistake_type,
+                    entry_confidence=str(confidence).upper(),
+                    failed_assumption=failed_assumption,
+                    failure_reason=failure_reason,
+                    recommended_adjustment=recommended_adjustment,
+                ),
+            )
+
+            self.logger.info("AI mistake reflection complete: stored rule '%s'", rule_text)
+
+        except Exception as e:
+            self.logger.warning("AI mistake reflection failed: %s", e)
+
+    def _compute_group_metrics(self, group_metas: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Compute outcome statistics for a group of trade metadata records."""
+        wins = [m for m in group_metas if m.get("outcome") == "WIN"]
+        losses = [m for m in group_metas if m.get("outcome") == "LOSS"]
+        total = len(group_metas)
+        win_count = len(wins)
+        loss_count = len(losses)
+
+        win_rate = win_count / total if total > 0 else 0.0
+        loss_rate = loss_count / total if total > 0 else 0.0
+
+        all_pnls = [self._as_float(m.get("pnl_pct"), 0.0) for m in group_metas]
+        win_pnls = [self._as_float(m.get("pnl_pct"), 0.0) for m in wins]
+        loss_pnls = [self._as_float(m.get("pnl_pct"), 0.0) for m in losses]
+
+        avg_pnl = sum(all_pnls) / total if total > 0 else 0.0
+        avg_win_pct = sum(win_pnls) / win_count if win_count > 0 else 0.0
+        avg_loss_pct = sum(loss_pnls) / loss_count if loss_count > 0 else 0.0
+
+        gross_profit = sum(p for p in all_pnls if p > 0)
+        gross_loss = abs(sum(p for p in all_pnls if p < 0))
+        if gross_loss > 0:
+            profit_factor = gross_profit / gross_loss
+        elif gross_profit > 0:
+            profit_factor = 999.0
+        else:
+            profit_factor = 1.0
+
+        expectancy_pct = win_rate * avg_win_pct + loss_rate * avg_loss_pct
+
+        avg_mae = self._average_meta(losses, "max_drawdown_pct", absolute=True, non_zero=True)
+        avg_mfe = self._average_meta(wins, "max_profit_pct", positive_only=True)
+
+        loss_reasons = Counter(self._normalize_close_reason(m.get("close_reason", "unknown")) for m in losses)
+        dominant_close_reason = loss_reasons.most_common(1)[0][0] if loss_reasons else "unknown"
+        profile_metas = losses if losses else group_metas
+        dominant_stop_loss_type = self._dominant_meta_value(profile_metas, "stop_loss_type")
+        dominant_stop_loss_interval = self._dominant_meta_value(profile_metas, "stop_loss_check_interval")
+        dominant_take_profit_type = self._dominant_meta_value(profile_metas, "take_profit_type")
+        dominant_take_profit_interval = self._dominant_meta_value(profile_metas, "take_profit_check_interval")
+        dominant_exit_profile = self._format_exit_profile(
+            dominant_stop_loss_type,
+            dominant_stop_loss_interval,
+            dominant_take_profit_type,
+            dominant_take_profit_interval,
+        )
+
+        return {
+            "total": total,
+            "wins": win_count,
+            "losses": loss_count,
+            "win_rate": win_rate,
+            "loss_rate": loss_rate,
+            "avg_pnl": avg_pnl,
+            "avg_win_pct": avg_win_pct,
+            "avg_loss_pct": avg_loss_pct,
+            "profit_factor": profit_factor,
+            "expectancy_pct": expectancy_pct,
+            "avg_mae": avg_mae,
+            "avg_mfe": avg_mfe,
+            "dominant_close_reason": dominant_close_reason,
+            "dominant_exit_profile": dominant_exit_profile,
+            "dominant_stop_loss_type": dominant_stop_loss_type,
+            "dominant_stop_loss_interval": dominant_stop_loss_interval,
+            "dominant_take_profit_type": dominant_take_profit_type,
+            "dominant_take_profit_interval": dominant_take_profit_interval,
+            "loss_metas": losses,
+        }
+
+    def _derive_failure_reason(self, metrics: Dict[str, Any]) -> str:
+        """Derive the primary cause of losses from trade group metrics."""
+        losses = metrics["loss_metas"]
+        if not losses:
+            return ""
+
+        reasons: List[str] = []
+        dominant_reason = metrics["dominant_close_reason"]
+
+        diagnostics = self._compute_loss_diagnostics(losses)
+        avg_adx = diagnostics["avg_adx"]
+        avg_rr = diagnostics["avg_rr"]
+        avg_confluence = diagnostics["avg_confluence"]
+        avg_loss_mfe = diagnostics["avg_loss_mfe"]
+
+        if self._is_stop_loss_reason(dominant_reason) and avg_adx > 0 and avg_adx < 20:
+            reasons.append(
+                f"low-ADX ({avg_adx:.0f}) choppy conditions caused {metrics['dominant_stop_loss_type']} stop-loss exits"
+            )
+        elif self._is_stop_loss_reason(dominant_reason):
+            reasons.append(f"stop-loss hit on {metrics['losses']} of {metrics['total']} trades")
+        if self._is_stop_loss_reason(dominant_reason) and metrics["dominant_stop_loss_type"] != "unknown":
+            reasons.append(f"{metrics['dominant_stop_loss_type']} stop-loss execution was active")
+        if avg_rr > 0 and avg_rr < 1.5:
+            reasons.append(f"low average R/R ({avg_rr:.1f}) insufficient to offset losses")
+        if avg_confluence > 0 and avg_confluence < 3:
+            reasons.append(f"weak entry confluence (avg {avg_confluence:.0f} factors)")
+        if avg_loss_mfe > 0.5:
+            reasons.append(f"trades moved favorably (avg MFE +{avg_loss_mfe:.1f}%) before reversing")
+        if not reasons:
+            reasons.append(f"exits via {dominant_reason}")
+
+        return "; ".join(reasons)
+
+    def _derive_recommended_adjustment(self, metrics: Dict[str, Any]) -> str:
+        """Generate actionable guidance to improve profitability for this pattern."""
+        losses = metrics["loss_metas"]
+        if not losses:
+            return ""
+
+        suggestions: List[str] = []
+
+        diagnostics = self._compute_loss_diagnostics(losses)
+        avg_adx = diagnostics["avg_adx"]
+        avg_rr = diagnostics["avg_rr"]
+        avg_confluence = diagnostics["avg_confluence"]
+
+        if avg_adx > 0 and avg_adx < 20:
+            suggestions.append("require ADX >= 20 before entry to avoid choppy markets")
+        if avg_rr > 0 and avg_rr < 1.5:
+            suggestions.append("require R/R >= 1.5 for this setup type")
+        if avg_confluence > 0 and avg_confluence < 3:
+            suggestions.append("demand at least 3 aligned confluences before entry")
+
+        dominant_reason = metrics["dominant_close_reason"]
+        stop_type = metrics["dominant_stop_loss_type"]
+        if self._is_stop_loss_reason(dominant_reason) and stop_type == "hard" and avg_adx > 0 and avg_adx < 20:
+            suggestions.append("avoid hard-stop entries in low-ADX chop unless breakout confirmation is present")
+        elif self._is_stop_loss_reason(dominant_reason) and stop_type == "hard":
+            suggestions.append("for hard SL setups, reduce position size or place invalidation beyond structure")
+        elif self._is_stop_loss_reason(dominant_reason) and stop_type == "soft":
+            suggestions.append("for soft SL setups, define the invalidation trigger and monitor it on the configured interval")
+
+        if diagnostics["avg_loss_mfe"] > 0.0:
+            avg_loss_mfe = diagnostics["avg_loss_mfe"]
+            if avg_loss_mfe > 0.5:
+                suggestions.append(
+                    f"move SL to breakeven after +{avg_loss_mfe * 0.5:.1f}% gain to protect against reversals"
+                )
+        if diagnostics["mixed_alignment_ratio"] > 0.5:
+            suggestions.append("reduce position size or HOLD when timeframes are MIXED or DIVERGENT")
+
+        if not suggestions:
+            win_rate_pct = round(metrics["win_rate"] * 100)
+            suggestions.append(
+                f"require stronger signal confirmation (current win rate {win_rate_pct}%)"
+            )
+
+        return "; ".join(suggestions)
 
     def track_position_update(
         self,

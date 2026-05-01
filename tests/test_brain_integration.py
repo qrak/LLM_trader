@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 
-from src.trading.data_models import Position
+from src.trading.data_models import Position, TradeDecision
 from src.trading.brain import TradingBrainService
 
 
@@ -15,6 +15,21 @@ def _make_brain():
     vector_memory.trade_count = 0
     vector_memory.get_relevant_rules.return_value = []
     return TradingBrainService(logger=logger, persistence=persistence, vector_memory=vector_memory)
+
+
+def _make_position(**overrides):
+    defaults = dict(
+        entry_price=100.0,
+        stop_loss=95.0,
+        take_profit=110.0,
+        size=1.0,
+        entry_time=datetime(2026, 4, 30, tzinfo=timezone.utc),
+        confidence="HIGH",
+        direction="LONG",
+        symbol="BTC/USDC",
+    )
+    defaults.update(overrides)
+    return Position(**defaults)
 
 
 # ── _build_rich_context_string ──────────────────────────────────
@@ -131,6 +146,58 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["take_profit_type"] == "soft"
         assert call_kwargs["metadata"]["take_profit_check_interval"] == "4h"
 
+    def test_closed_trade_stores_original_ai_decision_snapshot(self):
+        position = Position(
+            entry_price=100.0,
+            stop_loss=96.0,
+            take_profit=108.0,
+            size=1.0,
+            entry_time=datetime(2026, 4, 30, tzinfo=timezone.utc),
+            confidence="MEDIUM",
+            direction="LONG",
+            symbol="BTC/USDC",
+        )
+        entry_decision = TradeDecision(
+            timestamp=datetime(2026, 4, 30, tzinfo=timezone.utc),
+            symbol="BTC/USDC",
+            action="BUY",
+            confidence="HIGH",
+            price=100.0,
+            reasoning="Strong breakout momentum is likely to continue.",
+        )
+
+        self.brain.update_from_closed_trade(
+            position=position,
+            close_price=98.0,
+            close_reason="sideways",
+            entry_decision=entry_decision,
+            market_conditions={"adx": 16.0, "trend_direction": "NEUTRAL"},
+        )
+
+        call_kwargs = self.brain.vector_memory.store_experience.call_args.kwargs
+        assert call_kwargs["confidence"] == "HIGH"
+        assert call_kwargs["reasoning"] == "Strong breakout momentum is likely to continue."
+        assert call_kwargs["metadata"]["entry_action"] == "BUY"
+        assert call_kwargs["metadata"]["entry_confidence"] == "HIGH"
+        assert call_kwargs["metadata"]["ai_reasoning"] == "Strong breakout momentum is likely to continue."
+
+    def test_reflection_runs_every_five_closed_trades(self):
+        self.brain._trade_count = 4
+        self.brain._trigger_reflection = MagicMock()
+        self.brain._trigger_loss_reflection = MagicMock()
+        self.brain._trigger_ai_mistake_reflection = MagicMock()
+
+        self.brain.update_from_closed_trade(
+            position=_make_position(),
+            close_price=105.0,
+            close_reason="take_profit",
+            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+        )
+
+        self.brain._trigger_reflection.assert_called_once()
+        self.brain._trigger_loss_reflection.assert_called_once()
+        self.brain._trigger_ai_mistake_reflection.assert_called_once()
+
 
 # ── get_vector_context ──────────────────────────────────────────
 
@@ -226,4 +293,184 @@ class TestReflectionRuleFormatting:
         assert brain.vector_memory.store_semantic_rule.called
         rule_text = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_text"]
         assert "with High ADX." in rule_text
+
+    def test_reflection_blocked_when_losses_drop_win_rate_below_threshold(self):
+        """Matching losses that push win rate below 60% should prevent a best-practice rule."""
+        brain = _make_brain()
+
+        # 5 wins + 4 losses on the same pattern → 55.5% win rate
+        all_metas = [
+            {"outcome": "WIN", "market_regime": "BULLISH", "adx_at_entry": 30, "direction": "LONG"}
+            for _ in range(5)
+        ] + [
+            {"outcome": "LOSS", "market_regime": "BULLISH", "adx_at_entry": 30, "direction": "LONG"}
+            for _ in range(4)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = all_metas
+
+        brain._trigger_reflection()
+
+        assert not brain.vector_memory.store_semantic_rule.called
+
+    def test_trigger_reflection_stores_wins_and_losses_in_metadata(self):
+        """Stored best-practice metadata includes win/loss counts and profitability metrics."""
+        brain = _make_brain()
+
+        all_metas = [
+            {
+                "outcome": "WIN", "market_regime": "BULLISH", "adx_at_entry": 30,
+                "direction": "LONG", "pnl_pct": 2.0, "close_reason": "take_profit",
+            }
+            for _ in range(8)
+        ] + [
+            {
+                "outcome": "LOSS", "market_regime": "BULLISH", "adx_at_entry": 30,
+                "direction": "LONG", "pnl_pct": -1.0, "close_reason": "stop_loss",
+            }
+            for _ in range(2)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = all_metas
+
+        brain._trigger_reflection()
+
+        assert brain.vector_memory.store_semantic_rule.called
+        kwargs = brain.vector_memory.store_semantic_rule.call_args.kwargs
+        meta = kwargs["metadata"]
+        assert meta["rule_type"] == "best_practice"
+        assert meta["wins"] == 8
+        assert meta["losses"] == 2
+        assert meta["win_rate"] == pytest.approx(80.0, abs=0.1)
+        assert meta["avg_pnl_pct"] == pytest.approx(1.4, abs=0.1)
+        assert meta["profit_factor"] > 1.0
+
+    def test_trigger_loss_reflection_stores_failure_reason_and_recommended_adjustment(self):
+        """Loss reflection should diagnose why losses happened and suggest improvements."""
+        brain = _make_brain()
+
+        loss_metas = [
+            {
+                "outcome": "LOSS", "market_regime": "BULLISH", "adx_at_entry": 16,
+                "direction": "LONG", "close_reason": "stop_loss", "pnl_pct": -1.5,
+            }
+            for _ in range(4)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+
+        brain._trigger_loss_reflection()
+
+        assert brain.vector_memory.store_semantic_rule.called
+        kwargs = brain.vector_memory.store_semantic_rule.call_args.kwargs
+        meta = kwargs["metadata"]
+        assert meta.get("failure_reason")
+        assert meta.get("recommended_adjustment")
+        assert "ADX" in meta["failure_reason"] or "stop" in meta["failure_reason"]
+        assert meta["rule_type"] in ("anti_pattern", "corrective")
+        assert meta["wins"] == 0
+        assert meta["losses"] == 4
+
+    def test_trigger_loss_reflection_differentiates_hard_stop_profile(self):
+        """Hard stop-loss exits should be normalized as stop losses but keep exit profile metadata."""
+        brain = _make_brain()
+
+        loss_metas = [
+            {
+                "outcome": "LOSS", "market_regime": "NEUTRAL", "adx_at_entry": 16,
+                "direction": "LONG", "close_reason": "hard_stop", "pnl_pct": -1.2,
+                "stop_loss_type": "hard", "stop_loss_check_interval": "1m",
+                "take_profit_type": "soft", "take_profit_check_interval": "15m",
+            }
+            for _ in range(3)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+
+        brain._trigger_loss_reflection()
+
+        assert brain.vector_memory.store_semantic_rule.called
+        kwargs = brain.vector_memory.store_semantic_rule.call_args.kwargs
+        meta = kwargs["metadata"]
+        assert meta["dominant_close_reason"] == "stop_loss"
+        assert meta["dominant_stop_loss_type"] == "hard"
+        assert meta["dominant_take_profit_type"] == "soft"
+        assert meta["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
+        assert "hard" in meta["failure_reason"]
+        assert "hard" in meta["recommended_adjustment"]
+
+    def test_trigger_ai_mistake_reflection_stores_sideways_overconfidence_rule(self):
+        """Repeated HIGH-confidence sideways failures should become AI-mistake rules."""
+        brain = _make_brain()
+
+        mistake_metas = [
+            {
+                "outcome": "LOSS", "market_regime": "NEUTRAL", "adx_at_entry": 15,
+                "direction": "LONG", "close_reason": "sideways", "pnl_pct": -0.4,
+                "confidence": "HIGH", "entry_confidence": "HIGH",
+                "reasoning": "Strong breakout momentum will continue.",
+                "max_profit_pct": 0.2, "stop_loss_type": "hard",
+                "stop_loss_check_interval": "1m", "take_profit_type": "soft",
+                "take_profit_check_interval": "15m",
+            }
+            for _ in range(3)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = mistake_metas
+
+        brain._trigger_ai_mistake_reflection()
+
+        assert brain.vector_memory.store_semantic_rule.called
+        kwargs = brain.vector_memory.store_semantic_rule.call_args.kwargs
+        meta = kwargs["metadata"]
+        assert meta["rule_type"] == "ai_mistake"
+        assert meta["mistake_type"] == "sideways_overconfidence"
+        assert meta["entry_confidence"] == "HIGH"
+        assert meta["failed_assumption"] == "expected breakout continuation"
+        assert meta["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
+        assert "downgrade" in meta["recommended_adjustment"]
+        assert "AI MISTAKE" in kwargs["rule_text"]
+
+    def test_loss_reflection_rule_id_is_deterministic(self):
+        """Repeated loss reflections for the same pattern should produce the same rule_id."""
+        brain = _make_brain()
+
+        loss_metas = [
+            {
+                "outcome": "LOSS", "market_regime": "BEARISH", "adx_at_entry": 22,
+                "direction": "SHORT", "close_reason": "stop_loss", "pnl_pct": -2.0,
+            }
+            for _ in range(3)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+
+        brain._trigger_loss_reflection()
+        first_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]
+
+        brain.vector_memory.store_semantic_rule.reset_mock()
+        brain._trigger_loss_reflection()
+        second_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]
+
+        assert first_id == second_id
+
+    def test_best_practice_rule_id_is_deterministic(self):
+        """Repeated positive reflections for the same pattern should produce the same rule_id."""
+        brain = _make_brain()
+
+        win_metas = [
+            {"outcome": "WIN", "market_regime": "BULLISH", "adx_at_entry": 30, "direction": "LONG"}
+            for _ in range(6)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = win_metas
+
+        brain._trigger_reflection()
+        first_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]
+
+        brain.vector_memory.store_semantic_rule.reset_mock()
+        brain._trigger_reflection()
+        second_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]
+
+        assert first_id == second_id
 

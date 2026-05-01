@@ -118,7 +118,7 @@ class VectorMemoryContextMixin:
     def _calculate_recency_score(
         self,
         trade_timestamp: str,
-        half_life_days: int = 90,
+        half_life_days: int = 30,
     ) -> float:
         """Calculate recency weight using exponential decay."""
         try:
@@ -137,7 +137,7 @@ class VectorMemoryContextMixin:
         current_context: str,
         k: int = 5,
         use_decay: bool = True,
-        decay_half_life_days: int = 90,
+        decay_half_life_days: int = 30,
         where: Optional[Dict[str, Any]] = None,
     ) -> List[VectorSearchResult]:
         """Retrieve past experiences similar to the current market context."""

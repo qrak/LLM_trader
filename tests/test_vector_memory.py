@@ -248,6 +248,24 @@ class TestComputeFactorPerformance:
 class TestRetrievalAndPromptContext:
     """Verify retrieval and prompt context behavior after the split."""
 
+    def test_retrieve_similar_experiences_uses_30_day_half_life_by_default(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._collection = MagicMock()
+        svc._collection.count.return_value = 1
+        svc._collection.query.return_value = {
+            "ids": [["recent-trade"]],
+            "documents": [["doc-1"]],
+            "metadatas": [[{"timestamp": "2026-03-20T00:00:00+00:00"}]],
+            "distances": [[0.10]],
+        }
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2]
+
+        with patch.object(svc, "_calculate_recency_score", return_value=0.9) as recency_mock:
+            svc.retrieve_similar_experiences("BULLISH", k=1)
+
+        assert recency_mock.call_args.args[1] == 30
+
     def test_retrieve_similar_experiences_reorders_by_hybrid_score(self):
         svc = _make_service()
         svc._initialized = True
@@ -366,6 +384,30 @@ class TestSemanticRules:
             prompt = svc.get_anti_patterns_for_prompt(k=2)
 
         assert "Avoid longs into major resistance" in prompt
+        assert "Favor aligned trends" not in prompt
+
+    def test_get_anti_patterns_for_prompt_includes_ai_mistake_rules(self):
+        svc = _make_service()
+        with patch.object(
+            svc,
+            "get_active_rules",
+            return_value=[
+                {
+                    "text": "AI MISTAKE: HIGH confidence longs failed in sideways markets",
+                    "metadata": {
+                        "rule_type": "ai_mistake",
+                        "failure_reason": "AI expected breakout continuation",
+                        "recommended_adjustment": "downgrade confidence until ADX confirms expansion",
+                    },
+                },
+                {"text": "Favor aligned trends", "metadata": {"rule_type": "best_practice"}},
+            ],
+        ):
+            prompt = svc.get_anti_patterns_for_prompt(k=2)
+
+        assert "AI MISTAKE: HIGH confidence longs failed" in prompt
+        assert "AI expected breakout continuation" in prompt
+        assert "downgrade confidence" in prompt
         assert "Favor aligned trends" not in prompt
 
 
