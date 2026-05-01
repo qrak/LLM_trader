@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-05-01 - Security: Dependency Upgrades and requirements.txt Cleanup
+
+### Security
+
+- Upgraded `aiohttp` from `3.13.3` to `3.13.4` (CVE-2026-34513–34520, CVE-2026-22815 — 10 CVEs fixed).
+- Upgraded `cryptography` to `≥46.0.7` (CVE-2026-26007, CVE-2026-34073, CVE-2026-39892).
+- Upgraded `lxml` to `≥6.1.0` (CVE-2026-41066).
+- Upgraded `orjson` to `≥3.11.6` (CVE-2025-67221).
+- Upgraded `protobuf` to `≥6.33.5` (CVE-2026-0994).
+- Upgraded `pyasn1` to `≥0.6.3` (CVE-2026-23490, CVE-2026-30922).
+- Upgraded `pygments` to `≥2.20.0` (CVE-2026-4539).
+- Upgraded `pytest` to `≥9.0.3` (CVE-2025-71176) — dev dependency.
+- Upgraded `python-dotenv` to `≥1.2.2` (CVE-2026-28684).
+- Upgraded `requests` to `≥2.33.0` (CVE-2026-25645).
+- Upgraded `transformers` to `≥4.53.0` (CVE-2025-3777, CVE-2025-3933, CVE-2025-5197, CVE-2025-6051, CVE-2025-6638, CVE-2025-6921).
+- Remaining unfixed: `pip==26.0.1` (CVE-2026-3219) — no patched version published by PyPA yet.
+
+### Changed
+
+- `start.py` now reads optional `HF_TOKEN` from `keys.env` and exports it to process environment (`HF_TOKEN`/`HUGGINGFACE_HUB_TOKEN`) before `SentenceTransformer` initialization. This removes repeated unauthenticated Hugging Face Hub warnings when a token is configured and enables higher rate limits.
+- `keys.env.example` now documents optional `HF_TOKEN` setup.
+
 ## 2026-05-01 - Outcome-Aware Semantic Rules and AI Mistake Learning
 
 ### Changed

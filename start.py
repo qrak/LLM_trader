@@ -88,6 +88,20 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="discord")
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.genai")
 
 
+def _configure_hf_hub_auth() -> None:
+    """Expose optional Hugging Face token to libraries that read process env vars."""
+    hf_token = config.get_env("HF_TOKEN")
+    if not hf_token:
+        return
+
+    token = str(hf_token).strip()
+    if not token:
+        return
+
+    os.environ["HF_TOKEN"] = token
+    os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", token)
+
+
 def _get_best_device() -> str:
     """Auto-detect best available hardware accelerator for embeddings.
 
@@ -497,6 +511,8 @@ class CompositionRoot:
         """Provision trading strategy and memory services."""
         persistence = PersistenceManager(self.logger, data_dir="data/trading")
         risk_manager = RiskManager(self.logger, self.config)
+
+        _configure_hf_hub_auth()
 
         # Calculate specialized brain path
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
