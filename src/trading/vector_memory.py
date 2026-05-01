@@ -22,7 +22,7 @@ class VectorMemoryService(
 
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
-    DEFAULT_DECAY_HALF_LIFE_DAYS = 90
+    DEFAULT_DECAY_HALF_LIFE_DAYS = 30
     RR_THRESHOLDS = (1.3, 1.5, 1.8)
 
     FACTOR_BUCKETS = ("LOW", "MEDIUM", "HIGH")
@@ -71,7 +71,12 @@ class VectorMemoryService(
             )
 
             self._initialized = True
-            self.logger.info("VectorMemoryService collections ready: %s experiences stored", self._collection.count())
+            collection = self._collection
+            if collection is None:
+                self.logger.error("VectorMemoryService collection setup returned None")
+                self._initialized = False
+                return False
+            self.logger.info("VectorMemoryService collections ready: %s experiences stored", collection.count())
             return True
 
         except ImportError as e:
@@ -124,6 +129,11 @@ class VectorMemoryService(
             return False
 
         try:
+            collection = self._collection
+            if collection is None:
+                self.logger.warning("VectorMemoryService collection missing after initialization.")
+                return False
+
             meta = dict(metadata or {})
             document = self._build_experience_document(
                 direction=direction,
@@ -173,7 +183,7 @@ class VectorMemoryService(
 
             trade_metadata = self._sanitize_metadata(trade_metadata)
 
-            self._collection.upsert(
+            collection.upsert(
                 ids=[trade_id],
                 embeddings=[embedding],
                 documents=[document],

@@ -19,6 +19,27 @@ from src.utils.indicator_classifier import (
 )
 
 
+RULE_METADATA_FIELDS = (
+    "rule_type",
+    "win_rate",
+    "loss_rate",
+    "wins",
+    "losses",
+    "avg_pnl_pct",
+    "profit_factor",
+    "expectancy_pct",
+    "failure_reason",
+    "recommended_adjustment",
+    "mistake_type",
+    "entry_confidence",
+    "failed_assumption",
+    "dominant_close_reason",
+    "dominant_exit_profile",
+    "dominant_stop_loss_type",
+    "dominant_take_profit_type",
+)
+
+
 def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]]]:
     """Helper to read JSON file synchronously for offloading to a thread."""
     if not file_path.exists():
@@ -71,7 +92,9 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
         status["rsi"] = technical_data.get("rsi", status["rsi"])
         status["trend"] = classify_trend_direction(technical_data)
 
-    parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis") if unified_parser else None
+    parsed_analysis = None
+    if unified_parser and not technical_data:
+        parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
 
     if parsed_analysis:
         signal = parsed_analysis.get("signal")
@@ -183,6 +206,7 @@ class BrainRouter:
             data_dir = self.config.DATA_DIR
         except AttributeError:
             data_dir = "data"
+        timeframe = getattr(self.config, "TIMEFRAME", "unknown")
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         status = {
@@ -192,7 +216,7 @@ class BrainRouter:
             "action": "--",
             "adx": None,
             "rsi": None,
-            "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
+            "exit_management": build_exit_execution_context_from_config(self.config, timeframe),
         }
         try:
             prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
@@ -264,8 +288,10 @@ class BrainRouter:
                 mapped_rule = dict(r)
                 mapped_rule["rule_text"] = r.get("text", "")
                 meta = r.get("metadata", {})
-                mapped_rule["win_rate"] = meta.get("win_rate")
-                mapped_rule["source_trades"] = meta.get("source_trades")
+                mapped_rule["source_trades"] = meta.get("source_trades") or meta.get("source_loss_count")
+                for field in RULE_METADATA_FIELDS:
+                    mapped_rule[field] = meta.get(field)
+                mapped_rule["rule_type"] = mapped_rule["rule_type"] or "best_practice"
                 rules.append(mapped_rule)
             self.dashboard_state.set_cached("rules", rules)
             return rules

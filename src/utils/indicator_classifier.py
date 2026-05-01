@@ -54,10 +54,10 @@ def build_exit_execution_context_from_config(
     """Build risk-execution context from config attributes."""
     interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
     return build_exit_execution_context(
-        stop_loss_type=config.STOP_LOSS_TYPE,
-        stop_loss_check_interval=config.STOP_LOSS_CHECK_INTERVAL or interval_default,
-        take_profit_type=config.TAKE_PROFIT_TYPE,
-        take_profit_check_interval=config.TAKE_PROFIT_CHECK_INTERVAL or interval_default,
+        stop_loss_type=getattr(config, "STOP_LOSS_TYPE", EXIT_EXECUTION_UNKNOWN),
+        stop_loss_check_interval=getattr(config, "STOP_LOSS_CHECK_INTERVAL", interval_default) or interval_default,
+        take_profit_type=getattr(config, "TAKE_PROFIT_TYPE", EXIT_EXECUTION_UNKNOWN),
+        take_profit_check_interval=getattr(config, "TAKE_PROFIT_CHECK_INTERVAL", interval_default) or interval_default,
     )
 
 

@@ -124,15 +124,25 @@ class VectorMemoryRulesMixin:
         return self._semantic_rules_collection.count()
 
     def get_anti_patterns_for_prompt(self, k: int = 3) -> str:
-        """Get anti-pattern rules for prompt injection."""
-        rules = self.get_active_rules(n_results=k * 2)
-        anti_rules = [rule for rule in rules if rule.get("metadata", {}).get("rule_type") == "anti_pattern"]
+        """Get loss, corrective, and AI-mistake rules for prompt injection."""
+        rules = self.get_active_rules(n_results=k * 4)
+        actionable = [
+            rule for rule in rules
+            if rule.get("metadata", {}).get("rule_type") in ("anti_pattern", "corrective", "ai_mistake")
+        ]
 
-        if not anti_rules:
+        if not actionable:
             return ""
 
-        lines = ["⚠️ AVOID PATTERNS (learned from losses):"]
-        for rule in anti_rules[:k]:
+        lines = ["⚠️ AVOID / IMPROVE / AI MISTAKE PATTERNS:"]
+        for rule in actionable[:k]:
+            meta = rule.get("metadata", {})
             lines.append(f"  - {rule['text']}")
+            failure = meta.get("failure_reason")
+            if failure:
+                lines.append(f"    → Why: {failure}")
+            recommended = meta.get("recommended_adjustment")
+            if recommended:
+                lines.append(f"    → Fix: {recommended}")
 
         return "\n".join(lines)

@@ -1,6 +1,5 @@
 import json
 from types import SimpleNamespace
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -110,6 +109,53 @@ def test_extract_market_status_uses_text_and_indicators_without_json_parser():
     assert status["trend"] == "BEARISH"
     assert status["adx"] == 18.1
     assert status["rsi"] == 40.5
+
+
+@pytest.mark.asyncio
+async def test_get_active_rules_maps_ai_mistake_and_exit_metadata():
+    dashboard_state = DashboardState()
+    vector_memory = MagicMock()
+    vector_memory.get_active_rules.return_value = [
+        {
+            "rule_id": "rule-ai-1",
+            "text": "AI MISTAKE: high confidence breakout failed in chop",
+            "metadata": {
+                "rule_type": "ai_mistake",
+                "source_trades": 3,
+                "wins": 0,
+                "losses": 3,
+                "win_rate": 0.0,
+                "avg_pnl_pct": -0.8,
+                "mistake_type": "sideways_overconfidence",
+                "entry_confidence": "HIGH",
+                "failed_assumption": "expected breakout continuation",
+                "failure_reason": "AI used HIGH confidence in chop",
+                "recommended_adjustment": "downgrade confidence until ADX confirms expansion",
+                "dominant_exit_profile": "SL hard/1m | TP soft/15m",
+                "dominant_stop_loss_type": "hard",
+                "dominant_take_profit_type": "soft",
+            },
+        }
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=vector_memory,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=MagicMock(),
+    )
+
+    rules = await router.get_active_rules()
+
+    assert rules[0]["rule_text"] == "AI MISTAKE: high confidence breakout failed in chop"
+    assert rules[0]["rule_type"] == "ai_mistake"
+    assert rules[0]["source_trades"] == 3
+    assert rules[0]["mistake_type"] == "sideways_overconfidence"
+    assert rules[0]["entry_confidence"] == "HIGH"
+    assert rules[0]["failed_assumption"] == "expected breakout continuation"
+    assert rules[0]["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
 
 
 @pytest.mark.asyncio

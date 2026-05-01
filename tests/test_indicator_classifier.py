@@ -4,6 +4,8 @@ These two functions are the single source of truth for ADX/RSI labeling,
 used by brain.py, dashboard/routers/brain.py, vector_memory.py, and
 build_context_string_from_technical_data.
 """
+from types import SimpleNamespace
+
 import pytest
 
 from src.utils.indicator_classifier import (
@@ -18,6 +20,7 @@ from src.utils.indicator_classifier import (
     classify_market_sentiment,
     classify_order_book_bias,
     build_exit_execution_context,
+    build_exit_execution_context_from_config,
     build_context_string_from_technical_data,
     build_query_document_from_technical_data,
     format_exit_execution_context,
@@ -246,6 +249,16 @@ class TestBuildContextString:
 
     def test_unknown_exit_execution_context_is_omitted_by_default(self):
         assert format_exit_execution_context(build_exit_execution_context()) == ""
+
+    def test_exit_execution_config_falls_back_when_attributes_are_missing(self):
+        context = build_exit_execution_context_from_config(SimpleNamespace(), timeframe="4h")
+
+        assert context == {
+            "stop_loss_type": "unknown",
+            "stop_loss_check_interval": "4h",
+            "take_profit_type": "unknown",
+            "take_profit_check_interval": "4h",
+        }
 
 
 class TestBuildQueryDocument:

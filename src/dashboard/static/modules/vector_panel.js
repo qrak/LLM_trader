@@ -187,20 +187,66 @@ function renderSemanticRules(rules) {
     if (!rules || rules.length === 0) {
         return `
             <div style="font-size: 13px; color: var(--text-muted); padding: 12px 16px; background: rgba(255,255,255,0.02); border: 1px dashed var(--border-subtle); border-radius: 6px;">
-                Status: Gathering trade data to formulate rules... need 10+ wins matching a pattern.
+                Status: Analyzing closed trades for profitable patterns and recurring loss drivers (wins + losses both considered).
             </div>
         `;
     }
 
+    const TYPE_CONFIG = {
+        anti_pattern: { label: 'Avoid', color: 'var(--accent-danger)', bg: 'rgba(248,81,73,0.12)' },
+        corrective: { label: 'Improve', color: 'var(--accent-warning)', bg: 'rgba(210,153,34,0.12)' },
+        ai_mistake: { label: 'AI Mistake', color: '#79c0ff', bg: 'rgba(121,192,255,0.12)' },
+        best_practice: { label: 'Best Practice', color: 'var(--accent-success)', bg: 'rgba(63,185,80,0.10)' },
+    };
+
+    const renderDetailBlock = (label, value, color) => value
+        ? `<div style="font-size:11px; color:var(--text-muted); margin-top:6px; padding:4px 8px; background:rgba(255,255,255,0.04); border-radius:4px; border-left:2px solid ${color};">
+               → ${label}: ${escapeHtml(value)}
+           </div>`
+        : '';
+
     const cards = rules.map(rule => {
+        const cfg = TYPE_CONFIG[rule.rule_type] || TYPE_CONFIG.best_practice;
         const winRate = rule.win_rate !== undefined ? `${Math.round(rule.win_rate)}%` : '--';
-        const srcTrades = rule.source_trades || '--';
+
+        const wlLabel = (rule.wins !== undefined && rule.losses !== undefined)
+            ? `${rule.wins}W / ${rule.losses}L`
+            : `From ${rule.source_trades || '--'} Trades`;
+
+        const avgPnl = (rule.avg_pnl_pct !== undefined && rule.avg_pnl_pct !== null)
+            ? `<span style="color:${rule.avg_pnl_pct >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'};">${rule.avg_pnl_pct >= 0 ? '+' : ''}${rule.avg_pnl_pct.toFixed(1)}% Avg P&L</span>`
+            : '';
+
+        const pf = (rule.profit_factor !== undefined && rule.profit_factor !== null && rule.profit_factor < 90)
+            ? `<span>PF ${rule.profit_factor.toFixed(1)}</span>`
+            : '';
+
+        const exitProfile = rule.dominant_exit_profile
+            ? `<span>${escapeHtml(rule.dominant_exit_profile)}</span>`
+            : '';
+
+        const mistakeType = rule.mistake_type
+            ? `<span>${escapeHtml(rule.mistake_type.replace(/_/g, ' '))}</span>`
+            : '';
+
+        const failureHtml = renderDetailBlock('Why', rule.failure_reason, cfg.color);
+        const fixHtml = renderDetailBlock('Fix', rule.recommended_adjustment, cfg.color);
+
         return `
-            <div class="rule-card">
+            <div class="rule-card" style="border-left: 3px solid ${cfg.color}; background: ${cfg.bg};">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span style="font-size:10px; font-weight:600; padding:2px 6px; border-radius:3px; background:${cfg.color}; color:#0d1117; white-space:nowrap;">${cfg.label}</span>
+                </div>
                 <div class="rule-text">${escapeHtml(rule.rule_text)}</div>
-                <div class="rule-meta">
-                    <span>From ${srcTrades} Trades</span>
+                ${failureHtml}
+                ${fixHtml}
+                <div class="rule-meta" style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+                    <span>${wlLabel}</span>
                     <span class="win-rate">${winRate} Win Rate</span>
+                    ${avgPnl}
+                    ${pf}
+                    ${exitProfile}
+                    ${mistakeType}
                 </div>
             </div>
         `;
