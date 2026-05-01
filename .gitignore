@@ -52,6 +52,8 @@ config/config.ini
 # Updated configuration file management
 # Private keys and sensitive data
 keys.env
+.Jules/
+.jules/
 *.env
 *.ps1
 node_modules/
