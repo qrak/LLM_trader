@@ -61,7 +61,7 @@ class ArticleProcessor:
                 normalized_name = self._normalize_coin_name(raw_name)
                 if not normalized_name:
                     continue
-                name_pattern = rf"\b{re.escape(normalized_name).replace('\\ ', r'[-\\s]+')}\b"
+                name_pattern = r'\b' + r'[-\s]+'.join(re.escape(p) for p in normalized_name.split()) + r'\b'
                 if re.search(name_pattern, combined_text):
                     if symbol in known_crypto_tickers:
                         coins_mentioned.add(symbol)
