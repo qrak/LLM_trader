@@ -5,7 +5,16 @@ from typing import Optional, Any, Dict, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
-from src.utils.indicator_classifier import build_exit_execution_context_from_config
+from src.utils.indicator_classifier import (
+    build_exit_execution_context_from_config,
+    classify_bb_position,
+    classify_macd_signal,
+    classify_market_sentiment,
+    classify_order_book_bias,
+    classify_rsi_label,
+    classify_volume_state,
+    classify_volatility_level,
+)
 from .data_models import Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
@@ -503,16 +512,7 @@ class TradingStrategy:
         Used when closing via SL/TP hit where no fresh analysis is available.
         """
         rsi = position.rsi_at_entry
-        if rsi > 70:
-            rsi_level = "OVERBOUGHT"
-        elif rsi > 60:
-            rsi_level = "STRONG"
-        elif rsi < 30:
-            rsi_level = "OVERSOLD"
-        elif rsi < 40:
-            rsi_level = "WEAK"
-        else:
-            rsi_level = "NEUTRAL"
+        rsi_level = classify_rsi_label(rsi)
 
         return {
             "trend_direction": position.trend_direction_at_entry,
@@ -524,6 +524,7 @@ class TradingStrategy:
             "bb_position": position.bb_position_at_entry,
             "volume_state": position.volume_state_at_entry,
             "market_sentiment": position.market_sentiment_at_entry,
+            "order_book_bias": position.order_book_bias_at_entry,
         }
 
     def _extract_market_conditions(self, result: dict) -> Dict[str, Any]:
@@ -552,58 +553,74 @@ class TradingStrategy:
             tech_data = result.get("technical_data", {})
             if tech_data:
                 conditions["adx"] = tech_data.get("adx", 0)
-                conditions["rsi"] = tech_data.get("rsi", 50)
-                # Derive RSI Level
-                rsi_val = conditions["rsi"]
-                if rsi_val > 70:
-                    conditions["rsi_level"] = "OVERBOUGHT"
-                elif rsi_val > 60:
-                    conditions["rsi_level"] = "STRONG"
-                elif rsi_val < 30:
-                    conditions["rsi_level"] = "OVERSOLD"
-                elif rsi_val < 40:
-                    conditions["rsi_level"] = "WEAK"
-                else:
-                    conditions["rsi_level"] = "NEUTRAL"
-                    
+                rsi_raw = tech_data.get("rsi", 50)
+                try:
+                    rsi_value = float(rsi_raw)
+                except (TypeError, ValueError):
+                    rsi_value = 50.0
+                conditions["rsi"] = rsi_value
+                conditions["rsi_level"] = classify_rsi_label(rsi_value)
                 conditions["choppiness"] = tech_data.get("choppiness", None)
-                
-                # MACD
+
                 macd = tech_data.get("macd", {})
-                if isinstance(macd, dict):
+                conditions["macd_signal"] = classify_macd_signal(tech_data)
+                if conditions["macd_signal"] == "NEUTRAL" and isinstance(macd, dict):
                     conditions["macd_signal"] = macd.get("signal", "NEUTRAL")
-                
-                # Bollinger Bands
+
+                current_price = result.get("current_price")
+                context_obj = result.get("context")
+                if current_price is None and context_obj is not None:
+                    current_price = (
+                        context_obj.get("current_price")
+                        if isinstance(context_obj, dict) else context_obj.current_price
+                    )
+                conditions["bb_position"] = classify_bb_position(tech_data, current_price)
                 bb = tech_data.get("bollinger_bands", {})
-                if isinstance(bb, dict):
+                if conditions["bb_position"] == "MIDDLE" and isinstance(bb, dict):
                     pct_b = bb.get("percent_b", 0.5)
                     if pct_b > 0.95:
                         conditions["bb_position"] = "UPPER"
                     elif pct_b < 0.05:
                         conditions["bb_position"] = "LOWER"
-                    else:
-                        conditions["bb_position"] = "MIDDLE"
 
-                # Volume
+                conditions["volume_state"] = classify_volume_state(tech_data)
                 vol_data = tech_data.get("volume", {})
-                if isinstance(vol_data, dict):
+                if conditions["volume_state"] == "NORMAL" and isinstance(vol_data, dict):
                     conditions["volume_state"] = vol_data.get("state", "NORMAL")
 
                 # Extract ATR for dynamic SL/TP calculation
                 conditions["atr"] = tech_data.get("atr", 0)
-                atr_pct = tech_data.get("atr_percentage", 0)
+                atr_pct_raw = tech_data.get("atr_percent")
+                if atr_pct_raw is None:
+                    atr_pct_raw = tech_data.get("atr_percentage")
+                try:
+                    atr_pct = float(atr_pct_raw) if atr_pct_raw is not None else 2.0
+                except (TypeError, ValueError):
+                    atr_pct = 2.0
                 conditions["atr_percentage"] = atr_pct
-                # Determine volatility from ATR or other indicators
-                if atr_pct > 3:
-                    conditions["volatility"] = "HIGH"
-                elif atr_pct < 1.5:
-                    conditions["volatility"] = "LOW"
-                else:
-                    conditions["volatility"] = "MEDIUM"
-            
-            # Market Sentiment
-            conditions["market_sentiment"] = result.get("context", {}).get("market_sentiment", "NEUTRAL") if "context" in result else "NEUTRAL"
-            conditions["fear_greed_index"] = result.get("context", {}).get("fear_greed_index", 50) if "context" in result else 50
+                conditions["volatility"] = classify_volatility_level({"atr_percent": atr_pct})
+
+            context_obj = result.get("context")
+            sentiment_data = result.get("sentiment")
+            microstructure_data = result.get("market_microstructure")
+            legacy_market_sentiment = None
+            legacy_order_book_bias = None
+            if isinstance(context_obj, dict):
+                legacy_market_sentiment = context_obj.get("market_sentiment")
+                legacy_order_book_bias = context_obj.get("order_book_bias")
+                if sentiment_data is None:
+                    sentiment_data = context_obj.get("sentiment") or {"fear_greed_index": context_obj.get("fear_greed_index", 50)}
+                if microstructure_data is None:
+                    microstructure_data = context_obj.get("market_microstructure")
+            elif context_obj is not None:
+                if sentiment_data is None:
+                    sentiment_data = context_obj.sentiment
+                if microstructure_data is None:
+                    microstructure_data = context_obj.market_microstructure
+
+            conditions["market_sentiment"] = legacy_market_sentiment or classify_market_sentiment(sentiment_data)
+            conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if isinstance(sentiment_data, dict) else 50
+            conditions["order_book_bias"] = legacy_order_book_bias or classify_order_book_bias(microstructure_data)
 
             # Fallback: try to extract from raw response keywords
             raw_response = result.get("raw_response", "").lower()

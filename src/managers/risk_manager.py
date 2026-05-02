@@ -114,7 +114,14 @@ class RiskManager(RiskManagerProtocol):
 
         # 5. Position Sizing
         if position_size and position_size > 0:
-            final_size_pct = position_size
+            max_size = self.config.MAX_POSITION_SIZE
+            if position_size > max_size:
+                self.logger.warning(
+                    "AI position size %.1f%% exceeds cap %.1f%%, clamping",
+                    position_size * 100,
+                    max_size * 100,
+                )
+            final_size_pct = min(position_size, max_size)
         else:
             # Dynamic sizing based on confidence
             confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}

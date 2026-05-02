@@ -3,6 +3,7 @@ Template management for prompt building system.
 Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
+import json
 import re
 from datetime import datetime, timezone
 from typing import Optional, Any, Dict
@@ -40,6 +41,96 @@ class TemplateManager:
             describe("Stop loss", stop_type, stop_interval),
             describe("Take profit", take_profit_type, take_profit_interval),
         ])
+
+    def _extract_previous_analysis(self, previous_response: str) -> Optional[Dict[str, Any]]:
+        """Extract the analysis dict from a previous AI response JSON block.
+
+        Returns the unwrapped analysis dict, or None if parsing fails or analysis key is absent.
+        """
+        try:
+            match = re.search(r'```json\s*(.*?)\s*```', previous_response, re.DOTALL | re.IGNORECASE)
+            if match:
+                data = json.loads(match.group(1))
+                if isinstance(data, dict) and isinstance(data.get("analysis"), dict):
+                    return data["analysis"]
+        except (json.JSONDecodeError, ValueError):
+            if self.logger:
+                self.logger.debug("Previous response JSON could not be parsed for snapshot")
+        return None
+
+    def _format_previous_decision_snapshot(self, analysis: Dict[str, Any]) -> str:
+        """Format a compact decision snapshot from a prior analysis dict."""
+        lines = ["Prior decision snapshot:"]
+
+        signal = analysis.get("signal")
+        confidence = analysis.get("confidence")
+        if signal is not None:
+            conf_str = f" (confidence: {confidence})" if confidence is not None else ""
+            lines.append(f"- Signal: {signal}{conf_str}")
+
+        entry = analysis.get("entry_price")
+        sl = analysis.get("stop_loss")
+        tp = analysis.get("take_profit")
+        rr = analysis.get("risk_reward_ratio")
+        size = analysis.get("position_size")
+        level_parts = []
+        if entry is not None:
+            level_parts.append(f"Entry: {entry}")
+        if sl is not None:
+            level_parts.append(f"SL: {sl}")
+        if tp is not None:
+            level_parts.append(f"TP: {tp}")
+        if rr is not None:
+            level_parts.append(f"R/R: {rr}")
+        if size is not None:
+            level_parts.append(f"Size: {size}")
+        if level_parts:
+            lines.append("- " + " | ".join(level_parts))
+
+        trend = analysis.get("trend")
+        if isinstance(trend, dict) and trend:
+            trend_parts = []
+            direction = trend.get("direction")
+            if direction:
+                trend_parts.append(f"Trend: {direction}")
+            strength_4h = trend.get("strength_4h")
+            if strength_4h is not None:
+                trend_parts.append(f"4h: {strength_4h}")
+            strength_daily = trend.get("strength_daily")
+            if strength_daily is not None:
+                trend_parts.append(f"daily: {strength_daily}")
+            alignment = trend.get("timeframe_alignment")
+            if alignment:
+                trend_parts.append(f"alignment: {alignment}")
+            if trend_parts:
+                lines.append("- " + " | ".join(trend_parts))
+
+        confluence = analysis.get("confluence_factors")
+        if isinstance(confluence, dict) and confluence:
+            cf_parts = [
+                f"{k.replace('_', ' ')}: {int(v)}" for k, v in confluence.items()
+                if isinstance(v, (int, float))
+            ]
+            if cf_parts:
+                lines.append(f"- Confluence: {', '.join(cf_parts)}")
+
+        key_levels = analysis.get("key_levels")
+        if isinstance(key_levels, dict):
+            kl_parts = []
+            supports = key_levels.get("support") or []
+            resistances = key_levels.get("resistance") or []
+            if supports:
+                kl_parts.append(f"S: {', '.join(str(s) for s in supports[:2])}")
+            if resistances:
+                kl_parts.append(f"R: {', '.join(str(r) for r in resistances[:2])}")
+            if kl_parts:
+                lines.append(f"- Key levels: {' | '.join(kl_parts)}")
+
+        reasoning = analysis.get("reasoning")
+        if reasoning:
+            lines.append(f"- Thesis: {reasoning}")
+
+        return "\n".join(lines)
 
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: Optional[str] = None,
                             performance_context: Optional[str] = None, brain_context: Optional[str] = None,
@@ -124,9 +215,16 @@ class TemplateManager:
 
         # Add previous response context if available (strip JSON to save tokens)
         if previous_response:
-            # Extract only text reasoning, exclude JSON block
+            # Extract text reasoning (narrative before JSON block)
             text_reasoning = re.split(r'```json', previous_response, flags=re.IGNORECASE)[0].strip()
-            if text_reasoning:
+            # Extract and format structured decision data from the prior JSON block
+            prior_analysis = self._extract_previous_analysis(previous_response)
+            decision_snapshot = (
+                self._format_previous_decision_snapshot(prior_analysis)
+                if prior_analysis is not None else None
+            )
+
+            if decision_snapshot or text_reasoning:
                 # Calculate window duration safely using injected validator
                 window_minutes = 120 # Default fallback
                 if self.timeframe_validator:
@@ -142,10 +240,18 @@ class TemplateManager:
                 ])
                 if indicator_delta_alert:
                     header_lines.append(indicator_delta_alert)
+                if decision_snapshot:
+                    header_lines.extend([
+                        decision_snapshot,
+                        "",
+                    ])
+                if text_reasoning:
+                    header_lines.extend([
+                        "Your last analysis reasoning (for continuity):",
+                        text_reasoning,
+                        "",
+                    ])
                 header_lines.extend([
-                    "Your last analysis reasoning (for continuity):",
-                    text_reasoning,
-                    "",
                     "### DETERMINISTIC TIME CHECK",
                     f"- **Current Time**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC",
                     "- **Relevance**: PREVIOUS reasoning MUST be verified against CURRENT data. If previous claims (e.g., 'approaching' events) contradict the current clock or were based on now-outdated milestones, you MUST ignore or correct them.",
@@ -180,7 +286,14 @@ class TemplateManager:
         conf_std = thresholds.get("min_confluences_standard", 3)
         pos_reduce_mixed = thresholds.get("position_reduce_mixed", 0.20)
         pos_reduce_div = thresholds.get("position_reduce_divergent", 0.35)
-        min_pos_size = thresholds.get("min_position_size", 0.10)
+        max_pos_raw = getattr(self.config, "MAX_POSITION_SIZE", 0.10)
+        try:
+            max_pos = float(max_pos_raw)
+        except (TypeError, ValueError):
+            max_pos = 0.10
+        if max_pos <= 0:
+            max_pos = 0.10
+        min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
         rr_borderline = thresholds.get("rr_borderline_min", 1.5)
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         # Threshold origin metadata
@@ -234,7 +347,7 @@ Then output JSON:
         "stop_loss": number,
         "take_profit": number,
         "position_size": 0.0-1.0,
-        "reasoning": "1-2 sentence summary",
+        "reasoning": "3-4 sentences: (1) decision thesis — which indicators and confluences drove the signal; (2) market regime at decision time — trend direction, strength, timeframe alignment; (3) key invalidation trigger — the exact condition that would prove this thesis wrong; (4) next watch condition — what price or indicator event to monitor before the next candle close.",
         "key_levels": {{"support": [level1, level2], "resistance": [level1, level2]}},
         "trend": {{"direction": "BULLISH|BEARISH|NEUTRAL", "strength_4h": 0-100, "strength_daily": 0-100, "timeframe_alignment": "ALIGNED|MIXED|DIVERGENT"}},
         "risk_reward_ratio": number  // CALCULATE: reward / risk. For UPDATE: use Current Price as reference. For BUY/SELL: use entry_price.
@@ -277,11 +390,12 @@ CHOPPINESS INDEX CONTEXT:
 NOTE: You may OVERRIDE these guidelines if you have exceptional conviction ( catalyst, {conf_weak + 1}+ confluences). State reasoning.
 
 POSITION SIZING FORMULA (calculate before finalizing):
-- Base size = confidence / 100 (e.g., 75 confidence = 0.75 base)
-        - If timeframe_alignment = "MIXED": reduce by {pos_reduce_mixed:.2f} (e.g., 0.75 - {pos_reduce_mixed:.2f} = {0.75 - pos_reduce_mixed:.2f})
-        - If timeframe_alignment = "DIVERGENT": reduce by {pos_reduce_div:.2f} (e.g., 0.75 - {pos_reduce_div:.2f} = {0.75 - pos_reduce_div:.2f})
+- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital — hard cap enforced by system, values above are clamped)
+- Base size = confidence / 100 × {max_pos:.2f}  (e.g., confidence 75 → {0.75 * max_pos:.3f}, confidence 90 → {0.90 * max_pos:.3f})
+        - If timeframe_alignment = "MIXED": × {1 - pos_reduce_mixed:.2f} (reduce by {pos_reduce_mixed*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_mixed):.3f})
+        - If timeframe_alignment = "DIVERGENT": × {1 - pos_reduce_div:.2f} (reduce by {pos_reduce_div*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_div):.3f})
 - In weak trend environments (ADX < {adx_weak}): consider smaller sizes
-- Final position_size = max({min_pos_size:.2f}, calculated_value)
+- Final position_size = max({min_pos_size:.3f}, calculated_value)
 - Put the final numeric value in JSON only (`position_size`).
 
 MACRO TIMEFRAME CONFLICT (CRITICAL):

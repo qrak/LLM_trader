@@ -534,6 +534,12 @@ class AnalysisEngine:
         if self.context.technical_data:
             analysis_result["technical_data"] = self.context.technical_data
 
+        if self.context.sentiment:
+            analysis_result["sentiment"] = self.context.sentiment
+
+        if self.context.market_microstructure:
+            analysis_result["market_microstructure"] = self.context.market_microstructure
+
         # Add prompt for dashboard persistence
         if self.last_generated_prompt:
             analysis_result["generated_prompt"] = self.last_generated_prompt

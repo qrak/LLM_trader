@@ -193,16 +193,8 @@ class Config:
         return self.get_env('BOT_TOKEN_DISCORD')
 
     @property
-    def GUILD_ID_DISCORD(self):
-        return self.get_env('GUILD_ID_DISCORD')
-
-    @property
     def MAIN_CHANNEL_ID(self):
         return self.get_env('MAIN_CHANNEL_ID')
-
-    @property
-    def TEMPORARY_CHANNEL_ID_DISCORD(self):
-        return self.get_env('TEMPORARY_CHANNEL_ID_DISCORD')
 
     @property
     def OPENROUTER_API_KEY(self):
@@ -283,10 +275,6 @@ class Config:
     @property
     def OPENROUTER_BASE_MODEL(self):
         return self.get_config('ai_providers', 'openrouter_base_model', 'google/gemini-2.5-pro')
-
-    @property
-    def OPENROUTER_FALLBACK_MODEL(self):
-        return self.get_config('ai_providers', 'openrouter_fallback_model', 'deepseek/deepseek-r1:free')
 
     @property
     def GOOGLE_STUDIO_MODEL(self):
@@ -521,21 +509,11 @@ class Config:
         """Initial capital for demo trading (default 10000)."""
         return float(self.get_config('demo_trading', 'demo_quote_capital', 10000.0))
 
-    # Risk Management Defaults
+    # Risk Management
     @property
-    def DEFAULT_POSITION_SIZE(self):
-        """Default position size as decimal (e.g. 0.02) if AI doesn't specify."""
-        return float(self.get_config('risk_management', 'default_position_size', 0.02))
-
-    @property
-    def DEFAULT_STOP_LOSS_PCT(self):
-        """Default stop loss percentage as decimal (e.g. 0.02) if AI doesn't specify."""
-        return float(self.get_config('risk_management', 'default_stop_loss_pct', 0.02))
-
-    @property
-    def DEFAULT_TAKE_PROFIT_PCT(self):
-        """Default take profit percentage as decimal (e.g. 0.04) if AI doesn't specify."""
-        return float(self.get_config('risk_management', 'default_take_profit_pct', 0.04))
+    def MAX_POSITION_SIZE(self):
+        """Maximum allowed position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in RiskManager."""
+        return float(self.get_config('risk_management', 'max_position_size', 0.10))
 
     @property
     def STOP_LOSS_TYPE(self) -> str:

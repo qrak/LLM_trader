@@ -131,6 +131,8 @@ take_profit_type = hard
 # Hard-exit check intervals. Must be <= [general] timeframe.
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
+# Maximum position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in code.
+max_position_size = 0.10
 
 [cooldowns]
 # File message expiry is configured in hours; loader converts it to seconds at runtime.

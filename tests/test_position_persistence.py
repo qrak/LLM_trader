@@ -21,6 +21,7 @@ def test_position_persistence_round_trips_exit_execution_snapshot(tmp_path):
         stop_loss_check_interval_at_entry="15m",
         take_profit_type_at_entry="soft",
         take_profit_check_interval_at_entry="4h",
+        order_book_bias_at_entry="BUY_PRESSURE",
     )
 
     manager.save_position(position)
@@ -31,6 +32,7 @@ def test_position_persistence_round_trips_exit_execution_snapshot(tmp_path):
     assert loaded.stop_loss_check_interval_at_entry == "15m"
     assert loaded.take_profit_type_at_entry == "soft"
     assert loaded.take_profit_check_interval_at_entry == "4h"
+    assert loaded.order_book_bias_at_entry == "BUY_PRESSURE"
 
 
 def test_position_persistence_defaults_missing_exit_execution_snapshot_to_unknown(tmp_path):
@@ -58,3 +60,4 @@ def test_position_persistence_defaults_missing_exit_execution_snapshot_to_unknow
     assert loaded.stop_loss_check_interval_at_entry == "unknown"
     assert loaded.take_profit_type_at_entry == "unknown"
     assert loaded.take_profit_check_interval_at_entry == "unknown"
+    assert loaded.order_book_bias_at_entry == "BALANCED"

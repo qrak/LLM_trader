@@ -93,8 +93,13 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
         status["trend"] = classify_trend_direction(technical_data)
 
     parsed_analysis = None
-    if unified_parser and not technical_data:
-        parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
+    if unified_parser:
+        try:
+            extracted_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
+            if isinstance(extracted_analysis, dict):
+                parsed_analysis = extracted_analysis
+        except Exception:
+            parsed_analysis = None
 
     if parsed_analysis:
         signal = parsed_analysis.get("signal")
