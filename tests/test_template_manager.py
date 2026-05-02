@@ -234,3 +234,136 @@ class TestBuildResponseTemplate:
     def test_rr_calculation_mandatory(self):
         tmpl = self.mgr.build_response_template()
         assert "R/R CALCULATION (MANDATORY" in tmpl
+
+    def test_response_template_reasoning_continuity_guidance(self):
+        """Response template reasoning field should guide for vector DB continuity data."""
+        tmpl = self.mgr.build_response_template()
+        reasoning_idx = tmpl.find('"reasoning":')
+        assert reasoning_idx != -1
+        reasoning_context = tmpl[reasoning_idx : reasoning_idx + 400]
+        assert "invalidation" in reasoning_context.lower()
+        assert "watch" in reasoning_context.lower()
+        assert "thesis" in reasoning_context.lower()
+        assert "regime" in reasoning_context.lower() or "trend" in reasoning_context.lower()
+
+
+# ── Previous response JSON snapshot ──────────────────────────────
+
+
+class TestPreviousResponseSnapshot:
+    """Tests for structured decision snapshot in PREVIOUS ANALYSIS CONTEXT."""
+
+    def setup_method(self):
+        self.mgr = _make_manager()
+
+    def _full_prev(self, **overrides) -> str:
+        analysis = {
+            "signal": "BUY",
+            "confidence": 80,
+            "entry_price": 100.0,
+            "stop_loss": 95.0,
+            "take_profit": 115.0,
+            "position_size": 0.07,
+            "risk_reward_ratio": 3.0,
+            "trend": {
+                "direction": "BULLISH",
+                "strength_4h": 70,
+                "strength_daily": 55,
+                "timeframe_alignment": "ALIGNED",
+            },
+            "confluence_factors": {"trend_alignment": 80, "momentum_strength": 75},
+            "key_levels": {"support": [95.0, 90.0], "resistance": [115.0, 120.0]},
+            "reasoning": "Strong breakout above resistance.",
+        }
+        analysis.update(overrides)
+        import json
+        return (
+            "1) MARKET STRUCTURE: Bullish.\n"
+            "```json\n"
+            + json.dumps({"analysis": analysis})
+            + "\n```"
+        )
+
+    def test_analysis_json_creates_snapshot(self):
+        """Full analysis JSON should produce a structured decision snapshot."""
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=self._full_prev())
+        assert "Prior decision snapshot:" in prompt
+        assert "Signal: BUY" in prompt
+        assert "confidence: 80" in prompt
+        assert "Entry: 100.0" in prompt
+        assert "SL: 95.0" in prompt
+        assert "TP: 115.0" in prompt
+        assert "R/R: 3.0" in prompt
+        assert "Trend: BULLISH" in prompt
+        assert "alignment: ALIGNED" in prompt
+        assert "Thesis: Strong breakout above resistance." in prompt
+
+    def test_snapshot_excludes_raw_json_block(self):
+        """Raw JSON key strings must not appear verbatim in the prompt."""
+        prev = (
+            "Some text.\n"
+            "```json\n"
+            '{"analysis": {"signal": "HOLD", "confidence": 60}}\n'
+            "```"
+        )
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
+        assert '"signal"' not in prompt
+        assert "Signal: HOLD" in prompt
+
+    def test_json_only_response_still_creates_context(self):
+        """A JSON-only previous response (no narrative) still produces a context section."""
+        import json
+        prev = (
+            "```json\n"
+            + json.dumps({"analysis": {"signal": "SELL", "confidence": 75, "entry_price": 200.0,
+                                        "stop_loss": 210.0, "take_profit": 170.0}})
+            + "\n```"
+        )
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
+        assert "PREVIOUS ANALYSIS CONTEXT" in prompt
+        assert "Prior decision snapshot:" in prompt
+        assert "Signal: SELL" in prompt
+        assert "DETERMINISTIC TIME CHECK" in prompt
+
+    def test_malformed_json_falls_back_to_text(self):
+        """Malformed JSON block falls back gracefully to text-only context."""
+        prev = "My reasoning text.\n```json\n{this is not valid json\n```"
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
+        assert "PREVIOUS ANALYSIS CONTEXT" in prompt
+        assert "My reasoning text." in prompt
+        assert "Prior decision snapshot:" not in prompt
+
+    def test_snapshot_key_levels_capped_at_two(self):
+        """Key levels snapshot shows at most 2 support and 2 resistance levels."""
+        import json
+        prev = (
+            "```json\n"
+            + json.dumps({"analysis": {
+                "signal": "BUY",
+                "key_levels": {
+                    "support": [90.0, 85.0, 80.0],
+                    "resistance": [110.0, 115.0, 120.0],
+                },
+            }})
+            + "\n```"
+        )
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
+        assert "80.0" not in prompt  # third support level must be excluded
+        assert "120.0" not in prompt  # third resistance level must be excluded
+        assert "90.0" in prompt
+        assert "110.0" in prompt
+
+    def test_snapshot_and_narrative_both_present(self):
+        """When response has both narrative and JSON, both appear in the prompt."""
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=self._full_prev())
+        assert "Prior decision snapshot:" in prompt
+        assert "Your last analysis reasoning (for continuity):" in prompt
+        assert "1) MARKET STRUCTURE: Bullish." in prompt
+
+    def test_no_analysis_wrapper_falls_back_to_text(self):
+        """JSON without 'analysis' wrapper does not create a snapshot, text still shown."""
+        prev = "Some reasoning text\n```json\n{\"signal\": \"BUY\"}\n```"
+        prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
+        assert "Some reasoning text" in prompt
+        assert "Prior decision snapshot:" not in prompt
+        assert '"signal"' not in prompt

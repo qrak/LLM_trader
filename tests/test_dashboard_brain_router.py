@@ -91,6 +91,7 @@ def test_build_current_market_context_includes_exit_execution_settings(tmp_path)
 
 def test_extract_market_status_uses_text_and_indicators_without_json_parser():
     parser = MagicMock()
+    parser.extract_json_block.return_value = None
     data = {
         "response": {
             "text_analysis": "SIGNAL: UPDATE\nConfidence: 82%\nThe structure remains bearish.\n```json\n{bad json}\n```",
@@ -103,12 +104,37 @@ def test_extract_market_status_uses_text_and_indicators_without_json_parser():
 
     status = _extract_market_status(data, parser)
 
-    parser.extract_json_block.assert_not_called()
+    parser.extract_json_block.assert_called_once()
     assert status["action"] == "UPDATE"
     assert status["confidence"] == 82
     assert status["trend"] == "BEARISH"
     assert status["adx"] == 18.1
     assert status["rsi"] == 40.5
+
+
+def test_extract_market_status_parses_json_confidence_with_technical_data_present():
+    parser = MagicMock()
+    parser.extract_json_block.return_value = {
+        "signal": "UPDATE",
+        "confidence": 75,
+    }
+    data = {
+        "response": {
+            "text_analysis": "```json\n{\"analysis\": {\"signal\": \"UPDATE\", \"confidence\": 75}}\n```",
+            "adx": 19.9,
+            "rsi": 61.0,
+            "plus_di": 30.0,
+            "minus_di": 16.8,
+        }
+    }
+
+    status = _extract_market_status(data, parser)
+
+    parser.extract_json_block.assert_called_once()
+    assert status["action"] == "UPDATE"
+    assert status["confidence"] == 75
+    assert status["adx"] == 19.9
+    assert status["rsi"] == 61.0
 
 
 @pytest.mark.asyncio

@@ -1,19 +1,46 @@
 # Changelog
 
+## 2026-05-02 - Previous Analysis Context: Structured Decision Snapshot
+
+### Changed
+
+- `src/analyzer/prompts/template_manager.py` — `## PREVIOUS ANALYSIS CONTEXT` system-prompt section now includes a compact structured snapshot extracted from the previous AI response JSON block. The snapshot surfaces prior signal, confidence, entry/SL/TP/R/R/position size, trend direction and strength, confluence factor scores, and up to two key support/resistance levels alongside the existing narrative reasoning. Falls back to narrative-only when the JSON block is absent or malformed.
+- `src/analyzer/prompts/template_manager.py` — A JSON-only previous response (no narrative text) now correctly produces a `## PREVIOUS ANALYSIS CONTEXT` section; previously it was silently skipped.
+- `src/analyzer/prompts/template_manager.py` — `"reasoning"` field instruction in the response template now asks for 3-4 sentences covering decision thesis, market regime, key invalidation trigger, and next watch condition, improving data quality for vector-memory similarity and subsequent analysis cycles.
+- `src/trading/trading_strategy.py` now uses the shared indicator classifiers when converting analysis results into entry market conditions, so real `technical_data` keys such as `atr_percent`, `macd_line`/`macd_signal`, `obv_slope`, and Bollinger Band levels are preserved for trading-brain similarity storage.
+- `src/trading/data_models.py`, `src/factories/position_factory.py`, and `src/managers/persistence_manager.py` now persist `order_book_bias_at_entry`, allowing stop-loss/take-profit exits to reconstruct the same order-book context used by vector similarity queries.
+
+## 2026-05-02 - Test Stability Fixes: Template Config Fallback and Short Article Extraction
+
+### Fixed
+
+- `src/analyzer/prompts/template_manager.py` now handles lightweight config objects safely when building the response template. If `MAX_POSITION_SIZE` is missing or invalid, it falls back to `0.10` instead of raising `AttributeError`.
+- `src/rag/news_ingestion/rss_primitives.py` now accepts short but valid content from `article`/article-content/main selectors, avoiding fallback parser output that could include unrelated sidebar text.
+
+## 2026-05-02 - Position Sizing: 10% Hard Cap and Corrected Prompt Formula
+
+### Fixed
+
+- **Prompt formula corrected**: The AI was instructed to use `position_size = confidence / 100`, turning a 50% confidence into a 50% capital allocation. Formula is now `(confidence / 100) × max_position_size` (default 0.10), so confidence 75 → 0.075 (7.5% of capital).
+- **Hard cap added in `RiskManager`**: `calculate_entry_parameters` now clamps any AI-provided `position_size` to `config.MAX_POSITION_SIZE`. A warning is logged when clamping occurs.
+- **`min_pos_size` floor corrected**: The brain-learned floor for position sizing now defaults to `0.02` (was `0.10`) and is capped at `max_position_size` to prevent floor > cap.
+- **New config property `MAX_POSITION_SIZE`**: Added to `src/config/loader.py`, reading `[risk_management] max_position_size` from `config.ini` with a default of `0.10`.
+- **`config.ini` / `config.ini.example`**: Added `max_position_size = 0.10` under `[risk_management]`.
+
+## 2026-05-02 - Dashboard Confidence Parsing Regression Fix
+
+### Fixed
+
+- Restored dashboard Confidence KPI updates in `src/dashboard/routers/brain.py` by safely parsing `analysis.confidence` from JSON blocks in `response.text_analysis` even when `technical_data` is present.
+- This fixes the regression introduced after the Apr 30 confidence-path fix, where confidence fell back to `--` when LLM output used JSON-only confidence (for example `"confidence": 75`) instead of a `Confidence: 75%` text line.
+- Added/updated coverage in `tests/test_dashboard_brain_router.py` to ensure confidence is extracted from both regex fallback text and JSON analysis payloads when indicator fields are present.
+
 ## 2026-05-02 - Hard Exit Monitor Duplicate Position Save Fix
 
 ### Fixed
 
 - Updated `src/trading/exit_monitor.py` so when both hard stop-loss and hard take-profit checks are due in the same tick, the monitor performs a single combined strategy check instead of two separate checks.
 - This prevents duplicate `Saved position` writes/logs for unchanged open positions while preserving the same SL-first/TP-second evaluation semantics and timestamp persistence.
-
-## 2026-05-01 - Token-Efficient Analysis Output Contract
-
-### Changed
-
-- Updated `src/analyzer/prompts/template_manager.py` response template to a token-efficient mode where narrative text is capped to a compact summary and JSON remains the authoritative output for all trading values.
-- Removed prompt requirements to show detailed position-sizing and R/R arithmetic in narrative text. The model is now instructed to return final computed values in JSON fields (`position_size`, `risk_reward_ratio`) without duplicating long calculations in prose.
-- Kept existing risk/confluence/macro guidance and mandatory JSON schema intact so demo-trading extraction and decision flow remain driven by structured JSON fields.
 
 ## 2026-05-01 - Security: Dependency Upgrades and requirements.txt Cleanup
 
@@ -36,7 +63,6 @@
 
 - `start.py` now reads optional `HF_TOKEN` from `keys.env` and exports it to process environment (`HF_TOKEN`/`HUGGINGFACE_HUB_TOKEN`) before `SentenceTransformer` initialization. This removes repeated unauthenticated Hugging Face Hub warnings when a token is configured and enables higher rate limits.
 - `keys.env.example` now documents optional `HF_TOKEN` setup.
-- `src/rag/news_ingestion/rss_primitives.py` — replaced regex-based `<script>/<style>` filtering fallback with parser-based HTML extraction (`html.parser`) in `extract_html_body_text()`, remediating CodeQL `py/bad-tag-filter` bypass risk.
 
 ## 2026-05-01 - Outcome-Aware Semantic Rules and AI Mistake Learning
 

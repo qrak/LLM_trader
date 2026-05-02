@@ -177,20 +177,26 @@ def _extract_html_body_text_bs4(html_text: str) -> str:
     for tag in soup.select("script, style, noscript, svg, header, nav, footer, aside, form"):
         tag.decompose()
 
-    selector_groups = [
-        "[data-module-name='article-body'], [data-testid='article-body'], "
-        "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']",
-        "article, [class*='article-content'], [class*='articleContent'], "
-        "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']",
-        "main",
+    selector_groups: list[tuple[str, int]] = [
+        (
+            "[data-module-name='article-body'], [data-testid='article-body'], "
+            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']",
+            200,
+        ),
+        (
+            "article, [class*='article-content'], [class*='articleContent'], "
+            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']",
+            1,
+        ),
+        ("main", 1),
     ]
 
-    for selectors in selector_groups:
+    for selectors, min_len in selector_groups:
         candidates = [
             _text_from_soup_node(node)
             for node in soup.select(selectors)
         ]
-        candidates = [candidate for candidate in candidates if len(candidate) >= 200]
+        candidates = [candidate for candidate in candidates if len(candidate) >= min_len]
         if candidates:
             return max(candidates, key=len)
 

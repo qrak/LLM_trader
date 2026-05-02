@@ -165,6 +165,76 @@ async def test_process_analysis_compact_buy_uses_json_fields_for_risk_inputs() -
 
 
 @pytest.mark.asyncio
+async def test_process_analysis_passes_real_technical_data_to_brain_conditions() -> None:
+    strategy = _build_strategy()
+
+    risk_assessment = SimpleNamespace(
+        stop_loss=76480.0,
+        take_profit=80720.0,
+        size_pct=0.40,
+        quantity=0.051,
+        entry_fee=2.97,
+        sl_distance_pct=0.018,
+        tp_distance_pct=0.036,
+        rr_ratio=2.0,
+        quote_amount=4000.0,
+    )
+    strategy.risk_manager.calculate_entry_parameters = MagicMock(return_value=risk_assessment)
+
+    analysis_result = {
+        "raw_response": _make_compact_buy_response(),
+        "current_price": 99.0,
+        "analysis": {
+            "trend": {
+                "direction": "BULLISH",
+                "strength_4h": 68,
+                "timeframe_alignment": "ALIGNED",
+            },
+            "confluence_factors": {
+                "trend_alignment": 80,
+                "momentum_strength": 77,
+                "volume_support": 71,
+            },
+        },
+        "technical_data": {
+            "adx": 28.0,
+            "rsi": 61.0,
+            "atr": 120.0,
+            "atr_percent": 4.2,
+            "macd_line": 2.0,
+            "macd_signal": 1.0,
+            "obv_slope": 0.8,
+            "bb_upper": 100.0,
+            "bb_lower": 80.0,
+        },
+        "sentiment": {"fear_greed_index": 80},
+        "market_microstructure": {"order_book": {"imbalance": 0.25}},
+    }
+
+    await strategy.process_analysis(analysis_result, "BTC/USDC")
+
+    risk_kwargs = strategy.risk_manager.calculate_entry_parameters.call_args.kwargs
+    market_conditions = risk_kwargs["market_conditions"]
+    assert market_conditions["adx"] == 28.0
+    assert market_conditions["rsi"] == 61.0
+    assert market_conditions["rsi_level"] == "STRONG"
+    assert market_conditions["volatility"] == "HIGH"
+    assert market_conditions["macd_signal"] == "BULLISH"
+    assert market_conditions["volume_state"] == "ACCUMULATION"
+    assert market_conditions["bb_position"] == "UPPER"
+    assert market_conditions["market_sentiment"] == "EXTREME_GREED"
+    assert market_conditions["order_book_bias"] == "BUY_PRESSURE"
+
+    position_kwargs = strategy.position_factory.create_position.call_args.kwargs
+    assert position_kwargs["market_conditions"] == market_conditions
+    assert position_kwargs["confluence_factors"] == (
+        ("trend_alignment", 80.0),
+        ("momentum_strength", 77.0),
+        ("volume_support", 71.0),
+    )
+
+
+@pytest.mark.asyncio
 async def test_process_analysis_compact_hold_does_not_open_position() -> None:
     strategy = _build_strategy()
     strategy.risk_manager.calculate_entry_parameters = MagicMock()

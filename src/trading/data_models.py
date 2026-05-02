@@ -45,6 +45,7 @@ class Position(SerializableMixin):
     bb_position_at_entry: str = "MIDDLE"            # UPPER/MIDDLE/LOWER
     volume_state_at_entry: str = "NORMAL"           # ACCUMULATION/NORMAL/DISTRIBUTION
     market_sentiment_at_entry: str = "NEUTRAL"      # EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED
+    order_book_bias_at_entry: str = "BALANCED"      # BUY_PRESSURE/SELL_PRESSURE/BALANCED
     stop_loss_type_at_entry: str = "unknown"        # soft/hard/unknown execution mode snapshot
     stop_loss_check_interval_at_entry: str = "unknown"
     take_profit_type_at_entry: str = "unknown"      # soft/hard/unknown execution mode snapshot
