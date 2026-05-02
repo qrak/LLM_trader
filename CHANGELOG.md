@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-02 - Hard Exit Monitor Duplicate Position Save Fix
+
+### Fixed
+
+- Updated `src/trading/exit_monitor.py` so when both hard stop-loss and hard take-profit checks are due in the same tick, the monitor performs a single combined strategy check instead of two separate checks.
+- This prevents duplicate `Saved position` writes/logs for unchanged open positions while preserving the same SL-first/TP-second evaluation semantics and timestamp persistence.
+
+## 2026-05-01 - Token-Efficient Analysis Output Contract
+
+### Changed
+
+- Updated `src/analyzer/prompts/template_manager.py` response template to a token-efficient mode where narrative text is capped to a compact summary and JSON remains the authoritative output for all trading values.
+- Removed prompt requirements to show detailed position-sizing and R/R arithmetic in narrative text. The model is now instructed to return final computed values in JSON fields (`position_size`, `risk_reward_ratio`) without duplicating long calculations in prose.
+- Kept existing risk/confluence/macro guidance and mandatory JSON schema intact so demo-trading extraction and decision flow remain driven by structured JSON fields.
+
 ## 2026-05-01 - Security: Dependency Upgrades and requirements.txt Cleanup
 
 ### Security
@@ -21,6 +36,7 @@
 
 - `start.py` now reads optional `HF_TOKEN` from `keys.env` and exports it to process environment (`HF_TOKEN`/`HUGGINGFACE_HUB_TOKEN`) before `SentenceTransformer` initialization. This removes repeated unauthenticated Hugging Face Hub warnings when a token is configured and enables higher rate limits.
 - `keys.env.example` now documents optional `HF_TOKEN` setup.
+- `src/rag/news_ingestion/rss_primitives.py` — replaced regex-based `<script>/<style>` filtering fallback with parser-based HTML extraction (`html.parser`) in `extract_html_body_text()`, remediating CodeQL `py/bad-tag-filter` bypass risk.
 
 ## 2026-05-01 - Outcome-Aware Semantic Rules and AI Mistake Learning
 

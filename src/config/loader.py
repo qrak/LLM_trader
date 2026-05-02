@@ -90,7 +90,6 @@ class Config:
                 f"Supported values are: {valid_options}.\n"
                 f"Please update the [ai_providers] -> provider setting."
             )
-            logging.critical(error_msg)
             raise ValueError(error_msg)
 
     def _validate_exit_monitoring(self):
@@ -110,7 +109,6 @@ class Config:
                     f"Invalid {label} check interval '{interval}' in config.ini. "
                     f"It must not be greater than timeframe '{timeframe}'."
                 )
-                logging.critical(error_msg)
                 raise ValueError(error_msg)
 
     @staticmethod

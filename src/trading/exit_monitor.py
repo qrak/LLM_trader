@@ -1,5 +1,6 @@
 """Exit monitoring configuration and cadence helpers."""
 
+import inspect
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -140,11 +141,22 @@ class ExitMonitor:
 
         close_reason = None
         timestamps: Dict[str, datetime] = {}
+        due_exits = self.due_hard_exits(now, state)
         async with close_lock:
             if not strategy.current_position:
                 return None, {}
 
-            for exit_kind in self.due_hard_exits(now, state):
+            if self.STOP_LOSS in due_exits and self.TAKE_PROFIT in due_exits:
+                check_position = getattr(strategy, "check_position", None)
+                if callable(check_position):
+                    combined_result = check_position(current_price)
+                    if inspect.isawaitable(combined_result):
+                        close_reason = await combined_result
+                        timestamps[self.last_check_key(self.STOP_LOSS)] = now
+                        timestamps[self.last_check_key(self.TAKE_PROFIT)] = now
+                        return close_reason, timestamps
+
+            for exit_kind in due_exits:
                 if exit_kind == self.STOP_LOSS:
                     close_reason = await strategy.check_stop_loss(current_price)
                 else:

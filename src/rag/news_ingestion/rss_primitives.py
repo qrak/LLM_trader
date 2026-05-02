@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -100,20 +101,66 @@ def extract_html_body_text(html_text: str) -> str:
     if soup_text:
         return soup_text
 
-    cleaned = re.sub(r"(?is)<script.*?>.*?</script>", " ", html_text)
-    cleaned = re.sub(r"(?is)<style.*?>.*?</style>", " ", cleaned)
+    parser_text = _extract_html_body_text_parser(html_text)
+    if parser_text:
+        return parser_text
 
-    article_match = re.search(r"(?is)<article[^>]*>(.*?)</article>", cleaned)
-    if article_match:
-        cleaned = article_match.group(1)
+    return strip_html(html_text)
 
-    paragraphs = re.findall(r"(?is)<p[^>]*>(.*?)</p>", cleaned)
-    if paragraphs:
-        text = "\n\n".join(strip_html(p) for p in paragraphs)
-    else:
-        text = strip_html(cleaned)
 
-    return re.sub(r"\n{3,}", "\n\n", text).strip()
+class _HtmlBodyTextParser(HTMLParser):
+    """Extract readable text while ignoring executable/non-content tags."""
+
+    _IGNORED_TAGS: frozenset[str] = frozenset({
+        "script", "style", "noscript", "svg", "header", "nav", "footer", "aside", "form"
+    })
+    _BLOCK_TAGS: frozenset[str] = frozenset({
+        "article", "main", "section", "div", "p", "li", "blockquote", "h1", "h2", "h3", "br"
+    })
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._skip_depth = 0
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_name = tag.lower()
+        if tag_name in self._IGNORED_TAGS:
+            self._skip_depth += 1
+            return
+        if self._skip_depth == 0 and tag_name in self._BLOCK_TAGS:
+            self._parts.append("\n\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_name = tag.lower()
+        if tag_name in self._IGNORED_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth == 0 and tag_name in self._BLOCK_TAGS:
+            self._parts.append("\n\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth > 0:
+            return
+        chunk = re.sub(r"\s+", " ", data).strip()
+        if chunk:
+            self._parts.append(chunk)
+
+    def get_text(self) -> str:
+        joined = "".join(self._parts)
+        lines = [re.sub(r"\s+", " ", line).strip() for line in joined.split("\n\n")]
+        non_empty = [line for line in lines if line]
+        return "\n\n".join(non_empty)
+
+
+def _extract_html_body_text_parser(html_text: str) -> str:
+    parser = _HtmlBodyTextParser()
+    try:
+        parser.feed(html_text)
+        parser.close()
+    except Exception:  # noqa: BLE001
+        return ""
+    return parser.get_text().strip()
 
 
 def _extract_html_body_text_bs4(html_text: str) -> str:
