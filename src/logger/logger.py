@@ -65,6 +65,7 @@ class Logger(logging.Logger):
 
         level = logging.DEBUG if logger_debug else logging.INFO
         super().__init__(sanitized_name, level)
+        self.propagate = False
 
         self.log_filename_prefix = log_filename_prefix
 
@@ -201,3 +202,24 @@ class Logger(logging.Logger):
                 exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
             )
         threading.excepthook = _handle_thread_exception
+
+        root = logging.getLogger()
+        current_date = datetime.now().strftime("%Y_%m_%d")
+        error_log_dir = self._get_log_dir(current_date)
+        error_log_filename = os.path.join(error_log_dir, "errors.log")
+        root_error_handler = DailyRotatingFileHandler(
+            error_log_filename,
+            self.log_dir,
+            self.log_filename_prefix,
+            self.name,
+            is_error_handler=True,
+            when='midnight',
+            interval=1,
+            backupCount=30,
+            encoding='utf-8'
+        )
+        root_error_handler.setLevel(logging.ERROR)
+        root_error_handler.setFormatter(self._plain_formatter())
+        root_error_handler.namer = lambda name: name.replace(".log", "") + ".log"
+        root_error_handler.rotator = lambda source, _dest: self._log_rotator(source)
+        root.addHandler(root_error_handler)

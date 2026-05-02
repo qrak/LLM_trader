@@ -228,6 +228,35 @@ async def test_hard_monitor_stops_after_first_exit_closes_position():
 
 
 @pytest.mark.asyncio
+async def test_hard_monitor_uses_combined_check_when_both_exits_due():
+    now = datetime(2026, 4, 30, 12, 0, tzinfo=timezone.utc)
+    state = {
+        "last_stop_loss_check_at": (now - timedelta(minutes=5)).isoformat(),
+        "last_take_profit_check_at": (now - timedelta(minutes=15)).isoformat(),
+    }
+    context = _make_monitor_context(state=state)
+    strategy = MagicMock()
+    strategy.current_position = object()
+    strategy.check_position = AsyncMock(return_value=None)
+    strategy.check_stop_loss = AsyncMock(return_value=None)
+    strategy.check_take_profit = AsyncMock(return_value=None)
+    context.position_monitor.trading_strategy = strategy
+
+    close_reason = await context.position_monitor.run_hard_exit_checks(
+        100.0,
+        now,
+        state,
+    )
+
+    assert close_reason is None
+    strategy.check_position.assert_awaited_once_with(100.0)
+    strategy.check_stop_loss.assert_not_called()
+    strategy.check_take_profit.assert_not_called()
+    assert context.persistence.state["last_stop_loss_check_at"] == now.isoformat()
+    assert context.persistence.state["last_take_profit_check_at"] == now.isoformat()
+
+
+@pytest.mark.asyncio
 async def test_check_stop_loss_ignores_take_profit_hit():
     strategy = _make_strategy()
 

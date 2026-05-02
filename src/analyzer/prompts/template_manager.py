@@ -201,27 +201,20 @@ class TemplateManager:
 
         response_template = f'''## Response Format
 
-Discord-optimized output style (mandatory):
-- Use compact plain-text labels only: "1) MARKET STRUCTURE:", "2) INDICATOR ASSESSMENT:", etc.
-- Use these exact label numbers in narrative: 1), 2), 2.5), 3), 3.5), 4), 5).
+Token-efficient output mode (mandatory):
+- JSON is the source of truth for all numeric values and decision fields.
+- Keep narrative minimal: max 5 short lines total before JSON.
+- Do NOT repeat detailed arithmetic, position sizing math, or full level tables in narrative if already present in JSON.
 - Do NOT use Markdown headings (#, ##, ###, ####) in the narrative section.
-- Provide professional, desk-level reasoning in each section. Explain signal quality, counterarguments, and what would invalidate your view.
-- Keep the writing readable for Discord while remaining substantive: favor short paragraphs and clear bullets over ultra-brief summaries.
-- Avoid nested bullet lists in narrative text.
 
-Structure your analysis before JSON using plain-text labels:
-1) MARKET STRUCTURE: Current phase and trend state. Include **Multi-Timeframe Summary**: list each available timeframe (4h/12h/24h/3d/7d/Weekly/365D) with directional bias → state ALIGNED/MIXED/DIVERGENT and identify dominant timeframe.
-2) INDICATOR ASSESSMENT: Key technical signals and confluence
-2.5) QUANTITATIVE & VISUAL VALIDATION (required when data is present):
-    - **Statistical Signals**: Z-Score (mean-reversion risk if |Z|>1.5), Hurst exponent (trending >0.5 vs reverting <0.5), Kurtosis (tail risk if >3), Entropy, Skewness interpretation
-    - **Chart Validation** (only when chart image was provided): Summarize key observations from each panel — P1-PRICE (SMA alignment, key price levels), P2-RSI (zone + divergences), P3-VOLUME (trend + spikes), P4-CMF/OBV (flow direction). Flag any discrepancies between visual and numerical data.
-3) CONTEXT & CATALYST: Macro alignment, news, microstructure (if relevant)
-3.5) SCENARIO ANALYSIS (Bull vs Bear):
-    - **Bull Case Argument**: Strongest arguments for LONG (even if weak)
-    - **Bear Case Argument**: Strongest arguments for SHORT (even if weak)
-    - **Verdict**: Why one side outweighs the other (weight historical data/anti-patterns)
-4) RISK/REWARD: Invalidation point, targets, R/R ratio
-5) DECISION: Signal with confidence justification
+Optional compact narrative before JSON (plain-text labels):
+1) MARKET STRUCTURE: One line on trend regime and timeframe alignment.
+2) INDICATOR ASSESSMENT: One line on strongest confirming/conflicting signal.
+3) CONTEXT & CATALYST: One line only if materially relevant.
+4) DECISION: One line with signal rationale and invalidation condition.
+5) EXECUTION NOTE: One line only for conditional-entry or update logic.
+
+If information is uncertain or unavailable, skip the line instead of adding filler text.
 
 Then output JSON:
 
@@ -283,13 +276,13 @@ CHOPPINESS INDEX CONTEXT:
 
 NOTE: You may OVERRIDE these guidelines if you have exceptional conviction ( catalyst, {conf_weak + 1}+ confluences). State reasoning.
 
-POSITION SIZING FORMULA (calculate before finalizing - SHOW YOUR WORK in RISK/REWARD section):
+POSITION SIZING FORMULA (calculate before finalizing):
 - Base size = confidence / 100 (e.g., 75 confidence = 0.75 base)
         - If timeframe_alignment = "MIXED": reduce by {pos_reduce_mixed:.2f} (e.g., 0.75 - {pos_reduce_mixed:.2f} = {0.75 - pos_reduce_mixed:.2f})
         - If timeframe_alignment = "DIVERGENT": reduce by {pos_reduce_div:.2f} (e.g., 0.75 - {pos_reduce_div:.2f} = {0.75 - pos_reduce_div:.2f})
 - In weak trend environments (ADX < {adx_weak}): consider smaller sizes
 - Final position_size = max({min_pos_size:.2f}, calculated_value)
-- FORMAT: "Position: base [X] - alignment [Y] = [Z]"
+- Put the final numeric value in JSON only (`position_size`).
 
 MACRO TIMEFRAME CONFLICT (CRITICAL):
 If the 365D macro trend is BEARISH and you are going LONG (or vice versa):
@@ -327,12 +320,13 @@ RISK/REWARD GUIDELINES:
 - R/R >= {min_rr:.1f}: Standard acceptable quality
 - R/R >= {rr_strong:.1f}: Strong setup - preferred for counter-trend trades
 
-R/R CALCULATION (MANDATORY - show your work):
+R/R CALCULATION (MANDATORY):
 - For BUY/SELL signals: risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|
 - For UPDATE signals: risk = |Current Price - stop_loss|, reward = |take_profit - Current Price|
   (UPDATE adjusts an EXISTING position — R/R must reflect distance from where price IS, not original entry)
 - For HOLD (no position): Use your conditional `entry_price` (NOT current market price). risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|. This shows the quality of the setup you are waiting for.
 - risk_reward_ratio = reward / risk
+- Output only the final numeric ratio in JSON (`risk_reward_ratio`); do not print arithmetic steps in narrative.
 
 RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
 LONG trades:
