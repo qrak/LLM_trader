@@ -371,6 +371,25 @@ class TestSemanticRules:
         assert [rule["rule_id"] for rule in rules] == ["rule-strong"]
         assert rules[0]["similarity"] == 80.0
 
+    def test_deactivate_semantic_rules_marks_existing_rules_inactive(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._semantic_rules_collection = MagicMock()
+        svc._semantic_rules_collection.get.return_value = {
+            "ids": ["rule-stale"],
+            "metadatas": [{"active": True, "rule_type": "best_practice"}],
+        }
+
+        deactivated_count = svc.deactivate_semantic_rules(["rule-stale"])
+
+        assert deactivated_count == 1
+        update_kwargs = svc._semantic_rules_collection.update.call_args.kwargs
+        assert update_kwargs["ids"] == ["rule-stale"]
+        metadata = update_kwargs["metadatas"][0]
+        assert metadata["active"] is False
+        assert metadata["rule_type"] == "best_practice"
+        assert "deactivated_at" in metadata
+
     def test_get_anti_patterns_for_prompt_only_includes_anti_pattern_rules(self):
         svc = _make_service()
         with patch.object(

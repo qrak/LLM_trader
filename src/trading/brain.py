@@ -11,10 +11,12 @@ from uuid import uuid4
 from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
     build_context_string_from_classified_values,
+    build_exit_execution_context,
     build_exit_execution_context_from_position,
     build_query_document_from_classified_values,
     classify_adx_label,
     classify_rsi_label,
+    EXIT_EXECUTION_KEYS,
     format_exit_execution_context,
 )
 from .vector_memory import VectorMemoryService
@@ -34,11 +36,15 @@ class TradingBrainService:
     - Get dynamic thresholds
     """
 
+    UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
+    UNKNOWN_EXIT_PROFILE_KEY = "sl_unknown_unknown|tp_unknown_unknown"
+
     def __init__(
         self,
         logger: Logger,
         persistence: "PersistenceManager",
         vector_memory: VectorMemoryService,
+        exit_execution_context: Optional[Dict[str, Any]] = None,
     ):
         """Initialize trading brain service.
 
@@ -46,10 +52,14 @@ class TradingBrainService:
             logger: Logger instance
             persistence: Persistence service
             vector_memory: Injected vector memory service (required)
+            exit_execution_context: Configured fallback SL/TP execution context.
         """
         self.logger = logger
         self.persistence = persistence
         self.vector_memory = vector_memory
+        self._default_exit_execution_context: Dict[str, str] = build_exit_execution_context(
+            **(exit_execution_context or {})
+        )
 
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}
@@ -81,7 +91,9 @@ class TradingBrainService:
         is_win = pnl_pct > 0
 
         conditions = market_conditions or {}
-        exit_execution_context = build_exit_execution_context_from_position(position)
+        exit_execution_context = self._resolve_exit_execution_context(
+            build_exit_execution_context_from_position(position)
+        )
         entry_confidence = entry_decision.confidence if entry_decision else position.confidence
         entry_action = entry_decision.action if entry_decision else position.direction
         reasoning = entry_decision.reasoning if entry_decision else "N/A"
@@ -239,6 +251,7 @@ class TradingBrainService:
         )
 
         if vector_context:
+            vector_context = self._replace_unknown_exit_profile_text(vector_context)
             lines.extend(["", vector_context])
 
         # Check for limited data warning in the proper way
@@ -285,7 +298,8 @@ class TradingBrainService:
                     "ai_mistake": " [🧠 AI MISTAKE]",
                 }
                 type_tag = type_tags.get(rule_type, "")
-                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule['text']}")
+                rule_text = self._render_rule_text(rule)
+                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule_text}")
                 failure = meta.get("failure_reason")
                 if failure:
                     lines.append(f"  → Why it failed: {failure}")
@@ -318,7 +332,7 @@ class TradingBrainService:
             "min_confluences_standard": thresholds.get("min_confluences_standard", 3),
             "position_reduce_mixed": thresholds.get("position_reduce_mixed", 0.20),
             "position_reduce_divergent": thresholds.get("position_reduce_divergent", 0.35),
-            "min_position_size": thresholds.get("min_position_size", 0.10),
+            "min_position_size": thresholds.get("min_position_size", 0.02),
             "rr_borderline_min": thresholds.get("rr_borderline_min", 1.5),
             "rr_strong_setup": thresholds.get("rr_strong_setup", 2.5),
             # Metadata for origin labeling
@@ -547,6 +561,119 @@ class TradingBrainService:
         normalized = str(value).strip().lower().replace(" ", "_").replace("-", "_").replace("/", "_")
         return normalized or default
 
+    def _resolve_exit_execution_context(
+        self,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, str]:
+        """Return SL/TP execution metadata with configured defaults filled in."""
+        raw_context = metadata or {}
+        context = build_exit_execution_context(
+            stop_loss_type=raw_context.get("stop_loss_type"),
+            stop_loss_check_interval=raw_context.get("stop_loss_check_interval"),
+            take_profit_type=raw_context.get("take_profit_type"),
+            take_profit_check_interval=raw_context.get("take_profit_check_interval"),
+        )
+        resolved: Dict[str, str] = {}
+        for key in EXIT_EXECUTION_KEYS:
+            value = context[key]
+            if value == "unknown":
+                value = self._default_exit_execution_context.get(key, "unknown")
+            resolved[key] = value
+        return resolved
+
+    def _resolve_rule_exit_execution_context(self, metadata: Dict[str, Any]) -> Dict[str, str]:
+        """Resolve exit execution context from semantic-rule metadata."""
+        return self._resolve_exit_execution_context({
+            "stop_loss_type": metadata.get("dominant_stop_loss_type") or metadata.get("stop_loss_type"),
+            "stop_loss_check_interval": (
+                metadata.get("dominant_stop_loss_interval") or metadata.get("stop_loss_check_interval")
+            ),
+            "take_profit_type": metadata.get("dominant_take_profit_type") or metadata.get("take_profit_type"),
+            "take_profit_check_interval": (
+                metadata.get("dominant_take_profit_interval") or metadata.get("take_profit_check_interval")
+            ),
+        })
+
+    def _format_exit_profile_from_context(self, context: Dict[str, str]) -> str:
+        """Format a normalized SL/TP execution context."""
+        return self._format_exit_profile(
+            context["stop_loss_type"],
+            context["stop_loss_check_interval"],
+            context["take_profit_type"],
+            context["take_profit_check_interval"],
+        )
+
+    def _replace_unknown_exit_profile_text(
+        self,
+        text: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Replace legacy unknown exit-profile text with resolved rule/default metadata."""
+        if self.UNKNOWN_EXIT_PROFILE not in text:
+            return text
+        if metadata:
+            replacement_profile = self._format_exit_profile_from_context(
+                self._resolve_rule_exit_execution_context(metadata)
+            )
+        else:
+            replacement_profile = self._format_exit_profile_from_context(self._default_exit_execution_context)
+        if replacement_profile == self.UNKNOWN_EXIT_PROFILE:
+            return text
+        return text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
+
+    def _render_rule_text(self, rule: Dict[str, Any]) -> str:
+        """Return rule text with legacy unknown exit profile corrected for display."""
+        metadata = rule.get("metadata", {})
+        return self._replace_unknown_exit_profile_text(rule.get("text", ""), metadata)
+
+    def _dominant_exit_execution_context(self, metas: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Return the most common resolved SL/TP execution context for a trade group."""
+        contexts = [self._resolve_exit_execution_context(meta) for meta in metas]
+        if not contexts:
+            return self._resolve_exit_execution_context({})
+        dominant_context: Dict[str, str] = {}
+        for key in EXIT_EXECUTION_KEYS:
+            values = [context[key] for context in contexts]
+            dominant_context[key] = Counter(values).most_common(1)[0][0]
+        return dominant_context
+
+    def _legacy_unknown_exit_pattern_key(self, pattern_key: str) -> str:
+        """Return the equivalent rule key that used the old unknown exit profile."""
+        parts = pattern_key.split("|")
+        if len(parts) < 2:
+            return pattern_key
+        parts[-2:] = self.UNKNOWN_EXIT_PROFILE_KEY.split("|")
+        return "|".join(parts)
+
+    def _deactivate_legacy_unknown_exit_rule(self, rule_id_prefix: str, pattern_key: str) -> None:
+        """Deactivate the stale unknown-profile rule once a resolved replacement exists."""
+        legacy_pattern_key = self._legacy_unknown_exit_pattern_key(pattern_key)
+        if legacy_pattern_key == pattern_key:
+            return
+        legacy_rule_id = f"{rule_id_prefix}_{self._sanitize_rule_key(legacy_pattern_key)}"
+        self.vector_memory.deactivate_semantic_rules([legacy_rule_id])
+
+    def refresh_semantic_rules_if_stale(self) -> None:
+        """Refresh semantic rules once when active rules still use unknown exit profiles."""
+        default_profile = self._format_exit_profile_from_context(self._default_exit_execution_context)
+        if default_profile == self.UNKNOWN_EXIT_PROFILE:
+            return
+        try:
+            active_rules = self.vector_memory.get_active_rules(n_results=50)
+            has_stale_rule = any(
+                self.UNKNOWN_EXIT_PROFILE in str(rule.get("text", ""))
+                or "sl_unknown_unknown_tp_unknown_unknown" in str(rule.get("rule_id", ""))
+                for rule in active_rules
+            )
+            if not has_stale_rule:
+                return
+            self.logger.info("Refreshing semantic rules with missing exit execution profiles")
+            self._trigger_reflection()
+            self._trigger_loss_reflection()
+            self._trigger_ai_mistake_reflection()
+        except Exception as e:
+            self.logger.warning("Semantic rule refresh failed: %s", e)
+
     def _sanitize_rule_key(self, value: str) -> str:
         """Create a stable Chroma ID suffix from a composite rule key."""
         return self._safe_key_part(value.replace("|", "_"))
@@ -592,10 +719,11 @@ class TradingBrainService:
 
     def _build_exit_profile_key(self, meta: Dict[str, Any]) -> str:
         """Build a deterministic key for hard/soft SL/TP execution settings."""
-        stop_type = self._safe_key_part(meta.get("stop_loss_type"))
-        stop_interval = self._safe_key_part(meta.get("stop_loss_check_interval"))
-        take_profit_type = self._safe_key_part(meta.get("take_profit_type"))
-        take_profit_interval = self._safe_key_part(meta.get("take_profit_check_interval"))
+        context = self._resolve_exit_execution_context(meta)
+        stop_type = self._safe_key_part(context["stop_loss_type"])
+        stop_interval = self._safe_key_part(context["stop_loss_check_interval"])
+        take_profit_type = self._safe_key_part(context["take_profit_type"])
+        take_profit_interval = self._safe_key_part(context["take_profit_check_interval"])
         return f"sl_{stop_type}_{stop_interval}|tp_{take_profit_type}_{take_profit_interval}"
 
     @staticmethod
@@ -616,18 +744,6 @@ class TradingBrainService:
             include_unknown=True,
         )
         return profile.removeprefix("Exit Execution: ")
-
-    def _dominant_meta_value(
-        self,
-        metas: List[Dict[str, Any]],
-        key: str,
-        default: str = "unknown",
-    ) -> str:
-        """Return the most common normalized metadata value for a trade group."""
-        values = [self._safe_key_part(meta.get(key), default) for meta in metas if meta.get(key) is not None]
-        if not values:
-            return default
-        return Counter(values).most_common(1)[0][0]
 
     def _meta_values(
         self,
@@ -694,7 +810,9 @@ class TradingBrainService:
             "dominant_close_reason": metrics["dominant_close_reason"],
             "dominant_exit_profile": metrics["dominant_exit_profile"],
             "dominant_stop_loss_type": metrics["dominant_stop_loss_type"],
+            "dominant_stop_loss_interval": metrics["dominant_stop_loss_interval"],
             "dominant_take_profit_type": metrics["dominant_take_profit_type"],
+            "dominant_take_profit_interval": metrics["dominant_take_profit_interval"],
         }
         metadata.update(extra)
         return metadata
@@ -793,7 +911,7 @@ class TradingBrainService:
         if "overconfidence" in mistake_type:
             suggestions.append("cap confidence one level lower until the missing confirmation is present")
 
-        stop_type = self._dominant_meta_value(mistake_metas, "stop_loss_type")
+        stop_type = self._dominant_exit_execution_context(mistake_metas)["stop_loss_type"]
         if stop_type == "hard":
             suggestions.append("with hard SL, reduce size or place invalidation beyond structure because chop can force exits")
         elif stop_type == "soft":
@@ -865,7 +983,7 @@ class TradingBrainService:
             )
 
             rule_id = f"rule_best_{self._sanitize_rule_key(pattern_key)}"
-            self.vector_memory.store_semantic_rule(
+            stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self._build_rule_metadata(
@@ -875,6 +993,8 @@ class TradingBrainService:
                     total_analyzed=len(win_metas),
                 ),
             )
+            if stored:
+                self._deactivate_legacy_unknown_exit_rule("rule_best", pattern_key)
 
             self.logger.info("Reflection complete: stored best-practice rule '%s'", rule_text)
 
@@ -940,7 +1060,7 @@ class TradingBrainService:
             )
 
             rule_id = f"rule_{rule_type}_{self._sanitize_rule_key(pattern_key)}"
-            self.vector_memory.store_semantic_rule(
+            stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self._build_rule_metadata(
@@ -952,6 +1072,8 @@ class TradingBrainService:
                     recommended_adjustment=recommended_adjustment,
                 ),
             )
+            if stored:
+                self._deactivate_legacy_unknown_exit_rule(f"rule_{rule_type}", pattern_key)
 
             self.logger.info(
                 "Loss reflection complete: stored %s rule '%s'", rule_type, rule_text
@@ -1026,7 +1148,7 @@ class TradingBrainService:
             )
 
             rule_id = f"rule_ai_mistake_{self._sanitize_rule_key(pattern_key)}"
-            self.vector_memory.store_semantic_rule(
+            stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self._build_rule_metadata(
@@ -1041,6 +1163,8 @@ class TradingBrainService:
                     recommended_adjustment=recommended_adjustment,
                 ),
             )
+            if stored:
+                self._deactivate_legacy_unknown_exit_rule("rule_ai_mistake", pattern_key)
 
             self.logger.info("AI mistake reflection complete: stored rule '%s'", rule_text)
 
@@ -1083,16 +1207,12 @@ class TradingBrainService:
         loss_reasons = Counter(self._normalize_close_reason(m.get("close_reason", "unknown")) for m in losses)
         dominant_close_reason = loss_reasons.most_common(1)[0][0] if loss_reasons else "unknown"
         profile_metas = losses if losses else group_metas
-        dominant_stop_loss_type = self._dominant_meta_value(profile_metas, "stop_loss_type")
-        dominant_stop_loss_interval = self._dominant_meta_value(profile_metas, "stop_loss_check_interval")
-        dominant_take_profit_type = self._dominant_meta_value(profile_metas, "take_profit_type")
-        dominant_take_profit_interval = self._dominant_meta_value(profile_metas, "take_profit_check_interval")
-        dominant_exit_profile = self._format_exit_profile(
-            dominant_stop_loss_type,
-            dominant_stop_loss_interval,
-            dominant_take_profit_type,
-            dominant_take_profit_interval,
-        )
+        dominant_exit_context = self._dominant_exit_execution_context(profile_metas)
+        dominant_stop_loss_type = dominant_exit_context["stop_loss_type"]
+        dominant_stop_loss_interval = dominant_exit_context["stop_loss_check_interval"]
+        dominant_take_profit_type = dominant_exit_context["take_profit_type"]
+        dominant_take_profit_interval = dominant_exit_context["take_profit_check_interval"]
+        dominant_exit_profile = self._format_exit_profile_from_context(dominant_exit_context)
 
         return {
             "total": total,

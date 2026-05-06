@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-05-06 - Semantic Rule Exit Profile Repair
+
+### Fixed
+
+- `src/trading/brain.py` now fills missing semantic-rule SL/TP execution metadata from the configured exit profile before grouping trades, storing new rules, or rendering prompt context. This prevents legacy closed trades from producing `SL unknown/unknown | TP unknown/unknown` when the bot has configured hard/soft exit settings.
+- `src/trading/vector_memory_rules.py` now supports targeted semantic-rule deactivation so refreshed resolved-profile rules can retire only their matching stale unknown-profile predecessors.
+- `start.py` now injects config-derived exit execution defaults into the trading brain and triggers a one-shot refresh when active semantic rules still contain unknown exit profiles.
+- `src/dashboard/routers/brain.py` now exposes dominant SL/TP intervals and rewrites legacy unknown exit-profile text for the Semantic Rules dashboard response.
+
+## 2026-05-06 - Position Size Guardrails
+
+### Changed
+
+- LLM `position_size` parsing now treats explicit percent strings correctly, including values below 1% such as `0.5%`.
+- RiskManager position-size fallbacks for LOW/MEDIUM/HIGH confidence are now configurable under `[risk_management]` and are used only when the AI omits or returns an invalid `position_size`.
+- Brain and prompt defaults now keep `max_position_size` as a hard cap without nudging normal entries up to the cap as a minimum.
+
+## 2026-05-06 - Trading Performance Summary P&L Percent Fix
+
+### Fixed
+
+- Discord and console performance summaries now calculate `Total P&L (%)` from realized quote P&L divided by configured demo quote capital, matching persisted trading statistics. Previously the notifier summed per-trade percentages, so variable position sizes could show a positive total percent while quote P&L was negative.
+- Trading memory context now uses the same capital-based total P&L percentage when configured, while preserving average per-trade percentage separately.
+
 ## 2026-05-02 - Previous Analysis Context: Structured Decision Snapshot
 
 ### Changed

@@ -174,11 +174,16 @@ class TradingMemory(SerializableMixin):
         """Get the n most recent decisions."""
         return self.decisions[-n:]
 
-    def get_context_summary(self, full_history: Optional[List['TradeDecision']] = None) -> str:
+    def get_context_summary(
+        self,
+        full_history: Optional[List['TradeDecision']] = None,
+        initial_capital: Optional[float] = None,
+    ) -> str:
         """Generate a concise summary for prompt injection.
 
         Args:
             full_history: Complete trade history for calculating overall performance
+            initial_capital: Optional starting quote capital for total P&L percentage
 
         Returns:
             Formatted summary of last 5 decisions with overall P&L data from all trades
@@ -202,7 +207,8 @@ class TradingMemory(SerializableMixin):
         # Ensure chronological order for P&L calculation (handle mixed tz-aware/naive)
         history_to_analyze = sorted(history_to_analyze, key=lambda x: _ensure_utc(x.timestamp))
         total_pnl_quote = 0.0
-        total_pnl_pct = 0.0
+        sum_trade_pnl_pct = 0.0
+        total_entry_quote = 0.0
         closed_trades = 0
         winning_trades = 0
         close_pnl_by_key: Dict[str, float] = {}
@@ -222,7 +228,8 @@ class TradingMemory(SerializableMixin):
                     pnl_quote = (open_position.price - decision.price) * open_position.quantity
 
                 total_pnl_quote += pnl_quote
-                total_pnl_pct += pnl_pct
+                sum_trade_pnl_pct += pnl_pct
+                total_entry_quote += open_position.quote_amount or (open_position.price * open_position.quantity)
                 closed_trades += 1
                 if pnl_pct > 0:
                     winning_trades += 1
@@ -243,7 +250,9 @@ class TradingMemory(SerializableMixin):
 
         # Add overall performance summary from ALL closed trades
         if closed_trades > 0:
-            avg_pnl_pct = total_pnl_pct / closed_trades
+            pnl_pct_basis = initial_capital if initial_capital is not None else total_entry_quote
+            total_pnl_pct = (total_pnl_quote / pnl_pct_basis) * 100 if pnl_pct_basis > 0 else 0.0
+            avg_pnl_pct = sum_trade_pnl_pct / closed_trades
             win_rate = (winning_trades / closed_trades) * 100
             lines.append("")
             lines.append(f"## Overall Performance ({closed_trades} Total Closed Trades):")

@@ -9,6 +9,7 @@ from typing import Dict, Any, List, Optional, Union
 from fastapi import APIRouter, Query, Request
 
 from src.utils.indicator_classifier import (
+    build_exit_execution_context,
     build_exit_execution_context_from_config,
     build_exit_execution_context_from_position,
     build_context_string_from_technical_data,
@@ -36,7 +37,9 @@ RULE_METADATA_FIELDS = (
     "dominant_close_reason",
     "dominant_exit_profile",
     "dominant_stop_loss_type",
+    "dominant_stop_loss_interval",
     "dominant_take_profit_type",
+    "dominant_take_profit_interval",
 )
 
 
@@ -184,6 +187,8 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
 
 class BrainRouter:
     """Handles endpoints for the trading brain status, rules, and memory."""
+    UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
+
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-instance-attributes
     def __init__(self, config, logger, dashboard_state, vector_memory, unified_parser, persistence, exchange_manager):
         self.router = APIRouter(prefix="/api/brain", tags=["brain"])
@@ -201,6 +206,34 @@ class BrainRouter:
         self.router.add_api_route("/vectors", self.get_vector_details, methods=["GET"])
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
         self.router.add_api_route("/refresh-price", self.refresh_current_price, methods=["GET"])
+
+    def _resolve_rule_exit_profile(self, metadata: Dict[str, Any]) -> str:
+        """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
+        timeframe = getattr(self.config, "TIMEFRAME", "unknown")
+        default_context = build_exit_execution_context_from_config(self.config, timeframe)
+        context = build_exit_execution_context(
+            stop_loss_type=metadata.get("dominant_stop_loss_type") or metadata.get("stop_loss_type"),
+            stop_loss_check_interval=(
+                metadata.get("dominant_stop_loss_interval") or metadata.get("stop_loss_check_interval")
+            ),
+            take_profit_type=metadata.get("dominant_take_profit_type") or metadata.get("take_profit_type"),
+            take_profit_check_interval=(
+                metadata.get("dominant_take_profit_interval") or metadata.get("take_profit_check_interval")
+            ),
+        )
+        for key, value in context.items():
+            if value == "unknown":
+                context[key] = default_context.get(key, "unknown")
+        return format_exit_execution_context(context, include_unknown=True).removeprefix("Exit Execution: ")
+
+    def _render_rule_text(self, rule_text: str, metadata: Dict[str, Any]) -> str:
+        """Return dashboard rule text with legacy unknown exit profile corrected."""
+        if self.UNKNOWN_EXIT_PROFILE not in rule_text:
+            return rule_text
+        replacement_profile = self._resolve_rule_exit_profile(metadata)
+        if replacement_profile == self.UNKNOWN_EXIT_PROFILE:
+            return rule_text
+        return rule_text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
     async def get_brain_status(self) -> Dict[str, Any]:
         """Get the current thought process/status of the brain."""
@@ -291,11 +324,14 @@ class BrainRouter:
             rules = []
             for r in raw_rules:
                 mapped_rule = dict(r)
-                mapped_rule["rule_text"] = r.get("text", "")
                 meta = r.get("metadata", {})
+                mapped_rule["rule_text"] = self._render_rule_text(r.get("text", ""), meta)
                 mapped_rule["source_trades"] = meta.get("source_trades") or meta.get("source_loss_count")
                 for field in RULE_METADATA_FIELDS:
                     mapped_rule[field] = meta.get(field)
+                resolved_exit_profile = self._resolve_rule_exit_profile(meta)
+                if mapped_rule.get("dominant_exit_profile") in (None, "", self.UNKNOWN_EXIT_PROFILE):
+                    mapped_rule["dominant_exit_profile"] = resolved_exit_profile
                 mapped_rule["rule_type"] = mapped_rule["rule_type"] or "best_practice"
                 rules.append(mapped_rule)
             self.dashboard_state.set_cached("rules", rules)

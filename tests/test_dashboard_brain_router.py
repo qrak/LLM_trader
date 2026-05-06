@@ -159,7 +159,9 @@ async def test_get_active_rules_maps_ai_mistake_and_exit_metadata():
                 "recommended_adjustment": "downgrade confidence until ADX confirms expansion",
                 "dominant_exit_profile": "SL hard/1m | TP soft/15m",
                 "dominant_stop_loss_type": "hard",
+                "dominant_stop_loss_interval": "1m",
                 "dominant_take_profit_type": "soft",
+                "dominant_take_profit_interval": "15m",
             },
         }
     ]
@@ -182,6 +184,48 @@ async def test_get_active_rules_maps_ai_mistake_and_exit_metadata():
     assert rules[0]["entry_confidence"] == "HIGH"
     assert rules[0]["failed_assumption"] == "expected breakout continuation"
     assert rules[0]["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
+    assert rules[0]["dominant_stop_loss_interval"] == "1m"
+    assert rules[0]["dominant_take_profit_interval"] == "15m"
+
+
+@pytest.mark.asyncio
+async def test_get_active_rules_rewrites_legacy_unknown_exit_profile_from_config():
+    dashboard_state = DashboardState()
+    vector_memory = MagicMock()
+    vector_memory.get_active_rules.return_value = [
+        {
+            "rule_id": "rule_best_long_bullish_high_adx_sl_unknown_unknown_tp_unknown_unknown",
+            "text": "LONG trades perform well. Exit profile: SL unknown/unknown | TP unknown/unknown. (3 wins)",
+            "metadata": {
+                "rule_type": "best_practice",
+                "source_trades": 3,
+                "dominant_exit_profile": "SL unknown/unknown | TP unknown/unknown",
+                "dominant_stop_loss_type": "unknown",
+                "dominant_take_profit_type": "unknown",
+            },
+        }
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(
+            DATA_DIR="unused",
+            TIMEFRAME="4h",
+            STOP_LOSS_TYPE="hard",
+            STOP_LOSS_CHECK_INTERVAL="15m",
+            TAKE_PROFIT_TYPE="hard",
+            TAKE_PROFIT_CHECK_INTERVAL="15m",
+        ),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=vector_memory,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=MagicMock(),
+    )
+
+    rules = await router.get_active_rules()
+
+    assert "Exit profile: SL hard/15m | TP hard/15m" in rules[0]["rule_text"]
+    assert rules[0]["dominant_exit_profile"] == "SL hard/15m | TP hard/15m"
 
 
 @pytest.mark.asyncio

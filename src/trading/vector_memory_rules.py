@@ -70,6 +70,41 @@ class VectorMemoryRulesMixin:
             self.logger.error("Failed to get active rules: %s", e)
             return []
 
+    def deactivate_semantic_rules(self, rule_ids: List[str]) -> int:
+        """Mark semantic rules inactive without deleting their history."""
+        if not rule_ids or not self._ensure_initialized():
+            return 0
+
+        try:
+            existing_rules = self._semantic_rules_collection.get(
+                ids=rule_ids,
+                include=["metadatas"],
+            )
+            existing_ids = existing_rules.get("ids", []) if existing_rules else []
+            if not existing_ids:
+                return 0
+
+            existing_metadatas = existing_rules.get("metadatas") or []
+            updated_metadatas: List[Dict[str, Any]] = []
+            deactivated_at = datetime.now(timezone.utc).isoformat()
+            for index, rule_id in enumerate(existing_ids):
+                source_metadata = existing_metadatas[index] if index < len(existing_metadatas) else {}
+                metadata = dict(source_metadata or {})
+                metadata["active"] = False
+                metadata["deactivated_at"] = deactivated_at
+                updated_metadatas.append(metadata)
+                self.logger.info("Deactivated semantic rule: %s", rule_id)
+
+            self._semantic_rules_collection.update(
+                ids=existing_ids,
+                metadatas=updated_metadatas,
+            )
+            return len(existing_ids)
+
+        except Exception as e:
+            self.logger.error("Failed to deactivate semantic rules: %s", e)
+            return 0
+
     def get_relevant_rules(
         self,
         current_context: str,

@@ -7,14 +7,19 @@ from src.trading.data_models import Position, TradeDecision
 from src.trading.brain import TradingBrainService
 
 
-def _make_brain():
+def _make_brain(exit_execution_context=None):
     """Create a TradingBrainService with mocked dependencies."""
     logger = MagicMock()
     persistence = MagicMock()
     vector_memory = MagicMock()
     vector_memory.trade_count = 0
     vector_memory.get_relevant_rules.return_value = []
-    return TradingBrainService(logger=logger, persistence=persistence, vector_memory=vector_memory)
+    return TradingBrainService(
+        logger=logger,
+        persistence=persistence,
+        vector_memory=vector_memory,
+        exit_execution_context=exit_execution_context,
+    )
 
 
 def _make_position(**overrides):
@@ -146,6 +151,29 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["take_profit_type"] == "soft"
         assert call_kwargs["metadata"]["take_profit_check_interval"] == "4h"
 
+    def test_closed_trade_fills_unknown_exit_execution_from_configured_default(self):
+        brain = _make_brain({
+            "stop_loss_type": "hard",
+            "stop_loss_check_interval": "15m",
+            "take_profit_type": "hard",
+            "take_profit_check_interval": "15m",
+        })
+        position = _make_position()
+
+        brain.update_from_closed_trade(
+            position=position,
+            close_price=110.0,
+            close_reason="take_profit",
+            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+        )
+
+        call_kwargs = brain.vector_memory.store_experience.call_args.kwargs
+        assert "Exit Execution: SL hard/15m | TP hard/15m" in call_kwargs["market_context"]
+        assert call_kwargs["metadata"]["stop_loss_type"] == "hard"
+        assert call_kwargs["metadata"]["stop_loss_check_interval"] == "15m"
+        assert call_kwargs["metadata"]["take_profit_type"] == "hard"
+        assert call_kwargs["metadata"]["take_profit_check_interval"] == "15m"
+
     def test_closed_trade_stores_original_ai_decision_snapshot(self):
         position = Position(
             entry_price=100.0,
@@ -268,6 +296,7 @@ class TestGetDynamicThresholds:
         assert t["adx_strong_threshold"] == 25
         assert t["min_rr_recommended"] == 2.0
         assert t["confidence_threshold"] == 70
+        assert t["min_position_size"] == 0.02
 
 
 class TestReflectionRuleFormatting:
@@ -344,6 +373,39 @@ class TestReflectionRuleFormatting:
         assert meta["win_rate"] == pytest.approx(80.0, abs=0.1)
         assert meta["avg_pnl_pct"] == pytest.approx(1.4, abs=0.1)
         assert meta["profit_factor"] > 1.0
+
+    def test_reflection_fills_missing_exit_profile_and_retires_legacy_unknown_rule(self):
+        brain = _make_brain({
+            "stop_loss_type": "hard",
+            "stop_loss_check_interval": "15m",
+            "take_profit_type": "hard",
+            "take_profit_check_interval": "15m",
+        })
+
+        win_metas = [
+            {
+                "outcome": "WIN",
+                "market_regime": "BULLISH",
+                "adx_at_entry": 30,
+                "direction": "LONG",
+                "pnl_pct": 1.5,
+            }
+            for _ in range(5)
+        ]
+
+        brain.vector_memory._get_trade_metadatas.return_value = win_metas
+
+        brain._trigger_reflection()
+
+        kwargs = brain.vector_memory.store_semantic_rule.call_args.kwargs
+        assert kwargs["rule_id"] == "rule_best_long_bullish_high_adx_sl_hard_15m_tp_hard_15m"
+        assert "Exit profile: SL hard/15m | TP hard/15m" in kwargs["rule_text"]
+        assert kwargs["metadata"]["dominant_exit_profile"] == "SL hard/15m | TP hard/15m"
+        assert kwargs["metadata"]["dominant_stop_loss_interval"] == "15m"
+        assert kwargs["metadata"]["dominant_take_profit_interval"] == "15m"
+        brain.vector_memory.deactivate_semantic_rules.assert_called_once_with([
+            "rule_best_long_bullish_high_adx_sl_unknown_unknown_tp_unknown_unknown"
+        ])
 
     def test_trigger_loss_reflection_stores_failure_reason_and_recommended_adjustment(self):
         """Loss reflection should diagnose why losses happened and suggest improvements."""

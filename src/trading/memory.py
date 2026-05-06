@@ -21,7 +21,14 @@ class TradingMemoryService:
     - Provide formatted memory context for AI
     """
 
-    def __init__(self, logger: Logger, persistence: "PersistenceManager", max_memory: int = 10, vector_memory: Optional[Any] = None):
+    def __init__(
+        self,
+        logger: Logger,
+        persistence: "PersistenceManager",
+        max_memory: int = 10,
+        vector_memory: Optional[Any] = None,
+        initial_capital: Optional[float] = None,
+    ):
         """Initialize trading memory service.
 
         Args:
@@ -29,11 +36,13 @@ class TradingMemoryService:
             persistence: Persistence service for loading trade history
             max_memory: Maximum number of decisions to keep in memory
             vector_memory: VectorMemoryService instance (injected)
+            initial_capital: Starting quote capital used for total P&L percentage
         """
         self.logger = logger
         self.persistence = persistence
         self.max_memory = max_memory
         self.vector_memory = vector_memory
+        self.initial_capital = initial_capital
         self.memory = self._build_memory_from_history()
 
     def add_decision(self, decision: TradeDecision) -> None:
@@ -53,7 +62,7 @@ class TradingMemoryService:
         full_history_dicts = self.persistence.load_trade_history()
         full_history = [TradeDecision.from_dict(d) for d in full_history_dicts]
 
-        return self.memory.get_context_summary(full_history)
+        return self.memory.get_context_summary(full_history, initial_capital=self.initial_capital)
 
     def get_recent_decisions(self, n: int = 5) -> List[TradeDecision]:
         """Get recent decisions from memory.

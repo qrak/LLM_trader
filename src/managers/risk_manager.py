@@ -1,6 +1,8 @@
 """Risk Manager for converting signals into actionable trade parameters."""
 
+import math
 from typing import Optional, Dict, Any, TYPE_CHECKING
+
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
 
@@ -21,6 +23,57 @@ class RiskManager(RiskManagerProtocol):
     def validate_signal(self, signal: str) -> bool:
         """Validate if a signal is actionable."""
         return signal in ("BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT")
+
+    def _is_valid_position_size(self, position_size: Optional[float]) -> bool:
+        """Return whether position size is a usable capital fraction."""
+        return position_size is not None and math.isfinite(position_size) and position_size > 0
+
+    def _get_confidence_fallback_size(self, confidence: str) -> float:
+        """Get configured fallback size for a confidence level."""
+        fallback_sizes = {
+            "HIGH": self.config.POSITION_SIZE_FALLBACK_HIGH,
+            "MEDIUM": self.config.POSITION_SIZE_FALLBACK_MEDIUM,
+            "LOW": self.config.POSITION_SIZE_FALLBACK_LOW,
+        }
+        fallback_size = fallback_sizes.get(confidence.upper(), self.config.POSITION_SIZE_FALLBACK_MEDIUM)
+        if math.isfinite(fallback_size) and fallback_size > 0:
+            return fallback_size
+        self.logger.warning(
+            "Configured fallback position size for %s confidence is invalid, using MEDIUM fallback",
+            confidence,
+        )
+        return self.config.POSITION_SIZE_FALLBACK_MEDIUM
+
+    def _resolve_position_size_pct(self, position_size: Optional[float], confidence: str) -> float:
+        """Resolve final position size from AI request or configured confidence fallback."""
+        max_size = self.config.MAX_POSITION_SIZE
+        if not math.isfinite(max_size) or max_size <= 0:
+            raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
+
+        if self._is_valid_position_size(position_size):
+            requested_size = position_size
+            source = "AI"
+        else:
+            requested_size = self._get_confidence_fallback_size(confidence)
+            source = f"configured {confidence.upper()} confidence fallback"
+            self.logger.info("Using %s position size: %.2f%%", source, requested_size * 100)
+
+        final_size_pct = min(requested_size, max_size)
+        if requested_size > max_size:
+            self.logger.warning(
+                "%s position size %.2f%% exceeds cap %.2f%%, clamping",
+                source,
+                requested_size * 100,
+                max_size * 100,
+            )
+        self.logger.debug(
+            "Resolved position size: source=%s requested=%.4f cap=%.4f final=%.4f",
+            source,
+            requested_size,
+            max_size,
+            final_size_pct,
+        )
+        return final_size_pct
 
     def calculate_entry_parameters(
         self,
@@ -113,20 +166,7 @@ class RiskManager(RiskManagerProtocol):
                 final_tp = dynamic_tp
 
         # 5. Position Sizing
-        if position_size and position_size > 0:
-            max_size = self.config.MAX_POSITION_SIZE
-            if position_size > max_size:
-                self.logger.warning(
-                    "AI position size %.1f%% exceeds cap %.1f%%, clamping",
-                    position_size * 100,
-                    max_size * 100,
-                )
-            final_size_pct = min(position_size, max_size)
-        else:
-            # Dynamic sizing based on confidence
-            confidence_map = {"HIGH": 0.03, "MEDIUM": 0.02, "LOW": 0.01}
-            final_size_pct = confidence_map.get(confidence.upper(), 0.02)
-            self.logger.info("Using confidence-based size: %.1f%%", final_size_pct * 100)
+        final_size_pct = self._resolve_position_size_pct(position_size, confidence)
 
         # 6. Calculate Financials
         allocation = capital * final_size_pct
