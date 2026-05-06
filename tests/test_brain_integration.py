@@ -1,6 +1,6 @@
 """Tests for brain.py changes: classify_adx_label integration in _build_rich_context_string."""
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 import pytest
 
 from src.trading.data_models import Position, TradeDecision
@@ -407,6 +407,20 @@ class TestReflectionRuleFormatting:
             "rule_best_long_bullish_high_adx_sl_unknown_unknown_tp_unknown_unknown"
         ])
 
+    def test_refresh_semantic_rules_checks_all_stored_rules_for_stale_profiles(self):
+        brain = _make_brain({
+            "stop_loss_type": "hard",
+            "stop_loss_check_interval": "15m",
+            "take_profit_type": "hard",
+            "take_profit_check_interval": "15m",
+        })
+        brain.vector_memory.semantic_rule_count = 75
+        brain.vector_memory.get_active_rules.return_value = []
+
+        brain.refresh_semantic_rules_if_stale()
+
+        brain.vector_memory.get_active_rules.assert_called_once_with(n_results=75)
+
     def test_trigger_loss_reflection_stores_failure_reason_and_recommended_adjustment(self):
         """Loss reflection should diagnose why losses happened and suggest improvements."""
         brain = _make_brain()
@@ -460,6 +474,40 @@ class TestReflectionRuleFormatting:
         assert meta["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
         assert "hard" in meta["failure_reason"]
         assert "hard" in meta["recommended_adjustment"]
+
+    def test_loss_reflection_retires_stale_unknown_rule_when_loss_type_changes(self):
+        brain = _make_brain({
+            "stop_loss_type": "hard",
+            "stop_loss_check_interval": "15m",
+            "take_profit_type": "hard",
+            "take_profit_check_interval": "15m",
+        })
+
+        loss_metas = [
+            {
+                "outcome": "LOSS", "market_regime": "NEUTRAL", "adx_at_entry": 22,
+                "direction": "LONG", "close_reason": "stop_loss", "pnl_pct": -1.0,
+            }
+            for _ in range(3)
+        ]
+        win_metas = [
+            {
+                "outcome": "WIN", "market_regime": "NEUTRAL", "adx_at_entry": 22,
+                "direction": "LONG", "close_reason": "stop_loss", "pnl_pct": 1.0,
+            }
+            for _ in range(3)
+        ]
+        brain.vector_memory._get_trade_metadatas.return_value = loss_metas + win_metas
+
+        brain._trigger_loss_reflection()
+
+        assert brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"] == (
+            "rule_corrective_long_neutral_stop_loss_sl_hard_15m_tp_hard_15m"
+        )
+        brain.vector_memory.deactivate_semantic_rules.assert_has_calls([
+            call(["rule_anti_pattern_long_neutral_stop_loss_sl_unknown_unknown_tp_unknown_unknown"]),
+            call(["rule_corrective_long_neutral_stop_loss_sl_unknown_unknown_tp_unknown_unknown"]),
+        ])
 
     def test_trigger_ai_mistake_reflection_stores_sideways_overconfidence_rule(self):
         """Repeated HIGH-confidence sideways failures should become AI-mistake rules."""

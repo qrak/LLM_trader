@@ -659,7 +659,11 @@ class TradingBrainService:
         if default_profile == self.UNKNOWN_EXIT_PROFILE:
             return
         try:
-            active_rules = self.vector_memory.get_active_rules(n_results=50)
+            n_results = 50
+            semantic_rule_count = getattr(self.vector_memory, "semantic_rule_count", None)
+            if isinstance(semantic_rule_count, int):
+                n_results = max(n_results, semantic_rule_count)
+            active_rules = self.vector_memory.get_active_rules(n_results=n_results)
             has_stale_rule = any(
                 self.UNKNOWN_EXIT_PROFILE in str(rule.get("text", ""))
                 or "sl_unknown_unknown_tp_unknown_unknown" in str(rule.get("rule_id", ""))
@@ -1073,7 +1077,8 @@ class TradingBrainService:
                 ),
             )
             if stored:
-                self._deactivate_legacy_unknown_exit_rule(f"rule_{rule_type}", pattern_key)
+                self._deactivate_legacy_unknown_exit_rule("rule_anti_pattern", pattern_key)
+                self._deactivate_legacy_unknown_exit_rule("rule_corrective", pattern_key)
 
             self.logger.info(
                 "Loss reflection complete: stored %s rule '%s'", rule_type, rule_text
