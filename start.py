@@ -81,6 +81,7 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.prompts.context_builder import ContextBuilder as AnalyzerContextBuilder
 from src.analyzer.pattern_engine import ChartGenerator
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.indicator_classifier import build_exit_execution_context_from_config
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -528,14 +529,22 @@ class CompositionRoot:
 
         # Inject chroma_client into VectorMemoryService
         vector_memory = VectorMemoryService(self.logger, chroma_client, embedding_model=embedding_model)
+        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
+        exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
         
         brain_service = TradingBrainService(
-            self.logger, persistence, vector_memory
+            self.logger, persistence, vector_memory, exit_execution_context=exit_execution_context
         )
+        brain_service.refresh_semantic_rules_if_stale()
         
-        memory_service = TradingMemoryService(self.logger, persistence, max_memory=10, vector_memory=vector_memory)
+        memory_service = TradingMemoryService(
+            self.logger,
+            persistence,
+            max_memory=10,
+            vector_memory=vector_memory,
+            initial_capital=self.config.DEMO_QUOTE_CAPITAL,
+        )
         statistics_service = TradingStatisticsService(self.logger, persistence)
-        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
         exit_monitor = ExitMonitor(self.config, timeframe, POSITION_UPDATE_INTERVAL)
         exit_monitor.validate()
         

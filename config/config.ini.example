@@ -133,6 +133,10 @@ stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
 # Maximum position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in code.
 max_position_size = 0.10
+# Fallback sizes used only when the AI omits position_size or returns an invalid value.
+position_size_fallback_low = 0.01
+position_size_fallback_medium = 0.02
+position_size_fallback_high = 0.03
 
 [cooldowns]
 # File message expiry is configured in hours; loader converts it to seconds at runtime.

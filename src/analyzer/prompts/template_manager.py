@@ -390,12 +390,13 @@ CHOPPINESS INDEX CONTEXT:
 NOTE: You may OVERRIDE these guidelines if you have exceptional conviction ( catalyst, {conf_weak + 1}+ confluences). State reasoning.
 
 POSITION SIZING FORMULA (calculate before finalizing):
-- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital — hard cap enforced by system, values above are clamped)
+- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital - hard cap enforced by system, values above are clamped)
 - Base size = confidence / 100 × {max_pos:.2f}  (e.g., confidence 75 → {0.75 * max_pos:.3f}, confidence 90 → {0.90 * max_pos:.3f})
         - If timeframe_alignment = "MIXED": × {1 - pos_reduce_mixed:.2f} (reduce by {pos_reduce_mixed*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_mixed):.3f})
         - If timeframe_alignment = "DIVERGENT": × {1 - pos_reduce_div:.2f} (reduce by {pos_reduce_div*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_div):.3f})
 - In weak trend environments (ADX < {adx_weak}): consider smaller sizes
-- Final position_size = max({min_pos_size:.3f}, calculated_value)
+- Suggested minimum for normal valid entries: {min_pos_size:.3f}; use smaller for weak, mixed, or unusually risky setups.
+- Final position_size = min({max_pos:.3f}, adjusted_calculated_value); do not round up to the cap unless conviction justifies it.
 - Put the final numeric value in JSON only (`position_size`).
 
 MACRO TIMEFRAME CONFLICT (CRITICAL):

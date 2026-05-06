@@ -13,7 +13,8 @@
 ## Key Features
 
 - **Vector-Only Trading Brain**: ChromaDB vector store for semantic trade retrieval and adaptive thresholds.
-- **Adaptive Memory System**: Temporal awareness, decay engine, and automated reflection loops generating persistent Semantic Rules.
+- **Outcome-Aware Memory System**: Temporal awareness, decay engine, and automated reflection loops generating persistent Semantic Rules from wins, losses, and AI mistakes.
+- **Hard Exit Monitoring**: Bot-side interval checks for stop-loss and take-profit against live ticker prices, independent of candle closes.
 - **RAG Engine**: Aggregates news from free RSS feeds with optional Crawl4AI enrichment, plus fundamentals from DefiLlama.
 - **AI & LLM Support**: Multi-provider support (Google Gemini, OpenRouter, BlockRun.AI, LM Studio) with fallback logic and vision-assisted trading.
 - **Multi-Exchange Aggregation**: Fetches data via `ccxt` from Binance, KuCoin, Gate.io, MEXC, Hyperliquid.

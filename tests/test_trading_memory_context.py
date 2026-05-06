@@ -65,3 +65,48 @@ def test_losing_stop_loss_is_labeled_as_loss_cut():
 
     assert "loss-cutting stop" in summary
     assert "-1.00%" in summary
+
+
+def test_total_pnl_percent_uses_capital_not_sum_of_trade_returns():
+    history = [
+        _decision(
+            timestamp=datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc),
+            action="BUY",
+            price=100.0,
+            quantity=1.0,
+            quote_amount=100.0,
+            reasoning="Entered long.",
+        ),
+        _decision(
+            timestamp=datetime(2026, 4, 14, 13, 0, tzinfo=timezone.utc),
+            action="CLOSE_LONG",
+            price=110.0,
+            quantity=1.0,
+            quote_amount=100.0,
+            reasoning="Position closed: take_profit. P&L: +10.00%. Fee: $0.0000",
+        ),
+        _decision(
+            timestamp=datetime(2026, 4, 14, 14, 0, tzinfo=timezone.utc),
+            action="BUY",
+            price=100.0,
+            quantity=20.0,
+            quote_amount=2000.0,
+            reasoning="Entered long.",
+        ),
+        _decision(
+            timestamp=datetime(2026, 4, 14, 15, 0, tzinfo=timezone.utc),
+            action="CLOSE_LONG",
+            price=99.0,
+            quantity=20.0,
+            quote_amount=2000.0,
+            reasoning="Position closed: stop_loss. P&L: -1.00%. Fee: $0.0000",
+        ),
+    ]
+
+    summary = TradingMemory(decisions=history).get_context_summary(
+        full_history=history,
+        initial_capital=10000.0,
+    )
+
+    assert "Total P&L: $-10.00 (-0.10%)" in summary
+    assert "Average P&L per Trade: +4.50%" in summary

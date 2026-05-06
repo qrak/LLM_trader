@@ -516,6 +516,21 @@ class Config:
         return float(self.get_config('risk_management', 'max_position_size', 0.10))
 
     @property
+    def POSITION_SIZE_FALLBACK_LOW(self) -> float:
+        """Fallback position size for LOW confidence when AI size is missing or invalid."""
+        return float(self.get_config('risk_management', 'position_size_fallback_low', 0.01))
+
+    @property
+    def POSITION_SIZE_FALLBACK_MEDIUM(self) -> float:
+        """Fallback position size for MEDIUM confidence when AI size is missing or invalid."""
+        return float(self.get_config('risk_management', 'position_size_fallback_medium', 0.02))
+
+    @property
+    def POSITION_SIZE_FALLBACK_HIGH(self) -> float:
+        """Fallback position size for HIGH confidence when AI size is missing or invalid."""
+        return float(self.get_config('risk_management', 'position_size_fallback_high', 0.03))
+
+    @property
     def STOP_LOSS_TYPE(self) -> str:
         """Stop-loss execution type: soft candle-close or hard ticker-polled."""
         return self._normalize_exit_type(self.get_config('risk_management', 'stop_loss_type', 'soft'), 'stop_loss_type')

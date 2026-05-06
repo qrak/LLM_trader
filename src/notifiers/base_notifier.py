@@ -249,7 +249,7 @@ class BaseNotifier(ABC):
             return None
 
         total_pnl_quote = 0.0
-        total_pnl_pct = 0.0
+        sum_trade_pnl_pct = 0.0
         total_fees = 0.0
         closed_trades = 0
         winning_trades = 0
@@ -286,7 +286,7 @@ class BaseNotifier(ABC):
 
                 total_fees += entry_fee + exit_fee
                 total_pnl_quote += pnl_quote
-                total_pnl_pct += pnl_pct
+                sum_trade_pnl_pct += pnl_pct
                 closed_trades += 1
 
                 if pnl_pct > 0:
@@ -303,13 +303,19 @@ class BaseNotifier(ABC):
         if closed_trades == 0:
             return None
 
+        total_pnl_pct = (
+            (total_pnl_quote / self.config.DEMO_QUOTE_CAPITAL) * 100
+            if self.config.DEMO_QUOTE_CAPITAL > 0
+            else 0.0
+        )
+
         return {
             'total_pnl_quote': total_pnl_quote,
             'total_pnl_pct': total_pnl_pct,
             'total_fees': total_fees,
             'closed_trades': closed_trades,
             'winning_trades': winning_trades,
-            'avg_pnl_pct': total_pnl_pct / closed_trades,
+            'avg_pnl_pct': sum_trade_pnl_pct / closed_trades,
             'win_rate': (winning_trades / closed_trades) * 100,
             'net_pnl': total_pnl_quote - total_fees,
             'last_closed_trade': last_closed_trade,

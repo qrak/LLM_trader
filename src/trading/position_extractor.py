@@ -41,7 +41,7 @@ class PositionExtractor:
             re.IGNORECASE
         )
         self.position_size_pattern: Pattern = re.compile(
-            r'position[_\s]?size["\s:]*\[?([0-9]+(?:\.[0-9]+)?)\]?%?',
+            r'position[_\s]?size["\s:]*\[?([0-9]+(?:\.[0-9]+)?)(?:\s*(%))?\]?',
             re.IGNORECASE
         )
         self.reasoning_pattern: Pattern = re.compile(
@@ -129,8 +129,7 @@ class PositionExtractor:
 
         position_size = data.get("position_size")
         if position_size is not None:
-            size = float(str(position_size).replace("%", ""))
-            position_size = size / 100 if size > 1 else size
+            position_size = self._normalize_position_size(position_size)
 
         reasoning = str(data.get("reasoning", data.get("rationale", "")))
 
@@ -151,6 +150,24 @@ class PositionExtractor:
             return "MEDIUM"
         else:
             return "LOW"
+
+    def _normalize_position_size(self, value: Any, explicit_percent: bool = False) -> Optional[float]:
+        """Normalize position size values to decimal capital fractions."""
+        value_text = str(value).strip()
+        if not value_text:
+            return None
+
+        has_percent = explicit_percent or value_text.endswith("%")
+        try:
+            numeric_value = float(value_text.replace("%", "").replace(",", ""))
+        except (TypeError, ValueError):
+            if self.logger:
+                self.logger.warning("Invalid position_size value from AI response: %s", value)
+            return None
+
+        if has_percent:
+            return numeric_value / 100
+        return numeric_value / 100 if numeric_value > 1 else numeric_value
 
     def _extract_from_text(self, text: str) -> Tuple[str, str, Optional[float], Optional[float], Optional[float], str]:
         """Extract trading info using regex patterns.
@@ -181,8 +198,10 @@ class PositionExtractor:
         position_size_match = self.position_size_pattern.search(text)
         position_size = None
         if position_size_match:
-            size = float(position_size_match.group(1))
-            position_size = size / 100 if size > 1 else size
+            position_size = self._normalize_position_size(
+                position_size_match.group(1),
+                explicit_percent=position_size_match.group(2) is not None,
+            )
 
         # Extract reasoning (take first 200 chars of any found reasoning)
         reasoning_match = self.reasoning_pattern.search(text)

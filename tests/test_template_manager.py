@@ -220,6 +220,8 @@ class TestBuildResponseTemplate:
         tmpl = self.mgr.build_response_template()
         assert "POSITION SIZING FORMULA" in tmpl
         assert "Base size = confidence / 100" in tmpl
+        assert "Suggested minimum for normal valid entries: 0.020" in tmpl
+        assert "do not round up to the cap" in tmpl
 
     def test_confluence_scoring(self):
         tmpl = self.mgr.build_response_template()
