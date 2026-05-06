@@ -89,6 +89,27 @@ def test_build_current_market_context_includes_exit_execution_settings(tmp_path)
     assert "Exit Execution: SL hard/15m | TP soft/4h" in query_document
 
 
+def test_build_current_market_context_ignores_non_object_previous_response(tmp_path):
+    trading_dir = tmp_path / "trading"
+    trading_dir.mkdir()
+    previous_response = trading_dir / "previous_response.json"
+    previous_response.write_text(json.dumps([]), encoding="utf-8")
+
+    config = SimpleNamespace(
+        DATA_DIR=str(tmp_path),
+        TIMEFRAME="4h",
+        STOP_LOSS_TYPE="hard",
+        STOP_LOSS_CHECK_INTERVAL="15m",
+        TAKE_PROFIT_TYPE="hard",
+        TAKE_PROFIT_CHECK_INTERVAL="15m",
+    )
+
+    display_context, query_document = _build_current_market_context(config, MagicMock())
+
+    assert display_context == ""
+    assert query_document == ""
+
+
 def test_extract_market_status_uses_text_and_indicators_without_json_parser():
     parser = MagicMock()
     parser.extract_json_block.return_value = None

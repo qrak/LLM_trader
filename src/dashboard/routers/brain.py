@@ -151,7 +151,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
         return "", ""
     try:
         data = _read_json_file(prev_response_file)
-        if not data:
+        if not isinstance(data, dict):
             return "", ""
         technical_data = _extract_persisted_technical_data(data)
         exit_execution_context = build_exit_execution_context_from_config(config, config.TIMEFRAME)
@@ -258,7 +258,7 @@ class BrainRouter:
         }
         try:
             prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
-            if prev_data is not None:
+            if isinstance(prev_data, dict):
                 extracted = _extract_market_status(prev_data, self.unified_parser)
                 status.update(extracted)
         except Exception:
@@ -266,7 +266,7 @@ class BrainRouter:
 
         try:
             stats = await asyncio.to_thread(_read_json_file, stats_file)
-            if stats is not None:
+            if isinstance(stats, dict):
                 status.update({
                     "total_trades": stats.get("total_trades", 0),
                     "win_rate": stats.get("win_rate", 0),
@@ -294,7 +294,7 @@ class BrainRouter:
         trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         try:
             trades = await asyncio.to_thread(_read_json_file, trade_history_file)
-            if trades is not None:
+            if isinstance(trades, list):
                 result["trades"] = [
                     {
                         "id": f"trade_{i}",
@@ -305,6 +305,7 @@ class BrainRouter:
                         "reasoning": t.get("reasoning", "")[:100]
                     }
                     for i, t in enumerate(trades[-limit:])
+                    if isinstance(t, dict)
                 ]
         except Exception:
             self.logger.error("Failed to load trade history for memory", exc_info=True)
@@ -438,7 +439,7 @@ class BrainRouter:
             prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
             try:
                 data = await asyncio.to_thread(_read_json_file, prev_response_file)
-                if data is not None:
+                if isinstance(data, dict):
                     prompt = data.get("prompt", "")
                     match = re.search(r"Current Price:\s*\$?([\d,]+\.?\d*)", prompt)
                     if match:

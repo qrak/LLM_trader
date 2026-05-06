@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-06 - Latest Change Audit Fixes
+
+### Fixed
+
+- Semantic-rule refresh now checks all stored semantic rules for legacy unknown exit profiles and retires both stale loss-rule prefixes when a refreshed loss pattern changes between anti-pattern and corrective classification.
+- Dashboard brain helpers now ignore malformed non-object JSON snapshots instead of relying on broad exception handling when building market context, brain status, memory, or current-position fallback price data.
+
 ## 2026-05-06 - Semantic Rule Exit Profile Repair
 
 ### Fixed
