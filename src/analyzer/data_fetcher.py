@@ -102,7 +102,6 @@ class DataFetcher:
         Returns:
             Dict containing:
                 'data': NDArray of OHLCV data if available, or None
-                'latest_close': Latest closing price
                 'available_days': Number of days of data actually available
                 'is_complete': Boolean indicating if we have full history for requested period
         """
@@ -118,24 +117,20 @@ class DataFetcher:
                 self.logger.warning("No daily historical data available for %s", pair)
                 return {
                     'data': None,
-                    'latest_close': None,
                     'available_days': 0,
                     'is_complete': False,
                     'error': "No data returned from exchange"
                 }
 
-            ohlcv_data, latest_close = result
+            ohlcv_data, _ = result
             available_days = len(ohlcv_data)
             is_complete = (available_days >= days - 1)  # Closed candles only (no incomplete)
 
             if not is_complete:
                 self.logger.info("Limited historical data for %s: requested %s days, got %s days", pair, days, available_days)
-            else:
-                pass
 
             return {
                 'data': ohlcv_data,
-                'latest_close': latest_close,
                 'available_days': available_days,
                 'is_complete': is_complete,
                 'error': None
@@ -145,7 +140,6 @@ class DataFetcher:
             self.logger.error("Error fetching daily historical data for %s: %s", pair, str(e))
             return {
                 'data': None,
-                'latest_close': None,
                 'available_days': 0,
                 'is_complete': False,
                 'error': str(e)
@@ -163,9 +157,6 @@ class DataFetcher:
         Returns:
             Dict containing:
                 'data': NDArray of OHLCV data if available, or None
-                'latest_close': Latest closing price
-                'available_weeks': Number of weeks of data actually available
-                'meets_200w_threshold': Boolean indicating if we have 200+ weeks for full 200W SMA analysis
                 'error': Error message if fetch failed, None otherwise
         """
         try:
@@ -175,29 +166,19 @@ class DataFetcher:
             if result is None:
                 return {
                     'data': None,
-                    'latest_close': None,
-                    'available_weeks': 0,
-                    'meets_200w_threshold': False,
                     'error': "No data returned"
                 }
 
-            ohlcv_data, latest_close = result
-            available_weeks = len(ohlcv_data)
+            ohlcv_data, _ = result
 
             return {
                 'data': ohlcv_data,
-                'latest_close': latest_close,
-                'available_weeks': available_weeks,
-                'meets_200w_threshold': available_weeks >= 200,
                 'error': None
             }
         except Exception as e:
             self.logger.error("Error fetching weekly data: %s", e)
             return {
                 'data': None,
-                'latest_close': None,
-                'available_weeks': 0,
-                'meets_200w_threshold': False,
                 'error': str(e)
             }
 

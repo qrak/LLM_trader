@@ -23,6 +23,11 @@ class GracefulShutdownManager:
         self._callbacks = []
         self._shutting_down = False
 
+    @property
+    def is_shutting_down(self) -> bool:
+        """Return whether graceful shutdown is already in progress."""
+        return self._shutting_down
+
     def setup_signal_handlers(self):
         if sys.platform == 'win32':
             # On Windows, let Ctrl+C propagate as KeyboardInterrupt so start.py can

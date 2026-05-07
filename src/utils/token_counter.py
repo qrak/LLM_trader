@@ -9,7 +9,7 @@ from typing import Dict, Optional, Any
 
 import tiktoken
 
-from src.trading.data_models import ProviderCostStats, SessionCosts, TokenUsageStats
+from src.trading.data_models import ProviderCostStats, SessionCosts
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
@@ -87,7 +87,6 @@ class TokenCounter:
             "total": 0
         }
         self.session_costs = SessionCosts()
-        self.request_usage: Optional[TokenUsageStats] = None
 
     def count_tokens(self, text: str) -> int:
         """
@@ -138,12 +137,6 @@ class TokenCounter:
             completion_tokens: Actual completion token count from API
             cost: Optional cost from API (only OpenRouter provides this)
         """
-        self.request_usage = TokenUsageStats(
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            total_tokens=prompt_tokens + completion_tokens,
-            cost=cost
-        )
         self.session_tokens["prompt"] += prompt_tokens
         self.session_tokens["completion"] += completion_tokens
         self.session_tokens["total"] += prompt_tokens + completion_tokens
@@ -222,7 +215,6 @@ class TokenCounter:
             "total": 0
         }
         self.session_costs = SessionCosts()
-        self.request_usage = None
 
 
 class CostStorage:
@@ -349,9 +341,3 @@ class CostStorage:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
 
-    def reset(self) -> None:
-        """Reset all costs and update last_reset timestamp."""
-        from datetime import datetime, timezone
-        self._init_defaults()
-        self._last_reset = datetime.now(timezone.utc).isoformat()
-        self.save()

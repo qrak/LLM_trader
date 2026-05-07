@@ -280,10 +280,6 @@ class PersistenceManager:
             self.logger.error("Error loading statistics: %s", e)
             return TradingStatistics()
 
-    async def async_load_statistics(self) -> "TradingStatistics":
-        """Non-blocking load_statistics: runs on a thread-pool worker."""
-        return await asyncio.to_thread(self.load_statistics)
-
     def save_position_monitor_state(self, state: Dict[str, Any]) -> None:
         """Save position monitor cadence state to disk."""
         try:
@@ -305,8 +301,7 @@ class PersistenceManager:
             return {}
         try:
             with open(self.position_monitor_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return data if isinstance(data, dict) else {}
+                return json.load(f)
         except Exception as e:
             self.logger.error("Error loading position monitor state: %s", e)
             return {}

@@ -19,7 +19,7 @@ class TickerManager:
         try:
             if self.file_handler:
                 tickers_data = self.file_handler.load_known_tickers()
-                if tickers_data and isinstance(tickers_data, list):
+                if tickers_data:
                     self.known_tickers = set(tickers_data)
                     self.logger.debug("Loaded %s known tickers", len(self.known_tickers))
         except Exception as e:
@@ -56,18 +56,10 @@ class TickerManager:
         detected_coins = set()
 
         for article in news_database:
-            # Handle both list and legacy string formats
             coins_mentioned = article.get('detected_coins', [])
-            if isinstance(coins_mentioned, list):
-                for coin in coins_mentioned:
-                    if isinstance(coin, str) and len(coin) >= 2:
-                        detected_coins.add(coin.upper())
-            elif isinstance(coins_mentioned, str) and coins_mentioned:
-                # Handle string format
-                for coin in coins_mentioned.split('|'):
-                    coin = coin.strip()
-                    if coin and len(coin) >= 2:
-                        detected_coins.add(coin.upper())
+            for coin in coins_mentioned:
+                if len(coin) >= 2:
+                    detected_coins.add(coin.upper())
 
         return detected_coins
 
@@ -77,16 +69,15 @@ class TickerManager:
 
         for article in news_database:
             categories = article.get('categories', '')
-            if isinstance(categories, str):
-                # Look for ticker-like categories
-                category_parts = categories.split(',')
-                for category in category_parts:
-                    category = category.strip()
-                    if self._is_valid_ticker_category(category):
-                        # Extract potential ticker from category
-                        ticker = self._extract_ticker_from_category(category)
-                        if ticker:
-                            category_coins.add(ticker)
+            # Look for ticker-like categories
+            category_parts = categories.split(',')
+            for category in category_parts:
+                category = category.strip()
+                if self._is_valid_ticker_category(category):
+                    # Extract potential ticker from category
+                    ticker = self._extract_ticker_from_category(category)
+                    if ticker:
+                        category_coins.add(ticker)
 
         return category_coins
 

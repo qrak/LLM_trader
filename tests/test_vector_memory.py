@@ -1,4 +1,5 @@
 """Tests for vector_memory.py changes: classify_rsi_label integration and _adx_label."""
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import pytest
 
@@ -12,7 +13,12 @@ def _make_service():
     logger = MagicMock()
     chroma_client = MagicMock()
     embedding_model = MagicMock()
-    return VectorMemoryService(logger=logger, chroma_client=chroma_client, embedding_model=embedding_model)
+    return VectorMemoryService(
+        logger=logger,
+        chroma_client=chroma_client,
+        embedding_model=embedding_model,
+        timeframe_minutes=240,
+    )
 
 
 # ── _build_experience_document uses classify_rsi_label ───────────
@@ -248,11 +254,11 @@ class TestComputeFactorPerformance:
 class TestRetrievalAndPromptContext:
     """Verify retrieval and prompt context behavior after the split."""
 
-    def test_retrieve_similar_experiences_uses_30_day_half_life_by_default(self):
+    def test_retrieve_similar_experiences_uses_instance_half_life_days(self):
         svc = _make_service()
         svc._initialized = True
         svc._collection = MagicMock()
-        svc._collection.count.return_value = 1
+        svc._collection.count.return_value = 5
         svc._collection.query.return_value = {
             "ids": [["recent-trade"]],
             "documents": [["doc-1"]],
@@ -264,17 +270,20 @@ class TestRetrievalAndPromptContext:
         with patch.object(svc, "_calculate_recency_score", return_value=0.9) as recency_mock:
             svc.retrieve_similar_experiences("BULLISH", k=1)
 
-        assert recency_mock.call_args.args[1] == 30
+        assert recency_mock.call_args.args[1] == svc._decay_half_life_days
 
     def test_retrieve_similar_experiences_reorders_by_hybrid_score(self):
         svc = _make_service()
         svc._initialized = True
         svc._collection = MagicMock()
-        svc._collection.count.return_value = 2
+        svc._collection.count.return_value = 10
+        now = datetime.now(timezone.utc)
+        older_ts = (now - timedelta(days=max(2, svc._max_age_days - 1))).isoformat()
+        newer_ts = (now - timedelta(days=1)).isoformat()
         svc._collection.query.return_value = {
             "ids": [["older-better-match", "newer-slightly-weaker"]],
             "documents": [["doc-1", "doc-2"]],
-            "metadatas": [[{"timestamp": "2026-01-01T00:00:00+00:00"}, {"timestamp": "2026-03-20T00:00:00+00:00"}]],
+            "metadatas": [[{"timestamp": older_ts}, {"timestamp": newer_ts}]],
             "distances": [[0.10, 0.20]],
         }
         svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2]
@@ -284,6 +293,83 @@ class TestRetrievalAndPromptContext:
 
         assert [result.id for result in results] == ["newer-slightly-weaker", "older-better-match"]
         assert results[0].hybrid_score > results[1].hybrid_score
+
+    def test_timeframe_driven_decay_window_defaults(self):
+        svc_4h = VectorMemoryService(MagicMock(), MagicMock(), embedding_model=MagicMock(), timeframe_minutes=240)
+        svc_15m = VectorMemoryService(MagicMock(), MagicMock(), embedding_model=MagicMock(), timeframe_minutes=15)
+
+        assert svc_4h._decay_half_life_days == 14
+        assert svc_4h._max_age_days == 56
+        assert svc_15m._decay_half_life_days == 1
+        assert svc_15m._max_age_days == 4
+
+    def test_retrieve_similar_experiences_excludes_entries_older_than_max_age_days(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._collection = MagicMock()
+        svc._collection.count.return_value = 10
+        now = datetime.now(timezone.utc)
+        fresh_ts = (now - timedelta(days=1)).isoformat()
+        old_ts = (now - timedelta(days=svc._max_age_days + 10)).isoformat()
+        svc._collection.query.return_value = {
+            "ids": [["fresh", "too-old"]],
+            "documents": [["doc-1", "doc-2"]],
+            "metadatas": [[{"timestamp": fresh_ts}, {"timestamp": old_ts}]],
+            "distances": [[0.20, 0.10]],
+        }
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2]
+
+        with patch.object(svc, "_calculate_recency_score", side_effect=[0.9, 0.2]):
+            results = svc.retrieve_similar_experiences("BULLISH", k=5)
+
+        assert [item.id for item in results] == ["fresh"]
+
+    def test_retrieve_similar_experiences_excludes_invalid_timestamp_entries(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._collection = MagicMock()
+        svc._collection.count.return_value = 10
+        fresh_ts = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        svc._collection.query.return_value = {
+            "ids": [["valid", "invalid-ts"]],
+            "documents": [["doc-1", "doc-2"]],
+            "metadatas": [[{"timestamp": fresh_ts}, {"timestamp": "not-a-timestamp"}]],
+            "distances": [[0.30, 0.05]],
+        }
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2]
+
+        with patch.object(svc, "_calculate_recency_score", side_effect=[0.8, 0.4]):
+            results = svc.retrieve_similar_experiences("BULLISH", k=5)
+
+        assert [item.id for item in results] == ["valid"]
+
+    def test_get_context_for_prompt_includes_active_window_in_header(self):
+        svc = _make_service()
+        experiences = [
+            VectorSearchResult(
+                id="exp-1",
+                document="doc-1",
+                similarity=70.0,
+                recency=90.0,
+                hybrid_score=76.0,
+                metadata={
+                    "outcome": "WIN",
+                    "pnl_pct": 2.0,
+                    "direction": "LONG",
+                    "market_context": "BULLISH + High ADX",
+                    "reasoning": "Momentum continuation",
+                },
+            ),
+        ]
+
+        with patch.object(svc, "retrieve_similar_experiences", return_value=experiences), patch.object(
+            svc,
+            "get_anti_patterns_for_prompt",
+            return_value="",
+        ):
+            prompt = svc.get_context_for_prompt("BULLISH", k=1, display_context="BULLISH + High ADX")
+
+        assert f"active window: last {svc._max_age_days} days" in prompt
 
     def test_get_context_for_prompt_includes_limited_data_and_anti_patterns(self):
         svc = _make_service()

@@ -391,7 +391,6 @@ class CompositionRoot:
             'market': CCXTMarketAPI(
                 logger=self.logger,
                 exchange_manager=infra['exchange_manager'],
-                data_fetcher_factory=utils['data_fetcher_factory'],
             ),
             'defillama': defillama,
             'alternative_me': alternative_me
@@ -526,10 +525,16 @@ class CompositionRoot:
         embed_device = _get_best_device()
         self.logger.info("Embedding device: %s", embed_device)
         embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
+        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
+        timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
 
         # Inject chroma_client into VectorMemoryService
-        vector_memory = VectorMemoryService(self.logger, chroma_client, embedding_model=embedding_model)
-        timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
+        vector_memory = VectorMemoryService(
+            self.logger,
+            chroma_client,
+            embedding_model=embedding_model,
+            timeframe_minutes=timeframe_minutes,
+        )
         exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
         
         brain_service = TradingBrainService(
@@ -569,7 +574,7 @@ class CompositionRoot:
         notifier = None
         task = None
         
-        if self.config.DISCORD_BOT_ENABLED and hasattr(self.config, 'BOT_TOKEN_DISCORD') and self.config.BOT_TOKEN_DISCORD:
+        if self.config.DISCORD_BOT_ENABLED and self.config.BOT_TOKEN_DISCORD:
             try:
                 import discord
                 from src.notifiers.filehandler_components import (
@@ -622,7 +627,7 @@ class CompositionRoot:
             msg = context.get("message", "Unknown asyncio error")
             if exc is not None:
                 if isinstance(exc, KeyboardInterrupt):
-                    if self.shutdown_manager and getattr(self.shutdown_manager, "_shutting_down", False):
+                    if self.shutdown_manager and self.shutdown_manager.is_shutting_down:
                         return
                     self.logger.debug("Asyncio task KeyboardInterrupt during shutdown: %s", msg)
                     return

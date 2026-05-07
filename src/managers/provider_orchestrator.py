@@ -51,7 +51,6 @@ class ProviderOrchestrator:
                 default_model=self.config.GOOGLE_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.GOOGLE_STUDIO_MODEL),
                 supports_chart=True,
-                has_rate_limits=True
             ),
             'openrouter': ProviderMetadata(
                 name='OpenRouter',
@@ -59,7 +58,6 @@ class ProviderOrchestrator:
                 default_model=self.config.OPENROUTER_BASE_MODEL,
                 config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
                 supports_chart=True,
-                has_rate_limits=True
             ),
             'local': ProviderMetadata(
                 name='LM Studio',
@@ -67,7 +65,6 @@ class ProviderOrchestrator:
                 default_model=self.config.LM_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.LM_STUDIO_MODEL),
                 supports_chart=False,
-                has_rate_limits=False
             ),
             'blockrun': ProviderMetadata(
                 name='BlockRun.AI',
@@ -75,7 +72,6 @@ class ProviderOrchestrator:
                 default_model=self.config.BLOCKRUN_MODEL,
                 config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
                 supports_chart=True,
-                has_rate_limits=False
             )
         }
 
@@ -391,9 +387,9 @@ class ProviderOrchestrator:
         first_choice = response.choices[0]
         if first_choice.error:
             error_detail = first_choice.error
-            error_code = error_detail.get('code', 'unknown') if isinstance(error_detail, dict) else 'unknown'
-            error_msg = error_detail.get('message', 'unknown') if isinstance(error_detail, dict) else str(error_detail)
-            provider = error_detail.get('metadata', {}).get('provider_name', 'unknown') if isinstance(error_detail, dict) else 'unknown'
+            error_code = error_detail.get('code', 'unknown')
+            error_msg = error_detail.get('message', 'unknown')
+            provider = error_detail.get('metadata', {}).get('provider_name', 'unknown')
             self.logger.error("Error in API response choice from %s: [%s] %s", provider, error_code, error_msg)
             self.logger.debug("Full error details: %s", error_detail)
             return False

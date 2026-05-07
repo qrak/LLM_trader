@@ -115,7 +115,7 @@ class MonitorRouter:
         """Synchronously read and parse a news JSON file."""
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("articles", data) if isinstance(data, dict) else data
+            return data.get("articles", data)
 
     async def get_news(self) -> Dict[str, Any]:
         """Get cached news articles from RAG engine or disk."""

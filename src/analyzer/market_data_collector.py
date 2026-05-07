@@ -224,21 +224,16 @@ class MarketDataCollector:
             if result['data'] is None:
                 self.logger.warning("Weekly data unavailable: %s", result.get('error', 'Unknown'))
                 context.weekly_ohlcv = None
-                context.available_weeks = 0
-                context.meets_200w_threshold = False
                 return False
 
             context.weekly_ohlcv = result['data']
-            context.available_weeks = result['available_weeks']
-            context.meets_200w_threshold = result['meets_200w_threshold']
+            available_weeks = len(result['data'])
 
-            self.logger.info("Weekly data: %s weeks, 200W SMA: %s", result['available_weeks'], 'Available' if result['meets_200w_threshold'] else 'Insufficient')
+            self.logger.info("Weekly data: %s weeks, 200W SMA: %s", available_weeks, 'Available' if available_weeks >= 200 else 'Insufficient')
             return True
         except Exception as e:
             self.logger.error("Error fetching weekly macro data: %s", e)
             context.weekly_ohlcv = None
-            context.available_weeks = 0
-            context.meets_200w_threshold = False
             return False
 
 

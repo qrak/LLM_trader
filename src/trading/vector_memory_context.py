@@ -1,7 +1,7 @@
 """Context and retrieval helpers for vector memory."""
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from src.utils.indicator_classifier import classify_rsi_label, format_exit_execution_context
@@ -11,6 +11,17 @@ from .data_models import VectorSearchResult
 
 class VectorMemoryContextMixin:
     """Document building, retrieval, and prompt formatting behavior."""
+
+    @staticmethod
+    def _parse_trade_timestamp(timestamp: str) -> datetime:
+        """Parse trade timestamp safely and normalize to UTC."""
+        try:
+            parsed = datetime.fromisoformat(timestamp)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
+        except (TypeError, ValueError):
+            return datetime.min.replace(tzinfo=timezone.utc)
 
     def _build_experience_document(
         self,
@@ -137,7 +148,8 @@ class VectorMemoryContextMixin:
         current_context: str,
         k: int = 5,
         use_decay: bool = True,
-        decay_half_life_days: int = 30,
+        decay_half_life_days: Optional[int] = None,
+        max_age_days: Optional[int] = None,
         where: Optional[Dict[str, Any]] = None,
     ) -> List[VectorSearchResult]:
         """Retrieve past experiences similar to the current market context."""
@@ -149,10 +161,19 @@ class VectorMemoryContextMixin:
                 return []
 
             query_embedding = self._embedding_model.encode(current_context).tolist()
+            effective_half_life_days = (
+                decay_half_life_days
+                if decay_half_life_days is not None else self._decay_half_life_days
+            )
+            effective_max_age_days = (
+                max_age_days
+                if max_age_days is not None else self._max_age_days
+            )
+            overfetch_k = max(1, k * self.RETRIEVAL_OVERFETCH_MULTIPLIER)
 
             query_kwargs = {
                 "query_embeddings": [query_embedding],
-                "n_results": min(k, self._collection.count()),
+                "n_results": min(overfetch_k, self._collection.count()),
             }
             if where:
                 query_kwargs["where"] = where
@@ -166,7 +187,7 @@ class VectorMemoryContextMixin:
 
                     if use_decay:
                         timestamp = meta.get("timestamp", "")
-                        recency = self._calculate_recency_score(timestamp, decay_half_life_days)
+                        recency = self._calculate_recency_score(timestamp, effective_half_life_days)
                         hybrid_score = similarity * 0.7 + recency * 0.3
                     else:
                         recency = 1.0
@@ -182,6 +203,11 @@ class VectorMemoryContextMixin:
                     ))
 
             if use_decay:
+                cutoff_dt = datetime.now(timezone.utc) - timedelta(days=effective_max_age_days)
+                experiences = [
+                    item for item in experiences
+                    if self._parse_trade_timestamp(item.metadata.get("timestamp", "")) >= cutoff_dt
+                ]
                 experiences.sort(key=lambda item: item.hybrid_score, reverse=True)
                 experiences = experiences[:k]
 
@@ -207,16 +233,19 @@ class VectorMemoryContextMixin:
             return ""
 
         max_similarity = max(exp.similarity for exp in experiences)
+        context_header = (
+            f"RELEVANT PAST EXPERIENCES (Context: {display}, active window: last {self._max_age_days} days):"
+        )
         if len(experiences) <= 2 and max_similarity < 50:
             lines = [
-                f"RELEVANT PAST EXPERIENCES (Context: {display}):",
+                context_header,
                 "",
                 f"⚠️ LIMITED DATA: Only {len(experiences)} trade(s) with <50% similarity. Standard analysis recommended.",
                 "",
             ]
         else:
             lines = [
-                f"RELEVANT PAST EXPERIENCES (Context: {display}):",
+                context_header,
                 "",
             ]
 

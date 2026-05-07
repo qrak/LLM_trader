@@ -35,7 +35,7 @@ class MarketDataCache:
             timestamp = normalize_timestamp_func(timestamp_field)
         else:
             # Fallback simple normalization
-            timestamp = float(timestamp_field) if isinstance(timestamp_field, (int, float)) else 0
+            timestamp = float(timestamp_field)
 
         if timestamp:
             data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)

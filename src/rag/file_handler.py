@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 class RagFileHandler:
     NEWS_FILE = "crypto_news.json"
     MARKET_DATA_DIR = "market_data"
-    COINGECKO_CACHE_FILE = "coingecko_global.json"
 
     def __init__(self, logger: Logger, config: "ConfigProtocol", unified_parser=None):
         """Initialize RagFileHandler with logger and config.
@@ -32,9 +31,6 @@ class RagFileHandler:
         self.market_data_dir = os.path.join(self.data_dir, self.MARKET_DATA_DIR)
         self.news_file_path = os.path.join(self.data_dir, self.NEWS_FILE)
         self.tickers_file = os.path.join(self.data_dir, "known_tickers.json")
-
-        # Cache paths
-        self.coingecko_file_path = os.path.join(self.market_data_dir, self.COINGECKO_CACHE_FILE)
 
         # RAG priorities are configuration, not data - store in config directory
         config_dir = os.path.join(self.base_dir, "config")
@@ -217,7 +213,7 @@ class RagFileHandler:
             synced_map: Dict[str, str] = {}
             for ticker in sorted(normalized_tickers):
                 existing = mapping.get(ticker)
-                if isinstance(existing, str) and existing.strip():
+                if existing and existing.strip():
                     synced_map[ticker] = existing.strip().lower()
                 else:
                     synced_map[ticker] = ticker.lower()

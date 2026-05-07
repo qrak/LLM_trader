@@ -6,24 +6,6 @@ from src.indicators.trend import supertrend_numba
 
 
 @njit(cache=True)
-def _calculate_volume_filter_numba(volume, length, i):
-    """
-    Calculate volume filter for support/resistance detection (helper function).
-
-    Args:
-        volume: Volume array
-        length: Lookback period
-        i: Current index
-
-    Returns:
-        (rolling_avg_volume: float, volume_filter: bool)
-    """
-    rolling_avg_volume = np.mean(volume[i - length:i])
-    volume_filter = volume[i] > rolling_avg_volume
-    return rolling_avg_volume, volume_filter
-
-
-@njit(cache=True)
 def support_resistance_numba(high, low, length):
     n = len(high)
     rolling_resistance = np.full(n, np.nan)
@@ -116,7 +98,7 @@ def support_resistance_numba_advanced(high, low, close, volume, length):
         strong_resistance = np.where(volume_filter, r1, np.nan)
         return strong_support, strong_resistance
 
-    # FIXED: O(N) running sum replaces O(N*K) _calculate_volume_filter_numba slice scan.
+    # O(N) running sum replaces O(N*K) volume slice scans.
     # NaN-safe: track nan_count so vol_sum recovers once NaN scrolls out of the window.
     vol_sum = 0.0
     nan_count = 0
@@ -157,8 +139,6 @@ def support_resistance_numba_advanced(high, low, close, volume, length):
 
     return strong_support, strong_resistance
 
-
-
 @njit(cache=True)
 def advanced_support_resistance_numba(high, low, close, volume, length=50, strength_threshold=2, persistence=1,
                                       volume_factor=2.0, price_factor=0.005):
@@ -181,7 +161,7 @@ def advanced_support_resistance_numba(high, low, close, volume, length=50, stren
     if n < length:
         return strong_support, strong_resistance
 
-    # FIXED: O(N) running sum replaces O(N*K) _calculate_volume_filter_numba slice scan.
+    # O(N) running sum replaces O(N*K) volume slice scans.
     # NaN-safe: track nan_count so vol_sum recovers once NaN scrolls out of the window.
     vol_sum = 0.0
     nan_count = 0

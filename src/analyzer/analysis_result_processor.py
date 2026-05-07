@@ -116,7 +116,7 @@ class AnalysisResultProcessor:
 
                 # Log confluence factors if available (Chain-of-Thought scoring)
                 confluence_factors = analysis.get("confluence_factors", {})
-                if confluence_factors and isinstance(confluence_factors, dict):
+                if confluence_factors:
                     cf_str = ", ".join([f"{k}={v}" for k, v in confluence_factors.items()])
                     self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength) | Confluence: %s", signal, confidence, direction, strength, cf_str)
                 else:

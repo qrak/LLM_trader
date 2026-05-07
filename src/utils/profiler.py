@@ -3,7 +3,6 @@ import functools
 import asyncio
 from typing import Callable, Any
 from src.config.loader import config
-from src.utils.protocols import HasLogger
 
 def profile_performance(func: Callable) -> Callable:
     """
@@ -17,11 +16,11 @@ def profile_performance(func: Callable) -> Callable:
             return await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) \
                 else func(*args, **kwargs)
 
-        instance = args[0] if args else None
-        logger = instance.logger if isinstance(instance, HasLogger) else None
+        instance = args[0]
+        logger = instance.logger
 
         start_time = time.perf_counter()
-        class_name = args[0].__class__.__name__ if args else ''
+        class_name = instance.__class__.__name__
         method_name = func.__name__
 
         try:
@@ -38,22 +37,18 @@ def profile_performance(func: Callable) -> Callable:
             slow_marker = " [SLOW]" if duration > 1000 else ""
             msg = f"Performance: {class_name}.{method_name} took {duration:.2f}ms{slow_marker}"
 
-            if logger:
-                logger.debug(msg)
-            else:
-                # Fallback print if logger not found on instance
-                print(f"[DEBUG] {msg}")
+            logger.debug(msg)
 
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs) -> Any:
         if not config.LOGGER_DEBUG:
             return func(*args, **kwargs)
 
-        instance = args[0] if args else None
-        logger = instance.logger if isinstance(instance, HasLogger) else None
+        instance = args[0]
+        logger = instance.logger
 
         start_time = time.perf_counter()
-        class_name = args[0].__class__.__name__ if args else ''
+        class_name = instance.__class__.__name__
         method_name = func.__name__
 
         try:
@@ -65,10 +60,7 @@ def profile_performance(func: Callable) -> Callable:
             slow_marker = " [SLOW]" if duration > 1000 else ""
             msg = f"Performance: {class_name}.{method_name} took {duration:.2f}ms{slow_marker}"
 
-            if logger:
-                logger.debug(msg)
-            else:
-                print(f"[DEBUG] {msg}")
+            logger.debug(msg)
 
     # Return appropriate wrapper based on whether the original function is async
     if asyncio.iscoroutinefunction(func):

@@ -27,7 +27,7 @@ class PerformanceRouter:
 
     def _default_statistics(self) -> Dict[str, Any]:
         """Return a default statistics payload seeded from configured capital."""
-        initial_capital = getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0)
+        initial_capital = self.config.DEMO_QUOTE_CAPITAL
         return TradingStatistics(
             initial_capital=initial_capital,
             current_capital=initial_capital,
@@ -71,10 +71,7 @@ class PerformanceRouter:
         cached = self.dashboard_state.get_cached("performance_history", ttl_seconds=60.0)
         if cached:
             return cached
-        try:
-            data_dir = self.config.DATA_DIR
-        except AttributeError:
-            data_dir = "data"
+        data_dir = self.config.DATA_DIR
         trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         equity_curve = []

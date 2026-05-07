@@ -67,7 +67,7 @@ class IndexManager:
     def _index_article_coins(self, article: Dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
         """Detect and index coins mentioned in the article."""
         # Check if coins are already detected and stored as list
-        if 'detected_coins' in article and isinstance(article['detected_coins'], list):
+        if 'detected_coins' in article:
             coins_mentioned = set(article['detected_coins'])
         else:
             # Fall back to detection

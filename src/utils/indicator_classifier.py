@@ -5,7 +5,10 @@ by TradingBrainService to build context query strings. These functions
 are the single source of truth for classification thresholds, shared
 between the AnalysisEngine (live trading) and the dashboard router.
 """
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
+
+if TYPE_CHECKING:
+    from src.config.protocol import ConfigProtocol
 
 
 EXIT_EXECUTION_UNKNOWN = "unknown"
@@ -48,16 +51,16 @@ def build_exit_execution_context(
 
 
 def build_exit_execution_context_from_config(
-    config: Any,
+    config: "ConfigProtocol",
     timeframe: str = EXIT_EXECUTION_UNKNOWN,
 ) -> Dict[str, str]:
     """Build risk-execution context from config attributes."""
     interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
     return build_exit_execution_context(
-        stop_loss_type=getattr(config, "STOP_LOSS_TYPE", EXIT_EXECUTION_UNKNOWN),
-        stop_loss_check_interval=getattr(config, "STOP_LOSS_CHECK_INTERVAL", interval_default) or interval_default,
-        take_profit_type=getattr(config, "TAKE_PROFIT_TYPE", EXIT_EXECUTION_UNKNOWN),
-        take_profit_check_interval=getattr(config, "TAKE_PROFIT_CHECK_INTERVAL", interval_default) or interval_default,
+        stop_loss_type=config.STOP_LOSS_TYPE,
+        stop_loss_check_interval=config.STOP_LOSS_CHECK_INTERVAL or interval_default,
+        take_profit_type=config.TAKE_PROFIT_TYPE,
+        take_profit_check_interval=config.TAKE_PROFIT_CHECK_INTERVAL or interval_default,
     )
 
 
@@ -188,15 +191,14 @@ def classify_market_sentiment(sentiment_data: Optional[Dict[str, Any]]) -> str:
     """Classify Fear & Greed index into sentiment zones."""
     if sentiment_data:
         fear_greed = sentiment_data.get("fear_greed_index", 50)
-        if isinstance(fear_greed, (int, float)):
-            if fear_greed <= 25:
-                return "EXTREME_FEAR"
-            if fear_greed <= 45:
-                return "FEAR"
-            if fear_greed >= 75:
-                return "EXTREME_GREED"
-            if fear_greed >= 55:
-                return "GREED"
+        if fear_greed <= 25:
+            return "EXTREME_FEAR"
+        if fear_greed <= 45:
+            return "FEAR"
+        if fear_greed >= 75:
+            return "EXTREME_GREED"
+        if fear_greed >= 55:
+            return "GREED"
     return "NEUTRAL"
 
 
@@ -204,7 +206,7 @@ def classify_order_book_bias(microstructure_data: Optional[Dict[str, Any]]) -> s
     """Classify order book pressure from bid/ask imbalance."""
     if microstructure_data:
         order_book = microstructure_data.get("order_book", {})
-        imbalance = order_book.get("imbalance", 0) if isinstance(order_book, dict) else 0
+        imbalance = order_book.get("imbalance", 0)
         if imbalance > 0.1:
             return "BUY_PRESSURE"
         if imbalance < -0.1:

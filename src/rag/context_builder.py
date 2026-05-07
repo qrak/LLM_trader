@@ -7,13 +7,16 @@ Handles building analysis context from news articles and search results.
 import re
 from datetime import datetime
 from collections import namedtuple
-from typing import List, Dict, Any, Optional, Tuple, Set
+from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple, Set
 from src.logger.logger import Logger
 from src.rag.article_processor import ArticleProcessor
 from src.rag.news_ingestion.schema_mapper import normalize_article_whitespace
 from src.rag.scoring_policy import ArticleScoringPolicy
 from src.utils.profiler import profile_performance
 from src.utils.token_counter import TokenCounter
+
+if TYPE_CHECKING:
+    from src.config.protocol import ConfigProtocol
 
 ArticleContent = namedtuple('ArticleContent', ['title', 'body', 'categories', 'tags', 'detected_coins'])
 
@@ -24,7 +27,7 @@ class ContextBuilder:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config=None,
+        config: "ConfigProtocol",
         article_processor=None,
         symbol_name_map: Optional[Dict[str, str]] = None,
     ):
@@ -145,10 +148,7 @@ class ContextBuilder:
 
         # Use configured article_max_tokens to limit each article strictly
         # This ensures uniform article quality and control over content distribution
-        try:
-            article_max_tokens = int(self.config.RAG_ARTICLE_MAX_TOKENS) if self.config else 1500
-        except Exception:
-            article_max_tokens = 1500
+        article_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS
 
         for item in news_items:
             # Stop if we're close to the total context limit
@@ -187,8 +187,7 @@ class ContextBuilder:
             Formatted string: "Title\nSource (Date)\nArticle body..."
         """
         title = item.get('title', 'No Title').strip()
-        source_raw = item.get('source_info') or item.get('source', 'Unknown Source')
-        source = source_raw.get('name', 'Unknown Source') if isinstance(source_raw, dict) else str(source_raw)
+        source = item.get('source_info', {'name': 'Unknown Source'}).get('name', 'Unknown Source')
         published_on = item.get('published_on', 0)
         published = datetime.fromtimestamp(published_on).strftime('%Y-%m-%d %H:%M UTC')
 
@@ -269,7 +268,7 @@ class ContextBuilder:
             reverse=True
         )
 
-        min_body_chars = int(getattr(self.config, 'RAG_NEWS_ENRICH_MIN_CHARS', 400)) if self.config else 400
+        min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body = [
             idx for idx in candidate_sorted
             if idx < len(news_database) and len(str(news_database[idx].get('body', ''))) >= min_body_chars

@@ -85,9 +85,8 @@ class BaseAIClient(ABC):
         """
         sanitized = message
         # If the instance has an api_key attribute, try to redact it
-        if self.api_key:
-            if isinstance(self.api_key, str) and len(self.api_key) > 5:
-                sanitized = sanitized.replace(self.api_key, "[REDACTED_API_KEY]")
+        if self.api_key and len(self.api_key) > 5:
+            sanitized = sanitized.replace(self.api_key, "[REDACTED_API_KEY]")
 
         return sanitized
 
@@ -134,21 +133,21 @@ class BaseAIClient(ABC):
     def convert_pydantic_response(
         self,
         response: Any,
-        wrapper_attr: Optional[str] = None
+        unwrap_response: bool = False
     ) -> ChatResponseModel:
         """
         Convert any Pydantic SDK response to ChatResponseModel.
-        Used by: BlockRun (wrapper_attr='response'), OpenRouter (no wrapper)
+        Used by: BlockRun (unwrap_response=True), OpenRouter (no wrapper)
         
         Args:
             response: SDK response (Pydantic model)
-            wrapper_attr: Unwrap attribute (e.g., 'response' for ChatResponseWithCost)
+            unwrap_response: Whether to unwrap a ChatResponseWithCost response field
         """
         if response is None:
             return ChatResponseModel.from_error("Empty response from SDK")
             
         try:
-            inner = getattr(response, wrapper_attr) if wrapper_attr else response
+            inner = response.response if unwrap_response else response
         except AttributeError:
             inner = response
             

@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
 
@@ -43,7 +43,7 @@ RULE_METADATA_FIELDS = (
 )
 
 
-def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]]]:
+def _read_json_file(file_path: Path) -> Any:
     """Helper to read JSON file synchronously for offloading to a thread."""
     if not file_path.exists():
         return None
@@ -54,13 +54,10 @@ def _read_json_file(file_path: Path) -> Optional[Union[Dict[str, Any], List[Any]
 def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """Return persisted indicator values from new or legacy previous_response shapes."""
     technical_data = data.get("technical_data")
-    if isinstance(technical_data, dict) and technical_data:
+    if technical_data:
         return technical_data
 
     response = data.get("response", {})
-    if not isinstance(response, dict):
-        return {}
-
     return {
         key: value
         for key, value in response.items()
@@ -98,9 +95,7 @@ def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[st
     parsed_analysis = None
     if unified_parser:
         try:
-            extracted_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
-            if isinstance(extracted_analysis, dict):
-                parsed_analysis = extracted_analysis
+            parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
         except Exception:
             parsed_analysis = None
 
@@ -151,8 +146,6 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
         return "", ""
     try:
         data = _read_json_file(prev_response_file)
-        if not isinstance(data, dict):
-            return "", ""
         technical_data = _extract_persisted_technical_data(data)
         exit_execution_context = build_exit_execution_context_from_config(config, config.TIMEFRAME)
         if not technical_data:
@@ -166,8 +159,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
             return fallback, fallback
         current_price: Optional[float] = None
         response = data.get("response", {})
-        if isinstance(response, dict):
-            current_price = response.get("current_price")
+        current_price = response.get("current_price")
         sentiment_data: Optional[Dict[str, Any]] = data.get("sentiment")
         is_weekend = datetime.now().weekday() >= 5
         shared_kwargs: Dict[str, Any] = {
@@ -257,16 +249,16 @@ class BrainRouter:
             "exit_management": build_exit_execution_context_from_config(self.config, timeframe),
         }
         try:
-            prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
-            if isinstance(prev_data, dict):
+            if prev_response_file.exists():
+                prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
                 extracted = _extract_market_status(prev_data, self.unified_parser)
                 status.update(extracted)
         except Exception:
             self.logger.error("Failed to load brain status", exc_info=True)
 
         try:
-            stats = await asyncio.to_thread(_read_json_file, stats_file)
-            if isinstance(stats, dict):
+            if stats_file.exists():
+                stats = await asyncio.to_thread(_read_json_file, stats_file)
                 status.update({
                     "total_trades": stats.get("total_trades", 0),
                     "win_rate": stats.get("win_rate", 0),
@@ -293,8 +285,8 @@ class BrainRouter:
             result["stats"] = self.vector_memory.compute_confidence_stats()
         trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         try:
-            trades = await asyncio.to_thread(_read_json_file, trade_history_file)
-            if isinstance(trades, list):
+            if trade_history_file.exists():
+                trades = await asyncio.to_thread(_read_json_file, trade_history_file)
                 result["trades"] = [
                     {
                         "id": f"trade_{i}",
@@ -305,7 +297,6 @@ class BrainRouter:
                         "reasoning": t.get("reasoning", "")[:100]
                     }
                     for i, t in enumerate(trades[-limit:])
-                    if isinstance(t, dict)
                 ]
         except Exception:
             self.logger.error("Failed to load trade history for memory", exc_info=True)
@@ -330,8 +321,8 @@ class BrainRouter:
                 mapped_rule["source_trades"] = meta.get("source_trades") or meta.get("source_loss_count")
                 for field in RULE_METADATA_FIELDS:
                     mapped_rule[field] = meta.get(field)
-                resolved_exit_profile = self._resolve_rule_exit_profile(meta)
                 if mapped_rule.get("dominant_exit_profile") in (None, "", self.UNKNOWN_EXIT_PROFILE):
+                    resolved_exit_profile = self._resolve_rule_exit_profile(meta)
                     mapped_rule["dominant_exit_profile"] = resolved_exit_profile
                 mapped_rule["rule_type"] = mapped_rule["rule_type"] or "best_practice"
                 rules.append(mapped_rule)
@@ -438,8 +429,8 @@ class BrainRouter:
             data_dir = self.config.DATA_DIR
             prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
             try:
-                data = await asyncio.to_thread(_read_json_file, prev_response_file)
-                if isinstance(data, dict):
+                if prev_response_file.exists():
+                    data = await asyncio.to_thread(_read_json_file, prev_response_file)
                     prompt = data.get("prompt", "")
                     match = re.search(r"Current Price:\s*\$?([\d,]+\.?\d*)", prompt)
                     if match:
