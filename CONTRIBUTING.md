@@ -1,28 +1,66 @@
-# Contributing to LLM_Trader v2
+# Contributing to LLM Trader
 
-Thank you for your interest in contributing!
+Thank you for helping improve the project.
 
-## How to Contribute
-- Fork the repository on GitHub (https://github.com/qrak/LLM_trader)
-- Clone your fork and create a new branch for your changes
-- Make your changes and commit with clear messages
-- Push your branch and open a Pull Request
+## Quick Start
 
-## Guidelines
-- Follow the existing code style and structure
-- Document new features and update the README if needed
-- Do not commit secrets or API keys (use keys.env)
-- Add tests for new features if possible
-- Be respectful and constructive in discussions
+1. Fork the repository and clone your fork.
+2. Create a feature branch from `main`.
+3. Set up and activate the local virtual environment.
+4. Implement your change with tests and documentation updates.
+5. Open a Pull Request with a clear summary and validation steps.
 
-By contributing to this project, you agree that your contributions will be licensed under the Apache License, Version 2.0.
+## Local Development Setup (Windows PowerShell)
 
-## Issues & Feature Requests
-- Use GitHub Issues to report bugs or request features
-- Please provide clear steps to reproduce bugs
+```powershell
+python -m venv .venv
+& ./.venv/Scripts/Activate.ps1
+pip install -r requirements.txt
+pip install -r requirements-dev.txt
+```
+
+Use the interpreter inside `.venv` for all development commands.
+
+## Code Standards
+
+- Follow the existing code style and architecture patterns used in `src/` and `tests/`.
+- Keep architecture dependency-injected through the composition root (`start.py`), rather than constructing service dependencies inside service classes.
+- Use explicit type hints on new or changed APIs.
+- Use concise English docstrings for non-trivial classes and functions.
+- Do not commit secrets, API keys, or local runtime data from `data/`.
+
+## Testing Expectations
+
+Run targeted tests for changed modules first, then a broader pass when practical.
+
+```powershell
+pytest tests/
+```
+
+If your change touches prompts, parsing, trading logic, dashboard routes, or news ingestion, include or update relevant regression tests.
+
+## Documentation and Changelog Requirements
+
+- Update `README.md` when user-facing behavior changes.
+- Update docs under `docs/` when architecture or workflows change.
+- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes.
+
+## Pull Request Checklist
+
+- Describe what changed and why.
+- Link related issues.
+- Include test evidence (commands and results summary).
+- Mention documentation updates included in the PR.
+- Confirm no secrets were introduced.
+
+## Issues and Feature Requests
+
+Use GitHub Issues for bug reports and enhancement ideas. Include reproduction steps, expected behavior, actual behavior, and environment details.
+
+## License and Contribution Terms
+
+By contributing, you agree your contributions are licensed under the [MIT License](LICENSE.md).
 
 ## Contact
-- For questions, reach out via GitHub Issues or join the Discord server: https://discord.gg/ZC48aTTqR2
 
-Happy coding!
-— qrak
+For questions, open an issue or join Discord: https://discord.gg/ZC48aTTqR2

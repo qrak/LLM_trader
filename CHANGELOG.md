@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-07 - Documentation Discoverability and Risk Messaging Refresh
+
+### Changed
+
+- Updated `README.md` top-level status messaging to remove outdated branch/news notes and clearly state demo-account/paper-trading scope, with no real exchange execution implemented in the public branch.
+- Added a compact `Latest Changes (May 2026)` section in `README.md` to make recent behavior updates easier to discover from GitHub and LLM retrieval workflows.
+- Refreshed `README.md` feature and configuration guidance to reflect timeframe-aware memory windows, semantic-rule evolution, and current risk-management guardrails (`max_position_size` and fallback sizing tiers).
+- Rewrote `README.md` disclaimer language to emphasize not-financial-advice boundaries, user responsibility for local regulatory compliance, and warranty/liability consistency with `LICENSE.md`.
+- Expanded `CONTRIBUTING.md` with local setup, testing expectations, changelog/documentation update requirements, and repository convention references.
+- Added a documentation navigation hub for faster contributor and LLM orientation.
+- Refreshed documentation-plan metadata and completion notes to include May 6-7 updates and discoverability changes.
+- Added GitHub workflow scaffolding with `.github/pull_request_template.md` and issue templates under `.github/ISSUE_TEMPLATE/`.
+
 ## 2026-05-07 - Prompt Contract Hardening
 
 ### Changed
