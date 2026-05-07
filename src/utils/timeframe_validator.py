@@ -20,7 +20,6 @@ class TimeframeValidator:
     MINUTES_IN_WEEK = 10080
 
     MS_IN_MINUTE = 60 * 1000
-    MS_IN_HOUR = 60 * 60 * 1000
     MS_IN_DAY = 24 * 60 * 60 * 1000
 
     # Alignment constants
@@ -127,7 +126,7 @@ class TimeframeValidator:
         return target_mins // base_mins
 
     @classmethod
-    def is_ccxt_compatible(cls, timeframe: str, exchange_name: Optional[str] = None) -> bool:
+    def is_ccxt_compatible(cls, timeframe: str, _exchange_name: Optional[str] = None) -> bool:
         """
         Check if timeframe is compatible with CCXT exchanges.
 

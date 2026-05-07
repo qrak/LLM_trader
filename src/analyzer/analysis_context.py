@@ -18,7 +18,7 @@ class AnalysisContext(SerializableMixin):
     """Data container for market analysis data.
 
     All fields use proper typing. Validation is trusted via type hints
-    rather than redundant isinstance() checks.
+    rather than redundant runtime shape checks.
     """
     symbol: str
     exchange: Optional[str] = None
@@ -36,7 +36,4 @@ class AnalysisContext(SerializableMixin):
     market_overview: Dict[str, Any] = field(default_factory=dict)
     market_microstructure: Dict[str, Any] = field(default_factory=dict)
     weekly_ohlcv: Optional[np.ndarray] = None
-    available_weeks: int = 0
-    meets_200w_threshold: bool = False
-    news_articles: List[Dict[str, Any]] = field(default_factory=list)
     coin_details: Dict[str, Any] = field(default_factory=dict)

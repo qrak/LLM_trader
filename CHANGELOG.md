@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-05-07 - Prompt Contract Hardening
+
+### Changed
+
+- Trading prompts now provide a parser-safe JSON example without pseudo-values, inline comments, or placeholder ranges, reducing invalid AI response risk for compact decision output.
+- Response-format guidance now maps analysis steps to the existing five compact narrative lines, uses chart validation instructions only when chart analysis is available, and clarifies BUY/SELL, HOLD, UPDATE, and CLOSE JSON field semantics for open-position and no-position states.
+- Confidence guidance now defers BUY/SELL entry thresholds to the dynamic response template and allows high-confidence HOLD decisions when staying out or maintaining a position is strongly justified.
+- RAG/news/custom prompt snippets are now explicitly wrapped as untrusted market evidence so embedded article text cannot override system instructions, response format, risk rules, or trading policy.
+
+## 2026-05-07 - Timeframe-Aware Memory Relevance and Prompt Horizon
+
+### Changed
+
+- `VectorMemoryService` now derives recency-decay defaults from the active timeframe at startup. For `4h`, this yields a 14-day half-life and a 56-day hard relevance window; lower timeframes use shorter windows, and higher timeframes use longer windows (capped).
+- `retrieve_similar_experiences` now over-fetches vector candidates before ranking, applies a hard age cutoff for prompt relevance, and then hybrid-ranks fresh candidates by similarity and recency. Older entries remain stored but are no longer used as fallback filler when fresh candidates are insufficient.
+- Vector prompt context headers now include the active relevance window (`active window: last N days`) so the model can reason with explicit memory freshness constraints.
+- System prompts now include a new `Trading Style & Horizon` section that adapts guidance to the active timeframe (scalping, intraday swing, swing, or position context), including expected hold horizon, noise tolerance, and news relevance window.
+
+## 2026-05-06 - Internal Contract Cleanup
+
+### Changed
+
+- Removed redundant `hasattr()`, `getattr()`, and `isinstance()` checks from typed production paths, including config access, dashboard brain status/memory handling, prompt snapshot formatting, RAG retrieval, exit monitoring, retry logging, and AI provider response conversion.
+- Tightened internal contracts so services now use direct attribute and method access for known collaborators such as config objects, strategy exit checks, logger-bearing instances, semantic-rule memory, and canonical article/analysis payloads.
+- Config loader now normalizes admin IDs, dashboard CORS origins, and RAG news sources at load time so downstream services receive concrete lists instead of re-checking input shapes.
+- Removed verified unused internal code, including stale trading statistics dataclasses, token request tracking state, obsolete dashboard state broadcast helpers, an obsolete CCXT multi-price fallback, a dead CoinGecko coin-data fetcher, unused provider metadata, and unused helper methods/constants.
+- Fixed dashboard countdown datetime arithmetic and cache eviction typing surfaced during cleanup validation.
+
 ## 2026-05-06 - Latest Change Audit Fixes
 
 ### Fixed

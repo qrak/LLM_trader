@@ -4,7 +4,6 @@ Generates candlestick charts with OHLC data and annotations for visual pattern r
 """
 import io
 import os
-import time
 import threading
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Union, Callable

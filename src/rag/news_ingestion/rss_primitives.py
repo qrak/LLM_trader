@@ -123,7 +123,7 @@ class _HtmlBodyTextParser(HTMLParser):
         self._skip_depth = 0
         self._parts: list[str] = []
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:
         tag_name = tag.lower()
         if tag_name in self._IGNORED_TAGS:
             self._skip_depth += 1

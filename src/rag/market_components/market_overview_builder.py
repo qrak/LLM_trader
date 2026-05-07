@@ -48,7 +48,7 @@ class MarketOverviewBuilder:
 
             existing_top_coins = overview.get('top_coins', [])
 
-            if existing_top_coins and isinstance(existing_top_coins[0], dict):
+            if existing_top_coins:
                 # We have rich CoinGecko data. Update it with fresh stats if available.
                 for coin in existing_top_coins:
                     symbol = coin.get('symbol', '').upper()
@@ -79,25 +79,22 @@ class MarketOverviewBuilder:
                 for i, symbol in enumerate(top_coins):
                     # Try to find corresponding data in coin_data
                     coin_info = None
-                    if isinstance(symbol, str):
-                        # Find matching data (e.g. "BTC" matches "BTC/USDT")
-                        for key, data in overview.get('coin_data', {}).items():
-                            if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
-                                coin_info = data
-                                break
+                    # Find matching data (e.g. "BTC" matches "BTC/USDT")
+                    for key, data in overview.get('coin_data', {}).items():
+                        if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
+                            coin_info = data
+                            break
 
-                        # Create rich coin object
-                        rich_coin = {
-                            "symbol": symbol,
-                            "name": symbol,
-                            "market_cap_rank": i + 1,
-                            "current_price": coin_info.get('price', 0) if coin_info else 0,
-                            "price_change_percentage_24h": coin_info.get('change_24h', 0) if coin_info else 0,
-                            "total_volume": coin_info.get('volume', 0) if coin_info else 0
-                        }
-                        rich_top_coins.append(rich_coin)
-                    elif isinstance(symbol, dict):
-                         rich_top_coins.append(symbol)
+                    # Create rich coin object
+                    rich_coin = {
+                        "symbol": symbol,
+                        "name": symbol,
+                        "market_cap_rank": i + 1,
+                        "current_price": coin_info.get('price', 0) if coin_info else 0,
+                        "price_change_percentage_24h": coin_info.get('change_24h', 0) if coin_info else 0,
+                        "total_volume": coin_info.get('volume', 0) if coin_info else 0
+                    }
+                    rich_top_coins.append(rich_coin)
 
                 overview['top_coins'] = rich_top_coins
 

@@ -154,7 +154,7 @@ class NewsManager:
     def _normalize(self, article: Dict[str, Any]) -> None:
         """Pre-compute lowercased fields for fast keyword search."""
         source_info = article.get("source_info")
-        if isinstance(source_info, dict) and source_info.get("name"):
+        if source_info.get("name"):
             source_info["name"] = str(source_info["name"]).strip().lower()
 
         article["title_lower"] = article.get("title", "").lower()

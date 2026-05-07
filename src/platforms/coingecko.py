@@ -13,7 +13,6 @@ from src.utils.decorators import retry_async
 
 class CoinGeckoAPI:
     COINS_LIST_URL = "https://api.coingecko.com/api/v3/coins/list"
-    COIN_DATA_URL_TEMPLATE = "https://api.coingecko.com/api/v3/coins/{coin_id}"
     COINS_MARKETS_URL = "https://api.coingecko.com/api/v3/coins/markets"
     GLOBAL_DEFI_URL = "https://api.coingecko.com/api/v3/global/decentralized_finance_defi"
 
@@ -363,17 +362,6 @@ class CoinGeckoAPI:
             else:
                 self.logger.error("Failed to fetch coin list. Status: %s", response.status)
                 return []
-
-    @retry_async(max_retries=2, initial_delay=2, backoff_factor=2, max_delay=30)
-    async def _fetch_coin_data(self, coin_id: str) -> Dict[str, Any]:
-        if not self.session:
-            self.session = CachedSession(cache=self.cache_backend)
-
-        url = self.COIN_DATA_URL_TEMPLATE.format(coin_id=coin_id)
-        async with self.session.get(url) as response:
-            if response.status == 200:
-                return await response.json()
-            return {}
 
     def _update_symbol_map(self, coins: List[Dict[str, str]]) -> None:
         for coin in coins:

@@ -22,8 +22,11 @@ class VectorMemoryService(
 
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
-    DEFAULT_DECAY_HALF_LIFE_DAYS = 30
     RR_THRESHOLDS = (1.3, 1.5, 1.8)
+    DECAY_HALF_LIFE_DIVISOR = 17
+    MAX_DECAY_HALF_LIFE_DAYS = 30
+    MAX_AGE_MULTIPLIER = 4
+    RETRIEVAL_OVERFETCH_MULTIPLIER = 5
 
     FACTOR_BUCKETS = ("LOW", "MEDIUM", "HIGH")
     FACTOR_NAMES = (
@@ -34,13 +37,29 @@ class VectorMemoryService(
         "support_resistance",
     )
 
-    def __init__(self, logger: Logger, chroma_client: Any, embedding_model: Any = None):
+    @classmethod
+    def _derive_decay_window(cls, timeframe_minutes: int) -> tuple[int, int]:
+        """Derive default decay half-life and max relevance age from timeframe."""
+        half_life_days = min(
+            cls.MAX_DECAY_HALF_LIFE_DAYS,
+            max(1, round(timeframe_minutes / cls.DECAY_HALF_LIFE_DIVISOR)),
+        )
+        return half_life_days, half_life_days * cls.MAX_AGE_MULTIPLIER
+
+    def __init__(
+        self,
+        logger: Logger,
+        chroma_client: Any,
+        embedding_model: Any = None,
+        timeframe_minutes: int = 240,
+    ):
         """Initialize vector memory service.
 
         Args:
             logger: Logger instance
             chroma_client: Injected ChromaDB client instance
             embedding_model: SentenceTransformer instance (injected)
+            timeframe_minutes: Active analysis timeframe in minutes.
         """
         self.logger = logger
         self._client = chroma_client
@@ -48,6 +67,9 @@ class VectorMemoryService(
         self._semantic_rules_collection: Optional[Any] = None
         self._embedding_model = embedding_model
         self._initialized = False
+        self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
+            timeframe_minutes
+        )
 
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).

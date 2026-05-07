@@ -15,7 +15,6 @@ class ProviderMetadata:
     default_model: str
     config: Dict[str, Any]
     supports_chart: bool
-    has_rate_limits: bool
     paid_client: Optional[Any] = None
 
     def is_available(self) -> bool:

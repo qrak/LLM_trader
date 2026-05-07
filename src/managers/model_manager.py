@@ -250,8 +250,6 @@ class ModelManager(ModelManagerProtocol):
         Returns:
             Response content string
         """
-        if not isinstance(result, InvocationResult):
-            return self.unified_parser.format_error_response("Invalid result type")
         response = result.response
         if response is None:
             return self.unified_parser.format_error_response("Empty response from API")

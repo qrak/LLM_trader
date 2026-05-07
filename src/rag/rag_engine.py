@@ -179,18 +179,11 @@ class RagEngine:
         """Resolve retrieval limits from explicit values or config with safe fallbacks."""
         resolved_k = k
         if resolved_k is None:
-            try:
-                resolved_k = int(self.config.RAG_NEWS_LIMIT)
-            except Exception:
-                resolved_k = 3
+            resolved_k = self.config.RAG_NEWS_LIMIT
 
         resolved_max_tokens = max_tokens
         if resolved_max_tokens is None:
-            try:
-                article_max = int(self.config.RAG_ARTICLE_MAX_TOKENS)
-                resolved_max_tokens = article_max * resolved_k
-            except Exception:
-                resolved_max_tokens = 250 * resolved_k
+            resolved_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS * resolved_k
 
         return resolved_k, resolved_max_tokens
 
@@ -221,7 +214,7 @@ class RagEngine:
 
     def _prioritize_full_body_candidates(self, relevant_indices: list[int]) -> list[int]:
         """Move full-body articles ahead of short summaries while preserving relative order."""
-        min_body_chars = int(getattr(self.config, 'RAG_NEWS_ENRICH_MIN_CHARS', 400))
+        min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body_indices = [
             idx for idx in relevant_indices
             if len(str(self.news_manager.news_database[idx].get('body', ''))) >= min_body_chars
@@ -304,7 +297,7 @@ class RagEngine:
         if limit is not None and limit > 0:
             articles = articles[:limit]
 
-        return [dict(article) for article in articles if isinstance(article, dict)]
+        return [dict(article) for article in articles]
 
     def get_latest_article_urls_snapshot(self) -> Dict[str, str]:
         """Return a copy of article URLs captured during the latest retrieve_context call."""

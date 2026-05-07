@@ -4,7 +4,6 @@ Loads private keys from keys.env and public configuration from config.ini.
 """
 
 import configparser
-import logging
 from pathlib import Path
 from typing import Any, Dict
 from dotenv import dotenv_values
@@ -50,6 +49,12 @@ class Config:
             # Convert values to appropriate types
             for key, value in env_vars.items():
                 if value is not None:
+                    if key == 'ADMIN_USER_IDS':
+                        try:
+                            self._env_vars[key] = [int(uid.strip()) for uid in value.split(',') if uid.strip()]
+                        except ValueError as exc:
+                            raise ValueError("Invalid ADMIN_USER_IDS format in keys.env. Expected comma-separated integers.") from exc
+                        continue
                     # Convert numeric strings to integers
                     if value.isdigit():
                         value = int(value)
@@ -74,7 +79,12 @@ class Config:
                 section_data = {}
                 for key, value in config.items(section_name):
                     # Type conversion
-                    section_data[key] = self._convert_value(value)
+                    converted_value = self._convert_value(value)
+                    if section_name == 'dashboard' and key == 'cors_origins':
+                        converted_value = ["*"] if value.strip() == "*" else [origin.strip() for origin in value.split(',') if origin.strip()]
+                    elif section_name == 'rag' and key == 'news_sources':
+                        converted_value = [source.strip() for source in value.split(',') if source.strip()]
+                    section_data[key] = converted_value
                 self._config_data[section_name] = section_data
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
@@ -219,37 +229,7 @@ class Config:
     @property
     def ADMIN_USER_IDS(self):
         """Get list of admin user IDs from environment."""
-        admin_ids = self.get_env('ADMIN_USER_IDS', '')
-        if not admin_ids:
-            return []
-
-        # Handle single integer values produced by automatic type conversion
-        if isinstance(admin_ids, int):
-            return [admin_ids]
-
-        # Handle pre-parsed iterables (lists/tuples) defensively
-        if isinstance(admin_ids, (list, tuple)):
-            parsed_ids = []
-            for raw_id in admin_ids:
-                try:
-                    parsed_ids.append(int(str(raw_id).strip()))
-                except (TypeError, ValueError):
-                    logging.warning("Invalid ADMIN_USER_IDS entry '%s' in keys.env. Expected integers.", raw_id)
-                    return []
-            return parsed_ids
-
-        if isinstance(admin_ids, str):
-            try:
-                return [int(uid.strip()) for uid in admin_ids.split(',') if uid.strip()]
-            except ValueError:
-                logging.warning("Invalid ADMIN_USER_IDS format in keys.env. Expected comma-separated integers.")
-                return []
-
-        logging.warning(
-            "Unsupported ADMIN_USER_IDS type %s encountered. Expected string, int, list, or tuple.",
-            type(admin_ids).__name__
-        )
-        return []
+        return self.get_env('ADMIN_USER_IDS', [])
 
     # AI Provider Configuration
     @property
@@ -359,10 +339,6 @@ class Config:
     @property
     def DASHBOARD_CORS_ORIGINS(self):
         origins = self.get_config('dashboard', 'cors_origins', [])
-        if isinstance(origins, str):
-            if origins.strip() == '*':
-                return ["*"]
-            return [o.strip() for o in origins.split(',')]
         return origins
 
     # Cooldown Configuration
@@ -432,8 +408,11 @@ class Config:
 
     @property
     def RAG_NEWS_SOURCES(self):
-        """Enabled RSS source keys (list or comma-separated string; None = all)."""
-        return self.get_config('rag', 'news_sources', None)
+        """Enabled RSS source keys, or None to use all configured sources."""
+        raw_sources = self.get_config('rag', 'news_sources', None)
+        if not raw_sources:
+            return None
+        return [source.strip() for source in raw_sources if source.strip()]
 
     @property
     def RAG_NEWS_SOURCE_URLS(self) -> Dict[str, str]:
@@ -449,9 +428,7 @@ class Config:
     def RAG_NEWS_PAGE_ENRICHMENT(self) -> bool:
         """Whether to enrich short RSS bodies by fetching article pages."""
         val = self.get_config('rag', 'news_page_enrichment', True)
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() not in ('false', '0', 'no')
+        return bool(val)
 
     @property
     def RAG_NEWS_ENRICH_MIN_CHARS(self) -> int:
@@ -481,9 +458,7 @@ class Config:
         Set ``news_crawl4ai_enabled = true`` in ``[rag]`` to opt in.
         """
         val = self.get_config('rag', 'news_crawl4ai_enabled', False)
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() in ('true', '1', 'yes')
+        return bool(val)
 
     @property
     def RAG_NEWS_CRAWL_TIMEOUT(self) -> int:

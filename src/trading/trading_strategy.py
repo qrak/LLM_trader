@@ -564,19 +564,16 @@ class TradingStrategy:
 
                 macd = tech_data.get("macd", {})
                 conditions["macd_signal"] = classify_macd_signal(tech_data)
-                if conditions["macd_signal"] == "NEUTRAL" and isinstance(macd, dict):
+                if conditions["macd_signal"] == "NEUTRAL" and macd:
                     conditions["macd_signal"] = macd.get("signal", "NEUTRAL")
 
                 current_price = result.get("current_price")
                 context_obj = result.get("context")
                 if current_price is None and context_obj is not None:
-                    current_price = (
-                        context_obj.get("current_price")
-                        if isinstance(context_obj, dict) else context_obj.current_price
-                    )
+                    current_price = context_obj.current_price
                 conditions["bb_position"] = classify_bb_position(tech_data, current_price)
                 bb = tech_data.get("bollinger_bands", {})
-                if conditions["bb_position"] == "MIDDLE" and isinstance(bb, dict):
+                if conditions["bb_position"] == "MIDDLE" and bb:
                     pct_b = bb.get("percent_b", 0.5)
                     if pct_b > 0.95:
                         conditions["bb_position"] = "UPPER"
@@ -585,7 +582,7 @@ class TradingStrategy:
 
                 conditions["volume_state"] = classify_volume_state(tech_data)
                 vol_data = tech_data.get("volume", {})
-                if conditions["volume_state"] == "NORMAL" and isinstance(vol_data, dict):
+                if conditions["volume_state"] == "NORMAL" and vol_data:
                     conditions["volume_state"] = vol_data.get("state", "NORMAL")
 
                 # Extract ATR for dynamic SL/TP calculation
@@ -605,21 +602,14 @@ class TradingStrategy:
             microstructure_data = result.get("market_microstructure")
             legacy_market_sentiment = None
             legacy_order_book_bias = None
-            if isinstance(context_obj, dict):
-                legacy_market_sentiment = context_obj.get("market_sentiment")
-                legacy_order_book_bias = context_obj.get("order_book_bias")
-                if sentiment_data is None:
-                    sentiment_data = context_obj.get("sentiment") or {"fear_greed_index": context_obj.get("fear_greed_index", 50)}
-                if microstructure_data is None:
-                    microstructure_data = context_obj.get("market_microstructure")
-            elif context_obj is not None:
+            if context_obj is not None:
                 if sentiment_data is None:
                     sentiment_data = context_obj.sentiment
                 if microstructure_data is None:
                     microstructure_data = context_obj.market_microstructure
 
             conditions["market_sentiment"] = legacy_market_sentiment or classify_market_sentiment(sentiment_data)
-            conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if isinstance(sentiment_data, dict) else 50
+            conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
             conditions["order_book_bias"] = legacy_order_book_bias or classify_order_book_bias(microstructure_data)
 
             # Fallback: try to extract from raw response keywords
@@ -650,7 +640,7 @@ class TradingStrategy:
             # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
             analysis = result.get("analysis", {})
             confluence_factors = analysis.get("confluence_factors", {})
-            if isinstance(confluence_factors, dict):
+            if confluence_factors:
                 for factor_name, score in confluence_factors.items():
                     try:
                         # Ensure score is numeric and in valid range

@@ -63,8 +63,7 @@ class RSSCrawl4AINewsProvider:
         category detection is handled by ArticleProcessor after ingestion.
         """
         enabled_names = self._enabled_source_names()
-        source_urls = getattr(self.config, "RAG_NEWS_SOURCE_URLS", None)
-        sources = get_sources(enabled_names, source_urls)
+        sources = get_sources(enabled_names, self.config.RAG_NEWS_SOURCE_URLS)
 
         if not sources:
             self.logger.error("No RSS sources configured or none enabled")
@@ -167,11 +166,7 @@ class RSSCrawl4AINewsProvider:
 
     def _enabled_source_names(self) -> list[str] | None:
         """Return enabled source-name filter, or None to use all configured URLs."""
-        raw = getattr(self.config, "RAG_NEWS_SOURCES", None)
+        raw = self.config.RAG_NEWS_SOURCES
         if not raw:
             return None
-        if isinstance(raw, list):
-            return [s.strip() for s in raw if s.strip()]
-        if isinstance(raw, str):
-            return [s.strip() for s in raw.split(",") if s.strip()]
-        return None
+        return [source.strip() for source in raw if source.strip()]

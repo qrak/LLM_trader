@@ -1,10 +1,8 @@
 import asyncio
 import functools
-import logging
 import traceback
 import socket
 from typing import Any, Dict
-from src.utils.protocols import HasLogger
 
 import ccxt
 import aiohttp
@@ -25,22 +23,10 @@ _NETWORK_EXCEPTIONS = (
 
 def _log(logger, level: str, message: str):
     """Log a message using the provided logger or fallback to logging module."""
-    if logger:
-        try:
-            log_func = getattr(logger, level)
-            try:
-                # Duck-type: If it supports stacklevel (like standard logging)
-                log_func(message, stacklevel=3)
-            except TypeError:
-                # If wrapped or doesn't support stacklevel
-                log_func(message)
-        except AttributeError:
-            pass
+    if level == "warning":
+        logger.warning(message)
     else:
-        try:
-            getattr(logging, level)(message)
-        except AttributeError:
-            pass
+        logger.error(message)
 
 
 def _classify_retryable_error(e: Exception) -> str:
@@ -95,8 +81,8 @@ class _RetryContext:
     """Helper class to manage retry logic and reduce complexity."""
 
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
-        self.logger = instance.logger if isinstance(instance, HasLogger) else None
-        self.pair = kwargs.get('pair') or (args[0] if args and isinstance(args[0], str) else None)
+        self.logger = instance.logger
+        self.pair = kwargs.get('pair') or (args[0] if args else None)
         self.class_name = instance.__class__.__name__
         self.func_name = func.__name__
         self.max_retries = max_retries
@@ -189,7 +175,7 @@ class _ApiRetryContext:
     """Helper class to manage API retry logic."""
 
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
-        self.logger = instance.logger if isinstance(instance, HasLogger) else logging.getLogger("Bot")
+        self.logger = instance.logger
         self.model = kwargs.get('model', args[0] if args else 'unknown')
         self.func = func
         self.instance = instance
@@ -242,9 +228,9 @@ class _ApiRetryContext:
             self.logger.warning("Retryable top-level error for model %s: %s", self.model, response['error'])
             return True
         choices = response.get('choices', [])
-        if choices and isinstance(choices, list):
+        if choices:
             first_choice = choices[0]
-            if isinstance(first_choice, dict) and 'error' in first_choice:
+            if 'error' in first_choice:
                 choice_error = first_choice['error']
                 if _should_retry_api_error(choice_error):
                     error_code = choice_error.get('code', 'unknown')

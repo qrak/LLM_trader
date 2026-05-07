@@ -1,6 +1,5 @@
 """Market data management for fetching and serving market overview."""
 
-from datetime import datetime
 from typing import Dict, Any, Optional
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler

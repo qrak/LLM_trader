@@ -600,7 +600,7 @@ def uo_numba(
     config: Any
 ) -> np.ndarray:
     """
-    Ultimate Oscillator (UO) - Simple interface using config object or dictionary.
+    Ultimate Oscillator (UO) - Simple interface using the local config dictionary.
 
     Ultimate Oscillator using three timeframes: 7, 14 and 28 periods.
 
@@ -623,22 +623,14 @@ def uo_numba(
         high (pd.Series): Series of 'high's
         low (pd.Series): Series of 'low's
         close (pd.Series): Series of 'close's
-        config (Any): Configuration object or dict containing all parameters
+        config (Any): Configuration dictionary containing all parameters
 
     Returns:
         pd.Series: New feature generated.
     """
-    if isinstance(config, dict):
-        return _uo_numba(
-            high, low, close,
-            config['fast'], config['medium'], config['slow'],
-            config['fast_w'], config['medium_w'], config['slow_w'],
-            config['drift']
-        )
-    else:
-        return _uo_numba(
-            high, low, close,
-            config.fast, config.medium, config.slow,
-            config.fast_w, config.medium_w, config.slow_w,
-            config.drift
-        )
+    return _uo_numba(
+        high, low, close,
+        config['fast'], config['medium'], config['slow'],
+        config['fast_w'], config['medium_w'], config['slow_w'],
+        config['drift']
+    )

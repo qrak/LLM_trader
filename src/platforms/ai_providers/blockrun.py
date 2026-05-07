@@ -82,7 +82,7 @@ class BlockRunClient(BaseAIClient):
                 model=effective_model,
                 messages=messages
             )
-            return self.convert_pydantic_response(response, wrapper_attr='response')
+            return self.convert_pydantic_response(response, unwrap_response=True)
         except Exception as e:
             return self._handle_exception(e)
 
@@ -130,7 +130,7 @@ class BlockRunClient(BaseAIClient):
             )
             if response:
                 self.logger.debug("Received successful chart analysis response from BlockRun SDK")
-            return self.convert_pydantic_response(response, wrapper_attr='response')
+            return self.convert_pydantic_response(response, unwrap_response=True)
         except Exception as e:
             self.logger.error("Error during BlockRun chart analysis request: %s", self._redact_private_key(str(e)))
             return self._handle_exception(e)

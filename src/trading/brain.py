@@ -15,7 +15,6 @@ from src.utils.indicator_classifier import (
     build_exit_execution_context_from_position,
     build_query_document_from_classified_values,
     classify_adx_label,
-    classify_rsi_label,
     EXIT_EXECUTION_KEYS,
     format_exit_execution_context,
 )
@@ -659,10 +658,7 @@ class TradingBrainService:
         if default_profile == self.UNKNOWN_EXIT_PROFILE:
             return
         try:
-            n_results = 50
-            semantic_rule_count = getattr(self.vector_memory, "semantic_rule_count", None)
-            if isinstance(semantic_rule_count, int):
-                n_results = max(n_results, semantic_rule_count)
+            n_results = max(50, self.vector_memory.semantic_rule_count)
             active_rules = self.vector_memory.get_active_rules(n_results=n_results)
             has_stale_rule = any(
                 self.UNKNOWN_EXIT_PROFILE in str(rule.get("text", ""))

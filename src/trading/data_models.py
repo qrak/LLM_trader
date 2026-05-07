@@ -291,43 +291,6 @@ class RiskAssessment(SerializableMixin):
 
 
 @dataclass(slots=True)
-class ConfidenceLevelStats(SerializableMixin):
-    """Statistics for a single confidence level (HIGH/MEDIUM/LOW)."""
-    win_rate: float
-    avg_pnl: float
-    total_trades: int
-
-
-@dataclass(slots=True)
-class ADXBucketStats(SerializableMixin):
-    """Performance statistics for an ADX range bucket."""
-    bucket: str  # e.g., "0-20", "20-40"
-    win_rate: float
-    avg_pnl: float
-    total_trades: int
-
-
-@dataclass(slots=True)
-class FactorPerformance(SerializableMixin):
-    """Performance metrics for a confluence factor."""
-    factor_name: str
-    win_rate: float
-    avg_score: float
-    sample_size: int
-
-
-@dataclass(slots=True)
-class SemanticRule(SerializableMixin):
-    """A semantic trading rule learned from trade clusters."""
-    rule_id: str
-    rule_text: str
-    win_rate: Optional[float] = None
-    source_trades: Optional[int] = None
-    created_at: Optional[datetime] = None
-    similarity: float = 0.0
-
-
-@dataclass(slots=True)
 class ClosedTradeResult(SerializableMixin):
     """Result of a closed trade for statistics calculation."""
     entry_price: float
@@ -336,15 +299,6 @@ class ClosedTradeResult(SerializableMixin):
     pnl_quote: float
     quantity: float
     direction: str  # LONG, SHORT
-
-
-@dataclass(slots=True)
-class TokenUsageStats(SerializableMixin):
-    """Token usage statistics from a single API request."""
-    prompt_tokens: int = 0
-    completion_tokens: int = 0
-    total_tokens: int = 0
-    cost: Optional[float] = None
 
 
 @dataclass(slots=True)
