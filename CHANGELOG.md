@@ -14,6 +14,7 @@
 ### Changed
 
 - `VectorMemoryService` now derives recency-decay defaults from the active timeframe at startup. For `4h`, this yields a 14-day half-life and a 56-day hard relevance window; lower timeframes use shorter windows, and higher timeframes use longer windows (capped).
+- `TradingBrainService` now derives its closed-trade reflection scan cadence from the active timeframe: lower/noisier timeframes wait for more closed trades, `4h` keeps the existing 5-trade baseline, and daily/weekly timeframes scan sooner while preserving semantic-rule sample gates.
 - `retrieve_similar_experiences` now over-fetches vector candidates before ranking, applies a hard age cutoff for prompt relevance, and then hybrid-ranks fresh candidates by similarity and recency. Older entries remain stored but are no longer used as fallback filler when fresh candidates are insufficient.
 - Vector prompt context headers now include the active relevance window (`active window: last N days`) so the model can reason with explicit memory freshness constraints.
 - System prompts now include a new `Trading Style & Horizon` section that adapts guidance to the active timeframe (scalping, intraday swing, swing, or position context), including expected hold horizon, noise tolerance, and news relevance window.

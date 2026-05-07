@@ -7,7 +7,7 @@ from src.trading.data_models import Position, TradeDecision
 from src.trading.brain import TradingBrainService
 
 
-def _make_brain(exit_execution_context=None):
+def _make_brain(exit_execution_context=None, timeframe_minutes=240):
     """Create a TradingBrainService with mocked dependencies."""
     logger = MagicMock()
     persistence = MagicMock()
@@ -19,6 +19,7 @@ def _make_brain(exit_execution_context=None):
         persistence=persistence,
         vector_memory=vector_memory,
         exit_execution_context=exit_execution_context,
+        timeframe_minutes=timeframe_minutes,
     )
 
 
@@ -209,7 +210,24 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["entry_confidence"] == "HIGH"
         assert call_kwargs["metadata"]["ai_reasoning"] == "Strong breakout momentum is likely to continue."
 
-    def test_reflection_runs_every_five_closed_trades(self):
+    @pytest.mark.parametrize(("timeframe_minutes", "expected_interval"), [
+        (5, 10),
+        (15, 10),
+        (60, 7),
+        (120, 7),
+        (240, 5),
+        (720, 5),
+        (1440, 3),
+        (10080, 3),
+        (0, 5),
+        (-1, 5),
+        ("invalid", 5),
+    ])
+    def test_reflection_interval_derives_from_timeframe(self, timeframe_minutes, expected_interval):
+        assert TradingBrainService._derive_reflection_interval(timeframe_minutes) == expected_interval
+        assert _make_brain(timeframe_minutes=timeframe_minutes)._reflection_interval == expected_interval
+
+    def test_reflection_runs_on_default_four_hour_interval(self):
         self.brain._trade_count = 4
         self.brain._trigger_reflection = MagicMock()
         self.brain._trigger_loss_reflection = MagicMock()
@@ -225,6 +243,36 @@ class TestUpdateFromClosedTrade:
         self.brain._trigger_reflection.assert_called_once()
         self.brain._trigger_loss_reflection.assert_called_once()
         self.brain._trigger_ai_mistake_reflection.assert_called_once()
+
+    def test_reflection_uses_timeframe_derived_closed_trade_interval(self):
+        brain = _make_brain(timeframe_minutes=60)
+        brain._trade_count = 4
+        brain._trigger_reflection = MagicMock()
+        brain._trigger_loss_reflection = MagicMock()
+        brain._trigger_ai_mistake_reflection = MagicMock()
+
+        brain.update_from_closed_trade(
+            position=_make_position(),
+            close_price=105.0,
+            close_reason="take_profit",
+            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+        )
+
+        brain._trigger_reflection.assert_not_called()
+        brain._trigger_loss_reflection.assert_not_called()
+        brain._trigger_ai_mistake_reflection.assert_not_called()
+
+        brain._trade_count = 6
+        brain.update_from_closed_trade(
+            position=_make_position(entry_time=datetime(2026, 5, 1, tzinfo=timezone.utc)),
+            close_price=105.0,
+            close_reason="take_profit",
+            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+        )
+
+        brain._trigger_reflection.assert_called_once()
+        brain._trigger_loss_reflection.assert_called_once()
+        brain._trigger_ai_mistake_reflection.assert_called_once()
 
 
 # ── get_vector_context ──────────────────────────────────────────

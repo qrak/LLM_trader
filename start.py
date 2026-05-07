@@ -538,7 +538,11 @@ class CompositionRoot:
         exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
         
         brain_service = TradingBrainService(
-            self.logger, persistence, vector_memory, exit_execution_context=exit_execution_context
+            self.logger,
+            persistence,
+            vector_memory,
+            exit_execution_context=exit_execution_context,
+            timeframe_minutes=timeframe_minutes,
         )
         brain_service.refresh_semantic_rules_if_stale()
         
