@@ -37,6 +37,28 @@ class TradingBrainService:
 
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
     UNKNOWN_EXIT_PROFILE_KEY = "sl_unknown_unknown|tp_unknown_unknown"
+    DEFAULT_REFLECTION_TIMEFRAME_MINUTES = 240
+    SCALPING_REFLECTION_INTERVAL = 10
+    INTRADAY_REFLECTION_INTERVAL = 7
+    SWING_REFLECTION_INTERVAL = 5
+    POSITION_REFLECTION_INTERVAL = 3
+
+    @classmethod
+    def _derive_reflection_interval(cls, timeframe_minutes: int) -> int:
+        """Derive closed-trade reflection cadence from active timeframe."""
+        try:
+            minutes = int(timeframe_minutes)
+        except (TypeError, ValueError):
+            minutes = cls.DEFAULT_REFLECTION_TIMEFRAME_MINUTES
+        if minutes <= 0:
+            minutes = cls.DEFAULT_REFLECTION_TIMEFRAME_MINUTES
+        if minutes < 60:
+            return cls.SCALPING_REFLECTION_INTERVAL
+        if minutes < 240:
+            return cls.INTRADAY_REFLECTION_INTERVAL
+        if minutes < 1440:
+            return cls.SWING_REFLECTION_INTERVAL
+        return cls.POSITION_REFLECTION_INTERVAL
 
     def __init__(
         self,
@@ -44,6 +66,7 @@ class TradingBrainService:
         persistence: "PersistenceManager",
         vector_memory: VectorMemoryService,
         exit_execution_context: Optional[Dict[str, Any]] = None,
+        timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
     ):
         """Initialize trading brain service.
 
@@ -52,6 +75,7 @@ class TradingBrainService:
             persistence: Persistence service
             vector_memory: Injected vector memory service (required)
             exit_execution_context: Configured fallback SL/TP execution context.
+            timeframe_minutes: Active analysis timeframe in minutes.
         """
         self.logger = logger
         self.persistence = persistence
@@ -63,7 +87,11 @@ class TradingBrainService:
         # Cache for computed stats (invalidated when new trades arrive)
         self._stats_cache: Dict[str, Any] = {}
         self._cache_trade_count: int = 0
-        self._reflection_interval: int = 5
+        self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
+        self.logger.debug(
+            "Trading brain reflection interval: every %s closed trades",
+            self._reflection_interval,
+        )
 
         # Initialize trade count from persistent storage
         # This ensures reflection triggers consistently across restarts
