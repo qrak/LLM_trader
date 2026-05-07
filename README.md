@@ -2,9 +2,7 @@
 
 > **Status:** BETA / Research Edition
 >
-> **Note:** This is the public research branch. It is frequently experimentally updated. The stable production version runs privately.
->
-> **News Pipeline Update (2026):** CryptoCompare free News API tier is being retired. News ingestion now uses free RSS sources with Crawl4AI-based page enrichment.
+> **Note:** This project runs in demo-account and paper-trading mode. Real exchange order execution is not implemented in this public branch.
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
@@ -13,7 +11,8 @@
 ## Key Features
 
 - **Vector-Only Trading Brain**: ChromaDB vector store for semantic trade retrieval and adaptive thresholds.
-- **Outcome-Aware Memory System**: Temporal awareness, decay engine, and automated reflection loops generating persistent Semantic Rules from wins, losses, and AI mistakes.
+- **Outcome-Aware Memory System**: Timeframe-aware recency decay and active relevance windows keep prompt memory focused on fresh market regimes.
+- **Semantic Rule Learning**: Reflection loops generate best-practice, anti-pattern, corrective, and AI-mistake rules with diagnostics such as win/loss split, expectancy, and dominant exit profile.
 - **Hard Exit Monitoring**: Bot-side interval checks for stop-loss and take-profit against live ticker prices, independent of candle closes.
 - **RAG Engine**: Aggregates news from free RSS feeds with optional Crawl4AI enrichment, plus fundamentals from DefiLlama.
 - **AI & LLM Support**: Multi-provider support (Google Gemini, OpenRouter, BlockRun.AI, LM Studio) with fallback logic and vision-assisted trading.
@@ -90,6 +89,7 @@ Configure the following variables in `keys.env`:
 | `GOOGLE_STUDIO_PAID_API_KEY` | (Optional) Google AI Studio API key (paid tier). |
 | `COINGECKO_API_KEY` | (Optional) Free demo key for market metrics. |
 | `BLOCKRUN_WALLET_KEY` | (Optional) Private key for BlockRun.AI x402 micropayments. |
+| `HF_TOKEN` | (Optional) Hugging Face token for improved model download/auth rate limits when embeddings/models are fetched. |
 
 ### 5. Bot Configuration
 
@@ -130,6 +130,10 @@ stop_loss_type = soft
 stop_loss_check_interval = 1h
 take_profit_type = soft
 take_profit_check_interval = 1h
+max_position_size = 0.10
+position_size_fallback_low = 0.03
+position_size_fallback_medium = 0.05
+position_size_fallback_high = 0.07
 
 [rag]
 # Whitelist filter — only these source keys are enabled. Leave empty to enable all configured news_source_*_url entries.
@@ -139,7 +143,7 @@ news_sources = coindesk,cointelegraph,decrypt
 news_crawl4ai_enabled = true
 ```
 
-Both exit check intervals must be less than or equal to `[general] timeframe`. Soft exits are evaluated only at candle close; hard exits are bot-side checks against live ticker price at the configured interval.
+Both exit check intervals must be less than or equal to `[general] timeframe`. Soft exits are evaluated only at candle close; hard exits are bot-side checks against live ticker price at the configured interval. Position sizing is capped by `max_position_size`, and fallback size tiers are used only when AI returns missing or invalid `position_size`.
 
 ### 6. Start the Bot
 
@@ -150,8 +154,6 @@ python start.py
 ```
 
 The dashboard will be available at `http://localhost:8000`.
-
-Cloudflare setup reference: `docs/cloudflare_free_cache_playbook.md`.
 
 ### 7. Controls
 
@@ -241,13 +243,57 @@ tests/                 # Extensive unit and integration validations with API kno
 docs/                  # Deep technical documentation and component plans
 ```
 
-### Request Lifecycle
+### Runtime Mechanics
 
-1. **Pulse Checks**: Every configurable candle/loop wait, `app.py` triggers a market check.
-2. **Data & Vectors**: `rag_engine` pulls recent crypto news directly related to chosen Ticker. Concurrently, `analysis_engine` uses `technical_calculator` on exact timestamp OHLCV.
-3. **Retrieval**: `trading_strategy` and `brain.py` fetch the top comparable historical situations based on technical attributes + PnL success vs failure from ChromaDB. 
-4. **LLM Formulation**: A highly formatted markdown prompt is handed through `model_manager` requesting `BUY`, `SELL`, or `HOLD` along with risk management targets.
-5. **Execution**: Result triggers a change directly translated to trade sizes sent towards the connected `ExchangeManager` and recorded by `statistics.py`. Outputs are streamed via WebSockets toward the `dashboard`.
+#### 1. Scheduler and Loop Control
+
+- `CryptoTradingBot` in `src/app.py` controls the main async loop.
+- The loop wakes up on configured cadence (timeframe-aware), or immediately when forced by hotkey.
+- A cycle can be skipped when guard conditions fail (for example, missing market data), which prevents low-quality prompts.
+
+#### 2. Market and Context Assembly
+
+- The market-data pipeline collects OHLCV and related market state through `ccxt` integrations.
+- Technical calculators transform raw candles into structured indicator payloads and pattern signals.
+- The RAG path fetches and normalizes crypto news from RSS sources, then optionally enriches article content through Crawl4AI.
+- Fundamentals and sentiment inputs are merged into the same context window so the model sees both price structure and narrative pressure.
+
+#### 3. Memory Retrieval and Similarity Weighting
+
+- Vector memory is queried for similar historical setups using technical/context features from the current snapshot.
+- Similarity is not the only ranking factor: recency decay is applied so fresh regimes have more influence than stale periods.
+- Timeframe-aware windows constrain what is considered relevant (for example, a 4h profile uses tighter freshness than a higher timeframe profile).
+
+#### 4. Prompt Building and Contract Enforcement
+
+- Prompt builders combine market structure, indicators, patterns, news evidence, and memory snippets into a strict system/user prompt format.
+- News and external snippets are treated as untrusted evidence in the prompt hierarchy, so they cannot override policy instructions.
+- The expected response format is a compact, parser-safe JSON contract plus concise reasoning fields.
+
+#### 5. Model Routing and Fallback Strategy
+
+- `model_manager` selects the configured primary provider and can fall back across supported providers when needed.
+- Text and optional chart-vision paths are coordinated so the response still lands in the same output contract.
+- Provider differences are normalized before parsing, which keeps downstream trading logic provider-agnostic.
+
+#### 6. Parsing, Validation, and Risk Normalization
+
+- Raw model output is parsed through resilient JSON extraction and contract checks.
+- Trading fields such as signal, confidence, SL/TP, and position size are normalized before strategy execution.
+- Position sizing is hard-capped by `max_position_size`; fallback sizing tiers are used only when AI output is missing or invalid.
+
+#### 7. Paper Execution and Exit Mechanics
+
+- The strategy layer converts validated decisions into paper-trade actions, persistence updates, and notifier output.
+- Soft exits are evaluated on candle-close strategy checks.
+- Hard exits are evaluated by interval monitors against live ticker prices, independent of candle close.
+- Dashboard WebSocket updates stream the current state, position metrics, and latest decision telemetry in near real time.
+
+#### 8. Reflection and Continuous Learning
+
+- Closed trades feed post-trade reflection in the brain/memory layer.
+- The system synthesizes semantic rules from repeated outcomes: best-practice patterns, anti-patterns, corrective rules, and AI-mistake rules.
+- These rules and similar-experience retrieval influence future prompts, forming a feedback loop between outcome quality and next-cycle decision context.
 
 ## Testing
 
@@ -279,7 +325,14 @@ pytest tests/
 - **GitHub Issues**: Report bugs or suggest new features.
 
 ## Disclaimer
-**EDUCATIONAL USE ONLY.** This software is currently in **BETA** and configured for **PAPER TRADING**. No real financial transactions are executed. The authors are not responsible for any financial decisions made based on this software.
+**NOT FINANCIAL ADVICE.** This software is experimental and in **BETA**. It is configured for demo-account and paper-trading workflows, and real exchange order execution is not implemented in this public branch.
+
+Use of this repository is at your own risk. You are solely responsible for:
+- Verifying whether your intended use is permitted in your jurisdiction.
+- Complying with local laws, regulations, and platform terms before any real-money deployment.
+- Validating AI-generated signals independently before making trading decisions.
+
+No warranty is provided, and the authors and contributors assume no liability for losses, misuse, or regulatory non-compliance. See [LICENSE.md](LICENSE.md) for legal terms.
 
 ## Contributors
 - **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
