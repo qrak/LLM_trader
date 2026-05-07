@@ -2,7 +2,7 @@
 
 > **Status:** BETA / Research Edition
 >
-> **Note:** This project runs in demo-account and paper-trading mode. Real exchange order execution is not implemented in this public branch.
+> **Note:** This project runs in demo-account and paper-trading mode. Real exchange order execution is not implemented.
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
