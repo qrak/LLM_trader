@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 class TemplateManager:
     """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
 
+    PROMPT_VERSION = "trading-analysis-prompt-v1.2"
+    RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
+    PROMPT_VARIANT = "decision-gated"
+
     def __init__(self, config: "ConfigProtocol", logger: Optional[Logger] = None, timeframe_validator: Any = None):
         """Initialize the template manager.
 
@@ -29,6 +33,14 @@ class TemplateManager:
         self.logger = logger
         self.config = config
         self.timeframe_validator = timeframe_validator
+
+    def build_prompt_metadata(self) -> Dict[str, str]:
+        """Return metadata used to attribute prompt behavior in logs and dashboards."""
+        return {
+            "prompt_version": self.PROMPT_VERSION,
+            "response_contract_version": self.RESPONSE_CONTRACT_VERSION,
+            "prompt_variant": self.PROMPT_VARIANT,
+        }
 
     def _build_exit_execution_guidance(self, timeframe: str) -> str:
         stop_type = self.config.STOP_LOSS_TYPE
@@ -206,6 +218,15 @@ class TemplateManager:
             "Your written output MUST follow the **Response Format** sections exactly.",
             "Use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). Do NOT use Markdown headings (#, ##, ###, ####).",
             "",
+            "## Decision Reasoning Protocol",
+            "- First classify the regime: trending, ranging, breakout, reversal, exhaustion, or unclear/noisy.",
+            "- Separate evidence into directional edge, risk quality, and external context; do not mix weak news with hard technical confirmation.",
+            "- Resolve conflicts explicitly: closed-candle market structure and risk/reward outrank sentiment, untrusted news, and stale prior analysis.",
+            "- Choose HOLD when bull and bear cases are both plausible, R/R is poor, or the invalidation level is unclear.",
+            "- Choose UPDATE only when the current open-position thesis remains valid and the new SL/TP improves risk control or profit capture.",
+            "- Choose CLOSE when the original thesis is invalidated now; do not wait for SL if the evidence already disproves the setup.",
+            "- Before finalizing, name the single invalidation condition that would make your chosen signal wrong.",
+            "",
         ]
         header_lines.extend(self._build_timeframe_context(timeframe).splitlines())
 
@@ -303,7 +324,7 @@ class TemplateManager:
                     "- **Relevance**: PREVIOUS reasoning MUST be verified against CURRENT data. If previous claims (e.g., 'approaching' events) contradict the current clock or were based on now-outdated milestones, you MUST ignore or correct them.",
                     f"- **Relevance Window**: Only consider an event 'imminent' if it occurs within the next 2 full candles (Window: {window_minutes} minutes).",
                     "",
-                    "Use this context to maintain consistency in your analysis approach while prioritizing ground truth temporal data.",
+                    "Use prior context only as a hypothesis to retest. If current evidence changed, reverse or downgrade the old view without preserving it for consistency.",
                 ])
 
         return "\n".join(header_lines)
@@ -592,6 +613,11 @@ Step 5.5 → Narrative line 4 (DECISION) as the winning bull/bear case.
 Chart step, when present → Narrative line 2 or JSON reasoning only when it materially confirms/conflicts with numeric indicators.
 Synthesis → Narrative lines 4-5 and JSON execution fields.
 
+**Decision Gate:**
+- Evidence: Which side has the strongest confirmed evidence after conflicts are resolved?
+- Risk: Is there a clean invalidation level and acceptable R/R from current or conditional entry?
+- Action: If evidence and risk both pass, choose BUY/SELL/UPDATE/CLOSE. If either fails, choose HOLD.
+
 1. MULTI-TIMEFRAME ASSESSMENT:
    {timeframe_desc} | Compare short vs multi-day vs long-term (30d+, 365d) | Weekly macro (200-week SMA)
     Internal check: Are timeframes aligned or divergent? Which dominates?
@@ -623,7 +649,7 @@ Synthesis → Narrative lines 4-5 and JSON execution fields.
 5.5. BULL vs BEAR CASE (Forced Dialectical Analysis):
     BULL CASE: What confluence supports LONG? What would need to happen for price to rise?
     BEAR CASE: What confluence supports SHORT? What would need to happen for price to fall?
-    Internal decision: Which perspective wins? Justify with data. If brain has relevant semantic rules for either direction, weight those appropriately.
+    Internal decision: Which perspective wins after conflict resolution? If neither side clearly wins, HOLD. If brain has relevant semantic rules for either direction, weight those appropriately.
 
 6. NEWS & SENTIMENT:
    Asset news | Market events | Sentiment | Institutional activity | Regulatory impacts | News that could override technicals
@@ -649,7 +675,7 @@ Synthesis → Narrative lines 4-5 and JSON execution fields.
         analysis_steps += f"""
 
 {step_number}. SYNTHESIS:
-   Trend direction/strength | Indicator confluence | SL/TP levels | R/R ratio | Confidence | Invalidation triggers
+    Regime | winning bull/bear case | major conflict | SL/TP levels | R/R ratio | confidence | invalidation trigger
 
 NOTE: Indicators calculated from CLOSED CANDLES ONLY. No pattern = state "No clear pattern detected"."""
 

@@ -122,8 +122,11 @@ class AnalysisEngine:
         self.last_generated_prompt: Optional[str] = None
         self.last_prompt_timestamp: Optional[str] = None
         self.last_system_prompt: Optional[str] = None
+        self.last_prompt_metadata: Optional[Dict[str, Any]] = None
+        self.last_prompt_lint: Optional[Dict[str, Any]] = None
         self.last_llm_response: Optional[str] = None
         self.last_response_timestamp: Optional[str] = None
+        self.last_response_validation: Optional[Dict[str, Any]] = None
         self.last_chart_buffer: Optional[io.BytesIO] = None
 
     def initialize_for_symbol(self, symbol: str, exchange, timeframe=None) -> None:
@@ -515,6 +518,12 @@ class AnalysisEngine:
             previous_indicators=previous_indicators,
             position_context=position_context
         )
+        prompt_metadata = self.prompt_builder.get_prompt_metadata()
+        prompt_lint = self.prompt_builder.validate_and_warn(system_prompt, prompt, self.token_counter)
+        self.last_prompt_metadata = prompt_metadata
+        self.last_prompt_lint = prompt_lint
+        if prompt_lint["warnings"]:
+            self.logger.warning("Prompt preflight warnings: %s", prompt_lint["warnings"])
         # Process analysis
         analysis_result = await self._execute_ai_request(
             system_prompt, prompt, provider, model, chart_image
@@ -529,6 +538,8 @@ class AnalysisEngine:
         analysis_result["provider"] = actual_provider
         analysis_result["model"] = actual_model
         analysis_result["chart_analysis"] = has_chart_analysis
+        analysis_result["prompt_metadata"] = prompt_metadata
+        analysis_result["prompt_lint"] = prompt_lint
 
         # Add technical_data for persistence (will be saved to previous_response.json)
         if self.context.technical_data:
@@ -586,6 +597,7 @@ class AnalysisEngine:
         )
         self.last_llm_response = result.get("raw_response")
         self.last_response_timestamp = datetime.now().isoformat()
+        self.last_response_validation = result.get("response_validation")
         return result
 
     async def _generate_chart_image(self) -> Optional[io.BytesIO]:
