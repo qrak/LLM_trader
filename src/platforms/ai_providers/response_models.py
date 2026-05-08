@@ -1,7 +1,8 @@
 """Unified Pydantic response models for all AI providers."""
-from typing import Optional, List, Dict, Any
+from enum import Enum
+from typing import Optional, List, Dict, Any, ClassVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MessageModel(BaseModel):
@@ -53,3 +54,103 @@ class ChatResponseModel(BaseModel):
             model=model,
             id=response_id
         )
+
+
+class TradingSignal(str, Enum):
+    """Allowed trading decision signals emitted by the analysis LLM."""
+    BUY = "BUY"
+    SELL = "SELL"
+    HOLD = "HOLD"
+    CLOSE = "CLOSE"
+    UPDATE = "UPDATE"
+
+
+class TrendDirection(str, Enum):
+    """Allowed market trend directions in the analysis response."""
+    BULLISH = "BULLISH"
+    BEARISH = "BEARISH"
+    NEUTRAL = "NEUTRAL"
+
+
+class TimeframeAlignment(str, Enum):
+    """Allowed timeframe alignment labels in the analysis response."""
+    ALIGNED = "ALIGNED"
+    MIXED = "MIXED"
+    DIVERGENT = "DIVERGENT"
+
+
+class ConfluenceFactorsModel(BaseModel):
+    """Confluence scores used by trading-brain learning and dashboard logs."""
+    model_config = ConfigDict(extra="allow")
+
+    trend_alignment: float | None = Field(default=None, ge=0, le=100)
+    momentum_strength: float | None = Field(default=None, ge=0, le=100)
+    volume_support: float | None = Field(default=None, ge=0, le=100)
+    pattern_quality: float | None = Field(default=None, ge=0, le=100)
+    support_resistance_strength: float | None = Field(default=None, ge=0, le=100)
+
+
+class KeyLevelsModel(BaseModel):
+    """Support and resistance levels selected by the analysis response."""
+    model_config = ConfigDict(extra="allow")
+
+    support: list[float] = Field(default_factory=list)
+    resistance: list[float] = Field(default_factory=list)
+
+
+class TrendModel(BaseModel):
+    """Trend summary emitted by the trading analysis response."""
+    model_config = ConfigDict(extra="allow")
+
+    direction: TrendDirection | None = None
+    strength_4h: int | None = Field(default=None, ge=0, le=100)
+    strength_daily: int | None = Field(default=None, ge=0, le=100)
+    timeframe_alignment: TimeframeAlignment | None = None
+
+
+class TradingAnalysisModel(BaseModel):
+    """Validated shape for the `analysis` object in trading responses."""
+    model_config = ConfigDict(extra="allow")
+
+    signal: TradingSignal
+    confidence: int = Field(ge=0, le=100)
+    confluence_factors: ConfluenceFactorsModel | None = None
+    entry_price: float | None = Field(default=None, gt=0)
+    stop_loss: float | None = Field(default=None, gt=0)
+    take_profit: float | None = Field(default=None, gt=0)
+    position_size: float | None = Field(default=None, ge=0, le=1)
+    reasoning: str = ""
+    key_levels: KeyLevelsModel | None = None
+    trend: TrendModel | None = None
+    risk_reward_ratio: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_signal_execution_fields(self) -> "TradingAnalysisModel":
+        """Validate fields that are mandatory for immediate execution signals."""
+        if self.signal in (TradingSignal.BUY, TradingSignal.SELL):
+            required_fields = {
+                "entry_price": self.entry_price,
+                "stop_loss": self.stop_loss,
+                "take_profit": self.take_profit,
+                "risk_reward_ratio": self.risk_reward_ratio,
+                "position_size": self.position_size,
+            }
+            missing_fields = [field_name for field_name, field_value in required_fields.items() if field_value is None]
+            if missing_fields:
+                raise ValueError(
+                    f"{self.signal.value} response is missing required execution fields: {', '.join(missing_fields)}"
+                )
+        if self.signal == TradingSignal.UPDATE:
+            if self.entry_price is None:
+                raise ValueError("UPDATE response requires entry_price to represent the current price")
+            if self.stop_loss is None and self.take_profit is None:
+                raise ValueError("UPDATE response must include a new stop_loss or take_profit")
+        return self
+
+
+class TradingAnalysisResponseModel(BaseModel):
+    """Validated trading analysis response wrapper."""
+    model_config = ConfigDict(extra="allow")
+
+    schema_version: ClassVar[str] = "trading-analysis-response-v1"
+    analysis: TradingAnalysisModel

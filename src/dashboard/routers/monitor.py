@@ -44,7 +44,9 @@ class MonitorRouter:
             return {
                 "prompt": self.analysis_engine.last_generated_prompt,
                 "source": "memory",
-                "timestamp": self.analysis_engine.last_prompt_timestamp
+                "timestamp": self.analysis_engine.last_prompt_timestamp,
+                "metadata": self.analysis_engine.last_prompt_metadata,
+                "lint": self.analysis_engine.last_prompt_lint,
             }
         data = await asyncio.to_thread(self._load_prev_response_sync)
         prompt = data.get("prompt")
@@ -62,7 +64,8 @@ class MonitorRouter:
             return {
                 "response": self.analysis_engine.last_llm_response,
                 "source": "memory",
-                "timestamp": self.analysis_engine.last_response_timestamp
+                "timestamp": self.analysis_engine.last_response_timestamp,
+                "validation": self.analysis_engine.last_response_validation,
             }
         data = await asyncio.to_thread(self._load_prev_response_sync)
         if data:
@@ -84,7 +87,8 @@ class MonitorRouter:
             return {
                 "system_prompt": system_prompt,
                 "source": "memory",
-                "has_brain_context": has_brain
+                "has_brain_context": has_brain,
+                "metadata": self.analysis_engine.last_prompt_metadata,
             }
         return {"system_prompt": "No system prompt generated yet.", "source": None, "has_brain_context": False}
 

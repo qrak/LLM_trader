@@ -6,7 +6,10 @@ import json
 import re
 from typing import Dict, Any, Set, Optional
 
+from pydantic import ValidationError
+
 from src.logger.logger import Logger
+from src.platforms.ai_providers.response_models import TradingAnalysisResponseModel
 
 
 class UnifiedParser:
@@ -43,7 +46,8 @@ class UnifiedParser:
                 if json_end > json_start:
                     try:
                         result = json.loads(raw_text[json_start:json_end].strip())
-                        return self._normalize_numeric_fields(result)
+                        result = self._normalize_numeric_fields(result)
+                        return self._attach_response_validation(result)
                     except json.JSONDecodeError:
                         pass
 
@@ -52,7 +56,8 @@ class UnifiedParser:
                 try:
                     decoder = json.JSONDecoder()
                     result, _ = decoder.raw_decode(raw_text, first_brace)
-                    return self._normalize_numeric_fields(result)
+                    result = self._normalize_numeric_fields(result)
+                    return self._attach_response_validation(result)
                 except json.JSONDecodeError:
                     pass
 
@@ -68,6 +73,37 @@ class UnifiedParser:
         return (isinstance(response, dict) and
                 "analysis" in response and
                 isinstance(response["analysis"], dict))
+
+    def validate_trading_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate parsed trading response against the response contract."""
+        validation = {
+            "schema": TradingAnalysisResponseModel.schema_version,
+            "status": "skipped",
+            "valid": None,
+            "errors": [],
+        }
+        if not isinstance(response, dict):
+            return {
+                **validation,
+                "status": "invalid",
+                "valid": False,
+                "errors": [{"field": "response", "message": "Response is not an object", "type": "type_error"}],
+            }
+
+        analysis = response.get("analysis")
+        if not isinstance(analysis, dict) or "signal" not in analysis:
+            return validation
+
+        try:
+            TradingAnalysisResponseModel.model_validate(response)
+        except ValidationError as error:
+            return {
+                **validation,
+                "status": "invalid",
+                "valid": False,
+                "errors": self._format_validation_errors(error),
+            }
+        return {**validation, "status": "valid", "valid": True}
 
     def extract_json_block(self, text: str, unwrap_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Extract JSON block from markdown-formatted text.
@@ -269,6 +305,34 @@ class UnifiedParser:
 
         return data
 
+    def _attach_response_validation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Attach non-blocking response validation metadata to parsed responses."""
+        if isinstance(data, dict):
+            data["response_validation"] = self.validate_trading_response(data)
+        return data
+
+    @staticmethod
+    def _format_validation_errors(error: ValidationError) -> list[Dict[str, str]]:
+        """Convert Pydantic validation errors into compact log/dashboard metadata."""
+        formatted_errors = []
+        for item in error.errors():
+            field_path = ".".join(str(part) for part in item.get("loc", ()))
+            formatted_errors.append({
+                "field": field_path or "response",
+                "message": str(item.get("msg", "Invalid value")),
+                "type": str(item.get("type", "value_error")),
+            })
+        return formatted_errors
+
+    def _create_validation_error_metadata(self, message: str, error_type: str) -> Dict[str, Any]:
+        """Create response-validation metadata for parser-level failures."""
+        return {
+            "schema": TradingAnalysisResponseModel.schema_version,
+            "status": "invalid",
+            "valid": False,
+            "errors": [{"field": "response", "message": message, "type": error_type}],
+        }
+
     def _create_fallback_response(self, cleaned_text: str) -> Dict[str, Any]:
         """Create fallback response when parsing fails."""
         return {
@@ -279,7 +343,11 @@ class UnifiedParser:
                 "confidence_score": 0
             },
             "raw_response": cleaned_text,
-            "parse_error": "Failed to parse response"
+            "parse_error": "Failed to parse response",
+            "response_validation": self._create_validation_error_metadata(
+                "Failed to parse response JSON",
+                "json_parse_error"
+            )
         }
 
     def _create_error_response(self, error_message: str, raw_text: str) -> Dict[str, Any]:
@@ -291,5 +359,6 @@ class UnifiedParser:
                 "summary": "Error parsing response",
                 "observed_trend": "NEUTRAL",
                 "confidence_score": 0
-            }
+            },
+            "response_validation": self._create_validation_error_metadata(error_message, "parser_error")
         }

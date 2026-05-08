@@ -90,6 +90,7 @@ class AnalysisResultProcessor:
                 "error": "Invalid response format",
                 "raw_response": cleaned_response
             }
+        self._log_response_validation(parsed_response.get("response_validation"))
         # Log the analysis result
         self._log_analysis_result(parsed_response)
 
@@ -129,6 +130,20 @@ class AnalysisResultProcessor:
                 self.logger.debug("Analysis complete: Technical bias %s with %s trend (%s%% confidence)", bias, trend, confidence)
         else:
             self.logger.warning("Analysis complete but response format may be incomplete")
+
+    def _log_response_validation(self, validation: Optional[Dict[str, Any]]) -> None:
+        """Log response-contract validation metadata without blocking legacy parsing."""
+        if not validation:
+            return
+        status = validation.get("status")
+        if status == "valid":
+            self.logger.debug("AI response contract validation passed: %s", validation.get("schema"))
+            return
+        if status == "invalid":
+            errors = validation.get("errors", [])
+            self.logger.warning("AI response contract validation failed: %s", errors[:3])
+            return
+        self.logger.debug("AI response contract validation skipped: no trading signal found")
 
     def _format_analysis_response(self, parsed_response: Dict[str, Any],
                                 cleaned_response: str) -> Dict[str, Any]:

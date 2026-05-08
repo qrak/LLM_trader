@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-05-08 - Prompt Reasoning and Observability Foundation
+
+### Changed
+
+- Added a model-facing decision reasoning protocol and decision gate for regime classification, conflict resolution, HOLD discipline, UPDATE/CLOSE gating, and explicit invalidation checks.
+- Added backend prompt metadata and dashboard metadata fields so prompt behavior can be attributed by prompt version, response-contract version, and prompt variant without injecting version text into the LLM prompt.
+- Added non-blocking prompt preflight linting for critical response-format, analysis-step, analysis-time, JSON-example, token-count, and untrusted-context guardrails.
+- Added Pydantic-based validation metadata for trading analysis responses while preserving the existing JSON parser and fallback behavior.
+
 ## 2026-05-07 - Documentation Discoverability and Risk Messaging Refresh
 
 ### Changed
