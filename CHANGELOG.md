@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-09 - Non-Blocking News Refresh and Enrichment Timeouts
+
+### Changed
+
+- Added bounded timeout budgets for the market-knowledge refresh path so trading checks continue to analysis even when RSS fetch or article enrichment stalls.
+- Added new `[rag]` configuration keys in both config files: `rag_update_timeout_seconds`, `news_fetch_total_timeout_seconds`, and `news_enrichment_timeout_seconds`.
+- Increased default `news_crawl_timeout` to 120s and kept it fully configurable.
+- `src/app.py` now wraps market-knowledge refresh with timeout handling and explicit fallback logs, preventing pre-analysis stalls.
+- `src/rag/news_ingestion/rss_provider.py` now applies outer timeouts to RSS fetch and enrichment stages, logs stage durations, and skips stalled enrichment without blocking execution.
+- `src/rag/news_ingestion/crawl4ai_enricher.py` now applies an explicit batch timeout around Crawl4AI runs and falls back to aiohttp with clear warning telemetry.
+- `src/rag/news_ingestion/schema_mapper.py` now removes high-confidence Decrypt-style market ticker prefixes before article bodies reach prompts or Discord notifications.
+- `src/notifiers/notifier.py` now retries transient Discord 5xx send failures (including 503 no healthy upstream) with bounded backoff for text, embed, and chart sends.
+
+### Tests
+
+- Extended RSS provider contract coverage for fetch-stage timeout and enrichment-timeout skip behavior so the pipeline remains non-blocking.
+- Added schema-mapper regression coverage for Decrypt ticker-prefix cleanup while preserving normal price prose.
+- Added notifier tests for transient Discord retry behavior and non-transient failure handling.
+
 ## 2026-05-08 - Prompt Reasoning and Observability Foundation
 
 ### Changed

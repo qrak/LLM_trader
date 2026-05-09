@@ -9,6 +9,12 @@ import pytest
 from src.notifiers.notifier import DiscordNotifier
 
 
+class FakeDiscordHTTPError(Exception):
+    def __init__(self, status: int, message: str = "discord send failure"):
+        super().__init__(message)
+        self.status = status
+
+
 class DummyChannel:
     def __init__(self):
         self.calls = []
@@ -153,3 +159,37 @@ async def test_send_analysis_notification_sends_text_embed_and_chart(notifier_fi
     notifier.send_message.assert_awaited_once()
     notifier._send_embed.assert_awaited_once()
     notifier._send_analysis_chart.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_send_with_transient_retry_retries_and_succeeds(notifier_fixture):
+    notifier, _, _ = notifier_fixture
+    notifier._send_with_spacing = AsyncMock(side_effect=[
+        FakeDiscordHTTPError(503, "no healthy upstream"),
+        SimpleNamespace(id=999),
+    ])
+
+    with patch("src.notifiers.notifier.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+        result = await notifier._send_with_transient_retry(
+            send_operation=AsyncMock(),
+            operation_name="sending embed",
+        )
+
+    assert result.id == 999
+    assert notifier._send_with_spacing.await_count == 2
+    sleep_mock.assert_awaited_once_with(1.0)
+
+
+@pytest.mark.asyncio
+async def test_send_with_transient_retry_raises_for_non_transient(notifier_fixture):
+    notifier, _, _ = notifier_fixture
+    notifier._send_with_spacing = AsyncMock(side_effect=FakeDiscordHTTPError(400, "bad request"))
+
+    with patch("src.notifiers.notifier.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+        with pytest.raises(FakeDiscordHTTPError):
+            await notifier._send_with_transient_retry(
+                send_operation=AsyncMock(),
+                operation_name="sending embed",
+            )
+
+    sleep_mock.assert_not_awaited()

@@ -441,6 +441,21 @@ class Config:
         return int(self.get_config('rag', 'news_timeout_seconds', 20))
 
     @property
+    def RAG_UPDATE_TIMEOUT(self) -> int:
+        """Overall timeout in seconds for market knowledge refresh in a trading check."""
+        return int(self.get_config('rag', 'rag_update_timeout_seconds', 180))
+
+    @property
+    def RAG_NEWS_FETCH_TOTAL_TIMEOUT(self) -> int:
+        """Outer timeout in seconds for full RSS fetch stage across all sources."""
+        return int(self.get_config('rag', 'news_fetch_total_timeout_seconds', 45))
+
+    @property
+    def RAG_NEWS_ENRICH_TIMEOUT(self) -> int:
+        """Outer timeout in seconds for article-body enrichment batch."""
+        return int(self.get_config('rag', 'news_enrichment_timeout_seconds', 120))
+
+    @property
     def RAG_NEWS_CRAWL_CONCURRENCY(self) -> int:
         """Max concurrent page-enrichment / Crawl4AI sessions."""
         return int(self.get_config('rag', 'news_max_concurrency', 6))
@@ -464,6 +479,7 @@ class Config:
     def RAG_NEWS_CRAWL_TIMEOUT(self) -> int:
         """Per-page timeout in seconds for Crawl4AI (default: same as fetch timeout)."""
         return int(self.get_config('rag', 'news_crawl_timeout', self.RAG_NEWS_FETCH_TIMEOUT))
+
     @property
     def SUPPORTED_EXCHANGES(self):
         """Returns list of supported exchanges in priority order."""

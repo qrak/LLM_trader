@@ -25,6 +25,10 @@ if TYPE_CHECKING:
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
+    _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}
+    _DISCORD_SEND_MAX_ATTEMPTS = 3
+    _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
+
     def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
         """Initialize DiscordNotifier.
 
@@ -64,6 +68,39 @@ class DiscordNotifier(BaseNotifier):
             sent_message = await send_operation()
             self._last_send_timestamp = asyncio.get_running_loop().time()
             return sent_message
+
+    def _is_transient_discord_error(self, exc: Exception) -> bool:
+        """Return True for transient Discord 5xx errors worth retrying."""
+        status = getattr(exc, "status", None)
+        return isinstance(status, int) and status in self._DISCORD_TRANSIENT_STATUS_CODES
+
+    async def _send_with_transient_retry(
+        self,
+        send_operation: Callable[[], Awaitable[discord.Message]],
+        *,
+        operation_name: str,
+    ) -> discord.Message:
+        """Retry transient Discord upstream failures with bounded backoff."""
+        delay = self._DISCORD_SEND_INITIAL_BACKOFF_SECONDS
+        for attempt in range(1, self._DISCORD_SEND_MAX_ATTEMPTS + 1):
+            try:
+                return await self._send_with_spacing(send_operation)
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_transient_discord_error(exc) or attempt >= self._DISCORD_SEND_MAX_ATTEMPTS:
+                    raise
+
+                self.logger.warning(
+                    "Transient Discord error while %s (status=%s, attempt=%s/%s): %s",
+                    operation_name,
+                    getattr(exc, "status", "unknown"),
+                    attempt,
+                    self._DISCORD_SEND_MAX_ATTEMPTS,
+                    exc,
+                )
+                await asyncio.sleep(delay)
+                delay *= 2
+
+        raise RuntimeError("Unreachable: Discord transient retry loop exhausted unexpectedly")
 
 
     async def on_ready(self):
@@ -184,11 +221,12 @@ class DiscordNotifier(BaseNotifier):
                     await asyncio.sleep(1)
 
                 delete_after = float(expire_after) if expire_after is not None else None
-                sent_message = await self._send_with_spacing(
+                sent_message = await self._send_with_transient_retry(
                     lambda: channel.send(
                         content=chunk,
                         delete_after=delete_after
-                    )
+                    ),
+                    operation_name="sending message chunk",
                 )
                 await self.file_handler.track_message(
                     message_id=sent_message.id,
@@ -242,8 +280,9 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
-            sent_message = await self._send_with_spacing(
-                lambda: channel.send(embed=embed, delete_after=expire_after)
+            sent_message = await self._send_with_transient_retry(
+                lambda: channel.send(embed=embed, delete_after=expire_after),
+                operation_name="sending embed",
             )
 
             # Track message for persistent deletion
@@ -384,14 +423,14 @@ class DiscordNotifier(BaseNotifier):
 
             safe_symbol = symbol.replace('/', '_')
             filename = f"{safe_symbol}_{timeframe}_analysis_chart.png"
-            discord_file = discord.File(io.BytesIO(chart_bytes), filename=filename)
 
-            sent_message = await self._send_with_spacing(
+            sent_message = await self._send_with_transient_retry(
                 lambda: channel.send(
                     content=f"📈 {symbol} {timeframe} chart snapshot",
-                    file=discord_file,
-                    delete_after=expire_after
-                )
+                    file=discord.File(io.BytesIO(chart_bytes), filename=filename),
+                    delete_after=expire_after,
+                ),
+                operation_name="sending analysis chart",
             )
 
             await self.file_handler.track_message(

@@ -63,6 +63,17 @@ _BOILERPLATE_MENU_PATTERN = re.compile(
     r"(?:\s*\*\s*[\w&:'\-\s\(\)]+){6,}"
 )
 
+_MARKET_TICKER_END_PATTERN = re.compile(r"(?is)\bprice data by\b")
+_MARKET_TICKER_PRICE_CHANGE_PATTERN = re.compile(
+    r"\$[\d,.]+\s+[-+]?\d+(?:\.\d+)?%"
+)
+_MARKET_TICKER_TRAILING_NAV_PATTERN = re.compile(
+    r"(?is)^\s*(?:\*\s*){3,}\s*.{0,160}?\s*(?:\*\s*){3,}\s*"
+)
+_MARKET_TICKER_SEPARATOR_PREFIX_PATTERN = re.compile(r"(?is)^\s*(?:\*\s*){3,}\s*")
+_MARKET_TICKER_MIN_PRICE_CHANGES = 12
+_MARKET_TICKER_SCAN_CHARS = 20_000
+
 
 def make_article_id(url: str) -> str:
     """Return a 16-hex-char deterministic ID derived from the canonical URL."""
@@ -105,33 +116,57 @@ def normalize_article_whitespace(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", normalized)
 
 
+def _strip_market_ticker_prefix(text: str) -> str:
+    marker_match = _MARKET_TICKER_END_PATTERN.search(text[:_MARKET_TICKER_SCAN_CHARS])
+    if marker_match is None:
+        return text
+
+    prefix = text[:marker_match.start()]
+    price_change_count = len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix))
+    if price_change_count < _MARKET_TICKER_MIN_PRICE_CHANGES:
+        return text
+
+    remainder = text[marker_match.end():]
+    remainder = _MARKET_TICKER_TRAILING_NAV_PATTERN.sub("", remainder, count=1)
+    remainder = _MARKET_TICKER_SEPARATOR_PREFIX_PATTERN.sub("", remainder, count=1)
+    return remainder.lstrip(" \n\t:-|#")
+
+
+def _find_tail_marker_index(text: str, marker: str) -> int:
+    marker_pattern = re.compile(
+        rf"(?is){re.escape(marker)}(?=\s*(?:$|\n|\*|:|-|\|))"
+    )
+    marker_match = marker_pattern.search(text)
+    return marker_match.start() if marker_match else -1
+
+
 def _clean_article_body(body: str, title: str, source_name: str = "") -> str:
     text = normalize_article_whitespace(body)
+    text = _strip_market_ticker_prefix(text)
 
     if title:
         title_index = text.lower().find(title.lower())
         if 0 <= title_index <= 2500:
-            text = text[title_index + len(title):].lstrip(" \n\t:-|#")
+            text = text[title_index + len(title):].lstrip(" \n\t.:-|#")
 
     tail_markers = _BASE_TAIL_MARKERS + _SOURCE_TAIL_MARKERS.get(source_name.lower(), ())
-    lowered = text.lower()
     cut_at = len(text)
 
     separator_match = re.search(r"(?:\*\s*){3,}\s*About\b", text, flags=re.IGNORECASE)
-    if separator_match and separator_match.start() >= 300:
+    if separator_match:
         cut_at = min(cut_at, separator_match.start())
 
     boilerplate_match = _BOILERPLATE_SECTION_PATTERN.search(text)
-    if boilerplate_match and boilerplate_match.start() >= 300:
+    if boilerplate_match:
         cut_at = min(cut_at, boilerplate_match.start())
 
     menu_match = _BOILERPLATE_MENU_PATTERN.search(text)
-    if menu_match and menu_match.start() >= 300:
+    if menu_match:
         cut_at = min(cut_at, menu_match.start())
 
     for marker in tail_markers:
-        marker_index = lowered.find(marker.lower())
-        if marker_index >= 300:
+        marker_index = _find_tail_marker_index(text, marker)
+        if marker_index != -1:
             cut_at = min(cut_at, marker_index)
 
     text = text[:cut_at].strip()

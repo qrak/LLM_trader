@@ -6,6 +6,7 @@ before extracting private helper methods.
 """
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
@@ -26,7 +27,9 @@ def _make_config(**overrides) -> SimpleNamespace:
         RAG_NEWS_SOURCE_URLS=None,
         RAG_NEWS_MAX_ITEMS_PER_SOURCE=50,
         RAG_NEWS_FETCH_TIMEOUT=30,
+        RAG_NEWS_FETCH_TOTAL_TIMEOUT=45,
         RAG_NEWS_PAGE_ENRICHMENT=False,
+        RAG_NEWS_ENRICH_TIMEOUT=120,
         RAG_NEWS_CRAWL4AI_ENABLED=False,
         RAG_NEWS_CRAWL_CONCURRENCY=3,
         RAG_NEWS_CRAWL_TIMEOUT=30,
@@ -212,3 +215,33 @@ class TestFetchNewsOrchestration:
             await provider.fetch_news()
 
         mock_enrich.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fetch_stage_timeout_returns_empty(self, provider):
+        with patch("src.rag.news_ingestion.rss_provider.get_sources", return_value=[{"name": "coindesk", "url": "x"}]), \
+             patch("src.rag.news_ingestion.rss_provider.asyncio.wait_for", new=AsyncMock(side_effect=asyncio.TimeoutError())):
+            result = await provider.fetch_news()
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_enrichment_timeout_continues_with_mapped_articles(self):
+        config = _make_config(RAG_NEWS_PAGE_ENRICHMENT=True)
+        provider = _make_provider(config)
+        provider._enricher.enrich_items = AsyncMock(side_effect=asyncio.TimeoutError())
+        merged = [{
+            "url": "https://example.com/ada-news",
+            "title": "ADA News",
+            "body_text": "Short body",
+            "summary": "",
+            "categories": [],
+            "published_at_epoch": 1_700_000_000.0,
+            "source_name": "coindesk",
+        }]
+
+        with patch("src.rag.news_ingestion.rss_provider.dedupe_by_url", side_effect=lambda x: x), \
+             patch("src.rag.news_ingestion.rss_provider.sort_by_date", side_effect=lambda x: x):
+            result = await provider._postprocess_items(merged, session=MagicMock())
+
+        assert len(result) == 1
+        assert result[0]["url"] == "https://example.com/ada-news"
