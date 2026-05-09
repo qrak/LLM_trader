@@ -356,12 +356,43 @@ class CryptoTradingBot:
     
     async def _execute_market_knowledge_update(self, force_news_update: bool):
         """Update market knowledge based on analysis type"""
+        timeout_seconds = max(1, int(self.config.RAG_UPDATE_TIMEOUT))
         if force_news_update:
-            self.logger.info("Updating market knowledge (Regular Analysis)...")
-            await self.rag_engine.update_if_needed(force_update=True)
+            self.logger.info(
+                "Updating market knowledge (Regular Analysis, timeout=%ss)...",
+                timeout_seconds,
+            )
         else:
-            self.logger.info("Skipping forced market knowledge update (Forced Analysis)")
-            await self.rag_engine.update_if_needed(force_update=False)
+            self.logger.info(
+                "Updating market knowledge (Forced Analysis, timeout=%ss)...",
+                timeout_seconds,
+            )
+
+        update_start = time.perf_counter()
+        try:
+            updated = await asyncio.wait_for(
+                self.rag_engine.update_if_needed(force_update=force_news_update),
+                timeout=timeout_seconds,
+            )
+            self.logger.debug(
+                "Market knowledge update completed in %.1fs (updated=%s)",
+                time.perf_counter() - update_start,
+                updated,
+            )
+        except asyncio.TimeoutError:
+            self.logger.warning(
+                "Market knowledge update timed out after %.1fs (limit=%ss); "
+                "continuing with cached/partial market knowledge",
+                time.perf_counter() - update_start,
+                timeout_seconds,
+            )
+        except Exception as e:
+            self.logger.error(
+                "Market knowledge update failed after %.1fs: %s; continuing with "
+                "cached/partial market knowledge",
+                time.perf_counter() - update_start,
+                e,
+            )
     
     async def _build_analysis_context(self, current_price: Optional[float], current_ticker) -> Dict[str, Any]:
         """Build context data for market analysis"""

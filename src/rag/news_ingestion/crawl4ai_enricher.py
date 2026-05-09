@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
 import sys
 from typing import Any
@@ -277,7 +278,27 @@ class Crawl4AIEnricher:
 
         try:
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
-                results = list(await crawler.arun_many(urls=urls, config=run_cfg))
+                worker_count = max(1, min(self.concurrency, 2))
+                wave_count = max(1, math.ceil(len(urls) / worker_count))
+                batch_timeout = max(self.timeout * wave_count + 15.0, self.timeout)
+                logger.debug(
+                    "Starting Crawl4AI batch for %d urls "
+                    "(workers=%d, per-page timeout=%.1fs, batch timeout=%.1fs)",
+                    len(urls),
+                    worker_count,
+                    self.timeout,
+                    batch_timeout,
+                )
+                results = list(await asyncio.wait_for(
+                    crawler.arun_many(urls=urls, config=run_cfg),
+                    timeout=batch_timeout,
+                ))
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Crawl4AI batch timed out (urls=%d); falling back to aiohttp enrichment",
+                len(urls),
+            )
+            return await self._enrich_aiohttp(targets, None)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Crawl4AI browser session error, falling back to aiohttp: %s", exc)
             return await self._enrich_aiohttp(targets, None)

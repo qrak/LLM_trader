@@ -94,6 +94,13 @@ news_page_enrichment = true
 news_min_body_chars = 400
 # Timeout for RSS/page requests in seconds
 news_timeout_seconds = 20
+# Overall timeout budget for market knowledge refresh during trading checks.
+# If exceeded, the bot continues analysis using cached/partial news.
+rag_update_timeout_seconds = 180
+# Outer timeout for the full RSS fetch stage across all sources.
+news_fetch_total_timeout_seconds = 45
+# Outer timeout for full article-body enrichment batch.
+news_enrichment_timeout_seconds = 120
 # Max concurrent page-enrichment requests
 news_max_concurrency = 6
 # Cap articles fetched per source
@@ -110,7 +117,7 @@ cooccurrence_multiplier = 1.5
 # Default false - uses plain aiohttp HTML extraction instead
 news_crawl4ai_enabled = true
 # Per-page timeout for Crawl4AI in seconds (defaults to news_timeout_seconds)
-news_crawl_timeout = 60
+news_crawl_timeout = 120
 
 [exchanges]
 # List of exchanges to use for symbol lookup (in priority order)

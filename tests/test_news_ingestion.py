@@ -327,6 +327,54 @@ class TestToArticleSchema:
         assert "CoinDesk Headlines" not in article["body"]
         assert "Contact Us" not in article["body"]
 
+    def test_early_boilerplate_marker_is_trimmed(self):
+        body = (
+            "Bitcoin market structure remains constructive. "
+            "More For You * About Us * Contact Us * Newsletters * Latest Crypto News"
+        )
+        raw = self._make_raw(source_name="coindesk", body_text=body)
+
+        article = to_article_schema(raw)
+
+        assert article["body"] == "Bitcoin market structure remains constructive."
+
+    def test_decrypt_price_ticker_prefix_is_trimmed(self):
+        price_rows = "\n".join(
+            f"${index + 1}.00\n{index + 0.25:.2f}%"
+            for index in range(12)
+        )
+        title = "Banking Industry Says Clarity Act Stablecoin Proposal Would Enable Evasion"
+        body = (
+            "* * *\n"
+            "NewsPredictAILearnGaming\n"
+            f"{price_rows}\n"
+            "Price data by\n"
+            "* * *\n"
+            "DecryptNewsLaw and Order\n"
+            "* * *\n"
+            f"{title}. "
+            "The article continues with policy context."
+        )
+        raw = self._make_raw(title=title, source_name="decrypt", body_text=body)
+
+        article = to_article_schema(raw)
+
+        assert article["body"].startswith("The article continues")
+        assert "NewsPredictAILearnGaming" not in article["body"]
+        assert "Price data by" not in article["body"]
+        assert "$" not in article["body"][:100]
+
+    def test_price_prose_is_preserved(self):
+        body = (
+            "Bitcoin ETF demand rose 12% while market cap held near $1.5 trillion. "
+            "Analysts said spot liquidity remained orderly."
+        )
+        raw = self._make_raw(source_name="decrypt", body_text=body)
+
+        article = to_article_schema(raw)
+
+        assert article["body"] == body
+
     def test_early_marker_like_phrase_is_not_trimmed(self):
         body = (
             "Top Stories in derivatives can still be misleading without volume context. "

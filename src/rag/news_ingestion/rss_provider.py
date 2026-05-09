@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 from typing import Any, TYPE_CHECKING
 
 import aiohttp
@@ -103,21 +104,48 @@ class RSSCrawl4AINewsProvider:
         session: aiohttp.ClientSession,
     ) -> list[dict[str, Any]]:
         """Concurrently fetch all RSS sources; return merged raw item list."""
-        self.logger.info(
-            "Fetching crypto news from %d RSS sources; this may take up to %ss.",
-            len(sources),
-            self.config.RAG_NEWS_FETCH_TIMEOUT,
+        fetch_timeout = max(1, int(self.config.RAG_NEWS_FETCH_TIMEOUT))
+        fetch_total_timeout = max(
+            fetch_timeout,
+            int(self.config.RAG_NEWS_FETCH_TOTAL_TIMEOUT),
         )
-        results: list[FetchResult] = await asyncio.gather(*(
-            fetch_source(
-                session,
-                s["name"],
-                s["url"],
-                max_items=self.config.RAG_NEWS_MAX_ITEMS_PER_SOURCE,
-                timeout=float(self.config.RAG_NEWS_FETCH_TIMEOUT),
+        self.logger.info(
+            "Fetching crypto news from %d RSS sources "
+            "(per-source timeout=%ss, stage timeout=%ss).",
+            len(sources),
+            fetch_timeout,
+            fetch_total_timeout,
+        )
+        fetch_start = perf_counter()
+        try:
+            results: list[FetchResult] = await asyncio.wait_for(
+                asyncio.gather(*(
+                    fetch_source(
+                        session,
+                        s["name"],
+                        s["url"],
+                        max_items=self.config.RAG_NEWS_MAX_ITEMS_PER_SOURCE,
+                        timeout=float(fetch_timeout),
+                    )
+                    for s in sources
+                )),
+                timeout=float(fetch_total_timeout),
             )
-            for s in sources
-        ))
+        except asyncio.TimeoutError:
+            self.logger.warning(
+                "RSS fetch stage timed out after %.1fs (limit=%ss); "
+                "continuing with empty fresh-news set",
+                perf_counter() - fetch_start,
+                fetch_total_timeout,
+            )
+            return []
+        except Exception as exc:  # noqa: BLE001
+            self.logger.warning(
+                "RSS fetch stage failed after %.1fs: %s; continuing with empty fresh-news set",
+                perf_counter() - fetch_start,
+                exc,
+            )
+            return []
 
         for r in results:
             if not r.success:
@@ -126,6 +154,11 @@ class RSSCrawl4AINewsProvider:
         merged: list[dict[str, Any]] = []
         for r in results:
             merged.extend(r.normalized_items)
+        self.logger.debug(
+            "RSS fetch stage completed in %.1fs with %d raw items",
+            perf_counter() - fetch_start,
+            len(merged),
+        )
         return merged
 
     async def _postprocess_items(
@@ -135,13 +168,39 @@ class RSSCrawl4AINewsProvider:
     ) -> list[dict[str, Any]]:
         """Enrich bodies, deduplicate, sort, and map to canonical article schema."""
         if self.config.RAG_NEWS_PAGE_ENRICHMENT:
+            enrich_timeout = max(1, int(self.config.RAG_NEWS_ENRICH_TIMEOUT))
             self.logger.info(
-                "Enriching news article bodies for better analysis; this can take 30-60 seconds."
+                "Enriching %d news article bodies for better analysis "
+                "(stage timeout=%ss, crawl per-page timeout=%ss).",
+                len(merged),
+                enrich_timeout,
+                self.config.RAG_NEWS_CRAWL_TIMEOUT,
             )
-            enriched_count = await self._enricher.enrich_items(merged, session)
-            self.logger.debug(
-                "Body enrichment: %d/%d items enriched", enriched_count, len(merged)
-            )
+            enrich_start = perf_counter()
+            try:
+                enriched_count = await asyncio.wait_for(
+                    self._enricher.enrich_items(merged, session),
+                    timeout=float(enrich_timeout),
+                )
+                self.logger.debug(
+                    "Body enrichment: %d/%d items enriched in %.1fs",
+                    enriched_count,
+                    len(merged),
+                    perf_counter() - enrich_start,
+                )
+            except asyncio.TimeoutError:
+                self.logger.warning(
+                    "News enrichment timed out after %.1fs (limit=%ss); "
+                    "skipping remaining enrichment and continuing",
+                    perf_counter() - enrich_start,
+                    enrich_timeout,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning(
+                    "News enrichment failed after %.1fs: %s; continuing with available bodies",
+                    perf_counter() - enrich_start,
+                    exc,
+                )
 
         deduped = dedupe_by_url(merged)
         sorted_items = sort_by_date(deduped)
@@ -169,4 +228,6 @@ class RSSCrawl4AINewsProvider:
         raw = self.config.RAG_NEWS_SOURCES
         if not raw:
             return None
-        return [source.strip() for source in raw if source.strip()]
+        if isinstance(raw, str):
+            return [source.strip() for source in raw.split(",") if source.strip()]
+        return [str(source).strip() for source in raw if str(source).strip()]
