@@ -381,27 +381,16 @@ class TemplateManager:
 
         response_template = f'''## Response Format
 
-Token-efficient output mode (mandatory):
-- JSON is the source of truth for all numeric values and decision fields.
-- Keep narrative minimal: max 5 short lines total before JSON.
-- Do NOT repeat detailed arithmetic, position sizing math, or full level tables in narrative if already present in JSON.
-- Do NOT use Markdown headings (#, ##, ###, ####) in the narrative section.
+Output: max 5 plain-text lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines.
 
-Optional compact narrative before JSON (plain-text labels):
-1) MARKET STRUCTURE: One line on trend regime and timeframe alignment.
-2) INDICATOR ASSESSMENT: One line on strongest confirming/conflicting technical, statistical, or visual validation signal.{chart_validation_line}
-3) CONTEXT & CATALYST: One line only if news, macro, market overview, or bull-vs-bear scenario is materially relevant.
-4) DECISION: One line with signal rationale, risk/reward quality, and invalidation condition.
-5) EXECUTION NOTE: One line only for conditional-entry or update logic.
+Narrative (plain-text only):
+1) MARKET STRUCTURE: trend regime + alignment
+2) INDICATOR ASSESSMENT: strongest confirming/conflicting signal{chart_validation_line}
+3) CONTEXT & CATALYST: news/macro if relevant
+4) DECISION: signal, R/R quality, invalidation
+5) EXECUTION NOTE: conditional-entry/update logic
 
-If information is uncertain or unavailable, skip the line instead of adding filler text.
-
-Then output JSON:
-
-JSON value rules:
-- Use valid JSON only: no comments, no currency symbols, no percent signs, no arithmetic strings, and no placeholder ranges inside values.
-- `confidence` and confluence fields are integer scores from 0 to 100.
-- Numeric price, size, and ratio fields must be JSON numbers except where signal-specific rules below explicitly allow `null`.
+JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluence = 0-100 integers. Price/size/ratio = numbers or null.
 
 ```json
 {{
@@ -419,7 +408,7 @@ JSON value rules:
         "stop_loss": 79750.0,
         "take_profit": 73114.0,
         "position_size": 0.0,
-        "reasoning": "3-4 sentences: (1) decision thesis — which indicators and confluences drove the signal; (2) market regime at decision time — trend direction, strength, timeframe alignment; (3) key invalidation trigger — the exact condition that would prove this thesis wrong; (4) next watch condition — what price or indicator event to monitor before the next candle close.",
+        "reasoning": "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next.",
         "key_levels": {{"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 32, "strength_daily": 41, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": 2.58
@@ -427,69 +416,46 @@ JSON value rules:
 }}
 ```
 
-Allowed `signal` values: BUY, SELL, HOLD, CLOSE, UPDATE.
-Signal-specific JSON field rules:
-- BUY/SELL: `entry_price`, `stop_loss`, `take_profit`, and `risk_reward_ratio` must be numbers. `position_size` must be the adjusted decimal capital fraction (0.0-1.0).
-- HOLD with no open position: `entry_price` is the conditional trigger level; `stop_loss` and `take_profit` are levels relative to that trigger; `position_size` is 0.0.
-- HOLD with an open position: no execution change. Set `entry_price`, `stop_loss`, `take_profit`, and `risk_reward_ratio` to `null` unless describing a future conditional setup in reasoning; do not repeat stale SL/TP values.
-- UPDATE with an open position: use current price as `entry_price`; set only the new intended `stop_loss` and/or `take_profit` values; `risk_reward_ratio` uses current price as reference.
-- CLOSE: exit now. Use current price as `entry_price`, set `stop_loss`, `take_profit`, and `risk_reward_ratio` to `null`, and set `position_size` to 0.0.
+Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
+JSON rules by signal:
+| Signal | entry_price | stop_loss | take_profit | position_size | risk_reward_ratio |
+|--------|-------------|-----------|-------------|---------------|-------------------|
+| BUY/SELL | number | number | number | 0.0-1.0 | number |
+| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | number |
+| HOLD (open position) | null | null | null | 0.0 | null |
+| UPDATE | current price | new SL | new TP | 0.0 | number (from current) |
+| CLOSE | current price | null | null | 0.0 | null |
 
-CONFLUENCE SCORING (SIMPLE):
-Rate each factor 0-100 on how strongly it supports your decision:
-- 0-30: Opposes | 40-60: Neutral/Mixed | 70-100: Strongly confirms
-
-For BUY/SELL — score support for the trade direction:
-1. trend_alignment: Multi-timeframe trend agreement with your signal
-2. momentum_strength: RSI, MACD, momentum confirming direction
-3. volume_support: Volume confirms the move direction
-4. pattern_quality: (patterns supporting signal / total detected) × 100 — DO NOT INFLATE
-5. support_resistance_strength: S/R levels supporting the setup
-
-For HOLD — score justification for staying out (higher = better reason to wait):
-Same 5 factors but scored on how much they justify not trading (conflicting signals = high score, clear directional signal = low score).
+CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):
+1. trend_alignment  2. momentum_strength  3. volume_support
+4. pattern_quality (supporting/total × 100, don't inflate)  5. support_resistance_strength
+For HOLD: score how much each justifies waiting (mixed signals = high).
 
 CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL".
 
-=== Trend Strength Rules (Advisory) ===
-ADX + CHOPPINESS ASSESSMENT:
-- ADX < {adx_weak} AND Choppiness > 50: WARNING: Weak trend + choppy. Needs {conf_weak}+ confluences.
-- ADX < {adx_weak} but Choppiness < 50: Potential trend emerging. Trade with strong confirmation.
-- ADX {adx_weak}-{adx_strong}: Developing trend. Standard {conf_std}+ confluences.
-- ADX >= {adx_strong}: Strong trend environment.
+=== Trend Strength ===
+ADX < {adx_weak}: weak trend — needs {conf_weak}+ confluences
+ADX {adx_weak}-{adx_strong}: developing — {conf_std}+ confluences
+ADX >= {adx_strong}: strong trend
+Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional
 
-CHOPPINESS INDEX CONTEXT:
-- > 61.8: Ranging | < 38.2: Trending | 38-62: Transitional
+Override with exceptional conviction ({conf_weak + 1}+ confluences). State reasoning.
 
-NOTE: You may OVERRIDE these guidelines if you have exceptional conviction (major catalyst, {conf_weak + 1}+ confluences). State reasoning.
+POSITION SIZING:
+- Max {max_pos:.2f} ({max_pos*100:.0f}% capital). Base = confidence/100 × {max_pos:.2f}.
+- MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
+- Weak trend (ADX < {adx_weak}): smaller. Min normal: {min_pos_size:.3f}. Don't round up.
 
-POSITION SIZING (calculate before finalizing):
-- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital). System caps values above this.
-- Base size = confidence / 100 × {max_pos:.2f}
-  - MIXED alignment: reduce by {pos_reduce_mixed*100:.0f}%
-  - DIVERGENT alignment: reduce by {pos_reduce_div*100:.0f}%
-- Weak trend (ADX < {adx_weak}): use smaller sizes
-- Min for normal entries: {min_pos_size:.3f}
-- Final position_size = adjusted value (do not round up to cap)
+MACRO CONFLICT:
+If 365D trend conflicts with trade: need 4+ confluences. Both 365D+Weekly conflict: need 5+ or HOLD.
+State "365D MACRO CONFLICT: [direction]" in analysis.
 
-MACRO TIMEFRAME CONFLICT:
-If 365D macro trend conflicts with your trade direction:
-- State "365D MACRO CONFLICT: [direction]" in analysis
-- Need 4+ strong confluences or clear reversal structure
-- Both 365D AND Weekly conflicting: Need 5+ confluences + major reversal setup. Otherwise HOLD.
+SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
-SHORT TRADE OPPORTUNITIES:
-SHORT trades are valid with sufficient confluence, even in a bull macro. Look for:
-- Statistical overextension (high Z-score, overbought extremes)
-- Momentum divergence (price rising but oscillators failing)
-- Volume climax with rejection at resistance
-Do not dismiss SHORT signals in an uptrend — countertrend trades need strong confirmation but are not forbidden.
-
-TRADING SIGNALS & CONFIDENCE:
-- BUY/SELL: {conf_threshold}+ confidence. Strong confluence + clear SL/TP + min {min_rr:.1f}:1 R/R
-- HOLD: No trade or position change. High confidence in HOLD means strong evidence against entry/update.
-- CLOSE: Exit when thesis invalidated or SL/TP hit
-- UPDATE: Adjust existing position SL/TP — do this ONLY when price has moved significantly (>40% toward TP) and the move is confirmed by closed candles
+SIGNALS:
+- BUY/SELL: {conf_threshold}+ conf, min {min_rr:.1f}:1 R/R, clear SL/TP
+- HOLD: strong evidence against entry. CLOSE: thesis invalidated.
+- UPDATE: only when price >40% toward TP AND confirmed by closed candles
 
 RISK/REWARD GUIDELINES:
 - R/R < {rr_borderline:.1f}: Very unfavorable — HOLD
@@ -497,22 +463,12 @@ RISK/REWARD GUIDELINES:
 - R/R >= {min_rr:.1f}: Acceptable
 - R/R >= {rr_strong:.1f}: Strong setup
 
-R/R CALCULATION:
-- BUY/SELL: risk = |entry - SL|, reward = |TP - entry|
-- UPDATE: risk = |current price - SL|, reward = |TP - current price|
-- HOLD (no position): use your conditional entry price
-- HOLD (open position) / CLOSE: use null for R/R fields
-- ratio = reward / risk
+R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
 {chart_validation_guidance}
 
-RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
-LONG trades:
-- SL: Below swing low + 1x ATR buffer (max {avg_sl:.1f}% from entry) | Example: Entry $100, Swing Low $97, ATR $1 → SL $96
-- TP: Key resistance levels, Fibonacci (0.618/0.786/1.0), previous highs | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
-
-SHORT trades:
-- SL: Above swing high + 1x ATR buffer (max {avg_sl:.1f}% from entry) | Example: Entry $100, Swing High $103, ATR $1 → SL $104
-- TP: Key support levels, Fibonacci (0.382/0.236/0.0), previous lows | Multiple targets: TP1=1.5R, TP2=2.5R, TP3=3.5R
+STOP LOSS & TAKE PROFIT:{safe_mae_line}
+- LONG: SL below swing low + 1x ATR (max {avg_sl:.1f}% from entry). TP at resistance/Fib levels.
+- SHORT: SL above swing high + 1x ATR (max {avg_sl:.1f}% from entry). TP at support/Fib levels.
 
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.'''
