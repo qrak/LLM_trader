@@ -86,6 +86,23 @@ class PromptBuilder:
             raise ValueError("market_formatter is required for PromptBuilder")
         self.market_formatter = market_formatter
 
+        # Auto-detect if we should use minimal context for less capable LLMs
+        self._minimal_context = self._detect_minimal_context()
+
+    def _detect_minimal_context(self) -> bool:
+        """Return True if the current LLM benefits from reduced data context."""
+        try:
+            provider = str(getattr(self.config, 'PROVIDER', '')).lower()
+            # Google AI Studio models (Gemini Flash) perform better with less noise
+            if provider == 'googleai':
+                return True
+            # Also enable if explicitly configured
+            if hasattr(self.config, 'MINIMAL_CONTEXT'):
+                return bool(self.config.MINIMAL_CONTEXT)
+        except Exception:
+            pass
+        return False
+
     def build_prompt(
         self,
         context: AnalysisContext,
@@ -136,7 +153,8 @@ class PromptBuilder:
                         sections.append(ticker_section)
 
         # Add market microstructure data (order book, trades, funding rate)
-        if context.market_microstructure:
+        # Skip for less capable LLMs — this is complex real-time data
+        if context.market_microstructure and not self._minimal_context:
             microstructure = context.market_microstructure
 
             snapshot_notice = self.market_formatter.format_microstructure_snapshot_notice(
@@ -169,21 +187,23 @@ class PromptBuilder:
                 if funding_section:
                     sections.append(funding_section)
 
-        # Add cryptocurrency details if available
-        coin_details_section = self.context_builder.build_coin_details_section(
-            context.coin_details
-        )
-        if coin_details_section:
-            sections.append(coin_details_section)
+        # Add cryptocurrency details if available (skip for Flash — noise for BTC)
+        if not self._minimal_context:
+            coin_details_section = self.context_builder.build_coin_details_section(
+                context.coin_details
+            )
+            if coin_details_section:
+                sections.append(coin_details_section)
 
-        sections.extend([
-            self.context_builder.build_market_data_section(context.ohlcv_candles),
-            self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe),
-            self.context_builder.build_market_period_metrics_section(context.market_metrics),
-        ])
+        sections.append(self.context_builder.build_market_data_section(context.ohlcv_candles))
+        sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
-        # Add previous indicators comparison section if available
-        if previous_indicators:
+        # Market period metrics — skip for Flash (redundant with technical indicators)
+        if not self._minimal_context:
+            sections.append(self.context_builder.build_market_period_metrics_section(context.market_metrics))
+
+        # Add previous indicators comparison section if available (skip for Flash)
+        if previous_indicators and not self._minimal_context:
             prev_section = self.context_builder.build_previous_indicators_section(
                 previous_indicators,
                 context.technical_data
