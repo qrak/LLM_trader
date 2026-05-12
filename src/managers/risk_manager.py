@@ -135,19 +135,19 @@ class RiskManager(RiskManagerProtocol):
         # 4. Circuit Breakers (Clamp Extreme Values)
         sl_distance_raw = abs(current_price - final_sl) / current_price
 
-        # Clamp SL: min 0.5%, max 10%
+        # Clamp SL: min 1.0%, max 10%
         if sl_distance_raw > 0.10:
             self.logger.warning("SL distance %s exceeds 10%% max, clamping", f"{sl_distance_raw:.1%}")
             if direction == "LONG":
                 final_sl = current_price * 0.90
             else:
                 final_sl = current_price * 1.10
-        elif sl_distance_raw < 0.005:
-            self.logger.warning("SL distance %s below 0.5%% min, expanding", f"{sl_distance_raw:.1%}")
+        elif sl_distance_raw < 0.01:
+            self.logger.warning("SL distance %s below 1.0%% min, expanding", f"{sl_distance_raw:.1%}")
             if direction == "LONG":
-                final_sl = current_price * 0.995
+                final_sl = current_price * 0.99
             else:
-                final_sl = current_price * 1.005
+                final_sl = current_price * 1.01
 
         # Validate Logical Consistency
         if direction == "LONG":

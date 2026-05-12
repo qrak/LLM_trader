@@ -65,6 +65,9 @@ class TradingStrategy:
         # Load any existing position
         self.current_position: Optional[Position] = self.persistence.load_position()
 
+        # Track last update time to cap UPDATE frequency (prevent SL death-spiral)
+        self._last_position_update_time: Optional[datetime] = None
+
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
 
@@ -308,9 +311,23 @@ class TradingStrategy:
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
 
-        updated = await self._update_position_parameters(stop_loss, take_profit)
+        # Guard: cap UPDATE frequency — max 1 per 2 candles (8h on 4H timeframe)
+        MIN_UPDATE_INTERVAL_HOURS = 8.0
+        now = datetime.now(timezone.utc)
+        if self._last_position_update_time is not None:
+            hours_since_last = (now - self._last_position_update_time).total_seconds() / 3600
+            if hours_since_last < MIN_UPDATE_INTERVAL_HOURS:
+                self.logger.info(
+                    "REJECTED UPDATE: only %.1fh since last update (min %.0fh). "
+                    "Letting trade breathe.",
+                    hours_since_last, MIN_UPDATE_INTERVAL_HOURS,
+                )
+                return None
+
+        updated = await self._update_position_parameters(stop_loss, take_profit, current_price)
 
         if updated:
+            self._last_position_update_time = now
             try:
                 current_pnl = self.current_position.calculate_pnl(current_price)
                 self.brain_service.track_position_update(
@@ -387,6 +404,24 @@ class TradingStrategy:
         self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)
         self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)
 
+        # Guard: reject entries with poor R/R (flash model sometimes sets bad R/R)
+        MIN_RR_FOR_ENTRY = 1.5
+        if rr_ratio < MIN_RR_FOR_ENTRY:
+            self.logger.warning(
+                "REJECTED entry: R/R %.2f below minimum %.1f. "
+                "Trade has unfavorable risk/reward. Signal: %s, Confidence: %s",
+                rr_ratio, MIN_RR_FOR_ENTRY, signal, confidence,
+            )
+            return TradeDecision(
+                timestamp=datetime.now(timezone.utc),
+                symbol=symbol,
+                action="HOLD",
+                confidence=confidence,
+                price=current_price,
+                fee=0.0,
+                reasoning=f"Entry blocked: R/R {rr_ratio:.2f} below minimum {MIN_RR_FOR_ENTRY}. {reasoning[:150]}" if reasoning else f"Entry blocked: R/R {rr_ratio:.2f} below minimum {MIN_RR_FOR_ENTRY}.",
+            )
+
         # Create position using Factory
         self.current_position = self.position_factory.create_position(
             symbol=symbol,
@@ -428,12 +463,14 @@ class TradingStrategy:
         self,
         stop_loss: Optional[float],
         take_profit: Optional[float],
+        current_price: Optional[float] = None,
     ) -> bool:
         """Update position stop loss and take profit.
 
         Args:
             stop_loss: New stop loss
             take_profit: New take profit
+            current_price: Current price for SL tightening validation
 
         Returns:
             True if anything was updated
@@ -448,8 +485,47 @@ class TradingStrategy:
         if stop_loss and stop_loss != self.current_position.stop_loss:
             direction = self.current_position.direction
             old_sl = self.current_position.stop_loss
-            # FULL AI AUTONOMY: Allow AI to move stop loss in any direction
-            if direction == "LONG" and stop_loss < old_sl:
+
+            # Check if this is a tightening (moving SL closer to entry/price)
+            is_tightening = (
+                (direction == "LONG" and stop_loss > old_sl) or
+                (direction == "SHORT" and stop_loss < old_sl)
+            )
+
+            if is_tightening and current_price and current_price > 0:
+                # GUARD: Prevent premature SL tightening that kills trades
+                # Calculate how much price has moved toward TP vs total TP distance
+                tp_distance_total = abs(self.current_position.take_profit - self.current_position.entry_price)
+                if tp_distance_total > 0:
+                    if direction == "LONG":
+                        price_progress = (current_price - self.current_position.entry_price) / tp_distance_total
+                    else:
+                        price_progress = (self.current_position.entry_price - current_price) / tp_distance_total
+                else:
+                    price_progress = 0.0
+
+                # Only allow tightening if price has moved at least 15% toward TP
+                MIN_PROGRESS_FOR_TIGHTENING = 0.15
+                if price_progress < MIN_PROGRESS_FOR_TIGHTENING:
+                    self.logger.info(
+                        "REJECTED premature SL tightening: price progress %.1f%% < %.0f%% minimum. "
+                        "Keeping SL at $%s (AI requested $%s)",
+                        price_progress * 100,
+                        MIN_PROGRESS_FOR_TIGHTENING * 100,
+                        f"{old_sl:,.2f}",
+                        f"{stop_loss:,.2f}",
+                    )
+                else:
+                    # Allowed tightening
+                    new_sl = stop_loss
+                    self.logger.info(
+                        "Tightening Stop Loss: $%s -> $%s (price progress: %.1f%%)",
+                        f"{old_sl:,.2f}",
+                        f"{stop_loss:,.2f}",
+                        price_progress * 100,
+                    )
+                    updated = True
+            elif direction == "LONG" and stop_loss < old_sl:
                 self.logger.info(
                     "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
                     old_sl, stop_loss
