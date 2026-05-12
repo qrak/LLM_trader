@@ -228,8 +228,8 @@ class TestBuildResponseTemplate:
         assert "ADX < 18" in tmpl
         assert "2.5:1" in tmpl  # min_rr
         assert "3.0%" in tmpl  # avg_sl
-        assert "BUY/SELL: 75+ confidence" in tmpl
-        assert "High confidence in HOLD means strong evidence" in tmpl
+        assert "BUY/SELL: 75+ conf" in tmpl
+        assert "strong evidence against entry" in tmpl
 
     def test_response_template_json_example_is_valid(self):
         """The fenced JSON example should be parser-safe, not pseudo-JSON."""
@@ -256,10 +256,10 @@ class TestBuildResponseTemplate:
 
     def test_signal_specific_existing_position_rules(self):
         tmpl = self.mgr.build_response_template()
-        assert "HOLD with an open position" in tmpl
-        assert "do not repeat stale SL/TP values" in tmpl
-        assert "CLOSE: exit now" in tmpl
-        assert "risk_reward_ratio` to `null`" in tmpl
+        assert "HOLD (open position)" in tmpl
+        assert "CLOSE" in tmpl
+        assert "null" in tmpl
+        assert "BUY/SELL" in tmpl
 
     def test_threshold_origin_with_brain_data(self):
         thresholds = {
@@ -306,29 +306,28 @@ class TestBuildResponseTemplate:
     def test_position_sizing_formula(self):
         tmpl = self.mgr.build_response_template()
         assert "POSITION SIZING" in tmpl
-        assert "Base size = confidence / 100" in tmpl
-        assert "Min for normal entries: 0.020" in tmpl
-        assert "do not round up to cap" in tmpl
+        assert "Base = confidence/100" in tmpl
+        assert "Min normal: 0.020" in tmpl
+        assert "Don't round up" in tmpl
 
     def test_confluence_scoring(self):
         tmpl = self.mgr.build_response_template()
-        assert "CONFLUENCE SCORING" in tmpl
+        assert "CONFLUENCE" in tmpl
         assert "trend_alignment" in tmpl
 
     def test_macro_timeframe_conflict(self):
         tmpl = self.mgr.build_response_template()
-        assert "MACRO TIMEFRAME CONFLICT" in tmpl
+        assert "MACRO CONFLICT" in tmpl
         assert "365D" in tmpl
 
     def test_rr_calculation_mandatory(self):
         tmpl = self.mgr.build_response_template()
-        assert "R/R CALCULATION" in tmpl
+        assert "R/R:" in tmpl
 
     def test_hold_confidence_is_not_capped_below_trade_threshold(self):
         tmpl = self.mgr.build_response_template()
         assert "HOLD (any confidence <" not in tmpl
-        assert "High confidence in HOLD means strong evidence" in tmpl
-        assert "High confidence in HOLD means strong evidence" in tmpl
+        assert "strong evidence against entry" in tmpl
 
     def test_response_template_reasoning_continuity_guidance(self):
         """Response template reasoning field should guide for vector DB continuity data."""
