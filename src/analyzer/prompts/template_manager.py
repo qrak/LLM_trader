@@ -269,7 +269,8 @@ class TemplateManager:
                 "- IMPROVE win rate: Only trade when multiple factors align strongly (see confluence rules in Response Format)",
                 "- AVOID repeated mistakes: If recent trades failed due to weak setups, demand stronger confirmation",
                 "- HOLD discipline: Better to miss a trade than force a weak setup",
-                "- UPDATE positions actively: Move SL to breakeven after 1:1 or 1.5:1 gain, trail stops on strong trends, adjust TP if momentum extends",
+                "- LET TRADES BREATHE: Do NOT tighten stops prematurely. Only move SL after price reaches 50%+ of the distance to TP. Premature tightening is the #1 cause of losing trades. A wider stop that survives normal volatility is better than a tight stop that gets hit by random noise.",
+                "- UPDATE positions sparingly: Only update when price has moved significantly (covered >40% of TP distance) AND the move is confirmed by closed-candle structure. Do NOT update based on intra-candle wicks or minor fluctuations.",
                 "- CLOSE proactively: If your analysis at candle close shows the thesis is invalidated, signal CLOSE — don't wait for SL to be hit",
                 "- ADAPT to performance: If win rate is low, increase entry standards and risk/reward requirements",
             ])
@@ -443,27 +444,21 @@ Signal-specific JSON field rules:
 - UPDATE with an open position: use current price as `entry_price`; set only the new intended `stop_loss` and/or `take_profit` values; `risk_reward_ratio` uses current price as reference.
 - CLOSE: exit now. Use current price as `entry_price`, set `stop_loss`, `take_profit`, and `risk_reward_ratio` to `null`, and set `position_size` to 0.0.
 
-CONFLUENCE SCORING:
-Before finalizing your signal, rate each factor (0-100) based on how strongly it SUPPORTS your chosen signal:
-- 0 = Factor opposes the signal or is irrelevant
-- 50 = Neutral / Mixed signals
-- 100 = Factor strongly confirms the signal
+CONFLUENCE SCORING (SIMPLE):
+Rate each factor 0-100 on how strongly it supports your decision:
+- 0-30: Opposes | 40-60: Neutral/Mixed | 70-100: Strongly confirms
 
-For BUY/SELL signals — score how strongly each factor supports the TRADE DIRECTION:
-1. **trend_alignment**: Multi-timeframe trend confluence (short/medium/long align with signal direction)
-2. **momentum_strength**: RSI, MACD, momentum oscillators supporting the signal
-3. **volume_support**: Volume profile confirms the move (buying volume for BUY, selling for SELL)
-4. **pattern_quality**: Score = (Number of patterns supporting the signal / Total patterns detected) * 100. Example: 1 bullish / 4 total = 25. DO NOT INFLATE THIS SCORE.
-5. **support_resistance_strength**: Proximity and strength of S/R levels supporting the trade setup
+For BUY/SELL — score support for the trade direction:
+1. trend_alignment: Multi-timeframe trend agreement with your signal
+2. momentum_strength: RSI, MACD, momentum confirming direction
+3. volume_support: Volume confirms the move direction
+4. pattern_quality: (patterns supporting signal / total detected) × 100 — DO NOT INFLATE
+5. support_resistance_strength: S/R levels supporting the setup
 
-For HOLD (no position) — score how strongly each factor JUSTIFIES STAYING OUT:
-1. **trend_alignment**: No clear trend / conflicting timeframes = 60-80 (HOLD justified). Strong directional alignment = 10-30 (potential trade missed).
-2. **momentum_strength**: Conflicting momentum signals = 60-80. Strong uniform momentum = 10-30.
-3. **volume_support**: Low/declining volume = 60-80 (confirms indecision). High volume with direction = 10-30.
-4. **pattern_quality**: Mixed/conflicting patterns = 60-80 (HOLD justified). Clear directional pattern = 10-30. DO NOT INFLATE THIS SCORE.
-5. **support_resistance_strength**: Price in no-man's land between S/R = 60-80. Price at clear actionable level = 20-40.
+For HOLD — score justification for staying out (higher = better reason to wait):
+Same 5 factors but scored on how much they justify not trading (conflicting signals = high score, clear directional signal = low score).
 
-CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL". Make only the immediate action decision.
+CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL".
 
 === Trend Strength Rules (Advisory) ===
 ADX + CHOPPINESS ASSESSMENT:
@@ -477,60 +472,46 @@ CHOPPINESS INDEX CONTEXT:
 
 NOTE: You may OVERRIDE these guidelines if you have exceptional conviction (major catalyst, {conf_weak + 1}+ confluences). State reasoning.
 
-POSITION SIZING FORMULA (calculate before finalizing):
-- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital - hard cap enforced by system, values above are clamped)
-- Base size = confidence / 100 × {max_pos:.2f}  (e.g., confidence 75 → {0.75 * max_pos:.3f}, confidence 90 → {0.90 * max_pos:.3f})
-        - If timeframe_alignment = "MIXED": × {1 - pos_reduce_mixed:.2f} (reduce by {pos_reduce_mixed*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_mixed):.3f})
-        - If timeframe_alignment = "DIVERGENT": × {1 - pos_reduce_div:.2f} (reduce by {pos_reduce_div*100:.0f}%, e.g., {0.75 * max_pos:.3f} → {0.75 * max_pos * (1 - pos_reduce_div):.3f})
-- In weak trend environments (ADX < {adx_weak}): consider smaller sizes
-- Suggested minimum for normal valid entries: {min_pos_size:.3f}; use smaller for weak, mixed, or unusually risky setups.
-- Final position_size = min({max_pos:.3f}, adjusted_calculated_value); do not round up to the cap unless conviction justifies it.
-- Put the final numeric value in JSON only (`position_size`).
+POSITION SIZING (calculate before finalizing):
+- Max allowed: {max_pos:.2f} ({max_pos*100:.0f}% of capital). System caps values above this.
+- Base size = confidence / 100 × {max_pos:.2f}
+  - MIXED alignment: reduce by {pos_reduce_mixed*100:.0f}%
+  - DIVERGENT alignment: reduce by {pos_reduce_div*100:.0f}%
+- Weak trend (ADX < {adx_weak}): use smaller sizes
+- Min for normal entries: {min_pos_size:.3f}
+- Final position_size = adjusted value (do not round up to cap)
 
-MACRO TIMEFRAME CONFLICT (CRITICAL):
-If the 365D macro trend is BEARISH and you are going LONG (or vice versa):
-- Explicitly state: "365D MACRO CONFLICT: [direction]" in your analysis
-- Require 4+ strong confluences (standard is 3) or a clear REVERSAL structure (e.g. divergence, pattern break)
-- Differentiate between "Structural Bearishness" (don't buy) and "Overextended Bullishness" (valid short opportunity)
-If both 365D and Weekly macro conflict with your trade: Exercise EXTREME CAUTION. Only proceed if you identify a clear "Cycle Top/Bottom" or "Major Reversal" setup with 5+ confluences. Otherwise, HOLD is preferred.
+MACRO TIMEFRAME CONFLICT:
+If 365D macro trend conflicts with your trade direction:
+- State "365D MACRO CONFLICT: [direction]" in analysis
+- Need 4+ strong confluences or clear reversal structure
+- Both 365D AND Weekly conflicting: Need 5+ confluences + major reversal setup. Otherwise HOLD.
 
 SHORT TRADE OPPORTUNITIES:
-These are GUIDELINES, not hard rules. Use your judgment based on overall confluence, just as with LONG trades.
-When Weekly Macro is BULLISH but short-term conditions suggest exhaustion, SHORT may be valid if you observe:
-- Statistical overextension (elevated Z-score, overbought oscillators at extremes)
-- Momentum divergence (price making new highs, but indicators failing to confirm)
-- Volume climax with rejection (exceptionally high volume at resistance with reversal candle pattern)
-- One-sided order book pressure (heavy sell-side absorption visible in microstructure data)
-Evaluate internally before dismissing SHORT: ask what a professional mean-reversion trader would see here, but report only the concise conclusion.
-SHORT trades require stricter confluence than LONG in a bull macro - but they are NOT forbidden. If your analysis shows a clear exhaustion setup, state your reasoning and proceed with appropriate position sizing.
+SHORT trades are valid with sufficient confluence, even in a bull macro. Look for:
+- Statistical overextension (high Z-score, overbought extremes)
+- Momentum divergence (price rising but oscillators failing)
+- Volume climax with rejection at resistance
+Do not dismiss SHORT signals in an uptrend — countertrend trades need strong confirmation but are not forbidden.
 
 TRADING SIGNALS & CONFIDENCE:
-- BUY ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
-- SELL ({conf_threshold}-100 confidence): Strong multi-indicator confluence + volume confirmation + clear SL/TP + minimum {min_rr:.1f}:1 R/R preferred
-- HOLD: No new trade or position change. Confidence is confidence in staying out or maintaining the current position unchanged; it may be above {conf_threshold} when evidence strongly rejects entry/update.
-- CLOSE: Exit position when SL/TP hit, signal reversal, or thesis invalidated
-- UPDATE: Adjust existing position SL/TP when market structure improves
-
-HOLD SIGNAL JSON FIELDS (no open position):
-- `entry_price`: Your conditional trigger price — the level where conditions would justify entry
-- `stop_loss` / `take_profit`: Levels relative to that conditional entry
-- `position_size`: 0.0 (no position opened)
-- `risk_reward_ratio`: Calculated from the conditional entry (shows the setup you are waiting for)
+- BUY/SELL: {conf_threshold}+ confidence. Strong confluence + clear SL/TP + min {min_rr:.1f}:1 R/R
+- HOLD: No trade or position change. High confidence in HOLD means strong evidence against entry/update.
+- CLOSE: Exit when thesis invalidated or SL/TP hit
+- UPDATE: Adjust existing position SL/TP — do this ONLY when price has moved significantly (>40% toward TP) and the move is confirmed by closed candles
 
 RISK/REWARD GUIDELINES:
-- R/R < {rr_borderline:.1f}: Very unfavorable - strongly consider HOLD
-- R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline - only trade with exceptional confluence ({conf_weak}+)
-- R/R >= {min_rr:.1f}: Standard acceptable quality
-- R/R >= {rr_strong:.1f}: Strong setup - preferred for counter-trend trades
+- R/R < {rr_borderline:.1f}: Very unfavorable — HOLD
+- R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline — only trade with strong confluence
+- R/R >= {min_rr:.1f}: Acceptable
+- R/R >= {rr_strong:.1f}: Strong setup
 
-R/R CALCULATION (MANDATORY):
-- For BUY/SELL signals: risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|
-- For UPDATE signals: risk = |Current Price - stop_loss|, reward = |take_profit - Current Price|
-  (UPDATE adjusts an EXISTING position — R/R must reflect distance from where price IS, not original entry)
-- For HOLD (no position): Use your conditional `entry_price` (NOT current market price). risk = |entry_price - stop_loss|, reward = |take_profit - entry_price|. This shows the quality of the setup you are waiting for.
-- For HOLD with an existing position and for CLOSE: use `null` for non-applicable execution/risk fields instead of inventing a ratio.
-- risk_reward_ratio = reward / risk
-- Output only the final numeric ratio or allowed `null` in JSON (`risk_reward_ratio`); do not print arithmetic steps in narrative.
+R/R CALCULATION:
+- BUY/SELL: risk = |entry - SL|, reward = |TP - entry|
+- UPDATE: risk = |current price - SL|, reward = |TP - current price|
+- HOLD (no position): use your conditional entry price
+- HOLD (open position) / CLOSE: use null for R/R fields
+- ratio = reward / risk
 {chart_validation_guidance}
 
 RISK MANAGEMENT (Stop Loss & Take Profit):{safe_mae_line}
