@@ -215,7 +215,7 @@ class TemplateManager:
             "",
             "## Analytical Framework",
             "Follow the numbered **Analysis Steps** in the user prompt for internal reasoning.",
-            "Your written output MUST follow the **Response Format** sections exactly.",
+            "Your output must follow the Response Format sections exactly.",
             "Use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). Do NOT use Markdown headings (#, ##, ###, ####).",
             "",
             "## Decision Protocol",
@@ -313,7 +313,7 @@ class TemplateManager:
                 header_lines.extend([
                     "### DETERMINISTIC TIME CHECK",
                     f"- **Current Time**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC",
-                    "- **Relevance**: PREVIOUS reasoning MUST be verified against CURRENT data. If previous claims (e.g., 'approaching' events) contradict the current clock or were based on now-outdated milestones, you MUST ignore or correct them.",
+                    "- **Relevance**: Previous reasoning must be verified against current data. If previous claims (e.g., 'approaching' events) contradict the current clock or were based on now-outdated milestones, ignore or correct them.",
                     f"- **Relevance Window**: Only consider an event 'imminent' if it occurs within the next 2 full candles (Window: {window_minutes} minutes).",
                     "",
                     "Use prior context only as a hypothesis to retest. If current evidence changed, reverse or downgrade the old view without preserving it for consistency.",
@@ -431,7 +431,7 @@ CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):
 4. pattern_quality (supporting/total × 100, don't inflate)  5. support_resistance_strength
 For HOLD: score how much each justifies waiting (mixed signals = high).
 
-CRITICAL: Provide EXACTLY ONE signal. Never say "CLOSE then HOLD" or "BUY followed by SELL".
+Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc).
 
 === Trend Strength ===
 ADX < {adx_weak}: weak trend — needs {conf_weak}+ confluences
