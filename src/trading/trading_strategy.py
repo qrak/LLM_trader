@@ -68,6 +68,13 @@ class TradingStrategy:
         # Track last update time to cap UPDATE frequency (prevent SL death-spiral)
         self._last_position_update_time: Optional[datetime] = None
 
+        # Cache timeframe in minutes for guard logic
+        try:
+            from src.utils.timeframe_validator import TimeframeValidator
+            self._tf_minutes: int = TimeframeValidator.to_minutes(config.TIMEFRAME) if config else 240
+        except Exception:
+            self._tf_minutes = 240
+
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
 
@@ -311,16 +318,29 @@ class TradingStrategy:
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
 
-        # Guard: cap UPDATE frequency — max 1 per 2 candles (8h on 4H timeframe)
-        MIN_UPDATE_INTERVAL_HOURS = 8.0
+        # Guard: cap UPDATE frequency — scales with timeframe
+        tf_minutes = self._tf_minutes
+        if tf_minutes < 60:
+            # Scalping: 4 candles minimum (e.g., 15m → 60 min)
+            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 4) / 60.0
+        elif tf_minutes < 240:
+            # Intraday: 3 candles minimum (e.g., 1h → 3h)
+            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 3) / 60.0
+        elif tf_minutes < 1440:
+            # Swing: 2 candles minimum (e.g., 4h → 8h)
+            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 2) / 60.0
+        else:
+            # Position: 1 candle minimum (e.g., 1D → 24h)
+            MIN_UPDATE_INTERVAL_HOURS = tf_minutes / 60.0
+
         now = datetime.now(timezone.utc)
         if self._last_position_update_time is not None:
             hours_since_last = (now - self._last_position_update_time).total_seconds() / 3600
             if hours_since_last < MIN_UPDATE_INTERVAL_HOURS:
                 self.logger.info(
-                    "REJECTED UPDATE: only %.1fh since last update (min %.0fh). "
+                    "REJECTED UPDATE: only %.1fh since last update (min %.1fh for %s). "
                     "Letting trade breathe.",
-                    hours_since_last, MIN_UPDATE_INTERVAL_HOURS,
+                    hours_since_last, MIN_UPDATE_INTERVAL_HOURS, self.config.TIMEFRAME,
                 )
                 return None
 
@@ -504,8 +524,16 @@ class TradingStrategy:
                 else:
                     price_progress = 0.0
 
-                # Only allow tightening if price has moved at least 15% toward TP
-                MIN_PROGRESS_FOR_TIGHTENING = 0.15
+                # Progress threshold scales with timeframe: scalping needs more confirmation
+                tf_minutes = self._tf_minutes
+                if tf_minutes < 60:
+                    MIN_PROGRESS_FOR_TIGHTENING = 0.25   # Scalping: high noise
+                elif tf_minutes < 240:
+                    MIN_PROGRESS_FOR_TIGHTENING = 0.20   # Intraday
+                elif tf_minutes < 1440:
+                    MIN_PROGRESS_FOR_TIGHTENING = 0.15   # Swing (4H default)
+                else:
+                    MIN_PROGRESS_FOR_TIGHTENING = 0.10   # Position: low noise
                 if price_progress < MIN_PROGRESS_FOR_TIGHTENING:
                     self.logger.info(
                         "REJECTED premature SL tightening: price progress %.1f%% < %.0f%% minimum. "
