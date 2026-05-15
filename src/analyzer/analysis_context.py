@@ -6,7 +6,7 @@ and other analysis context using dataclass pattern.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -21,19 +21,19 @@ class AnalysisContext(SerializableMixin):
     rather than redundant runtime shape checks.
     """
     symbol: str
-    exchange: Optional[str] = None
-    timeframe: Optional[str] = None
-    ohlcv_candles: Optional[np.ndarray] = None
-    current_price: Optional[float] = None
-    timestamps: Optional[List[datetime]] = None
-    technical_data: Dict[str, Any] = field(default_factory=dict)
-    technical_history: Dict[str, Any] = field(default_factory=dict)
-    technical_patterns: Dict[str, Any] = field(default_factory=dict)
-    market_metrics: Dict[str, Any] = field(default_factory=dict)
-    sentiment: Optional[Dict[str, Any]] = None
-    long_term_data: Optional[Dict[str, Any]] = None
-    weekly_macro_indicators: Optional[Dict[str, Any]] = None
-    market_overview: Dict[str, Any] = field(default_factory=dict)
-    market_microstructure: Dict[str, Any] = field(default_factory=dict)
-    weekly_ohlcv: Optional[np.ndarray] = None
-    coin_details: Dict[str, Any] = field(default_factory=dict)
+    exchange: str | None = None
+    timeframe: str | None = None
+    ohlcv_candles: np.ndarray | None = None
+    current_price: float | None = None
+    timestamps: list[datetime] | None = None
+    technical_data: dict[str, Any] = field(default_factory=dict)
+    technical_history: dict[str, Any] = field(default_factory=dict)
+    technical_patterns: dict[str, Any] = field(default_factory=dict)
+    market_metrics: dict[str, Any] = field(default_factory=dict)
+    sentiment: dict[str, Any] | None = None
+    long_term_data: dict[str, Any] | None = None
+    weekly_macro_indicators: dict[str, Any] | None = None
+    market_overview: dict[str, Any] = field(default_factory=dict)
+    market_microstructure: dict[str, Any] = field(default_factory=dict)
+    weekly_ohlcv: np.ndarray | None = None
+    coin_details: dict[str, Any] = field(default_factory=dict)

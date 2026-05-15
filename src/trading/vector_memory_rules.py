@@ -1,7 +1,7 @@
 """Semantic rule helpers for vector memory."""
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class VectorMemoryRulesMixin:
@@ -11,7 +11,7 @@ class VectorMemoryRulesMixin:
         self,
         rule_id: str,
         rule_text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """Store a semantic trading rule learned from trade clusters."""
         if not self._ensure_initialized():
@@ -40,7 +40,7 @@ class VectorMemoryRulesMixin:
             self.logger.error("Failed to store semantic rule: %s", e)
             return False
 
-    def get_active_rules(self, n_results: int = 5) -> List[Dict[str, Any]]:
+    def get_active_rules(self, n_results: int = 5) -> list[dict[str, Any]]:
         """Retrieve active semantic rules for prompt injection."""
         if not self._ensure_initialized():
             return []
@@ -55,7 +55,7 @@ class VectorMemoryRulesMixin:
                 limit=n_results,
             )
 
-            rules: List[Dict[str, Any]] = []
+            rules: list[dict[str, Any]] = []
             if all_rules and all_rules["ids"]:
                 for i, rule_id in enumerate(all_rules["ids"]):
                     rules.append({
@@ -70,7 +70,7 @@ class VectorMemoryRulesMixin:
             self.logger.error("Failed to get active rules: %s", e)
             return []
 
-    def deactivate_semantic_rules(self, rule_ids: List[str]) -> int:
+    def deactivate_semantic_rules(self, rule_ids: list[str]) -> int:
         """Mark semantic rules inactive without deleting their history."""
         if not rule_ids or not self._ensure_initialized():
             return 0
@@ -85,7 +85,7 @@ class VectorMemoryRulesMixin:
                 return 0
 
             existing_metadatas = existing_rules.get("metadatas") or []
-            updated_metadatas: List[Dict[str, Any]] = []
+            updated_metadatas: list[dict[str, Any]] = []
             deactivated_at = datetime.now(timezone.utc).isoformat()
             for index, rule_id in enumerate(existing_ids):
                 source_metadata = existing_metadatas[index] if index < len(existing_metadatas) else {}
@@ -110,7 +110,7 @@ class VectorMemoryRulesMixin:
         current_context: str,
         n_results: int = 3,
         min_similarity: float = 0.4,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve semantic rules relevant to current market context."""
         if not self._ensure_initialized():
             return []
@@ -128,7 +128,7 @@ class VectorMemoryRulesMixin:
                 n_results=min(n_results * 2, count),
             )
 
-            rules: List[Dict[str, Any]] = []
+            rules: list[dict[str, Any]] = []
             if results and results["ids"] and results["ids"][0]:
                 for i, rule_id in enumerate(results["ids"][0]):
                     distance = results["distances"][0][i] if results["distances"] else 1.0

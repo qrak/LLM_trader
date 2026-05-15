@@ -6,7 +6,7 @@ import io
 import os
 import threading
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Union, Callable
+from typing import Any, Union, Callable
 
 import math
 import numpy as np
@@ -21,7 +21,7 @@ from src.utils.profiler import profile_performance
 class ChartGenerator:
     """Generates interactive charts and static images for market data with OHLCV and RSI."""
 
-    def __init__(self, logger: Optional[Logger] = None, config: Optional[Any] = None, formatter: Optional[Callable] = None, format_utils=None):
+    def __init__(self, logger: Logger | None = None, config: Any | None = None, formatter: Callable | None = None, format_utils=None):
         """Initialize the chart generator.
 
         Args:
@@ -159,15 +159,15 @@ class ChartGenerator:
     async def create_chart_image(
         self,
         ohlcv: np.ndarray,
-        technical_history: Optional[Dict[str, np.ndarray]] = None,
+        technical_history: dict[str, np.ndarray] | None = None,
         pair_symbol: str = "",
         timeframe: str = "1h",
         height: int = 2160,  # Updated to 2160p height
         width: int = 3840,   # Updated to 3840p width
         save_to_disk: bool = False,
-        output_path: Optional[str] = None,
+        output_path: str | None = None,
         simple_mode: bool = True,  # Default to simple mode for AI analysis
-        timestamps: Optional[List] = None
+        timestamps: list | None = None
     ) -> Union[io.BytesIO, str]:
         """Create a PNG chart image optimized for AI pattern analysis.
 
@@ -256,8 +256,8 @@ class ChartGenerator:
         timeframe: str,
         height: int,
         width: int,
-        timestamps: Optional[List] = None,
-        technical_history: Optional[Dict[str, np.ndarray]] = None
+        timestamps: list | None = None,
+        technical_history: dict[str, np.ndarray] | None = None
     ) -> go.Figure:
         """Create a multi-panel chart with price, RSI, Volume, and CMF/OBV for AI pattern analysis.
 
@@ -293,7 +293,7 @@ class ChartGenerator:
         volumes = ohlcv[:, 5].astype(float) if ohlcv.shape[1] > 5 else np.zeros(len(ohlcv))
 
         # Slice indicator arrays to match displayed candle count
-        def slice_indicator(arr: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        def slice_indicator(arr: np.ndarray | None) -> np.ndarray | None:
             if arr is None or len(arr) == 0:
                 return None
             if len(arr) > len(ohlcv):

@@ -1,7 +1,7 @@
 """
 Ticker management and validation operations.
 """
-from typing import Set, List, Dict, Any, Optional
+from typing import Set, Any
 from src.logger.logger import Logger
 
 
@@ -26,7 +26,7 @@ class TickerManager:
             self.logger.exception("Error loading known tickers: %s", e)
             self.known_tickers = set()
 
-    async def update_known_tickers(self, news_database: List[Dict[str, Any]]) -> None:
+    async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
         """Update known tickers from news database and validation."""
         try:
             # Extract coins from news database
@@ -51,7 +51,7 @@ class TickerManager:
         except Exception as e:
             self.logger.exception("Error updating known tickers: %s", e)
 
-    def _extract_detected_coins(self, news_database: List[Dict[str, Any]]) -> set:
+    def _extract_detected_coins(self, news_database: list[dict[str, Any]]) -> set:
         """Extract coins that were detected in news articles."""
         detected_coins = set()
 
@@ -63,7 +63,7 @@ class TickerManager:
 
         return detected_coins
 
-    def _extract_category_coins(self, news_database: List[Dict[str, Any]]) -> set:
+    def _extract_category_coins(self, news_database: list[dict[str, Any]]) -> set:
         """Extract coins from category information in news articles."""
         category_coins = set()
 
@@ -95,7 +95,7 @@ class TickerManager:
         category_lower = category.lower()
         return not any(skip in category_lower for skip in skip_categories)
 
-    def _extract_ticker_from_category(self, category: str) -> Optional[str]:
+    def _extract_ticker_from_category(self, category: str) -> str | None:
         """Extract ticker symbol from category string."""
         # Look for patterns that might be tickers
         category_upper = category.upper()

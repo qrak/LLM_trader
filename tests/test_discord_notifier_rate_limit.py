@@ -9,9 +9,10 @@ import pytest
 from src.notifiers.notifier import DiscordNotifier
 
 
-class FakeDiscordHTTPError(Exception):
+class FakeDiscordHTTPError(discord.HTTPException):
     def __init__(self, status: int, message: str = "discord send failure"):
-        super().__init__(message)
+        mock_response = MagicMock(status=status)
+        super().__init__(mock_response, message)
         self.status = status
 
 

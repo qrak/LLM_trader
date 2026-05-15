@@ -1,7 +1,7 @@
 """Risk Manager for converting signals into actionable trade parameters."""
 
 import math
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
@@ -19,12 +19,13 @@ class RiskManager(RiskManagerProtocol):
     def __init__(self, logger: Logger, config: "ConfigProtocol"):
         self.logger = logger
         self.config = config
+        self._last_frictions: list[dict[str, Any]] = []
 
     def validate_signal(self, signal: str) -> bool:
         """Validate if a signal is actionable."""
         return signal in ("BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT")
 
-    def _is_valid_position_size(self, position_size: Optional[float]) -> bool:
+    def _is_valid_position_size(self, position_size: float | None) -> bool:
         """Return whether position size is a usable capital fraction."""
         return position_size is not None and math.isfinite(position_size) and position_size > 0
 
@@ -44,7 +45,7 @@ class RiskManager(RiskManagerProtocol):
         )
         return self.config.POSITION_SIZE_FALLBACK_MEDIUM
 
-    def _resolve_position_size_pct(self, position_size: Optional[float], confidence: str) -> float:
+    def _resolve_position_size_pct(self, position_size: float | None, confidence: str) -> float:
         """Resolve final position size from AI request or configured confidence fallback."""
         max_size = self.config.MAX_POSITION_SIZE
         if not math.isfinite(max_size) or max_size <= 0:
@@ -66,6 +67,13 @@ class RiskManager(RiskManagerProtocol):
                 requested_size * 100,
                 max_size * 100,
             )
+            self._last_frictions.append({
+                "guard_type": "position_size_clamp",
+                "direction": "N/A",
+                "suggested_size": requested_size,
+                "max_size": max_size,
+                "detail": f"Position size {requested_size*100:.1f}% clamped to max {max_size*100:.1f}%",
+            })
         self.logger.debug(
             "Resolved position size: source=%s requested=%.4f cap=%.4f final=%.4f",
             source,
@@ -81,10 +89,10 @@ class RiskManager(RiskManagerProtocol):
         current_price: float,
         capital: float,
         confidence: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        position_size: Optional[float] = None,
-        market_conditions: Optional[Dict[str, Any]] = None
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        position_size: float | None = None,
+        market_conditions: dict[str, Any] | None = None
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
@@ -138,12 +146,30 @@ class RiskManager(RiskManagerProtocol):
         # Clamp SL: min 1.0%, max 10%
         if sl_distance_raw > 0.10:
             self.logger.warning("SL distance %s exceeds 10%% max, clamping", f"{sl_distance_raw:.1%}")
+            self._last_frictions.append({
+                "guard_type": "sl_distance_max",
+                "direction": direction,
+                "suggested_sl_pct": sl_distance_raw,
+                "corrected_sl_pct": 0.10,
+                "current_price": current_price,
+                "volatility_level": volatility_level,
+                "detail": f"SL distance {sl_distance_raw*100:.1f}% clamped to max 10%",
+            })
             if direction == "LONG":
                 final_sl = current_price * 0.90
             else:
                 final_sl = current_price * 1.10
         elif sl_distance_raw < 0.01:
             self.logger.warning("SL distance %s below 1.0%% min, expanding", f"{sl_distance_raw:.1%}")
+            self._last_frictions.append({
+                "guard_type": "sl_distance_min",
+                "direction": direction,
+                "suggested_sl_pct": sl_distance_raw,
+                "corrected_sl_pct": 0.01,
+                "current_price": current_price,
+                "volatility_level": volatility_level,
+                "detail": f"SL distance {sl_distance_raw*100:.1f}% expanded to min 1%",
+            })
             if direction == "LONG":
                 final_sl = current_price * 0.99
             else:
@@ -153,16 +179,52 @@ class RiskManager(RiskManagerProtocol):
         if direction == "LONG":
             if final_sl >= current_price:
                 self.logger.warning("Invalid SL for LONG (%s >= %s), using dynamic", final_sl, current_price)
+                self._last_frictions.append({
+                    "guard_type": "sl_below_entry",
+                    "direction": direction,
+                    "suggested_sl": final_sl,
+                    "dynamic_sl": dynamic_sl,
+                    "current_price": current_price,
+                    "volatility_level": volatility_level,
+                    "detail": f"SL ${final_sl:,.2f} was above/at entry ${current_price:,.2f}, using dynamic",
+                })
                 final_sl = dynamic_sl
             if final_tp <= current_price:
                 self.logger.warning("Invalid TP for LONG (%s <= %s), using dynamic", final_tp, current_price)
+                self._last_frictions.append({
+                    "guard_type": "tp_below_entry",
+                    "direction": direction,
+                    "suggested_tp": final_tp,
+                    "dynamic_tp": dynamic_tp,
+                    "current_price": current_price,
+                    "volatility_level": volatility_level,
+                    "detail": f"TP ${final_tp:,.2f} was below/at entry ${current_price:,.2f}, using dynamic",
+                })
                 final_tp = dynamic_tp
         else:  # SHORT
             if final_sl <= current_price:
                 self.logger.warning("Invalid SL for SHORT (%s <= %s), using dynamic", final_sl, current_price)
+                self._last_frictions.append({
+                    "guard_type": "sl_below_entry",
+                    "direction": direction,
+                    "suggested_sl": final_sl,
+                    "dynamic_sl": dynamic_sl,
+                    "current_price": current_price,
+                    "volatility_level": volatility_level,
+                    "detail": f"SL ${final_sl:,.2f} was below/at entry ${current_price:,.2f}, using dynamic",
+                })
                 final_sl = dynamic_sl
             if final_tp >= current_price:
                 self.logger.warning("Invalid TP for SHORT (%s >= %s), using dynamic", final_tp, current_price)
+                self._last_frictions.append({
+                    "guard_type": "tp_below_entry",
+                    "direction": direction,
+                    "suggested_tp": final_tp,
+                    "dynamic_tp": dynamic_tp,
+                    "current_price": current_price,
+                    "volatility_level": volatility_level,
+                    "detail": f"TP ${final_tp:,.2f} was above/at entry ${current_price:,.2f}, using dynamic",
+                })
                 final_tp = dynamic_tp
 
         # 5. Position Sizing
@@ -192,3 +254,16 @@ class RiskManager(RiskManagerProtocol):
             rr_ratio=rr_ratio,
             volatility_level=volatility_level
         )
+
+    def get_and_clear_frictions(self) -> list[dict[str, Any]]:
+        """Return accumulated friction reports and clear the buffer.
+
+        Called by TradingStrategy after `calculate_entry_parameters` to retrieve
+        any clamping/rejection events for persistence as blocked trade feedback.
+
+        Returns:
+            List of friction dicts (guard_type, direction, deltas, etc.).
+        """
+        frictions = self._last_frictions
+        self._last_frictions = []
+        return frictions

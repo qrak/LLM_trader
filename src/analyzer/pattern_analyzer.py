@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Any
 import numpy as np
 
 from src.analyzer.pattern_engine import PatternEngine
@@ -14,7 +14,7 @@ class PatternAnalyzer:
         self,
         pattern_engine: PatternEngine,
         indicator_pattern_engine: IndicatorPatternEngine,
-        logger: Optional[Logger] = None
+        logger: Logger | None = None
     ):
         self.logger = logger
         self.pattern_engine = pattern_engine
@@ -25,10 +25,10 @@ class PatternAnalyzer:
     def detect_patterns(
         self,
         ohlcv_data: np.ndarray,
-        technical_history: Dict[str, np.ndarray],
-        long_term_data: Optional[Dict] = None,
-        timestamps: Optional[List] = None
-    ) -> Dict[str, Any]:
+        technical_history: dict[str, np.ndarray],
+        long_term_data: dict | None = None,
+        timestamps: list | None = None
+    ) -> dict[str, Any]:
         """
         Detect all chart and indicator patterns from current market data.
 
@@ -99,7 +99,7 @@ class PatternAnalyzer:
         volume = np.linspace(1_000.0, 1_500.0, sample_count)
         return np.column_stack((timestamps, open_prices, high, low, close, volume))
 
-    def _build_dummy_history(self, sample_count: int, close_series: np.ndarray) -> Dict[str, np.ndarray]:
+    def _build_dummy_history(self, sample_count: int, close_series: np.ndarray) -> dict[str, np.ndarray]:
         """Construct the minimal indicator history needed for pattern warm-up."""
         ramp = np.linspace(-1.0, 1.0, sample_count)
         rsi = np.clip(50 + 20 * np.sin(ramp * np.pi), 0, 100)
@@ -134,9 +134,9 @@ class PatternAnalyzer:
     def get_all_patterns(
         self,
         ohlcv_data: np.ndarray,
-        technical_history: Dict[str, np.ndarray],
-        long_term_data: Optional[Dict] = None
-    ) -> List[Dict]:
+        technical_history: dict[str, np.ndarray],
+        long_term_data: dict | None = None
+    ) -> list[dict]:
         try:
             patterns_dict = self.detect_patterns(ohlcv_data, technical_history, long_term_data)
 

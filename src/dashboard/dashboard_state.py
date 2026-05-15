@@ -5,7 +5,7 @@ It enables WebSocket broadcasts and API endpoints to share live data.
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Any
 import asyncio
 import time
 from src.dashboard.routers.ws_router import broadcast
@@ -15,8 +15,8 @@ from src.dashboard.routers.ws_router import broadcast
 class DashboardState:
     """Shared state between bot and dashboard."""
     # pylint: disable=too-many-instance-attributes
-    next_check_utc: Optional[datetime] = None
-    current_price: Optional[float] = None
+    next_check_utc: datetime | None = None
+    current_price: float | None = None
     _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -32,11 +32,11 @@ class DashboardState:
             self.next_check_utc = next_time
         await self._broadcast({"type": "countdown", "next_check_utc": next_time.isoformat()})
 
-    async def _broadcast(self, data: Dict[str, Any]) -> None:
+    async def _broadcast(self, data: dict[str, Any]) -> None:
         """Broadcast data to all connected WebSocket clients."""
         await broadcast(data)
 
-    def get_countdown_data(self) -> Dict[str, Any]:
+    def get_countdown_data(self) -> dict[str, Any]:
         """Get current countdown state for REST API."""
         if not self.next_check_utc:
             return {"next_check_utc": None, "seconds_remaining": None}
@@ -52,7 +52,7 @@ class DashboardState:
             "seconds_remaining": max(0, int(remaining))
         }
 
-    def get_cached(self, key: str, ttl_seconds: float = 30.0) -> Optional[Any]:
+    def get_cached(self, key: str, ttl_seconds: float = 30.0) -> Any | None:
         """Retrieve a cached value if it is within TTL."""
         cached_time = self.cache_timestamps.get(key, 0)
         if time.time() - cached_time > ttl_seconds:

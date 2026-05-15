@@ -1,11 +1,13 @@
 """Token counting and cost tracking for AI model usage."""
+from __future__ import annotations
+
 import json
 import os
 import threading
 import time
 import atexit
 import tempfile
-from typing import Dict, Optional, Any
+from typing import Any
 
 import tiktoken
 
@@ -13,8 +15,8 @@ from src.trading.data_models import ProviderCostStats, SessionCosts
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
-    _instance: Optional["ModelPricing"] = None
-    _pricing: Optional[Dict[str, Any]] = None
+    _instance: "ModelPricing | None" = None
+    _pricing: dict[str, Any] | None = None
 
     def __new__(cls) -> "ModelPricing":
         if cls._instance is None:
@@ -25,7 +27,7 @@ class ModelPricing:
         if ModelPricing._pricing is None:
             ModelPricing._pricing = self._load_pricing()
 
-    def _load_pricing(self) -> Dict[str, Any]:
+    def _load_pricing(self) -> dict[str, Any]:
         """Load pricing data from JSON file."""
         pricing_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_pricing.json")
         pricing_path = os.path.normpath(pricing_path)
@@ -35,7 +37,7 @@ class ModelPricing:
         except (FileNotFoundError, json.JSONDecodeError):
             return {"google": {}, "openrouter": {}}
 
-    def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+    def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> float | None:
         """
         Calculate cost for a request based on token counts.
 
@@ -126,7 +128,7 @@ class TokenCounter:
         provider: str,
         prompt_tokens: int,
         completion_tokens: int,
-        cost: Optional[float] = None
+        cost: float | None = None
     ) -> None:
         """
         Record actual token usage from API response (replaces tiktoken estimates).
@@ -164,10 +166,10 @@ class TokenCounter:
 
     def process_response_usage(
         self,
-        usage: Optional[Dict[str, Any]],
+        usage: dict[str, Any] | None,
         provider: str = "unknown",
         logger=None,
-        fallback_text: Optional[str] = None
+        fallback_text: str | None = None
     ) -> None:
         """
         Process API response usage data: record and optionally log.
@@ -197,7 +199,7 @@ class TokenCounter:
                 stats = self.get_usage_stats()
                 logger.info("Total tokens used: %s", f"{stats['total']:,}")
 
-    def get_usage_stats(self) -> Dict[str, int]:
+    def get_usage_stats(self) -> dict[str, int]:
         """
         Get current token usage statistics.
 
@@ -230,8 +232,8 @@ class CostStorage:
         """
         self.file_path = file_path
         self._ensure_directory()
-        self._providers: Dict[str, ProviderCostStats] = {}
-        self._last_reset: Optional[str] = None
+        self._providers: dict[str, ProviderCostStats] = {}
+        self._last_reset: str | None = None
 
         self._lock = threading.RLock()
         self._last_save_time = 0.0
@@ -311,7 +313,7 @@ class CostStorage:
         provider: str,
         prompt_tokens: int,
         completion_tokens: int,
-        cost: Optional[float] = None
+        cost: float | None = None
     ) -> None:
         """
         Record usage for a provider and save to disk (buffered).

@@ -23,6 +23,7 @@ def _builder() -> ContextBuilder:
         logger=MagicMock(),
         token_counter=_TokenCounter(),
         config=config,
+        scoring_policy=MagicMock(),
         article_processor=article_processor,
     )
 
@@ -111,6 +112,7 @@ def test_process_article_respects_token_budget_with_tiktoken_counter():
         logger=MagicMock(),
         token_counter=token_counter,
         config=config,
+        scoring_policy=MagicMock(),
         article_processor=article_processor,
     )
 

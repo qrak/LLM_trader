@@ -2,14 +2,14 @@
 Collision resolution utilities for category-word mappings.
 Centralizes priority-based collision resolution logic to avoid code duplication.
 """
-from typing import Set, Dict
+from typing import Set
 
 
 class CategoryCollisionResolver:
     """Handles priority-based collision resolution for category-word mappings."""
 
     def __init__(self, important_categories: Set[str] = None, ticker_categories: Set[str] = None,
-                 general_categories: Set[str] = None, generic_priorities: Dict[str, int] = None):
+                 general_categories: Set[str] = None, generic_priorities: dict[str, int] = None):
         self.important_categories = important_categories or set()
         self.ticker_categories = ticker_categories or set()
         self.general_categories = general_categories or set()
@@ -46,7 +46,7 @@ class CategoryCollisionResolver:
         else:
             return existing_category
 
-    def update_category_sets(self, important_categories: Set[str], ticker_categories: Set[str], general_categories: Set[str], generic_priorities: Dict[str, int] = None) -> None:
+    def update_category_sets(self, important_categories: Set[str], ticker_categories: Set[str], general_categories: Set[str], generic_priorities: dict[str, int] = None) -> None:
         """Update category sets for priority calculation."""
         self.important_categories = important_categories
         self.ticker_categories = ticker_categories

@@ -8,7 +8,6 @@ Detects volatility-based patterns:
 All functions use @njit for performance.
 """
 
-from typing import Tuple
 
 import numpy as np
 from numba import njit
@@ -19,7 +18,7 @@ def detect_atr_spike_numba(
     atr: np.ndarray,
     spike_threshold: float = 1.5,
     lookback: int = 14
-) -> Tuple[bool, int, float, float]:
+) -> tuple[bool, int, float, float]:
     """
     Detect sudden ATR spikes (volatility explosion).
 
@@ -62,7 +61,7 @@ def detect_bb_squeeze_numba(
     bb_lower: np.ndarray,
     squeeze_percentile: float = 20.0,
     lookback: int = 20
-) -> Tuple[bool, float, float]:
+) -> tuple[bool, float, float]:
     """
     Detect Bollinger Band squeeze (low volatility).
 

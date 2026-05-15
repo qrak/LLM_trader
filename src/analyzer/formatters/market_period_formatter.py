@@ -2,7 +2,7 @@
 Market Period Formatter - Formats period-based market metrics.
 Handles 1h, 4h, 24h, 7d, 30d period metrics and indicator changes.
 """
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class MarketPeriodFormatter:
     """Formatter for period-based market metrics and indicator changes."""
 
-    def __init__(self, logger: Optional[Logger] = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
         """Initialize the market period formatter.
 
         Args:

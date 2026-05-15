@@ -7,7 +7,6 @@ and compatibility checking for various APIs and exchanges.
 Supported timeframe range: 5m (minimum) to 1w (maximum)
 """
 
-from typing import Optional
 import re
 
 
@@ -126,7 +125,7 @@ class TimeframeValidator:
         return target_mins // base_mins
 
     @classmethod
-    def is_ccxt_compatible(cls, timeframe: str, _exchange_name: Optional[str] = None) -> bool:
+    def is_ccxt_compatible(cls, timeframe: str, _exchange_name: str | None = None) -> bool:
         """
         Check if timeframe is compatible with CCXT exchanges.
 

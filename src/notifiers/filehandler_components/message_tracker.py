@@ -4,7 +4,7 @@ Handles the core logic for tracking messages and determining expired messages.
 """
 import asyncio
 from datetime import datetime
-from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -27,7 +27,7 @@ class MessageTracker:
         self._tracking_lock = asyncio.Lock()
 
     async def track_message(self, message_id: int, channel_id: int, user_id: int,
-                          message_type: str = "general", expire_after: Optional[int] = None) -> bool:
+                          message_type: str = "general", expire_after: int | None = None) -> bool:
         """Track a message for automatic deletion."""
         if expire_after is None:
             expire_after = self.config.FILE_MESSAGE_EXPIRY
@@ -38,7 +38,7 @@ class MessageTracker:
             return await self._save_message_tracking(message_id, message_data)
 
     def _create_message_data(self, channel_id: int, user_id: int,
-                           message_type: str, expire_after: int) -> Dict[str, Any]:
+                           message_type: str, expire_after: int) -> dict[str, Any]:
         """Create message tracking data structure."""
         now = datetime.now()
         expiry_time = now.timestamp() + expire_after
@@ -52,7 +52,7 @@ class MessageTracker:
             "expires_at": expiry_time
         }
 
-    async def _save_message_tracking(self, message_id: int, message_data: Dict[str, Any]) -> bool:
+    async def _save_message_tracking(self, message_id: int, message_data: dict[str, Any]) -> bool:
         """Save message tracking data."""
         try:
             tracking_data = await self.persistence.load_tracking_data()
@@ -66,7 +66,7 @@ class MessageTracker:
             self.logger.error("Error tracking message %s: %s", message_id, e)
             return False
 
-    async def get_expired_messages(self) -> List[Tuple[int, int]]:
+    async def get_expired_messages(self) -> list[tuple[int, int]]:
         """Get all expired messages that need deletion."""
         async with self._tracking_lock:
             tracking_data = await self.persistence.load_tracking_data()
@@ -85,7 +85,7 @@ class MessageTracker:
 
         return expired_messages
 
-    def _is_message_expired(self, message_data: Dict[str, Any], current_time: float) -> bool:
+    def _is_message_expired(self, message_data: dict[str, Any], current_time: float) -> bool:
         """Check if a message has expired."""
         try:
             expires_at = message_data.get('expires_at')
@@ -98,7 +98,7 @@ class MessageTracker:
         async with self._tracking_lock:
             await self.persistence.remove_message_tracking(message_id)
 
-    async def get_tracking_stats(self) -> Dict[str, int]:
+    async def get_tracking_stats(self) -> dict[str, int]:
         """Get statistics about tracked messages."""
         tracking_data = await self.persistence.load_tracking_data()
         current_time = datetime.now().timestamp()

@@ -4,7 +4,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
@@ -51,7 +51,7 @@ def _read_json_file(file_path: Path) -> Any:
         return json.load(f)
 
 
-def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_persisted_technical_data(data: dict[str, Any]) -> dict[str, Any]:
     """Return persisted indicator values from new or legacy previous_response shapes."""
     technical_data = data.get("technical_data")
     if technical_data:
@@ -65,7 +65,7 @@ def _extract_persisted_technical_data(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _distance_pct_or_fallback(stored_pct: Optional[float], entry_price: float, target_price: float) -> float:
+def _distance_pct_or_fallback(stored_pct: float | None, entry_price: float, target_price: float) -> float:
     """Return stored distance percent or derive it from entry and target prices."""
     if stored_pct and stored_pct > 0:
         return stored_pct
@@ -74,7 +74,7 @@ def _distance_pct_or_fallback(stored_pct: Optional[float], entry_price: float, t
     return abs(target_price - entry_price) / entry_price
 
 
-def _extract_market_status(data: Dict[str, Any], unified_parser=None) -> Dict[str, Any]:
+def _extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[str, Any]:
     """Helper to extract market status from previous_response data."""
     response = data.get("response", {})
     text = response.get("text_analysis", "")
@@ -135,8 +135,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
     logic used during live trading so that similarity queries are semantically
     identical to the documents stored in vector memory.
 
-    Returns:
-        Tuple of (display_context, query_document). display_context is the
+    Returns: tuple of (display_context, query_document). display_context is the
         categorical string for display; query_document is the enriched string
         for embedding search. Both are empty strings on failure.
     """
@@ -157,12 +156,12 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
             if exit_execution_text:
                 fallback = f"{fallback} + {exit_execution_text}"
             return fallback, fallback
-        current_price: Optional[float] = None
+        current_price: float | None = None
         response = data.get("response", {})
         current_price = response.get("current_price")
-        sentiment_data: Optional[Dict[str, Any]] = data.get("sentiment")
+        sentiment_data: dict[str, Any] | None = data.get("sentiment")
         is_weekend = datetime.now().weekday() >= 5
-        shared_kwargs: Dict[str, Any] = {
+        shared_kwargs: dict[str, Any] = {
             "technical_data": technical_data,
             "current_price": current_price,
             "sentiment_data": sentiment_data,
@@ -198,10 +197,11 @@ class BrainRouter:
         self.router.add_api_route("/vectors", self.get_vector_details, methods=["GET"])
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
         self.router.add_api_route("/refresh-price", self.refresh_current_price, methods=["GET"])
+        self.router.add_api_route("/blocked-trades", self.get_blocked_trades, methods=["GET"])
 
-    def _resolve_rule_exit_profile(self, metadata: Dict[str, Any]) -> str:
+    def _resolve_rule_exit_profile(self, metadata: dict[str, Any]) -> str:
         """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
-        timeframe = getattr(self.config, "TIMEFRAME", "unknown")
+        timeframe = self.config.TIMEFRAME
         default_context = build_exit_execution_context_from_config(self.config, timeframe)
         context = build_exit_execution_context(
             stop_loss_type=metadata.get("dominant_stop_loss_type") or metadata.get("stop_loss_type"),
@@ -218,7 +218,7 @@ class BrainRouter:
                 context[key] = default_context.get(key, "unknown")
         return format_exit_execution_context(context, include_unknown=True).removeprefix("Exit Execution: ")
 
-    def _render_rule_text(self, rule_text: str, metadata: Dict[str, Any]) -> str:
+    def _render_rule_text(self, rule_text: str, metadata: dict[str, Any]) -> str:
         """Return dashboard rule text with legacy unknown exit profile corrected."""
         if self.UNKNOWN_EXIT_PROFILE not in rule_text:
             return rule_text
@@ -227,7 +227,7 @@ class BrainRouter:
             return rule_text
         return rule_text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
-    async def get_brain_status(self) -> Dict[str, Any]:
+    async def get_brain_status(self) -> dict[str, Any]:
         """Get the current thought process/status of the brain."""
         cached = self.dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
         if cached:
@@ -236,7 +236,10 @@ class BrainRouter:
             data_dir = self.config.DATA_DIR
         except AttributeError:
             data_dir = "data"
-        timeframe = getattr(self.config, "TIMEFRAME", "unknown")
+        try:
+            timeframe = self.config.TIMEFRAME
+        except AttributeError:
+            timeframe = "unknown"
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         status = {
@@ -269,7 +272,7 @@ class BrainRouter:
         self.dashboard_state.set_cached("brain_status", status)
         return status
 
-    async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> Dict[str, Any]:
+    async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
         """Get recent vector memories (synapses)."""
         cached = self.dashboard_state.get_cached(f"memory_{limit}", ttl_seconds=30.0)
         if cached:
@@ -304,7 +307,7 @@ class BrainRouter:
         self.dashboard_state.set_cached(f"memory_{limit}", result)
         return result
 
-    async def get_active_rules(self) -> List[Dict[str, Any]]:
+    async def get_active_rules(self) -> list[dict[str, Any]]:
         """Get currently active semantic rules."""
         cached = self.dashboard_state.get_cached("rules", ttl_seconds=30.0)
         if cached:
@@ -334,7 +337,7 @@ class BrainRouter:
 
     async def get_vector_details(
         self, request: Request, query: str = Query(default=None, max_length=500), limit: int = Query(default=50, ge=1, le=500)
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get detailed vector memory contents from ChromaDB."""
         # Validate inputs to prevent DoS via unbounded cache keys
         sort_by = request.query_params.get("sort_by", "date")
@@ -419,7 +422,7 @@ class BrainRouter:
             result["error"] = "Internal error retrieving vector details"
         return result
 
-    async def get_current_position(self) -> Dict[str, Any]:
+    async def get_current_position(self) -> dict[str, Any]:
         """Get current open position details."""
         cached = self.dashboard_state.get_cached("position", ttl_seconds=10.0)
         if cached:
@@ -486,7 +489,7 @@ class BrainRouter:
         self.dashboard_state.set_cached("position", res)
         return res
 
-    async def refresh_current_price(self) -> Dict[str, Any]:
+    async def refresh_current_price(self) -> dict[str, Any]:
         """Fetch fresh price from exchange and update dashboard state."""
         if not self.exchange_manager:
             return {"success": False, "error": "Exchange manager not available"}
@@ -505,3 +508,29 @@ class BrainRouter:
         except Exception:
             self.logger.error("Internal error during price refresh", exc_info=True)
             return {"success": False, "error": "Internal error during price refresh"}
+
+    async def get_blocked_trades(
+        self,
+        limit: int = Query(default=50, ge=1, le=500),
+        guard_type: str | None = Query(default=None),
+    ) -> dict[str, Any]:
+        """Get recent system-rejected (blocked) trade events from ChromaDB.
+
+        Exposes friction reports for dashboard visualization and debugging.
+        """
+        if not self.vector_memory:
+            return {"blocked_count": 0, "blocked_trades": []}
+
+        try:
+            blocked = self.vector_memory.get_recent_blocked_trades(
+                n=limit,
+                guard_type=guard_type,
+                max_age_hours=168,
+            )
+            return {
+                "blocked_count": self.vector_memory.get_blocked_trade_count(),
+                "blocked_trades": blocked,
+            }
+        except Exception:
+            self.logger.error("Failed to retrieve blocked trades for dashboard", exc_info=True)
+            return {"blocked_count": 0, "blocked_trades": [], "error": "Internal error"}

@@ -28,11 +28,12 @@ from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.ccxt_market_api import CCXTMarketAPI
-from src.rag.news_ingestion import RSSCrawl4AINewsProvider
 from src.rag.local_taxonomy import LocalTaxonomyProvider
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
+from src.rag.scoring_policy import ArticleScoringPolicy
+from src.rag.news_ingestion import RSSCrawl4AINewsProvider, Crawl4AIEnricher
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.utils.format_utils import FormatUtils
 from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
@@ -375,7 +376,15 @@ class CompositionRoot:
         )
         await coingecko.initialize()
 
-        news_client = RSSCrawl4AINewsProvider(self.logger, self.config)
+        news_client = RSSCrawl4AINewsProvider(
+            self.logger, self.config,
+            enricher=Crawl4AIEnricher(
+                concurrency=self.config.RAG_NEWS_CRAWL_CONCURRENCY,
+                timeout=float(self.config.RAG_NEWS_CRAWL_TIMEOUT),
+                min_chars=self.config.RAG_NEWS_ENRICH_MIN_CHARS,
+                use_crawl4ai=self.config.RAG_NEWS_CRAWL4AI_ENABLED,
+            ),
+        )
 
         defillama = DefiLlamaClient(
             logger=self.logger, session=infra['session'], cache_dir='cache',
@@ -436,6 +445,7 @@ class CompositionRoot:
                 self.logger,
                 utils['token_counter'],
                 self.config,
+                ArticleScoringPolicy(config=self.config),
                 article_processor,
                 symbol_name_map=symbol_name_map,
             )

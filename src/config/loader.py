@@ -5,7 +5,7 @@ Loads private keys from keys.env and public configuration from config.ini.
 
 import configparser
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from dotenv import dotenv_values
 
 from src.utils.timeframe_validator import TimeframeValidator
@@ -415,7 +415,7 @@ class Config:
         return [source.strip() for source in raw_sources if source.strip()]
 
     @property
-    def RAG_NEWS_SOURCE_URLS(self) -> Dict[str, str]:
+    def RAG_NEWS_SOURCE_URLS(self) -> dict[str, str]:
         """Configured RSS source URL mapping keyed by source name."""
         return {
             'coindesk': self.get_config('rag', 'news_source_coindesk_url', 'https://www.coindesk.com/arc/outboundfeeds/rss/'),
@@ -570,7 +570,7 @@ class Config:
         return 'USDC'
 
 
-    def get_model_config(self, model_name: str, overrides: Dict[str, Any] = None) -> Dict[str, Any]:
+    def get_model_config(self, model_name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Get configuration parameters for a specific model.
 

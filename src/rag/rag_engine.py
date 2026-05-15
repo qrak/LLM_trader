@@ -1,7 +1,8 @@
+from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import re
-from typing import Dict, Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
@@ -19,7 +20,7 @@ class RagEngine:
         logger: Logger,
         token_counter: TokenCounter,
         config: "ConfigProtocol",
-        coingecko_api: Optional["CoinGeckoAPI"] = None,
+        coingecko_api: "CoinGeckoAPI" | None = None,
         file_handler=None,
         news_manager=None,
         market_data_manager=None,
@@ -64,7 +65,7 @@ class RagEngine:
         self.coingecko_api = coingecko_api
 
         # Update timestamps
-        self.last_update: Optional[datetime] = None
+        self.last_update: datetime | None = None
 
         # Update intervals from config
         self.update_interval = timedelta(hours=config.RAG_UPDATE_INTERVAL_HOURS)
@@ -79,7 +80,7 @@ class RagEngine:
         self._is_closed = False
 
         # Last retrieval metadata snapshot for external consumers.
-        self._latest_article_urls: Dict[str, str] = {}
+        self._latest_article_urls: dict[str, str] = {}
 
     async def initialize(self) -> None:
         """Initialize RAG engine and load cached data"""
@@ -175,7 +176,7 @@ class RagEngine:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
 
-    def _resolve_retrieval_limits(self, k: Optional[int], max_tokens: Optional[int]) -> tuple[int, int]:
+    def _resolve_retrieval_limits(self, k: int | None, max_tokens: int | None) -> tuple[int, int]:
         """Resolve retrieval limits from explicit values or config with safe fallbacks."""
         resolved_k = k
         if resolved_k is None:
@@ -239,7 +240,7 @@ class RagEngine:
         return f"{coin_name} price analysis market trends"
 
     @profile_performance
-    async def retrieve_context(self, query: str, symbol: str, k: Optional[int] = None, max_tokens: Optional[int] = None) -> str:
+    async def retrieve_context(self, query: str, symbol: str, k: int | None = None, max_tokens: int | None = None) -> str:
         """Retrieve relevant context for a query with token limiting.
 
         If `k` is None, the configured RAG news limit (`[rag] news_limit`) will be used.
@@ -288,7 +289,7 @@ class RagEngine:
             self._latest_article_urls = {}
             return "Error retrieving market context."
 
-    def get_news_cache_snapshot(self, limit: Optional[int] = None) -> list[Dict[str, Any]]:
+    def get_news_cache_snapshot(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Return a copy of cached news articles for read-only external consumption."""
         if not self.news_manager:
             return []
@@ -299,11 +300,11 @@ class RagEngine:
 
         return [dict(article) for article in articles]
 
-    def get_latest_article_urls_snapshot(self) -> Dict[str, str]:
+    def get_latest_article_urls_snapshot(self) -> dict[str, str]:
         """Return a copy of article URLs captured during the latest retrieve_context call."""
         return dict(self._latest_article_urls)
 
-    async def get_market_overview(self) -> Optional[Dict[str, Any]]:
+    async def get_market_overview(self) -> dict[str, Any] | None:
         """Get current market overview data using MarketDataManager (aggregates CoinGecko + DefiLlama)"""
         try:
             # Delegate to MarketDataManager which handles aggregation of all sources

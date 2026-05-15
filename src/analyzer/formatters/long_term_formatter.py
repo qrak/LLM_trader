@@ -2,7 +2,7 @@
 Long-Term Formatter - Formats long-term analysis and macro trends.
 Handles daily/weekly indicators, SMAs, and macro trend analysis.
 """
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class LongTermFormatter:
     """Formatter for long-term historical analysis and macro trends."""
 
-    def __init__(self, logger: Optional[Logger] = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
         """Initialize the long-term formatter.
 
         Args:

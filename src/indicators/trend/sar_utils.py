@@ -1,13 +1,12 @@
 """
 Parabolic SAR utilities extracted to reduce complexity.
 """
-from typing import Tuple
 import numpy as np
 from numba import njit
 
 
 @njit(cache=True)
-def initialize_sar_arrays(n: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def initialize_sar_arrays(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Initialize SAR calculation arrays."""
     sar = np.full(n, np.nan)
     ep = np.full(n, np.nan)
@@ -16,7 +15,7 @@ def initialize_sar_arrays(n: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 @njit(cache=True)
-def get_initial_sar_state(high: np.ndarray, low: np.ndarray, step: float) -> Tuple[int, float, float, float]:
+def get_initial_sar_state(high: np.ndarray, low: np.ndarray, step: float) -> tuple[int, float, float, float]:
     """Get initial SAR state based on first two periods."""
     trend = -1 if high[0] > low[1] else 1
 

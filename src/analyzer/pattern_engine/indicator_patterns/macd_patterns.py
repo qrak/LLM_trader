@@ -9,7 +9,6 @@ Detects MACD-based patterns:
 All functions use @njit for performance.
 """
 
-from typing import Tuple
 
 import numpy as np
 from numba import njit
@@ -19,7 +18,7 @@ from numba import njit
 def detect_macd_crossover_numba(
     macd_line: np.ndarray,
     signal_line: np.ndarray
-) -> Tuple[bool, bool, int, float, float]:
+) -> tuple[bool, bool, int, float, float]:
     """
     Detect MACD line crossing signal line.
     Scans ENTIRE array for the most recent crossover event.
@@ -69,7 +68,7 @@ def detect_macd_crossover_numba(
 @njit(cache=True)
 def detect_macd_zero_cross_numba(
     macd_line: np.ndarray
-) -> Tuple[bool, bool, int, float]:
+) -> tuple[bool, bool, int, float]:
     """
     Detect MACD line crossing zero line.
     Scans ENTIRE array for the most recent zero-line crossover.

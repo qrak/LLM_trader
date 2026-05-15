@@ -40,7 +40,11 @@ def _make_config(**overrides) -> SimpleNamespace:
 
 
 def _make_provider(config=None) -> RSSCrawl4AINewsProvider:
-    return RSSCrawl4AINewsProvider(logger=MagicMock(), config=config or _make_config())
+    return RSSCrawl4AINewsProvider(
+        logger=MagicMock(),
+        config=config or _make_config(),
+        enricher=MagicMock(),
+    )
 
 
 def _article(age_hours: float, **kwargs) -> dict[str, Any]:

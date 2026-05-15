@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.trading.data_models import Position, RiskAssessment
 from src.logger.logger import Logger
@@ -18,8 +18,8 @@ class PositionFactory:
         confidence: str,
         risk_assessment: RiskAssessment,
         confluence_factors: tuple = (),
-        market_conditions: Optional[Dict[str, Any]] = None,
-        exit_execution_context: Optional[Dict[str, Any]] = None
+        market_conditions: dict[str, Any] | None = None,
+        exit_execution_context: dict[str, Any] | None = None
     ) -> Position:
         """Create a new Position instance."""
         market_conditions = market_conditions or {}

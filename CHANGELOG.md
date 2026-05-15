@@ -1,5 +1,82 @@
 # Changelog
 
+## 2026-05-14 - Code Quality: Eliminate Dynamic Attribute Access and Improve Type Safety
+
+### Changed — Dynamic Attribute Access (Phase 1)
+
+- **prompt_builder.py**: Removed `_detect_minimal_context()` and `_minimal_context` flag entirely. All prompt sections now render unconditionally — the feature was dead code (MINIMAL_CONTEXT config key never existed). Removed `getattr`/`hasattr` calls on config.
+- **notifier.py**: Replaced `getattr(exc, "status", None)` with `isinstance(exc, discord.HTTPException)` type-narrowing.
+- **crawl4ai_enricher.py**: Replaced all 6 `getattr()` calls with direct attribute access. Removed `_markdown_value()` helper. Crawl4AI objects have a documented API contract.
+- **dashboard/server.py**: Replaced `getattr(response, "body", b"")` with try/except AttributeError.
+- **dashboard/routers/brain.py**: Replaced `getattr(self.config, "TIMEFRAME", "unknown")` with direct access + try/except fallback (2 sites).
+- **rss_primitives.py**: Removed 14 decorative section separator headers.
+- **crawl4ai_enricher.py**: Removed 4 decorative section separator headers.
+- **test_discord_notifier_rate_limit.py**: `FakeDiscordHTTPError` now inherits from `discord.HTTPException`, matching production hierarchy.
+
+### Changed — Modern Typing (Phase 2)
+
+- **config/protocol.py**: `Dict[str, str]` → `dict[str, str]`, `Dict[str, Any]` → `dict[str, Any]`. Removed unused `Dict` import.
+- **contracts/model_contract.py**: Full modernization. `Optional[str]` → `str | None`, `List[Dict[str, str]]` → `list[dict[str, str]]`, `Union[io.BytesIO, bytes, str]` → `io.BytesIO | bytes | str`, `Tuple[str, str]` → `tuple[str, str]`. Removed `Optional`, `Union`, `Tuple`, `Dict`, `List` imports.
+- **config/loader.py**: `Dict[str, str]` → `dict[str, str]`, `Dict[str, Any]` → `dict[str, Any]`. Removed unused `Dict` import.
+- **src/app.py**: All 11 `Optional[X]` → `X | None`, all `Dict[str, Any]` → `dict[str, Any]`. Removed `Optional` and `Dict` imports.
+
+### Removed
+
+- `_detect_minimal_context()` and `_minimal_context` from `PromptBuilder`.
+- `_markdown_value()` from `crawl4ai_enricher.py`.
+- 18 decorative section separator headers across 2 files.
+
+### Changed — Dependency Injection (Phase 3)
+
+- **context_builder.py**: `ArticleScoringPolicy` is now injected via constructor (`scoring_policy` parameter) instead of being constructed internally from `config`. The composition root (`start.py`) now creates and wires it.
+- **rss_provider.py**: `Crawl4AIEnricher` is now injected via constructor (`enricher` parameter) instead of being constructed internally from `config` values. The composition root now creates and wires it.
+- **start.py**: Added construction of `ArticleScoringPolicy` and `Crawl4AIEnricher` in the DI wiring layer, passed to `ContextBuilder` and `RSSCrawl4AINewsProvider` respectively. Removed stale duplicate import.
+- **test_rss_provider_contract.py**: Added `enricher=MagicMock()` to `_make_provider()` fixture.
+- **test_rag_context_builder_contract.py**: Added `scoring_policy=MagicMock()` to `_builder()` fixture and inline construction site.
+
+### Changed — Modern Typing: Full Codebase Sweep (Phase 5)
+
+- **src/platforms/** (12 files): `Dict`/`List`/`Optional`/`Tuple` → `dict`/`list`/`| None`/`tuple` in all AI provider clients, exchange wrappers, and API clients.
+- **src/trading/** (12 files): Full modernization of trading layer — brain, strategy, memory, exit monitor, position management, statistics, vector memory.
+- **src/managers/** (5 files): Model, persistence, provider orchestrator, types, risk manager. Added `from __future__ import annotations` where forward refs with `|` needed.
+- **src/notifiers/** (5 files): Base, console, Discord, file handler, and components.
+- **src/parsing/** (1 file): Unified parser.
+- **src/analyzer/** (19 files): Analysis engine, context, result processor, data fetcher, formatters, pattern engine, prompt builder, template manager, context builder, technical calculator. Added `from __future__ import annotations` for forward ref support.
+- **src/dashboard/** (6 files): State, routers (brain, monitor, performance, visuals, websocket).
+- **src/factories/** (2 files): Position and provider factories.
+- **src/indicators/** (4 files): Base indicators, technical indicators, support/resistance, volatility.
+- **src/rag/** (15 files): Article processor, category processor, collision resolver, context builder, file handler, index manager, market components, news manager, RAG engine, scoring policy, ticker manager. Added `from __future__ import annotations` where needed.
+- **src/contracts/** (1 file): Risk contract.
+- All bare `Dict`/`List`/`Tuple` type references (without subscript) converted to `dict`/`list`/`tuple`.
+
+### Verified
+
+- Entire codebase imports cleanly.
+- 400 of 406 tests pass; 6 failures are pre-existing (confirmed via git stash).
+- No `getattr()`/`hasattr()`/`setattr()` in application code.
+- No Pydantic v1 patterns.
+- No unused imports.
+- Old-style typing (`Optional[X]`, `Dict[K,V]`, `List[X]`, `Tuple[X]`, bare `Dict`/`List`/`Tuple`) eliminated from all source files.
+- `from __future__ import annotations` added to 5 files where forward references required it.
+
+### Verified
+
+- 0 `getattr()`/`hasattr()`/`setattr()` in application code.
+- 400 of 406 tests pass; 6 failures are pre-existing.
+- No Pydantic v1 patterns found.
+- No unused imports.
+- 33 files modified across all 4 phases, 0 regressions.
+
+### Changed — Redundant isinstance Cleanup (Phase 6)
+
+- **unified_parser.py**: Removed 2 defensive `isinstance(data, dict)` guards in `_normalize_numeric_fields()` and `_attach_response_validation()`. Both functions are typed as `dict[str, Any]` — the isinstance checks were redundant with the type contract and silently masked type errors instead of failing fast.
+
+### Verified
+
+- 400 of 406 tests pass; 6 failures are pre-existing.
+- No regressions from isinstance removal.
+- All 88 remaining isinstance calls in the codebase are legitimate: type-narrowing on `Any`, polymorphic Union dispatch, exception classification, or untrusted-data validation.
+
 ## 2026-05-09 - Non-Blocking News Refresh and Enrichment Timeouts
 
 ### Changed

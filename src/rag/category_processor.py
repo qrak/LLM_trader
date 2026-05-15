@@ -1,7 +1,7 @@
 """
 Category processing and normalization operations.
 """
-from typing import Dict, Any, List, Set, Tuple
+from typing import Any, Set
 from src.logger.logger import Logger
 from src.rag.collision_resolver import CategoryCollisionResolver
 
@@ -14,7 +14,7 @@ class CategoryProcessor:
         self.file_handler = file_handler
 
         # Category data storage
-        self.category_word_map: Dict[str, str] = {}
+        self.category_word_map: dict[str, str] = {}
         self.general_categories: Set[str] = set()
         self.ticker_categories: Set[str] = set()
 
@@ -23,13 +23,13 @@ class CategoryProcessor:
 
         # Load configurations from cached config
         self.important_categories: Set[str] = self._load_important_categories(rag_config)
-        self.generic_priorities: Dict[str, int] = self._load_generic_priorities(rag_config)
+        self.generic_priorities: dict[str, int] = self._load_generic_priorities(rag_config)
 
         # Injected collision resolver
         self.collision_resolver = collision_resolver
         self._update_collision_resolver()
 
-    def _load_rag_config(self) -> Dict:
+    def _load_rag_config(self) -> dict:
         """Load RAG priorities config once for reuse."""
         if self.file_handler:
             try:
@@ -39,7 +39,7 @@ class CategoryProcessor:
         return {}
 
 
-    def _load_important_categories(self, config_data: Dict) -> Set[str]:
+    def _load_important_categories(self, config_data: dict) -> Set[str]:
         """Load important categories from pre-loaded config."""
         if config_data and 'important_categories' in config_data:
             categories = set(config_data['important_categories'])
@@ -51,7 +51,7 @@ class CategoryProcessor:
             self.logger.warning("No important_categories in config data")
         return set()
 
-    def _load_generic_priorities(self, config_data: Dict) -> Dict[str, int]:
+    def _load_generic_priorities(self, config_data: dict) -> dict[str, int]:
         """Load generic category priorities from pre-loaded config."""
         if config_data and 'generic_priorities' in config_data:
             priorities = config_data['generic_priorities']
@@ -64,7 +64,7 @@ class CategoryProcessor:
         return {}
 
 
-    def process_api_categories(self, api_categories: List[Dict[str, Any]]) -> None:
+    def process_api_categories(self, api_categories: list[dict[str, Any]]) -> None:
         """Process API categories and update internal indices."""
         if not api_categories:
             return
@@ -88,7 +88,7 @@ class CategoryProcessor:
         self._update_collision_resolver()
 
 
-    def _categorize_api_data(self, api_categories: List[Dict[str, Any]]) -> Tuple[Set[str], Set[str]]:
+    def _categorize_api_data(self, api_categories: list[dict[str, Any]]) -> tuple[Set[str], Set[str]]:
         """Categorize API data into general and ticker categories."""
         general_categories = set()
         ticker_categories = set()

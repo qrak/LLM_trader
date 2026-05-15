@@ -1,6 +1,6 @@
 """Protocol definition for RiskManager interface"""
 
-from typing import Protocol, Optional, Dict, Any, TYPE_CHECKING
+from typing import Protocol, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.trading.data_models import RiskAssessment
@@ -16,10 +16,10 @@ class RiskManagerProtocol(Protocol):
         current_price: float,
         capital: float,
         confidence: str,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        position_size: Optional[float] = None,
-        market_conditions: Optional[Dict[str, Any]] = None
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        position_size: float | None = None,
+        market_conditions: dict[str, Any] | None = None
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.

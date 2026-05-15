@@ -3,7 +3,7 @@ Simplified Discord File Handler using specialized components.
 Orchestrates message tracking, cleanup scheduling, and deletion operations.
 """
 import asyncio
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from .filehandler_components.tracking_persistence import TrackingPersistence
 from .filehandler_components.message_tracker import MessageTracker
@@ -56,7 +56,7 @@ class DiscordFileHandler:
         self.logger.debug("DiscordFileHandler initialized with specialized components")
 
     async def track_message(self, message_id: int, channel_id: int, user_id: int,
-                          message_type: str = "general", expire_after: Optional[int] = None) -> bool:
+                          message_type: str = "general", expire_after: int | None = None) -> bool:
         """Track a message for automatic deletion."""
         if not self.is_initialized:
             self.logger.debug("FileHandler not yet initialized, waiting for ready event...")

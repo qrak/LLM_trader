@@ -1,7 +1,7 @@
 """Trading strategy that wraps analysis with position management."""
 
 from datetime import datetime, timezone
-from typing import Optional, Any, Dict, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
@@ -63,10 +63,10 @@ class TradingStrategy:
         self.position_factory = position_factory
 
         # Load any existing position
-        self.current_position: Optional[Position] = self.persistence.load_position()
+        self.current_position: Position | None = self.persistence.load_position()
 
         # Track last update time to cap UPDATE frequency (prevent SL death-spiral)
-        self._last_position_update_time: Optional[datetime] = None
+        self._last_position_update_time: datetime | None = None
 
         # Cache timeframe in minutes for guard logic
         try:
@@ -74,6 +74,21 @@ class TradingStrategy:
             self._tf_minutes: int = TimeframeValidator.to_minutes(config.TIMEFRAME) if config else 240
         except Exception:
             self._tf_minutes = 240
+
+        # Precompute timeframe-dependent thresholds (static per run, avoid recompute)
+        tf = self._tf_minutes
+        if tf < 60:
+            self._min_update_interval_hours: float = (tf * 4) / 60.0
+            self._min_progress_for_tightening: float = 0.25
+        elif tf < 240:
+            self._min_update_interval_hours = (tf * 3) / 60.0
+            self._min_progress_for_tightening = 0.20
+        elif tf < 1440:
+            self._min_update_interval_hours = (tf * 2) / 60.0
+            self._min_progress_for_tightening = 0.15
+        else:
+            self._min_update_interval_hours = tf / 60.0
+            self._min_progress_for_tightening = 0.10
 
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
@@ -86,7 +101,7 @@ class TradingStrategy:
         await self.persistence.async_save_position(self.current_position)
         return True
 
-    async def check_position(self, current_price: float) -> Optional[str]:
+    async def check_position(self, current_price: float) -> str | None:
         """Check if current position hit stop loss or take profit.
 
         Args:
@@ -110,7 +125,7 @@ class TradingStrategy:
 
         return None
 
-    async def check_stop_loss(self, current_price: float) -> Optional[str]:
+    async def check_stop_loss(self, current_price: float) -> str | None:
         """Check only the configured stop loss exit."""
         if not await self._update_live_metrics(current_price):
             return None
@@ -122,7 +137,7 @@ class TradingStrategy:
 
         return None
 
-    async def check_take_profit(self, current_price: float) -> Optional[str]:
+    async def check_take_profit(self, current_price: float) -> str | None:
         """Check only the configured take profit exit."""
         if not await self._update_live_metrics(current_price):
             return None
@@ -138,7 +153,7 @@ class TradingStrategy:
         self,
         reason: str,
         current_price: float,
-        market_conditions: Optional[Dict[str, Any]] = None
+        market_conditions: dict[str, Any] | None = None
     ) -> None:
         """Close the current position and update trading brain.
 
@@ -211,7 +226,7 @@ class TradingStrategy:
         await self.persistence.async_save_position(None)
         self.current_position = None
 
-    async def process_analysis(self, analysis_result: dict, symbol: str) -> Optional[TradeDecision]:
+    async def process_analysis(self, analysis_result: dict, symbol: str) -> TradeDecision | None:
         """Process AI analysis result and execute trading decision.
 
         Args:
@@ -280,13 +295,13 @@ class TradingStrategy:
         self,
         signal: str,
         confidence: str,
-        stop_loss: Optional[float],
-        take_profit: Optional[float],
+        stop_loss: float | None,
+        take_profit: float | None,
         current_price: float,
         symbol: str,
         reasoning: str,
-        market_conditions: Optional[Dict[str, Any]] = None,
-    ) -> Optional[TradeDecision]:
+        market_conditions: dict[str, Any] | None = None,
+    ) -> TradeDecision | None:
         """Handle trading decision when position exists.
 
         Args:
@@ -318,29 +333,15 @@ class TradingStrategy:
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
 
-        # Guard: cap UPDATE frequency — scales with timeframe
-        tf_minutes = self._tf_minutes
-        if tf_minutes < 60:
-            # Scalping: 4 candles minimum (e.g., 15m → 60 min)
-            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 4) / 60.0
-        elif tf_minutes < 240:
-            # Intraday: 3 candles minimum (e.g., 1h → 3h)
-            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 3) / 60.0
-        elif tf_minutes < 1440:
-            # Swing: 2 candles minimum (e.g., 4h → 8h)
-            MIN_UPDATE_INTERVAL_HOURS = (tf_minutes * 2) / 60.0
-        else:
-            # Position: 1 candle minimum (e.g., 1D → 24h)
-            MIN_UPDATE_INTERVAL_HOURS = tf_minutes / 60.0
-
+        # Guard: cap UPDATE frequency using precomputed timeframe threshold
         now = datetime.now(timezone.utc)
         if self._last_position_update_time is not None:
             hours_since_last = (now - self._last_position_update_time).total_seconds() / 3600
-            if hours_since_last < MIN_UPDATE_INTERVAL_HOURS:
+            if hours_since_last < self._min_update_interval_hours:
                 self.logger.info(
                     "REJECTED UPDATE: only %.1fh since last update (min %.1fh for %s). "
                     "Letting trade breathe.",
-                    hours_since_last, MIN_UPDATE_INTERVAL_HOURS, self.config.TIMEFRAME,
+                    hours_since_last, self._min_update_interval_hours, self.config.TIMEFRAME,
                 )
                 return None
 
@@ -384,14 +385,14 @@ class TradingStrategy:
         self,
         signal: str,
         confidence: str,
-        stop_loss: Optional[float],
-        take_profit: Optional[float],
-        position_size: Optional[float],
+        stop_loss: float | None,
+        take_profit: float | None,
+        position_size: float | None,
         current_price: float,
         symbol: str,
         reasoning: str,
         confluence_factors: tuple = (),
-        market_conditions: Optional[Dict[str, Any]] = None,
+        market_conditions: dict[str, Any] | None = None,
     ) -> TradeDecision:
         """Open a new trading position with dynamic parameter calculation."""
         direction = "LONG" if signal == "BUY" else "SHORT"
@@ -412,6 +413,32 @@ class TradingStrategy:
             market_conditions=market_conditions
         )
 
+        # Capture and persist any clamping frictions from RiskManager
+        try:
+            frictions = getattr(self.risk_manager, "get_and_clear_frictions", None)
+            if frictions:
+                for friction in frictions():
+                    guard_type = friction.get("guard_type", "unknown")
+                    friction_dir = friction.get("direction", direction)
+                    friction_vol = friction.get("volatility_level", risk_assessment.volatility_level)
+                    self.brain_service.vector_memory.store_blocked_trade(
+                        guard_type=guard_type,
+                        direction=friction_dir,
+                        confidence=confidence,
+                        suggested_rr=risk_assessment.rr_ratio,
+                        required_rr=risk_assessment.rr_ratio,  # same since it was corrected
+                        suggested_sl_pct=friction.get("suggested_sl_pct", risk_assessment.sl_distance_pct),
+                        suggested_tp_pct=risk_assessment.tp_distance_pct,
+                        suggested_sl=friction.get("suggested_sl", risk_assessment.stop_loss),
+                        suggested_tp=friction.get("suggested_tp", risk_assessment.take_profit),
+                        current_price=current_price,
+                        volatility_level=friction_vol,
+                        reasoning_snippet=friction.get("detail", ""),
+                        metadata={"friction": friction},
+                    )
+        except Exception:
+            self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)
+
         final_sl = risk_assessment.stop_loss
         final_tp = risk_assessment.take_profit
         final_size_pct = risk_assessment.size_pct
@@ -424,14 +451,38 @@ class TradingStrategy:
         self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)
         self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)
 
-        # Guard: reject entries with poor R/R (flash model sometimes sets bad R/R)
-        MIN_RR_FOR_ENTRY = 1.5
-        if rr_ratio < MIN_RR_FOR_ENTRY:
+        # Guard: reject entries with poor R/R using brain-learned threshold
+        brain_thresholds = self.brain_service.get_dynamic_thresholds()
+        try:
+            min_rr_for_entry = float(brain_thresholds.get("rr_borderline_min", 1.5))
+        except (TypeError, ValueError):
+            min_rr_for_entry = 1.5
+        if rr_ratio < min_rr_for_entry:
             self.logger.warning(
                 "REJECTED entry: R/R %.2f below minimum %.1f. "
                 "Trade has unfavorable risk/reward. Signal: %s, Confidence: %s",
-                rr_ratio, MIN_RR_FOR_ENTRY, signal, confidence,
+                rr_ratio, min_rr_for_entry, signal, confidence,
             )
+
+            # Emit Friction Report: persist blocked trade for LLM self-correction
+            try:
+                self.brain_service.vector_memory.store_blocked_trade(
+                    guard_type="rr_minimum",
+                    direction=direction,
+                    confidence=confidence,
+                    suggested_rr=rr_ratio,
+                    required_rr=min_rr_for_entry,
+                    suggested_sl_pct=sl_distance_pct,
+                    suggested_tp_pct=tp_distance_pct,
+                    suggested_sl=risk_assessment.stop_loss,
+                    suggested_tp=risk_assessment.take_profit,
+                    current_price=current_price,
+                    volatility_level=risk_assessment.volatility_level,
+                    reasoning_snippet=reasoning[:200] if reasoning else "",
+                )
+            except Exception:
+                self.logger.warning("Failed to store blocked trade event", exc_info=True)
+
             return TradeDecision(
                 timestamp=datetime.now(timezone.utc),
                 symbol=symbol,
@@ -439,7 +490,7 @@ class TradingStrategy:
                 confidence=confidence,
                 price=current_price,
                 fee=0.0,
-                reasoning=f"Entry blocked: R/R {rr_ratio:.2f} below minimum {MIN_RR_FOR_ENTRY}. {reasoning[:150]}" if reasoning else f"Entry blocked: R/R {rr_ratio:.2f} below minimum {MIN_RR_FOR_ENTRY}.",
+                reasoning=f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}. {reasoning[:150]}" if reasoning else f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}.",
             )
 
         # Create position using Factory
@@ -481,9 +532,9 @@ class TradingStrategy:
 
     async def _update_position_parameters(
         self,
-        stop_loss: Optional[float],
-        take_profit: Optional[float],
-        current_price: Optional[float] = None,
+        stop_loss: float | None,
+        take_profit: float | None,
+        current_price: float | None = None,
     ) -> bool:
         """Update position stop loss and take profit.
 
@@ -514,7 +565,6 @@ class TradingStrategy:
 
             if is_tightening and current_price and current_price > 0:
                 # GUARD: Prevent premature SL tightening that kills trades
-                # Calculate how much price has moved toward TP vs total TP distance
                 tp_distance_total = abs(self.current_position.take_profit - self.current_position.entry_price)
                 if tp_distance_total > 0:
                     if direction == "LONG":
@@ -524,22 +574,12 @@ class TradingStrategy:
                 else:
                     price_progress = 0.0
 
-                # Progress threshold scales with timeframe: scalping needs more confirmation
-                tf_minutes = self._tf_minutes
-                if tf_minutes < 60:
-                    MIN_PROGRESS_FOR_TIGHTENING = 0.25   # Scalping: high noise
-                elif tf_minutes < 240:
-                    MIN_PROGRESS_FOR_TIGHTENING = 0.20   # Intraday
-                elif tf_minutes < 1440:
-                    MIN_PROGRESS_FOR_TIGHTENING = 0.15   # Swing (4H default)
-                else:
-                    MIN_PROGRESS_FOR_TIGHTENING = 0.10   # Position: low noise
-                if price_progress < MIN_PROGRESS_FOR_TIGHTENING:
+                if price_progress < self._min_progress_for_tightening:
                     self.logger.info(
                         "REJECTED premature SL tightening: price progress %.1f%% < %.0f%% minimum. "
                         "Keeping SL at $%s (AI requested $%s)",
                         price_progress * 100,
-                        MIN_PROGRESS_FOR_TIGHTENING * 100,
+                        self._min_progress_for_tightening * 100,
                         f"{old_sl:,.2f}",
                         f"{stop_loss:,.2f}",
                     )
@@ -610,7 +650,7 @@ class TradingStrategy:
         return 0.0
 
     @staticmethod
-    def _build_conditions_from_position(position: Position) -> Dict[str, Any]:
+    def _build_conditions_from_position(position: Position) -> dict[str, Any]:
         """Reconstruct market conditions from Position's stored entry fields.
 
         Used when closing via SL/TP hit where no fresh analysis is available.
@@ -631,7 +671,7 @@ class TradingStrategy:
             "order_book_bias": position.order_book_bias_at_entry,
         }
 
-    def _extract_market_conditions(self, result: dict) -> Dict[str, Any]:
+    def _extract_market_conditions(self, result: dict) -> dict[str, Any]:
         """Extract market conditions from analysis result for brain learning.
 
         Args:
@@ -704,17 +744,15 @@ class TradingStrategy:
             context_obj = result.get("context")
             sentiment_data = result.get("sentiment")
             microstructure_data = result.get("market_microstructure")
-            legacy_market_sentiment = None
-            legacy_order_book_bias = None
             if context_obj is not None:
                 if sentiment_data is None:
                     sentiment_data = context_obj.sentiment
                 if microstructure_data is None:
                     microstructure_data = context_obj.market_microstructure
 
-            conditions["market_sentiment"] = legacy_market_sentiment or classify_market_sentiment(sentiment_data)
+            conditions["market_sentiment"] = classify_market_sentiment(sentiment_data)
             conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
-            conditions["order_book_bias"] = legacy_order_book_bias or classify_order_book_bias(microstructure_data)
+            conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
 
             # Fallback: try to extract from raw response keywords
             raw_response = result.get("raw_response", "").lower()
@@ -735,8 +773,7 @@ class TradingStrategy:
         Args:
             result: Analysis result dictionary
 
-        Returns:
-            Tuple of (factor_name, score) pairs
+        Returns: tuple of (factor_name, score) pairs
         """
         factors = []
 
@@ -757,7 +794,7 @@ class TradingStrategy:
             self.logger.warning("Could not extract confluence factors: %s", e)
         return tuple(factors)
 
-    def get_position_context(self, current_price: Optional[float] = None) -> str:
+    def get_position_context(self, current_price: float | None = None) -> str:
         """Get formatted context about current position for prompts.
 
         Args:

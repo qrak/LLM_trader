@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import aiohttp
 
@@ -20,8 +20,8 @@ class MarketDataCollector:
     def __init__(self,
                 logger: Logger,
                 rag_engine: "RagEngine",
-                alternative_me_api: Optional[AlternativeMeAPI] = None,
-                session: Optional[aiohttp.ClientSession] = None):
+                alternative_me_api: AlternativeMeAPI | None = None,
+                session: aiohttp.ClientSession | None = None):
         self.logger = logger
         self.rag_engine = rag_engine
         self.alternative_me_api = alternative_me_api
@@ -68,7 +68,7 @@ class MarketDataCollector:
 
         self.article_urls = {}
 
-    async def collect_data(self, context) -> Dict[str, Any]:
+    async def collect_data(self, context) -> dict[str, Any]:
         """Collect all required data for market analysis"""
         result = {
             "success": True,
@@ -274,7 +274,7 @@ class MarketDataCollector:
             self.logger.error("Error fetching sentiment data: %s", e)
             return False
 
-    async def _fetch_fear_greed_index(self, limit: int = 0) -> List[Dict[str, Any]]:
+    async def _fetch_fear_greed_index(self, limit: int = 0) -> list[dict[str, Any]]:
         """Fetch Fear & Greed Index data using AlternativeMeAPI client"""
         try:
             # Use the API client if available
@@ -318,8 +318,8 @@ class MarketDataCollector:
     async def _fetch_fear_greed_from_api(
         self,
         session: aiohttp.ClientSession,
-        params: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
+        params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
         """Helper method to fetch Fear & Greed data from API"""
         # Use ClientTimeout for aiohttp requests
         client_timeout = aiohttp.ClientTimeout(total=10)

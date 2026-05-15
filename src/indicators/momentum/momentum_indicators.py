@@ -1,4 +1,4 @@
-from typing import Tuple, Any
+from typing import Any
 
 import math
 import numpy as np
@@ -41,7 +41,7 @@ def rsi_numba(close: np.ndarray, length: int) -> np.ndarray:
 
 @njit(cache=True)
 def macd_numba(close: np.ndarray, fast_length: int = 12, slow_length: int = 26,
-               signal_length: int = 9) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+               signal_length: int = 9) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     n = len(close)
     macd_line = np.full(n, np.nan, dtype=np.float64)
     signal_line = np.full(n, np.nan, dtype=np.float64)

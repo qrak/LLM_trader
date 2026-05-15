@@ -1,6 +1,7 @@
+from __future__ import annotations
 """Dataclasses for AI provider configuration and invocation results."""
 from dataclasses import dataclass
-from typing import Optional, Any, Dict, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
@@ -11,11 +12,11 @@ if TYPE_CHECKING:
 class ProviderMetadata:
     """Configuration metadata for an AI provider."""
     name: str
-    client: Optional[Any]
+    client: Any | None
     default_model: str
-    config: Dict[str, Any]
+    config: dict[str, Any]
     supports_chart: bool
-    paid_client: Optional[Any] = None
+    paid_client: Any | None = None
 
     def is_available(self) -> bool:
         """Check if the provider's client is available."""
@@ -26,13 +27,13 @@ class ProviderMetadata:
 class InvocationResult:
     """Result of a provider invocation attempt."""
     success: bool
-    response: Optional["ChatResponseModel"]
+    response: "ChatResponseModel" | None
     provider: str
     model: str
     used_paid_tier: bool = False
 
     @property
-    def error(self) -> Optional[str]:
+    def error(self) -> str | None:
         """Extract error message from response if present."""
         if self.response and self.response.error:
             return self.response.error
@@ -42,14 +43,14 @@ class InvocationResult:
 @dataclass
 class ProviderClients:
     """Container for all AI provider clients (runtime objects, not serializable)."""
-    google: Optional["GoogleAIClient"] = None
-    google_paid: Optional["GoogleAIClient"] = None
-    openrouter: Optional["OpenRouterClient"] = None
-    lmstudio: Optional["LMStudioClient"] = None
-    blockrun: Optional["BlockRunClient"] = None
+    google: "GoogleAIClient" | None = None
+    google_paid: "GoogleAIClient" | None = None
+    openrouter: "OpenRouterClient" | None = None
+    lmstudio: "LMStudioClient" | None = None
+    blockrun: "BlockRunClient" | None = None
 
     @classmethod
-    def from_factory_dict(cls, clients: Dict[str, Any]) -> "ProviderClients":
+    def from_factory_dict(cls, clients: dict[str, Any]) -> "ProviderClients":
         """Create from ProviderFactory.create_all_clients() output."""
         return cls(
             google=clients.get('google'),

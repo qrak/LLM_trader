@@ -12,7 +12,7 @@ Formatting Strategy:
     3. Scientific notation is used only for microscopic values (< 1e-7)
 """
 from datetime import datetime
-from typing import List, Any, Optional
+from typing import Any
 
 import math
 import numpy as np
@@ -32,7 +32,7 @@ FULL_PRECISION_THRESHOLD = 10.0
 CLEAN_NUMBER_CHARS = ('$', '€', '£', '%', ',')
 
 
-def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> List[datetime]:
+def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
     """Convert numpy array of millisecond timestamps to list of datetime objects.
 
     Uses pandas for ~10x faster vectorized conversion compared to list comprehension.
@@ -40,8 +40,7 @@ def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> List[datetime]:
     Args:
         timestamps_ms: Numpy array of timestamps in milliseconds
 
-    Returns:
-        List of datetime objects
+    Returns: list of datetime objects
     """
     return pd.to_datetime(timestamps_ms, unit='ms', utc=True).to_pydatetime().tolist()
 
@@ -231,7 +230,7 @@ class FormatUtils:
             return self.timestamp_from_iso(timestamp_field)
         return 0.0
 
-    def parse_timestamp_ms(self, timestamp_ms: float) -> Optional[datetime]:
+    def parse_timestamp_ms(self, timestamp_ms: float) -> datetime | None:
         """Parse timestamp in milliseconds to datetime object.
 
         Args:

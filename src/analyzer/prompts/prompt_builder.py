@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import math
 import numpy as np
@@ -23,7 +23,7 @@ class PromptBuilder:
     def __init__(
         self,
         timeframe: str = "1h",
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
         technical_calculator: TechnicalCalculator = None,
         config: Any = None,
         format_utils: "FormatUtils" = None,
@@ -54,7 +54,7 @@ class PromptBuilder:
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
-        self.context: Optional[AnalysisContext] = None
+        self.context: AnalysisContext | None = None
         if technical_calculator is None:
             raise ValueError("technical_calculator is required for PromptBuilder")
         self.technical_calculator = technical_calculator
@@ -86,29 +86,12 @@ class PromptBuilder:
             raise ValueError("market_formatter is required for PromptBuilder")
         self.market_formatter = market_formatter
 
-        # Auto-detect if we should use minimal context for less capable LLMs
-        self._minimal_context = self._detect_minimal_context()
-
-    def _detect_minimal_context(self) -> bool:
-        """Return True if the current LLM benefits from reduced data context."""
-        try:
-            provider = str(getattr(self.config, 'PROVIDER', '')).lower()
-            # Google AI Studio models (Gemini Flash) perform better with less noise
-            if provider == 'googleai':
-                return True
-            # Also enable if explicitly configured
-            if hasattr(self.config, 'MINIMAL_CONTEXT'):
-                return bool(self.config.MINIMAL_CONTEXT)
-        except Exception:
-            pass
-        return False
-
     def build_prompt(
         self,
         context: AnalysisContext,
-        additional_context: Optional[str] = None,
-        previous_indicators: Optional[dict] = None,
-        position_context: Optional[str] = None
+        additional_context: str | None = None,
+        previous_indicators: dict | None = None,
+        position_context: str | None = None
     ) -> str:
         """Build the complete prompt using component managers.
 
@@ -153,8 +136,7 @@ class PromptBuilder:
                         sections.append(ticker_section)
 
         # Add market microstructure data (order book, trades, funding rate)
-        # Skip for less capable LLMs — this is complex real-time data
-        if context.market_microstructure and not self._minimal_context:
+        if context.market_microstructure:
             microstructure = context.market_microstructure
 
             snapshot_notice = self.market_formatter.format_microstructure_snapshot_notice(
@@ -187,23 +169,21 @@ class PromptBuilder:
                 if funding_section:
                     sections.append(funding_section)
 
-        # Add cryptocurrency details if available (skip for Flash — noise for BTC)
-        if not self._minimal_context:
-            coin_details_section = self.context_builder.build_coin_details_section(
-                context.coin_details
-            )
-            if coin_details_section:
-                sections.append(coin_details_section)
+        # Add cryptocurrency details if available
+        coin_details_section = self.context_builder.build_coin_details_section(
+            context.coin_details
+        )
+        if coin_details_section:
+            sections.append(coin_details_section)
 
         sections.append(self.context_builder.build_market_data_section(context.ohlcv_candles))
         sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
-        # Market period metrics — skip for Flash (redundant with technical indicators)
-        if not self._minimal_context:
-            sections.append(self.context_builder.build_market_period_metrics_section(context.market_metrics))
+        # Market period metrics
+        sections.append(self.context_builder.build_market_period_metrics_section(context.market_metrics))
 
-        # Add previous indicators comparison section if available (skip for Flash)
-        if previous_indicators and not self._minimal_context:
+        # Add previous indicators comparison section if available
+        if previous_indicators:
             prev_section = self.context_builder.build_previous_indicators_section(
                 previous_indicators,
                 context.technical_data
@@ -252,11 +232,11 @@ class PromptBuilder:
 
         return final_prompt
 
-    def get_prompt_metadata(self) -> Dict[str, str]:
+    def get_prompt_metadata(self) -> dict[str, str]:
         """Return prompt metadata for logs, persistence, and dashboard observability."""
         return self.template_manager.build_prompt_metadata()
 
-    def validate_and_warn(self, system_prompt: str, prompt: str, token_counter: Any = None) -> Dict[str, Any]:
+    def validate_and_warn(self, system_prompt: str, prompt: str, token_counter: Any = None) -> dict[str, Any]:
         """Run non-blocking preflight checks before a prompt is sent to the model."""
         system_tokens = token_counter.count_tokens(system_prompt) if token_counter else max(1, len(system_prompt) // 4)
         prompt_tokens = token_counter.count_tokens(prompt) if token_counter else max(1, len(prompt) // 4)
@@ -297,13 +277,13 @@ class PromptBuilder:
         self,
         symbol: str,
         context: AnalysisContext,
-        previous_response: Optional[str] = None,
-        performance_context: Optional[str] = None,
-        brain_context: Optional[str] = None,
-        last_analysis_time: Optional[str] = None,
+        previous_response: str | None = None,
+        performance_context: str | None = None,
+        brain_context: str | None = None,
+        last_analysis_time: str | None = None,
         has_chart_analysis: bool = False,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None,
-        previous_indicators: Optional[Dict[str, Any]] = None
+        dynamic_thresholds: dict[str, Any] | None = None,
+        previous_indicators: dict[str, Any] | None = None
     ) -> str:
         """Build system prompt using template manager.
 
