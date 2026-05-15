@@ -1,6 +1,6 @@
 """Provider orchestration for AI model invocation with fallback logic."""
 import io
-from typing import Optional, Dict, Any, List, Union, cast, TYPE_CHECKING
+from typing import Any, Union, cast, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.response_models import ChatResponseModel
@@ -41,7 +41,7 @@ class ProviderOrchestrator:
         self.clients = clients
         self._providers = self._build_provider_metadata()
 
-    def _build_provider_metadata(self) -> Dict[str, ProviderMetadata]:
+    def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
         """Build provider metadata registry from clients and config."""
         return {
             'googleai': ProviderMetadata(
@@ -75,11 +75,11 @@ class ProviderOrchestrator:
             )
         }
 
-    def get_metadata(self, provider: str) -> Optional[ProviderMetadata]:
+    def get_metadata(self, provider: str) -> ProviderMetadata | None:
         """Get metadata for a provider."""
         return self._providers.get(provider)
 
-    def resolve_model(self, provider: str, model_override: Optional[str] = None) -> str:
+    def resolve_model(self, provider: str, model_override: str | None = None) -> str:
         """Resolve effective model name for a provider."""
         if model_override:
             return model_override
@@ -101,11 +101,11 @@ class ProviderOrchestrator:
     async def invoke(
         self,
         provider: str,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         *,
         chart: bool = False,
-        chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
-        model: Optional[str] = None
+        chart_image: Union[io.BytesIO, bytes, str] | None = None,
+        model: str | None = None
     ) -> InvocationResult:
         """
         Invoke a single provider and return structured result.
@@ -146,18 +146,18 @@ class ProviderOrchestrator:
 
     async def invoke_with_fallback(
         self,
-        providers: List[str],
-        messages: List[Dict[str, str]],
+        providers: list[str],
+        messages: list[dict[str, str]],
         *,
         chart: bool = False,
-        chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
-        model: Optional[str] = None
+        chart_image: Union[io.BytesIO, bytes, str] | None = None,
+        model: str | None = None
     ) -> InvocationResult:
         """
         Try providers in order, returning first successful result.
 
         Args:
-            providers: List of provider keys to try in order
+            providers: list of provider keys to try in order
             messages: Chat messages
             chart: Whether this is a chart analysis request
             chart_image: Optional chart image
@@ -166,7 +166,7 @@ class ProviderOrchestrator:
         Returns:
             InvocationResult from first successful provider, or last failure
         """
-        last_result: Optional[InvocationResult] = None
+        last_result: InvocationResult | None = None
         for provider in providers:
             if not self.is_available(provider):
                 continue
@@ -187,8 +187,8 @@ class ProviderOrchestrator:
     async def get_text_response(
         self,
         effective_provider: str,
-        messages: List[Dict[str, str]],
-        model: Optional[str] = None
+        messages: list[dict[str, str]],
+        model: str | None = None
     ) -> InvocationResult:
         """
         Get text response using single provider or fallback chain.
@@ -221,9 +221,9 @@ class ProviderOrchestrator:
     async def get_chart_response(
         self,
         effective_provider: str,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model: Optional[str] = None
+        model: str | None = None
     ) -> InvocationResult:
         """
         Get chart analysis response using single provider or fallback chain.
@@ -263,10 +263,10 @@ class ProviderOrchestrator:
     async def _invoke_google(
         self,
         metadata: ProviderMetadata,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Optional[Union[io.BytesIO, bytes, str]]
+        chart_image: Union[io.BytesIO, bytes, str] | None
     ) -> InvocationResult:
         """Invoke Google AI with free/paid tier fallback logic."""
         is_free_tier_model = "flash" in effective_model.lower()
@@ -326,7 +326,7 @@ class ProviderOrchestrator:
     async def _invoke_local(
         self,
         metadata: ProviderMetadata,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         effective_model: str,
         chart: bool
     ) -> InvocationResult:
@@ -358,10 +358,10 @@ class ProviderOrchestrator:
     async def _invoke_openrouter(
         self,
         metadata: ProviderMetadata,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Optional[Union[io.BytesIO, bytes, str]]
+        chart_image: Union[io.BytesIO, bytes, str] | None
     ) -> InvocationResult:
         """Invoke OpenRouter provider."""
         if chart and chart_image:
@@ -378,7 +378,7 @@ class ProviderOrchestrator:
             model=effective_model
         )
 
-    def _is_valid_response(self, response: Optional[ChatResponseModel]) -> bool:
+    def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
         """Check if response contains valid choices with content."""
         if not response:
             return False
@@ -399,7 +399,7 @@ class ProviderOrchestrator:
             return False
         return True
 
-    def _is_rate_limited(self, response: Optional[ChatResponseModel]) -> bool:
+    def _is_rate_limited(self, response: ChatResponseModel | None) -> bool:
         """Check if response indicates rate limiting."""
         return bool(response and response.error and "rate_limit" in response.error)
 
@@ -438,10 +438,10 @@ class ProviderOrchestrator:
     async def _invoke_blockrun(
         self,
         metadata: ProviderMetadata,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Optional[Union[io.BytesIO, bytes, str]]
+        chart_image: Union[io.BytesIO, bytes, str] | None
     ) -> InvocationResult:
         """Invoke BlockRun provider."""
         if chart and chart_image:

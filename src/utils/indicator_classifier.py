@@ -5,7 +5,7 @@ by TradingBrainService to build context query strings. These functions
 are the single source of truth for classification thresholds, shared
 between the AnalysisEngine (live trading) and the dashboard router.
 """
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -33,7 +33,7 @@ def build_exit_execution_context(
     stop_loss_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
     take_profit_type: Any = EXIT_EXECUTION_UNKNOWN,
     take_profit_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Return normalized SL/TP execution settings for brain memory/query context."""
     stop_type = _normalize_exit_execution_value(stop_loss_type)
     take_profit_exit_type = _normalize_exit_execution_value(take_profit_type)
@@ -53,18 +53,18 @@ def build_exit_execution_context(
 def build_exit_execution_context_from_config(
     config: "ConfigProtocol",
     timeframe: str = EXIT_EXECUTION_UNKNOWN,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Build risk-execution context from config attributes."""
     interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
     return build_exit_execution_context(
-        stop_loss_type=config.STOP_LOSS_TYPE,
-        stop_loss_check_interval=config.STOP_LOSS_CHECK_INTERVAL or interval_default,
-        take_profit_type=config.TAKE_PROFIT_TYPE,
-        take_profit_check_interval=config.TAKE_PROFIT_CHECK_INTERVAL or interval_default,
+        stop_loss_type=getattr(config, "STOP_LOSS_TYPE", EXIT_EXECUTION_UNKNOWN),
+        stop_loss_check_interval=getattr(config, "STOP_LOSS_CHECK_INTERVAL", None) or interval_default,
+        take_profit_type=getattr(config, "TAKE_PROFIT_TYPE", EXIT_EXECUTION_UNKNOWN),
+        take_profit_check_interval=getattr(config, "TAKE_PROFIT_CHECK_INTERVAL", None) or interval_default,
     )
 
 
-def build_exit_execution_context_from_position(position: Any) -> Dict[str, str]:
+def build_exit_execution_context_from_position(position: Any) -> dict[str, str]:
     """Build risk-execution context from a position entry snapshot."""
     return build_exit_execution_context(
         stop_loss_type=position.stop_loss_type_at_entry,
@@ -75,7 +75,7 @@ def build_exit_execution_context_from_position(position: Any) -> Dict[str, str]:
 
 
 def format_exit_execution_context(
-    exit_execution_context: Optional[Dict[str, Any]] = None,
+    exit_execution_context: dict[str, Any] | None = None,
     *,
     include_unknown: bool = False,
 ) -> str:
@@ -95,7 +95,7 @@ def format_exit_execution_context(
     )
 
 
-def classify_trend_direction(technical_data: Dict[str, Any]) -> str:
+def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     """Classify trend direction from +DI/-DI crossover."""
     di_plus = technical_data.get("plus_di", 0.0)
     di_minus = technical_data.get("minus_di", 0.0)
@@ -106,7 +106,7 @@ def classify_trend_direction(technical_data: Dict[str, Any]) -> str:
     return "NEUTRAL"
 
 
-def classify_volatility_level(technical_data: Dict[str, Any]) -> str:
+def classify_volatility_level(technical_data: dict[str, Any]) -> str:
     """Classify volatility from ATR as percentage of price."""
     atr_pct = technical_data.get("atr_percent", 2.0)
     if atr_pct > 3.0:
@@ -144,13 +144,13 @@ def classify_rsi_label(rsi: float) -> str:
     return "NEUTRAL"
 
 
-def classify_rsi_level(technical_data: Dict[str, Any]) -> str:
+def classify_rsi_level(technical_data: dict[str, Any]) -> str:
     """Classify RSI into momentum zones from technical data dict."""
     rsi = technical_data.get("rsi", 50.0)
     return classify_rsi_label(rsi)
 
 
-def classify_macd_signal(technical_data: Dict[str, Any]) -> str:
+def classify_macd_signal(technical_data: dict[str, Any]) -> str:
     """Classify MACD as BULLISH/BEARISH based on line vs signal line."""
     macd_line = technical_data.get("macd_line")
     macd_signal_line = technical_data.get("macd_signal")
@@ -162,7 +162,7 @@ def classify_macd_signal(technical_data: Dict[str, Any]) -> str:
     return "NEUTRAL"
 
 
-def classify_volume_state(technical_data: Dict[str, Any]) -> str:
+def classify_volume_state(technical_data: dict[str, Any]) -> str:
     """Classify volume trend from On-Balance Volume slope."""
     obv_slope = technical_data.get("obv_slope", 0.0)
     if obv_slope > 0.5:
@@ -173,8 +173,8 @@ def classify_volume_state(technical_data: Dict[str, Any]) -> str:
 
 
 def classify_bb_position(
-    technical_data: Dict[str, Any],
-    current_price: Optional[float],
+    technical_data: dict[str, Any],
+    current_price: float | None,
 ) -> str:
     """Classify price position relative to Bollinger Bands."""
     bb_upper = technical_data.get("bb_upper")
@@ -187,7 +187,7 @@ def classify_bb_position(
     return "MIDDLE"
 
 
-def classify_market_sentiment(sentiment_data: Optional[Dict[str, Any]]) -> str:
+def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
     """Classify Fear & Greed index into sentiment zones."""
     if sentiment_data:
         fear_greed = sentiment_data.get("fear_greed_index", 50)
@@ -202,7 +202,7 @@ def classify_market_sentiment(sentiment_data: Optional[Dict[str, Any]]) -> str:
     return "NEUTRAL"
 
 
-def classify_order_book_bias(microstructure_data: Optional[Dict[str, Any]]) -> str:
+def classify_order_book_bias(microstructure_data: dict[str, Any] | None) -> str:
     """Classify order book pressure from bid/ask imbalance."""
     if microstructure_data:
         order_book = microstructure_data.get("order_book", {})
@@ -215,12 +215,12 @@ def classify_order_book_bias(microstructure_data: Optional[Dict[str, Any]]) -> s
 
 
 def build_context_string_from_technical_data(
-    technical_data: Dict[str, Any],
-    current_price: Optional[float] = None,
-    sentiment_data: Optional[Dict[str, Any]] = None,
-    microstructure_data: Optional[Dict[str, Any]] = None,
+    technical_data: dict[str, Any],
+    current_price: float | None = None,
+    sentiment_data: dict[str, Any] | None = None,
+    microstructure_data: dict[str, Any] | None = None,
     is_weekend: bool = False,
-    exit_execution_context: Optional[Dict[str, Any]] = None,
+    exit_execution_context: dict[str, Any] | None = None,
 ) -> str:
     """Build the rich context string from raw technical indicators.
 
@@ -229,7 +229,7 @@ def build_context_string_from_technical_data(
     issued during live trading.
 
     Args:
-        technical_data: Dict of raw indicator values (rsi, adx, macd_line …).
+        technical_data: dict of raw indicator values (rsi, adx, macd_line …).
         current_price: Optional current price for Bollinger Band positioning.
         sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
         microstructure_data: Optional order book microstructure dict.
@@ -275,7 +275,7 @@ def build_context_string_from_classified_values(
     is_weekend: bool = False,
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
-    exit_execution_context: Optional[Dict[str, Any]] = None,
+    exit_execution_context: dict[str, Any] | None = None,
 ) -> str:
     """Build the rich context string from already classified market values."""
     adx_label = classify_adx_label(adx)
@@ -304,12 +304,12 @@ def build_context_string_from_classified_values(
 
 
 def build_query_document_from_technical_data(
-    technical_data: Dict[str, Any],
-    current_price: Optional[float] = None,
-    sentiment_data: Optional[Dict[str, Any]] = None,
-    microstructure_data: Optional[Dict[str, Any]] = None,
+    technical_data: dict[str, Any],
+    current_price: float | None = None,
+    sentiment_data: dict[str, Any] | None = None,
+    microstructure_data: dict[str, Any] | None = None,
     is_weekend: bool = False,
-    exit_execution_context: Optional[Dict[str, Any]] = None,
+    exit_execution_context: dict[str, Any] | None = None,
 ) -> str:
     """Build an enriched query document for vector similarity search.
 
@@ -318,7 +318,7 @@ def build_query_document_from_technical_data(
     mirrors stored experience documents.
 
     Args:
-        technical_data: Dict of raw indicator values (rsi, adx, macd_line …).
+        technical_data: dict of raw indicator values (rsi, adx, macd_line …).
         current_price: Optional current price for Bollinger Band positioning.
         sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
         microstructure_data: Optional order book microstructure dict.
@@ -365,7 +365,7 @@ def build_query_document_from_classified_values(
     is_weekend: bool = False,
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
-    exit_execution_context: Optional[Dict[str, Any]] = None,
+    exit_execution_context: dict[str, Any] | None = None,
 ) -> str:
     """Build an enriched vector query document from already classified values."""
     context_str = build_context_string_from_classified_values(

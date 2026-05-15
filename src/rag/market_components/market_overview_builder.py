@@ -3,7 +3,7 @@ Market Overview Builder
 Handles building and structuring market overview data.
 """
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.logger.logger import Logger
 
@@ -15,7 +15,7 @@ class MarketOverviewBuilder:
         self.logger = logger
         self.processor = processor
 
-    def build_overview_structure(self, price_data: Optional[Dict], coingecko_data: Optional[Dict], top_coins: Optional[list] = None) -> Dict[str, Any]:
+    def build_overview_structure(self, price_data: dict | None, coingecko_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
         """Build the complete market overview structure."""
         overview = {
             "timestamp": datetime.now().isoformat(),
@@ -73,19 +73,25 @@ class MarketOverviewBuilder:
                 overview['top_coins'] = existing_top_coins
 
             elif top_coins:
-                 # Fallback: We only have a list of symbols (top_coins arg) and no rich CoinGecko data
-                 # We must build the objects from scratch using coin_data
+                 # Fallback: We only have a list of symbols or pre-built dicts
+                 # and no rich CoinGecko data. Build objects from scratch for bare strings,
+                 # but pass dict items through directly (they are already rich).
                 rich_top_coins = []
-                for i, symbol in enumerate(top_coins):
+                for i, item in enumerate(top_coins):
+                    if isinstance(item, dict):
+                        # Already a rich coin dict — pass through as-is
+                        rich_top_coins.append(item)
+                        continue
+
+                    # Bare symbol string — build rich coin from coin_data
+                    symbol = item
                     # Try to find corresponding data in coin_data
                     coin_info = None
-                    # Find matching data (e.g. "BTC" matches "BTC/USDT")
                     for key, data in overview.get('coin_data', {}).items():
                         if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
                             coin_info = data
                             break
 
-                    # Create rich coin object
                     rich_coin = {
                         "symbol": symbol,
                         "name": symbol,
@@ -105,7 +111,7 @@ class MarketOverviewBuilder:
             self.logger.exception("Traceback:")
             return overview
 
-    def build_overview(self, coingecko_data: Optional[Dict], price_data: Optional[Dict], top_coins: Optional[list] = None) -> Dict[str, Any]:
+    def build_overview(self, coingecko_data: dict | None, price_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
         """Build market overview from fetched data - main entry point."""
         try:
             return self.build_overview_structure(price_data, coingecko_data, top_coins)
@@ -117,7 +123,7 @@ class MarketOverviewBuilder:
                 "published_on": datetime.now().timestamp()
             }
 
-    def _finalize_overview(self, overview: Dict) -> Dict[str, Any]:
+    def _finalize_overview(self, overview: dict) -> dict[str, Any]:
         """Finalize and validate the overview structure."""
         try:
             # Add metadata

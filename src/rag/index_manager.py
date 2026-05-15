@@ -6,7 +6,7 @@ Handles building and maintaining search indices for news articles.
 
 import re
 from collections import defaultdict
-from typing import List, Dict, Any, Set
+from typing import Any, Set
 from src.logger.logger import Logger
 
 
@@ -19,14 +19,14 @@ class IndexManager:
         self.article_processor = article_processor
 
         # Search indices
-        self.category_index: Dict[str, List[int]] = defaultdict(list)
-        self.tag_index: Dict[str, List[int]] = defaultdict(list)
-        self.coin_index: Dict[str, List[int]] = defaultdict(list)
-        self.keyword_index: Dict[str, List[int]] = defaultdict(list)
+        self.category_index: dict[str, list[int]] = defaultdict(list)
+        self.tag_index: dict[str, list[int]] = defaultdict(list)
+        self.coin_index: dict[str, list[int]] = defaultdict(list)
+        self.keyword_index: dict[str, list[int]] = defaultdict(list)
 
-    def build_indices(self, news_database: List[Dict[str, Any]],
+    def build_indices(self, news_database: list[dict[str, Any]],
                      known_crypto_tickers: Set[str],
-                     category_word_map: Dict[str, str]) -> None:
+                     category_word_map: dict[str, str]) -> None:
         """Build search indices from news database."""
         self._clear_indices()
 
@@ -43,7 +43,7 @@ class IndexManager:
         self.coin_index.clear()
         self.keyword_index.clear()
 
-    def _index_article_categories(self, article: Dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
+    def _index_article_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
         """Index article categories."""
         categories = article.get('categories', '').split('|')
         for category in categories:
@@ -57,14 +57,14 @@ class IndexManager:
             if category.strip().upper() in known_crypto_tickers:
                 self.coin_index[category_lower].append(index)
 
-    def _index_article_tags(self, article: Dict[str, Any], index: int) -> None:
+    def _index_article_tags(self, article: dict[str, Any], index: int) -> None:
         """Index article tags."""
         tags = article.get('tags', '').split('|')
         for tag in tags:
             if tag:
                 self.tag_index[tag.lower()].append(index)
 
-    def _index_article_coins(self, article: Dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
+    def _index_article_coins(self, article: dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
         """Detect and index coins mentioned in the article."""
         # Check if coins are already detected and stored as list
         if 'detected_coins' in article:
@@ -80,7 +80,7 @@ class IndexManager:
         for coin in coins_mentioned:
             self.coin_index[coin.lower()].append(index)
 
-    def _index_article_keywords(self, article: Dict[str, Any], index: int, category_word_map: Dict[str, str]) -> None:
+    def _index_article_keywords(self, article: dict[str, Any], index: int, category_word_map: dict[str, str]) -> None:
         """Index keywords from article title and body with consistent case normalization."""
         title = article.get('title', '').lower()
         body = article.get('body', '').lower()
@@ -91,7 +91,7 @@ class IndexManager:
         # Index important title words
         self._index_title_words(title, index)
 
-    def _index_category_words(self, title: str, body: str, index: int, category_word_map: Dict[str, str]) -> None:
+    def _index_category_words(self, title: str, body: str, index: int, category_word_map: dict[str, str]) -> None:
         """Index words associated with categories with consistent lowercase normalization."""
         for word, _ in category_word_map.items():
             # Ensure word is already lowercase (should be from the mapping)
@@ -115,11 +115,11 @@ class IndexManager:
                     self.keyword_index[word_lower].append(index)
 
 
-    def search_by_coin(self, coin: str) -> List[int]:
+    def search_by_coin(self, coin: str) -> list[int]:
         """Search for articles mentioning a specific coin."""
         coin_lower = coin.lower()
         return self.coin_index.get(coin_lower, [])
 
-    def get_coin_indices(self) -> Dict[str, List[int]]:
+    def get_coin_indices(self) -> dict[str, list[int]]:
         """Get the coin index."""
         return dict(self.coin_index)

@@ -42,41 +42,44 @@ def _clean_markdown_text(markdown_text: str) -> str:
     return text.strip()
 
 
-def _markdown_value(markdown_obj: Any, attr_name: str) -> str:
-    value = getattr(markdown_obj, attr_name, "")
-    return value if isinstance(value, str) else ""
-
-
 def _is_unusable_body(text: str) -> bool:
     normalized = re.sub(r"\s+", " ", text).strip().lower()
     return any(marker in normalized for marker in _UNUSABLE_BODY_MARKERS)
 
 
 def _extract_crawl4ai_body(result: Any, min_chars: int) -> str | None:
-    """Return the best full-article text from a Crawl4AI result."""
-    markdown_obj = getattr(result, "markdown", None)
+    """Return the best full-article text from a Crawl4AI CrawlResult.
+
+    When this function is called, crawl4ai has already succeeded, so all
+    CrawlResult attributes (markdown, cleaned_html, html, url, success)
+    exist as part of the library's documented API.
+    """
+    markdown_obj = result.markdown
     candidates: list[str] = []
 
     if isinstance(markdown_obj, str):
         candidates.append(markdown_obj)
     elif markdown_obj is not None:
-        fit_markdown = _markdown_value(markdown_obj, "fit_markdown")
-        raw_markdown = _markdown_value(markdown_obj, "raw_markdown")
-        cited_markdown = _markdown_value(markdown_obj, "markdown_with_citations")
-
-        if fit_markdown:
-            candidates.append(fit_markdown)
-        if raw_markdown and len(raw_markdown) > len(fit_markdown):
-            candidates.append(raw_markdown)
-        if cited_markdown and cited_markdown not in candidates:
-            candidates.append(cited_markdown)
+        # MarkdownGenerationResult — attributes present when DefaultMarkdownGenerator is used
+        fit = markdown_obj.fit_markdown
+        raw = markdown_obj.raw_markdown
+        cited = markdown_obj.markdown_with_citations
+        fit = fit if isinstance(fit, str) else ""
+        raw = raw if isinstance(raw, str) else ""
+        cited = cited if isinstance(cited, str) else ""
+        if fit:
+            candidates.append(fit)
+        if raw and len(raw) > len(fit):
+            candidates.append(raw)
+        if cited and cited not in candidates:
+            candidates.append(cited)
 
     for candidate in candidates:
         text = _clean_markdown_text(candidate)
         if len(text) >= min_chars and not _is_unusable_body(text):
             return text
 
-    html = getattr(result, "cleaned_html", None) or getattr(result, "html", None) or ""
+    html = result.cleaned_html or result.html or ""
     if html:
         text = extract_html_body_text(html).strip()
         if len(text) >= min_chars and not _is_unusable_body(text):
@@ -115,9 +118,7 @@ def _requires_dedicated_crawl_loop() -> bool:
     return isinstance(current_loop, asyncio.SelectorEventLoop)
 
 
-# ---------------------------------------------------------------------------
 # aiohttp fallback enricher
-# ---------------------------------------------------------------------------
 
 async def _fetch_body_aiohttp(
     session: aiohttp.ClientSession,
@@ -140,9 +141,7 @@ async def _fetch_body_aiohttp(
         return None
 
 
-# ---------------------------------------------------------------------------
 # Crawl4AI enricher
-# ---------------------------------------------------------------------------
 
 class Crawl4AIEnricher:
     """Enriches article items with full body text using Crawl4AI.
@@ -306,13 +305,8 @@ class Crawl4AIEnricher:
         fallback_targets: list[dict[str, Any]] = []
 
         for result in results:
-            result_url = normalize_url(
-                str(
-                    getattr(result, "url", None)
-                    or getattr(result, "redirected_url", None)
-                    or ""
-                )
-            )
+            resolved_url = result.url or result.redirected_url
+            result_url = normalize_url(str(resolved_url))
             item = url_to_item.pop(result_url, None)
             if item is None:
                 continue

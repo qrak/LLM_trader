@@ -7,7 +7,7 @@ import asyncio
 import io
 import time
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Any
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
@@ -48,7 +48,7 @@ class CryptoTradingBot:
         self,
         logger: Logger,
         config,
-        shutdown_manager: Optional[Any],
+        shutdown_manager: Any | None,
         exchange_manager,
         market_analyzer,
         trading_strategy,
@@ -66,7 +66,7 @@ class CryptoTradingBot:
         memory_service: TradingMemoryService,
         exit_monitor: ExitMonitor,
         dashboard_state = None,
-        discord_task: Optional[asyncio.Task] = None
+        discord_task: asyncio.Task | None = None
     ):
         # pylint: disable=too-many-arguments, too-many-locals
         # Reason: Dependency Injection pattern requires all components to be injected.
@@ -108,12 +108,11 @@ class CryptoTradingBot:
         self._active_tasks = set()
         self._force_analysis = asyncio.Event()
         self._discord_task = discord_task
-        self.position_monitor: Optional[PositionStatusMonitor] = None
 
         # Trading state
-        self.current_exchange = None
-        self.current_symbol: Optional[str] = None
-        self.current_timeframe: Optional[str] = None
+        self.position_monitor: PositionStatusMonitor | None = None
+        self.current_symbol: str | None = None
+        self.current_timeframe: str | None = None
 
     @property
     def active_tasks(self) -> set[asyncio.Task]:
@@ -215,7 +214,7 @@ class CryptoTradingBot:
         self.logger.info("Bot shutdown signaling complete.")
 
 
-    async def run(self, symbol: str, timeframe: Optional[str] = None):
+    async def run(self, symbol: str, timeframe: str | None = None):
         """Run the trading bot in continuous mode.
 
         Args:
@@ -345,7 +344,7 @@ class CryptoTradingBot:
             self.logger.warning("Could not fetch current ticker: %s", e)
         return None, None
     
-    async def _check_position_status(self, current_price: Optional[float], *, is_candle_close: bool = True):
+    async def _check_position_status(self, current_price: float | None, *, is_candle_close: bool = True):
         """Check if existing position hit stop/target.
 
         Soft exit mode: SL/TP evaluation only runs on candle close.
@@ -394,7 +393,7 @@ class CryptoTradingBot:
                 e,
             )
     
-    async def _build_analysis_context(self, current_price: Optional[float], current_ticker) -> Dict[str, Any]:
+    async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
         """Build context data for market analysis"""
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.memory_service.get_context_summary()
@@ -421,7 +420,7 @@ class CryptoTradingBot:
             "dynamic_thresholds": dynamic_thresholds
         }
     
-    def _get_formatted_last_analysis_time(self) -> Optional[str]:
+    def _get_formatted_last_analysis_time(self) -> str | None:
         """Get last analysis time formatted as UTC string"""
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
         if not last_analysis_time_obj:
@@ -434,14 +433,14 @@ class CryptoTradingBot:
 
         return last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
     
-    async def _handle_new_position(self, decision, current_price: Optional[float]):
+    async def _handle_new_position(self, decision, current_price: float | None):
         """Handle new position creation and status updates"""
         if decision.action not in ('BUY', 'SELL') or not self.trading_strategy.current_position:
             return
 
         await self._require_position_monitor().handle_new_position(current_price)
     
-    async def _send_discord_notification(self, result: Dict[str, Any]):
+    async def _send_discord_notification(self, result: dict[str, Any]):
         """Send Discord notification with analysis results"""
         if self.discord_notifier:
             chart_image = None
@@ -462,7 +461,7 @@ class CryptoTradingBot:
                 chart_image=chart_image
             )
     
-    def _save_analysis_data(self, result: Dict[str, Any]):
+    def _save_analysis_data(self, result: dict[str, Any]):
         """Save analysis response and technical data"""
         raw_response = result.get("raw_response", "")
         if raw_response:
@@ -470,7 +469,7 @@ class CryptoTradingBot:
             generated_prompt = result.get("generated_prompt")
             self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
 
-    async def _fetch_current_ticker(self) -> Optional[Dict[str, Any]]:
+    async def _fetch_current_ticker(self) -> dict[str, Any] | None:
         """Fetch current ticker from exchange."""
         try:
             if self.current_exchange is None or self.current_symbol is None:

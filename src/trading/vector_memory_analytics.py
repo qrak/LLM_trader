@@ -1,6 +1,6 @@
 """Analytics helpers for vector memory."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .data_models import VectorSearchResult
 
@@ -26,7 +26,7 @@ class VectorMemoryAnalyticsMixin:
         except Exception:
             return self._collection.count()
 
-    def get_direction_bias(self) -> Optional[Dict[str, Any]]:
+    def get_direction_bias(self) -> dict[str, Any] | None:
         """Get count of LONG vs SHORT trades for bias detection."""
         metas = self._get_trade_metadatas(exclude_updates=True)
         if not metas:
@@ -49,8 +49,8 @@ class VectorMemoryAnalyticsMixin:
     def get_all_experiences(
         self,
         limit: int = 100,
-        where: Optional[Dict[str, Any]] = None,
-    ) -> List[VectorSearchResult]:
+        where: dict[str, Any] | None = None,
+    ) -> list[VectorSearchResult]:
         """Retrieve all experiences without vector similarity search."""
         if not self._ensure_initialized():
             return []
@@ -63,7 +63,7 @@ class VectorMemoryAnalyticsMixin:
                 include=["metadatas", "documents"],
             )
 
-            experiences: List[VectorSearchResult] = []
+            experiences: list[VectorSearchResult] = []
             if results and results["ids"]:
                 for i, doc_id in enumerate(results["ids"]):
                     meta = results["metadatas"][i] if results["metadatas"] else {}
@@ -83,7 +83,7 @@ class VectorMemoryAnalyticsMixin:
             self.logger.error("Failed to retrieve all experiences: %s", e)
             return []
 
-    def _get_trade_metadatas(self, exclude_updates: bool = True) -> List[Dict[str, Any]]:
+    def _get_trade_metadatas(self, exclude_updates: bool = True) -> list[dict[str, Any]]:
         """Retrieve metadatas for all stored trades, handling filtering."""
         if not self._ensure_initialized():
             return []
@@ -98,12 +98,12 @@ class VectorMemoryAnalyticsMixin:
         return metas
 
     @staticmethod
-    def _build_trade_snapshot(pnl: float, is_win: bool) -> Dict[str, Any]:
+    def _build_trade_snapshot(pnl: float, is_win: bool) -> dict[str, Any]:
         """Create a normalized trade snapshot for aggregation helpers."""
         return {"pnl": pnl, "is_win": is_win}
 
     @staticmethod
-    def _summarize_trade_group(trades: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _summarize_trade_group(trades: list[dict[str, Any]]) -> dict[str, Any]:
         """Compute common trade performance metrics for an aggregated group."""
         total = len(trades)
         wins = sum(1 for trade in trades if trade["is_win"])
@@ -117,7 +117,7 @@ class VectorMemoryAnalyticsMixin:
         }
 
     @staticmethod
-    def _factor_bucket_for_score(score: float) -> Optional[str]:
+    def _factor_bucket_for_score(score: float) -> str | None:
         """Map a factor score to the configured factor bucket."""
         if score <= 0:
             return None
@@ -128,7 +128,7 @@ class VectorMemoryAnalyticsMixin:
         return "HIGH"
 
     @staticmethod
-    def _normalize_categorical_value(category_name: str, value: Any) -> Optional[str]:
+    def _normalize_categorical_value(category_name: str, value: Any) -> str | None:
         """Normalize categorical factor values into stable reporting buckets."""
         if not value:
             return None
@@ -146,7 +146,7 @@ class VectorMemoryAnalyticsMixin:
 
     @staticmethod
     def _append_trade_to_group(
-        groups: Dict[str, List[Dict[str, Any]]],
+        groups: dict[str, list[dict[str, Any]]],
         key: str,
         pnl: float,
         is_win: bool,
@@ -160,9 +160,9 @@ class VectorMemoryAnalyticsMixin:
         self,
         factor_name: str,
         bucket: str,
-        trades: List[Dict[str, Any]],
+        trades: list[dict[str, Any]],
         avg_score: float = 0.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build a stable factor performance payload from aggregated trades."""
         summary = self._summarize_trade_group(trades)
         return {
@@ -172,7 +172,7 @@ class VectorMemoryAnalyticsMixin:
             **summary,
         }
 
-    def compute_confidence_stats(self) -> Dict[str, Dict[str, Any]]:
+    def compute_confidence_stats(self) -> dict[str, dict[str, Any]]:
         """Compute confidence level statistics from all stored experiences."""
         metas = self._get_trade_metadatas()
         if not metas:
@@ -197,7 +197,7 @@ class VectorMemoryAnalyticsMixin:
                 stats[confidence]["winning_trades"] += 1
             stats[confidence]["pnl_sum"] += pnl
 
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         for level, data in stats.items():
             total = data["total_trades"]
             result[level] = {
@@ -209,7 +209,7 @@ class VectorMemoryAnalyticsMixin:
 
         return result
 
-    def compute_adx_performance(self) -> Dict[str, Dict[str, Any]]:
+    def compute_adx_performance(self) -> dict[str, dict[str, Any]]:
         """Compute ADX bucket performance from all stored experiences."""
         metas = self._get_trade_metadatas()
         if not metas:
@@ -235,7 +235,7 @@ class VectorMemoryAnalyticsMixin:
 
             buckets[bucket]["trades"].append(self._build_trade_snapshot(pnl, is_win))
 
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         for key, data in buckets.items():
             result[key] = {
                 "level": data["level"],
@@ -244,13 +244,13 @@ class VectorMemoryAnalyticsMixin:
 
         return result
 
-    def compute_factor_performance(self) -> Dict[str, Dict[str, Any]]:
+    def compute_factor_performance(self) -> dict[str, dict[str, Any]]:
         """Compute confluence factor performance from all stored experiences."""
         metas = self._get_trade_metadatas()
         if not metas:
             return {}
 
-        factors: Dict[str, Dict[str, Any]] = {}
+        factors: dict[str, dict[str, Any]] = {}
         for name in self.FACTOR_NAMES:
             for bucket in self.FACTOR_BUCKETS:
                 key = f"{name}_{bucket}"
@@ -275,7 +275,7 @@ class VectorMemoryAnalyticsMixin:
                 factors[key]["trades"].append(self._build_trade_snapshot(pnl, is_win))
                 factors[key]["scores"].append(score)
 
-        result: Dict[str, Dict[str, Any]] = {}
+        result: dict[str, dict[str, Any]] = {}
         for key, data in factors.items():
             trades = data["trades"]
             scores = data["scores"]
@@ -289,7 +289,7 @@ class VectorMemoryAnalyticsMixin:
                 avg_score=sum(scores) / len(scores) if scores else 0.0,
             )
 
-        categorical_buckets: Dict[str, List[Dict[str, Any]]] = {}
+        categorical_buckets: dict[str, list[dict[str, Any]]] = {}
         for meta in metas:
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
@@ -316,12 +316,12 @@ class VectorMemoryAnalyticsMixin:
 
         return result
 
-    def compute_optimal_thresholds(self, min_sample_size: int = 5) -> Dict[str, Any]:
+    def compute_optimal_thresholds(self, min_sample_size: int = 5) -> dict[str, Any]:
         """Compute optimal thresholds from vector store data."""
         if not self._ensure_initialized():
             return {}
 
-        thresholds: Dict[str, Any] = {}
+        thresholds: dict[str, Any] = {}
 
         adx_perf = self.compute_adx_performance()
         adx_high = adx_perf.get("HIGH", {})
@@ -355,9 +355,9 @@ class VectorMemoryAnalyticsMixin:
                     all_experiences["ids"].append(raw_ids[idx])
 
         if all_experiences["metadatas"]:
-            rr_wins: List[float] = []
-            rr_losses: List[float] = []
-            sl_distances: List[float] = []
+            rr_wins: list[float] = []
+            rr_losses: list[float] = []
+            sl_distances: list[float] = []
 
             for meta in all_experiences["metadatas"]:
                 rr = meta.get("rr_ratio", 0)
@@ -413,14 +413,14 @@ class VectorMemoryAnalyticsMixin:
 
     def _learn_position_size_threshold(
         self,
-        all_experiences: Dict[str, Any],
+        all_experiences: dict[str, Any],
         min_sample_size: int,
-        thresholds: Dict[str, Any],
+        thresholds: dict[str, Any],
     ) -> None:
         """Learn min_position_size from small position performance."""
         if not all_experiences or not all_experiences.get("metadatas"):
             return
-        small_positions: List[bool] = []
+        small_positions: list[bool] = []
         for meta in all_experiences["metadatas"]:
             size_pct = meta.get("position_size_pct")
             if size_pct is not None and size_pct < 0.15:
@@ -434,14 +434,14 @@ class VectorMemoryAnalyticsMixin:
 
     def _learn_confluence_thresholds(
         self,
-        all_experiences: Dict[str, Any],
+        all_experiences: dict[str, Any],
         min_sample_size: int,
-        thresholds: Dict[str, Any],
+        thresholds: dict[str, Any],
     ) -> None:
         """Learn minimum confluence thresholds from historical performance."""
         if not all_experiences or not all_experiences.get("metadatas"):
             return
-        confluence_buckets: Dict[tuple, List[bool]] = {}
+        confluence_buckets: dict[tuple, list[bool]] = {}
         for meta in all_experiences["metadatas"]:
             count = meta.get("confluence_count")
             adx = meta.get("adx_at_entry", 25)
@@ -467,14 +467,14 @@ class VectorMemoryAnalyticsMixin:
 
     def _learn_alignment_thresholds(
         self,
-        all_experiences: Dict[str, Any],
+        all_experiences: dict[str, Any],
         min_sample_size: int,
-        thresholds: Dict[str, Any],
+        thresholds: dict[str, Any],
     ) -> None:
         """Learn position reduction thresholds from timeframe alignment performance."""
         if not all_experiences or not all_experiences.get("metadatas"):
             return
-        alignment_pnl: Dict[str, List[float]] = {"ALIGNED": [], "MIXED": [], "DIVERGENT": []}
+        alignment_pnl: dict[str, list[float]] = {"ALIGNED": [], "MIXED": [], "DIVERGENT": []}
         for meta in all_experiences["metadatas"]:
             alignment = meta.get("timeframe_alignment")
             pnl = meta.get("pnl_pct", 0)
@@ -495,7 +495,7 @@ class VectorMemoryAnalyticsMixin:
                 reduction = min(0.50, max(0.20, 1 - (divergent_avg / aligned_avg)))
                 thresholds["position_reduce_divergent"] = round(reduction, 2)
 
-    def get_confidence_recommendation(self, min_sample_size: int = 5) -> Optional[str]:
+    def get_confidence_recommendation(self, min_sample_size: int = 5) -> str | None:
         """Generate recommendation based on confidence calibration."""
         conf_stats = self.compute_confidence_stats()
         high_stats = conf_stats.get("HIGH", {})

@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from typing import Dict, Callable, Awaitable, Optional, Tuple
+from typing import Callable, Awaitable
 
 from src.logger.logger import Logger
 
@@ -16,7 +16,7 @@ else:
 class KeyboardHandler:
     """Handles keyboard input for console commands"""
 
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(self, logger: Logger | None = None):
         """Initialize the keyboard handler
 
         Args:
@@ -24,7 +24,7 @@ class KeyboardHandler:
         """
         self.logger = logger
         self.running = False
-        self._commands: Dict[str, Tuple[Callable, str]] = {}
+        self._commands: dict[str, tuple[Callable, str]] = {}
         self._listening_task = None
         self._old_settings = None  # To store terminal settings on Linux/Mac
 
@@ -98,7 +98,7 @@ class KeyboardHandler:
             # Linux/Unix implementation using select
             return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
-    def _read_key(self) -> Optional[str]:
+    def _read_key(self) -> str | None:
         """Read a single character from keyboard input.
 
         Returns the actual key pressed (preserves case for SHIFT detection).

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Pure JSON I/O service for trading data persistence.
 
 This service handles all file system operations for trading data without any business logic.
@@ -9,7 +10,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 from src.logger.logger import Logger
 from src.utils.data_utils import serialize_for_json
@@ -51,12 +52,12 @@ class PersistenceManager:
         self.position_monitor_file = self.data_dir / "position_monitor.json"
 
         # In-memory caches to prevent blocking I/O on hot paths
-        self._position_cache: Optional["Position"] = None
+        self._position_cache: "Position" | None = None
         self._position_cache_valid: bool = False
-        self._last_analysis_time_cache: Optional[datetime] = None
+        self._last_analysis_time_cache: datetime | None = None
         self._last_analysis_time_cache_valid: bool = False
 
-    def save_position(self, position: Optional["Position"]) -> None:
+    def save_position(self, position: "Position" | None) -> None:
         """Save current position to disk."""
         try:
             # Update cache immediately
@@ -113,11 +114,11 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving position: %s", e)
 
-    async def async_save_position(self, position: Optional["Position"]) -> None:
+    async def async_save_position(self, position: "Position" | None) -> None:
         """Non-blocking save_position: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_position, position)
 
-    def load_position(self) -> Optional["Position"]:
+    def load_position(self) -> "Position" | None:
         """Load current position from disk."""
         if self._position_cache_valid:
             return self._position_cache
@@ -197,7 +198,7 @@ class PersistenceManager:
         """Non-blocking save_trade_decision: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_trade_decision, decision)
 
-    def load_trade_history(self) -> List[Dict[str, Any]]:
+    def load_trade_history(self) -> list[dict[str, Any]]:
         """Load full trade history."""
         if not self.history_file.exists():
             return []
@@ -209,7 +210,7 @@ class PersistenceManager:
             self.logger.error("Error loading trade history: %s", e)
             return []
 
-    def get_entry_decision_for_position(self, entry_time: datetime) -> Optional["TradeDecision"]:
+    def get_entry_decision_for_position(self, entry_time: datetime) -> "TradeDecision" | None:
         """Retrieve the entry decision from trade history for a given position.
 
         Args:
@@ -280,7 +281,7 @@ class PersistenceManager:
             self.logger.error("Error loading statistics: %s", e)
             return TradingStatistics()
 
-    def save_position_monitor_state(self, state: Dict[str, Any]) -> None:
+    def save_position_monitor_state(self, state: dict[str, Any]) -> None:
         """Save position monitor cadence state to disk."""
         try:
             data = serialize_for_json(state)
@@ -291,11 +292,11 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving position monitor state: %s", e)
 
-    async def async_save_position_monitor_state(self, state: Dict[str, Any]) -> None:
+    async def async_save_position_monitor_state(self, state: dict[str, Any]) -> None:
         """Non-blocking save_position_monitor_state: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_position_monitor_state, state)
 
-    def load_position_monitor_state(self) -> Dict[str, Any]:
+    def load_position_monitor_state(self) -> dict[str, Any]:
         """Load position monitor cadence state from disk."""
         if not self.position_monitor_file.exists():
             return {}
@@ -306,7 +307,7 @@ class PersistenceManager:
             self.logger.error("Error loading position monitor state: %s", e)
             return {}
 
-    async def async_load_position_monitor_state(self) -> Dict[str, Any]:
+    async def async_load_position_monitor_state(self) -> dict[str, Any]:
         """Non-blocking load_position_monitor_state: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_position_monitor_state)
 
@@ -325,8 +326,8 @@ class PersistenceManager:
     def save_previous_response(
         self,
         response: str,
-        technical_data: Optional[Dict[str, Any]] = None,
-        prompt: Optional[str] = None
+        technical_data: dict[str, Any] | None = None,
+        prompt: str | None = None
     ) -> None:
         """Save the previous AI response, technical indicator values, and prompt.
 
@@ -362,11 +363,11 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving previous response: %s", e)
 
-    async def async_load_previous_response(self) -> Optional[Dict[str, Any]]:
+    async def async_load_previous_response(self) -> dict[str, Any] | None:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_previous_response)
 
-    def load_previous_response(self) -> Optional[Dict[str, Any]]:
+    def load_previous_response(self) -> dict[str, Any] | None:
         """Load the previous AI response and technical indicators.
 
         Returns:
@@ -393,7 +394,7 @@ class PersistenceManager:
             self.logger.error("Error loading previous response: %s", e)
             return None
 
-    def save_last_analysis_time(self, timestamp: Optional[datetime] = None) -> None:
+    def save_last_analysis_time(self, timestamp: datetime | None = None) -> None:
         """Save the timestamp of the last successful analysis.
 
         Args:
@@ -416,7 +417,7 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving last analysis time: %s", e)
 
-    def get_last_analysis_time(self) -> Optional[datetime]:
+    def get_last_analysis_time(self) -> datetime | None:
         """Get timestamp of last successful analysis."""
         if self._last_analysis_time_cache_valid:
             return self._last_analysis_time_cache

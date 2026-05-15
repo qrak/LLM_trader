@@ -3,7 +3,7 @@ Console Notifier - Fallback notification service when Discord is disabled.
 Prints AI trading analysis to console with colored and formatted output.
 """
 import io
-from typing import Optional, List, Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from .base_notifier import BaseNotifier
 
@@ -53,8 +53,8 @@ class ConsoleNotifier(BaseNotifier):
     async def send_message(
             self,
             message: str,
-            channel_id: Optional[int] = None,
-            expire_after: Optional[int] = None
+            channel_id: int | None = None,
+            expire_after: int | None = None
     ) -> None:
         """Print a text message to console.
 
@@ -65,7 +65,7 @@ class ConsoleNotifier(BaseNotifier):
         """
         print(f"\n{message}")
 
-    async def send_trading_decision(self, decision: Any, channel_id: Optional[int] = None) -> None:
+    async def send_trading_decision(self, decision: Any, channel_id: int | None = None) -> None:
         """Print a trading decision to console.
 
         Args:
@@ -104,8 +104,8 @@ class ConsoleNotifier(BaseNotifier):
             result: dict,
             symbol: str,
             timeframe: str,
-            channel_id: Optional[int] = None,
-            chart_image: Optional[io.BytesIO] = None
+            channel_id: int | None = None,
+            chart_image: io.BytesIO | None = None
     ) -> None:
         """Print full analysis notification with reasoning and JSON data.
 
@@ -141,7 +141,7 @@ class ConsoleNotifier(BaseNotifier):
             self,
             position: Any,
             current_price: float,
-            channel_id: Optional[int] = None
+            channel_id: int | None = None
     ) -> None:
         """Print current open position status.
 
@@ -186,9 +186,9 @@ class ConsoleNotifier(BaseNotifier):
 
     async def send_performance_stats(
             self,
-            trade_history: List[Dict[str, Any]],
+            trade_history: list[dict[str, Any]],
             symbol: str,
-            channel_id: Optional[int] = None
+            channel_id: int | None = None
     ) -> None:
         """Print overall performance statistics.
 

@@ -1,4 +1,3 @@
-from typing import Dict
 import math
 import numpy as np
 from src.utils.timeframe_validator import TimeframeValidator
@@ -97,7 +96,7 @@ class MarketMetricsCalculator:
                 period_metrics["1D"] = self._calculate_period_metrics(ohlcv[-min(24, n):], "1D (Fallback)", context)
                 context.market_metrics = period_metrics
 
-    def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> Dict:
+    def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> dict:
         """Calculate metrics for a specific time period.
 
         Args:
@@ -166,7 +165,7 @@ class MarketMetricsCalculator:
             "key_levels": levels
         }
 
-    def _calculate_basic_metrics(self, ohlcv_slice: np.ndarray, period_name: str) -> Dict:
+    def _calculate_basic_metrics(self, ohlcv_slice: np.ndarray, period_name: str) -> dict:
         """Calculate basic price and volume metrics using numpy vectorization.
 
         Args:
@@ -196,7 +195,7 @@ class MarketMetricsCalculator:
             "data_points": len(prices)
         }
 
-    def _calculate_indicator_changes_for_period(self, context, start_idx: int, end_idx: int) -> Dict:
+    def _calculate_indicator_changes_for_period(self, context, start_idx: int, end_idx: int) -> dict:
         """Calculate changes in technical indicators over the period"""
         indicator_changes = {}
 

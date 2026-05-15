@@ -3,7 +3,7 @@
 This module orchestrates the gathering of market data, technical analysis,
 and AI generation to produce trading signals.
 """
-from typing import Dict, Any, Optional, Tuple, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 import io
 import asyncio
 from datetime import datetime
@@ -87,7 +87,7 @@ class AnalysisEngine:
         self.base_symbol = None
         self.context = None
         self.article_urls = {}
-        self.previous_microstructure_snapshots: Dict[str, Dict[str, Any]] = {}
+        self.previous_microstructure_snapshots: dict[str, dict[str, Any]] = {}
 
         # Load configuration
         try:
@@ -119,15 +119,15 @@ class AnalysisEngine:
         self.token_counter = self.model_manager.token_counter
 
         # Dashboard Monitoring Data
-        self.last_generated_prompt: Optional[str] = None
-        self.last_prompt_timestamp: Optional[str] = None
-        self.last_system_prompt: Optional[str] = None
-        self.last_prompt_metadata: Optional[Dict[str, Any]] = None
-        self.last_prompt_lint: Optional[Dict[str, Any]] = None
-        self.last_llm_response: Optional[str] = None
-        self.last_response_timestamp: Optional[str] = None
-        self.last_response_validation: Optional[Dict[str, Any]] = None
-        self.last_chart_buffer: Optional[io.BytesIO] = None
+        self.last_generated_prompt: str | None = None
+        self.last_prompt_timestamp: str | None = None
+        self.last_system_prompt: str | None = None
+        self.last_prompt_metadata: dict[str, Any] | None = None
+        self.last_prompt_lint: dict[str, Any] | None = None
+        self.last_llm_response: str | None = None
+        self.last_response_timestamp: str | None = None
+        self.last_response_validation: dict[str, Any] | None = None
+        self.last_chart_buffer: io.BytesIO | None = None
 
     def initialize_for_symbol(self, symbol: str, exchange, timeframe=None) -> None:
         """
@@ -196,18 +196,18 @@ class AnalysisEngine:
     @profile_performance
     async def analyze_market(
         self,
-        provider: Optional[str] = None,
-        model: Optional[str] = None,
-        additional_context: Optional[str] = None,
-        previous_response: Optional[str] = None,
-        previous_indicators: Optional[Dict[str, Any]] = None,
-        position_context: Optional[str] = None,
-        performance_context: Optional[str] = None,
+        provider: str | None = None,
+        model: str | None = None,
+        additional_context: str | None = None,
+        previous_response: str | None = None,
+        previous_indicators: dict[str, Any] | None = None,
+        position_context: str | None = None,
+        performance_context: str | None = None,
         brain_service = None,
-        last_analysis_time: Optional[str] = None,
-        current_ticker: Optional[Dict[str, Any]] = None,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+        last_analysis_time: str | None = None,
+        current_ticker: dict[str, Any] | None = None,
+        dynamic_thresholds: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
 
@@ -308,7 +308,7 @@ class AnalysisEngine:
 
         return True
 
-    async def _enrich_market_context(self, current_ticker: Optional[Dict[str, Any]] = None) -> None:
+    async def _enrich_market_context(self, current_ticker: dict[str, Any] | None = None) -> None:
         """
         Enrich market context with overview, microstructure, and coin details
 
@@ -349,7 +349,7 @@ class AnalysisEngine:
                 self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
                 self.context.coin_details = {}
 
-    def _copy_comparison_bucket(self, bucket: Dict[str, Any]) -> Dict[str, float]:
+    def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
         """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
         return {
             'bid_depth': float(bucket.get('bid_depth', 0.0)),
@@ -357,7 +357,7 @@ class AnalysisEngine:
             'imbalance': float(bucket.get('imbalance', 0.0))
         }
 
-    def _build_order_book_comparison_state(self, order_book: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_order_book_comparison_state(self, order_book: dict[str, Any]) -> dict[str, Any]:
         """Persist only compact order book metrics needed for the next-cycle delta."""
         return {
             'timestamp': order_book.get('timestamp'),
@@ -380,9 +380,9 @@ class AnalysisEngine:
 
     def _build_order_book_deltas(
         self,
-        current_order_book: Dict[str, Any],
-        previous_order_book: Optional[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+        current_order_book: dict[str, Any],
+        previous_order_book: dict[str, Any] | None
+    ) -> dict[str, Any]:
         """Build deltas versus the immediately previous analysis-cycle snapshot."""
         if not previous_order_book:
             return {}
@@ -419,7 +419,7 @@ class AnalysisEngine:
             }
         }
 
-    def _apply_microstructure_snapshot_context(self, microstructure: Dict[str, Any]) -> Dict[str, Any]:
+    def _apply_microstructure_snapshot_context(self, microstructure: dict[str, Any]) -> dict[str, Any]:
         """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
         snapshot_context = {
             'is_live_snapshot': True,
@@ -473,18 +473,18 @@ class AnalysisEngine:
 
     async def _generate_ai_analysis(
         self,
-        provider: Optional[str],
-        model: Optional[str],
-        additional_context: Optional[str] = None,
-        previous_response: Optional[str] = None,
-        previous_indicators: Optional[Dict[str, Any]] = None,
-        position_context: Optional[str] = None,
-        performance_context: Optional[str] = None,
-        brain_context: Optional[str] = None,
-        last_analysis_time: Optional[str] = None,
-        dynamic_thresholds: Optional[Dict[str, Any]] = None,
-        precomputed_chart: Optional[Tuple[Optional[io.BytesIO], bool]] = None
-    ) -> Dict[str, Any]:
+        provider: str | None,
+        model: str | None,
+        additional_context: str | None = None,
+        previous_response: str | None = None,
+        previous_indicators: dict[str, Any] | None = None,
+        position_context: str | None = None,
+        performance_context: str | None = None,
+        brain_context: str | None = None,
+        last_analysis_time: str | None = None,
+        dynamic_thresholds: dict[str, Any] | None = None,
+        precomputed_chart: tuple[io.BytesIO | None, bool] | None = None
+    ) -> dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
 
         # Use precomputed chart if available, otherwise generate (fallback)
@@ -493,7 +493,7 @@ class AnalysisEngine:
         else:
             # Fallback for synchronous calls or if parallel logic bypassed
             has_chart_analysis = self.model_manager.supports_image_analysis(provider)
-            chart_image: Optional[io.BytesIO] = None
+            chart_image: io.BytesIO | None = None
 
             if has_chart_analysis:
                 chart_image = await self._generate_chart_image()
@@ -561,10 +561,10 @@ class AnalysisEngine:
         self,
         system_prompt: str,
         prompt: str,
-        provider: Optional[str],
-        model: Optional[str],
-        chart_image: Optional[io.BytesIO] = None
-    ) -> Dict[str, Any]:
+        provider: str | None,
+        model: str | None,
+        chart_image: io.BytesIO | None = None
+    ) -> dict[str, Any]:
         """Execute the AI request with optional chart image for visual analysis.
 
         Args:
@@ -600,7 +600,7 @@ class AnalysisEngine:
         self.last_response_validation = result.get("response_validation")
         return result
 
-    async def _generate_chart_image(self) -> Optional[io.BytesIO]:
+    async def _generate_chart_image(self) -> io.BytesIO | None:
         """Generate chart image for AI visual analysis.
 
         Returns:
@@ -739,7 +739,7 @@ class AnalysisEngine:
         else:
             self.context.weekly_macro_indicators = None
 
-    async def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: Dict[str, Any]) -> str:
+    async def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: dict[str, Any]) -> str:
         """Generate brain context using CURRENT technical indicators.
 
         Offloads blocking ChromaDB queries and CPU-bound embedding operations
@@ -747,7 +747,7 @@ class AnalysisEngine:
 
         Args:
             brain_service: TradingBrainService instance
-            technical_data: Dict of current technical indicators
+            technical_data: dict of current technical indicators
 
         Returns:
             Formatted brain context string

@@ -6,7 +6,7 @@ drawdowns, win rate, and other performance metrics from trade history.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any
 import numpy as np
 
 from src.utils.data_utils import SerializableMixin
@@ -45,7 +45,7 @@ class StatisticsCalculator:
 
     @staticmethod
     def calculate_from_history(
-        trade_history: List[Dict[str, Any]],
+        trade_history: list[dict[str, Any]],
         initial_capital: float = 10000.0
     ) -> TradingStatistics:
         """Calculate all statistics from full trade history using numpy optimization."""
@@ -108,10 +108,10 @@ class StatisticsCalculator:
         )
 
     @staticmethod
-    def _extract_closed_trades(trade_history: List[Dict[str, Any]]) -> List[ClosedTradeResult]:
+    def _extract_closed_trades(trade_history: list[dict[str, Any]]) -> list[ClosedTradeResult]:
         """Extract closed trades with P&L from history."""
-        closed_trades: List[ClosedTradeResult] = []
-        open_position: Optional[Dict[str, Any]] = None
+        closed_trades: list[ClosedTradeResult] = []
+        open_position: dict[str, Any] | None = None
         for trade in trade_history:
             action = trade.get("action", "").upper()
             if action in ("BUY", "SELL"):

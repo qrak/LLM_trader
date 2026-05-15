@@ -5,7 +5,7 @@ Handles brain state management, learning from closed trades, and providing AI co
 
 from datetime import datetime
 from collections import Counter
-from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 from uuid import uuid4
 
 from src.logger.logger import Logger
@@ -65,7 +65,7 @@ class TradingBrainService:
         logger: Logger,
         persistence: "PersistenceManager",
         vector_memory: VectorMemoryService,
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        exit_execution_context: dict[str, Any] | None = None,
         timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
     ):
         """Initialize trading brain service.
@@ -80,12 +80,12 @@ class TradingBrainService:
         self.logger = logger
         self.persistence = persistence
         self.vector_memory = vector_memory
-        self._default_exit_execution_context: Dict[str, str] = build_exit_execution_context(
+        self._default_exit_execution_context: dict[str, str] = build_exit_execution_context(
             **(exit_execution_context or {})
         )
 
         # Cache for computed stats (invalidated when new trades arrive)
-        self._stats_cache: Dict[str, Any] = {}
+        self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(
@@ -102,8 +102,8 @@ class TradingBrainService:
         position: Position,
         close_price: float,
         close_reason: str,
-        entry_decision: Optional[TradeDecision] = None,
-        market_conditions: Optional[Dict[str, Any]] = None
+        entry_decision: TradeDecision | None = None,
+        market_conditions: dict[str, Any] | None = None
     ) -> None:
         """Extract insights from a closed trade and update brain.
 
@@ -203,7 +203,7 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        exit_execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval.
 
@@ -259,6 +259,16 @@ class TradingBrainService:
                 ])
                 if direction_bias['short_count'] == 0:
                     lines.append("- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; lack of data means you may be missing valid setups.")
+
+        # Section 1.5: System Rejection Feedback (closed-loop self-correction)
+        try:
+            blocked_feedback = self.vector_memory.get_blocked_trade_feedback(
+                n=5, max_age_hours=168
+            )
+            if blocked_feedback:
+                lines.extend(["", blocked_feedback])
+        except Exception:
+            pass  # Non-critical: skip if vector memory unavailable
 
         # Section 2: Vector-Retrieved Past Experiences (context-aware)
         vector_context = self.get_vector_context(
@@ -337,11 +347,10 @@ class TradingBrainService:
 
         return "\n".join(lines)
 
-    def get_dynamic_thresholds(self) -> Dict[str, Any]:
+    def get_dynamic_thresholds(self) -> dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
 
-        Returns:
-            Dict with learned thresholds. Defaults used when insufficient data.
+        Returns: dict with learned thresholds. Defaults used when insufficient data.
         """
         thresholds = self._get_cached_stats(
             "thresholds", self.vector_memory.compute_optimal_thresholds
@@ -379,7 +388,7 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        exit_execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Build rich semantic context string for vector storage and retrieval.
 
@@ -413,7 +422,7 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        exit_execution_context: dict[str, Any] | None = None,
     ) -> str:
         """Build a query document that mirrors _build_experience_document format.
 
@@ -464,7 +473,7 @@ class TradingBrainService:
         is_weekend: bool = False,
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        exit_execution_context: dict[str, Any] | None = None,
         k: int = 5
     ) -> str:
         """Get context from similar past experiences via vector retrieval.
@@ -536,7 +545,7 @@ class TradingBrainService:
 
         return vector_context
 
-    def _get_cached_stats(self, key: str, compute_fn) -> Dict[str, Any]:
+    def _get_cached_stats(self, key: str, compute_fn) -> dict[str, Any]:
         """Get stats from cache or compute and cache them.
 
         Args:
@@ -556,9 +565,9 @@ class TradingBrainService:
 
         return self._stats_cache[key]
 
-    def _extract_factor_scores(self, confluence_factors: tuple) -> Dict[str, float]:
+    def _extract_factor_scores(self, confluence_factors: tuple) -> dict[str, float]:
         """Extract factor scores into flat dict for vector metadata."""
-        scores: Dict[str, float] = {}
+        scores: dict[str, float] = {}
         if not confluence_factors:
             return scores
         for factor_name, score in confluence_factors:
@@ -590,8 +599,8 @@ class TradingBrainService:
 
     def _resolve_exit_execution_context(
         self,
-        metadata: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, str]:
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
         """Return SL/TP execution metadata with configured defaults filled in."""
         raw_context = metadata or {}
         context = build_exit_execution_context(
@@ -600,7 +609,7 @@ class TradingBrainService:
             take_profit_type=raw_context.get("take_profit_type"),
             take_profit_check_interval=raw_context.get("take_profit_check_interval"),
         )
-        resolved: Dict[str, str] = {}
+        resolved: dict[str, str] = {}
         for key in EXIT_EXECUTION_KEYS:
             value = context[key]
             if value == "unknown":
@@ -608,7 +617,7 @@ class TradingBrainService:
             resolved[key] = value
         return resolved
 
-    def _resolve_rule_exit_execution_context(self, metadata: Dict[str, Any]) -> Dict[str, str]:
+    def _resolve_rule_exit_execution_context(self, metadata: dict[str, Any]) -> dict[str, str]:
         """Resolve exit execution context from semantic-rule metadata."""
         return self._resolve_exit_execution_context({
             "stop_loss_type": metadata.get("dominant_stop_loss_type") or metadata.get("stop_loss_type"),
@@ -621,7 +630,7 @@ class TradingBrainService:
             ),
         })
 
-    def _format_exit_profile_from_context(self, context: Dict[str, str]) -> str:
+    def _format_exit_profile_from_context(self, context: dict[str, str]) -> str:
         """Format a normalized SL/TP execution context."""
         return self._format_exit_profile(
             context["stop_loss_type"],
@@ -633,7 +642,7 @@ class TradingBrainService:
     def _replace_unknown_exit_profile_text(
         self,
         text: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Replace legacy unknown exit-profile text with resolved rule/default metadata."""
         if self.UNKNOWN_EXIT_PROFILE not in text:
@@ -648,17 +657,17 @@ class TradingBrainService:
             return text
         return text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
-    def _render_rule_text(self, rule: Dict[str, Any]) -> str:
+    def _render_rule_text(self, rule: dict[str, Any]) -> str:
         """Return rule text with legacy unknown exit profile corrected for display."""
         metadata = rule.get("metadata", {})
         return self._replace_unknown_exit_profile_text(rule.get("text", ""), metadata)
 
-    def _dominant_exit_execution_context(self, metas: List[Dict[str, Any]]) -> Dict[str, str]:
+    def _dominant_exit_execution_context(self, metas: list[dict[str, Any]]) -> dict[str, str]:
         """Return the most common resolved SL/TP execution context for a trade group."""
         contexts = [self._resolve_exit_execution_context(meta) for meta in metas]
         if not contexts:
             return self._resolve_exit_execution_context({})
-        dominant_context: Dict[str, str] = {}
+        dominant_context: dict[str, str] = {}
         for key in EXIT_EXECUTION_KEYS:
             values = [context[key] for context in contexts]
             dominant_context[key] = Counter(values).most_common(1)[0][0]
@@ -726,7 +735,7 @@ class TradingBrainService:
         """Return whether a close reason represents any stop-loss style exit."""
         return self._normalize_close_reason(reason) == "stop_loss"
 
-    def _adx_bucket_for_meta(self, meta: Dict[str, Any]) -> str:
+    def _adx_bucket_for_meta(self, meta: dict[str, Any]) -> str:
         """Classify ADX into the reflection buckets used for rule keys."""
         adx = self._as_float(meta.get("adx_at_entry"), 0.0)
         if adx >= 25:
@@ -745,7 +754,7 @@ class TradingBrainService:
         }
         return adx_level_map.get(adx_bucket, adx_bucket.replace("_", " ").title())
 
-    def _build_exit_profile_key(self, meta: Dict[str, Any]) -> str:
+    def _build_exit_profile_key(self, meta: dict[str, Any]) -> str:
         """Build a deterministic key for hard/soft SL/TP execution settings."""
         context = self._resolve_exit_execution_context(meta)
         stop_type = self._safe_key_part(context["stop_loss_type"])
@@ -775,15 +784,15 @@ class TradingBrainService:
 
     def _meta_values(
         self,
-        metas: List[Dict[str, Any]],
+        metas: list[dict[str, Any]],
         key: str,
         *,
         absolute: bool = False,
         positive_only: bool = False,
         non_zero: bool = False,
-    ) -> List[float]:
+    ) -> list[float]:
         """Return normalized numeric metadata values with optional filtering."""
-        values: List[float] = []
+        values: list[float] = []
         for meta in metas:
             if meta.get(key) is None:
                 continue
@@ -797,12 +806,12 @@ class TradingBrainService:
             values.append(value)
         return values
 
-    def _average_meta(self, metas: List[Dict[str, Any]], key: str, **filters: Any) -> float:
+    def _average_meta(self, metas: list[dict[str, Any]], key: str, **filters: Any) -> float:
         """Average a numeric metadata field after applying optional filters."""
         values = self._meta_values(metas, key, **filters)
         return sum(values) / len(values) if values else 0.0
 
-    def _compute_loss_diagnostics(self, losses: List[Dict[str, Any]]) -> Dict[str, float]:
+    def _compute_loss_diagnostics(self, losses: list[dict[str, Any]]) -> dict[str, float]:
         """Compute reused diagnostic averages for losing trades."""
         alignment_values = [m.get("timeframe_alignment") for m in losses if m.get("timeframe_alignment")]
         mixed_count = sum(1 for value in alignment_values if value in ("MIXED", "DIVERGENT"))
@@ -818,9 +827,9 @@ class TradingBrainService:
         self,
         rule_type: str,
         source_pattern: str,
-        metrics: Dict[str, Any],
+        metrics: dict[str, Any],
         **extra: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build common semantic-rule metadata for best, loss, and AI-mistake rules."""
         metadata = {
             "rule_type": rule_type,
@@ -845,7 +854,7 @@ class TradingBrainService:
         metadata.update(extra)
         return metadata
 
-    def _is_sideways_failure(self, meta: Dict[str, Any]) -> bool:
+    def _is_sideways_failure(self, meta: dict[str, Any]) -> bool:
         """Identify losses or flat outcomes where the market failed to trend."""
         pnl = self._as_float(meta.get("pnl_pct"), 0.0)
         if pnl > 0.2:
@@ -867,7 +876,7 @@ class TradingBrainService:
             or "chop" in reasoning
         )
 
-    def _classify_ai_mistake(self, meta: Dict[str, Any]) -> str:
+    def _classify_ai_mistake(self, meta: dict[str, Any]) -> str:
         """Classify whether an outcome contradicts the AI's entry confidence."""
         confidence = str(meta.get("entry_confidence") or meta.get("confidence") or "").upper()
         if confidence not in ("HIGH", "MEDIUM"):
@@ -887,7 +896,7 @@ class TradingBrainService:
             return "low_follow_through_overconfidence"
         return ""
 
-    def _derive_ai_assumption(self, metas: List[Dict[str, Any]]) -> str:
+    def _derive_ai_assumption(self, metas: list[dict[str, Any]]) -> str:
         """Summarize the failed assumption from stored AI reasoning text."""
         joined_reasoning = " ".join(
             str(meta.get("reasoning") or meta.get("ai_reasoning") or "") for meta in metas
@@ -904,12 +913,12 @@ class TradingBrainService:
 
     def _derive_ai_mistake_reason(
         self,
-        mistake_metas: List[Dict[str, Any]],
+        mistake_metas: list[dict[str, Any]],
         mistake_type: str,
         failed_assumption: str,
     ) -> str:
         """Explain what the AI got wrong for a repeated mistake cluster."""
-        reasons: List[str] = []
+        reasons: list[str] = []
         high_confidence_count = sum(
             1 for meta in mistake_metas
             if str(meta.get("entry_confidence") or meta.get("confidence") or "").upper() == "HIGH"
@@ -927,11 +936,11 @@ class TradingBrainService:
 
     def _derive_ai_mistake_adjustment(
         self,
-        mistake_metas: List[Dict[str, Any]],
+        mistake_metas: list[dict[str, Any]],
         mistake_type: str,
     ) -> str:
         """Generate prompt-ready corrections for repeated AI judgment mistakes."""
-        suggestions: List[str] = []
+        suggestions: list[str] = []
         if "sideways" in mistake_type or any(self._is_sideways_failure(meta) for meta in mistake_metas):
             suggestions.append(
                 "downgrade confidence in neutral/low-ADX markets and HOLD unless expansion volume or ADX >= 20 confirms follow-through"
@@ -963,7 +972,7 @@ class TradingBrainService:
                 self.logger.debug("Not enough winning trades for reflection (need 5+)")
                 return
 
-            def build_win_key(meta: Dict[str, Any]) -> str:
+            def build_win_key(meta: dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
                 direction = meta.get("direction", "UNKNOWN")
                 adx_label = self._adx_bucket_for_meta(meta)
@@ -1043,7 +1052,7 @@ class TradingBrainService:
                 self.logger.debug("Not enough losing trades for anti-pattern reflection (need 3+)")
                 return
 
-            def build_loss_key(meta: Dict[str, Any]) -> str:
+            def build_loss_key(meta: dict[str, Any]) -> str:
                 regime = meta.get("market_regime", "NEUTRAL")
                 close_reason = self._normalize_close_reason(meta.get("close_reason", "unknown"))
                 direction = meta.get("direction", "UNKNOWN")
@@ -1121,7 +1130,7 @@ class TradingBrainService:
                 self.logger.debug("Not enough AI mistake samples for reflection (need 2+)")
                 return
 
-            def build_mistake_key(meta: Dict[str, Any]) -> str:
+            def build_mistake_key(meta: dict[str, Any]) -> str:
                 mistake_type = self._classify_ai_mistake(meta)
                 confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
                 direction = meta.get("direction", "UNKNOWN")
@@ -1151,7 +1160,7 @@ class TradingBrainService:
             direction = sample_meta.get("direction", "UNKNOWN")
             regime = sample_meta.get("market_regime", "NEUTRAL")
 
-            def build_base_key(meta: Dict[str, Any]) -> str:
+            def build_base_key(meta: dict[str, Any]) -> str:
                 meta_confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
                 return "|".join([
                     self._safe_key_part(meta_confidence).upper(),
@@ -1200,7 +1209,7 @@ class TradingBrainService:
         except Exception as e:
             self.logger.warning("AI mistake reflection failed: %s", e)
 
-    def _compute_group_metrics(self, group_metas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _compute_group_metrics(self, group_metas: list[dict[str, Any]]) -> dict[str, Any]:
         """Compute outcome statistics for a group of trade metadata records."""
         wins = [m for m in group_metas if m.get("outcome") == "WIN"]
         losses = [m for m in group_metas if m.get("outcome") == "LOSS"]
@@ -1265,13 +1274,13 @@ class TradingBrainService:
             "loss_metas": losses,
         }
 
-    def _derive_failure_reason(self, metrics: Dict[str, Any]) -> str:
+    def _derive_failure_reason(self, metrics: dict[str, Any]) -> str:
         """Derive the primary cause of losses from trade group metrics."""
         losses = metrics["loss_metas"]
         if not losses:
             return ""
 
-        reasons: List[str] = []
+        reasons: list[str] = []
         dominant_reason = metrics["dominant_close_reason"]
 
         diagnostics = self._compute_loss_diagnostics(losses)
@@ -1299,13 +1308,13 @@ class TradingBrainService:
 
         return "; ".join(reasons)
 
-    def _derive_recommended_adjustment(self, metrics: Dict[str, Any]) -> str:
+    def _derive_recommended_adjustment(self, metrics: dict[str, Any]) -> str:
         """Generate actionable guidance to improve profitability for this pattern."""
         losses = metrics["loss_metas"]
         if not losses:
             return ""
 
-        suggestions: List[str] = []
+        suggestions: list[str] = []
 
         diagnostics = self._compute_loss_diagnostics(losses)
         avg_adx = diagnostics["avg_adx"]
@@ -1354,7 +1363,7 @@ class TradingBrainService:
         new_tp: float,
         current_price: float,
         current_pnl_pct: float,
-        market_conditions: Optional[Dict[str, Any]] = None
+        market_conditions: dict[str, Any] | None = None
     ) -> None:
         """Track position update decisions for learning.
 

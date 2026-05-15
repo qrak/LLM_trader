@@ -5,7 +5,7 @@ Defines the contract for configuration access without requiring concrete Config 
 Prevents circular dependencies by using typing.Protocol.
 """
 
-from typing import Any, Dict, Protocol
+from typing import Any, Protocol
 
 
 class ConfigProtocol(Protocol):
@@ -160,7 +160,7 @@ class ConfigProtocol(Protocol):
     def RAG_NEWS_SOURCES(self) -> list[str] | None: ...
 
     @property
-    def RAG_NEWS_SOURCE_URLS(self) -> Dict[str, str]: ...
+    def RAG_NEWS_SOURCE_URLS(self) -> dict[str, str]: ...
 
     @property
     def RAG_NEWS_PAGE_ENRICHMENT(self) -> bool: ...
@@ -253,4 +253,4 @@ class ConfigProtocol(Protocol):
 
     def get_config(self, section: str, key: str, default: Any = None) -> Any: ...
 
-    def get_model_config(self, model_name: str, overrides: Dict[str, Any] | None = None) -> Dict[str, Any]: ...
+    def get_model_config(self, model_name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]: ...

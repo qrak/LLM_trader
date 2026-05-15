@@ -2,7 +2,6 @@
 Market Data Processing Utilities
 Handles data normalization and processing operations.
 """
-from typing import Dict, Optional, List
 
 from src.logger.logger import Logger
 
@@ -17,7 +16,7 @@ class MarketDataProcessor:
         self.logger = logger
         self.format_utils = format_utils
 
-    def extract_top_coins(self, coingecko_data: Optional[Dict]) -> List[str]:
+    def extract_top_coins(self, coingecko_data: dict | None) -> list[str]:
         """Extract top cryptocurrency symbols from CoinGecko data."""
         try:
             if not coingecko_data:
@@ -58,7 +57,7 @@ class MarketDataProcessor:
             self.logger.error("Error extracting top coins: %s", e)
             return []
 
-    def process_coin_data(self, values: Dict) -> Optional[Dict]:
+    def process_coin_data(self, values: dict) -> dict | None:
         """Process individual coin data from market sources."""
         try:
             processed_coin = {}

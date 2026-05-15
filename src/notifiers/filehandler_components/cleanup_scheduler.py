@@ -3,7 +3,7 @@ Cleanup scheduler for periodic message cleanup.
 Handles background tasks and scheduling for message cleanup operations.
 """
 import asyncio
-from typing import Set, Optional
+from typing import Set
 
 
 class CleanupScheduler:
@@ -12,7 +12,7 @@ class CleanupScheduler:
     def __init__(self, cleanup_interval: int, logger):
         self.cleanup_interval = cleanup_interval
         self.logger = logger
-        self.cleanup_task: Optional[asyncio.Task] = None
+        self.cleanup_task: asyncio.Task | None = None
         self.deletion_tasks: Set[asyncio.Task] = set()
         self.is_running = False
 

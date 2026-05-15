@@ -72,7 +72,10 @@ class DashboardServer:
             return "no-store" in cache_control or "no-store" in edge_control
 
         def _build_etag(request, response, path):
-            body = getattr(response, "body", b"")
+            try:
+                body = response.body
+            except AttributeError:
+                body = b""
             if body:
                 digest = hashlib.sha256(body).hexdigest()
                 return f'W/"{digest}"'

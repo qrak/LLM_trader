@@ -3,7 +3,7 @@ Technical Calculator Module.
 
 Calculates technical indicators for market analysis.
 """
-from typing import Dict, Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 import math
@@ -23,15 +23,15 @@ if TYPE_CHECKING:
 class TechnicalCalculator:
     """Core calculator for technical indicators"""
 
-    def __init__(self, logger: Optional[Logger] = None, format_utils=None, ti_factory: "TechnicalIndicatorsFactory" = None):
+    def __init__(self, logger: Logger | None = None, format_utils=None, ti_factory: "TechnicalIndicatorsFactory" = None):
         """Initialize the technical indicator calculator"""
         self.logger = logger
         self.format_utils = format_utils
         self.ti_factory = ti_factory
-        self.ti: Optional[TechnicalIndicators] = None
+        self.ti: TechnicalIndicators | None = None
 
     @profile_performance
-    def get_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, np.ndarray]:
+    def get_indicators(self, ohlcv_data: np.ndarray) -> dict[str, np.ndarray]:
         """Calculate all technical indicators - no caching, always fresh"""
         self.ti = self.ti_factory.create_for_current_timeframe(ohlcv_data)
 
@@ -48,7 +48,7 @@ class TechnicalCalculator:
 
         return indicators
 
-    def _calculate_volume_indicators(self) -> Dict[str, np.ndarray]:
+    def _calculate_volume_indicators(self) -> dict[str, np.ndarray]:
         """Calculate volume-based indicators"""
         return {
             "vwap": self.ti.rolling_vwap(length=20),
@@ -63,7 +63,7 @@ class TechnicalCalculator:
             "ad_line": self.ti.accumulation_distribution_line(),
         }
 
-    def _calculate_momentum_indicators(self) -> Dict[str, np.ndarray]:
+    def _calculate_momentum_indicators(self) -> dict[str, np.ndarray]:
         """Calculate momentum indicators"""
         stoch_k, stoch_d = self.ti.stochastic(period_k=14, smooth_k=3, period_d=3)
 
@@ -88,7 +88,7 @@ class TechnicalCalculator:
 
         return indicators
 
-    def _calculate_volatility_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, np.ndarray]:
+    def _calculate_volatility_indicators(self, ohlcv_data: np.ndarray) -> dict[str, np.ndarray]:
         """Calculate volatility indicators"""
         indicators = {
             "atr": self.ti.atr(length=20),
@@ -129,7 +129,7 @@ class TechnicalCalculator:
 
         return indicators
 
-    def _calculate_trend_indicators(self) -> Dict[str, np.ndarray]:
+    def _calculate_trend_indicators(self) -> dict[str, np.ndarray]:
         """Calculate trend indicators"""
         # Calculate ADX once
         adx, plus_di, minus_di = self.ti.adx(length=14)
@@ -170,7 +170,7 @@ class TechnicalCalculator:
 
         return indicators
 
-    def _calculate_support_resistance_indicators(self) -> Dict[str, np.ndarray]:
+    def _calculate_support_resistance_indicators(self) -> dict[str, np.ndarray]:
         """Calculate support and resistance indicators"""
         indicators = {
             "kurtosis": self.ti.kurtosis(length=20),
@@ -223,7 +223,7 @@ class TechnicalCalculator:
 
         return indicators
 
-    def get_long_term_indicators(self, ohlcv_data: np.ndarray) -> Dict[str, Any]:
+    def get_long_term_indicators(self, ohlcv_data: np.ndarray) -> dict[str, Any]:
         """Calculate long-term indicators for historical data - no caching, always fresh"""
         # Create new TI instance for long-term calculations (avoid interference with regular timeframe indicators)
         ti_lt = self.ti_factory.create_for_long_term(ohlcv_data)
@@ -256,7 +256,7 @@ class TechnicalCalculator:
 
         return result
 
-    def get_weekly_macro_indicators(self, weekly_ohlcv_data: np.ndarray) -> Dict[str, Any]:
+    def get_weekly_macro_indicators(self, weekly_ohlcv_data: np.ndarray) -> dict[str, Any]:
         """Calculate macro indicators using weekly data (200W SMA methodology) - no caching, always fresh"""
         ti_weekly = self.ti_factory.create_for_weekly(weekly_ohlcv_data)
         available_weeks = len(weekly_ohlcv_data)
@@ -295,15 +295,15 @@ class TechnicalCalculator:
 
     def _compute_weekly_macro_trend_analysis(
         self, ti: TechnicalIndicators, available_weeks: int,
-        weekly_sma_values: Dict[int, float], ohlcv_data: np.ndarray, price_change_pct: float,
-        sma_arrays: Dict[str, np.ndarray] = None
-    ) -> Dict[str, Any]:
+        weekly_sma_values: dict[int, float], ohlcv_data: np.ndarray, price_change_pct: float,
+        sma_arrays: dict[str, np.ndarray] = None
+    ) -> dict[str, Any]:
         """Weekly macro trend using 200W SMA methodology with timestamps.
 
         Args:
             ti: TechnicalIndicators instance with weekly data
             available_weeks: Number of weeks available
-            weekly_sma_values: Dict of current SMA values
+            weekly_sma_values: dict of current SMA values
             ohlcv_data: Weekly OHLCV array for timestamp extraction
             price_change_pct: Already-calculated price change percentage from _compute_change_metrics
             sma_arrays: Pre-calculated SMA arrays to avoid redundant computation
@@ -422,8 +422,8 @@ class TechnicalCalculator:
 
     def _compute_sma_sets(self, ti: TechnicalIndicators, available_days: int):
         sma_periods = [20, 50, 100, 200]
-        sma_values: Dict[int, float] = {}
-        volume_sma_values: Dict[int, float] = {}
+        sma_values: dict[int, float] = {}
+        volume_sma_values: dict[int, float] = {}
         for period in sma_periods:
             if available_days >= period:
                 # Use technical indicators directly instead of extracted arrays
@@ -457,7 +457,7 @@ class TechnicalCalculator:
         return None
 
     def _compute_macro_trend_analysis(self, ti: TechnicalIndicators, available_days: int,
-                                      sma_values: Dict[int, float], price_change_pct: float) -> Dict[str, Any]:
+                                      sma_values: dict[int, float], price_change_pct: float) -> dict[str, Any]:
         """Analyze macro trend using SMA relationships and 365-day context.
 
         Args:
@@ -571,9 +571,9 @@ class TechnicalCalculator:
 
         return analysis
 
-    def _compute_daily_indicators(self, ti: TechnicalIndicators, available_days: int) -> Dict[str, Any]:
+    def _compute_daily_indicators(self, ti: TechnicalIndicators, available_days: int) -> dict[str, Any]:
         """Compute daily indicators based on available data."""
-        out: Dict[str, Any] = self._initialize_daily_indicators()
+        out: dict[str, Any] = self._initialize_daily_indicators()
 
         if available_days >= 14:
             self._compute_14_day_indicators(ti, out)
@@ -586,7 +586,7 @@ class TechnicalCalculator:
 
         return out
 
-    def _initialize_daily_indicators(self) -> Dict[str, Any]:
+    def _initialize_daily_indicators(self) -> dict[str, Any]:
         """Initialize dictionary with daily indicator keys."""
         return {
             'daily_rsi': None,
@@ -604,7 +604,7 @@ class TechnicalCalculator:
             'daily_ichimoku_span_b': None
         }
 
-    def _compute_14_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
+    def _compute_14_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
         """Compute indicators that require 14 days of data."""
         # RSI
         rsi_vals = ti.rsi(length=14)
@@ -630,7 +630,7 @@ class TechnicalCalculator:
         if obv_vals is not None and not math.isnan(obv_vals[-1]):
             out['daily_obv'] = float(obv_vals[-1])
 
-    def _compute_26_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
+    def _compute_26_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
         """Compute indicators that require 26 days of data."""
         macd_line, macd_signal, macd_hist = ti.macd()
 
@@ -641,7 +641,7 @@ class TechnicalCalculator:
         if macd_hist is not None and not math.isnan(macd_hist[-1]):
             out['daily_macd_hist'] = float(macd_hist[-1])
 
-    def _compute_52_day_indicators(self, ti: TechnicalIndicators, out: Dict[str, Any]) -> None:
+    def _compute_52_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
         """Compute indicators that require 52 days of data."""
         conversion, base, span_a, span_b = ti.ichimoku_cloud()
 
@@ -656,7 +656,7 @@ class TechnicalCalculator:
         # Handle span B
         self._process_ichimoku_span(span_b, out, 'daily_ichimoku_span_b')
 
-    def _process_ichimoku_span(self, span_data, out: Dict[str, Any], key: str) -> None:
+    def _process_ichimoku_span(self, span_data, out: dict[str, Any], key: str) -> None:
         """Process Ichimoku span data safely."""
         value = get_last_valid_value(span_data)
         if value is not None:

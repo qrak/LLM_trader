@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +20,7 @@ class PatternEngine:
         self.lookahead = lookahead
         self.format_utils = format_utils
 
-    def detect_patterns(self, _ohlcv: np.ndarray, _timestamps: List[datetime] = None) -> Dict[str, List[Dict[str, Any]]]:
+    def detect_patterns(self, _ohlcv: np.ndarray, _timestamps: list[datetime] = None) -> dict[str, list[dict[str, Any]]]:
         """
         Detect patterns from OHLCV data.
 

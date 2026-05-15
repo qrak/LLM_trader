@@ -38,16 +38,10 @@ class RSSCrawl4AINewsProvider:
     * ``filter_by_age(articles, max_age_hours) -> list[dict]``
     """
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol") -> None:
+    def __init__(self, logger: Logger, config: "ConfigProtocol", enricher: Crawl4AIEnricher) -> None:
         self.logger = logger
         self.config = config
-
-        self._enricher = Crawl4AIEnricher(
-            concurrency=config.RAG_NEWS_CRAWL_CONCURRENCY,
-            timeout=float(config.RAG_NEWS_CRAWL_TIMEOUT),
-            min_chars=config.RAG_NEWS_ENRICH_MIN_CHARS,
-            use_crawl4ai=config.RAG_NEWS_CRAWL4AI_ENABLED,
-        )
+        self._enricher = enricher
 
     # ------------------------------------------------------------------
     # Public API expected by NewsManager
