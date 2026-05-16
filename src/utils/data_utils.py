@@ -213,6 +213,14 @@ class SerializableMixin:
             item_type = args[0]
             return [SerializableMixin._convert_value(item, item_type) for item in value]
 
+        if origin is tuple and isinstance(value, (list, tuple)):
+            if len(args) == 2 and args[1] is Ellipsis:
+                return tuple(SerializableMixin._convert_value(item, args[0]) for item in value)
+            return tuple(
+                SerializableMixin._convert_value(item, args[index]) if index < len(args) else item
+                for index, item in enumerate(value)
+            )
+
         # Handle datetime
         if target_type is datetime and isinstance(value, str):
             try:

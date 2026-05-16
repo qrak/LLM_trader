@@ -1,14 +1,14 @@
 """Risk Manager for converting signals into actionable trade parameters."""
 
 import math
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 from src.contracts.risk_contract import RiskManagerProtocol
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
-    from src.trading.data_models import RiskAssessment
+    from src.trading.data_models import RiskAssessment, MarketConditions
 
 class RiskManager(RiskManagerProtocol):
     """
@@ -92,18 +92,18 @@ class RiskManager(RiskManagerProtocol):
         stop_loss: float | None = None,
         take_profit: float | None = None,
         position_size: float | None = None,
-        market_conditions: dict[str, Any] | None = None
+        market_conditions: "MarketConditions | None" = None
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
         """
         from src.trading.data_models import RiskAssessment
-        market_conditions = market_conditions or {}
+        mc = market_conditions
         direction = "LONG" if signal == "BUY" else "SHORT"
 
         # 1. Extract or Default ATR/Volatility
-        atr = market_conditions.get("atr", current_price * 0.02)
-        atr_pct = market_conditions.get("atr_percentage", (atr / current_price) * 100)
+        atr = mc.atr if mc and mc.atr > 0 else current_price * 0.02
+        atr_pct = mc.atr_percentage if mc and mc.atr_percentage > 0 else (atr / current_price) * 100
 
         # Determine volatility level
         if atr_pct > 3:

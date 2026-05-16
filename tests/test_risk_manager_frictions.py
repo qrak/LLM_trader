@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.managers.risk_manager import RiskManager
+from src.trading.data_models import MarketConditions
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ def _entry(
     stop_loss: float | None = None,
     take_profit: float | None = None,
     position_size: float | None = None,
-    market_conditions: dict | None = None,
+    market_conditions: MarketConditions | None = None,
 ):
     return manager.calculate_entry_parameters(
         signal=signal,
@@ -219,7 +220,7 @@ class TestGuardInvalidSlTp:
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         # Provide a clearly invalid SL, with no ATR to override the default dynamic calc
         assessment = _entry(mgr, signal="BUY", stop_loss=102.0, current_price=100.0,
-                            market_conditions={"atr": 1.0, "atr_percentage": 1.0})
+                            market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
 
         frictions = mgr.get_and_clear_frictions()
         assert any(f["guard_type"] == "sl_below_entry" for f in frictions)
@@ -228,7 +229,7 @@ class TestGuardInvalidSlTp:
         """LONG with TP <= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         assessment = _entry(mgr, signal="BUY", take_profit=95.0, current_price=100.0,
-                            market_conditions={"atr": 2.0, "atr_percentage": 2.0})
+                            market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
 
         frictions = mgr.get_and_clear_frictions()
         # TP 5% below entry for LONG should be caught
@@ -238,7 +239,7 @@ class TestGuardInvalidSlTp:
         """SHORT with SL <= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="SELL", stop_loss=95.0, current_price=100.0,
-               market_conditions={"atr": 1.0, "atr_percentage": 1.0})
+               market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
 
         frictions = mgr.get_and_clear_frictions()
         assert any(f["guard_type"] == "sl_below_entry" for f in frictions)
@@ -247,7 +248,7 @@ class TestGuardInvalidSlTp:
         """SHORT with TP >= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="SELL", take_profit=105.0, current_price=100.0,
-               market_conditions={"atr": 2.0, "atr_percentage": 2.0})
+               market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
 
         frictions = mgr.get_and_clear_frictions()
         assert len(frictions) >= 1
@@ -296,7 +297,7 @@ class TestFrictionDictContract:
     def test_sl_below_entry_schema(self):
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="BUY", stop_loss=102.0, current_price=100.0,
-               market_conditions={"atr": 1.0, "atr_percentage": 1.0})
+               market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
         f = next(f for f in mgr.get_and_clear_frictions() if f["guard_type"] == "sl_below_entry")
 
         assert self.MANDATORY_KEYS.issubset(f.keys())
@@ -308,7 +309,7 @@ class TestFrictionDictContract:
     def test_tp_below_entry_schema(self):
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="LONG", take_profit=95.0, current_price=100.0, stop_loss=None,
-               market_conditions={"atr": 2.0, "atr_percentage": 2.0})
+               market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
         tp_frictions = [f for f in mgr.get_and_clear_frictions() if f["guard_type"] == "tp_below_entry"]
         if tp_frictions:  # only if AI TP was used (prevailed over dynamic for LONG)
             f = tp_frictions[0]
@@ -326,7 +327,7 @@ class TestVolatilityLevelInFrictions:
     def test_high_volatility_label_in_sl_max_friction(self):
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="BUY", stop_loss=80.0, current_price=100.0,
-               market_conditions={"atr": 5.0, "atr_percentage": 5.0})
+               market_conditions=MarketConditions(atr=5.0, atr_percentage=5.0))
 
         f = next(f for f in mgr.get_and_clear_frictions() if f["guard_type"] == "sl_distance_max")
         assert f["volatility_level"] == "HIGH"
@@ -334,7 +335,7 @@ class TestVolatilityLevelInFrictions:
     def test_low_volatility_label_in_sl_min_friction(self):
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         _entry(mgr, signal="BUY", stop_loss=99.8, current_price=100.0,
-               market_conditions={"atr": 1.0, "atr_percentage": 1.0})
+               market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
 
         f = next(f for f in mgr.get_and_clear_frictions() if f["guard_type"] == "sl_distance_min")
         assert f["volatility_level"] == "LOW"
@@ -350,7 +351,7 @@ class TestDefaultAtrFallback:
         """Default ATR = current_price * 0.02 (100 * 0.02 = 2.0)."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         assessment = _entry(mgr, signal="BUY", stop_loss=95.0, take_profit=110.0,
-                            market_conditions={})
+                            market_conditions=MarketConditions())
 
         # Dynamic SL = 100 - 2*2 = 96, TP = 100 + 4*2 = 108
         # But AI SL 95 is used since it's provided
@@ -378,5 +379,5 @@ class TestRiskRewardRatio:
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         # SL at 100 when price is 100 → sl_distance 0
         assessment = _entry(mgr, signal="BUY", stop_loss=100.0, current_price=100.0,
-                            market_conditions={"atr": 1.0, "atr_percentage": 1.0})
+                            market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
         assert assessment.rr_ratio >= 0

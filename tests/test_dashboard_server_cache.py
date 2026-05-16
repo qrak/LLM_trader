@@ -12,6 +12,11 @@ def _build_server(tmp_path):
         DEMO_QUOTE_CAPITAL=10000.0,
         DASHBOARD_ENABLE_CORS=False,
         DASHBOARD_CORS_ORIGINS=[],
+        TIMEFRAME="4h",
+        STOP_LOSS_TYPE="hard",
+        STOP_LOSS_CHECK_INTERVAL="15m",
+        TAKE_PROFIT_TYPE="hard",
+        TAKE_PROFIT_CHECK_INTERVAL="15m",
     )
     return DashboardServer(
         brain_service=MagicMock(),
@@ -88,6 +93,34 @@ def test_vector_query_endpoint_bypasses_cache_for_search_queries(tmp_path):
 
     with TestClient(server.app) as client:
         response = client.get("/api/brain/vectors?query=btc&limit=50")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == (
+        "no-store, no-cache, must-revalidate, proxy-revalidate"
+    )
+    assert response.headers["CDN-Cache-Control"] == "no-store"
+    assert response.headers["Cloudflare-CDN-Cache-Control"] == response.headers["CDN-Cache-Control"]
+
+
+def test_brain_lifecycle_endpoint_bypasses_cache(tmp_path):
+    server = _build_server(tmp_path)
+
+    with TestClient(server.app) as client:
+        response = client.get("/api/brain/lifecycle")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == (
+        "no-store, no-cache, must-revalidate, proxy-revalidate"
+    )
+    assert response.headers["CDN-Cache-Control"] == "no-store"
+    assert response.headers["Cloudflare-CDN-Cache-Control"] == response.headers["CDN-Cache-Control"]
+
+
+def test_brain_refresh_endpoint_bypasses_cache(tmp_path):
+    server = _build_server(tmp_path)
+
+    with TestClient(server.app) as client:
+        response = client.post("/api/brain/refresh")
 
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == (

@@ -1,11 +1,21 @@
 """Semantic rule helpers for vector memory."""
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 class VectorMemoryRulesMixin:
     """Semantic rule storage and retrieval behavior."""
+
+    if TYPE_CHECKING:
+        logger: Any
+        _semantic_rules_collection: Any
+
+        def _ensure_initialized(self) -> bool: ...
+
+        def _encode_embedding(self, text: str) -> list[float]: ...
+
+        def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]: ...
 
     def store_semantic_rule(
         self,
@@ -18,13 +28,14 @@ class VectorMemoryRulesMixin:
             return False
 
         try:
-            embedding = self._embedding_model.encode(rule_text).tolist()
+            embedding = self._encode_embedding(rule_text)
             rule_meta = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "active": True,
             }
             if metadata:
                 rule_meta.update(metadata)
+            rule_meta = self._sanitize_metadata(rule_meta)
 
             self._semantic_rules_collection.upsert(
                 ids=[rule_id],
@@ -120,7 +131,7 @@ class VectorMemoryRulesMixin:
             if count == 0:
                 return []
 
-            query_embedding = self._embedding_model.encode(current_context).tolist()
+            query_embedding = self._encode_embedding(current_context)
 
             results = self._semantic_rules_collection.query(
                 query_embeddings=[query_embedding],

@@ -117,6 +117,12 @@ class DashboardServer:
                     "no-store",
                 )
 
+            if path.endswith("/brain/refresh") or path.endswith("/brain/lifecycle"):
+                return (
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
+
             if path.endswith("/vectors") and query_params.get("query"):
                 return (
                     "no-store, no-cache, must-revalidate, proxy-revalidate",

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.managers.risk_manager import RiskManager
+from src.trading.data_models import MarketConditions
 
 
 def _make_config(
@@ -34,7 +35,7 @@ def _calculate_entry(manager: RiskManager, position_size: float | None, confiden
         stop_loss=95.0,
         take_profit=110.0,
         position_size=position_size,
-        market_conditions={"atr": 2.0, "atr_percentage": 2.0},
+        market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0),
     )
 
 

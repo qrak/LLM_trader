@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-05-16 - Trading Brain Close Lifecycle and Vector Memory Hardening
+
+### Changed
+
+- **trading_strategy.py**: Centralized trade-decision recording so saved BUY/SELL/UPDATE/CLOSE decisions also refresh short-term trading memory.
+- **trading_strategy.py**: Close-time brain learning now runs through a thread offload after the close decision, statistics rebuild, and position clear are persisted.
+- **trading_strategy.py** and **dashboard_state.py**: Trade-close brain learning now emits dashboard lifecycle notifications and invalidates brain, position, rule, memory, vector, performance, and statistics caches.
+- **vector_memory.py**: Added serialized embedding-model access and stricter Chroma metadata sanitation for non-finite and unsupported values.
+- **dashboard/routers/brain.py**: Moved vector detail retrieval, stats, and sorting work off the async route thread and made legacy numeric metadata sorting safe.
+- **dashboard/routers/brain.py**: Added brain lifecycle and refresh endpoints plus structured risk-management data in the position payload while preserving existing flat fields.
+- **dashboard/static**: Added overview SL/TP execution policy badges, brain lifecycle status, vector freshness, trade-friction rendering, and safer legacy metadata formatting.
+- **persistence_manager.py**: Entry-decision lookup now filters by symbol when available and chooses the nearest timestamp match; position cache updates only after successful disk writes.
+- **indicator_classifier.py** and **brain.py**: Corrected `ExitExecutionContext` type contracts used by trading brain context building.
+- **brain.py**: Split the monolithic trading brain into focused collaborator classes while keeping `TradingBrainService` as the stable public facade and preserving the public `vector_memory` access path.
+- **brain_context.py**, **brain_experience.py**, **brain_exit_profiles.py**, **brain_patterns.py**, and **brain_reflection.py**: Extracted prompt-context/threshold lookup, experience recording, SL/TP exit-profile normalization, trade-pattern diagnostics, and semantic-rule rebuild logic into cohesive modules.
+- **indicator_classifier.py**: Preserved direct mandatory config attribute access for SL/TP execution settings; tests now supply required config fields instead of relying on missing-attribute fallbacks.
+- **.github/skills/refactor/SKILL.md**: Clarified refactor validation guidance to avoid repeatedly rerunning already-green suites unless relevant code changed or a final validation boundary is reached.
+- **data_utils.py**: `SerializableMixin.from_dict()` now restores tuple fields from serialized lists.
+
+### Added
+
+- Regression tests for memory refresh after saved decisions, vector metadata sanitation, dashboard vector sorting, entry-decision matching, failed position writes, and tuple deserialization.
+- Regression coverage and fixture updates for mandatory SL/TP config contracts in indicator classification and trading-strategy friction capture.
+- Dashboard regression tests for lifecycle/risk payloads, brain refresh cache invalidation, cache headers, blocked-trade routing, and static frontend bindings.
+
+## 2026-05-15 - Prompt Consistency and Continuity Sanitization
+
+### Changed
+
+- **template_manager.py**: Sanitized previous-analysis continuity text so old response-format/schema instructions cannot be reintroduced under `PREVIOUS ANALYSIS CONTEXT`.
+- **template_manager.py**: Previous decision snapshots now use the last valid fenced `analysis` JSON block, avoiding schema/example JSON when a response contains multiple fenced blocks.
+- **template_manager.py**: Clarified that markdown-heading restrictions apply to the model output only, and made HOLD/open-position and UPDATE semantics more explicit.
+- **prompt_builder.py**: Added preflight warning detection for stale prompt instructions leaking into previous-analysis context and made untrusted-context linting robust to wording variants.
+
+### Added
+
+- **test_prompt_consistency.py**: Regression coverage for previous-context sanitization, stale prompt-section removal, output-heading wording, HOLD semantics, and UPDATE progress wording.
+
 ## 2026-05-14 - Code Quality: Eliminate Dynamic Attribute Access and Improve Type Safety
 
 ### Changed — Dynamic Attribute Access (Phase 1)

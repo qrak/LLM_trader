@@ -1,9 +1,9 @@
 """Protocol definition for RiskManager interface"""
 
-from typing import Protocol, Any, TYPE_CHECKING
+from typing import Any, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.trading.data_models import RiskAssessment
+    from src.trading.data_models import RiskAssessment, MarketConditions
 
 class RiskManagerProtocol(Protocol):
     """
@@ -19,7 +19,7 @@ class RiskManagerProtocol(Protocol):
         stop_loss: float | None = None,
         take_profit: float | None = None,
         position_size: float | None = None,
-        market_conditions: dict[str, Any] | None = None
+        market_conditions: "MarketConditions | None" = None
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
@@ -31,4 +31,8 @@ class RiskManagerProtocol(Protocol):
 
     def validate_signal(self, signal: str) -> bool:
         """Validate if a signal is actionable."""
+        ...
+
+    def get_and_clear_frictions(self) -> list[dict[str, Any]]:
+        """Return accumulated risk frictions and clear the buffer."""
         ...
