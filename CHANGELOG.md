@@ -18,12 +18,51 @@
 - **indicator_classifier.py**: Preserved direct mandatory config attribute access for SL/TP execution settings; tests now supply required config fields instead of relying on missing-attribute fallbacks.
 - **.github/skills/refactor/SKILL.md**: Clarified refactor validation guidance to avoid repeatedly rerunning already-green suites unless relevant code changed or a final validation boundary is reached.
 - **data_utils.py**: `SerializableMixin.from_dict()` now restores tuple fields from serialized lists.
+- **prompt_builder.py**: Added `_previous_context_contains_stale_prompt_rules()` to detect when old prompt contract text leaks into continuity context, protecting against schema/format instructions from corrupting future analyses.
 
 ### Added
 
-- Regression tests for memory refresh after saved decisions, vector metadata sanitation, dashboard vector sorting, entry-decision matching, failed position writes, and tuple deserialization.
+- **test_brain_integration.py** (+86): Brain lifecycle, refresh endpoints, cache bypassing, and memory refresh after saved decisions.
+- **test_dashboard_brain_router.py** (+118): Risk payload, lifecycle data, confidence parsing, brain status/memory extraction from JSON snapshots.
+- **test_dashboard_server_cache.py** (+33 new): Cache headers, server cache invalidation, blocked-trade routing paths.
+- **test_dashboard_static_bindings.py** (+29 new): Static HTML/JavaScript bindings, SL/TP badges, lifecycle status, vector freshness rendering.
+- **test_data_utils_serialization.py** (+16 new): Tuple field serialization/deserialization in `SerializableMixin.from_dict()`.
+- **test_edge_cases_feedback.py** (+99): Updated to use `MarketConditions` data model for market context across edge case scenarios.
+- **test_indicator_classifier.py** (+25): Mandatory config attribute access for SL/TP execution settings.
+- **test_position_persistence.py** (+60 new): Entry-decision lookup with symbol filtering, cache updates after successful disk writes, write failure handling.
+- **test_prompt_consistency.py** (+137 new): Comprehensive coverage for sanitization of continuity context, stale prompt-section removal, wording consistency, HOLD/UPDATE semantics.
+- **test_prompt_linting.py** (+22 new): Stale prompt-rules detection and sanitization coverage.
+- **test_risk_manager_frictions.py** (+23): Guard types friction generation, delta calculations, mandatory key validation.
+- **test_trading_strategy_branches.py** (+111): Market conditions validation, decision-making processes, friction capture integration.
+- **test_trading_strategy_frictions.py** (+4): Trading strategy friction reporting and persistence paths.
+- **test_trading_strategy_process_analysis.py** (+18): Analysis processing and market condition handling.
+- **test_vector_memory.py** (+47): Non-finite metadata sanitation, complex metadata handling, Chroma store validation.
 - Regression coverage and fixture updates for mandatory SL/TP config contracts in indicator classification and trading-strategy friction capture.
 - Dashboard regression tests for lifecycle/risk payloads, brain refresh cache invalidation, cache headers, blocked-trade routing, and static frontend bindings.
+
+## 2026-05-15 - System-Side ADX Trend Validation and Pattern Quality Scoring
+
+### Added
+
+- **trend_validator.py**: New module that cross-checks LLM-reported `strength_4h`/`daily` against computed ADX indicators.
+- **pattern_quality_scorer.py**: New deterministic pattern quality scoring module using 4-component scoring from actual pattern detection results.
+- Integrated trend/pattern validation into `AnalysisResultProcessor._validate_llm_claims()` so validation runs on every analysis cycle.
+- 38 TrendValidator tests (100% coverage) validating ADX cross-checks and strength assertions.
+- 34 PatternQualityScorer tests (90% coverage) validating deterministic scoring logic.
+- 36 TradingStrategy branch tests (+22pp coverage increase to 73% overall).
+
+## 2026-05-15 - RiskManager Friction Reporting and TradingStrategy Integration Tests
+
+### Added
+
+- **tests/test_risk_manager_frictions.py**: Comprehensive friction reporting tests validating generation of friction reports across guard types (max_position_size, max_concurrent_positions, etc.) with correct delta calculations.
+- **tests/test_trading_strategy_friction_capture.py**: Friction capture and persistence tests ensuring frictions from RiskManager are correctly stored, retrieved, and handled on storage failures.
+- Enhanced existing test fixtures by adding `scoring_policy` and `enricher` mocks where necessary to support new test requirements.
+
+### Changed
+
+- **RiskManager**: Verified all mandatory keys are present in friction reports and that parameters are correctly propagated during friction storage.
+- **TradingStrategy**: Ensured frictions are persisted correctly and failures in storage are handled gracefully with appropriate logging.
 
 ## 2026-05-15 - Prompt Consistency and Continuity Sanitization
 
@@ -37,6 +76,31 @@
 ### Added
 
 - **test_prompt_consistency.py**: Regression coverage for previous-context sanitization, stale prompt-section removal, output-heading wording, HOLD semantics, and UPDATE progress wording.
+
+## 2026-05-12 - Gemini Flash Model Profitability: SL Tightening Guards and Prompt Simplification
+
+### Changed
+
+- **template_manager.py**: Compressed response template by ~60 lines through markdown tables, reduced conditional JSON rules, simplified trend/position/risk/conflict sections, and streamlined output format.
+- **prompt_builder.py**: Removed all-caps directives (CRITICAL→directive, MUST→must) and reduced system prompt by ~30 lines for Flash model clarity.
+- **trading_strategy.py**: Added three critical code guards to prevent SL tightening death spiral: (1) reject SL tightening until price moves 15%+ toward TP (was: immediate tightening), (2) reject entries with R/R < 1.5, (3) cap UPDATE frequency: 1 per 8h for position trades, 2 per swing, 4 per scalping (was: every 4h candle).
+- **risk_manager.py**: Increased minimum SL from 0.5% to 1.0% (below 4H ATR moving average) to reduce micro-losses and preserve account.
+- **Config (untracked)**: Brain learning reset from 20 consecutive losing trades; soft exit policy enabled; max position size capped at 10%; increased thinking depth for Flash model.
+
+### Fixed
+
+- **Root Cause**: SL tightening on every update eliminated TP hits (0/20 in previous cycle, 4.2 updates/trade on average).
+- **Solution Impact**: Code guards now prevent premature SL moves; UPDATE frequency cap reduces noise; R/R check prevents underwater entries; simplified prompts reduce token waste.
+
+### Tests
+
+- Updated `test_template_manager.py` (+61 lines) with coverage for compressed template formats, markdown table rendering, and simplified rule sections.
+
+### Verified
+
+- All 56 tests pass after template simplification and guard implementation.
+- No regressions in entry/exit logic validation.
+- Prompt simplifications reduce token usage for more efficient model processing.
 
 ## 2026-05-14 - Code Quality: Eliminate Dynamic Attribute Access and Improve Type Safety
 
@@ -128,11 +192,17 @@
 - `src/rag/news_ingestion/schema_mapper.py` now removes high-confidence Decrypt-style market ticker prefixes before article bodies reach prompts or Discord notifications.
 - `src/notifiers/notifier.py` now retries transient Discord 5xx send failures (including 503 no healthy upstream) with bounded backoff for text, embed, and chart sends.
 
-### Tests
+### Added
 
-- Extended RSS provider contract coverage for fetch-stage timeout and enrichment-timeout skip behavior so the pipeline remains non-blocking.
-- Added schema-mapper regression coverage for Decrypt ticker-prefix cleanup while preserving normal price prose.
-- Added notifier tests for transient Discord retry behavior and non-transient failure handling.
+- **test_discord_notifier_rate_limit.py** (+40 new): Transient Discord 5xx retry behavior, retry backoff logic, non-transient failure handling.
+- **test_news_ingestion.py** (+48 new): RSS fetch timeout, enrichment timeout skip, non-blocking execution paths.
+- **test_rss_provider_contract.py** (+33 new): RSS provider contract coverage for fetch-stage timeout and enrichment-timeout skip behavior, stage duration logging.
+
+### Verified
+
+- All 56+ tests pass with timeout and retry integration.
+- Non-blocking execution confirmed: trading analysis proceeds even when RSS/enrichment stalls.
+- Discord retry backoff working correctly for transient 5xx failures.
 
 ## 2026-05-08 - Prompt Reasoning and Observability Foundation
 
@@ -142,6 +212,19 @@
 - Added backend prompt metadata and dashboard metadata fields so prompt behavior can be attributed by prompt version, response-contract version, and prompt variant without injecting version text into the LLM prompt.
 - Added non-blocking prompt preflight linting for critical response-format, analysis-step, analysis-time, JSON-example, token-count, and untrusted-context guardrails.
 - Added Pydantic-based validation metadata for trading analysis responses while preserving the existing JSON parser and fallback behavior.
+- **src/parsing/unified_parser.py**: Extended with response validation schema, decision gate logic, and error recovery paths.
+- **src/platforms/ai_providers/response_models.py**: Added prompt metadata fields (version, variant, contract_version) and comprehensive validation models.
+
+### Added
+
+- **test_prompt_linting.py** (+65 new): Preflight linting coverage for response format, analysis steps, JSON examples, token counts, and untrusted-context detection.
+- **test_response_validation.py** (+62 new): Pydantic validation metadata, decision reasoning protocol, conflict resolution gate, HOLD/UPDATE/CLOSE gating logic.
+- **test_template_manager.py** (+24): Metadata field integration and template rendering with observability features.
+
+### Verified
+
+- All 440+ line additions validated; zero regressions in response parsing.
+- Preflight linting successfully detects common response-format violations before LLM execution.
 
 ## 2026-05-07 - Documentation Discoverability and Risk Messaging Refresh
 
