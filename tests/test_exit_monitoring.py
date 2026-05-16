@@ -211,6 +211,7 @@ async def test_hard_monitor_stops_after_first_exit_closes_position():
         strategy.current_position = None
         return "stop_loss"
 
+    strategy.check_position = AsyncMock(side_effect=close_on_stop)
     strategy.check_stop_loss = AsyncMock(side_effect=close_on_stop)
     strategy.check_take_profit = AsyncMock(return_value=None)
     context.position_monitor.trading_strategy = strategy
@@ -222,7 +223,7 @@ async def test_hard_monitor_stops_after_first_exit_closes_position():
     )
 
     assert close_reason == "stop_loss"
-    strategy.check_stop_loss.assert_awaited_once_with(94.0)
+    strategy.check_position.assert_awaited_once_with(94.0)
     strategy.check_take_profit.assert_not_called()
     assert context.persistence.state["last_stop_loss_check_at"] == now.isoformat()
 

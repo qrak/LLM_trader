@@ -2,7 +2,8 @@
 Market Data Fetcher
 Handles fetching market data from various sources like CoinGecko and exchanges.
 """
-from typing import Dict, Optional, List, TYPE_CHECKING
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.defillama import DefiLlamaClient, MacroMarketData
@@ -14,7 +15,7 @@ class MarketDataFetcher:
     """Handles fetching market data from external APIs."""
 
     def __init__(self, logger: Logger, coingecko_api=None, exchange_manager=None, market_api=None,
-                 defillama_client: Optional[DefiLlamaClient] = None):
+                 defillama_client: DefiLlamaClient | None = None):
         # pylint: disable=too-many-arguments
         """Initialize MarketDataFetcher."""
         self.logger = logger
@@ -23,7 +24,7 @@ class MarketDataFetcher:
         self.market_api = market_api
         self.defillama_client = defillama_client
 
-    async def fetch_global_market_data(self) -> Optional[Dict]:
+    async def fetch_global_market_data(self) -> dict | None:
         """Fetch global market data from CoinGecko."""
         if not self.coingecko_api:
             self.logger.error("CoinGecko API client not initialized")
@@ -35,7 +36,7 @@ class MarketDataFetcher:
             self.logger.error("Error fetching global market data: %s", e)
             return None
 
-    async def fetch_macro_data(self) -> Optional[MacroMarketData]:
+    async def fetch_macro_data(self) -> MacroMarketData | None:
         """Fetch macro market data (Stablecoins, TVL) from DefiLlama."""
         if not self.defillama_client:
             return None
@@ -46,7 +47,7 @@ class MarketDataFetcher:
             self.logger.error("Error fetching macro data from DefiLlama: %s", e)
             return None
 
-    async def fetch_defi_fundamentals(self) -> Optional['DeFiFundamentalsData']:
+    async def fetch_defi_fundamentals(self) -> 'DeFiFundamentalsData' | None:
         """Fetch aggregated DeFi fundamentals from DefiLlama and cache results."""
         if not self.defillama_client:
             return None
@@ -59,7 +60,7 @@ class MarketDataFetcher:
             self.logger.error("Error fetching DeFi fundamentals: %s", e)
             return None
 
-    async def fetch_price_data(self, top_coins: List[str]) -> Optional[Dict]:
+    async def fetch_price_data(self, top_coins: list[str]) -> dict | None:
         """Fetch price data for top coins using CCXT."""
         price_data = None
         try:
@@ -70,7 +71,7 @@ class MarketDataFetcher:
         return price_data
 
 
-    async def _try_ccxt_price_data(self, top_coins: List[str]) -> Optional[Dict]:
+    async def _try_ccxt_price_data(self, top_coins: list[str]) -> dict | None:
         """Try to fetch price data using CCXT exchange."""
         if not (self.exchange_manager and self.exchange_manager.exchanges):
             return None

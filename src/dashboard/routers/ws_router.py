@@ -1,6 +1,6 @@
 """WebSocket router for real-time dashboard updates."""
 
-from typing import Set, Dict, Any
+from typing import Set, Any
 from collections import defaultdict
 from urllib.parse import urlparse
 
@@ -12,7 +12,7 @@ class ConnectionManager:
 
     def __init__(self, max_connections: int = 1000, max_per_ip: int = 10):
         self.active_connections: Set[WebSocket] = set()
-        self.ip_counts: Dict[str, int] = defaultdict(int)
+        self.ip_counts: dict[str, int] = defaultdict(int)
         self.max_connections = max_connections
         self.max_per_ip = max_per_ip
 
@@ -52,7 +52,7 @@ class ConnectionManager:
             if self.ip_counts[client_ip] <= 0:
                 del self.ip_counts[client_ip]
 
-    async def broadcast(self, data: Dict[str, Any]):
+    async def broadcast(self, data: dict[str, Any]):
         """Broadcast data to all active connections."""
         for connection in list(self.active_connections):
             try:
@@ -67,7 +67,7 @@ manager = ConnectionManager()
 connected_clients = manager.active_connections
 
 
-async def broadcast(data: Dict[str, Any]) -> None:
+async def broadcast(data: dict[str, Any]) -> None:
     """Broadcast data to all connected WebSocket clients."""
     await manager.broadcast(data)
 
@@ -122,7 +122,7 @@ class WebSocketRouter:
             except Exception:
                 self.manager.disconnect(websocket)
 
-    async def get_countdown(self) -> Dict[str, Any]:
+    async def get_countdown(self) -> dict[str, Any]:
         """Get countdown to next analysis (REST fallback for WebSocket)."""
         if self.dashboard_state:
             return self.dashboard_state.get_countdown_data()

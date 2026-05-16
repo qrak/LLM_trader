@@ -38,6 +38,38 @@ function calculatePnL(entryPrice, currentPrice, direction) {
     return diff * 100;
 }
 
+function toNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatPercent(value, digits = 1) {
+    return `${(toNumber(value) * 100).toFixed(digits)}%`;
+}
+
+function formatRiskBadges(riskManagement, fallbackExitManagement) {
+    const entryLabels = riskManagement?.at_entry_labels || {};
+    const stopLossMode = entryLabels.stop_loss || formatExecutionPolicy(fallbackExitManagement, 'stop_loss');
+    const takeProfitMode = entryLabels.take_profit || formatExecutionPolicy(fallbackExitManagement, 'take_profit');
+    const changed = riskManagement?.policy_changed
+        ? '<span class="risk-policy-changed" title="Current execution policy differs from the entry snapshot">policy changed</span>'
+        : '';
+    return `
+        <div class="position-exit-management">
+            <div><span class="label">SL Execution</span><span class="risk-badge sl">SL: ${escapeHtml(stopLossMode)}</span></div>
+            <div><span class="label">TP Execution</span><span class="risk-badge tp">TP: ${escapeHtml(takeProfitMode)}</span></div>
+            ${changed}
+        </div>
+    `;
+}
+
+function formatExecutionPolicy(policy, prefix) {
+    if (!policy) return '--';
+    const executionType = policy[`${prefix}_type`] || 'unknown';
+    const checkInterval = policy[`${prefix}_check_interval`] || 'unknown';
+    return `${executionType} / ${checkInterval}`;
+}
+
 /**
  * Update position panel with latest data.
  * @param {number|null} currentPrice - Optional price to use
@@ -61,8 +93,12 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         }
         const response = await fetch('/api/brain/position');
         const data = await response.json();
+        const previousPosition = lastPosition;
         lastPosition = data;
         if (!data.has_position) {
+            if (previousPosition && previousPosition.has_position) {
+                document.dispatchEvent(new CustomEvent('trade-closed-detected'));
+            }
             container.innerHTML = `
                 <div class="no-position">
                     <span class="no-position-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
@@ -78,12 +114,6 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const isProfit = pnl !== null && pnl >= 0;
         const directionClass = data.direction === 'LONG' ? 'long' : 'short';
         const exitManagement = data.exit_management_at_entry || data.exit_management || {};
-        const stopLossMode = exitManagement.stop_loss_type
-            ? `${escapeHtml(exitManagement.stop_loss_type)} / ${escapeHtml(exitManagement.stop_loss_check_interval || '--')}`
-            : '--';
-        const takeProfitMode = exitManagement.take_profit_type
-            ? `${escapeHtml(exitManagement.take_profit_type)} / ${escapeHtml(exitManagement.take_profit_check_interval || '--')}`
-            : '--';
         const longIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>`;
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
@@ -106,23 +136,20 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                     ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '--'}
                 </div>
                 <div class="position-sl-tp">
-                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${(data.sl_distance_pct * 100).toFixed(1)}%)</span></div>
-                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${(data.tp_distance_pct * 100).toFixed(1)}%)</span></div>
+                    <div class="sl">SL: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)} <span class="pct">(-${formatPercent(data.sl_distance_pct)})</span></div>
+                    <div class="tp">TP: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)} <span class="pct">(+${formatPercent(data.tp_distance_pct)})</span></div>
                 </div>
-                <div class="position-exit-management">
-                    <div><span class="label">SL Execution</span><span class="value">${stopLossMode}</span></div>
-                    <div><span class="label">TP Execution</span><span class="value">${takeProfitMode}</span></div>
-                </div>
+                ${formatRiskBadges(data.risk_management, exitManagement)}
                 <div class="position-meta">
                     <span title="Time in position" class="meta-item">${timeIcon} <span>${formatDuration(timeInPosition)}</span></span>
-                    <span title="Risk/Reward ratio">R:R ${data.rr_ratio.toFixed(1)}</span>
+                    <span title="Risk/Reward ratio">R:R ${toNumber(data.rr_ratio).toFixed(1)}</span>
                     <span title="Confidence">${escapeHtml(String(data.confidence))}</span>
                 </div>
                 
                 <div class="position-indicators" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
                     <div style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px;">
-                        <span title="ADX at Entry">ADX: ${data.adx_at_entry ? data.adx_at_entry.toFixed(1) : '--'}</span>
-                        <span title="RSI at Entry">RSI: ${data.rsi_at_entry ? data.rsi_at_entry.toFixed(1) : '--'}</span>
+                        <span title="ADX at Entry">ADX: ${data.adx_at_entry ? toNumber(data.adx_at_entry).toFixed(1) : '--'}</span>
+                        <span title="RSI at Entry">RSI: ${data.rsi_at_entry ? toNumber(data.rsi_at_entry).toFixed(1) : '--'}</span>
                     </div>
                 </div>
 

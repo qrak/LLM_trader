@@ -2,6 +2,9 @@
 
 These are the reusable building blocks shared between the runtime provider and
 the operator preview scripts.
+
+Sanitization ownership note: keep RSS/HTML cleanup and tracking-parameter
+normalization rules centralized in this module.
 """
 from __future__ import annotations
 
@@ -20,9 +23,7 @@ import html as html_module
 import aiohttp
 
 
-# ---------------------------------------------------------------------------
 # Source registry – default values; callers may supply a filtered subset.
-# ---------------------------------------------------------------------------
 
 _DEFAULT_RSS_SOURCES: list[dict[str, str]] = [
     {"name": "coindesk",      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
@@ -58,9 +59,7 @@ def get_sources(
     return [s for s in registry if s["name"].lower() in names]
 
 
-# ---------------------------------------------------------------------------
 # URL normalisation
-# ---------------------------------------------------------------------------
 
 _TRACKING_PARAMS: frozenset[str] = frozenset({
     "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
@@ -84,9 +83,7 @@ def normalize_url(raw_url: str) -> str:
     return urlunparse(cleaned)
 
 
-# ---------------------------------------------------------------------------
 # HTML text extraction
-# ---------------------------------------------------------------------------
 
 def strip_html(text: str) -> str:
     """Remove HTML tags, unescape HTML entities, and collapse whitespace."""
@@ -220,9 +217,7 @@ def _text_from_soup_node(node: Any) -> str:
     return "\n\n".join(parts).strip()
 
 
-# ---------------------------------------------------------------------------
 # Date parsing
-# ---------------------------------------------------------------------------
 
 def parse_pub_date_to_epoch(raw_date: str | None) -> float:
     """Convert an RFC-2822 or ISO-8601 date string to a UTC epoch float.
@@ -248,9 +243,7 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
         return 0.0
 
 
-# ---------------------------------------------------------------------------
 # RSS XML parsing
-# ---------------------------------------------------------------------------
 
 def _first_text(parent: ET.Element, path: str) -> str:
     node = parent.find(path)
@@ -324,9 +317,7 @@ def parse_rss_items(
     return results
 
 
-# ---------------------------------------------------------------------------
 # Async source fetching
-# ---------------------------------------------------------------------------
 
 @dataclass
 class FetchResult:
@@ -393,9 +384,7 @@ async def fetch_source(
         )
 
 
-# ---------------------------------------------------------------------------
 # Deduplication
-# ---------------------------------------------------------------------------
 
 def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate items by canonical URL, keeping the most recent version."""

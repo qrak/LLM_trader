@@ -10,7 +10,6 @@ Divergences are powerful reversal signals that often precede major trend changes
 All functions use @njit for performance.
 """
 
-from typing import Tuple
 
 import numpy as np
 from numba import njit
@@ -21,7 +20,7 @@ def _find_local_extrema_numba(
     data: np.ndarray,
     lookback: int,
     find_maxima: bool
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Find local maxima or minima in data.
 
@@ -86,7 +85,7 @@ def _find_matching_indicator_extrema(
     indicator_values: np.ndarray,
     price_idx: int,
     tolerance: int = 3
-) -> Tuple[int, float]:
+) -> tuple[int, float]:
     """
     Find indicator extrema near a price extrema.
 
@@ -110,7 +109,7 @@ def detect_bullish_divergence_numba(
     prices: np.ndarray,
     indicator: np.ndarray,
     min_spacing: int = 5
-) -> Tuple[bool, int, int, float, float, float, float]:
+) -> tuple[bool, int, int, float, float, float, float]:
     """
     Detect bullish divergence between price and indicator.
 
@@ -201,7 +200,7 @@ def detect_bearish_divergence_numba(
     prices: np.ndarray,
     indicator: np.ndarray,
     min_spacing: int = 5
-) -> Tuple[bool, int, int, float, float, float, float]:
+) -> tuple[bool, int, int, float, float, float, float]:
     """
     Detect bearish divergence between price and indicator.
 

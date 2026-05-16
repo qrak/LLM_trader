@@ -1,7 +1,7 @@
 """Utilities for data manipulation, serialization, and type conversion."""
 import dataclasses
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_args, get_origin
+from typing import Any, Type, TypeVar, Union, get_args, get_origin
 
 import math
 import numpy as np
@@ -12,8 +12,8 @@ T = TypeVar("T")
 
 def get_last_valid_value(
     arr: NDArray,
-    default: Optional[float] = None
-) -> Optional[float]:
+    default: float | None = None
+) -> float | None:
     """Extract the last non-NaN value from a numpy array.
 
     Args:
@@ -72,8 +72,8 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
 def safe_array_to_scalar(
     arr: NDArray,
     index: int = -1,
-    default: Optional[float] = None
-) -> Optional[float]:
+    default: float | None = None
+) -> float | None:
     """Safely extract a scalar value from an array at given index.
 
     Args:
@@ -99,7 +99,7 @@ def safe_array_to_scalar(
         return default
 
 
-def get_indicator_value(td: dict, key: str) -> Union[float, str]:
+def get_indicator_value(td: dict, key: str) -> float | str:
     """Get indicator value with proper type checking and error handling.
 
     Args:
@@ -162,9 +162,9 @@ class SerializableMixin:
     - Nested dataclasses (recursive conversion)
     """
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary with ISO format dates."""
-        def _dict_factory(data: List[tuple[str, Any]]) -> Dict[str, Any]:
+        def _dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
             result = {}
             for key, value in data:
                 if isinstance(value, datetime):
@@ -176,7 +176,7 @@ class SerializableMixin:
         return dataclasses.asdict(self, dict_factory=_dict_factory)
 
     @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
+    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
         """Create dataclass instance from dictionary, handling types."""
         if not dataclasses.is_dataclass(cls):
             raise TypeError(f"{cls.__name__} must be a dataclass to use SerializableMixin")
@@ -209,9 +209,17 @@ class SerializableMixin:
                 return SerializableMixin._convert_value(value, non_none_args[0])
 
         # Handle List[T]
-        if (origin is list or origin is List) and isinstance(value, list):
+        if (origin is list) and isinstance(value, list):
             item_type = args[0]
             return [SerializableMixin._convert_value(item, item_type) for item in value]
+
+        if origin is tuple and isinstance(value, (list, tuple)):
+            if len(args) == 2 and args[1] is Ellipsis:
+                return tuple(SerializableMixin._convert_value(item, args[0]) for item in value)
+            return tuple(
+                SerializableMixin._convert_value(item, args[index]) if index < len(args) else item
+                for index, item in enumerate(value)
+            )
 
         # Handle datetime
         if target_type is datetime and isinstance(value, str):

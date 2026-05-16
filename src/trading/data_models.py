@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 
 from src.utils.data_utils import SerializableMixin
@@ -108,8 +108,8 @@ class TradeDecision(SerializableMixin):
     action: str  # BUY, SELL, HOLD, CLOSE
     confidence: str  # HIGH, MEDIUM, LOW
     price: float
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     position_size: float = 0.0  # AI's suggested percentage of capital (0.0-1.0)
     quote_amount: float = 0.0   # Invested quote currency amount (e.g. USDT)
     quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
@@ -120,7 +120,7 @@ class TradeDecision(SerializableMixin):
 @dataclass(slots=True)
 class TradingMemory(SerializableMixin):
     """Rolling memory of recent trading decisions for context."""
-    decisions: List[TradeDecision] = field(default_factory=list)
+    decisions: list[TradeDecision] = field(default_factory=list)
     max_decisions: int = 10
 
     @staticmethod
@@ -129,7 +129,7 @@ class TradingMemory(SerializableMixin):
         return f"{decision.timestamp.isoformat()}|{decision.action}|{decision.price:.8f}"
 
     @staticmethod
-    def _extract_close_reason(reasoning: str) -> Optional[str]:
+    def _extract_close_reason(reasoning: str) -> str | None:
         """Extract the raw close reason from persisted close reasoning text."""
         prefix = "Position closed: "
         if not reasoning.startswith(prefix):
@@ -138,7 +138,7 @@ class TradingMemory(SerializableMixin):
         return remainder.split(".", 1)[0].strip() or None
 
     @staticmethod
-    def _describe_close_reason(reason: Optional[str], pnl_pct: Optional[float]) -> Optional[str]:
+    def _describe_close_reason(reason: str | None, pnl_pct: float | None) -> str | None:
         """Convert close reasons into explicit outcome-aware wording for prompts."""
         if not reason:
             return None
@@ -156,7 +156,7 @@ class TradingMemory(SerializableMixin):
         return "breakeven stop"
 
     @classmethod
-    def _format_recent_reasoning(cls, reasoning: str, pnl_pct: Optional[float]) -> str:
+    def _format_recent_reasoning(cls, reasoning: str, pnl_pct: float | None) -> str:
         """Make close reasoning explicit about whether a stop protected profit or cut loss."""
         raw_reason = cls._extract_close_reason(reasoning)
         display_reason = cls._describe_close_reason(raw_reason, pnl_pct)
@@ -170,14 +170,14 @@ class TradingMemory(SerializableMixin):
         if len(self.decisions) > self.max_decisions:
             self.decisions.pop(0)
 
-    def get_recent_decisions(self, n: int = 5) -> List[TradeDecision]:
+    def get_recent_decisions(self, n: int = 5) -> list[TradeDecision]:
         """Get the n most recent decisions."""
         return self.decisions[-n:]
 
     def get_context_summary(
         self,
-        full_history: Optional[List['TradeDecision']] = None,
-        initial_capital: Optional[float] = None,
+        full_history: list['TradeDecision'] | None = None,
+        initial_capital: float | None = None,
     ) -> str:
         """Generate a concise summary for prompt injection.
 
@@ -211,7 +211,7 @@ class TradingMemory(SerializableMixin):
         total_entry_quote = 0.0
         closed_trades = 0
         winning_trades = 0
-        close_pnl_by_key: Dict[str, float] = {}
+        close_pnl_by_key: dict[str, float] = {}
 
         # Track open positions to calculate P&L across entire history
         open_position = None
@@ -270,7 +270,56 @@ class VectorSearchResult(SerializableMixin):
     similarity: float
     recency: float
     hybrid_score: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
+
+
+@dataclass(slots=True)
+class ExitExecutionContext:
+    """Normalized SL/TP execution settings for brain memory and query context."""
+    stop_loss_type: str = "unknown"
+    stop_loss_check_interval: str = "unknown"
+    take_profit_type: str = "unknown"
+    take_profit_check_interval: str = "unknown"
+
+    def to_dict(self) -> dict[str, str]:
+        """Return as a plain dict for spreading into metadata payloads."""
+        return {
+            "stop_loss_type": self.stop_loss_type,
+            "stop_loss_check_interval": self.stop_loss_check_interval,
+            "take_profit_type": self.take_profit_type,
+            "take_profit_check_interval": self.take_profit_check_interval,
+        }
+
+    def with_defaults(self, defaults: "ExitExecutionContext") -> "ExitExecutionContext":
+        """Return a new instance with unknown fields filled from *defaults*."""
+        return ExitExecutionContext(
+            stop_loss_type=self.stop_loss_type if self.stop_loss_type != "unknown" else defaults.stop_loss_type,
+            stop_loss_check_interval=self.stop_loss_check_interval if self.stop_loss_check_interval != "unknown" else defaults.stop_loss_check_interval,
+            take_profit_type=self.take_profit_type if self.take_profit_type != "unknown" else defaults.take_profit_type,
+            take_profit_check_interval=self.take_profit_check_interval if self.take_profit_check_interval != "unknown" else defaults.take_profit_check_interval,
+        )
+
+
+@dataclass(slots=True)
+class MarketConditions:
+    """Market state snapshot passed between trading, brain, and risk modules."""
+    trend_direction: str = "NEUTRAL"
+    adx: float = 0.0
+    rsi: float = 50.0
+    rsi_level: str = "NEUTRAL"
+    volatility: str = "MEDIUM"
+    atr: float = 0.0
+    atr_percentage: float = 0.0
+    macd_signal: str = "NEUTRAL"
+    bb_position: str = "MIDDLE"
+    volume_state: str = "NORMAL"
+    is_weekend: bool = False
+    market_sentiment: str = "NEUTRAL"
+    order_book_bias: str = "BALANCED"
+    fear_greed_index: int = 50
+    trend_strength: float = 0.0
+    timeframe_alignment: str | None = None
+    choppiness: float | None = None
 
 
 @dataclass(slots=True)

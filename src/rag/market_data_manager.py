@@ -1,6 +1,6 @@
 """Market data management for fetching and serving market overview."""
 
-from typing import Dict, Any, Optional
+from typing import Any
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
 from .market_components import (
@@ -22,10 +22,10 @@ class MarketDataManager:
         market_api=None,
         exchange_manager=None,
         unified_parser=None,
-        fetcher: Optional[MarketDataFetcher] = None,
-        processor: Optional[MarketDataProcessor] = None,
-        cache: Optional[MarketDataCache] = None,
-        overview_builder: Optional[MarketOverviewBuilder] = None
+        fetcher: MarketDataFetcher | None = None,
+        processor: MarketDataProcessor | None = None,
+        cache: MarketDataCache | None = None,
+        overview_builder: MarketOverviewBuilder | None = None
     ):
         self.logger = logger
         self.file_handler = file_handler
@@ -41,15 +41,15 @@ class MarketDataManager:
         self.market_api = market_api
         self.exchange_manager = exchange_manager
     @property
-    def current_market_overview(self) -> Optional[Dict[str, Any]]:
+    def current_market_overview(self) -> dict[str, Any] | None:
         """Backward-compatible alias for cache-backed overview state."""
         return self.cache.current_market_overview
 
     @current_market_overview.setter
-    def current_market_overview(self, value: Optional[Dict[str, Any]]) -> None:
+    def current_market_overview(self, value: dict[str, Any] | None) -> None:
         self.cache.current_market_overview = value
 
-    async def fetch_market_overview(self) -> Optional[Dict[str, Any]]:
+    async def fetch_market_overview(self) -> dict[str, Any] | None:
         """Fetch overall market data from various sources concurrently."""
         try:
             # Use fetcher component to get global data
@@ -111,7 +111,7 @@ class MarketDataManager:
 
         return False
 
-    def get_current_overview(self) -> Optional[Dict[str, Any]]:
+    def get_current_overview(self) -> dict[str, Any] | None:
         """Get the current market overview data."""
         return self.cache.get_current_overview()
 

@@ -6,7 +6,7 @@ import asyncio
 import os
 import json
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Dict, Any, Union
+from typing import Any, Union
 
 import aiohttp
 from pydantic import BaseModel, Field
@@ -19,8 +19,8 @@ class StablecoinData(BaseModel):
     id: str = Field(default="")
     name: str = Field(default="")
     symbol: str = Field(default="")
-    gecko_id: Optional[str] = None
-    pegType: Optional[str] = None
+    gecko_id: str | None = None
+    pegType: str | None = None
     circulating: float = Field(default=0.0)
     circulatingPrevDay: float = Field(default=0.0)
     circulatingPrev1Week: float = Field(default=0.0)
@@ -32,37 +32,37 @@ class StablecoinData(BaseModel):
 
 class ChainTVLData(BaseModel):
     """Data model for a single chain's TVL."""
-    gecko_id: Optional[str] = None
+    gecko_id: str | None = None
     tvl: float = Field(default=0.0)
-    tokenSymbol: Optional[str] = None
-    cmcId: Optional[Union[str, int]] = None
+    tokenSymbol: str | None = None
+    cmcId: Union[str, int] | None = None
     name: str = Field(default="Unknown")
-    chainId: Optional[Union[str, int]] = None
+    chainId: Union[str, int] | None = None
 
 class DexVolumeData(BaseModel):
     """Data model for DEX volume overview."""
     total_24h: float = Field(default=0.0)
     change_1d: float = Field(default=0.0)
-    top_protocols: List[Dict[str, Any]] = Field(default_factory=list)
+    top_protocols: list[dict[str, Any]] = Field(default_factory=list)
 
 class FeesData(BaseModel):
     """Data model for protocol fees/revenue."""
     total_24h_fees: float = Field(default=0.0)
     total_24h_revenue: float = Field(default=0.0)
-    top_earners: List[Dict[str, Any]] = Field(default_factory=list)
+    top_earners: list[dict[str, Any]] = Field(default_factory=list)
 
 class OptionsData(BaseModel):
     """Data model for options market overview."""
     notional_volume_24h: float = Field(default=0.0)
     premium_volume_24h: float = Field(default=0.0)
-    top_protocols: List[Dict[str, Any]] = Field(default_factory=list)
+    top_protocols: list[dict[str, Any]] = Field(default_factory=list)
 
 class DeFiFundamentalsData(BaseModel):
     """Aggregated on-chain fundamentals."""
     macro: 'MacroMarketData'  # existing: stablecoins, TVL
-    dex_volumes: Optional[DexVolumeData] = None
-    fees: Optional[FeesData] = None
-    options: Optional[OptionsData] = None
+    dex_volumes: DexVolumeData | None = None
+    fees: FeesData | None = None
+    options: OptionsData | None = None
 
 
 class MacroMarketData(BaseModel):
@@ -70,7 +70,7 @@ class MacroMarketData(BaseModel):
     stablecoins_market_cap: float
     stablecoins_24h_change: float
     total_tvl: float
-    top_chains: List[ChainTVLData]
+    top_chains: list[ChainTVLData]
 
 
 class DefiLlamaClient:
@@ -81,7 +81,7 @@ class DefiLlamaClient:
 
     DEFILLAMA_CACHE_FILE = "defillama_fundamentals.json"
 
-    def __init__(self, logger: Logger, session: Optional[aiohttp.ClientSession] = None,
+    def __init__(self, logger: Logger, session: aiohttp.ClientSession | None = None,
                  cache_dir: str = 'cache', update_interval_hours: float = 0.25):
         self.logger = logger
         self._external_session = session is not None
@@ -91,7 +91,7 @@ class DefiLlamaClient:
         self.cache_dir = cache_dir
         self.update_interval = timedelta(hours=update_interval_hours)
         self.cache_file_path = f"{cache_dir}/{self.DEFILLAMA_CACHE_FILE}"
-        self.last_update: Optional[datetime] = None
+        self.last_update: datetime | None = None
 
         # Ensure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -110,14 +110,14 @@ class DefiLlamaClient:
         except Exception as e:
             self.logger.debug("Could not read DefiLlama cache metadata: %s", e)
 
-    def _read_cache_file_sync(self) -> Dict[str, Any]:
+    def _read_cache_file_sync(self) -> dict[str, Any]:
         """Synchronous helper for reading cache file."""
         if not os.path.exists(self.cache_file_path):
             return {}
         with open(self.cache_file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def _write_cache_file_sync(self, cache_payload: Dict[str, Any]) -> None:
+    def _write_cache_file_sync(self, cache_payload: dict[str, Any]) -> None:
         """Synchronous helper for atomic writing cache file."""
         temp_path = f"{self.cache_file_path}.tmp"
         with open(temp_path, 'w', encoding='utf-8') as f:
@@ -135,7 +135,7 @@ class DefiLlamaClient:
             self.session = aiohttp.ClientSession()
         return self.session
 
-    async def get_stablecoins(self) -> List[StablecoinData]:
+    async def get_stablecoins(self) -> list[StablecoinData]:
         """Fetch list of all stablecoins."""
         url = f"{self.STABLECOINS_URL}/stablecoins"
         try:
@@ -166,7 +166,7 @@ class DefiLlamaClient:
             self.logger.error("Error fetching stablecoins: %s", e)
             return []
 
-    async def get_chains_tvl(self) -> List[ChainTVLData]:
+    async def get_chains_tvl(self) -> list[ChainTVLData]:
         """Fetch current TVL of all chains."""
         url = f"{self.BASE_URL}/v2/chains"
         try:
@@ -182,7 +182,7 @@ class DefiLlamaClient:
             self.logger.error("Error fetching chain TVL: %s", e)
             return []
 
-    async def get_macro_overview(self) -> Optional[MacroMarketData]:
+    async def get_macro_overview(self) -> MacroMarketData | None:
         """Get aggregated macro market data (Stablecoin MC + TVL)."""
         try:
             stables, chains = await asyncio.gather(
@@ -229,7 +229,7 @@ class DefiLlamaClient:
         except (ValueError, TypeError):
             return 0.0
 
-    async def get_dex_volumes(self) -> Optional[DexVolumeData]:
+    async def get_dex_volumes(self) -> DexVolumeData | None:
         """Fetch DEX volume overview."""
         url = f"{self.BASE_URL}/overview/dexs"
         try:
@@ -257,7 +257,7 @@ class DefiLlamaClient:
             self.logger.error("Error fetching DEX volumes: %s", e)
             return None
 
-    async def get_fees_data(self) -> Optional[FeesData]:
+    async def get_fees_data(self) -> FeesData | None:
         """Fetch fees and revenue overview."""
         url = f"{self.BASE_URL}/overview/fees"
         try:
@@ -288,7 +288,7 @@ class DefiLlamaClient:
             self.logger.error("Error fetching fees data: %s", e)
             return None
 
-    async def get_options_data(self) -> Optional[OptionsData]:
+    async def get_options_data(self) -> OptionsData | None:
         """Fetch options market overview."""
         url = f"{self.BASE_URL}/overview/options"
         try:
@@ -316,7 +316,7 @@ class DefiLlamaClient:
             self.logger.error("Error fetching options data: %s", e)
             return None
 
-    async def get_defi_fundamentals(self) -> Optional[DeFiFundamentalsData]:
+    async def get_defi_fundamentals(self) -> DeFiFundamentalsData | None:
         """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
 
         # Check cache freshness

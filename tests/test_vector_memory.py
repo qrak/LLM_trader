@@ -1,10 +1,11 @@
 """Tests for vector_memory.py changes: classify_rsi_label integration and _adx_label."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+import numpy as np
 import pytest
 
 from src.trading.vector_memory import VectorMemoryService
-from src.trading.data_models import VectorSearchResult
+from src.trading.data_models import ExitExecutionContext, VectorSearchResult
 from src.utils.indicator_classifier import classify_rsi_label
 
 
@@ -106,12 +107,12 @@ class TestBuildExperienceDocument:
 
     def test_exit_execution_context_in_structure(self):
         doc = self._build_doc(
-            exit_execution_context={
-                "stop_loss_type": "hard",
-                "stop_loss_check_interval": "15m",
-                "take_profit_type": "hard",
-                "take_profit_check_interval": "15m",
-            }
+            exit_execution_context=ExitExecutionContext(
+                stop_loss_type="hard",
+                stop_loss_check_interval="15m",
+                take_profit_type="hard",
+                take_profit_check_interval="15m",
+            )
         )
         assert "Exit Execution: SL hard/15m | TP hard/15m" in doc
 
@@ -204,6 +205,38 @@ class TestStoreExperience:
         assert metadata["take_profit_type"] == "hard"
         assert metadata["take_profit_check_interval"] == "15m"
         assert "Exit Execution: SL hard/15m | TP hard/15m" in upsert_kwargs["documents"][0]
+
+    def test_store_experience_sanitizes_non_finite_and_complex_metadata(self):
+        svc = _make_service()
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+
+        stored = svc.store_experience(
+            trade_id="trade-sanitize-1",
+            market_context="BULLISH + High ADX",
+            outcome="WIN",
+            pnl_pct=2.5,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="Momentum continuation",
+            metadata={
+                "finite_numpy": np.float64(1.25),
+                "bad_nan": float("nan"),
+                "bad_inf": float("inf"),
+                "nested": {"value": 1},
+                "items": [1, 2, 3],
+                "none_value": None,
+            },
+            symbol="BTC/USDC",
+        )
+
+        assert stored is True
+        metadata = svc._collection.upsert.call_args.kwargs["metadatas"][0]
+        assert metadata["finite_numpy"] == 1.25
+        assert "bad_nan" not in metadata
+        assert "bad_inf" not in metadata
+        assert "nested" not in metadata
+        assert "items" not in metadata
+        assert "none_value" not in metadata
 
 
 class TestComputeFactorPerformance:
@@ -635,3 +668,131 @@ class TestAnalyticsAndThresholds:
 
         assert thresholds["min_rr_recommended"] == 1.6
         assert "rr_borderline_min" not in thresholds
+
+    # ── _learn_sl_tightening_threshold ──────────────────────────
+
+    def _make_raw_snapshot(self, update_records, close_records):
+        """Build a raw Chroma snapshot with UPDATE + WIN/LOSS records."""
+        ids = []
+        metas = []
+        for i, meta in enumerate(update_records):
+            ids.append(f"update_{i}")
+            metas.append({"outcome": "UPDATE", **meta})
+        for i, meta in enumerate(close_records):
+            ids.append(meta.get("_trade_id", f"trade_{i}"))
+            metas.append({k: v for k, v in meta.items() if k != "_trade_id"})
+        return {"ids": ids, "metadatas": metas}
+
+    def test_learn_sl_tightening_threshold_learns_from_paired_updates(self):
+        svc = _make_service()
+        position_id_base = "BTC/USDC|2026-04-30T10:00:00+00:00"
+        close_records = [
+            {
+                "_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+                "outcome": "WIN",
+                "pnl_pct": 4.0,
+                "position_id": f"{position_id_base}{i}",
+                "position_entry_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+            }
+            for i in range(8)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": f"{position_id_base}{i}",
+                "position_entry_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+            }
+            for i in range(8)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" in thresholds
+        sl = thresholds["sl_tightening"]
+        assert sl["learned_threshold"] <= 0.30
+        assert sl["source"] == "brain"
+        assert sl["basis"] == "paired_update_outcomes"
+        assert sl["expectancy_pct"] > 0
+
+    def test_learn_sl_tightening_threshold_no_emission_below_min_samples(self):
+        svc = _make_service()
+        close_records = [
+            {
+                "_trade_id": f"trade_pos{i}",
+                "outcome": "WIN",
+                "pnl_pct": 3.0,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(3)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(3)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds
+
+    def test_learn_sl_tightening_threshold_no_emission_when_unpaired(self):
+        svc = _make_service()
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.25,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        close_records = []
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds
+
+    def test_learn_sl_tightening_threshold_no_emission_non_positive_expectancy(self):
+        svc = _make_service()
+        position_ids = [f"SYM|pos{i}" for i in range(8)]
+        close_records = [
+            {
+                "_trade_id": f"trade_pos{i}",
+                "outcome": "LOSS",
+                "pnl_pct": -3.0,
+                "position_id": position_ids[i],
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": position_ids[i],
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds

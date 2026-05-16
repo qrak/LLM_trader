@@ -4,7 +4,7 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
 import io
-from typing import Optional, TYPE_CHECKING, List, Dict, Any, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
 import discord
 from aiohttp import ClientSession
@@ -43,7 +43,7 @@ class DiscordNotifier(BaseNotifier):
 
 
         super().__init__(logger, config, unified_parser, formatter)
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
         self._ready_event = asyncio.Event()
         self._shutdown_started = False
 
@@ -71,8 +71,9 @@ class DiscordNotifier(BaseNotifier):
 
     def _is_transient_discord_error(self, exc: Exception) -> bool:
         """Return True for transient Discord 5xx errors worth retrying."""
-        status = getattr(exc, "status", None)
-        return isinstance(status, int) and status in self._DISCORD_TRANSIENT_STATUS_CODES
+        if not isinstance(exc, discord.HTTPException):
+            return False
+        return exc.status in self._DISCORD_TRANSIENT_STATUS_CODES
 
     async def _send_with_transient_retry(
         self,
@@ -89,10 +90,11 @@ class DiscordNotifier(BaseNotifier):
                 if not self._is_transient_discord_error(exc) or attempt >= self._DISCORD_SEND_MAX_ATTEMPTS:
                     raise
 
+                status_code = exc.status if isinstance(exc, discord.HTTPException) else "unknown"
                 self.logger.warning(
                     "Transient Discord error while %s (status=%s, attempt=%s/%s): %s",
                     operation_name,
-                    getattr(exc, "status", "unknown"),
+                    status_code,
                     attempt,
                     self._DISCORD_SEND_MAX_ATTEMPTS,
                     exc,
@@ -182,8 +184,8 @@ class DiscordNotifier(BaseNotifier):
             self,
             message: str,
             channel_id: int,
-            expire_after: Optional[int] = None
-    ) -> Optional[discord.Message]:
+            expire_after: int | None = None
+    ) -> discord.Message | None:
         """Send a text message to Discord with automatic expiration.
 
         Args:
@@ -259,8 +261,8 @@ class DiscordNotifier(BaseNotifier):
         self,
         embed: discord.Embed,
         channel_id: int,
-        expire_after: Optional[float] = None
-    ) -> Optional[discord.Message]:
+        expire_after: float | None = None
+    ) -> discord.Message | None:
         """Send a Discord embed to a channel with expiration.
 
         Args:
@@ -353,7 +355,7 @@ class DiscordNotifier(BaseNotifier):
             symbol: str,
             timeframe: str,
             channel_id: int,
-            chart_image: Optional[io.BytesIO] = None
+            chart_image: io.BytesIO | None = None
     ) -> None:
         """Send full analysis notification with reasoning and JSON embed.
 
@@ -401,8 +403,8 @@ class DiscordNotifier(BaseNotifier):
             symbol: str,
             timeframe: str,
             channel_id: int,
-            expire_after: Optional[float] = None
-    ) -> Optional[discord.Message]:
+            expire_after: float | None = None
+    ) -> discord.Message | None:
         """Send analysis chart image to Discord and track it for cleanup."""
         if expire_after is None:
             expire_after = float(self.config.FILE_MESSAGE_EXPIRY)
@@ -498,7 +500,7 @@ class DiscordNotifier(BaseNotifier):
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_performance_stats(
             self,
-            trade_history: List[Dict[str, Any]],
+            trade_history: list[dict[str, Any]],
             symbol: str,
             channel_id: int
     ) -> None:
@@ -545,7 +547,7 @@ class DiscordNotifier(BaseNotifier):
         except Exception as e:
             self.logger.error("Error sending performance stats: %s", e)
 
-    def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> Optional[discord.Embed]:
+    def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> discord.Embed | None:
         """Create Discord embed from analysis JSON."""
         try:
             fields = self.extract_analysis_fields(analysis)

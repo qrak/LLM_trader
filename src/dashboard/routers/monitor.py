@@ -2,7 +2,7 @@
 import asyncio
 import json
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter
 from src.utils.token_counter import CostStorage
@@ -26,7 +26,7 @@ class MonitorRouter:
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
 
-    def _load_prev_response_sync(self) -> Dict[str, Any]:
+    def _load_prev_response_sync(self) -> dict[str, Any]:
         """Helper to load previous response data synchronously."""
         data_dir = self.config.DATA_DIR
         path = Path(data_dir) / "trading" / "previous_response.json"
@@ -38,7 +38,7 @@ class MonitorRouter:
                 self.logger.error("Error loading previous response", exc_info=True)
         return {}
 
-    async def get_last_prompt(self) -> Dict[str, Any]:
+    async def get_last_prompt(self) -> dict[str, Any]:
         """Get the last prompt sent to the LLM."""
         if self.analysis_engine and self.analysis_engine.last_generated_prompt:
             return {
@@ -58,7 +58,7 @@ class MonitorRouter:
             }
         return {"prompt": "No prompt generated yet.", "source": None}
 
-    async def get_last_response(self) -> Dict[str, Any]:
+    async def get_last_response(self) -> dict[str, Any]:
         """Get the last response received from the LLM."""
         if self.analysis_engine and self.analysis_engine.last_llm_response:
             return {
@@ -79,7 +79,7 @@ class MonitorRouter:
             }
         return {"response": "No response received yet."}
 
-    async def get_system_prompt(self) -> Dict[str, Any]:
+    async def get_system_prompt(self) -> dict[str, Any]:
         """Get the last system prompt (contains brain context and trading rules)."""
         system_prompt = self.analysis_engine.last_system_prompt if self.analysis_engine else None
         if system_prompt:
@@ -93,7 +93,7 @@ class MonitorRouter:
         return {"system_prompt": "No system prompt generated yet.", "source": None, "has_brain_context": False}
 
 
-    async def get_api_costs(self) -> Dict[str, Any]:
+    async def get_api_costs(self) -> dict[str, Any]:
         """Get current API cost tracking data."""
         cached = self.dashboard_state.get_cached("costs", ttl_seconds=30.0)
         if cached:
@@ -121,7 +121,7 @@ class MonitorRouter:
             data = json.load(f)
             return data.get("articles", data)
 
-    async def get_news(self) -> Dict[str, Any]:
+    async def get_news(self) -> dict[str, Any]:
         """Get cached news articles from RAG engine or disk."""
         cached = self.dashboard_state.get_cached("news", ttl_seconds=3600.0)
         if cached is not None:

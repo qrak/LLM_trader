@@ -1,6 +1,6 @@
 import timeit
 from dataclasses import dataclass
-from typing import Union, Tuple, Optional, Callable, List, Any, Dict
+from typing import Union, Callable, Any
 
 import numpy as np
 import pandas as pd
@@ -13,14 +13,14 @@ class IndicatorBase:
     NUM_COLUMNS: int = 5
 
     def __post_init__(self) -> None:
-        self.timestamp: Optional[np.ndarray] = None
+        self.timestamp: np.ndarray | None = None
         self.open: np.ndarray = np.array([], dtype=np.float64)
         self.high: np.ndarray = np.array([], dtype=np.float64)
         self.low: np.ndarray = np.array([], dtype=np.float64)
         self.close: np.ndarray = np.array([], dtype=np.float64)
         self.volume: np.ndarray = np.array([], dtype=np.float64)
 
-    def get_data(self, new_data: Union[pd.DataFrame, np.ndarray, List[List[Union[int, float]]]]) -> None:
+    def get_data(self, new_data: Union[pd.DataFrame, np.ndarray, list[list[Union[int, float]]]]) -> None:
         if isinstance(new_data, pd.DataFrame):
             self._handle_dataframe(new_data)
         elif isinstance(new_data, np.ndarray):
@@ -50,8 +50,8 @@ class IndicatorBase:
 
         return result
 
-    def _save_indicator_result_to_csv(self, indicator_name: str, indicator_result: Union[np.ndarray, Tuple]) -> None:
-        data: Dict[str, np.ndarray] = {}
+    def _save_indicator_result_to_csv(self, indicator_name: str, indicator_result: Union[np.ndarray, tuple]) -> None:
+        data: dict[str, np.ndarray] = {}
         n = len(self.close)
 
         if self.timestamp is not None:
@@ -94,7 +94,7 @@ class IndicatorBase:
         csv_filename = f"{indicator_name}_results.csv"
         df.to_csv(csv_filename, index=False)
 
-    def _handle_list(self, data: List[List[Union[int, float]]]) -> None:
+    def _handle_list(self, data: list[list[Union[int, float]]]) -> None:
         if not data or not isinstance(data[0], list):
             raise ValueError("Input must be a non-empty list of lists")
 

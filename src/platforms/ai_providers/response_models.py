@@ -1,6 +1,6 @@
 """Unified Pydantic response models for all AI providers."""
 from enum import Enum
-from typing import Optional, List, Dict, Any, ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -21,17 +21,17 @@ class UsageModel(BaseModel):
 class ChoiceModel(BaseModel):
     """Single response choice from AI."""
     message: MessageModel
-    finish_reason: Optional[str] = None
-    error: Optional[Dict[str, Any]] = None
+    finish_reason: str | None = None
+    error: dict[str, Any] | None = None
 
 
 class ChatResponseModel(BaseModel):
     """Unified response model for all AI providers."""
-    choices: List[ChoiceModel]
-    usage: Optional[UsageModel] = None
-    id: Optional[str] = None
-    model: Optional[str] = None
-    error: Optional[str] = None
+    choices: list[ChoiceModel]
+    usage: UsageModel | None = None
+    id: str | None = None
+    model: str | None = None
+    error: str | None = None
 
     @classmethod
     def from_error(cls, error: str) -> "ChatResponseModel":
@@ -43,9 +43,9 @@ class ChatResponseModel(BaseModel):
         cls,
         content: str,
         role: str = "assistant",
-        usage: Optional[UsageModel] = None,
-        model: Optional[str] = None,
-        response_id: Optional[str] = None
+        usage: UsageModel | None = None,
+        model: str | None = None,
+        response_id: str | None = None
     ) -> "ChatResponseModel":
         """Create response from content string."""
         return cls(

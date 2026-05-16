@@ -1,7 +1,7 @@
 import asyncio
 import signal
 import sys
-from typing import Optional, Callable
+from typing import Callable
 
 try:
     import tkinter as tk
@@ -15,7 +15,7 @@ class GracefulShutdownManager:
         self,
         loop: asyncio.AbstractEventLoop,
         logger=None,
-        confirmation_callback: Optional[Callable[[], bool]] = None
+        confirmation_callback: Callable[[], bool] | None = None
     ):
         self.loop = loop
         self.logger = logger

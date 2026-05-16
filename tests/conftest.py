@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 # Create the mock config object
 mock_config = MagicMock()
 mock_config.LOGGER_DEBUG = False
+mock_config.MODEL_VERBOSITY = "high"
 mock_config.get_config.return_value = {}
 mock_config.get_env.return_value = None
 

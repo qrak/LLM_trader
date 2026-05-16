@@ -17,6 +17,9 @@ expect articles in this exact shape:
         # "detected_coins_str":  str
         # "_normalize()-added fields (title_lower etc.)
     }
+
+This module is the canonical location for article-body boilerplate/tail-marker
+sanitization rules.
 """
 from __future__ import annotations
 

@@ -2,7 +2,7 @@
 
 import re
 from re import Pattern
-from typing import Tuple, Optional, Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class PositionExtractor:
     """Extracts trading signals, stop loss, take profit from AI responses."""
 
-    def __init__(self, logger: Optional[Logger] = None, unified_parser: "UnifiedParser" = None):
+    def __init__(self, logger: Logger | None = None, unified_parser: "UnifiedParser" = None):
         """Initialize the position extractor.
 
         Args:
@@ -49,7 +49,7 @@ class PositionExtractor:
             re.IGNORECASE
         )
 
-    def extract_from_json(self, text: str) -> Optional[Dict[str, Any]]:
+    def extract_from_json(self, text: str) -> dict[str, Any] | None:
         """Try to extract trading decision from JSON in response.
 
         Uses UnifiedParser.extract_json_block() for JSON extraction (DRY).
@@ -83,14 +83,13 @@ class PositionExtractor:
         # Try raw extraction without unwrapping
         return self.unified_parser.extract_json_block(text)
 
-    def extract_trading_info(self, text: str) -> Tuple[str, str, Optional[float], Optional[float], Optional[float], str]:
+    def extract_trading_info(self, text: str) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading information from AI response.
 
         Args:
             text: AI response text
 
-        Returns:
-            Tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
+        Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
         """
         # First try JSON extraction
         json_data = self.extract_from_json(text)
@@ -100,14 +99,13 @@ class PositionExtractor:
         # Fall back to regex extraction
         return self._extract_from_text(text)
 
-    def _extract_from_dict(self, data: Dict[str, Any]) -> Tuple[str, str, Optional[float], Optional[float], Optional[float], str]:
+    def _extract_from_dict(self, data: dict[str, Any]) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading info from a dictionary.
 
         Args:
             data: Dictionary containing trading decision
 
-        Returns:
-            Tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
+        Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
         """
         signal = str(data.get("signal", data.get("action", "HOLD"))).upper()
 
@@ -151,7 +149,7 @@ class PositionExtractor:
         else:
             return "LOW"
 
-    def _normalize_position_size(self, value: Any, explicit_percent: bool = False) -> Optional[float]:
+    def _normalize_position_size(self, value: Any, explicit_percent: bool = False) -> float | None:
         """Normalize position size values to decimal capital fractions."""
         value_text = str(value).strip()
         if not value_text:
@@ -169,14 +167,13 @@ class PositionExtractor:
             return numeric_value / 100
         return numeric_value / 100 if numeric_value > 1 else numeric_value
 
-    def _extract_from_text(self, text: str) -> Tuple[str, str, Optional[float], Optional[float], Optional[float], str]:
+    def _extract_from_text(self, text: str) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading info using regex patterns.
 
         Args:
             text: Raw text response
 
-        Returns:
-            Tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
+        Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
         """
         # Extract signal
         signal_match = self.signal_pattern.search(text)

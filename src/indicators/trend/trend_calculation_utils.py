@@ -2,14 +2,13 @@
 Trend calculation utilities for trend indicators.
 Extracted to reduce complexity in trend_indicators.py
 """
-from typing import Tuple
 import math
 import numpy as np
 from numba import njit
 
 
 @njit(cache=True)
-def calculate_directional_movement(high: np.ndarray, low: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def calculate_directional_movement(high: np.ndarray, low: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Calculate positive and negative directional movement."""
     n = len(high)
     dm_pos = np.full(n, np.nan)
@@ -58,7 +57,7 @@ def calculate_smoothed_values(values: np.ndarray, length: int) -> np.ndarray:
 
 @njit(cache=True)
 def calculate_directional_indicators(dm_pos14: np.ndarray, dm_neg14: np.ndarray,
-                                   tr14: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                                   tr14: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Calculate PDI, NDI, and DX from smoothed values."""
     n = len(dm_pos14)
     pdi = np.full(n, np.nan)
@@ -136,7 +135,7 @@ def get_donchian_channels_o1(high: np.ndarray, low: np.ndarray, length: int) -> 
 
 @njit(cache=True)
 def calculate_ichimoku_lines(high: np.ndarray, low: np.ndarray,
-                           conversion_length: int, base_length: int) -> Tuple[np.ndarray, np.ndarray]:
+                           conversion_length: int, base_length: int) -> tuple[np.ndarray, np.ndarray]:
     """Calculate Ichimoku conversion and base lines."""
     # Calculate Conversion Line (Tenkan-sen) and Base Line (Kijun-sen)
     conversion_line = get_donchian_channels_o1(high, low, conversion_length)
@@ -148,7 +147,7 @@ def calculate_ichimoku_lines(high: np.ndarray, low: np.ndarray,
 @njit(cache=True)
 def calculate_ichimoku_spans(high: np.ndarray, low: np.ndarray,
                            conversion_line: np.ndarray, base_line: np.ndarray,
-                           lagging_span2_length: int, displacement: int) -> Tuple[np.ndarray, np.ndarray]:
+                           lagging_span2_length: int, displacement: int) -> tuple[np.ndarray, np.ndarray]:
     """Calculate Ichimoku leading spans A and B."""
     n = len(high)
     leading_span_a = np.full(n, np.nan)
@@ -173,7 +172,7 @@ def calculate_ichimoku_spans(high: np.ndarray, low: np.ndarray,
 
 @njit(cache=True)
 def calculate_band_adjustments(close: np.ndarray, upperband: np.ndarray,
-                             lowerband: np.ndarray, i: int) -> Tuple[float, float]:
+                             lowerband: np.ndarray, i: int) -> tuple[float, float]:
     """Calculate adjusted upper and lower bands for Supertrend."""
     upper = upperband[i]
     lower = lowerband[i]
@@ -190,7 +189,7 @@ def calculate_band_adjustments(close: np.ndarray, upperband: np.ndarray,
 
 @njit(cache=True)
 def calculate_vortex_components(high: np.ndarray, low: np.ndarray,
-                              close: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                              close: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Calculate True Range and Vortex Movement components."""
     n = len(high)
     tr = np.zeros(n)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -52,7 +52,7 @@ class CCXTMarketAPI:
             "is_trading": bool(market.get("active", True)),
         }
 
-    async def _find_market_for_symbol(self, symbol: str) -> Optional[dict[str, Any]]:
+    async def _find_market_for_symbol(self, symbol: str) -> dict[str, Any] | None:
         for quote in ("USDT", "USD", "USDC", "BTC"):
             pair = f"{symbol}/{quote}"
             exchange, _ = await self.exchange_manager.find_symbol_exchange(pair)

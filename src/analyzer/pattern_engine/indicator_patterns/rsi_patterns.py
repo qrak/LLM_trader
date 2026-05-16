@@ -10,7 +10,6 @@ Detects RSI-based patterns:
 All functions use @njit for performance.
 """
 
-from typing import Tuple
 
 import numpy as np
 from numba import njit
@@ -21,7 +20,7 @@ def detect_rsi_oversold_numba(
     rsi: np.ndarray,
     threshold: float = 30.0,
     min_periods: int = 1
-) -> Tuple[bool, int, float]:
+) -> tuple[bool, int, float]:
     """
     Detect oversold conditions in RSI.
 
@@ -65,7 +64,7 @@ def detect_rsi_overbought_numba(
     rsi: np.ndarray,
     threshold: float = 70.0,
     min_periods: int = 1
-) -> Tuple[bool, int, float]:
+) -> tuple[bool, int, float]:
     """
     Detect overbought conditions in RSI.
 
@@ -111,7 +110,7 @@ def detect_rsi_w_bottom_numba(
     threshold: float = 30.0,
     similarity_threshold: float = 5.0,
     lookback: int = 14
-) -> Tuple[bool, int, int, float, float]:
+) -> tuple[bool, int, int, float, float]:
     """
     Detect W-Bottom pattern in RSI (bullish reversal confirmation).
 
@@ -197,7 +196,7 @@ def detect_rsi_m_top_numba(
     threshold: float = 70.0,
     similarity_threshold: float = 5.0,
     lookback: int = 14
-) -> Tuple[bool, int, int, float, float]:
+) -> tuple[bool, int, int, float, float]:
     """
     Detect M-Top pattern in RSI (bearish reversal confirmation).
 

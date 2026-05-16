@@ -4,7 +4,7 @@ Supports text-only and multimodal (text + image) requests with x402 micropayment
 """
 import io
 import base64
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Union
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -24,7 +24,7 @@ class BlockRunClient(BaseAIClient):
         super().__init__(logger)
         self._wallet_key = wallet_key
         self.base_url = base_url
-        self._client: Optional[Any] = None
+        self._client: Any | None = None
 
     async def _initialize_client(self) -> None:
         """Initialize the BlockRun SDK client."""
@@ -57,14 +57,14 @@ class BlockRunClient(BaseAIClient):
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
-        self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request to the BlockRun API using the SDK.
 
         Args:
             model: Model name in provider/model format (e.g., openai/gpt-4o, anthropic/claude-sonnet-4)
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             model_config: Configuration parameters for the model
 
         Returns:
@@ -90,16 +90,16 @@ class BlockRunClient(BaseAIClient):
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
         Args:
             model: Model name in provider/model format (e.g., openai/gpt-4o, anthropic/claude-sonnet-4)
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
 
@@ -141,7 +141,7 @@ class BlockRunClient(BaseAIClient):
             return f"openai/{model}"
         return model
 
-    def _extract_all_user_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
+    def _extract_all_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
         """Extract and concatenate text content from all user messages."""
         user_texts = []
         for message in messages:
@@ -153,9 +153,9 @@ class BlockRunClient(BaseAIClient):
 
     def _prepare_multimodal_messages(
         self,
-        messages: List[Dict[str, Any]],
-        multimodal_content: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        messages: list[dict[str, Any]],
+        multimodal_content: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Convert messages to BlockRun multimodal format."""
         multimodal_messages = []
         for i, message in enumerate(messages):
@@ -173,7 +173,7 @@ class BlockRunClient(BaseAIClient):
                 multimodal_messages.append(message)
         return multimodal_messages
 
-    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
+    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle BlockRun specific exceptions, falling back to common handler."""
         redacted_error = self._redact_private_key(str(exception))
         self.logger.error("BlockRun API error: %s", redacted_error)

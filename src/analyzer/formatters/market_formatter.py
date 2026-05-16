@@ -3,7 +3,7 @@ Consolidated Market Analysis Formatter - Main Coordinator.
 Delegates to specialized formatters.
 """
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.logger.logger import Logger
 from .market_overview_formatter import MarketOverviewFormatter
@@ -16,13 +16,13 @@ class MarketFormatter:
 
     def __init__(
         self,
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
         format_utils=None,
         config=None,
         token_counter=None,
-        overview_formatter: Optional[MarketOverviewFormatter] = None,
-        period_formatter: Optional[MarketPeriodFormatter] = None,
-        long_term_formatter: Optional[LongTermFormatter] = None
+        overview_formatter: MarketOverviewFormatter | None = None,
+        period_formatter: MarketPeriodFormatter | None = None,
+        long_term_formatter: LongTermFormatter | None = None
     ):
         """Initialize the market formatter and its specialized components.
 
@@ -44,7 +44,7 @@ class MarketFormatter:
         self.period_formatter = period_formatter
         self.long_term_formatter = long_term_formatter
 
-    def _format_snapshot_timestamp(self, timestamp_ms: Optional[int]) -> str:
+    def _format_snapshot_timestamp(self, timestamp_ms: int | None) -> str:
         """Format a millisecond timestamp for prompt display."""
         if not timestamp_ms:
             return "Unavailable"
@@ -52,7 +52,7 @@ class MarketFormatter:
         snapshot_dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
         return snapshot_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    def _format_signed_number(self, value: Optional[float], precision: int = 3) -> str:
+    def _format_signed_number(self, value: float | None, precision: int = 3) -> str:
         """Format signed numeric deltas consistently for prompts."""
         if value is None:
             return "N/A"
@@ -75,7 +75,7 @@ class MarketFormatter:
         currency_symbol = "$" if quote_currency in ["USD", "USDT", "USDC"] else f"{quote_currency} "
         return f"{currency_symbol}{self.format_utils.fmt(value, precision=2)}"
 
-    def format_microstructure_snapshot_notice(self, symbol: str, timeframe: str, microstructure: Dict[str, Any]) -> str:
+    def format_microstructure_snapshot_notice(self, symbol: str, timeframe: str, microstructure: dict[str, Any]) -> str:
         """Explain that microstructure data is a live snapshot and not timeframe aggregation."""
         snapshot_context = microstructure.get('snapshot_context', {})
         if not snapshot_context.get('is_live_snapshot'):
@@ -89,7 +89,7 @@ class MarketFormatter:
 
 
 
-    def format_coin_details_section(self, coin_details: Dict[str, Any], max_description_tokens: int = 256) -> str:
+    def format_coin_details_section(self, coin_details: dict[str, Any], max_description_tokens: int = 256) -> str:
         """Format coin details into a compressed section (removed low-trading-value data)
 
         Args:

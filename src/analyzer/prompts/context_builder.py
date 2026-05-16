@@ -4,7 +4,7 @@ Handles building context sections like trading context, sentiment, market data, 
 """
 
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
@@ -21,7 +21,7 @@ class ContextBuilder:
     def __init__(
         self,
         timeframe: str = "1h",
-        logger: Optional[Logger] = None,
+        logger: Logger | None = None,
         format_utils: "FormatUtils" = None,
         market_formatter: MarketFormatter = None,
         period_formatter: MarketPeriodFormatter = None,
@@ -158,7 +158,7 @@ class ContextBuilder:
 
         return "\n".join(milestones) if milestones else "        - No major milestones within 24h"
 
-    def build_sentiment_section(self, sentiment_data: Optional[Dict[str, Any]]) -> str:
+    def build_sentiment_section(self, sentiment_data: dict[str, Any] | None) -> str:
         """Build sentiment analysis section.
 
         Args:
@@ -191,11 +191,10 @@ class ContextBuilder:
 
         return sentiment_section
 
-    def _calculate_period_candles(self) -> Dict[str, int]:
+    def _calculate_period_candles(self) -> dict[str, int]:
         """Calculate candle counts for standard periods based on current timeframe.
 
-        Returns:
-            Dict mapping period names to candle counts needed (filters out periods smaller than timeframe)
+        Returns: dict mapping period names to candle counts needed (filters out periods smaller than timeframe)
         """
         # Default fallback
         base_minutes = 60
@@ -259,7 +258,7 @@ class ContextBuilder:
 
         return data if data != "MARKET DATA:\n" else ""
 
-    def build_market_period_metrics_section(self, market_metrics: Optional[Dict[str, Any]]) -> str:
+    def build_market_period_metrics_section(self, market_metrics: dict[str, Any] | None) -> str:
         """Build market period metrics section.
 
         Args:
@@ -273,7 +272,7 @@ class ContextBuilder:
 
         return self.period_formatter.format_market_period_metrics(market_metrics)
 
-    def build_coin_details_section(self, coin_details: Optional[Dict[str, Any]]) -> str:
+    def build_coin_details_section(self, coin_details: dict[str, Any] | None) -> str:
         """Build cryptocurrency details section.
 
         Args:
@@ -288,7 +287,7 @@ class ContextBuilder:
         return self.market_formatter.format_coin_details_section(coin_details)
 
     @staticmethod
-    def _resolve_indicator_value(raw_val: Any) -> Optional[float]:
+    def _resolve_indicator_value(raw_val: Any) -> float | None:
         """Extract a scalar float from an indicator value that may be an array or scalar.
 
         Returns None if the value is missing, empty, or not convertible to float.
@@ -304,7 +303,7 @@ class ContextBuilder:
         except (ValueError, TypeError):
             return None
 
-    def build_previous_indicators_section(self, previous_indicators: Dict[str, Any], current_indicators: Dict[str, Any]) -> str:
+    def build_previous_indicators_section(self, previous_indicators: dict[str, Any], current_indicators: dict[str, Any]) -> str:
         """Build comparison section showing how key indicators changed since last analysis.
 
         Args:
@@ -402,8 +401,8 @@ class ContextBuilder:
 
         return "\n".join(lines)
 
-    def compute_indicator_delta_alert(self, previous_indicators: Dict[str, Any],
-                                      current_indicators: Dict[str, Any],
+    def compute_indicator_delta_alert(self, previous_indicators: dict[str, Any],
+                                      current_indicators: dict[str, Any],
                                       change_threshold: float = 20.0,
                                       min_count: int = 3) -> str:
         """Compute a delta alert string when many indicators changed significantly.
@@ -449,7 +448,7 @@ class ContextBuilder:
         return ""
 
     def _format_indicator_change(self, label: str, prev_val: float, curr_val: float,
-                                 is_zero_cross_type: bool) -> Optional[str]:
+                                 is_zero_cross_type: bool) -> str | None:
         """Format a single indicator change."""
         # Calculate change
         diff = curr_val - prev_val

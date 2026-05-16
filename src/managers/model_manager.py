@@ -1,6 +1,6 @@
 """ModelManager - Public API for AI model interactions."""
 import io
-from typing import Optional, Dict, List, Union, Tuple, TYPE_CHECKING
+from typing import Union, TYPE_CHECKING
 from src.logger.logger import Logger
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.contracts.model_contract import ModelManagerProtocol
@@ -29,11 +29,11 @@ class ModelManager(ModelManagerProtocol):
         logger: Logger,
         config: "ConfigProtocol",
         unified_parser=None,
-        token_counter: Optional[TokenCounter] = None,
-        cost_storage: Optional[CostStorage] = None,
-        model_pricing: Optional[ModelPricing] = None,
-        orchestrator: Optional[ProviderOrchestrator] = None,
-        provider_clients: Optional[ProviderClients] = None
+        token_counter: TokenCounter | None = None,
+        cost_storage: CostStorage | None = None,
+        model_pricing: ModelPricing | None = None,
+        orchestrator: ProviderOrchestrator | None = None,
+        provider_clients: ProviderClients | None = None
     ) -> None:
         """
         Initialize the ModelManager.
@@ -100,9 +100,9 @@ class ModelManager(ModelManagerProtocol):
         self,
         prompt: str,
         system_message: str = None,
-        prepared_messages: List[Dict[str, str]] = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
+        prepared_messages: list[dict[str, str]] = None,
+        provider: str | None = None,
+        model: str | None = None
     ) -> str:
         """
         Send a prompt to the model and get a response.
@@ -126,8 +126,8 @@ class ModelManager(ModelManagerProtocol):
         self,
         prompt: str,
         system_message: str = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
+        provider: str | None = None,
+        model: str | None = None
     ) -> str:
         """
         Send a prompt to the model and get a streaming response.
@@ -162,8 +162,8 @@ class ModelManager(ModelManagerProtocol):
         prompt: str,
         chart_image: Union[io.BytesIO, bytes, str],
         system_message: str = None,
-        provider: Optional[str] = None,
-        model: Optional[str] = None
+        provider: str | None = None,
+        model: str | None = None
     ) -> str:
         """
         Send a prompt with chart image for pattern analysis.
@@ -188,18 +188,18 @@ class ModelManager(ModelManagerProtocol):
             raise ValueError(f"Chart analysis failed: {result.error or 'invalid response'}")
         return await self._process_result(result)
 
-    def supports_image_analysis(self, provider_override: Optional[str] = None) -> bool:
+    def supports_image_analysis(self, provider_override: str | None = None) -> bool:
         """Check if the selected provider supports image analysis."""
         provider_name = (provider_override or self.provider or "").lower()
         return self._orchestrator.supports_chart(provider_name)
 
     def describe_provider_and_model(
         self,
-        provider_override: Optional[str],
-        model_override: Optional[str],
+        provider_override: str | None,
+        model_override: str | None,
         *,
         chart: bool = False,
-    ) -> Tuple[str, str]:
+    ) -> tuple[str, str]:
         """Return provider + model description for logging and telemetry."""
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
@@ -207,7 +207,7 @@ class ModelManager(ModelManagerProtocol):
         if provider_name in ("googleai", "openrouter", "local"):
             return provider_name, self._orchestrator.resolve_model(provider_name)
         if provider_name == "all":
-            chain: List[str] = []
+            chain: list[str] = []
             if self.config.GOOGLE_STUDIO_MODEL:
                 chain.append(self.config.GOOGLE_STUDIO_MODEL)
             if chart:
@@ -222,23 +222,23 @@ class ModelManager(ModelManagerProtocol):
             return provider_name, model_chain
         return provider_name, "unspecified"
 
-    def _prepare_messages(self, prompt: str, system_message: Optional[str] = None) -> List[Dict[str, str]]:
+    def _prepare_messages(self, prompt: str, system_message: str | None = None) -> list[dict[str, str]]:
         """Prepare message structure for API call."""
         self.token_counter.reset_session_stats()
-        messages = []
         if system_message:
-            combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
-            messages.append({"role": "user", "content": combined_prompt})
             system_tokens = self.token_counter.count_tokens(system_message)
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug("Pre-call estimate: system=%s, prompt=%s", f"{system_tokens:,}", f"{prompt_tokens:,}")
+            combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
             self.logger.info("Full prompt content: %s", combined_prompt)
-        else:
-            messages.append({"role": "user", "content": prompt})
-            prompt_tokens = self.token_counter.count_tokens(prompt)
-            self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
-            self.logger.info("Full prompt content: %s", prompt)
-        return messages
+            return [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ]
+        prompt_tokens = self.token_counter.count_tokens(prompt)
+        self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
+        self.logger.info("Full prompt content: %s", prompt)
+        return [{"role": "user", "content": prompt}]
 
     async def _process_result(self, result) -> str:
         """
@@ -270,7 +270,7 @@ class ModelManager(ModelManagerProtocol):
         usage = response.usage
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
-        cost: Optional[float] = None
+        cost: float | None = None
         if result.provider == "openrouter" and self._clients.openrouter:
             generation_id = response.id
             if generation_id:

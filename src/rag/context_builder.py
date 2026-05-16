@@ -3,11 +3,11 @@ Context Building Module for RAG Engine
 
 Handles building analysis context from news articles and search results.
 """
-
+from __future__ import annotations
 import re
 from datetime import datetime
 from collections import namedtuple
-from typing import TYPE_CHECKING, List, Dict, Any, Optional, Tuple, Set
+from typing import TYPE_CHECKING, Any, Set
 from src.logger.logger import Logger
 from src.rag.article_processor import ArticleProcessor
 from src.rag.news_ingestion.schema_mapper import normalize_article_whitespace
@@ -28,15 +28,16 @@ class ContextBuilder:
         logger: Logger,
         token_counter: TokenCounter,
         config: "ConfigProtocol",
+        scoring_policy: ArticleScoringPolicy,
         article_processor=None,
-        symbol_name_map: Optional[Dict[str, str]] = None,
+        symbol_name_map: dict[str, str] | None = None,
     ):
         self.logger = logger
         self.config = config
         self.token_counter = token_counter
+        self.scoring_policy = scoring_policy
         self.article_processor = article_processor
-        self.latest_article_urls: Dict[str, str] = {}
-        self.scoring_policy = ArticleScoringPolicy(config=config)
+        self.latest_article_urls: dict[str, str] = {}
         self.symbol_name_map = {
             str(symbol).upper(): ArticleProcessor._normalize_coin_name(str(name))
             for symbol, name in (symbol_name_map or {}).items()
@@ -44,10 +45,10 @@ class ContextBuilder:
         }
 
     @profile_performance
-    async def keyword_search(self, query: str, news_database: List[Dict[str, Any]],
-                           symbol: Optional[str] = None, coin_index: Optional[Dict[str, List[int]]] = None,
-                           category_word_map: Optional[Dict[str, str]] = None,
-                           important_categories: Optional[Set[str]] = None) -> List[Tuple[int, float]]:
+    async def keyword_search(self, query: str, news_database: list[dict[str, Any]],
+                           symbol: str | None = None, coin_index: dict[str, list[int]] | None = None,
+                           category_word_map: dict[str, str] | None = None,
+                           important_categories: Set[str] | None = None) -> list[tuple[int, float]]:
         """Search for articles matching keywords with relevance scores."""
         # Provide default empty containers to avoid mutable defaults
         coin_index = coin_index or {}
@@ -58,7 +59,7 @@ class ContextBuilder:
         keywords = set(re.findall(r'\b\w{3,15}\b', query))
 
         coin = None
-        coin_patterns: Optional[Dict[str, Any]] = None
+        coin_patterns: dict[str, Any] | None = None
         if symbol and self.article_processor:
             coin = self.article_processor.extract_base_coin(symbol).upper()
             coin_lower = coin.lower()
@@ -79,7 +80,7 @@ class ContextBuilder:
                 if word in query:
                     relevant_categories.append(category.lower())
 
-        scores: List[Tuple[int, float]] = []
+        scores: list[tuple[int, float]] = []
         current_time = datetime.now().timestamp()
 
         for i, article in enumerate(news_database):
@@ -93,11 +94,11 @@ class ContextBuilder:
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores
 
-    def _calculate_article_relevance(self, article: Dict[str, Any], keywords: Set[str],
-                                   coin: Optional[str],
-                                   current_time: float, relevant_categories: List[str],
+    def _calculate_article_relevance(self, article: dict[str, Any], keywords: Set[str],
+                                   coin: str | None,
+                                   current_time: float, relevant_categories: list[str],
                                    important_categories: Set[str],
-                                   coin_patterns: Optional[Dict[str, Any]] = None) -> float:
+                                   coin_patterns: dict[str, Any] | None = None) -> float:
         """Calculate article relevance score based on various factors."""
         content = self._extract_article_content(article)
         if self.article_processor:
@@ -116,7 +117,7 @@ class ContextBuilder:
             coin_patterns=coin_patterns,
         )
 
-    def _extract_article_content(self, article: Dict[str, Any]):
+    def _extract_article_content(self, article: dict[str, Any]):
         """Extract and normalize article content for scoring."""
         # Use pre-computed lowercase fields if available (from NewsManager), otherwise compute on the fly
         return ArticleContent(
@@ -128,13 +129,14 @@ class ContextBuilder:
         )
 
     @profile_performance
-    def build_context(self, news_items: List[Dict], max_tokens: int = 2000) -> str:
+    def build_context(self, news_items: list[dict], max_tokens: int | None = None) -> str:
         """
         Build a context string from news items using simple lead paragraph extraction.
 
         Args:
-            news_items: List of news dictionaries
-            max_tokens: Maximum tokens for the entire context
+            news_items: list of news dictionaries
+            max_tokens: Maximum tokens for the entire context. When omitted,
+                uses config-derived default: article_max_tokens * news_limit.
 
         Returns:
             Formatted context string
@@ -149,10 +151,13 @@ class ContextBuilder:
         # Use configured article_max_tokens to limit each article strictly
         # This ensures uniform article quality and control over content distribution
         article_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS
+        resolved_max_tokens = max_tokens
+        if resolved_max_tokens is None:
+            resolved_max_tokens = article_max_tokens * self.config.RAG_NEWS_LIMIT
 
         for item in news_items:
             # Stop if we're close to the total context limit
-            if current_tokens >= max_tokens:
+            if current_tokens >= resolved_max_tokens:
                 break
 
             # Process article with strict per-article token limit
@@ -162,7 +167,7 @@ class ContextBuilder:
                 token_count = self.token_counter.count_tokens(processed_text)
 
                 # Skip this article if including it would exceed total context limit
-                if current_tokens + token_count > max_tokens:
+                if current_tokens + token_count > resolved_max_tokens:
                     break
 
                 context_parts.append(processed_text)
@@ -175,7 +180,7 @@ class ContextBuilder:
 
         return "\n\n".join(context_parts)
 
-    def _process_article_simple(self, item: Dict, max_tokens: int) -> str:
+    def _process_article_simple(self, item: dict, max_tokens: int) -> str:
         """
         Process a single article: Title + article body (truncated only by budget).
 
@@ -238,27 +243,26 @@ class ContextBuilder:
 
     def add_articles_to_context(
         self,
-        relevant_indices: List[int],
-        news_database: List[Dict],
+        relevant_indices: list[int],
+        news_database: list[dict],
         max_tokens: int,
         k: int,
         _keywords: set,
-        scores_dict: Dict[int, float]
-    ) -> Tuple[str, int]:
+        scores_dict: dict[int, float]
+    ) -> tuple[str, int]:
         """
         Bridge method for rag_engine compatibility.
         Converts article indices to article dicts and builds context.
 
         Args:
-            relevant_indices: List of article indices from news_database
+            relevant_indices: list of article indices from news_database
             news_database: Full news database
             max_tokens: Maximum tokens for context
             k: Number of top articles to include
             keywords: Keywords for relevance (unused in simple approach)
             scores_dict: Relevance scores (used for sorting)
 
-        Returns:
-            Tuple of (context_text, total_tokens)
+        Returns: tuple of (context_text, total_tokens)
         """
         # Score-sort a wider candidate pool, then prefer full-body items first.
         pool_limit = max(k * 10, 50)
@@ -287,6 +291,6 @@ class ContextBuilder:
 
         return context_text, total_tokens
 
-    def get_latest_article_urls(self) -> Dict[str, str]:
+    def get_latest_article_urls(self) -> dict[str, str]:
         """Get the latest article URLs from the last context build."""
         return self.latest_article_urls.copy()

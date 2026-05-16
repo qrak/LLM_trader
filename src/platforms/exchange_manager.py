@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Dict, Optional, Set, Tuple, Any, TYPE_CHECKING
+from typing import Set, Any, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
 import aiohttp
@@ -27,17 +27,17 @@ class ExchangeManager:
 
         self.logger = logger
         self.config = config
-        self.exchanges: Dict[str, ccxt.Exchange] = {}
-        self.symbols_by_exchange: Dict[str, Set[str]] = {}
-        self.exchange_last_loaded: Dict[str, datetime] = {}
-        self._update_task: Optional[asyncio.Task] = None
+        self.exchanges: dict[str, ccxt.Exchange] = {}
+        self.symbols_by_exchange: dict[str, Set[str]] = {}
+        self.exchange_last_loaded: dict[str, datetime] = {}
+        self._update_task: asyncio.Task | None = None
         self._shutdown_in_progress = False
-        self.exchange_config: Dict[str, Any] = {
+        self.exchange_config: dict[str, Any] = {
             'enableRateLimit': True,
             'options': {'defaultType': 'spot'}
         }
         self.exchange_names = self.config.SUPPORTED_EXCHANGES
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def initialize(self) -> None:
         """Initialize the session for exchanges - no longer loads all exchanges upfront"""
@@ -94,7 +94,7 @@ class ExchangeManager:
         self.logger.info("ExchangeManager shutdown complete")
 
     @retry_async()
-    async def _load_exchange(self, exchange_id: str) -> Optional[ccxt.Exchange]:
+    async def _load_exchange(self, exchange_id: str) -> ccxt.Exchange | None:
         """Load a single exchange and its markets"""
         self.logger.debug("Loading %s markets", exchange_id)
         try:
@@ -126,7 +126,7 @@ class ExchangeManager:
             self.logger.error("Failed to load %s markets: %s", exchange_id, e)
             return None
 
-    async def _ensure_exchange_loaded(self, exchange_id: str) -> Optional[ccxt.Exchange]:
+    async def _ensure_exchange_loaded(self, exchange_id: str) -> ccxt.Exchange | None:
         """Ensure exchange is loaded and markets are up to date"""
         now = datetime.now()
 
@@ -208,7 +208,7 @@ class ExchangeManager:
                 self.logger.error("Error in periodic update: %s", e)
                 await asyncio.sleep(300)  # Wait 5 minutes before retrying on error
 
-    async def find_symbol_exchange(self, symbol: str) -> Tuple[Optional[ccxt.Exchange], Optional[str]]:
+    async def find_symbol_exchange(self, symbol: str) -> tuple[ccxt.Exchange | None, str | None]:
         """Find the first exchange that supports the given symbol using lazy loading"""
         # self.logger.debug("Looking for symbol %s across exchanges", symbol)
 
