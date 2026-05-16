@@ -25,6 +25,7 @@ from src.utils.indicator_classifier import (
     build_query_document_from_technical_data,
     format_exit_execution_context,
 )
+from src.trading.data_models import ExitExecutionContext
 
 
 # ── classify_adx_label ──────────────────────────────────────────
@@ -250,15 +251,23 @@ class TestBuildContextString:
     def test_unknown_exit_execution_context_is_omitted_by_default(self):
         assert format_exit_execution_context(build_exit_execution_context()) == ""
 
-    def test_exit_execution_config_falls_back_when_attributes_are_missing(self):
-        context = build_exit_execution_context_from_config(SimpleNamespace(), timeframe="4h")
+    def test_exit_execution_config_uses_mandatory_attributes_and_timeframe_defaults(self):
+        context = build_exit_execution_context_from_config(
+            SimpleNamespace(
+                STOP_LOSS_TYPE="unknown",
+                STOP_LOSS_CHECK_INTERVAL="",
+                TAKE_PROFIT_TYPE="unknown",
+                TAKE_PROFIT_CHECK_INTERVAL="",
+            ),
+            timeframe="4h",
+        )
 
-        assert context == {
-            "stop_loss_type": "unknown",
-            "stop_loss_check_interval": "4h",
-            "take_profit_type": "unknown",
-            "take_profit_check_interval": "4h",
-        }
+        assert context == ExitExecutionContext(
+            stop_loss_type="unknown",
+            stop_loss_check_interval="4h",
+            take_profit_type="unknown",
+            take_profit_check_interval="4h",
+        )
 
 
 class TestBuildQueryDocument:

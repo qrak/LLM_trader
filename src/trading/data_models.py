@@ -274,6 +274,55 @@ class VectorSearchResult(SerializableMixin):
 
 
 @dataclass(slots=True)
+class ExitExecutionContext:
+    """Normalized SL/TP execution settings for brain memory and query context."""
+    stop_loss_type: str = "unknown"
+    stop_loss_check_interval: str = "unknown"
+    take_profit_type: str = "unknown"
+    take_profit_check_interval: str = "unknown"
+
+    def to_dict(self) -> dict[str, str]:
+        """Return as a plain dict for spreading into metadata payloads."""
+        return {
+            "stop_loss_type": self.stop_loss_type,
+            "stop_loss_check_interval": self.stop_loss_check_interval,
+            "take_profit_type": self.take_profit_type,
+            "take_profit_check_interval": self.take_profit_check_interval,
+        }
+
+    def with_defaults(self, defaults: "ExitExecutionContext") -> "ExitExecutionContext":
+        """Return a new instance with unknown fields filled from *defaults*."""
+        return ExitExecutionContext(
+            stop_loss_type=self.stop_loss_type if self.stop_loss_type != "unknown" else defaults.stop_loss_type,
+            stop_loss_check_interval=self.stop_loss_check_interval if self.stop_loss_check_interval != "unknown" else defaults.stop_loss_check_interval,
+            take_profit_type=self.take_profit_type if self.take_profit_type != "unknown" else defaults.take_profit_type,
+            take_profit_check_interval=self.take_profit_check_interval if self.take_profit_check_interval != "unknown" else defaults.take_profit_check_interval,
+        )
+
+
+@dataclass(slots=True)
+class MarketConditions:
+    """Market state snapshot passed between trading, brain, and risk modules."""
+    trend_direction: str = "NEUTRAL"
+    adx: float = 0.0
+    rsi: float = 50.0
+    rsi_level: str = "NEUTRAL"
+    volatility: str = "MEDIUM"
+    atr: float = 0.0
+    atr_percentage: float = 0.0
+    macd_signal: str = "NEUTRAL"
+    bb_position: str = "MIDDLE"
+    volume_state: str = "NORMAL"
+    is_weekend: bool = False
+    market_sentiment: str = "NEUTRAL"
+    order_book_bias: str = "BALANCED"
+    fear_greed_index: int = 50
+    trend_strength: float = 0.0
+    timeframe_alignment: str | None = None
+    choppiness: float | None = None
+
+
+@dataclass(slots=True)
 class RiskAssessment(SerializableMixin):
     """Represents the calculated risk parameters for a trade."""
     direction: str

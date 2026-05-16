@@ -309,6 +309,7 @@ class CompositionRoot:
 
         deps['dashboard_server'] = dashboard_server
         deps['dashboard_state'] = dashboard_server.dashboard_state
+        trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
 
         return deps
 

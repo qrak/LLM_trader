@@ -373,7 +373,7 @@
 
 .position-exit-management {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
     gap: 12px;
     grid-column: 1 / -1;
     padding: 10px 12px;
@@ -395,6 +395,18 @@
     font-family: var(--font-mono);
     font-size: 0.9em;
     color: var(--text-main);
+}
+
+.position-exit-management .risk-badge {
+    margin-top: 4px;
+}
+
+.risk-policy-changed {
+    align-self: center;
+    color: var(--accent-warning);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .position-meta {

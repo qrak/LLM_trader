@@ -12,12 +12,14 @@ Covers:
 import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 
 import pytest
 
+from src.dashboard.dashboard_state import DashboardState
 from src.managers.risk_manager import RiskManager
-from src.trading.data_models import Position, TradeDecision
+from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.trading_strategy import TradingStrategy
 
 
@@ -36,6 +38,10 @@ def _make_config(**overrides):
         "DEMO_QUOTE_CAPITAL": 10000.0,
         "TIMEFRAME": "4h",
         "QUOTE_CURRENCY": "USDT",
+        "STOP_LOSS_TYPE": "hard",
+        "STOP_LOSS_CHECK_INTERVAL": "15m",
+        "TAKE_PROFIT_TYPE": "hard",
+        "TAKE_PROFIT_CHECK_INTERVAL": "15m",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -293,6 +299,7 @@ class TestClosePosition:
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert decision.action == "CLOSE_LONG"
         assert "stop_loss" in decision.reasoning
+        cast(MagicMock, strategy.memory_service.add_decision).assert_called_once_with(decision)
 
         # Verify brain updated
         brain.update_from_closed_trade.assert_called_once()
@@ -320,16 +327,41 @@ class TestClosePosition:
         pos = _make_position()
         strategy, _, _, brain, _, _ = _make_strategy(current_position=pos)
 
-        conditions = {"trend_direction": "BULLISH", "adx": 40}
+        conditions = MarketConditions(trend_direction="BULLISH", adx=40)
         asyncio.run(strategy.close_position("analysis_signal", 105.0, market_conditions=conditions))
 
         call_kwargs = brain.update_from_closed_trade.call_args[1]
         assert call_kwargs["market_conditions"] == conditions
 
+    def test_close_position_notifies_dashboard_lifecycle(self):
+        """Dashboard lifecycle is marked around close-time brain learning."""
+        pos = _make_position(direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        dashboard_state = DashboardState()
+        dashboard_state.mark_brain_rebuild_started = AsyncMock()
+        dashboard_state.mark_brain_rebuild_completed = AsyncMock()
+        dashboard_state.mark_brain_rebuild_failed = AsyncMock()
+        strategy.set_dashboard_state(dashboard_state)
+
+        asyncio.run(strategy.close_position("take_profit", 110.0))
+
+        dashboard_state.mark_brain_rebuild_started.assert_awaited_once_with(
+            "Learning from closed LONG trade"
+        )
+        dashboard_state.mark_brain_rebuild_completed.assert_awaited_once_with(
+            "Brain state rebuilt from closed trade"
+        )
+        dashboard_state.mark_brain_rebuild_failed.assert_not_awaited()
+
     def test_close_position_brain_update_failure_non_fatal(self):
         """Brain update error doesn't prevent position close."""
         pos = _make_position()
         strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=pos)
+        dashboard_state = DashboardState()
+        dashboard_state.mark_brain_rebuild_started = AsyncMock()
+        dashboard_state.mark_brain_rebuild_completed = AsyncMock()
+        dashboard_state.mark_brain_rebuild_failed = AsyncMock()
+        strategy.set_dashboard_state(dashboard_state)
         brain.update_from_closed_trade.side_effect = RuntimeError("Brain crash")
 
         # Should not raise
@@ -338,6 +370,11 @@ class TestClosePosition:
         # Position still cleared
         assert strategy.current_position is None
         persistence.async_save_position.assert_called_with(None)
+        dashboard_state.mark_brain_rebuild_started.assert_awaited_once()
+        dashboard_state.mark_brain_rebuild_completed.assert_not_awaited()
+        dashboard_state.mark_brain_rebuild_failed.assert_awaited_once_with(
+            "Brain rebuild failed after trade close"
+        )
 
     def test_close_position_stats_recalculate_failure_non_fatal(self):
         """Stats recalculate error doesn't prevent position close."""
@@ -356,6 +393,38 @@ class TestClosePosition:
         asyncio.run(strategy.close_position("take_profit", 115.0))
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert "P&L: +15.00%" in decision.reasoning
+
+    def test_open_new_position_records_decision_in_memory(self):
+        """Opening a position persists the entry and refreshes short-term memory."""
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=None)
+        risk_assessment = SimpleNamespace(
+            stop_loss=95.0,
+            take_profit=112.0,
+            size_pct=0.05,
+            quantity=5.0,
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.12,
+            rr_ratio=2.4,
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=112.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        persistence.async_save_trade_decision.assert_called_once_with(decision)
+        cast(MagicMock, strategy.memory_service.add_decision).assert_called_once_with(decision)
 
     def test_close_position_calculates_correct_pnl_short(self):
         """Short position closing with profit calculates P&L correctly."""
@@ -489,18 +558,18 @@ class TestBuildConditionsFromPosition:
         pos = _make_position()
         conditions = TradingStrategy._build_conditions_from_position(pos)
 
-        assert conditions["trend_direction"] == "NEUTRAL"
-        assert conditions["adx"] == 35.0
-        assert conditions["rsi"] == 55.0
-        assert "rsi_level" in conditions
-        assert conditions["volatility"] == "MEDIUM"
+        assert conditions.trend_direction == "NEUTRAL"
+        assert conditions.adx == 35.0
+        assert conditions.rsi == 55.0
+        assert conditions.rsi_level is not None
+        assert conditions.volatility == "MEDIUM"
 
     def test_build_conditions_bullish_position(self):
         """Position with BULLISH trend maps correctly."""
         pos = _make_position(trend_direction_at_entry="BULLISH", adx_at_entry=45.0)
         conditions = TradingStrategy._build_conditions_from_position(pos)
-        assert conditions["trend_direction"] == "BULLISH"
-        assert conditions["adx"] == 45.0
+        assert conditions.trend_direction == "BULLISH"
+        assert conditions.adx == 45.0
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -533,11 +602,11 @@ class TestExtractMarketConditions:
         }
 
         conditions = strategy._extract_market_conditions(result)
-        assert conditions["trend_direction"] == "BULLISH"
-        assert conditions["trend_strength"] == 45
-        assert conditions["timeframe_alignment"] == "ALIGNED"
-        assert conditions["adx"] == 42.0
-        assert conditions["rsi"] == 65.0
+        assert conditions.trend_direction == "BULLISH"
+        assert conditions.trend_strength == 45
+        assert conditions.timeframe_alignment == "ALIGNED"
+        assert conditions.adx == 42.0
+        assert conditions.rsi == 65.0
 
     def test_market_conditions_with_rsi_as_string(self):
         """RSI value provided as string (e.g., from JSON) is converted."""
@@ -547,16 +616,16 @@ class TestExtractMarketConditions:
             "technical_data": {"adx": 30, "rsi": "72.5"},
         }
         conditions = strategy._extract_market_conditions(result)
-        assert conditions["rsi"] == 72.5
+        assert conditions.rsi == 72.5
 
     def test_market_conditions_empty_result(self):
         """Empty result returns default conditions (sentiment + fallback trend)."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         conditions = strategy._extract_market_conditions({})
         # Defaults: NEUTRAL trend from raw_response fallback + sentiment defaults
-        assert conditions["trend_direction"] == "NEUTRAL"
-        assert conditions["fear_greed_index"] == 50
-        assert "market_sentiment" in conditions
+        assert conditions.trend_direction == "NEUTRAL"
+        assert conditions.fear_greed_index == 50
+        assert conditions.market_sentiment == "NEUTRAL"
 
     def test_market_conditions_fallback_from_raw_response(self):
         """When trend_direction is empty, extract from raw_response."""
@@ -567,7 +636,7 @@ class TestExtractMarketConditions:
             "raw_response": "Strong BULLISH momentum expected",
         }
         conditions = strategy._extract_market_conditions(result)
-        assert conditions["trend_direction"] == "BULLISH"
+        assert conditions.trend_direction == "BULLISH"
 
     def test_market_conditions_bearish_fallback(self):
         """Bearish keywords in raw_response determine direction."""
@@ -578,11 +647,11 @@ class TestExtractMarketConditions:
             "raw_response": "Downtrend likely to continue, BEARISH outlook",
         }
         conditions = strategy._extract_market_conditions(result)
-        assert conditions["trend_direction"] == "BEARISH"
+        assert conditions.trend_direction == "BEARISH"
 
     def test_market_conditions_exception_handling(self):
         """Exception during extraction returns empty dict."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"analysis": None}  # .get() on None will fail
         conditions = strategy._extract_market_conditions(result)
-        assert conditions == {}
+        assert conditions == MarketConditions()

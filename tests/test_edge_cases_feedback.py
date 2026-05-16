@@ -15,6 +15,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import chromadb
@@ -23,7 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.managers.risk_manager import RiskManager
 from src.trading.brain import TradingBrainService
-from src.trading.data_models import Position, RiskAssessment
+from src.trading.data_models import MarketConditions, Position, RiskAssessment
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 
@@ -199,17 +200,7 @@ class TestAsyncRaceConditions:
     @pytest.mark.asyncio
     async def test_trading_loop_not_blocked_by_storage(self):
         """RiskManager friction storage doesn't add >100ms to position open."""
-        from types import SimpleNamespace
-
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-            DEMO_QUOTE_CAPITAL=10000.0,
-            TIMEFRAME="4h",
-        )
+        config = _make_risk_config()
         logger = MagicMock()
         persistence = MagicMock()
         persistence.load_position.return_value = None
@@ -280,74 +271,46 @@ class TestBoundaryValues:
 
     def test_nan_sl_handled_gracefully(self):
         """NaN stop_loss shouldn't crash RiskManager."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         # NaN SL → AI SL not used → falls back to dynamic
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=math.nan,
-            market_conditions={"atr": 2.0, "atr_percentage": 2.0},
+            market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0),
         )
         assert math.isfinite(assessment.stop_loss)
         assert math.isfinite(assessment.take_profit)
 
     def test_inf_price_handled(self):
         """Infinite stop_loss shouldn't crash."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=float("inf"),
-            market_conditions={"atr": 2.0, "atr_percentage": 2.0},
+            market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0),
         )
         assert math.isfinite(assessment.stop_loss)
 
     def test_negative_price_handled(self):
         """Negative stop_loss should be treated as invalid → fallback to dynamic."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         # Negative SL → not > 0 → falls back to dynamic
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=-10.0,
-            market_conditions={"atr": 2.0, "atr_percentage": 2.0},
+            market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0),
         )
         assert assessment.stop_loss > 0
 
     def test_zero_capital_produces_zero_quantity(self):
         """Zero capital results in zero quantity, not division by zero."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         assessment = mgr.calculate_entry_parameters(
@@ -359,40 +322,26 @@ class TestBoundaryValues:
 
     def test_extreme_rr_ratio_still_finite(self):
         """R/R ratio should always be finite."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         # Very tight SL (1% clamped to min) with far TP
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=99.99, take_profit=200.0,
-            market_conditions={"atr": 0.5, "atr_percentage": 0.5},
+            market_conditions=MarketConditions(atr=0.5, atr_percentage=0.5),
         )
         assert math.isfinite(assessment.rr_ratio)
         assert assessment.rr_ratio >= 0
 
     def test_empty_market_conditions_uses_defaults(self):
-        """Empty market_conditions dict doesn't crash."""
-        from types import SimpleNamespace
-        config = SimpleNamespace(
-            MAX_POSITION_SIZE=0.10,
-            POSITION_SIZE_FALLBACK_LOW=0.01,
-            POSITION_SIZE_FALLBACK_MEDIUM=0.02,
-            POSITION_SIZE_FALLBACK_HIGH=0.03,
-            TRANSACTION_FEE_PERCENT=0.001,
-        )
+        """Default MarketConditions doesn't crash."""
+        config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
-            confidence="HIGH", market_conditions={},
+            confidence="HIGH", market_conditions=MarketConditions(),
         )
         assert math.isfinite(assessment.stop_loss)
         assert math.isfinite(assessment.take_profit)
@@ -468,6 +417,24 @@ def _make_brain_with_svc(svc: VectorMemoryService) -> TradingBrainService:
         persistence=persistence,
         vector_memory=svc,
     )
+
+
+def _make_risk_config(**overrides: object) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "MAX_POSITION_SIZE": 0.10,
+        "POSITION_SIZE_FALLBACK_LOW": 0.01,
+        "POSITION_SIZE_FALLBACK_MEDIUM": 0.02,
+        "POSITION_SIZE_FALLBACK_HIGH": 0.03,
+        "TRANSACTION_FEE_PERCENT": 0.001,
+        "DEMO_QUOTE_CAPITAL": 10000.0,
+        "TIMEFRAME": "4h",
+        "STOP_LOSS_TYPE": "soft",
+        "STOP_LOSS_CHECK_INTERVAL": "4h",
+        "TAKE_PROFIT_TYPE": "soft",
+        "TAKE_PROFIT_CHECK_INTERVAL": "4h",
+    }
+    values.update(overrides)
+    return SimpleNamespace(**values)
 
 
 def _store_test_block_fast(

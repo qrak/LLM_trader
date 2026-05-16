@@ -2,10 +2,10 @@ import { initPerformanceChart, updatePerformanceData } from './modules/performan
 import { initSynapseNetwork, updateSynapses } from './modules/synapse_viewer.js?v=4.5';
 import { updateLogs, updatePromptTab, updateResponseTab } from './modules/log_viewer.js?v=4.5';
 import { updateVisuals } from './modules/visuals.js?v=4.5';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.5';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.6';
 import { initFullscreen } from './modules/fullscreen.js?v=4.5';
-import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.5';
-import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.5';
+import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.6';
+import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.6';
 import { initUI } from './modules/ui.js?v=4.5';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.5';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.5';
@@ -23,6 +23,35 @@ function formatCost(cost) {
     if (cost < 0.01) return `$${cost.toFixed(6)}`;
     if (cost < 1) return `$${cost.toFixed(4)}`;
     return `$${cost.toFixed(2)}`;
+}
+
+function formatExecutionPolicy(policy, prefix) {
+    if (!policy) return '--';
+    const type = policy[`${prefix}_type`] || 'unknown';
+    const interval = policy[`${prefix}_check_interval`] || 'unknown';
+    return `${type} / ${interval}`;
+}
+
+function updateRiskPolicyDisplay(exitManagement) {
+    const slEl = document.getElementById('overview-sl-policy');
+    const tpEl = document.getElementById('overview-tp-policy');
+    if (slEl) slEl.textContent = `SL: ${formatExecutionPolicy(exitManagement, 'stop_loss')}`;
+    if (tpEl) tpEl.textContent = `TP: ${formatExecutionPolicy(exitManagement, 'take_profit')}`;
+}
+
+function updateLifecycleDisplay(lifecycle) {
+    const badge = document.getElementById('brain-lifecycle-badge');
+    if (!badge || !lifecycle) return;
+    const status = lifecycle.status || 'idle';
+    const labels = {
+        idle: 'Brain idle',
+        updating: 'Brain updating',
+        rebuilt: 'Brain rebuilt',
+        error: 'Brain error'
+    };
+    badge.textContent = labels[status] || `Brain ${status}`;
+    badge.title = lifecycle.message || '';
+    badge.className = `lifecycle-badge ${status}`;
 }
 
 async function fetchCosts() {
@@ -78,6 +107,9 @@ async function fetchBrainStatus() {
         // (Legacy indicator removed from UI, skipping update)
 
         // Direct update to Overview KPIs
+        updateRiskPolicyDisplay(data.exit_management);
+        updateLifecycleDisplay(data.brain_lifecycle);
+
         const trendEl = document.getElementById('overview-trend');
         if (trendEl) {
             trendEl.textContent = data.trend || '--';
@@ -181,6 +213,16 @@ async function updateAll() {
     await updateSlowLane();
 }
 
+async function refreshBrainPanels() {
+    try {
+        await fetch('/api/brain/refresh', { method: 'POST' });
+    } catch (e) {
+        console.warn('Failed to request brain refresh', e);
+    }
+    await updateFastLane();
+    await updateSlowLane();
+}
+
 async function updateFastLane() {
     await fetchBrainStatus();
     await updatePositionData();
@@ -204,6 +246,7 @@ function initApp() {
 
     // Make crucial functions global immediately
     window.updateAll = updateAll;
+    window.refreshBrainPanels = refreshBrainPanels;
 
     window.togglePanelMinimize = togglePanelMinimize;
 
@@ -257,6 +300,23 @@ function initApp() {
             console.log('Analysis complete, refreshing...');
             updateFastLane();
             updateSlowLane();
+        });
+
+        document.addEventListener('brain-lifecycle-update', (event) => {
+            updateLifecycleDisplay(event.detail);
+            if (event.detail && ['rebuilt', 'error'].includes(event.detail.status)) {
+                updateFastLane();
+                updateSlowLane();
+            }
+        });
+
+        document.addEventListener('brain-state-updated', () => {
+            updateFastLane();
+            updateSlowLane();
+        });
+
+        document.addEventListener('trade-closed-detected', () => {
+            refreshBrainPanels();
         });
 
         console.log('Dashboard App Initialized');

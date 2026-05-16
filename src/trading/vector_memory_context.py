@@ -2,15 +2,29 @@
 
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.utils.indicator_classifier import classify_rsi_label, format_exit_execution_context
+from src.utils.indicator_classifier import build_exit_execution_context, classify_rsi_label, format_exit_execution_context
 
-from .data_models import VectorSearchResult
+from .data_models import ExitExecutionContext, VectorSearchResult
 
 
 class VectorMemoryContextMixin:
     """Document building, retrieval, and prompt formatting behavior."""
+
+    if TYPE_CHECKING:
+        logger: Any
+        _collection: Any
+        _embedding_model: Any
+        _decay_half_life_days: int
+        _max_age_days: int
+        RETRIEVAL_OVERFETCH_MULTIPLIER: int
+
+        def _ensure_initialized(self) -> bool: ...
+
+        def _encode_embedding(self, text: str) -> list[float]: ...
+
+        def get_anti_patterns_for_prompt(self, k: int = 3) -> str: ...
 
     @staticmethod
     def _parse_trade_timestamp(timestamp: str) -> datetime:
@@ -47,7 +61,7 @@ class VectorMemoryContextMixin:
         max_profit_pct: float | None,
         max_drawdown_pct: float | None,
         factor_scores: dict[str, float],
-        exit_execution_context: dict[str, Any] | None = None,
+        exit_execution_context: ExitExecutionContext | None = None,
     ) -> str:
         """Build the discriminative text document embedded for semantic search."""
         symbol_str = f" [{symbol}]" if symbol else ""
@@ -160,7 +174,7 @@ class VectorMemoryContextMixin:
             if self._collection.count() == 0:
                 return []
 
-            query_embedding = self._embedding_model.encode(current_context).tolist()
+            query_embedding = self._encode_embedding(current_context)
             effective_half_life_days = (
                 decay_half_life_days
                 if decay_half_life_days is not None else self._decay_half_life_days
@@ -304,7 +318,14 @@ class VectorMemoryContextMixin:
         if rr is not None:
             parts.append(f"R/R: {rr:.1f}")
 
-        exit_execution_text = format_exit_execution_context(meta)
+        exit_execution_text = format_exit_execution_context(
+            build_exit_execution_context(
+                stop_loss_type=meta.get("stop_loss_type"),
+                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                take_profit_type=meta.get("take_profit_type"),
+                take_profit_check_interval=meta.get("take_profit_check_interval"),
+            )
+        )
         if exit_execution_text:
             parts.append(exit_execution_text)
 
@@ -382,7 +403,14 @@ class VectorMemoryContextMixin:
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")
 
-        exit_execution_text = format_exit_execution_context(meta)
+        exit_execution_text = format_exit_execution_context(
+            build_exit_execution_context(
+                stop_loss_type=meta.get("stop_loss_type"),
+                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                take_profit_type=meta.get("take_profit_type"),
+                take_profit_check_interval=meta.get("take_profit_check_interval"),
+            )
+        )
         if exit_execution_text:
             parts.append(exit_execution_text)
 

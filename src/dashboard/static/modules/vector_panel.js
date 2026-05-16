@@ -22,21 +22,23 @@ export async function initVectorPanel() {
 
 export async function updateVectorData() {
     try {
-        const [vectorResponse, rulesResponse] = await Promise.all([
+        const [vectorResponse, rulesResponse, blockedResponse] = await Promise.all([
             fetch(`/api/brain/vectors?limit=50&sort_by=${currentSort.by}&order=${currentSort.order}`),
-            fetch('/api/brain/rules')
+            fetch('/api/brain/rules'),
+            fetch('/api/brain/blocked-trades?limit=10')
         ]);
         const data = await vectorResponse.json();
         const rulesData = rulesResponse.ok ? await rulesResponse.json() : [];
+        const blockedData = blockedResponse.ok ? await blockedResponse.json() : { blocked_trades: [] };
 
-        renderVectorPanel(data, rulesData);
+        renderVectorPanel(data, rulesData, blockedData);
     } catch (e) {
         console.error("Failed to fetch vector data", e);
         renderEmptyState();
     }
 }
 
-function renderVectorPanel(data, rulesData) {
+function renderVectorPanel(data, rulesData, blockedData) {
     const container = document.getElementById('vector-content');
     if (!container) return;
 
@@ -62,18 +64,30 @@ function renderVectorPanel(data, rulesData) {
            </div>`
         : '';
 
+    const freshnessHtml = `
+        <div class="vector-freshness" aria-live="polite">
+            <span>${escapeHtml(String(data.experience_count || 0))} experiences</span>
+            <span>${escapeHtml(String(data.rule_count || 0))} active rules</span>
+            <span>Refreshed ${new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date())}</span>
+        </div>
+    `;
+
     // Build stats cards
     const statsHtml = renderStatsCards(data);
 
     // Build rules section
     const rulesHtml = renderSemanticRules(rulesData);
 
+    const frictionHtml = renderTradeFriction(blockedData);
+
     // Build experience table
     const tableHtml = renderExperienceTable(data.experiences || []);
 
     container.innerHTML = `
+        ${freshnessHtml}
         ${contextHtml}
         <div class="vector-stats">${statsHtml}</div>
+        ${frictionHtml}
         <div style="margin-bottom: 24px;">
             <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Semantic Rules</h3>
             ${rulesHtml}
@@ -183,6 +197,49 @@ function renderStatsCards(data) {
     `;
 }
 
+function toNumber(value, fallback = null) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatNumber(value, digits = 1) {
+    const parsed = toNumber(value);
+    return parsed === null ? '--' : parsed.toFixed(digits);
+}
+
+function renderTradeFriction(data) {
+    const blockedTrades = data?.blocked_trades || [];
+    if (!blockedTrades.length) return '';
+    const rows = blockedTrades.slice(0, 6).map(item => {
+        const timestamp = item.timestamp
+            ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(item.timestamp))
+            : '--';
+        const guard = item.guard_type ? item.guard_type.replace(/_/g, ' ') : 'unknown guard';
+        return `
+            <tr>
+                <td>${escapeHtml(guard)}</td>
+                <td>${escapeHtml(item.direction || '--')}</td>
+                <td>${escapeHtml(item.confidence || '--')}</td>
+                <td>${formatNumber(item.suggested_rr, 2)} / ${formatNumber(item.required_rr, 2)}</td>
+                <td>${timestamp}</td>
+            </tr>
+        `;
+    }).join('');
+    return `
+        <div class="trade-friction-block">
+            <h3>Trade Friction</h3>
+            <div class="vector-table compact">
+                <table>
+                    <thead>
+                        <tr><th>Guard</th><th>Direction</th><th>Confidence</th><th>R:R</th><th>Date</th></tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 function renderSemanticRules(rules) {
     if (!rules || rules.length === 0) {
         return `
@@ -207,18 +264,21 @@ function renderSemanticRules(rules) {
 
     const cards = rules.map(rule => {
         const cfg = TYPE_CONFIG[rule.rule_type] || TYPE_CONFIG.best_practice;
-        const winRate = rule.win_rate !== undefined ? `${Math.round(rule.win_rate)}%` : '--';
+        const winRateValue = toNumber(rule.win_rate);
+        const winRate = winRateValue !== null ? `${Math.round(winRateValue)}%` : '--';
 
         const wlLabel = (rule.wins !== undefined && rule.losses !== undefined)
             ? `${rule.wins}W / ${rule.losses}L`
             : `From ${rule.source_trades || '--'} Trades`;
 
-        const avgPnl = (rule.avg_pnl_pct !== undefined && rule.avg_pnl_pct !== null)
-            ? `<span style="color:${rule.avg_pnl_pct >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'};">${rule.avg_pnl_pct >= 0 ? '+' : ''}${rule.avg_pnl_pct.toFixed(1)}% Avg P&L</span>`
+        const avgPnlValue = toNumber(rule.avg_pnl_pct);
+        const avgPnl = avgPnlValue !== null
+            ? `<span style="color:${avgPnlValue >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'};">${avgPnlValue >= 0 ? '+' : ''}${avgPnlValue.toFixed(1)}% Avg P&L</span>`
             : '';
 
-        const pf = (rule.profit_factor !== undefined && rule.profit_factor !== null && rule.profit_factor < 90)
-            ? `<span>PF ${rule.profit_factor.toFixed(1)}</span>`
+        const profitFactor = toNumber(rule.profit_factor);
+        const pf = profitFactor !== null && profitFactor < 90
+            ? `<span>PF ${profitFactor.toFixed(1)}</span>`
             : '';
 
         const exitProfile = rule.dominant_exit_profile
@@ -356,12 +416,14 @@ function renderExperienceTable(experiences) {
         const meta = exp.metadata || {};
         const outcome = meta.outcome || '--';
         const outcomeClass = outcome === 'WIN' ? 'win' : outcome === 'LOSS' ? 'loss' : '';
-        const pnl = meta.pnl_pct !== undefined ? `${meta.pnl_pct >= 0 ? '+' : ''}${meta.pnl_pct.toFixed(2)}%` : '--';
-        const pnlClass = meta.pnl_pct >= 0 ? 'positive' : 'negative';
+        const pnlValue = toNumber(meta.pnl_pct);
+        const pnl = pnlValue !== null ? `${pnlValue >= 0 ? '+' : ''}${pnlValue.toFixed(2)}%` : '--';
+        const pnlClass = pnlValue === null ? '' : (pnlValue >= 0 ? 'positive' : 'negative');
         const confidence = meta.confidence || '--';
         const direction = meta.direction || '--';
         const symbol = meta.symbol ? `<span style="font-size:0.8em;color:var(--text-muted);">${escapeHtml(meta.symbol)}</span>` : '';
-        const similarity = (exp.similarity !== undefined && exp.similarity > 0) ? `${exp.similarity.toFixed(1)}%` : '--';
+        const similarityValue = toNumber(exp.similarity);
+        const similarity = similarityValue !== null && similarityValue > 0 ? `${similarityValue.toFixed(1)}%` : '--';
         const timestamp = meta.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(meta.timestamp)) : '--';
 
         const closeReason = meta.close_reason || '';

@@ -69,6 +69,14 @@ function handleUpdate(data) {
         case 'analysis_complete':
             triggerRefreshAll();
             break;
+        case 'brain_rebuild_started':
+        case 'brain_rebuild_completed':
+        case 'brain_rebuild_failed':
+            dispatchBrainLifecycle(data.data);
+            break;
+        case 'brain_state_updated':
+            dispatchBrainStateUpdated(data.data);
+            break;
         default:
             console.log('Unknown WS message type:', data.type);
     }
@@ -99,6 +107,16 @@ function triggerRefreshAll() {
     document.dispatchEvent(event);
 }
 
+function dispatchBrainLifecycle(lifecycle) {
+    const event = new CustomEvent('brain-lifecycle-update', { detail: lifecycle || {} });
+    document.dispatchEvent(event);
+}
+
+function dispatchBrainStateUpdated(data) {
+    const event = new CustomEvent('brain-state-updated', { detail: data || {} });
+    document.dispatchEvent(event);
+}
+
 /**
  * Update connection status indicator.
  */
@@ -106,7 +124,7 @@ function updateConnectionStatus(status) {
     const indicator = document.getElementById('connection-status');
     const statusDot = document.querySelector('.status-dot');
     if (!indicator) return;
-    
+
     if (status === 'connected') {
         indicator.textContent = 'Connected';
         indicator.classList.remove('status-text', 'disconnected');

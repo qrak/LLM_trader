@@ -31,6 +31,10 @@ def _make_config(**overrides) -> SimpleNamespace:
         "TRANSACTION_FEE_PERCENT": 0.001,
         "DEMO_QUOTE_CAPITAL": 10000.0,
         "TIMEFRAME": "4h",
+        "STOP_LOSS_TYPE": "hard",
+        "STOP_LOSS_CHECK_INTERVAL": "4h",
+        "TAKE_PROFIT_TYPE": "hard",
+        "TAKE_PROFIT_CHECK_INTERVAL": "4h",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

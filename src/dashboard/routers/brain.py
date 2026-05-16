@@ -2,7 +2,7 @@
 import asyncio
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +72,31 @@ def _distance_pct_or_fallback(stored_pct: float | None, entry_price: float, targ
     if entry_price <= 0:
         return 0.0
     return abs(target_price - entry_price) / entry_price
+
+
+def _format_execution_label(data: dict[str, Any], prefix: str) -> str:
+    execution_type = data.get(f"{prefix}_type") or "unknown"
+    check_interval = data.get(f"{prefix}_check_interval") or "unknown"
+    return f"{execution_type} / {check_interval}"
+
+
+def _build_risk_management(current: dict[str, Any], at_entry: dict[str, Any] | None = None) -> dict[str, Any]:
+    entry = at_entry or current
+    current_labels = {
+        "stop_loss": _format_execution_label(current, "stop_loss"),
+        "take_profit": _format_execution_label(current, "take_profit"),
+    }
+    entry_labels = {
+        "stop_loss": _format_execution_label(entry, "stop_loss"),
+        "take_profit": _format_execution_label(entry, "take_profit"),
+    }
+    return {
+        "current": current,
+        "at_entry": entry,
+        "current_labels": current_labels,
+        "at_entry_labels": entry_labels,
+        "policy_changed": current != entry,
+    }
 
 
 def _extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[str, Any]:
@@ -198,6 +223,8 @@ class BrainRouter:
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
         self.router.add_api_route("/refresh-price", self.refresh_current_price, methods=["GET"])
         self.router.add_api_route("/blocked-trades", self.get_blocked_trades, methods=["GET"])
+        self.router.add_api_route("/lifecycle", self.get_brain_lifecycle, methods=["GET"])
+        self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"])
 
     def _resolve_rule_exit_profile(self, metadata: dict[str, Any]) -> str:
         """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
@@ -213,10 +240,8 @@ class BrainRouter:
                 metadata.get("dominant_take_profit_interval") or metadata.get("take_profit_check_interval")
             ),
         )
-        for key, value in context.items():
-            if value == "unknown":
-                context[key] = default_context.get(key, "unknown")
-        return format_exit_execution_context(context, include_unknown=True).removeprefix("Exit Execution: ")
+        resolved = context.with_defaults(default_context)
+        return format_exit_execution_context(resolved, include_unknown=True).removeprefix("Exit Execution: ")
 
     def _render_rule_text(self, rule_text: str, metadata: dict[str, Any]) -> str:
         """Return dashboard rule text with legacy unknown exit profile corrected."""
@@ -231,7 +256,9 @@ class BrainRouter:
         """Get the current thought process/status of the brain."""
         cached = self.dashboard_state.get_cached("brain_status", ttl_seconds=30.0)
         if cached:
-            return cached
+            result = dict(cached)
+            result["brain_lifecycle"] = self.dashboard_state.get_brain_lifecycle()
+            return result
         try:
             data_dir = self.config.DATA_DIR
         except AttributeError:
@@ -249,7 +276,8 @@ class BrainRouter:
             "action": "--",
             "adx": None,
             "rsi": None,
-            "exit_management": build_exit_execution_context_from_config(self.config, timeframe),
+            "exit_management": build_exit_execution_context_from_config(self.config, timeframe).to_dict(),
+            "brain_lifecycle": self.dashboard_state.get_brain_lifecycle(),
         }
         try:
             if prev_response_file.exists():
@@ -271,6 +299,20 @@ class BrainRouter:
             self.logger.error("Failed to load statistics", exc_info=True)
         self.dashboard_state.set_cached("brain_status", status)
         return status
+
+    async def get_brain_lifecycle(self) -> dict[str, Any]:
+        """Get current brain rebuild lifecycle state."""
+        return self.dashboard_state.get_brain_lifecycle()
+
+    async def refresh_brain_state(self) -> dict[str, Any]:
+        """Invalidate brain-bound dashboard caches and notify clients to refetch."""
+        self.dashboard_state.invalidate_brain_caches()
+        await self.dashboard_state.broadcast_brain_state_updated("Brain dashboard caches refreshed")
+        return {
+            "success": True,
+            "refreshed_at": datetime.now(timezone.utc).isoformat(),
+            "lifecycle": self.dashboard_state.get_brain_lifecycle(),
+        }
 
     async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
         """Get recent vector memories (synapses)."""
@@ -335,6 +377,87 @@ class BrainRouter:
             self.logger.error("Failed to retrieve active rules", exc_info=True)
             return []
 
+    @staticmethod
+    def _empty_vector_details() -> dict[str, Any]:
+        return {
+            "experience_count": 0,
+            "experiences": [],
+            "confidence_stats": {},
+            "adx_stats": {},
+            "factor_stats": {},
+            "rule_count": 0,
+            "current_context": None,
+        }
+
+    @staticmethod
+    def _sort_number(value: Any) -> float:
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _build_vector_details_result(
+        self,
+        query: str | None,
+        limit: int,
+        sort_by: str,
+        order: str,
+    ) -> dict[str, Any]:
+        result = self._empty_vector_details()
+        result["experience_count"] = self.vector_memory.trade_count
+        result["rule_count"] = self.vector_memory.semantic_rule_count
+        result["confidence_stats"] = self.vector_memory.compute_confidence_stats()
+        result["adx_stats"] = self.vector_memory.compute_adx_performance()
+        result["factor_stats"] = self.vector_memory.compute_factor_performance()
+
+        where_filter = {"outcome": {"$ne": "UPDATE"}}
+        embed_query = query
+        display_context = query
+        if not embed_query:
+            display_context, embed_query = _build_current_market_context(
+                self.config, self.logger, self.unified_parser
+            )
+            if display_context:
+                result["current_context"] = display_context
+
+        if embed_query:
+            experiences = self.vector_memory.retrieve_similar_experiences(
+                embed_query, k=limit, where=where_filter
+            )
+        else:
+            experiences = self.vector_memory.get_all_experiences(limit=limit, where=where_filter)
+
+        def get_sort_key(item):
+            meta = item.metadata
+            if sort_by == "date":
+                return str(meta.get("timestamp", ""))
+            if sort_by == "similarity":
+                return self._sort_number(item.similarity)
+            if sort_by == "pnl":
+                return self._sort_number(meta.get("pnl_pct"))
+            if sort_by == "outcome":
+                return str(meta.get("outcome", ""))
+            if sort_by == "confidence":
+                conf_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+                return conf_map.get(str(meta.get("confidence", "LOW")).upper(), 0)
+            if sort_by == "direction":
+                return str(meta.get("direction", ""))
+            return 0
+
+        experiences.sort(key=get_sort_key, reverse=order == "desc")
+        result["experiences"] = [
+            {
+                "id": exp.id,
+                "document": exp.document,
+                "similarity": exp.similarity,
+                "recency": exp.recency,
+                "hybrid_score": exp.hybrid_score,
+                "metadata": exp.metadata,
+            }
+            for exp in experiences[:limit]
+        ]
+        return result
+
     async def get_vector_details(
         self, request: Request, query: str = Query(default=None, max_length=500), limit: int = Query(default=50, ge=1, le=500)
     ) -> dict[str, Any]:
@@ -353,68 +476,13 @@ class BrainRouter:
             cached = self.dashboard_state.get_cached(cache_key, ttl_seconds=30.0)
             if cached:
                 return cached
-        result = {
-            "experience_count": 0,
-            "experiences": [],
-            "confidence_stats": {},
-            "adx_stats": {},
-            "factor_stats": {},
-            "rule_count": 0,
-            "current_context": None
-        }
+        result = self._empty_vector_details()
         if not self.vector_memory:
             return result
         try:
-            result["experience_count"] = self.vector_memory.trade_count
-            result["rule_count"] = self.vector_memory.semantic_rule_count
-            result["confidence_stats"] = self.vector_memory.compute_confidence_stats()
-            result["adx_stats"] = self.vector_memory.compute_adx_performance()
-            result["factor_stats"] = self.vector_memory.compute_factor_performance()
-            where_filter = {"outcome": {"$ne": "UPDATE"}}
-            embed_query = query
-            display_context = query
-            if not embed_query:
-                display_context, embed_query = await asyncio.to_thread(
-                    _build_current_market_context, self.config, self.logger, self.unified_parser
-                )
-                if display_context:
-                    result["current_context"] = display_context
-            if embed_query:
-                experiences = self.vector_memory.retrieve_similar_experiences(
-                    embed_query, k=limit, where=where_filter
-                )
-            else:
-                experiences = self.vector_memory.get_all_experiences(limit=limit, where=where_filter)
-            reverse = order == "desc"
-            def get_sort_key(item):
-                # pylint: disable=too-many-return-statements
-                meta = item.metadata
-                if sort_by == "date":
-                    return meta.get("timestamp", "")
-                if sort_by == "similarity":
-                    return item.similarity
-                if sort_by == "pnl":
-                    return meta.get("pnl_pct", 0)
-                if sort_by == "outcome":
-                    return meta.get("outcome", "")
-                if sort_by == "confidence":
-                    conf_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
-                    return conf_map.get(meta.get("confidence", "LOW"), 0)
-                if sort_by == "direction":
-                    return meta.get("direction", "")
-                return 0
-            experiences.sort(key=get_sort_key, reverse=reverse)
-            experiences_list = []
-            for exp in experiences[:limit]:
-                experiences_list.append({
-                    "id": exp.id,
-                    "document": exp.document,
-                    "similarity": exp.similarity,
-                    "recency": exp.recency,
-                    "hybrid_score": exp.hybrid_score,
-                    "metadata": exp.metadata
-                })
-            result["experiences"] = experiences_list
+            result = await asyncio.to_thread(
+                self._build_vector_details_result, query, limit, sort_by, order
+            )
             if not query:
                 self.dashboard_state.set_cached(cache_key, result)
         except Exception:
@@ -445,10 +513,14 @@ class BrainRouter:
             return {"has_position": False, "error": "Persistence not available"}
         position = self.persistence.load_position()
         if not position:
+            current_exit_management = build_exit_execution_context_from_config(
+                self.config, self.config.TIMEFRAME
+            ).to_dict()
             res = {
                 "has_position": False,
                 "current_price": current_price,
-                "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
+                "exit_management": current_exit_management,
+                "risk_management": _build_risk_management(current_exit_management),
             }
             self.dashboard_state.set_cached("position", res)
             return res
@@ -462,6 +534,10 @@ class BrainRouter:
             position.entry_price,
             position.take_profit,
         )
+        current_exit_management = build_exit_execution_context_from_config(
+            self.config, self.config.TIMEFRAME
+        ).to_dict()
+        entry_exit_management = build_exit_execution_context_from_position(position).to_dict()
         res = {
             "has_position": True,
             "current_price": current_price,
@@ -483,8 +559,9 @@ class BrainRouter:
             "max_drawdown_pct": position.max_drawdown_pct,
             "max_profit_pct": position.max_profit_pct,
             "confluence_factors": position.confluence_factors,
-            "exit_management": build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME),
-            "exit_management_at_entry": build_exit_execution_context_from_position(position),
+            "exit_management": current_exit_management,
+            "exit_management_at_entry": entry_exit_management,
+            "risk_management": _build_risk_management(current_exit_management, entry_exit_management),
         }
         self.dashboard_state.set_cached("position", res)
         return res

@@ -1,10 +1,11 @@
 """Tests for vector_memory.py changes: classify_rsi_label integration and _adx_label."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+import numpy as np
 import pytest
 
 from src.trading.vector_memory import VectorMemoryService
-from src.trading.data_models import VectorSearchResult
+from src.trading.data_models import ExitExecutionContext, VectorSearchResult
 from src.utils.indicator_classifier import classify_rsi_label
 
 
@@ -106,12 +107,12 @@ class TestBuildExperienceDocument:
 
     def test_exit_execution_context_in_structure(self):
         doc = self._build_doc(
-            exit_execution_context={
-                "stop_loss_type": "hard",
-                "stop_loss_check_interval": "15m",
-                "take_profit_type": "hard",
-                "take_profit_check_interval": "15m",
-            }
+            exit_execution_context=ExitExecutionContext(
+                stop_loss_type="hard",
+                stop_loss_check_interval="15m",
+                take_profit_type="hard",
+                take_profit_check_interval="15m",
+            )
         )
         assert "Exit Execution: SL hard/15m | TP hard/15m" in doc
 
@@ -204,6 +205,38 @@ class TestStoreExperience:
         assert metadata["take_profit_type"] == "hard"
         assert metadata["take_profit_check_interval"] == "15m"
         assert "Exit Execution: SL hard/15m | TP hard/15m" in upsert_kwargs["documents"][0]
+
+    def test_store_experience_sanitizes_non_finite_and_complex_metadata(self):
+        svc = _make_service()
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.1, 0.2, 0.3]
+
+        stored = svc.store_experience(
+            trade_id="trade-sanitize-1",
+            market_context="BULLISH + High ADX",
+            outcome="WIN",
+            pnl_pct=2.5,
+            direction="LONG",
+            confidence="HIGH",
+            reasoning="Momentum continuation",
+            metadata={
+                "finite_numpy": np.float64(1.25),
+                "bad_nan": float("nan"),
+                "bad_inf": float("inf"),
+                "nested": {"value": 1},
+                "items": [1, 2, 3],
+                "none_value": None,
+            },
+            symbol="BTC/USDC",
+        )
+
+        assert stored is True
+        metadata = svc._collection.upsert.call_args.kwargs["metadatas"][0]
+        assert metadata["finite_numpy"] == 1.25
+        assert "bad_nan" not in metadata
+        assert "bad_inf" not in metadata
+        assert "nested" not in metadata
+        assert "items" not in metadata
+        assert "none_value" not in metadata
 
 
 class TestComputeFactorPerformance:

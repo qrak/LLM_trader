@@ -1,5 +1,6 @@
 """Trading strategy that wraps analysis with position management."""
 
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
@@ -15,12 +16,13 @@ from src.utils.indicator_classifier import (
     classify_volume_state,
     classify_volatility_level,
 )
-from .data_models import Position, TradeDecision
+from .data_models import MarketConditions, Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
 
 if TYPE_CHECKING:
+    from src.dashboard.dashboard_state import DashboardState
     from src.managers.persistence_manager import PersistenceManager
 
 
@@ -38,6 +40,7 @@ class TradingStrategy:
         config: Any = None,
         position_extractor=None,
         position_factory=None,
+        dashboard_state: "DashboardState | None" = None,
     ):
         """Initialize the trading strategy with DI pattern.
 
@@ -51,6 +54,7 @@ class TradingStrategy:
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
             position_factory: PositionFactory instance (injected from start.py)
+            dashboard_state: Optional dashboard state for UI lifecycle notifications
         """
         self.logger = logger
         self.persistence = persistence
@@ -61,6 +65,7 @@ class TradingStrategy:
         self.config = config
         self.extractor = position_extractor
         self.position_factory = position_factory
+        self.dashboard_state = dashboard_state
 
         # Load any existing position
         self.current_position: Position | None = self.persistence.load_position()
@@ -92,6 +97,15 @@ class TradingStrategy:
 
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
+
+    def set_dashboard_state(self, dashboard_state: "DashboardState | None") -> None:
+        """Inject dashboard state after dashboard server construction."""
+        self.dashboard_state = dashboard_state
+
+    async def _record_trade_decision(self, decision: TradeDecision) -> None:
+        """Persist a decision and refresh short-term memory."""
+        await self.persistence.async_save_trade_decision(decision)
+        self.memory_service.add_decision(decision)
 
     async def _update_live_metrics(self, current_price: float) -> bool:
         """Update live position metrics before evaluating an exit."""
@@ -153,7 +167,7 @@ class TradingStrategy:
         self,
         reason: str,
         current_price: float,
-        market_conditions: dict[str, Any] | None = None
+        market_conditions: MarketConditions | None = None
     ) -> None:
         """Close the current position and update trading brain.
 
@@ -165,36 +179,38 @@ class TradingStrategy:
         if not self.current_position:
             return
 
-        pnl = self.current_position.calculate_pnl(current_price)
+        closed_position = self.current_position
+        pnl = closed_position.calculate_pnl(current_price)
 
         # Calculate closing fee
-        closing_fee = self.current_position.calculate_closing_fee(
+        closing_fee = closed_position.calculate_closing_fee(
             current_price,
             self.config.TRANSACTION_FEE_PERCENT
         )
 
         decision = TradeDecision(
             timestamp=datetime.now(timezone.utc),
-            symbol=self.current_position.symbol,
-            action=f"CLOSE_{self.current_position.direction}",
-            confidence=self.current_position.confidence,
+            symbol=closed_position.symbol,
+            action=f"CLOSE_{closed_position.direction}",
+            confidence=closed_position.confidence,
             price=current_price,
-            stop_loss=self.current_position.stop_loss,
-            take_profit=self.current_position.take_profit,
-            position_size=self.current_position.size_pct,
-            quote_amount=self.current_position.quote_amount,
-            quantity=self.current_position.size,
+            stop_loss=closed_position.stop_loss,
+            take_profit=closed_position.take_profit,
+            position_size=closed_position.size_pct,
+            quote_amount=closed_position.quote_amount,
+            quantity=closed_position.size,
             fee=closing_fee,
             reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%. Fee: ${closing_fee:.4f}",
         )
 
-        self.logger.info("Closing %s position (%s) @ $%s, P&L: %s%%, Fee: $%.4f", self.current_position.direction, reason, f"{current_price:,.2f}", f"{pnl:+.2f}", closing_fee)
+        self.logger.info("Closing %s position (%s) @ $%s, P&L: %s%%, Fee: $%.4f", closed_position.direction, reason, f"{current_price:,.2f}", f"{pnl:+.2f}", closing_fee)
 
         # Retrieve entry decision from trade history for brain learning
         entry_decision = None
         try:
             entry_decision = self.persistence.get_entry_decision_for_position(
-                self.current_position.entry_time
+                closed_position.entry_time,
+                symbol=closed_position.symbol,
             )
             if entry_decision:
                 reasoning_preview = entry_decision.reasoning[:500] if entry_decision.reasoning else "(no reasoning)"
@@ -204,27 +220,34 @@ class TradingStrategy:
         except Exception as e:
             self.logger.error("Error retrieving entry decision: %s", e)
 
-        # Update trading brain with closed trade insights
-        try:
-            self.brain_service.update_from_closed_trade(
-                position=self.current_position,
-                close_price=current_price,
-                close_reason=reason,
-                entry_decision=entry_decision,
-                market_conditions=market_conditions
-            )
-        except Exception as e:
-            self.logger.error("Error updating trading brain: %s", e)
-        # Save close decision FIRST so statistics include this trade
-        await self.persistence.async_save_trade_decision(decision)
+        await self._record_trade_decision(decision)
 
-        # Recalculate performance statistics (Sharpe, Sortino, drawdown, etc.)
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
         except Exception as e:
             self.logger.error("Error recalculating statistics: %s", e)
         await self.persistence.async_save_position(None)
         self.current_position = None
+
+        try:
+            if self.dashboard_state:
+                await self.dashboard_state.mark_brain_rebuild_started(
+                    f"Learning from closed {closed_position.direction} trade"
+                )
+            await asyncio.to_thread(
+                self.brain_service.update_from_closed_trade,
+                position=closed_position,
+                close_price=current_price,
+                close_reason=reason,
+                entry_decision=entry_decision,
+                market_conditions=market_conditions,
+            )
+            if self.dashboard_state:
+                await self.dashboard_state.mark_brain_rebuild_completed("Brain state rebuilt from closed trade")
+        except Exception as e:
+            self.logger.error("Error updating trading brain: %s", e)
+            if self.dashboard_state:
+                await self.dashboard_state.mark_brain_rebuild_failed("Brain rebuild failed after trade close")
 
     async def process_analysis(self, analysis_result: dict, symbol: str) -> TradeDecision | None:
         """Process AI analysis result and execute trading decision.
@@ -300,7 +323,7 @@ class TradingStrategy:
         current_price: float,
         symbol: str,
         reasoning: str,
-        market_conditions: dict[str, Any] | None = None,
+        market_conditions: MarketConditions | None = None,
     ) -> TradeDecision | None:
         """Handle trading decision when position exists.
 
@@ -375,7 +398,7 @@ class TradingStrategy:
                 fee=0.0,
                 reasoning=f"Updated position parameters. {reasoning}",
             )
-            await self.persistence.async_save_trade_decision(decision)
+            await self._record_trade_decision(decision)
             self.logger.info("Position updated: New SL=$%s, TP=$%s", f"{stop_loss:,.2f}", f"{take_profit:,.2f}")
             return decision
 
@@ -392,7 +415,7 @@ class TradingStrategy:
         symbol: str,
         reasoning: str,
         confluence_factors: tuple = (),
-        market_conditions: dict[str, Any] | None = None,
+        market_conditions: MarketConditions | None = None,
     ) -> TradeDecision:
         """Open a new trading position with dynamic parameter calculation."""
         direction = "LONG" if signal == "BUY" else "SHORT"
@@ -415,27 +438,25 @@ class TradingStrategy:
 
         # Capture and persist any clamping frictions from RiskManager
         try:
-            frictions = getattr(self.risk_manager, "get_and_clear_frictions", None)
-            if frictions:
-                for friction in frictions():
-                    guard_type = friction.get("guard_type", "unknown")
-                    friction_dir = friction.get("direction", direction)
-                    friction_vol = friction.get("volatility_level", risk_assessment.volatility_level)
-                    self.brain_service.vector_memory.store_blocked_trade(
-                        guard_type=guard_type,
-                        direction=friction_dir,
-                        confidence=confidence,
-                        suggested_rr=risk_assessment.rr_ratio,
-                        required_rr=risk_assessment.rr_ratio,  # same since it was corrected
-                        suggested_sl_pct=friction.get("suggested_sl_pct", risk_assessment.sl_distance_pct),
-                        suggested_tp_pct=risk_assessment.tp_distance_pct,
-                        suggested_sl=friction.get("suggested_sl", risk_assessment.stop_loss),
-                        suggested_tp=friction.get("suggested_tp", risk_assessment.take_profit),
-                        current_price=current_price,
-                        volatility_level=friction_vol,
-                        reasoning_snippet=friction.get("detail", ""),
-                        metadata={"friction": friction},
-                    )
+            for friction in self.risk_manager.get_and_clear_frictions():
+                guard_type = friction.get("guard_type", "unknown")
+                friction_dir = friction.get("direction", direction)
+                friction_vol = friction.get("volatility_level", risk_assessment.volatility_level)
+                self.brain_service.vector_memory.store_blocked_trade(
+                    guard_type=guard_type,
+                    direction=friction_dir,
+                    confidence=confidence,
+                    suggested_rr=risk_assessment.rr_ratio,
+                    required_rr=risk_assessment.rr_ratio,
+                    suggested_sl_pct=friction.get("suggested_sl_pct", risk_assessment.sl_distance_pct),
+                    suggested_tp_pct=risk_assessment.tp_distance_pct,
+                    suggested_sl=friction.get("suggested_sl", risk_assessment.stop_loss),
+                    suggested_tp=friction.get("suggested_tp", risk_assessment.take_profit),
+                    current_price=current_price,
+                    volatility_level=friction_vol,
+                    reasoning_snippet=friction.get("detail", ""),
+                    metadata={"friction": friction},
+                )
         except Exception:
             self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)
 
@@ -526,7 +547,7 @@ class TradingStrategy:
             reasoning=reasoning,
         )
 
-        await self.persistence.async_save_trade_decision(decision)
+        await self._record_trade_decision(decision)
 
         return decision
 
@@ -650,7 +671,7 @@ class TradingStrategy:
         return 0.0
 
     @staticmethod
-    def _build_conditions_from_position(position: Position) -> dict[str, Any]:
+    def _build_conditions_from_position(position: Position) -> MarketConditions:
         """Reconstruct market conditions from Position's stored entry fields.
 
         Used when closing via SL/TP hit where no fresh analysis is available.
@@ -658,29 +679,29 @@ class TradingStrategy:
         rsi = position.rsi_at_entry
         rsi_level = classify_rsi_label(rsi)
 
-        return {
-            "trend_direction": position.trend_direction_at_entry,
-            "adx": position.adx_at_entry,
-            "rsi": rsi,
-            "rsi_level": rsi_level,
-            "volatility": position.volatility_level,
-            "macd_signal": position.macd_signal_at_entry,
-            "bb_position": position.bb_position_at_entry,
-            "volume_state": position.volume_state_at_entry,
-            "market_sentiment": position.market_sentiment_at_entry,
-            "order_book_bias": position.order_book_bias_at_entry,
-        }
+        return MarketConditions(
+            trend_direction=position.trend_direction_at_entry,
+            adx=position.adx_at_entry,
+            rsi=rsi,
+            rsi_level=rsi_level,
+            volatility=position.volatility_level,
+            macd_signal=position.macd_signal_at_entry,
+            bb_position=position.bb_position_at_entry,
+            volume_state=position.volume_state_at_entry,
+            market_sentiment=position.market_sentiment_at_entry,
+            order_book_bias=position.order_book_bias_at_entry,
+        )
 
-    def _extract_market_conditions(self, result: dict) -> dict[str, Any]:
+    def _extract_market_conditions(self, result: dict) -> MarketConditions:
         """Extract market conditions from analysis result for brain learning.
 
         Args:
             result: Analysis result dictionary
 
         Returns:
-            Dictionary with trend_direction, adx, volatility, etc.
+            MarketConditions with trend_direction, adx, volatility, etc.
         """
-        conditions = {}
+        conditions: dict[str, Any] = {}
 
         try:
             # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
@@ -765,7 +786,25 @@ class TradingStrategy:
                     conditions["trend_direction"] = "NEUTRAL"
         except Exception as e:
             self.logger.warning("Could not extract market conditions: %s", e)
-        return conditions
+        return MarketConditions(
+            trend_direction=conditions.get("trend_direction", "NEUTRAL"),
+            adx=float(conditions.get("adx", 0.0)),
+            rsi=float(conditions.get("rsi", 50.0)),
+            rsi_level=conditions.get("rsi_level", "NEUTRAL"),
+            volatility=conditions.get("volatility", "MEDIUM"),
+            atr=float(conditions.get("atr", 0.0)),
+            atr_percentage=float(conditions.get("atr_percentage", 0.0)),
+            macd_signal=conditions.get("macd_signal", "NEUTRAL"),
+            bb_position=conditions.get("bb_position", "MIDDLE"),
+            volume_state=conditions.get("volume_state", "NORMAL"),
+            is_weekend=bool(conditions.get("is_weekend", False)),
+            market_sentiment=conditions.get("market_sentiment", "NEUTRAL"),
+            order_book_bias=conditions.get("order_book_bias", "BALANCED"),
+            fear_greed_index=int(conditions.get("fear_greed_index", 50)),
+            trend_strength=float(conditions.get("trend_strength", 0.0)),
+            timeframe_alignment=conditions.get("timeframe_alignment"),
+            choppiness=conditions.get("choppiness"),
+        )
 
     def _extract_confluence_factors(self, result: dict) -> tuple:
         """Extract confluence factors from analysis result for brain learning.

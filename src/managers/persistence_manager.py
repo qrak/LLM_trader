@@ -26,6 +26,8 @@ class PersistenceManager:
     - No business logic (no P&L calculation, no insight extraction)
     """
 
+    ENTRY_DECISION_MATCH_TOLERANCE_SECONDS = 0.5
+
     @staticmethod
     def _ensure_utc(dt: datetime) -> datetime:
         """Ensure datetime is timezone-aware (UTC)."""
@@ -60,13 +62,11 @@ class PersistenceManager:
     def save_position(self, position: "Position" | None) -> None:
         """Save current position to disk."""
         try:
-            # Update cache immediately
-            self._position_cache = position
-            self._position_cache_valid = True
-
             if position is None:
                 if self.positions_file.exists():
                     self.positions_file.unlink()
+                self._position_cache = None
+                self._position_cache_valid = True
                 return
 
             data = {
@@ -109,6 +109,9 @@ class PersistenceManager:
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2)
             os.replace(temp_path, self.positions_file)
+
+            self._position_cache = position
+            self._position_cache_valid = True
 
             self.logger.debug("Saved position: %s %s", position.direction, position.symbol)
         except Exception as e:
@@ -210,11 +213,16 @@ class PersistenceManager:
             self.logger.error("Error loading trade history: %s", e)
             return []
 
-    def get_entry_decision_for_position(self, entry_time: datetime) -> "TradeDecision" | None:
+    def get_entry_decision_for_position(
+        self,
+        entry_time: datetime,
+        symbol: str | None = None,
+    ) -> "TradeDecision" | None:
         """Retrieve the entry decision from trade history for a given position.
 
         Args:
-            entry_time: The entry_time of the position to find
+            entry_time: The entry_time of the position to find.
+            symbol: Optional symbol used to disambiguate rapid entries.
 
         Returns:
             TradeDecision with the original entry reasoning, or None if not found
@@ -223,33 +231,41 @@ class PersistenceManager:
             history = self.load_trade_history()
             entry_actions = {"BUY", "SELL"}
 
-            # Search for BUY/SELL action matching the entry_time
+            entry_time_utc = self._ensure_utc(entry_time)
+            best_match: tuple[float, dict[str, Any], datetime] | None = None
             for decision_dict in history:
                 action = decision_dict.get("action", "")
                 timestamp_str = decision_dict.get("timestamp", "")
 
-                if action in entry_actions and timestamp_str:
-                    decision_time = self._ensure_utc(datetime.fromisoformat(timestamp_str))
-                    entry_time_utc = self._ensure_utc(entry_time)
+                if action not in entry_actions or not timestamp_str:
+                    continue
+                if symbol and decision_dict.get("symbol", symbol) != symbol:
+                    continue
 
-                    # Match by timestamp (allowing 1 second tolerance for floating point precision)
-                    time_diff = abs((decision_time - entry_time_utc).total_seconds())
-                    if time_diff < 1.0:
-                        # Reconstruct TradeDecision from dictionary
-                        return TradeDecision(
-                            timestamp=decision_time,
-                            symbol=decision_dict.get("symbol", "BTC/USDC"),
-                            action=action,
-                            confidence=decision_dict.get("confidence", "MEDIUM"),
-                            price=decision_dict.get("price", 0.0),
-                            stop_loss=decision_dict.get("stop_loss"),
-                            take_profit=decision_dict.get("take_profit"),
-                            position_size=decision_dict.get("position_size", 0.0),
-                            quote_amount=decision_dict.get("quote_amount", 0.0),
-                            quantity=decision_dict.get("quantity", 0.0),
-                            fee=decision_dict.get("fee", 0.0),
-                            reasoning=decision_dict.get("reasoning", "")
-                        )
+                decision_time = self._ensure_utc(datetime.fromisoformat(timestamp_str))
+                time_diff = abs((decision_time - entry_time_utc).total_seconds())
+                if time_diff > self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS:
+                    continue
+                if best_match is None or time_diff < best_match[0]:
+                    best_match = (time_diff, decision_dict, decision_time)
+
+            if best_match:
+                _, decision_dict, decision_time = best_match
+                action = decision_dict.get("action", "")
+                return TradeDecision(
+                    timestamp=decision_time,
+                    symbol=decision_dict.get("symbol", "BTC/USDC"),
+                    action=action,
+                    confidence=decision_dict.get("confidence", "MEDIUM"),
+                    price=decision_dict.get("price", 0.0),
+                    stop_loss=decision_dict.get("stop_loss"),
+                    take_profit=decision_dict.get("take_profit"),
+                    position_size=decision_dict.get("position_size", 0.0),
+                    quote_amount=decision_dict.get("quote_amount", 0.0),
+                    quantity=decision_dict.get("quantity", 0.0),
+                    fee=decision_dict.get("fee", 0.0),
+                    reasoning=decision_dict.get("reasoning", "")
+                )
 
             self.logger.warning("Could not find entry decision for position at %s", entry_time)
             return None

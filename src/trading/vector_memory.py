@@ -1,9 +1,13 @@
 """Vector memory service for trading experiences using ChromaDB."""
 
+import math
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
 from src.logger.logger import Logger
+from src.utils.data_utils import serialize_for_json
+from src.utils.indicator_classifier import build_exit_execution_context
 from .vector_memory_analytics import VectorMemoryAnalyticsMixin
 from .vector_memory_context import VectorMemoryContextMixin
 from .vector_memory_rules import VectorMemoryRulesMixin
@@ -68,10 +72,20 @@ class VectorMemoryService(
         self._semantic_rules_collection: Any | None = None
         self._blocked_collection: Any | None = None
         self._embedding_model = embedding_model
+        self._embedding_lock = threading.Lock()
         self._initialized = False
         self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
             timeframe_minutes
         )
+
+    def _encode_embedding(self, text: str) -> list[float]:
+        """Encode text with serialized access to the shared embedding model."""
+        with self._embedding_lock:
+            encoded = self._embedding_model.encode(text)
+        try:
+            return encoded.tolist()
+        except AttributeError:
+            return list(encoded)
 
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).
@@ -115,12 +129,32 @@ class VectorMemoryService(
             return False
 
     def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
-        """Remove None values from metadata dict.
+        """Keep only Chroma-compatible finite primitive metadata values."""
+        sanitized: dict[str, Any] = {}
+        serialized = serialize_for_json(metadata)
+        if not isinstance(serialized, dict):
+            return sanitized
 
-        ChromaDB rejects NoneType values in metadata. This filters them out
-        while preserving all valid primitive values (str, int, float, bool).
-        """
-        return {k: v for k, v in metadata.items() if v is not None}
+        for key, value in serialized.items():
+            if value is None:
+                continue
+            if isinstance(value, bool):
+                sanitized[key] = value
+                continue
+            if isinstance(value, int):
+                sanitized[key] = value
+                continue
+            if isinstance(value, float):
+                if math.isfinite(value):
+                    sanitized[key] = value
+                else:
+                    self.logger.debug("Dropping non-finite metadata value: %s=%s", key, value)
+                continue
+            if isinstance(value, str):
+                sanitized[key] = value
+                continue
+            self.logger.debug("Dropping unsupported metadata value: %s=%r", key, value)
+        return sanitized
 
     def store_experience(
         self,
@@ -186,10 +220,15 @@ class VectorMemoryService(
                 max_profit_pct=meta.get("max_profit_pct"),
                 max_drawdown_pct=meta.get("max_drawdown_pct"),
                 factor_scores={k: v for k, v in meta.items() if k.endswith("_score")},
-                exit_execution_context=meta,
+                exit_execution_context=build_exit_execution_context(
+                    stop_loss_type=meta.get("stop_loss_type"),
+                    stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                    take_profit_type=meta.get("take_profit_type"),
+                    take_profit_check_interval=meta.get("take_profit_check_interval"),
+                ),
             )
 
-            embedding = self._embedding_model.encode(document).tolist()
+            embedding = self._encode_embedding(document)
 
             trade_metadata: dict[str, Any] = {
                 "outcome": outcome,
@@ -271,7 +310,6 @@ class VectorMemoryService(
                 self.logger.warning("Blocked trades collection missing after initialization.")
                 return False
 
-            import math
             rr_delta = suggested_rr - required_rr if (math.isfinite(suggested_rr) and math.isfinite(required_rr)) else 0.0
 
             # Build discriminative document for semantic retrieval
@@ -285,7 +323,7 @@ class VectorMemoryService(
                 document_parts.append(f"AI reasoning: {reasoning_snippet}")
             document = " ".join(document_parts)
 
-            embedding = self._embedding_model.encode(document).tolist()
+            embedding = self._encode_embedding(document)
 
             block_metadata: dict[str, Any] = {
                 "guard_type": guard_type,

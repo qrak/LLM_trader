@@ -17,6 +17,11 @@ class DashboardState:
     # pylint: disable=too-many-instance-attributes
     next_check_utc: datetime | None = None
     current_price: float | None = None
+    brain_rebuild_status: str = "idle"
+    brain_rebuild_started_at: datetime | None = None
+    brain_rebuild_completed_at: datetime | None = None
+    brain_rebuild_message: str = ""
+    brain_rebuild_sequence: int = 0
     _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
@@ -72,6 +77,68 @@ class DashboardState:
         """Remove cached value."""
         self._cache.pop(key, None)
         self.cache_timestamps.pop(key, None)
+
+    def invalidate_cache_prefix(self, prefix: str) -> None:
+        """Remove cached values whose keys start with prefix."""
+        for key in list(self._cache):
+            if key.startswith(prefix):
+                self.invalidate_cache(key)
+
+    def invalidate_brain_caches(self) -> None:
+        """Remove dashboard caches affected by trade close and brain learning."""
+        for key in ("brain_status", "position", "rules", "performance_history", "statistics"):
+            self.invalidate_cache(key)
+        for prefix in ("memory_", "vectors_"):
+            self.invalidate_cache_prefix(prefix)
+
+    def get_brain_lifecycle(self) -> dict[str, Any]:
+        """Return current brain rebuild lifecycle state for API responses."""
+        return {
+            "status": self.brain_rebuild_status,
+            "started_at": self.brain_rebuild_started_at.isoformat() if self.brain_rebuild_started_at else None,
+            "completed_at": self.brain_rebuild_completed_at.isoformat() if self.brain_rebuild_completed_at else None,
+            "message": self.brain_rebuild_message,
+            "sequence": self.brain_rebuild_sequence,
+        }
+
+    async def mark_brain_rebuild_started(self, message: str = "Brain learning from closed trade") -> None:
+        """Mark brain rebuild as started and notify dashboard clients."""
+        async with self._lock:
+            self.brain_rebuild_sequence += 1
+            self.brain_rebuild_status = "updating"
+            self.brain_rebuild_started_at = datetime.now(timezone.utc)
+            self.brain_rebuild_completed_at = None
+            self.brain_rebuild_message = message
+            lifecycle = self.get_brain_lifecycle()
+        self.invalidate_brain_caches()
+        await self._broadcast({"type": "brain_rebuild_started", "data": lifecycle})
+
+    async def mark_brain_rebuild_completed(self, message: str = "Brain state rebuilt") -> None:
+        """Mark brain rebuild as complete, clear stale caches, and notify clients."""
+        async with self._lock:
+            self.brain_rebuild_status = "rebuilt"
+            self.brain_rebuild_completed_at = datetime.now(timezone.utc)
+            self.brain_rebuild_message = message
+            lifecycle = self.get_brain_lifecycle()
+        self.invalidate_brain_caches()
+        await self._broadcast({"type": "brain_rebuild_completed", "data": lifecycle})
+
+    async def mark_brain_rebuild_failed(self, message: str) -> None:
+        """Mark brain rebuild as failed and notify dashboard clients."""
+        async with self._lock:
+            self.brain_rebuild_status = "error"
+            self.brain_rebuild_completed_at = datetime.now(timezone.utc)
+            self.brain_rebuild_message = message
+            lifecycle = self.get_brain_lifecycle()
+        self.invalidate_brain_caches()
+        await self._broadcast({"type": "brain_rebuild_failed", "data": lifecycle})
+
+    async def broadcast_brain_state_updated(self, message: str = "Brain state refreshed") -> None:
+        """Notify clients that brain-bound panels should refresh."""
+        await self._broadcast({
+            "type": "brain_state_updated",
+            "data": {"message": message, "lifecycle": self.get_brain_lifecycle()},
+        })
 
 
 dashboard_state = DashboardState()

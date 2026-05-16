@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
+    from src.trading.data_models import ExitExecutionContext
 
 
 EXIT_EXECUTION_UNKNOWN = "unknown"
@@ -33,8 +34,9 @@ def build_exit_execution_context(
     stop_loss_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
     take_profit_type: Any = EXIT_EXECUTION_UNKNOWN,
     take_profit_check_interval: Any = EXIT_EXECUTION_UNKNOWN,
-) -> dict[str, str]:
+) -> "ExitExecutionContext":
     """Return normalized SL/TP execution settings for brain memory/query context."""
+    from src.trading.data_models import ExitExecutionContext
     stop_type = _normalize_exit_execution_value(stop_loss_type)
     take_profit_exit_type = _normalize_exit_execution_value(take_profit_type)
     if stop_type not in EXIT_EXECUTION_TYPES:
@@ -42,29 +44,29 @@ def build_exit_execution_context(
     if take_profit_exit_type not in EXIT_EXECUTION_TYPES:
         take_profit_exit_type = EXIT_EXECUTION_UNKNOWN
 
-    return {
-        "stop_loss_type": stop_type,
-        "stop_loss_check_interval": _normalize_exit_execution_value(stop_loss_check_interval),
-        "take_profit_type": take_profit_exit_type,
-        "take_profit_check_interval": _normalize_exit_execution_value(take_profit_check_interval),
-    }
+    return ExitExecutionContext(
+        stop_loss_type=stop_type,
+        stop_loss_check_interval=_normalize_exit_execution_value(stop_loss_check_interval),
+        take_profit_type=take_profit_exit_type,
+        take_profit_check_interval=_normalize_exit_execution_value(take_profit_check_interval),
+    )
 
 
 def build_exit_execution_context_from_config(
     config: "ConfigProtocol",
     timeframe: str = EXIT_EXECUTION_UNKNOWN,
-) -> dict[str, str]:
+) -> "ExitExecutionContext":
     """Build risk-execution context from config attributes."""
     interval_default = timeframe or EXIT_EXECUTION_UNKNOWN
     return build_exit_execution_context(
-        stop_loss_type=getattr(config, "STOP_LOSS_TYPE", EXIT_EXECUTION_UNKNOWN),
-        stop_loss_check_interval=getattr(config, "STOP_LOSS_CHECK_INTERVAL", None) or interval_default,
-        take_profit_type=getattr(config, "TAKE_PROFIT_TYPE", EXIT_EXECUTION_UNKNOWN),
-        take_profit_check_interval=getattr(config, "TAKE_PROFIT_CHECK_INTERVAL", None) or interval_default,
+        stop_loss_type=config.STOP_LOSS_TYPE,
+        stop_loss_check_interval=config.STOP_LOSS_CHECK_INTERVAL or interval_default,
+        take_profit_type=config.TAKE_PROFIT_TYPE,
+        take_profit_check_interval=config.TAKE_PROFIT_CHECK_INTERVAL or interval_default,
     )
 
 
-def build_exit_execution_context_from_position(position: Any) -> dict[str, str]:
+def build_exit_execution_context_from_position(position: Any) -> "ExitExecutionContext":
     """Build risk-execution context from a position entry snapshot."""
     return build_exit_execution_context(
         stop_loss_type=position.stop_loss_type_at_entry,
@@ -75,23 +77,18 @@ def build_exit_execution_context_from_position(position: Any) -> dict[str, str]:
 
 
 def format_exit_execution_context(
-    exit_execution_context: dict[str, Any] | None = None,
+    exit_execution_context: "ExitExecutionContext | None" = None,
     *,
     include_unknown: bool = False,
 ) -> str:
     """Format SL/TP execution settings for vector documents and query strings."""
-    raw_context = exit_execution_context or {}
-    context = build_exit_execution_context(
-        stop_loss_type=raw_context.get("stop_loss_type", EXIT_EXECUTION_UNKNOWN),
-        stop_loss_check_interval=raw_context.get("stop_loss_check_interval", EXIT_EXECUTION_UNKNOWN),
-        take_profit_type=raw_context.get("take_profit_type", EXIT_EXECUTION_UNKNOWN),
-        take_profit_check_interval=raw_context.get("take_profit_check_interval", EXIT_EXECUTION_UNKNOWN),
-    )
-    if not include_unknown and all(value == EXIT_EXECUTION_UNKNOWN for value in context.values()):
+    from src.trading.data_models import ExitExecutionContext
+    ctx = exit_execution_context or ExitExecutionContext()
+    if not include_unknown and all(v == EXIT_EXECUTION_UNKNOWN for v in ctx.to_dict().values()):
         return ""
     return (
-        f"Exit Execution: SL {context['stop_loss_type']}/{context['stop_loss_check_interval']} | "
-        f"TP {context['take_profit_type']}/{context['take_profit_check_interval']}"
+        f"Exit Execution: SL {ctx.stop_loss_type}/{ctx.stop_loss_check_interval} | "
+        f"TP {ctx.take_profit_type}/{ctx.take_profit_check_interval}"
     )
 
 
@@ -220,7 +217,7 @@ def build_context_string_from_technical_data(
     sentiment_data: dict[str, Any] | None = None,
     microstructure_data: dict[str, Any] | None = None,
     is_weekend: bool = False,
-    exit_execution_context: dict[str, Any] | None = None,
+    exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
     """Build the rich context string from raw technical indicators.
 
@@ -275,7 +272,7 @@ def build_context_string_from_classified_values(
     is_weekend: bool = False,
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
-    exit_execution_context: dict[str, Any] | None = None,
+    exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
     """Build the rich context string from already classified market values."""
     adx_label = classify_adx_label(adx)
@@ -309,7 +306,7 @@ def build_query_document_from_technical_data(
     sentiment_data: dict[str, Any] | None = None,
     microstructure_data: dict[str, Any] | None = None,
     is_weekend: bool = False,
-    exit_execution_context: dict[str, Any] | None = None,
+    exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
     """Build an enriched query document for vector similarity search.
 
@@ -365,7 +362,7 @@ def build_query_document_from_classified_values(
     is_weekend: bool = False,
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
-    exit_execution_context: dict[str, Any] | None = None,
+    exit_execution_context: "ExitExecutionContext | None" = None,
 ) -> str:
     """Build an enriched vector query document from already classified values."""
     context_str = build_context_string_from_classified_values(
