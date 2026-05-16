@@ -1,7 +1,7 @@
 """Router for fetching dashboard visualizations and charts."""
 import base64
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -13,7 +13,7 @@ class VisualsRouter:
 
         self.router.add_api_route("/charts/latest", self.get_latest_chart, methods=["GET"])
 
-    async def get_latest_chart(self) -> Dict[str, Any]:
+    async def get_latest_chart(self) -> dict[str, Any]:
         """Get the latest generated analysis chart as base64-encoded JSON."""
         last_chart_buffer = self.analysis_engine.last_chart_buffer if self.analysis_engine else None
         if last_chart_buffer:

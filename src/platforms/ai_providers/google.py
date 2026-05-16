@@ -3,7 +3,7 @@ Google GenAI client implementation using the official Google GenAI SDK.
 Supports both text-only and multimodal (text + image) requests for pattern analysis.
 """
 import io
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Union
 
 from google import genai
 from google.genai import types
@@ -29,7 +29,7 @@ class GoogleAIClient(BaseAIClient):
         super().__init__(logger)
         self.api_key = api_key
         self.model = model
-        self.client: Optional[genai.Client] = None
+        self.client: genai.Client | None = None
 
     async def _initialize_client(self) -> None:
         """Initialize the Google GenAI client."""
@@ -47,7 +47,7 @@ class GoogleAIClient(BaseAIClient):
             self.client = genai.Client(api_key=self.api_key)
         return self.client
 
-    def _extract_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
+    def _extract_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
         """Extract combined text content from OpenAI-style messages."""
         text_parts = []
         for message in messages:
@@ -81,7 +81,7 @@ class GoogleAIClient(BaseAIClient):
             self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
-    def _extract_usage_metadata(self, response) -> Optional[UsageModel]:
+    def _extract_usage_metadata(self, response) -> UsageModel | None:
         """Extract token usage metadata from Google AI response."""
         try:
             metadata = response.usage_metadata
@@ -114,7 +114,7 @@ class GoogleAIClient(BaseAIClient):
 
     def _create_generation_config(
         self,
-        model_config: Dict[str, Any],
+        model_config: dict[str, Any],
         include_thinking: bool = True,
         include_code_execution: bool = False
     ) -> types.GenerateContentConfig:
@@ -140,14 +140,14 @@ class GoogleAIClient(BaseAIClient):
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
-        self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request to the Google AI API.
 
         Args:
             model: Model name (overrides default if provided)
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             model_config: Configuration parameters for the model
 
         Returns:
@@ -184,16 +184,16 @@ class GoogleAIClient(BaseAIClient):
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
         Args:
             model: Model name (overrides default if provided)
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
 
@@ -235,7 +235,7 @@ class GoogleAIClient(BaseAIClient):
                 return self._handle_exception(e)
         return None
 
-    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
+    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle Google AI specific exceptions, falling back to common handler."""
         result = self.handle_common_errors(exception)
         if result:

@@ -4,7 +4,7 @@ Supports text-only and multimodal (text + image) requests for local inference.
 """
 import io
 import re
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Union
 
 import lmstudio as lms
 
@@ -20,8 +20,8 @@ class LMStudioClient(BaseAIClient):
     def __init__(self, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.base_url = base_url
-        self._client: Optional[lms.AsyncClient] = None
-        self._cached_model: Optional[str] = None
+        self._client: lms.AsyncClient | None = None
+        self._cached_model: str | None = None
 
     async def _initialize_client(self) -> None:
         """Initialize the LM Studio SDK client."""
@@ -56,8 +56,8 @@ class LMStudioClient(BaseAIClient):
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
-        self, model: str, messages: list, model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        self, model: str, messages: list, model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """Send a chat completion request to the LM Studio API using the SDK."""
         api_host = self._get_api_host()
         try:
@@ -91,16 +91,16 @@ class LMStudioClient(BaseAIClient):
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
         Args:
             model: Model name to use
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
 
@@ -142,9 +142,9 @@ class LMStudioClient(BaseAIClient):
         self,
         model: str,
         messages: list,
-        model_config: Dict[str, Any],
+        model_config: dict[str, Any],
         callback=None
-    ) -> Optional[ChatResponseModel]:
+    ) -> ChatResponseModel | None:
         """Send a streaming chat completion request to the LM Studio API."""
         api_host = self._get_api_host()
         try:
@@ -183,7 +183,7 @@ class LMStudioClient(BaseAIClient):
             self.logger.error("Error during LM Studio streaming request: %s", str(e))
             return self._handle_exception(e)
 
-    def _build_prediction_config(self, model_config: Dict[str, Any]) -> Optional[lms.LlmPredictionConfig]:
+    def _build_prediction_config(self, model_config: dict[str, Any]) -> lms.LlmPredictionConfig | None:
         """Build LM Studio prediction config from model_config dict."""
         config_dict = {}
         if "temperature" in model_config:
@@ -211,7 +211,7 @@ class LMStudioClient(BaseAIClient):
                     break
         return None
 
-    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
+    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle LM Studio specific exceptions, falling back to common handler."""
         error_message = str(exception)
         if "ErrorDeviceLost" in error_message or "vk::Queue::submit" in error_message:

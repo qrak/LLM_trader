@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
 
-from src.trading.data_models import Position, RiskAssessment
+from src.trading.data_models import ExitExecutionContext, MarketConditions, Position, RiskAssessment
 from src.logger.logger import Logger
-from src.utils.indicator_classifier import build_exit_execution_context
 
 class PositionFactory:
     """Factory for creating and updating Position objects."""
@@ -18,12 +16,12 @@ class PositionFactory:
         confidence: str,
         risk_assessment: RiskAssessment,
         confluence_factors: tuple = (),
-        market_conditions: Optional[Dict[str, Any]] = None,
-        exit_execution_context: Optional[Dict[str, Any]] = None
+        market_conditions: MarketConditions | None = None,
+        exit_execution_context: ExitExecutionContext | None = None
     ) -> Position:
         """Create a new Position instance."""
-        market_conditions = market_conditions or {}
-        exit_execution = build_exit_execution_context(**(exit_execution_context or {}))
+        mc = market_conditions or MarketConditions()
+        ec = exit_execution_context or ExitExecutionContext()
 
         return Position(
             entry_price=risk_assessment.entry_price,
@@ -38,23 +36,23 @@ class PositionFactory:
             entry_fee=risk_assessment.entry_fee,
             quote_amount=risk_assessment.quote_amount,
             size_pct=risk_assessment.size_pct,
-            atr_at_entry=market_conditions.get('atr', 0.0),
+            atr_at_entry=mc.atr,
             volatility_level=risk_assessment.volatility_level,
             sl_distance_pct=risk_assessment.sl_distance_pct,
             tp_distance_pct=risk_assessment.tp_distance_pct,
             rr_ratio_at_entry=risk_assessment.rr_ratio,
-            adx_at_entry=market_conditions.get('adx', 0.0),
-            rsi_at_entry=market_conditions.get('rsi', 50.0),
-            trend_direction_at_entry=market_conditions.get('trend_direction', 'NEUTRAL'),
-            macd_signal_at_entry=market_conditions.get('macd_signal', 'NEUTRAL'),
-            bb_position_at_entry=market_conditions.get('bb_position', 'MIDDLE'),
-            volume_state_at_entry=market_conditions.get('volume_state', 'NORMAL'),
-            market_sentiment_at_entry=market_conditions.get('market_sentiment', 'NEUTRAL'),
-            order_book_bias_at_entry=market_conditions.get('order_book_bias', 'BALANCED'),
-            stop_loss_type_at_entry=exit_execution["stop_loss_type"],
-            stop_loss_check_interval_at_entry=exit_execution["stop_loss_check_interval"],
-            take_profit_type_at_entry=exit_execution["take_profit_type"],
-            take_profit_check_interval_at_entry=exit_execution["take_profit_check_interval"],
+            adx_at_entry=mc.adx,
+            rsi_at_entry=mc.rsi,
+            trend_direction_at_entry=mc.trend_direction,
+            macd_signal_at_entry=mc.macd_signal,
+            bb_position_at_entry=mc.bb_position,
+            volume_state_at_entry=mc.volume_state,
+            market_sentiment_at_entry=mc.market_sentiment,
+            order_book_bias_at_entry=mc.order_book_bias,
+            stop_loss_type_at_entry=ec.stop_loss_type,
+            stop_loss_check_interval_at_entry=ec.stop_loss_check_interval,
+            take_profit_type_at_entry=ec.take_profit_type,
+            take_profit_check_interval_at_entry=ec.take_profit_check_interval,
             max_drawdown_pct=0.0,
             max_profit_pct=0.0
         )

@@ -2,15 +2,29 @@
 
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 
-from src.utils.indicator_classifier import classify_rsi_label, format_exit_execution_context
+from src.utils.indicator_classifier import build_exit_execution_context, classify_rsi_label, format_exit_execution_context
 
-from .data_models import VectorSearchResult
+from .data_models import ExitExecutionContext, VectorSearchResult
 
 
 class VectorMemoryContextMixin:
     """Document building, retrieval, and prompt formatting behavior."""
+
+    if TYPE_CHECKING:
+        logger: Any
+        _collection: Any
+        _embedding_model: Any
+        _decay_half_life_days: int
+        _max_age_days: int
+        RETRIEVAL_OVERFETCH_MULTIPLIER: int
+
+        def _ensure_initialized(self) -> bool: ...
+
+        def _encode_embedding(self, text: str) -> list[float]: ...
+
+        def get_anti_patterns_for_prompt(self, k: int = 3) -> str: ...
 
     @staticmethod
     def _parse_trade_timestamp(timestamp: str) -> datetime:
@@ -33,27 +47,27 @@ class VectorMemoryContextMixin:
         reasoning: str,
         close_reason: str,
         market_context: str,
-        adx: Optional[float],
-        rsi: Optional[float],
-        atr_pct: Optional[float],
+        adx: float | None,
+        rsi: float | None,
+        atr_pct: float | None,
         volatility: str,
         macd_signal: str,
         bb_position: str,
-        rr_ratio: Optional[float],
-        sl_pct: Optional[float],
-        tp_pct: Optional[float],
+        rr_ratio: float | None,
+        sl_pct: float | None,
+        tp_pct: float | None,
         market_sentiment: str,
         order_book_bias: str,
-        max_profit_pct: Optional[float],
-        max_drawdown_pct: Optional[float],
-        factor_scores: Dict[str, float],
-        exit_execution_context: Optional[Dict[str, Any]] = None,
+        max_profit_pct: float | None,
+        max_drawdown_pct: float | None,
+        factor_scores: dict[str, float],
+        exit_execution_context: ExitExecutionContext | None = None,
     ) -> str:
         """Build the discriminative text document embedded for semantic search."""
         symbol_str = f" [{symbol}]" if symbol else ""
         header = f"{direction} trade{symbol_str}. {market_context}."
 
-        indicator_parts: List[str] = []
+        indicator_parts: list[str] = []
         if adx is not None:
             indicator_parts.append(f"ADX={adx:.1f} ({self._adx_label(adx)})")
         if rsi is not None:
@@ -68,7 +82,7 @@ class VectorMemoryContextMixin:
             indicator_parts.append(f"BB={bb_position}")
         indicators_str = " | ".join(indicator_parts)
 
-        structure_parts: List[str] = []
+        structure_parts: list[str] = []
         if rr_ratio is not None:
             structure_parts.append(f"RR={rr_ratio:.1f}")
         if sl_pct is not None:
@@ -84,7 +98,7 @@ class VectorMemoryContextMixin:
             structure_parts.append(exit_execution_text)
         structure_str = " | ".join(structure_parts)
 
-        factor_parts: List[str] = []
+        factor_parts: list[str] = []
         for key, score in sorted(factor_scores.items()):
             name = key.replace("_score", "")
             bucket = "HIGH" if score > 69 else "MED" if score > 30 else "LOW"
@@ -95,7 +109,7 @@ class VectorMemoryContextMixin:
         if close_reason:
             result_str += f" via {close_reason}"
 
-        post_parts: List[str] = []
+        post_parts: list[str] = []
         if max_profit_pct is not None and max_profit_pct > 0:
             post_parts.append(f"MFE=+{max_profit_pct:.1f}%")
         if max_drawdown_pct is not None and max_drawdown_pct > 0:
@@ -148,10 +162,10 @@ class VectorMemoryContextMixin:
         current_context: str,
         k: int = 5,
         use_decay: bool = True,
-        decay_half_life_days: Optional[int] = None,
-        max_age_days: Optional[int] = None,
-        where: Optional[Dict[str, Any]] = None,
-    ) -> List[VectorSearchResult]:
+        decay_half_life_days: int | None = None,
+        max_age_days: int | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> list[VectorSearchResult]:
         """Retrieve past experiences similar to the current market context."""
         if not self._ensure_initialized():
             return []
@@ -160,7 +174,7 @@ class VectorMemoryContextMixin:
             if self._collection.count() == 0:
                 return []
 
-            query_embedding = self._embedding_model.encode(current_context).tolist()
+            query_embedding = self._encode_embedding(current_context)
             effective_half_life_days = (
                 decay_half_life_days
                 if decay_half_life_days is not None else self._decay_half_life_days
@@ -179,7 +193,7 @@ class VectorMemoryContextMixin:
                 query_kwargs["where"] = where
             results = self._collection.query(**query_kwargs)
 
-            experiences: List[VectorSearchResult] = []
+            experiences: list[VectorSearchResult] = []
             if results and results["ids"] and results["ids"][0]:
                 for i, doc_id in enumerate(results["ids"][0]):
                     similarity = 1 - results["distances"][0][i] if results["distances"] else 0
@@ -277,9 +291,9 @@ class VectorMemoryContextMixin:
 
         return "\n".join(lines)
 
-    def _generate_synthetic_insight(self, meta: Dict[str, Any]) -> str:
+    def _generate_synthetic_insight(self, meta: dict[str, Any]) -> str:
         """Generate synthetic insight from trade metadata when reasoning is unavailable."""
-        parts: List[str] = []
+        parts: list[str] = []
 
         symbol = meta.get("symbol", "")
         if symbol:
@@ -304,7 +318,14 @@ class VectorMemoryContextMixin:
         if rr is not None:
             parts.append(f"R/R: {rr:.1f}")
 
-        exit_execution_text = format_exit_execution_context(meta)
+        exit_execution_text = format_exit_execution_context(
+            build_exit_execution_context(
+                stop_loss_type=meta.get("stop_loss_type"),
+                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                take_profit_type=meta.get("take_profit_type"),
+                take_profit_check_interval=meta.get("take_profit_check_interval"),
+            )
+        )
         if exit_execution_text:
             parts.append(exit_execution_text)
 
@@ -317,9 +338,9 @@ class VectorMemoryContextMixin:
 
         return " | ".join(parts) if parts else "No additional data"
 
-    def _build_match_factors(self, meta: Dict[str, Any], current_context: str) -> str:
+    def _build_match_factors(self, meta: dict[str, Any], current_context: str) -> str:
         """Build a match factors line showing stored numeric features vs current context."""
-        parts: List[str] = []
+        parts: list[str] = []
         ctx_upper = current_context.upper()
 
         adx = meta.get("adx_at_entry")
@@ -382,7 +403,14 @@ class VectorMemoryContextMixin:
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")
 
-        exit_execution_text = format_exit_execution_context(meta)
+        exit_execution_text = format_exit_execution_context(
+            build_exit_execution_context(
+                stop_loss_type=meta.get("stop_loss_type"),
+                stop_loss_check_interval=meta.get("stop_loss_check_interval"),
+                take_profit_type=meta.get("take_profit_type"),
+                take_profit_check_interval=meta.get("take_profit_check_interval"),
+            )
+        )
         if exit_execution_text:
             parts.append(exit_execution_text)
 
@@ -392,7 +420,7 @@ class VectorMemoryContextMixin:
         self,
         current_context: str,
         k: int = 20,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Calculate statistics from similar past experiences."""
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}

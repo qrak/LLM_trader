@@ -3,7 +3,7 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -52,7 +52,7 @@ class RagFileHandler:
             # __file__ is inside src/rag/; go up three levels to reach project root
             return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    def load_json_file(self, file_path: str) -> Optional[Dict]:
+    def load_json_file(self, file_path: str) -> dict | None:
         try:
             # Security: Prevent path traversal including symlink resolution
             abs_path = os.path.realpath(file_path)
@@ -69,7 +69,7 @@ class RagFileHandler:
             self.logger.error("Error loading JSON file %s: %s", file_path, e)
             return None
 
-    def save_json_file(self, file_path: str, data: Dict):
+    def save_json_file(self, file_path: str, data: dict):
         try:
             # Security: Prevent path traversal including symlink resolution
             abs_path = os.path.realpath(file_path)
@@ -95,7 +95,7 @@ class RagFileHandler:
                     pass
             self.logger.error("Error saving JSON file %s: %s", file_path, e)
 
-    def filter_articles_by_age(self, articles: List[Dict], max_age_seconds: int) -> List[Dict]:
+    def filter_articles_by_age(self, articles: list[dict], max_age_seconds: int) -> list[dict]:
         """Filter articles by age in seconds."""
         current_timestamp = datetime.now().timestamp()
         cutoff_time = current_timestamp - max_age_seconds
@@ -108,7 +108,7 @@ class RagFileHandler:
 
         return filtered_articles
 
-    def save_news_articles(self, articles: List[Dict]):
+    def save_news_articles(self, articles: list[dict]):
         if not articles:
             return
 
@@ -141,7 +141,7 @@ class RagFileHandler:
         except Exception as e:
             self.logger.error("Error saving news articles: %s", e)
 
-    def load_news_articles(self) -> List[Dict]:
+    def load_news_articles(self) -> list[dict]:
         try:
             data = self.load_json_file(self.news_file_path)
 
@@ -161,7 +161,7 @@ class RagFileHandler:
             self.logger.error("Error loading news articles: %s", e)
             return []
 
-    def load_fallback_articles(self, max_age_hours: int = 72) -> List[Dict]:
+    def load_fallback_articles(self, max_age_hours: int = 72) -> list[dict]:
         """Load articles from file with extended age for fallback when API fails"""
         try:
             data = self.load_json_file(self.news_file_path)
@@ -183,7 +183,7 @@ class RagFileHandler:
             self.logger.error("Error loading fallback news articles: %s", e)
             return []
 
-    def load_known_tickers(self) -> Optional[List[str]]:
+    def load_known_tickers(self) -> list[str] | None:
         """Load known tickers from symbol_name_map keys in data JSON."""
         try:
             data = self.load_json_file(self.tickers_file) or {}
@@ -193,7 +193,7 @@ class RagFileHandler:
             self.logger.error("Error loading known tickers: %s", e)
             return None
 
-    def save_known_tickers(self, tickers: List[str]) -> None:
+    def save_known_tickers(self, tickers: list[str]) -> None:
         """Persist known tickers by syncing symbol_name_map keys.
 
         We keep data/known_tickers.json as the single source of truth. New
@@ -210,7 +210,7 @@ class RagFileHandler:
                 if ticker
             }
 
-            synced_map: Dict[str, str] = {}
+            synced_map: dict[str, str] = {}
             for ticker in sorted(normalized_tickers):
                 existing = mapping.get(ticker)
                 if existing and existing.strip():
@@ -224,7 +224,7 @@ class RagFileHandler:
         except Exception as e:
             self.logger.error("Error saving known tickers: %s", e)
 
-    def load_symbol_name_map(self) -> Dict[str, str]:
+    def load_symbol_name_map(self) -> dict[str, str]:
         """Load optional symbol -> full coin name mapping from data JSON."""
         try:
             data = self.load_json_file(self.tickers_file) or {}
@@ -238,7 +238,7 @@ class RagFileHandler:
             self.logger.error("Error loading symbol name map: %s", e)
             return {}
 
-    def load_rag_priorities(self) -> Optional[Dict]:
+    def load_rag_priorities(self) -> dict | None:
         """Load RAG priorities configuration from disk."""
         try:
             self.logger.debug("Loading RAG priorities from: %s", self.rag_priorities_file)

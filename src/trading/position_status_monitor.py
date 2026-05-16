@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Awaitable, Callable
 
 from .exit_monitor import ExitMonitor
 
@@ -20,9 +20,9 @@ class PositionStatusMonitor:
         notifier: Any,
         active_tasks: set[asyncio.Task],
         is_running: Callable[[], bool],
-        fetch_current_ticker: Callable[[], Awaitable[Optional[Dict[str, Any]]]],
+        fetch_current_ticker: Callable[[], Awaitable[dict[str, Any] | None]],
         interruptible_sleep: Callable[..., Awaitable[Any]],
-        get_symbol: Callable[[], Optional[str]],
+        get_symbol: Callable[[], str | None],
     ) -> None:
         self.logger = logger
         self.config = config
@@ -35,10 +35,10 @@ class PositionStatusMonitor:
         self.fetch_current_ticker = fetch_current_ticker
         self.interruptible_sleep = interruptible_sleep
         self.get_symbol = get_symbol
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._position_close_lock = asyncio.Lock()
 
-    async def check_soft_exit_status(self, current_price: Optional[float], *, is_candle_close: bool = True) -> None:
+    async def check_soft_exit_status(self, current_price: float | None, *, is_candle_close: bool = True) -> None:
         """Evaluate soft exits at candle close and handle a closed position."""
         if not (self.trading_strategy.current_position and current_price is not None):
             return
@@ -58,7 +58,7 @@ class PositionStatusMonitor:
         except Exception as e:
             self.logger.error("Error checking position: %s", e)
 
-    async def handle_new_position(self, current_price: Optional[float]) -> None:
+    async def handle_new_position(self, current_price: float | None) -> None:
         """Send the first status message, seed monitor timestamps, and start the loop."""
         if not self.trading_strategy.current_position:
             return
@@ -125,7 +125,7 @@ class PositionStatusMonitor:
             self._task = None
             self.logger.debug("Stopped position status and exit monitor")
 
-    async def load_state(self) -> Dict[str, Any]:
+    async def load_state(self) -> dict[str, Any]:
         """Load persisted position monitor state."""
         return await self.exit_monitor.load_state(self.persistence)
 
@@ -143,10 +143,10 @@ class PositionStatusMonitor:
 
     async def run_hard_exit_checks(
         self,
-        current_price: Optional[float],
+        current_price: float | None,
         now: datetime,
-        state: Dict[str, Any],
-    ) -> Optional[str]:
+        state: dict[str, Any],
+    ) -> str | None:
         """Run due hard-exit checks and persist due timestamps."""
         due_hard_exits = self.exit_monitor.due_hard_exits(now, state)
         close_reason, timestamps = await self.exit_monitor.check_hard_exits(

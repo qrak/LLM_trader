@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, call, patch
 import pytest
 
-from src.trading.data_models import Position, TradeDecision
+from src.trading.data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
 from src.trading.brain import TradingBrainService
+from src.trading.stop_loss_tightening_policy import TighteningEvaluation
 
 
 def _make_brain(exit_execution_context=None, timeframe_minutes=240):
@@ -106,12 +107,12 @@ class TestBuildRichContextString:
     def test_exit_execution_included(self):
         ctx = self.brain._build_rich_context_string(
             adx=25,
-            exit_execution_context={
-                "stop_loss_type": "hard",
-                "stop_loss_check_interval": "15m",
-                "take_profit_type": "hard",
-                "take_profit_check_interval": "15m",
-            },
+            exit_execution_context=ExitExecutionContext(
+                stop_loss_type="hard",
+                stop_loss_check_interval="15m",
+                take_profit_type="hard",
+                take_profit_check_interval="15m",
+            ),
         )
         assert "Exit Execution: SL hard/15m | TP hard/15m" in ctx
 
@@ -142,7 +143,7 @@ class TestUpdateFromClosedTrade:
             position=position,
             close_price=110.0,
             close_reason="take_profit",
-            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
         )
 
         call_kwargs = self.brain.vector_memory.store_experience.call_args.kwargs
@@ -153,19 +154,19 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["take_profit_check_interval"] == "4h"
 
     def test_closed_trade_fills_unknown_exit_execution_from_configured_default(self):
-        brain = _make_brain({
-            "stop_loss_type": "hard",
-            "stop_loss_check_interval": "15m",
-            "take_profit_type": "hard",
-            "take_profit_check_interval": "15m",
-        })
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
         position = _make_position()
 
         brain.update_from_closed_trade(
             position=position,
             close_price=110.0,
             close_reason="take_profit",
-            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
         )
 
         call_kwargs = brain.vector_memory.store_experience.call_args.kwargs
@@ -200,7 +201,7 @@ class TestUpdateFromClosedTrade:
             close_price=98.0,
             close_reason="sideways",
             entry_decision=entry_decision,
-            market_conditions={"adx": 16.0, "trend_direction": "NEUTRAL"},
+            market_conditions=MarketConditions(adx=16.0, trend_direction="NEUTRAL"),
         )
 
         call_kwargs = self.brain.vector_memory.store_experience.call_args.kwargs
@@ -237,7 +238,7 @@ class TestUpdateFromClosedTrade:
             position=_make_position(),
             close_price=105.0,
             close_reason="take_profit",
-            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
         )
 
         self.brain._trigger_reflection.assert_called_once()
@@ -255,7 +256,7 @@ class TestUpdateFromClosedTrade:
             position=_make_position(),
             close_price=105.0,
             close_reason="take_profit",
-            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
         )
 
         brain._trigger_reflection.assert_not_called()
@@ -267,7 +268,7 @@ class TestUpdateFromClosedTrade:
             position=_make_position(entry_time=datetime(2026, 5, 1, tzinfo=timezone.utc)),
             close_price=105.0,
             close_reason="take_profit",
-            market_conditions={"adx": 30.0, "trend_direction": "BULLISH"},
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
         )
 
         brain._trigger_reflection.assert_called_once()
@@ -303,12 +304,12 @@ class TestGetVectorContext:
         self.brain.get_vector_context(
             adx=30,
             trend_direction="BULLISH",
-            exit_execution_context={
-                "stop_loss_type": "hard",
-                "stop_loss_check_interval": "15m",
-                "take_profit_type": "soft",
-                "take_profit_check_interval": "4h",
-            },
+            exit_execution_context=ExitExecutionContext(
+                stop_loss_type="hard",
+                stop_loss_check_interval="15m",
+                take_profit_type="soft",
+                take_profit_check_interval="4h",
+            ),
         )
         call_args = self.brain.vector_memory.get_context_for_prompt.call_args
         query_str = call_args[0][0]
@@ -345,6 +346,99 @@ class TestGetDynamicThresholds:
         assert t["min_rr_recommended"] == 2.0
         assert t["confidence_threshold"] == 70
         assert t["min_position_size"] == 0.02
+
+    def test_sl_tightening_nested_key_present(self):
+        t = self.brain.get_dynamic_thresholds()
+        assert "sl_tightening" in t
+        sl = t["sl_tightening"]
+        assert "base_threshold" in sl
+        assert "effective_threshold" in sl
+        assert "effective_threshold_pct" in sl
+        assert "source" in sl
+
+    def test_sl_tightening_effective_threshold_pct_matches_flat_key(self):
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["effective_threshold_pct"] == t["sl_tightening_pct"]
+
+    def test_sl_tightening_config_source_when_no_brain_data(self):
+        self.brain.vector_memory.compute_optimal_thresholds.return_value = {}
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["source"] == "config"
+
+    def test_sl_tightening_brain_source_when_learned_threshold_provided(self):
+        self.brain.vector_memory.compute_optimal_thresholds.return_value = {
+            "sl_tightening": {
+                "learned_threshold": 0.15,
+                "sample_count": 20,
+                "paired_sample_count": 12,
+                "win_rate": 0.6,
+                "avg_win_pct": 3.0,
+                "avg_loss_pct": -1.5,
+                "expectancy_pct": 0.6,
+                "source": "brain",
+                "basis": "paired_update_outcomes",
+            }
+        }
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["source"] == "brain"
+        assert t["sl_tightening"]["learned_threshold"] == 0.15
+
+
+# ── track_position_update with policy evaluation ──────────────
+
+
+class TestTrackPositionUpdateWithPolicy:
+    """Verify brain.track_position_update forwards TighteningEvaluation to recorder."""
+
+    def _make_evaluation(self, price_progress=0.25, is_tightening=True, allowed=True):
+        return TighteningEvaluation(
+            is_tightening=is_tightening,
+            price_progress=price_progress,
+            base_min_progress=0.20,
+            effective_min_progress=0.20,
+            allowed=allowed,
+            source="config",
+            reason="sufficient progress",
+        )
+
+    def test_tightening_evaluation_forwarded_to_experience_recorder(self):
+        brain = _make_brain(timeframe_minutes=240)
+        brain.experience_recorder = MagicMock()
+        position = _make_position()
+        evaluation = self._make_evaluation()
+
+        brain.track_position_update(
+            position=position,
+            old_sl=95.0,
+            old_tp=110.0,
+            new_sl=97.0,
+            new_tp=110.0,
+            current_price=105.0,
+            current_pnl_pct=5.0,
+            tightening_evaluation=evaluation,
+        )
+
+        call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs
+        assert call_kwargs["tightening_evaluation"] is evaluation
+        assert call_kwargs["timeframe_minutes"] == 240
+
+    def test_none_evaluation_forwarded_when_not_provided(self):
+        brain = _make_brain()
+        brain.experience_recorder = MagicMock()
+        position = _make_position()
+
+        brain.track_position_update(
+            position=position,
+            old_sl=95.0,
+            old_tp=110.0,
+            new_sl=97.0,
+            new_tp=110.0,
+            current_price=105.0,
+            current_pnl_pct=5.0,
+        )
+
+        call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs
+        assert call_kwargs["tightening_evaluation"] is None
 
 
 class TestReflectionRuleFormatting:
@@ -423,12 +517,12 @@ class TestReflectionRuleFormatting:
         assert meta["profit_factor"] > 1.0
 
     def test_reflection_fills_missing_exit_profile_and_retires_legacy_unknown_rule(self):
-        brain = _make_brain({
-            "stop_loss_type": "hard",
-            "stop_loss_check_interval": "15m",
-            "take_profit_type": "hard",
-            "take_profit_check_interval": "15m",
-        })
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
 
         win_metas = [
             {
@@ -456,12 +550,12 @@ class TestReflectionRuleFormatting:
         ])
 
     def test_refresh_semantic_rules_checks_all_stored_rules_for_stale_profiles(self):
-        brain = _make_brain({
-            "stop_loss_type": "hard",
-            "stop_loss_check_interval": "15m",
-            "take_profit_type": "hard",
-            "take_profit_check_interval": "15m",
-        })
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
         brain.vector_memory.semantic_rule_count = 75
         brain.vector_memory.get_active_rules.return_value = []
 
@@ -524,12 +618,12 @@ class TestReflectionRuleFormatting:
         assert "hard" in meta["recommended_adjustment"]
 
     def test_loss_reflection_retires_stale_unknown_rule_when_loss_type_changes(self):
-        brain = _make_brain({
-            "stop_loss_type": "hard",
-            "stop_loss_check_interval": "15m",
-            "take_profit_type": "hard",
-            "take_profit_check_interval": "15m",
-        })
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
 
         loss_metas = [
             {

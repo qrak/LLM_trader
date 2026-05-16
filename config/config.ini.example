@@ -77,7 +77,7 @@ coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 # Maximum number of news articles to include in the AI's context
 news_limit = 5
 # Maximum number of tokens per article chunk for processing
-article_max_tokens = 1500
+article_max_tokens = 1000
 # Enabled RSS source keys (comma-separated).
 # This is a FILTER over the URL registry below. Leave empty to enable all
 # configured news_source_*_url entries.
@@ -145,6 +145,19 @@ position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02
 position_size_fallback_high = 0.03
 
+# Stop-loss tightening policy: minimum price-to-TP progress required before tightening SL,
+# expressed as a decimal fraction (e.g. 0.20 = 20% of entry-to-TP distance must be covered).
+# Separate defaults per timeframe bucket preserve current executor behavior.
+sl_tightening_scalping = 0.25
+sl_tightening_intraday = 0.20
+sl_tightening_swing = 0.15
+sl_tightening_position = 0.10
+# Safety bounds: the brain cannot push the learned threshold outside [floor, ceiling].
+sl_tightening_floor = 0.05
+sl_tightening_ceiling = 0.40
+# Minimum number of paired update/outcome samples before trusting a brain override.
+sl_tightening_min_samples = 10
+
 [cooldowns]
 # File message expiry is configured in hours; loader converts it to seconds at runtime.
 file_message_expiry = 168
@@ -180,6 +193,10 @@ google_thinking_level = high
 # Available for Gemini 3 Flash+ models via Google AI Studio API only (not OpenRouter).
 # May increase token usage slightly but improves accuracy for complex visual analysis.
 google_code_execution = false
+# Controls narrative depth in the AI's analysis above the required fenced JSON block.
+# The JSON execution block is always present regardless of this setting.
+# Options: "low" (3-line signal-only), "medium" (5-line condensed), "high" (13-line deep technical breakdown).
+model_verbosity = high
 
 [dashboard]
 # Enable or disable the web dashboard entirely (true/false)

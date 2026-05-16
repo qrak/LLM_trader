@@ -8,7 +8,7 @@
     <meta name="description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
     <meta property="og:title" content="Semantic Signal LLM">
     <meta property="og:description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
-    <link rel="stylesheet" href="css/style.css?v=6.0">
+    <link rel="stylesheet" href="css/style.css?v=6.1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -187,7 +187,11 @@
             <div id="tab-overview" class="tab-content active" role="tabpanel" aria-labelledby="nav-overview">
                 <header class="tab-header">
                     <h2>Live Dashboard</h2>
-                    <span id="last-updated" style="font-size: 12px; color: var(--text-muted);">Updated: --</span>
+                    <div class="header-status-row">
+                        <span id="brain-lifecycle-badge" class="lifecycle-badge idle" aria-live="polite">Brain
+                            idle</span>
+                        <span id="last-updated" style="font-size: 12px; color: var(--text-muted);">Updated: --</span>
+                    </div>
                 </header>
                 <p class="tab-attribution">Market data from various sources including <a
                         href="https://www.coingecko.com" target="_blank" rel="noopener noreferrer">CoinGecko</a></p>
@@ -215,6 +219,12 @@
                     </div>
                 </div>
 
+                <div id="risk-policy-strip" class="risk-policy-strip" aria-live="polite">
+                    <span class="risk-policy-title">Execution Policy</span>
+                    <span id="overview-sl-policy" class="risk-badge sl">SL: --</span>
+                    <span id="overview-tp-policy" class="risk-badge tp">TP: --</span>
+                </div>
+
                 <section id="panel-performance" class="panel full-height-panel">
                     <div class="panel-header">
                         <h3>Performance Metrics</h3>
@@ -239,6 +249,7 @@
                         <div class="panel-header">
                             <h3>Synaptic Pathways</h3>
                             <div class="legend">
+                                <span id="experience-count" class="meta-info">0 learned experiences</span>
                                 <span class="dot buy"></span> BUY
                                 <span class="dot close"></span> CLOSE
                                 <span class="dot update"></span> UPDATE
@@ -411,7 +422,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js?v=5.0"></script>
+    <script type="module" src="main.js?v=5.1"></script>
 </body>
 
 </html>

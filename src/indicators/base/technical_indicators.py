@@ -4,7 +4,7 @@ Technical Indicators - Direct Access (No Delegation)
 Refactored to eliminate delegation pattern. All indicator methods are now
 directly accessible on TechnicalIndicators instead of through category sub-objects.
 """
-from typing import Union, List, Tuple
+from typing import Union
 
 import numpy as np
 import pandas as pd
@@ -88,7 +88,7 @@ class TechnicalIndicators:
     def volume(self) -> np.ndarray:
         return self._base.volume
 
-    def get_data(self, data: Union[pd.DataFrame, np.ndarray, List[List[Union[int, float]]]]) -> None:
+    def get_data(self, data: Union[pd.DataFrame, np.ndarray, list[list[Union[int, float]]]]) -> None:
         self._base.get_data(data)
 
     # ==================== MOMENTUM INDICATORS ====================
@@ -106,7 +106,7 @@ class TechnicalIndicators:
             fast_length: int = 12,
             slow_length: int = 26,
             signal_length: int = 9
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             macd_numba,
             self.close,
@@ -121,7 +121,7 @@ class TechnicalIndicators:
             period_k: int = 5,
             smooth_k: int = 3,
             period_d: int = 3
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             stochastic_numba,
             self.high,
@@ -429,7 +429,7 @@ class TechnicalIndicators:
         )
 
     def apa_adaptive_eot(self, q1: float = 0.8, q2: float = 0.4, min_len: int = 10, max_len: int = 48,
-                         ave_len: int = 3) -> Tuple[np.ndarray, np.ndarray]:
+                         ave_len: int = 3) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             apa_adaptive_eot_numba,
             self.close,
@@ -453,7 +453,7 @@ class TechnicalIndicators:
 
     # ==================== SUPPORT/RESISTANCE INDICATORS ====================
 
-    def support_resistance(self, length: int = 30) -> Tuple[np.ndarray, np.ndarray]:
+    def support_resistance(self, length: int = 30) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             support_resistance_numba,
             self.high,
@@ -462,7 +462,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def find_support_resistance(self, window: int = 30) -> Tuple[float, float]:
+    def find_support_resistance(self, window: int = 30) -> tuple[float, float]:
         support, resistance = self.support_resistance_advanced(length=window)
         return self._base.calculate_indicator(
             find_support_resistance_numba,
@@ -473,7 +473,7 @@ class TechnicalIndicators:
             required_length=window
         )
 
-    def support_resistance_advanced(self, length: int = 30) -> Tuple[np.ndarray, np.ndarray]:
+    def support_resistance_advanced(self, length: int = 30) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             support_resistance_numba_advanced,
             self.high,
@@ -491,7 +491,7 @@ class TechnicalIndicators:
             persistence: int = 1,
             volume_factor: float = 1.3,
             price_factor: float = 0.004
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             advanced_support_resistance_numba,
             self.high,
@@ -515,7 +515,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def fibonacci_bollinger_bands(self, length: int = 20, mult: float = 3.0) -> Tuple[
+    def fibonacci_bollinger_bands(self, length: int = 20, mult: float = 3.0) -> tuple[
         np.ndarray, np.ndarray, np.ndarray]:
         hlc3 = (self.high + self.low + self.close) / 3
         return self._base.calculate_indicator(
@@ -534,7 +534,7 @@ class TechnicalIndicators:
             level_down: float = 50.0,
             length: int = 7,
             multiplier: float = 3.0,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             floating_levels_numba,
             self.high,
@@ -548,14 +548,13 @@ class TechnicalIndicators:
             required_length=lookback
         )
 
-    def pivot_points(self) -> Tuple[
+    def pivot_points(self) -> tuple[
             np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
             np.ndarray, np.ndarray, np.ndarray, np.ndarray
     ]:
         """Calculate standard pivot points and support/resistance levels
         
-        Returns:
-            Tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
+        Returns: tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
         """
         return self._base.calculate_indicator(
             pivot_points_numba,
@@ -565,14 +564,13 @@ class TechnicalIndicators:
             required_length=1
         )
 
-    def fibonacci_pivot_points(self) -> Tuple[
+    def fibonacci_pivot_points(self) -> tuple[
             np.ndarray, np.ndarray, np.ndarray, np.ndarray,
             np.ndarray, np.ndarray, np.ndarray
     ]:
         """Calculate Fibonacci pivot points using Fibonacci ratios (0.382, 0.618, 1.0)
         
-        Returns:
-            Tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
+        Returns: tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
         """
         return self._base.calculate_indicator(
             fibonacci_pivot_points_numba,
@@ -584,7 +582,7 @@ class TechnicalIndicators:
 
     # ==================== TREND INDICATORS ====================
 
-    def adx(self, length: int = 14) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def adx(self, length: int = 14) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             adx_numba,
             self.high,
@@ -594,7 +592,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def supertrend(self, length: int = 7, multiplier: float = 3.0) -> Tuple[
+    def supertrend(self, length: int = 7, multiplier: float = 3.0) -> tuple[
         np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             supertrend_numba,
@@ -611,7 +609,7 @@ class TechnicalIndicators:
             base_length: int = 26,
             lagging_span2_length: int = 52,
             displacement: int = 26
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             ichimoku_cloud_numba,
             self.high,
@@ -632,7 +630,7 @@ class TechnicalIndicators:
             max_step
         )
 
-    def vortex_indicator(self, length: int = 14) -> Tuple[np.ndarray, np.ndarray]:
+    def vortex_indicator(self, length: int = 14) -> tuple[np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             vortex_indicator_numba,
             self.high,
@@ -682,7 +680,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def bollinger_bands(self, length: int = 20, num_std_dev: float = 2.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def bollinger_bands(self, length: int = 20, num_std_dev: float = 2.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             bollinger_bands_numba,
             self.close,
@@ -691,7 +689,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = 'rma') -> Tuple[
+    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = 'rma') -> tuple[
         np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             chandelier_exit_numba,
@@ -720,7 +718,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = 'ema') -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = 'ema') -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             keltner_channels_numba,
             self.high,
@@ -732,7 +730,7 @@ class TechnicalIndicators:
             required_length=length
         )
 
-    def donchian_channels(self, length: int = 20) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def donchian_channels(self, length: int = 20) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self._base.calculate_indicator(
             donchian_channels_numba,
             self.high,

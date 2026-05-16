@@ -4,7 +4,7 @@ Eliminates duplication and unnecessary delegation layers.
 """
 import json
 import re
-from typing import Dict, Any, Set, Optional
+from typing import Any, Set
 
 from pydantic import ValidationError
 
@@ -34,7 +34,7 @@ class UnifiedParser:
 
 
 
-    def parse_ai_response(self, raw_text: str) -> Dict[str, Any]:
+    def parse_ai_response(self, raw_text: str) -> dict[str, Any]:
         """
         Parse AI model response from raw string to structured data.
         Requires models to produce valid JSON (no heuristic parsing for low-quality models).
@@ -68,13 +68,13 @@ class UnifiedParser:
             self.logger.error("Failed to parse AI response: %s", e)
             return self._create_error_response(str(e), raw_text)
 
-    def validate_ai_response(self, response: Dict[str, Any]) -> bool:
+    def validate_ai_response(self, response: dict[str, Any]) -> bool:
         """Validate that AI response has required structure."""
         return (isinstance(response, dict) and
                 "analysis" in response and
                 isinstance(response["analysis"], dict))
 
-    def validate_trading_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_trading_response(self, response: dict[str, Any]) -> dict[str, Any]:
         """Validate parsed trading response against the response contract."""
         validation = {
             "schema": TradingAnalysisResponseModel.schema_version,
@@ -105,7 +105,7 @@ class UnifiedParser:
             }
         return {**validation, "status": "valid", "valid": True}
 
-    def extract_json_block(self, text: str, unwrap_key: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def extract_json_block(self, text: str, unwrap_key: str | None = None) -> dict[str, Any] | None:
         """Extract JSON block from markdown-formatted text.
 
         Reusable utility for extracting ```json ... ``` blocks from AI responses.
@@ -224,10 +224,8 @@ class UnifiedParser:
 
 
 
-    def _normalize_numeric_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_numeric_fields(self, data: dict[str, Any]) -> dict[str, Any]:
         """Ensure numeric fields are properly typed at the data source."""
-        if not isinstance(data, dict):
-            return data
 
         # Check analysis section
         analysis = data.get('analysis', {})
@@ -305,14 +303,13 @@ class UnifiedParser:
 
         return data
 
-    def _attach_response_validation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _attach_response_validation(self, data: dict[str, Any]) -> dict[str, Any]:
         """Attach non-blocking response validation metadata to parsed responses."""
-        if isinstance(data, dict):
-            data["response_validation"] = self.validate_trading_response(data)
+        data["response_validation"] = self.validate_trading_response(data)
         return data
 
     @staticmethod
-    def _format_validation_errors(error: ValidationError) -> list[Dict[str, str]]:
+    def _format_validation_errors(error: ValidationError) -> list[dict[str, str]]:
         """Convert Pydantic validation errors into compact log/dashboard metadata."""
         formatted_errors = []
         for item in error.errors():
@@ -324,7 +321,7 @@ class UnifiedParser:
             })
         return formatted_errors
 
-    def _create_validation_error_metadata(self, message: str, error_type: str) -> Dict[str, Any]:
+    def _create_validation_error_metadata(self, message: str, error_type: str) -> dict[str, Any]:
         """Create response-validation metadata for parser-level failures."""
         return {
             "schema": TradingAnalysisResponseModel.schema_version,
@@ -333,7 +330,7 @@ class UnifiedParser:
             "errors": [{"field": "response", "message": message, "type": error_type}],
         }
 
-    def _create_fallback_response(self, cleaned_text: str) -> Dict[str, Any]:
+    def _create_fallback_response(self, cleaned_text: str) -> dict[str, Any]:
         """Create fallback response when parsing fails."""
         return {
             "analysis": {
@@ -350,7 +347,7 @@ class UnifiedParser:
             )
         }
 
-    def _create_error_response(self, error_message: str, raw_text: str) -> Dict[str, Any]:
+    def _create_error_response(self, error_message: str, raw_text: str) -> dict[str, Any]:
         """Create error response for parsing exceptions."""
         return {
             "error": error_message,

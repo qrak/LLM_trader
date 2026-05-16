@@ -72,7 +72,10 @@ class DashboardServer:
             return "no-store" in cache_control or "no-store" in edge_control
 
         def _build_etag(request, response, path):
-            body = getattr(response, "body", b"")
+            try:
+                body = response.body
+            except AttributeError:
+                body = b""
             if body:
                 digest = hashlib.sha256(body).hexdigest()
                 return f'W/"{digest}"'
@@ -109,6 +112,12 @@ class DashboardServer:
             """Return browser/edge cache policy pair for API routes."""
             # Always bypass CDN cache for highly volatile or user-driven high-cardinality APIs.
             if path.endswith("/refresh-price"):
+                return (
+                    "no-store, no-cache, must-revalidate, proxy-revalidate",
+                    "no-store",
+                )
+
+            if path.endswith("/brain/refresh") or path.endswith("/brain/lifecycle"):
                 return (
                     "no-store, no-cache, must-revalidate, proxy-revalidate",
                     "no-store",

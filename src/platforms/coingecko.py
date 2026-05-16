@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 from os.path import exists, getsize
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 from aiohttp_client_cache import CachedSession, SQLiteBackend
 
@@ -19,20 +19,20 @@ class CoinGeckoAPI:
     def __init__(
         self,
         logger: Logger,
-        cache_backend: Optional[SQLiteBackend] = None,
+        cache_backend: SQLiteBackend | None = None,
         cache_dir: str = 'data/market_data',
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         update_interval_hours: int = 24,
         global_api_url: str = 'https://api.coingecko.com/api/v3/global'
     ) -> None:
         self.cache_backend = cache_backend
-        self.session: Optional[CachedSession] = None
-        self.symbol_to_id_map: Dict[str, List[Dict[str, str]]] = {}
+        self.session: CachedSession | None = None
+        self.symbol_to_id_map: dict[str, list[dict[str, str]]] = {}
         self.logger = logger
         self.cache_dir = cache_dir
         self.coingecko_cache_file = os.path.join(self.cache_dir, "coingecko_global.json")
         self.update_interval = timedelta(hours=update_interval_hours)
-        self.last_update: Optional[datetime] = None
+        self.last_update: datetime | None = None
         self.api_key = api_key
         self.global_api_url = global_api_url
         self._file_lock = asyncio.Lock()
@@ -78,7 +78,7 @@ class CoinGeckoAPI:
             except Exception as e:
                 self.logger.error("Error loading CoinGecko cache: %s", e)
 
-    async def _read_cache_file(self) -> Optional[Dict[str, Any]]:
+    async def _read_cache_file(self) -> dict[str, Any] | None:
         """Read cache file in a thread pool executor to avoid blocking the event loop"""
         try:
             async with self._file_lock:
@@ -88,12 +88,12 @@ class CoinGeckoAPI:
             self.logger.error("Error reading cache file: %s", e)
             return None
 
-    def _read_json_sync(self) -> Dict[str, Any]:
+    def _read_json_sync(self) -> dict[str, Any]:
         """Synchronous file read for executor"""
         with open(self.coingecko_cache_file, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    async def _write_cache_file(self, data: Dict[str, Any]) -> None:
+    async def _write_cache_file(self, data: dict[str, Any]) -> None:
         """Write cache file in a thread pool executor to avoid blocking the event loop"""
         try:
             async with self._file_lock:
@@ -102,12 +102,12 @@ class CoinGeckoAPI:
         except Exception as e:
             self.logger.error("Error writing cache file: %s", e)
 
-    def _write_json_sync(self, data: Dict[str, Any]) -> None:
+    def _write_json_sync(self, data: dict[str, Any]) -> None:
         """Synchronous file write for executor"""
         with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-    def _get_dominance_coin_ids(self, dominance_data: Optional[Dict[str, float]] = None) -> List[str]:
+    def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
         """
         Map dominance symbols to CoinGecko coin IDs dynamically.
 
@@ -115,8 +115,7 @@ class CoinGeckoAPI:
             dominance_data: Optional dominance dictionary from API. If not provided,
                           uses a default mapping for top coins.
 
-        Returns:
-            List of CoinGecko coin IDs
+        Returns: list of CoinGecko coin IDs
         """
         # Standard mapping for common symbols
         symbol_to_id = {
@@ -153,15 +152,14 @@ class CoinGeckoAPI:
         # Default: return top 10 most common coins
         return list(symbol_to_id.values())[:10]
 
-    async def get_top_coins_by_dominance(self, dominance_coins: List[str]) -> List[Dict[str, Any]]:
+    async def get_top_coins_by_dominance(self, dominance_coins: list[str]) -> list[dict[str, Any]]:
         """
         Fetch market data for top coins by dominance.
 
         Args:
-            dominance_coins: List of coin IDs (e.g., ['bitcoin', 'ethereum', 'tether'])
+            dominance_coins: list of coin IDs (e.g., ['bitcoin', 'ethereum', 'tether'])
 
-        Returns:
-            List of coin market data objects
+        Returns: list of coin market data objects
         """
         if not dominance_coins:
             return []
@@ -195,7 +193,7 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching coins/markets: %s", e)
             return []
 
-    async def get_defi_market_data(self) -> Dict[str, Any]:
+    async def get_defi_market_data(self) -> dict[str, Any]:
         """
         Fetch global DeFi market data.
 
@@ -217,7 +215,7 @@ class CoinGeckoAPI:
             return {}
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
-    async def get_global_market_data(self, force_refresh: bool = False) -> Dict[str, Any]:
+    async def get_global_market_data(self, force_refresh: bool = False) -> dict[str, Any]:
         """
         Get global market data, top coins, and DeFi metrics from CoinGecko.
         Caches everything in coingecko_global.json every 4h.
@@ -303,7 +301,7 @@ class CoinGeckoAPI:
         self.logger.debug("Updated CoinGecko global data cache with top coins and DeFi metrics")
         return processed_data
 
-    async def _fetch_global(self) -> Dict[str, Any]:
+    async def _fetch_global(self) -> dict[str, Any]:
         """Fetch /global endpoint."""
         try:
             async with self.session.get(self.global_api_url) as response:
@@ -316,7 +314,7 @@ class CoinGeckoAPI:
             self.logger.error("Error fetching /global: %s", e)
             return {}
 
-    async def _get_cached_global_data(self) -> Dict[str, Any]:
+    async def _get_cached_global_data(self) -> dict[str, Any]:
         """Retrieve cached global data as fallback"""
         try:
             if os.path.exists(self.coingecko_cache_file):
@@ -330,7 +328,7 @@ class CoinGeckoAPI:
         # Return empty dict if cache read fails
         return {}
 
-    def _process_global_data(self, api_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_global_data(self, api_data: dict[str, Any]) -> dict[str, Any]:
         """Process raw API data into a standardized format"""
         if not api_data or "data" not in api_data:
             return {}
@@ -352,7 +350,7 @@ class CoinGeckoAPI:
             }
         }
 
-    async def _fetch_all_coins(self) -> List[Dict[str, str]]:
+    async def _fetch_all_coins(self) -> list[dict[str, str]]:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
@@ -363,7 +361,7 @@ class CoinGeckoAPI:
                 self.logger.error("Failed to fetch coin list. Status: %s", response.status)
                 return []
 
-    def _update_symbol_map(self, coins: List[Dict[str, str]]) -> None:
+    def _update_symbol_map(self, coins: list[dict[str, str]]) -> None:
         for coin in coins:
             symbol = coin['symbol'].upper()
             if symbol not in self.symbol_to_id_map:

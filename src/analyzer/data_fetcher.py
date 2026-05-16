@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Dict, Any, List
+from typing import Any
 import time
 
 import numpy as np
@@ -21,8 +21,8 @@ class DataFetcher:
                                      pair: str,
                                      timeframe: str,
                                      limit: int,
-                                     start_time: Optional[int] = None
-                                     ) -> Optional[Tuple[NDArray, float]]:
+                                     start_time: int | None = None
+                                     ) -> tuple[NDArray, float] | None:
         # Validate timeframe is supported by exchange
         try:
             exchange_timeframes = self.exchange.timeframes
@@ -91,7 +91,7 @@ class DataFetcher:
     async def fetch_daily_historical_data(self,
                                          pair: str,
                                          days: int = 365
-                                         ) -> Dict[str, Any]:
+                                         ) -> dict[str, Any]:
         """
         Fetch historical daily data for a specified number of days.
 
@@ -99,8 +99,7 @@ class DataFetcher:
             pair: The trading pair to fetch data for
             days: Number of days of historical data to retrieve (default: 365)
 
-        Returns:
-            Dict containing:
+        Returns: dict containing:
                 'data': NDArray of OHLCV data if available, or None
                 'available_days': Number of days of data actually available
                 'is_complete': Boolean indicating if we have full history for requested period
@@ -146,7 +145,7 @@ class DataFetcher:
             }
 
     @retry_async()
-    async def fetch_weekly_historical_data(self, pair: str, target_weeks: int = 300) -> Dict[str, Any]:
+    async def fetch_weekly_historical_data(self, pair: str, target_weeks: int = 300) -> dict[str, Any]:
         """
         Fetch weekly data for macro analysis. Wraps fetch_candlestick_data with weekly metadata.
 
@@ -154,8 +153,7 @@ class DataFetcher:
             pair: The trading pair to fetch data for
             target_weeks: Number of weeks of historical data to retrieve (default: 300)
 
-        Returns:
-            Dict containing:
+        Returns: dict containing:
                 'data': NDArray of OHLCV data if available, or None
                 'error': Error message if fetch failed, None otherwise
         """
@@ -183,12 +181,12 @@ class DataFetcher:
             }
 
     @retry_async()
-    async def fetch_multiple_tickers(self, symbols: List[str] = None) -> Dict[str, Any]:
+    async def fetch_multiple_tickers(self, symbols: list[str] = None) -> dict[str, Any]:
         """
         Fetch price data for multiple trading pairs at once using CCXT with caching
 
         Args:
-            symbols: List of trading pair symbols (e.g., ["BTC/USDT", "ETH/USDT"])
+            symbols: list of trading pair symbols (e.g., ["BTC/USDT", "ETH/USDT"])
                     If None, fetches all available tickers
 
         Returns:
@@ -219,7 +217,7 @@ class DataFetcher:
             return False
         return True
 
-    def _process_ticker_data(self, tickers: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_ticker_data(self, tickers: dict[str, Any]) -> dict[str, Any]:
         """Process ticker data into a RAW/DISPLAY-compatible format."""
         result = {"RAW": {}, "DISPLAY": {}}
 
@@ -235,19 +233,19 @@ class DataFetcher:
 
         return result
 
-    def _extract_currencies(self, symbol: str) -> Tuple[Optional[str], Optional[str]]:
+    def _extract_currencies(self, symbol: str) -> tuple[str | None, str | None]:
         """Extract base and quote currencies from symbol."""
         if '/' not in symbol:
             return None, None
         parts = symbol.split('/', 1)
         return parts[0], parts[1]
 
-    def _has_required_ticker_data(self, ticker: Dict[str, Any]) -> bool:
+    def _has_required_ticker_data(self, ticker: dict[str, Any]) -> bool:
         """Check if ticker has required data fields."""
         return 'last' in ticker and ticker['last'] is not None
 
-    def _add_ticker_to_result(self, result: Dict[str, Any], base_currency: str,
-                            quote_currency: str, ticker: Dict[str, Any]) -> None:
+    def _add_ticker_to_result(self, result: dict[str, Any], base_currency: str,
+                            quote_currency: str, ticker: dict[str, Any]) -> None:
         """Add processed ticker data to result structure."""
         # Initialize structure if needed
         if base_currency not in result["RAW"]:
@@ -263,7 +261,7 @@ class DataFetcher:
             ticker, quote_currency
         )
 
-    def _create_raw_ticker_data(self, ticker: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_raw_ticker_data(self, ticker: dict[str, Any]) -> dict[str, Any]:
         """Create raw ticker data structure with comprehensive 24h statistics."""
         return {
             # Core price data
@@ -299,7 +297,7 @@ class DataFetcher:
             "INFO": ticker.get('info', {}),  # Raw exchange data (for advanced analysis)
         }
 
-    def _create_display_ticker_data(self, ticker: Dict[str, Any], quote_currency: str) -> Dict[str, Any]:
+    def _create_display_ticker_data(self, ticker: dict[str, Any], quote_currency: str) -> dict[str, Any]:
         """Create display ticker data structure with formatted values."""
         is_usd_quote = quote_currency in ("USD", "USDT")
 
@@ -324,7 +322,7 @@ class DataFetcher:
         total_depth = bid_depth + ask_depth
         return (bid_depth - ask_depth) / total_depth if total_depth > 0 else 0.0
 
-    def _calculate_depth_bucket(self, bids: NDArray, asks: NDArray, level_count: int) -> Dict[str, float]:
+    def _calculate_depth_bucket(self, bids: NDArray, asks: NDArray, level_count: int) -> dict[str, float]:
         """Summarize bid and ask depth for a fixed number of visible levels."""
         bid_subset = bids[:level_count]
         ask_subset = asks[:level_count]
@@ -348,7 +346,7 @@ class DataFetcher:
         asks: NDArray,
         mid_price: float,
         basis_points: int
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Summarize liquidity close to the mid price within a basis-point band."""
         if mid_price <= 0:
             return {
@@ -372,7 +370,7 @@ class DataFetcher:
             'imbalance': self._calculate_depth_imbalance(bid_depth, ask_depth)
         }
 
-    def _calculate_largest_wall(self, levels: NDArray, mid_price: float) -> Dict[str, float]:
+    def _calculate_largest_wall(self, levels: NDArray, mid_price: float) -> dict[str, float]:
         """Find the largest visible resting order on one side of the book."""
         if len(levels) == 0:
             return {
@@ -395,7 +393,7 @@ class DataFetcher:
         }
 
     @retry_async()
-    async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> Optional[Dict[str, Any]]:
+    async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> dict[str, Any] | None:
         """
         Fetch order book depth for liquidity and support/resistance analysis.
 
@@ -410,10 +408,9 @@ class DataFetcher:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             limit: Maximum number of order book levels to fetch (default: 100)
 
-        Returns:
-            Dict containing:
-                'bids': List of [price, amount] bid orders (buy side)
-                'asks': List of [price, amount] ask orders (sell side)
+        Returns: dict containing:
+                'bids': list of [price, amount] bid orders (buy side)
+                'asks': list of [price, amount] ask orders (sell side)
                 'timestamp': Unix timestamp in milliseconds
                 'spread': Absolute spread between best bid and ask
                 'spread_percent': Spread as percentage of best bid price
@@ -495,7 +492,7 @@ class DataFetcher:
             return None
 
     @retry_async()
-    async def fetch_recent_trades(self, pair: str, limit: int = 1000) -> Optional[Dict[str, Any]]:
+    async def fetch_recent_trades(self, pair: str, limit: int = 1000) -> dict[str, Any] | None:
         """
         Fetch recent trades for order flow and momentum analysis.
 
@@ -510,9 +507,8 @@ class DataFetcher:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             limit: Maximum number of recent trades to fetch (default: 1000)
 
-        Returns:
-            Dict containing:
-                'trades': List of trade dicts with timestamp, price, amount, side
+        Returns: dict containing:
+                'trades': list of trade dicts with timestamp, price, amount, side
                 'buy_volume': Total volume from buy-side trades (base currency)
                 'sell_volume': Total volume from sell-side trades (base currency)
                 'buy_sell_ratio': Ratio of buy to sell volume (>1 = more buying)
@@ -569,7 +565,7 @@ class DataFetcher:
             return None
 
     @retry_async()
-    async def fetch_funding_rate(self, pair: str) -> Optional[Dict[str, Any]]:
+    async def fetch_funding_rate(self, pair: str) -> dict[str, Any] | None:
         """
         Fetch current funding rate for perpetual futures contracts.
 
@@ -582,8 +578,7 @@ class DataFetcher:
         Args:
             pair: Trading pair symbol for perpetual futures (e.g., "BTC/USDT:USDT")
 
-        Returns:
-            Dict containing:
+        Returns: dict containing:
                 'funding_rate': Current funding rate (decimal, e.g., 0.0001 = 0.01%)
                 'funding_rate_percent': Funding rate as percentage
                 'funding_timestamp': Next funding time (Unix timestamp in ms)
@@ -640,7 +635,7 @@ class DataFetcher:
             self.logger.debug("Funding rate not available for %s: %s", pair, e)
             return None
 
-    async def fetch_market_microstructure(self, pair: str, cached_ticker: Optional[Dict] = None) -> Dict[str, Any]:
+    async def fetch_market_microstructure(self, pair: str, cached_ticker: dict | None = None) -> dict[str, Any]:
         """
         Fetch comprehensive market microstructure data for a trading pair.
 
@@ -653,13 +648,12 @@ class DataFetcher:
             pair: Trading pair symbol (e.g., "BTC/USDT")
             cached_ticker: Optional pre-fetched ticker data to avoid redundant API calls
 
-        Returns:
-            Dict containing:
+        Returns: dict containing:
                 'ticker': 24h ticker statistics (price, volume, changes)
                 'order_book': Order book depth analysis (liquidity, spread, imbalance)
                 'recent_trades': Recent trade flow analysis (buy/sell pressure, velocity)
                 'funding_rate': Funding rate data (futures only, None for spot)
-                'available_data': List of successfully fetched data types
+                'available_data': list of successfully fetched data types
                 'timestamp': Collection timestamp
 
         Note:

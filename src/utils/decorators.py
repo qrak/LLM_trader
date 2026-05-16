@@ -2,7 +2,7 @@ import asyncio
 import functools
 import traceback
 import socket
-from typing import Any, Dict
+from typing import Any
 
 import ccxt
 import aiohttp
@@ -186,10 +186,10 @@ class _ApiRetryContext:
         self.backoff_factor = backoff_factor
         self.max_delay = max_delay
 
-    async def execute_with_retry(self) -> Dict[str, Any] | None:
+    async def execute_with_retry(self) -> dict[str, Any] | None:
         """Execute the function with retry logic."""
         attempt = 0
-        last_response: Dict[str, Any] | None = None
+        last_response: dict[str, Any] | None = None
 
         while attempt <= self.max_retries:
             try:
@@ -222,7 +222,7 @@ class _ApiRetryContext:
         # Handle SDK Pydantic response objects (duck-typing)
         return self._check_sdk_response(response)
 
-    def _check_dict_response(self, response: Dict[str, Any]) -> bool:
+    def _check_dict_response(self, response: dict[str, Any]) -> bool:
         """Check dict-based response for retryable errors."""
         if response.get('error') and _should_retry_api_error(response['error']):
             self.logger.warning("Retryable top-level error for model %s: %s", self.model, response['error'])

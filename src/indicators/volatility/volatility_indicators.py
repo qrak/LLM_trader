@@ -186,8 +186,7 @@ def donchian_channels_numba(high, low, length=20):
         low: Low prices array
         length: Period for calculation (default: 20)
 
-    Returns:
-        Tuple of (upper_channel, middle_channel, lower_channel)
+    Returns: tuple of (upper_channel, middle_channel, lower_channel)
     """
     n = len(high)
 

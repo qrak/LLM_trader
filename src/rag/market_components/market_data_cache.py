@@ -3,7 +3,7 @@ Market Data Cache Manager
 Handles caching and storage of market overview data.
 """
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional
+from typing import Any
 
 from src.logger.logger import Logger
 from ..file_handler import RagFileHandler
@@ -15,11 +15,11 @@ class MarketDataCache:
     def __init__(self, logger: Logger, file_handler: RagFileHandler):
         self.logger = logger
         self.file_handler = file_handler
-        self.current_market_overview: Optional[Dict[str, Any]] = None
+        self.current_market_overview: dict[str, Any] | None = None
 
 
 
-    def get_current_overview(self) -> Optional[Dict[str, Any]]:
+    def get_current_overview(self) -> dict[str, Any] | None:
         """Get the current market overview data."""
         return self.current_market_overview
 

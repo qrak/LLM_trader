@@ -5,7 +5,7 @@ Implements common patterns: context managers, image processing, error handling.
 import io
 import re
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List, Union, Callable
+from typing import Any, Union, Callable
 
 from src.logger.logger import Logger
 from .response_models import ChatResponseModel, ChoiceModel, MessageModel, UsageModel
@@ -16,7 +16,7 @@ class BaseAIClient(ABC):
 
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
-        self.api_key: Optional[str] = None
+        self.api_key: str | None = None
         # Common unsupported parameters to pre-filter
         self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k'}
 
@@ -39,18 +39,18 @@ class BaseAIClient(ABC):
 
     @abstractmethod
     async def chat_completion(
-        self, model: str, messages: List[Dict[str, Any]], model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """Send a chat completion request."""
 
     @abstractmethod
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """Send a chat completion request with chart image analysis."""
 
     def process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
@@ -90,7 +90,7 @@ class BaseAIClient(ABC):
 
         return sanitized
 
-    def handle_common_errors(self, exception: Exception) -> Optional[ChatResponseModel]:
+    def handle_common_errors(self, exception: Exception) -> ChatResponseModel | None:
         """
         Handle common API errors across all providers.
 
@@ -217,7 +217,7 @@ class BaseAIClient(ABC):
             self.logger.error("Failed to create response model: %s", e)
             return ChatResponseModel.from_error(f"Response creation error: {e}")
 
-    def _detect_unsupported_param(self, error_msg: str) -> Optional[str]:
+    def _detect_unsupported_param(self, error_msg: str) -> str | None:
         """
         Detect which parameter caused the error from error message.
         Shared logic for all providers to handle SDK strictness.
@@ -239,7 +239,7 @@ class BaseAIClient(ABC):
     async def _execute_with_param_retry(
         self,
         func: Callable[..., Any],
-        config: Dict[str, Any],
+        config: dict[str, Any],
         **fixed_args: Any
     ) -> Any:
         """
@@ -288,9 +288,9 @@ class BaseAIClient(ABC):
         self,
         content: str,
         role: str = "assistant",
-        usage: Optional[UsageModel] = None,
-        model: Optional[str] = None,
-        response_id: Optional[str] = None
+        usage: UsageModel | None = None,
+        model: str | None = None,
+        response_id: str | None = None
     ) -> ChatResponseModel:
         """
         Create a ChatResponseModel from content.

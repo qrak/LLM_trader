@@ -1,5 +1,5 @@
 """Factory for creating AI provider clients based on configuration."""
-from typing import Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
@@ -33,15 +33,14 @@ class ProviderFactory:
         self.logger = logger
         self.config = config
 
-    def create_google_clients(self) -> Tuple[Optional[GoogleAIClient], Optional[GoogleAIClient]]:
+    def create_google_clients(self) -> tuple[GoogleAIClient | None, GoogleAIClient | None]:
         """
         Create Google AI clients (free tier and optional paid tier).
 
-        Returns:
-            Tuple of (google_client, google_paid_client). Both can be None if API keys not configured.
+        Returns: tuple of (google_client, google_paid_client). Both can be None if API keys not configured.
         """
-        google_client: Optional[GoogleAIClient] = None
-        google_paid_client: Optional[GoogleAIClient] = None
+        google_client: GoogleAIClient | None = None
+        google_paid_client: GoogleAIClient | None = None
 
         # Initialize Google AI client if API key is available
         if self.config.GOOGLE_STUDIO_API_KEY:
@@ -63,7 +62,7 @@ class ProviderFactory:
 
         return google_client, google_paid_client
 
-    def create_openrouter_client(self) -> Optional[OpenRouterClient]:
+    def create_openrouter_client(self) -> OpenRouterClient | None:
         """
         Create OpenRouter client if API key is configured.
 
@@ -81,7 +80,7 @@ class ProviderFactory:
         self.logger.debug("OpenRouter client initialized")
         return client
 
-    def create_lmstudio_client(self) -> Optional[LMStudioClient]:
+    def create_lmstudio_client(self) -> LMStudioClient | None:
         """
         Create LM Studio client for local inference.
 
@@ -98,7 +97,7 @@ class ProviderFactory:
         self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
         return client
 
-    def create_blockrun_client(self) -> Optional[BlockRunClient]:
+    def create_blockrun_client(self) -> BlockRunClient | None:
         """
         Create BlockRun client for x402 micropayments.
 

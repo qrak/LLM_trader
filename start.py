@@ -28,11 +28,12 @@ from src.platforms.alternative_me import AlternativeMeAPI
 from src.platforms.defillama import DefiLlamaClient
 from src.platforms.coingecko import CoinGeckoAPI
 from src.platforms.ccxt_market_api import CCXTMarketAPI
-from src.rag.news_ingestion import RSSCrawl4AINewsProvider
 from src.rag.local_taxonomy import LocalTaxonomyProvider
 from src.platforms.exchange_manager import ExchangeManager
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.rag import RagEngine
+from src.rag.scoring_policy import ArticleScoringPolicy
+from src.rag.news_ingestion import RSSCrawl4AINewsProvider, Crawl4AIEnricher
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.utils.format_utils import FormatUtils
 from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
@@ -82,6 +83,7 @@ from src.analyzer.prompts.context_builder import ContextBuilder as AnalyzerConte
 from src.analyzer.pattern_engine import ChartGenerator
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -308,6 +310,7 @@ class CompositionRoot:
 
         deps['dashboard_server'] = dashboard_server
         deps['dashboard_state'] = dashboard_server.dashboard_state
+        trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
 
         return deps
 
@@ -375,7 +378,15 @@ class CompositionRoot:
         )
         await coingecko.initialize()
 
-        news_client = RSSCrawl4AINewsProvider(self.logger, self.config)
+        news_client = RSSCrawl4AINewsProvider(
+            self.logger, self.config,
+            enricher=Crawl4AIEnricher(
+                concurrency=self.config.RAG_NEWS_CRAWL_CONCURRENCY,
+                timeout=float(self.config.RAG_NEWS_CRAWL_TIMEOUT),
+                min_chars=self.config.RAG_NEWS_ENRICH_MIN_CHARS,
+                use_crawl4ai=self.config.RAG_NEWS_CRAWL4AI_ENABLED,
+            ),
+        )
 
         defillama = DefiLlamaClient(
             logger=self.logger, session=infra['session'], cache_dir='cache',
@@ -436,6 +447,7 @@ class CompositionRoot:
                 self.logger,
                 utils['token_counter'],
                 self.config,
+                ArticleScoringPolicy(config=self.config),
                 article_processor,
                 symbol_name_map=symbol_name_map,
             )
@@ -536,13 +548,15 @@ class CompositionRoot:
             timeframe_minutes=timeframe_minutes,
         )
         exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
-        
+        tightening_policy = StopLossTighteningPolicy.from_config(self.config)
+
         brain_service = TradingBrainService(
             self.logger,
             persistence,
             vector_memory,
             exit_execution_context=exit_execution_context,
             timeframe_minutes=timeframe_minutes,
+            tightening_policy=tightening_policy,
         )
         brain_service.refresh_semantic_rules_if_stale()
         
@@ -561,7 +575,7 @@ class CompositionRoot:
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
-            PositionFactory(self.logger)
+            PositionFactory(self.logger), tightening_policy=tightening_policy
         )
         
         return {

@@ -1,7 +1,7 @@
 import io
 import json
 import random
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Union
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -17,7 +17,7 @@ class MockClient(BaseAIClient):
     returns a simple synthesized response.
     """
 
-    def __init__(self, api_key: str = "", base_url: str = "", logger: Optional[Logger] = None):
+    def __init__(self, api_key: str = "", base_url: str = "", logger: Logger | None = None):
         super().__init__(logger or Logger("mock_client", logger_debug=False))
         self.api_key = api_key
         self.base_url = base_url
@@ -28,7 +28,7 @@ class MockClient(BaseAIClient):
     async def close(self) -> None:
         """Mock client doesn't need cleanup."""
 
-    def _extract_last_close_hint(self, messages: List[Dict[str, Any]]) -> Optional[float]:
+    def _extract_last_close_hint(self, messages: list[dict[str, Any]]) -> float | None:
         """Try to find a TEST_HINT in messages with last_close value."""
         for m in reversed(messages):
             content = m.get("content", "")
@@ -44,7 +44,7 @@ class MockClient(BaseAIClient):
                             continue
         return None
 
-    def _synthesize_response(self, last_close: Optional[float] = None, has_chart: bool = False) -> str:
+    def _synthesize_response(self, last_close: float | None = None, has_chart: bool = False) -> str:
         """Create a human-readable analysis + JSON block following the project's template."""
         if last_close is None:
             last_close = 100.0
@@ -105,7 +105,7 @@ class MockClient(BaseAIClient):
         response = f"{analysis_text}\n```json\n{json.dumps(payload, indent=4)}\n```"
         return response
 
-    async def chat_completion(self, *args, **kwargs) -> Optional[ChatResponseModel]:
+    async def chat_completion(self, *args, **kwargs) -> ChatResponseModel | None:
         """Emulate chat completion supporting both GoogleAI and OpenRouter signatures."""
         messages = []
         if len(args) > 0:
@@ -123,10 +123,10 @@ class MockClient(BaseAIClient):
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """Emulate chart analysis with deterministic responses."""
         last_close = self._extract_last_close_hint(messages)
         content = self._synthesize_response(last_close, has_chart=True)

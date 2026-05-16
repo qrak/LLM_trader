@@ -5,7 +5,7 @@ Supports text-only and multimodal (text + image) requests with cost tracking.
 import asyncio
 import io
 import base64
-from typing import Optional, Dict, Any, List, Union
+from typing import Any, Union
 
 from openrouter import OpenRouter
 
@@ -22,7 +22,7 @@ class OpenRouterClient(BaseAIClient):
         super().__init__(logger)
         self.api_key = api_key
         self.base_url = base_url
-        self._client: Optional[OpenRouter] = None
+        self._client: OpenRouter | None = None
 
     async def _initialize_client(self) -> None:
         """Initialize the OpenRouter SDK client."""
@@ -44,8 +44,8 @@ class OpenRouterClient(BaseAIClient):
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
-        self, model: str, messages: list, model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        self, model: str, messages: list, model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """Send a chat completion request to the OpenRouter API using the SDK."""
         client = self._ensure_client()
         try:
@@ -66,16 +66,16 @@ class OpenRouterClient(BaseAIClient):
     async def chat_completion_with_chart_analysis(
         self,
         model: str,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         chart_image: Union[io.BytesIO, bytes, str],
-        model_config: Dict[str, Any]
-    ) -> Optional[ChatResponseModel]:
+        model_config: dict[str, Any]
+    ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
 
         Args:
             model: Model name to use
-            messages: List of OpenAI-style messages
+            messages: list of OpenAI-style messages
             chart_image: Chart image as BytesIO, bytes, or file path string
             model_config: Configuration parameters for the model
 
@@ -110,7 +110,7 @@ class OpenRouterClient(BaseAIClient):
             self.logger.error("Error during OpenRouter chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
-    async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> Optional[Dict[str, Any]]:
+    async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> dict[str, Any] | None:
         """
         Retrieve cost and stats for a specific generation.
 
@@ -169,7 +169,7 @@ class OpenRouterClient(BaseAIClient):
                 self.logger.warning("Could not retrieve generation stats: %s", error_msg)
             return None
 
-    def _extract_user_text_from_messages(self, messages: List[Dict[str, Any]]) -> str:
+    def _extract_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
         """Extract text content from the last user message."""
         for message in reversed(messages):
             if message["role"] == "user":
@@ -178,9 +178,9 @@ class OpenRouterClient(BaseAIClient):
 
     def _prepare_multimodal_messages(
         self,
-        messages: List[Dict[str, Any]],
-        multimodal_content: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        messages: list[dict[str, Any]],
+        multimodal_content: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Convert messages to OpenRouter multimodal format."""
         multimodal_messages = []
         for message in messages:
@@ -198,7 +198,7 @@ class OpenRouterClient(BaseAIClient):
                 multimodal_messages.append(message)
         return multimodal_messages
 
-    def _handle_exception(self, exception: Exception) -> Optional[ChatResponseModel]:
+    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle OpenRouter specific exceptions, falling back to common handler."""
         result = self.handle_common_errors(exception)
         if result:

@@ -4,7 +4,7 @@ Handles loading and saving of message tracking data to JSON files.
 """
 import json
 import os
-from typing import Dict, Any
+from typing import Any
 
 
 class TrackingPersistence:
@@ -17,7 +17,7 @@ class TrackingPersistence:
         # Ensure directory exists
         os.makedirs(os.path.dirname(self.tracking_file), exist_ok=True)
 
-    async def load_tracking_data(self) -> Dict[str, Any]:
+    async def load_tracking_data(self) -> dict[str, Any]:
         """Load all message tracking data."""
         if not os.path.exists(self.tracking_file):
             return {}
@@ -32,7 +32,7 @@ class TrackingPersistence:
             self.logger.error("Error loading tracking data: %s", e)
             return {}
 
-    async def save_tracking_data(self, data: Dict[str, Any]) -> bool:
+    async def save_tracking_data(self, data: dict[str, Any]) -> bool:
         """Save tracking data."""
         try:
             if data:

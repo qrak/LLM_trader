@@ -3,10 +3,10 @@ Scoring policy for RAG article relevance.
 
 This module isolates ranking heuristics from ContextBuilder orchestration.
 """
-
+from __future__ import annotations
 import math
 import re
-from typing import Any, Dict, Optional, Set
+from typing import Any, Set
 
 
 FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
@@ -15,20 +15,20 @@ FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
 class ArticleScoringPolicy:
     """Encapsulates article relevance scoring heuristics."""
 
-    def __init__(self, config: Optional[Any] = None):
+    def __init__(self, config: Any | None = None):
         self.config = config
 
     def calculate_article_relevance(
         self,
-        article: Dict[str, Any],
+        article: dict[str, Any],
         content: Any,
         keywords: Set[str],
-        coin: Optional[str],
+        coin: str | None,
         current_time: float,
         relevant_categories: list[str],
         important_categories: Set[str],
         pub_time: float,
-        coin_patterns: Optional[Dict[str, Any]] = None,
+        coin_patterns: dict[str, Any] | None = None,
     ) -> float:
         """Calculate article relevance score based on current scoring policy."""
         keyword_score = self.calculate_keyword_score(keywords, content)
@@ -71,7 +71,7 @@ class ArticleScoringPolicy:
         return score
 
     @staticmethod
-    def calculate_coin_score(coin: str, content: Any, coin_patterns: Optional[Dict[str, Any]] = None) -> float:
+    def calculate_coin_score(coin: str, content: Any, coin_patterns: dict[str, Any] | None = None) -> float:
         """Calculate score based on coin-specific matches using word boundaries."""
         coin_lower = coin.lower()
         score = 0.0
@@ -120,7 +120,7 @@ class ArticleScoringPolicy:
                 score += 3
         return score
 
-    def calculate_density_modifier(self, article: Dict[str, Any]) -> float:
+    def calculate_density_modifier(self, article: dict[str, Any]) -> float:
         """Calculate score multiplier based on article body length (content quality)."""
         if not self.config:
             return 1.0
@@ -148,11 +148,11 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def _calculate_coin_relevance_multiplier(
-        article: Dict[str, Any],
-        coin: Optional[str],
+        article: dict[str, Any],
+        coin: str | None,
         coin_score: float,
         content: Any,
-        coin_patterns: Optional[Dict[str, Any]],
+        coin_patterns: dict[str, Any] | None,
     ) -> float:
         """Demote low-coin-relevance items for symbol-specific analysis."""
         if not coin or article.get("id") == "market_overview":

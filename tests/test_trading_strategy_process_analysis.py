@@ -215,15 +215,15 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
 
     risk_kwargs = strategy.risk_manager.calculate_entry_parameters.call_args.kwargs
     market_conditions = risk_kwargs["market_conditions"]
-    assert market_conditions["adx"] == 28.0
-    assert market_conditions["rsi"] == 61.0
-    assert market_conditions["rsi_level"] == "STRONG"
-    assert market_conditions["volatility"] == "HIGH"
-    assert market_conditions["macd_signal"] == "BULLISH"
-    assert market_conditions["volume_state"] == "ACCUMULATION"
-    assert market_conditions["bb_position"] == "UPPER"
-    assert market_conditions["market_sentiment"] == "EXTREME_GREED"
-    assert market_conditions["order_book_bias"] == "BUY_PRESSURE"
+    assert market_conditions.adx == 28.0
+    assert market_conditions.rsi == 61.0
+    assert market_conditions.rsi_level == "STRONG"
+    assert market_conditions.volatility == "HIGH"
+    assert market_conditions.macd_signal == "BULLISH"
+    assert market_conditions.volume_state == "ACCUMULATION"
+    assert market_conditions.bb_position == "UPPER"
+    assert market_conditions.market_sentiment == "EXTREME_GREED"
+    assert market_conditions.order_book_bias == "BUY_PRESSURE"
 
     position_kwargs = strategy.position_factory.create_position.call_args.kwargs
     assert position_kwargs["market_conditions"] == market_conditions

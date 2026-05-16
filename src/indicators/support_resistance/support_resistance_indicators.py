@@ -324,8 +324,7 @@ def fibonacci_retracement_numba(length, high, low):
 def pivot_points_numba(high, low, close):
     """Calculate standard pivot points and support/resistance levels
 
-    Returns:
-        Tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
+    Returns: tuple of (pivot_point, r1, r2, r3, r4, s1, s2, s3, s4) arrays
     """
     n = len(high)
     pivot_point = np.full(n, np.nan)
@@ -364,8 +363,7 @@ def fibonacci_pivot_points_numba(high, low, close):
 
     Uses Fibonacci ratios (0.382, 0.618, 1.0, 1.618) for support/resistance levels
 
-    Returns:
-        Tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
+    Returns: tuple of (pivot_point, r1, r2, r3, s1, s2, s3) arrays
     """
     n = len(high)
     pivot_point = np.full(n, np.nan)

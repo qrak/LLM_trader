@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
+from typing import Any
 
 import aiohttp
 
@@ -29,9 +29,9 @@ class AlternativeMeAPI:
         self.data_dir = data_dir
         self.update_interval = timedelta(hours=cache_update_hours)
         self.fear_greed_cache_file = os.path.join(data_dir, "fear_greed_index.json")
-        self.last_update: Optional[datetime] = None
-        self.current_index: Optional[Dict[str, Any]] = None
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.last_update: datetime | None = None
+        self.current_index: dict[str, Any] | None = None
+        self.session: aiohttp.ClientSession | None = None
 
         # Ensure cache directory exists
         os.makedirs(data_dir, exist_ok=True)
@@ -55,18 +55,18 @@ class AlternativeMeAPI:
             except Exception as e:
                 self.logger.error("Error loading Fear & Greed cache: %s", e)
 
-    def _read_cache_file(self) -> Dict[str, Any]:
+    def _read_cache_file(self) -> dict[str, Any]:
         """Read and parse the cache file. Executed in a thread."""
         with open(self.fear_greed_cache_file, 'r', encoding='utf-8') as f:
             return json.load(f)
 
-    def _write_cache_file(self, data: Dict[str, Any]) -> None:
+    def _write_cache_file(self, data: dict[str, Any]) -> None:
         """Write data to cache file. Executed in a thread."""
         with open(self.fear_greed_cache_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
-    async def get_fear_greed_index(self, force_refresh: bool = False) -> Dict[str, Any]:
+    async def get_fear_greed_index(self, force_refresh: bool = False) -> dict[str, Any]:
         """
         Get current Fear & Greed Index data
 
@@ -133,15 +133,14 @@ class AlternativeMeAPI:
         }
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
-    async def get_historical_fear_greed(self, days: int = 30) -> List[Dict[str, Any]]:
+    async def get_historical_fear_greed(self, days: int = 30) -> list[dict[str, Any]]:
         """
         Get historical Fear & Greed Index data
 
         Args:
             days: Number of days of historical data to retrieve
 
-        Returns:
-            List of Fear & Greed Index data points, sorted by date (newest first)
+        Returns: list of Fear & Greed Index data points, sorted by date (newest first)
         """
         limit = min(max(days, 1), 365)  # Limit between 1 and 365
         url = self.FEAR_GREED_HISTORY_URL.format(limit=limit)

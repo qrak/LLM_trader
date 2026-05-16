@@ -1,13 +1,15 @@
-"""
-Analysis Result Processor.
+"""Analysis Result Processor.
 
 Handles the processing and formatting of analysis results from the AI models.
 """
+from __future__ import annotations
 import io
 import re
-from typing import Dict, Any, Optional, Union, TYPE_CHECKING
+from typing import Any, Union, TYPE_CHECKING
 
 from src.logger.logger import Logger
+from src.analyzer.trend_validator import TrendValidator
+from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
@@ -22,11 +24,13 @@ class AnalysisResultProcessor:
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
-        self.context: Optional["AnalysisContext"] = None
+        self.context: "AnalysisContext" | None = None
+        self._trend_validator = TrendValidator()
+        self._quality_scorer = PatternQualityScorer()
 
     async def process_analysis(self, system_prompt: str, prompt: str,
-                              chart_image: Optional[Union[io.BytesIO, bytes, str]] = None,
-                              provider: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
+                              chart_image: Union[io.BytesIO, bytes, str] | None = None,
+                              provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         """
         Process analysis by sending prompts to AI model and formatting response.
@@ -94,10 +98,13 @@ class AnalysisResultProcessor:
         # Log the analysis result
         self._log_analysis_result(parsed_response)
 
+        # Validate LLM claims against computed data (trend ADX + pattern quality)
+        self._validate_llm_claims(parsed_response)
+
         # Format the final response
         return self._format_analysis_response(parsed_response, cleaned_response)
 
-    def _log_analysis_result(self, parsed_response: Dict[str, Any]) -> None:
+    def _log_analysis_result(self, parsed_response: dict[str, Any]) -> None:
         """Log analysis result information"""
         if "analysis" in parsed_response:
             analysis = parsed_response["analysis"]
@@ -131,7 +138,7 @@ class AnalysisResultProcessor:
         else:
             self.logger.warning("Analysis complete but response format may be incomplete")
 
-    def _log_response_validation(self, validation: Optional[Dict[str, Any]]) -> None:
+    def _log_response_validation(self, validation: dict[str, Any] | None) -> None:
         """Log response-contract validation metadata without blocking legacy parsing."""
         if not validation:
             return
@@ -145,8 +152,8 @@ class AnalysisResultProcessor:
             return
         self.logger.debug("AI response contract validation skipped: no trading signal found")
 
-    def _format_analysis_response(self, parsed_response: Dict[str, Any],
-                                cleaned_response: str) -> Dict[str, Any]:
+    def _format_analysis_response(self, parsed_response: dict[str, Any],
+                                cleaned_response: str) -> dict[str, Any]:
         """Format the final analysis response."""
         parsed_response["raw_response"] = cleaned_response
         if self.context is not None:
@@ -157,3 +164,65 @@ class AnalysisResultProcessor:
     def _clean_response(text: str) -> str:
         """Remove thinking sections and extra whitespace from AI responses"""
         return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+
+    def _validate_llm_claims(self, parsed_response: dict[str, Any]) -> None:
+        """Validate LLM-reported ADX strengths and pattern quality against computed data.
+
+        Runs after parsing but before the response is returned. Overwrites
+        LLM values with computed ones when discrepancies exceed thresholds.
+        Logs warnings for any significant gaps found.
+        """
+        if self.context is None:
+            return
+
+        analysis = parsed_response.get("analysis")
+        if not analysis:
+            return
+
+        trend = analysis.get("trend", {})
+        tech_data = self.context.technical_data or {}
+        long_term_data = self.context.long_term_data or {}
+
+        # --- Trend ADX Validation ---
+        trend_result = self._trend_validator.validate(
+            strength_4h=trend.get("strength_4h"),
+            strength_daily=trend.get("strength_daily"),
+            computed_adx=tech_data.get("adx"),
+            computed_daily_adx=long_term_data.get("daily_adx") if long_term_data else None,
+        )
+
+        if trend_result.has_computed_data:
+            # Always overwrite with validated values (computed beats LLM guess)
+            self._trend_validator.overwrite_llm_trend(analysis, trend_result)
+
+            if not trend_result.passed:
+                for d in trend_result.discrepancies:
+                    self.logger.warning("ADX validation: %s", d)
+            else:
+                self.logger.debug(
+                    "ADX validation passed: 4H=%s daily=%s",
+                    trend_result.validated_4h, trend_result.validated_daily,
+                )
+
+        # --- Pattern Quality Validation ---
+        llm_quality_raw = analysis.get("pattern_quality")
+        try:
+            llm_quality = float(llm_quality_raw) if llm_quality_raw is not None else None
+        except (TypeError, ValueError):
+            llm_quality = None
+
+        quality = self._quality_scorer.score(
+            patterns=self.context.technical_patterns,
+            tech_data=tech_data,
+            llm_quality=llm_quality,
+        )
+        self._quality_scorer.overwrite_llm_quality(analysis, quality)
+
+        if not quality.passed:
+            for d in quality.discrepancies:
+                self.logger.warning("Pattern quality validation: %s", d)
+        else:
+            self.logger.debug(
+                "Pattern quality: computed=%s (%s)",
+                round(quality.overall), quality.label,
+            )

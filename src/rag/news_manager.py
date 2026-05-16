@@ -3,7 +3,7 @@ News Management Module for RAG Engine
 
 Fetches, deduplicates, and caches cryptocurrency news articles.
 """
-from typing import List, Dict, Any, Set
+from typing import Any, Set
 
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
@@ -29,7 +29,7 @@ class NewsManager:
         self.article_processor = article_processor
         self.news_repository = news_repository or NewsRepository(logger=logger, file_handler=file_handler)
 
-        self.news_database: List[Dict[str, Any]] = []
+        self.news_database: list[dict[str, Any]] = []
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ class NewsManager:
             self.logger.exception("Error loading cached news: %s", e)
             self.news_database = []
 
-    async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> List[Dict[str, Any]]:
+    async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> list[dict[str, Any]]:
         """Fetch fresh articles from the news provider; fall back to cache on failure."""
         if self.news_client is None:
             self.logger.error("News client not initialized")
@@ -75,7 +75,7 @@ class NewsManager:
             self.logger.error("Error fetching news: %s", e)
             return self._fallback()
 
-    def update_news_database(self, new_articles: List[Dict[str, Any]]) -> bool:
+    def update_news_database(self, new_articles: list[dict[str, Any]]) -> bool:
         """Merge new articles into the local database, deduplicate, and persist.
 
         Deduplication is URL-first: if a canonical URL already exists in the
@@ -145,16 +145,16 @@ class NewsManager:
 
     # ── Private ───────────────────────────────────────────────────────────────
 
-    def _fallback(self) -> List[Dict[str, Any]]:
+    def _fallback(self) -> list[dict[str, Any]]:
         articles = self.news_repository.load_fallback_articles(max_age_hours=72)
         if articles:
             self.logger.info("Using %s cached articles as fallback", len(articles))
         return articles
 
-    def _normalize(self, article: Dict[str, Any]) -> None:
+    def _normalize(self, article: dict[str, Any]) -> None:
         """Pre-compute lowercased fields for fast keyword search."""
         source_info = article.get("source_info")
-        if source_info.get("name"):
+        if source_info and source_info.get("name"):
             source_info["name"] = str(source_info["name"]).strip().lower()
 
         article["title_lower"] = article.get("title", "").lower()

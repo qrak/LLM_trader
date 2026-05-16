@@ -5,7 +5,6 @@ This module provides optimized implementations of various trend indicators
 including ADX, Supertrend, Ichimoku Cloud, Parabolic SAR, TRIX,
 Vortex Indicator, PFE, and TD Sequential.
 """
-from typing import Tuple
 
 import math
 import numpy as np
@@ -27,11 +26,11 @@ from .sar_utils import (
 
 @njit(cache=True)
 def adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
-              length: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+              length: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Calculate ADX (Average Directional Index) and directional indicators.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray, np.ndarray]: (ADX, +DI, -DI) arrays.
+        tuple[np.ndarray, np.ndarray, np.ndarray]: (ADX, +DI, -DI) arrays.
     """
     n = len(high)
 
@@ -66,11 +65,11 @@ def adx_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
 
 @njit(cache=True)
 def supertrend_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
-                     length: int = 10, multiplier: float = 3.0) -> Tuple[np.ndarray, np.ndarray]:
+                     length: int = 10, multiplier: float = 3.0) -> tuple[np.ndarray, np.ndarray]:
     """Calculate Supertrend indicator.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray]: (Supertrend Line, Trend Direction [1/-1])
+        tuple[np.ndarray, np.ndarray]: (Supertrend Line, Trend Direction [1/-1])
     """
     n = len(close)
     atr = atr_numba(high, low, close, length)
@@ -105,11 +104,11 @@ def supertrend_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
 def ichimoku_cloud_numba(high: np.ndarray, low: np.ndarray,
                          conversion_length: int = 9, base_length: int = 26,
                          lagging_span2_length: int = 52,
-                         displacement: int = 26) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                         displacement: int = 26) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Calculate Ichimoku Cloud components.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             (Conversion Line, Base Line, Leading Span A, Leading Span B)
     """
     # Calculate conversion and base lines

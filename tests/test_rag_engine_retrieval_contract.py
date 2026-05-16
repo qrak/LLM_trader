@@ -208,3 +208,13 @@ def test_build_context_query_uses_symbol_name_map_when_available(base_components
     query = base_components.engine.build_context_query("BTCUSDT")
 
     assert query == "bitcoin price analysis market trends"
+
+
+def test_resolve_retrieval_limits_defaults_to_config_budget(base_components):
+    resolved_k, resolved_max_tokens = base_components.engine._resolve_retrieval_limits(
+        k=None,
+        max_tokens=None,
+    )
+
+    assert resolved_k == _Config.RAG_NEWS_LIMIT
+    assert resolved_max_tokens == _Config.RAG_NEWS_LIMIT * _Config.RAG_ARTICLE_MAX_TOKENS

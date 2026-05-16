@@ -5,7 +5,7 @@ Subclasses implement rendering methods for their specific output medium.
 import io
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -67,7 +67,7 @@ class BaseNotifier(ABC):
             self,
             message: str,
             channel_id: int,
-            expire_after: Optional[int] = None
+            expire_after: int | None = None
     ) -> Any:
         """Send a text message."""
 
@@ -82,7 +82,7 @@ class BaseNotifier(ABC):
             symbol: str,
             timeframe: str,
             channel_id: int,
-            chart_image: Optional[io.BytesIO] = None
+            chart_image: io.BytesIO | None = None
     ) -> None:
         """Send full analysis notification."""
 
@@ -98,21 +98,20 @@ class BaseNotifier(ABC):
     @abstractmethod
     async def send_performance_stats(
             self,
-            trade_history: List[Dict[str, Any]],
+            trade_history: list[dict[str, Any]],
             symbol: str,
             channel_id: int
     ) -> None:
         """Send overall performance statistics."""
 
     @staticmethod
-    def get_action_styling(action: str) -> Tuple[str, str]:
+    def get_action_styling(action: str) -> tuple[str, str]:
         """Get color key and emoji for a trading action.
 
         Args:
             action: Trading action (BUY, SELL, HOLD, CLOSE, etc.)
 
-        Returns:
-            Tuple of (color_key, emoji)
+        Returns: tuple of (color_key, emoji)
         """
         color_map = {
             'BUY': 'green',
@@ -135,14 +134,13 @@ class BaseNotifier(ABC):
         return color_map.get(action, 'grey'), emoji_map.get(action, '📊')
 
     @staticmethod
-    def get_pnl_styling(pnl_pct: float) -> Tuple[str, str]:
+    def get_pnl_styling(pnl_pct: float) -> tuple[str, str]:
         """Get color key and emoji based on PnL percentage.
 
         Args:
             pnl_pct: Profit and Loss percentage
 
-        Returns:
-            Tuple of (color_key, emoji)
+        Returns: tuple of (color_key, emoji)
         """
         if pnl_pct > 0:
             return 'green', '📈'
@@ -155,15 +153,14 @@ class BaseNotifier(ABC):
             self,
             position: Any,
             current_price: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Calculate unrealized PnL for a position.
 
         Args:
             position: Position object with entry_price, size, direction
             current_price: Current market price
 
-        Returns:
-            Tuple of (pnl_percent, pnl_quote)
+        Returns: tuple of (pnl_percent, pnl_quote)
         """
         pnl_pct = position.calculate_pnl(current_price)
         if position.direction == 'LONG':
@@ -176,15 +173,14 @@ class BaseNotifier(ABC):
             self,
             position: Any,
             current_price: float
-    ) -> Tuple[float, float]:
+    ) -> tuple[float, float]:
         """Calculate percentage distances to stop loss and take profit.
 
         Args:
             position: Position object with stop_loss, take_profit, direction
             current_price: Current market price
 
-        Returns:
-            Tuple of (stop_distance_pct, target_distance_pct)
+        Returns: tuple of (stop_distance_pct, target_distance_pct)
         """
         if position.direction == 'LONG':
             stop_distance_pct = ((position.stop_loss - current_price) / current_price) * 100
@@ -212,7 +208,7 @@ class BaseNotifier(ABC):
         return time_held.total_seconds() / 3600
 
     @staticmethod
-    def _extract_close_reason(decision_dict: Dict[str, Any]) -> Optional[str]:
+    def _extract_close_reason(decision_dict: dict[str, Any]) -> str | None:
         """Extract close reason from decision metadata or legacy reasoning text."""
         close_reason = decision_dict.get('close_reason')
         if close_reason:
@@ -227,7 +223,7 @@ class BaseNotifier(ABC):
         return None
 
     @staticmethod
-    def _format_close_reason(close_reason: Optional[str]) -> Optional[str]:
+    def _format_close_reason(close_reason: str | None) -> str | None:
         """Normalize close reason for user-facing notifications."""
         if not close_reason:
             return None
@@ -235,15 +231,14 @@ class BaseNotifier(ABC):
 
     def calculate_performance_stats(
             self,
-            trade_history: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
+            trade_history: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
         """Calculate overall performance statistics from trade history.
 
         Args:
-            trade_history: List of trade decision dictionaries
+            trade_history: list of trade decision dictionaries
 
-        Returns:
-            Dict with stats or None if no closed trades
+        Returns: dict with stats or None if no closed trades
         """
         if not trade_history:
             return None
@@ -322,14 +317,13 @@ class BaseNotifier(ABC):
         }
 
     @staticmethod
-    def extract_analysis_fields(analysis: dict) -> Dict[str, Any]:
+    def extract_analysis_fields(analysis: dict) -> dict[str, Any]:
         """Extract common fields from analysis JSON.
 
         Args:
             analysis: Analysis dictionary from AI response
 
-        Returns:
-            Dict with extracted fields
+        Returns: dict with extracted fields
         """
         return {
             'signal': analysis.get('signal', 'UNKNOWN'),
