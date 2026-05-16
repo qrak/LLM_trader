@@ -177,7 +177,11 @@ class RagEngine:
                 self.logger.debug("News database updated; rebuilt indices")
 
     def _resolve_retrieval_limits(self, k: int | None, max_tokens: int | None) -> tuple[int, int]:
-        """Resolve retrieval limits from explicit values or config with safe fallbacks."""
+        """Resolve retrieval limits from explicit values or config with safe fallbacks.
+
+        Default token budget is derived from per-article config:
+        ``RAG_ARTICLE_MAX_TOKENS * RAG_NEWS_LIMIT``.
+        """
         resolved_k = k
         if resolved_k is None:
             resolved_k = self.config.RAG_NEWS_LIMIT

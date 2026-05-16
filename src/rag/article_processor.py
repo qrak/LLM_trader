@@ -45,7 +45,7 @@ class ArticleProcessor:
 
         # Check title and body for coin mentions
         title = article.get('title', '')
-        body = article.get('body', '')[:10000] if len(article.get('body', '')) >= 10000 else article.get('body', '')
+        body = article.get('body', '')
 
         title_coins = self.parser.detect_coins_in_text(title, known_crypto_tickers)
         body_coins = self.parser.detect_coins_in_text(body, known_crypto_tickers)

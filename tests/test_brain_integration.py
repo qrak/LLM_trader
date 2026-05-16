@@ -5,6 +5,7 @@ import pytest
 
 from src.trading.data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
 from src.trading.brain import TradingBrainService
+from src.trading.stop_loss_tightening_policy import TighteningEvaluation
 
 
 def _make_brain(exit_execution_context=None, timeframe_minutes=240):
@@ -345,6 +346,99 @@ class TestGetDynamicThresholds:
         assert t["min_rr_recommended"] == 2.0
         assert t["confidence_threshold"] == 70
         assert t["min_position_size"] == 0.02
+
+    def test_sl_tightening_nested_key_present(self):
+        t = self.brain.get_dynamic_thresholds()
+        assert "sl_tightening" in t
+        sl = t["sl_tightening"]
+        assert "base_threshold" in sl
+        assert "effective_threshold" in sl
+        assert "effective_threshold_pct" in sl
+        assert "source" in sl
+
+    def test_sl_tightening_effective_threshold_pct_matches_flat_key(self):
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["effective_threshold_pct"] == t["sl_tightening_pct"]
+
+    def test_sl_tightening_config_source_when_no_brain_data(self):
+        self.brain.vector_memory.compute_optimal_thresholds.return_value = {}
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["source"] == "config"
+
+    def test_sl_tightening_brain_source_when_learned_threshold_provided(self):
+        self.brain.vector_memory.compute_optimal_thresholds.return_value = {
+            "sl_tightening": {
+                "learned_threshold": 0.15,
+                "sample_count": 20,
+                "paired_sample_count": 12,
+                "win_rate": 0.6,
+                "avg_win_pct": 3.0,
+                "avg_loss_pct": -1.5,
+                "expectancy_pct": 0.6,
+                "source": "brain",
+                "basis": "paired_update_outcomes",
+            }
+        }
+        t = self.brain.get_dynamic_thresholds()
+        assert t["sl_tightening"]["source"] == "brain"
+        assert t["sl_tightening"]["learned_threshold"] == 0.15
+
+
+# ── track_position_update with policy evaluation ──────────────
+
+
+class TestTrackPositionUpdateWithPolicy:
+    """Verify brain.track_position_update forwards TighteningEvaluation to recorder."""
+
+    def _make_evaluation(self, price_progress=0.25, is_tightening=True, allowed=True):
+        return TighteningEvaluation(
+            is_tightening=is_tightening,
+            price_progress=price_progress,
+            base_min_progress=0.20,
+            effective_min_progress=0.20,
+            allowed=allowed,
+            source="config",
+            reason="sufficient progress",
+        )
+
+    def test_tightening_evaluation_forwarded_to_experience_recorder(self):
+        brain = _make_brain(timeframe_minutes=240)
+        brain.experience_recorder = MagicMock()
+        position = _make_position()
+        evaluation = self._make_evaluation()
+
+        brain.track_position_update(
+            position=position,
+            old_sl=95.0,
+            old_tp=110.0,
+            new_sl=97.0,
+            new_tp=110.0,
+            current_price=105.0,
+            current_pnl_pct=5.0,
+            tightening_evaluation=evaluation,
+        )
+
+        call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs
+        assert call_kwargs["tightening_evaluation"] is evaluation
+        assert call_kwargs["timeframe_minutes"] == 240
+
+    def test_none_evaluation_forwarded_when_not_provided(self):
+        brain = _make_brain()
+        brain.experience_recorder = MagicMock()
+        position = _make_position()
+
+        brain.track_position_update(
+            position=position,
+            old_sl=95.0,
+            old_tp=110.0,
+            new_sl=97.0,
+            new_tp=110.0,
+            current_price=105.0,
+            current_pnl_pct=5.0,
+        )
+
+        call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs
+        assert call_kwargs["tightening_evaluation"] is None
 
 
 class TestReflectionRuleFormatting:

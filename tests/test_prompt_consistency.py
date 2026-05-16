@@ -17,6 +17,7 @@ def _make_manager() -> TemplateManager:
         TAKE_PROFIT_CHECK_INTERVAL="1h",
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
+        MODEL_VERBOSITY="low",
     )
     return TemplateManager(
         config=config,
@@ -126,7 +127,8 @@ class TestPromptContractWording:
         combined = f"{system_prompt}\n{response_template}"
 
         assert ">40%" not in combined
-        assert "50%+ of the entry-to-TP distance" in combined
+        assert "50%+ of the entry-to-TP distance" not in combined
+        assert "hybrid tightening policy" in combined
         assert "material structure change" in combined
 
     def test_hold_open_position_contract_is_explicit(self) -> None:

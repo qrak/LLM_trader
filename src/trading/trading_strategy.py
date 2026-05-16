@@ -20,6 +20,7 @@ from .data_models import MarketConditions, Position, TradeDecision
 from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
+from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 
 if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
@@ -41,6 +42,7 @@ class TradingStrategy:
         position_extractor=None,
         position_factory=None,
         dashboard_state: "DashboardState | None" = None,
+        tightening_policy: StopLossTighteningPolicy | None = None,
     ):
         """Initialize the trading strategy with DI pattern.
 
@@ -55,6 +57,7 @@ class TradingStrategy:
             position_extractor: PositionExtractor instance (injected from app.py)
             position_factory: PositionFactory instance (injected from start.py)
             dashboard_state: Optional dashboard state for UI lifecycle notifications
+            tightening_policy: Stop-loss tightening policy (injected from start.py)
         """
         self.logger = logger
         self.persistence = persistence
@@ -80,20 +83,24 @@ class TradingStrategy:
         except Exception:
             self._tf_minutes = 240
 
-        # Precompute timeframe-dependent thresholds (static per run, avoid recompute)
+        # Shared tightening policy — fall back to a default instance when not injected
+        self._tightening_policy: StopLossTighteningPolicy = (
+            tightening_policy if tightening_policy is not None else StopLossTighteningPolicy()
+        )
+
+        # Last accepted SL tightening policy evaluation — forwarded to brain on update
+        self._last_sl_tightening_evaluation: TighteningEvaluation | None = None
+
+        # Precompute timeframe-dependent update-frequency threshold (static per run)
         tf = self._tf_minutes
         if tf < 60:
             self._min_update_interval_hours: float = (tf * 4) / 60.0
-            self._min_progress_for_tightening: float = 0.25
         elif tf < 240:
             self._min_update_interval_hours = (tf * 3) / 60.0
-            self._min_progress_for_tightening = 0.20
         elif tf < 1440:
             self._min_update_interval_hours = (tf * 2) / 60.0
-            self._min_progress_for_tightening = 0.15
         else:
             self._min_update_interval_hours = tf / 60.0
-            self._min_progress_for_tightening = 0.10
 
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
@@ -368,6 +375,7 @@ class TradingStrategy:
                 )
                 return None
 
+        self._last_sl_tightening_evaluation = None
         updated = await self._update_position_parameters(stop_loss, take_profit, current_price)
 
         if updated:
@@ -382,7 +390,8 @@ class TradingStrategy:
                     new_tp=take_profit if take_profit else old_tp,
                     current_price=current_price,
                     current_pnl_pct=current_pnl,
-                    market_conditions=market_conditions
+                    market_conditions=market_conditions,
+                    tightening_evaluation=self._last_sl_tightening_evaluation,
                 )
             except Exception as e:
                 self.logger.warning("Failed to track position update: %s", e)
@@ -577,60 +586,78 @@ class TradingStrategy:
         if stop_loss and stop_loss != self.current_position.stop_loss:
             direction = self.current_position.direction
             old_sl = self.current_position.stop_loss
+            brain_thresholds = self.brain_service.get_dynamic_thresholds()
 
-            # Check if this is a tightening (moving SL closer to entry/price)
-            is_tightening = (
-                (direction == "LONG" and stop_loss > old_sl) or
-                (direction == "SHORT" and stop_loss < old_sl)
+            evaluation = self._tightening_policy.evaluate_update(
+                position=self.current_position,
+                proposed_sl=stop_loss,
+                current_price=current_price or 0.0,
+                tf_minutes=self._tf_minutes,
+                brain_thresholds=brain_thresholds,
             )
 
-            if is_tightening and current_price and current_price > 0:
-                # GUARD: Prevent premature SL tightening that kills trades
-                tp_distance_total = abs(self.current_position.take_profit - self.current_position.entry_price)
-                if tp_distance_total > 0:
-                    if direction == "LONG":
-                        price_progress = (current_price - self.current_position.entry_price) / tp_distance_total
-                    else:
-                        price_progress = (self.current_position.entry_price - current_price) / tp_distance_total
-                else:
-                    price_progress = 0.0
-
-                if price_progress < self._min_progress_for_tightening:
+            if evaluation.is_tightening:
+                if not evaluation.allowed:
                     self.logger.info(
-                        "REJECTED premature SL tightening: price progress %.1f%% < %.0f%% minimum. "
+                        "REJECTED premature SL tightening: %s. "
                         "Keeping SL at $%s (AI requested $%s)",
-                        price_progress * 100,
-                        self._min_progress_for_tightening * 100,
+                        evaluation.reason,
                         f"{old_sl:,.2f}",
                         f"{stop_loss:,.2f}",
                     )
+                    try:
+                        pos = self.current_position
+                        self.brain_service.vector_memory.store_blocked_trade(
+                            guard_type="sl_tightening",
+                            direction=direction,
+                            confidence=pos.confidence,
+                            suggested_rr=0.0,
+                            required_rr=0.0,
+                            suggested_sl_pct=abs(stop_loss - pos.entry_price) / pos.entry_price if pos.entry_price else 0.0,
+                            suggested_tp_pct=pos.tp_distance_pct,
+                            suggested_sl=stop_loss,
+                            suggested_tp=pos.take_profit,
+                            current_price=current_price or 0.0,
+                            volatility_level=pos.volatility_level,
+                            reasoning_snippet=evaluation.reason[:200],
+                            metadata={
+                                "price_progress": evaluation.price_progress,
+                                "effective_min_progress": evaluation.effective_min_progress,
+                                "base_min_progress": evaluation.base_min_progress,
+                                "policy_source": evaluation.source,
+                                "tf_minutes": self._tf_minutes,
+                                "position_entry_timestamp": pos.entry_time.isoformat(),
+                                "position_entry_trade_id": f"trade_{pos.entry_time.isoformat()}",
+                                "position_id": f"{pos.symbol}|{pos.entry_time.isoformat()}",
+                            },
+                        )
+                    except Exception:
+                        self.logger.warning("Failed to store sl_tightening blocked event", exc_info=True)
                 else:
-                    # Allowed tightening
                     new_sl = stop_loss
+                    self._last_sl_tightening_evaluation = evaluation
                     self.logger.info(
-                        "Tightening Stop Loss: $%s -> $%s (price progress: %.1f%%)",
+                        "Tightening Stop Loss: $%s -> $%s (%s)",
                         f"{old_sl:,.2f}",
                         f"{stop_loss:,.2f}",
-                        price_progress * 100,
+                        evaluation.reason,
                     )
                     updated = True
-            elif direction == "LONG" and stop_loss < old_sl:
-                self.logger.info(
-                    "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
-                    old_sl, stop_loss
-                )
-                new_sl = stop_loss
-                updated = True
-            elif direction == "SHORT" and stop_loss > old_sl:
-                self.logger.info(
-                    "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f (Risk Increased)",
-                    old_sl, stop_loss
-                )
-                new_sl = stop_loss
-                updated = True
             else:
+                # SL is widening or unchanged — allow unconditionally
+                if direction == "LONG" and stop_loss < old_sl:
+                    self.logger.info(
+                        "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
+                        old_sl, stop_loss
+                    )
+                elif direction == "SHORT" and stop_loss > old_sl:
+                    self.logger.info(
+                        "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f (Risk Increased)",
+                        old_sl, stop_loss
+                    )
+                else:
+                    self.logger.info("Updated Stop Loss: $%s", f"{stop_loss:,.2f}")
                 new_sl = stop_loss
-                self.logger.info("Updated Stop Loss: $%s", f"{stop_loss:,.2f}")
                 updated = True
 
         if take_profit and take_profit != self.current_position.take_profit:
@@ -888,4 +915,31 @@ class TradingStrategy:
             pnl_pct = pos.calculate_pnl(current_price)
             pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
             context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
+
+        brain_thresholds = self.brain_service.get_dynamic_thresholds()
+        sl_eval = self._tightening_policy.evaluate_update(
+            position=pos,
+            proposed_sl=pos.stop_loss + 1e-8,  # sentinel: minimal upward nudge forces tightening path
+            current_price=current_price or 0.0,
+            tf_minutes=self._tf_minutes,
+            brain_thresholds=brain_thresholds,
+        )
+        effective_pct = sl_eval.effective_min_progress * 100
+        progress_pct = sl_eval.price_progress * 100 if current_price and current_price > 0 else None
+        if progress_pct is not None:
+            eligible = progress_pct >= effective_pct
+            context_lines.extend([
+                "",
+                "## SL Tightening Policy",
+                f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
+                f"- Current price progress: {progress_pct:.1f}%",
+                f"- Tightening eligible: {'YES' if eligible else 'NO — wait until price progress reaches the minimum'}",
+            ])
+        else:
+            context_lines.extend([
+                "",
+                "## SL Tightening Policy",
+                f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
+            ])
+
         return "\n".join(context_lines)

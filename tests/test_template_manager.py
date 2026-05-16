@@ -16,6 +16,7 @@ def _make_manager(**overrides):
         TAKE_PROFIT_CHECK_INTERVAL="1h",
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
+        MODEL_VERBOSITY="low",
     )
     defaults = dict(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
     defaults.update(overrides)
@@ -58,6 +59,7 @@ class TestBuildSystemPrompt:
             STOP_LOSS_CHECK_INTERVAL="5m",
             TAKE_PROFIT_TYPE="hard",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
+            MODEL_VERBOSITY="low",
         )
         mgr = _make_manager(config=config)
 
@@ -72,6 +74,7 @@ class TestBuildSystemPrompt:
             STOP_LOSS_CHECK_INTERVAL="5m",
             TAKE_PROFIT_TYPE="soft",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
+            MODEL_VERBOSITY="low",
         )
         mgr = _make_manager(config=config)
 

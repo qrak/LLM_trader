@@ -340,7 +340,8 @@ class PromptBuilder:
             performance_context,
             brain_context,
             last_analysis_time,
-            indicator_delta_alert=indicator_delta_alert
+            indicator_delta_alert=indicator_delta_alert,
+            dynamic_thresholds=dynamic_thresholds
         )
 
         # Check if we have advanced support/resistance detected

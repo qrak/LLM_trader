@@ -13,6 +13,7 @@ class _TokenCounter:
 def _builder() -> ContextBuilder:
     config = SimpleNamespace(
         RAG_ARTICLE_MAX_TOKENS=300,
+        RAG_NEWS_LIMIT=2,
         RAG_NEWS_ENRICH_MIN_CHARS=20,
     )
     article_processor = MagicMock()
@@ -26,6 +27,27 @@ def _builder() -> ContextBuilder:
         scoring_policy=MagicMock(),
         article_processor=article_processor,
     )
+
+
+def test_build_context_uses_config_derived_default_budget():
+    builder = _builder()
+    builder.config.RAG_ARTICLE_MAX_TOKENS = 10
+    builder.config.RAG_NEWS_LIMIT = 1
+    called_limits: list[int] = []
+
+    def _stub_process(_item: dict, max_tokens: int) -> str:
+        called_limits.append(max_tokens)
+        return "word " * 8
+
+    builder._process_article_simple = _stub_process
+
+    context_text = builder.build_context([
+        {"title": "A0", "url": "https://example.com/0"},
+        {"title": "A1", "url": "https://example.com/1"},
+    ])
+
+    assert context_text.strip() == ("word " * 8).strip()
+    assert called_limits == [10, 10]
 
 
 def test_add_articles_to_context_prefers_full_body_even_if_score_is_lower():

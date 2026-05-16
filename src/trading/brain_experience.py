@@ -11,6 +11,7 @@ from src.utils.indicator_classifier import (
 
 from .brain_patterns import TradePatternAnalyzer
 from .data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
+from .stop_loss_tightening_policy import TighteningEvaluation
 from .vector_memory import VectorMemoryService
 
 
@@ -29,6 +30,19 @@ class BrainExperienceRecorder:
         self.vector_memory = vector_memory
         self.pattern_analyzer = pattern_analyzer
         self.default_exit_execution_context = default_exit_execution_context
+
+    @staticmethod
+    def _timeframe_bucket(tf_minutes: int | None) -> str:
+        """Map timeframe minutes to a stable bucket label."""
+        if tf_minutes is None or tf_minutes <= 0:
+            return "unknown"
+        if tf_minutes < 60:
+            return "scalping"
+        if tf_minutes < 240:
+            return "intraday"
+        if tf_minutes < 1440:
+            return "swing"
+        return "position"
 
     @staticmethod
     def build_rich_context_string(
@@ -91,6 +105,7 @@ class BrainExperienceRecorder:
             exit_execution_context=exit_execution_context,
         )
         trade_id = f"trade_{position.entry_time.isoformat()}"
+        position_id = f"{position.symbol}|{position.entry_time.isoformat()}"
         self.vector_memory.store_experience(
             trade_id=trade_id,
             market_context=condition_str,
@@ -124,6 +139,9 @@ class BrainExperienceRecorder:
                 "order_book_bias": conditions.order_book_bias,
                 "macd_signal": conditions.macd_signal,
                 "bb_pos": conditions.bb_position,
+                "position_entry_timestamp": position.entry_time.isoformat(),
+                "position_entry_trade_id": trade_id,
+                "position_id": position_id,
                 **exit_execution_context.to_dict(),
                 **self.pattern_analyzer.extract_factor_scores(position.confluence_factors),
             }
@@ -146,6 +164,8 @@ class BrainExperienceRecorder:
         current_price: float,
         current_pnl_pct: float,
         market_conditions: MarketConditions | None = None,
+        tightening_evaluation: TighteningEvaluation | None = None,
+        timeframe_minutes: int | None = None,
     ) -> None:
         """Track position update decisions for learning."""
         conditions = market_conditions or MarketConditions()
@@ -175,6 +195,23 @@ class BrainExperienceRecorder:
         )
         update_id = f"update_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
         reasoning_str = f"Moved {action_type}: SL {old_sl:.2f}→{new_sl:.2f}, TP {old_tp:.2f}→{new_tp:.2f}"
+        position_entry_timestamp = position.entry_time.isoformat()
+        position_entry_trade_id = f"trade_{position_entry_timestamp}"
+        position_id = f"{position.symbol}|{position_entry_timestamp}"
+        entry_price = position.entry_price
+        old_sl_dist = abs(old_sl - entry_price) / entry_price if entry_price else 0.0
+        new_sl_dist = abs(new_sl - entry_price) / entry_price if entry_price else 0.0
+        policy_meta: dict = {}
+        if tightening_evaluation is not None:
+            policy_meta = {
+                "is_tightening": tightening_evaluation.is_tightening,
+                "price_progress": round(tightening_evaluation.price_progress, 4),
+                "base_min_progress": round(tightening_evaluation.base_min_progress, 4),
+                "effective_min_progress": round(tightening_evaluation.effective_min_progress, 4),
+                "policy_source": tightening_evaluation.source,
+                "policy_allowed": tightening_evaluation.allowed,
+                "policy_reason": tightening_evaluation.reason[:200],
+            }
         self.vector_memory.store_experience(
             trade_id=update_id,
             market_context=market_context,
@@ -191,6 +228,19 @@ class BrainExperienceRecorder:
                 "pnl_at_update": current_pnl_pct,
                 "adx_at_update": conditions.adx,
                 "volatility": conditions.volatility,
+                "position_entry_timestamp": position_entry_timestamp,
+                "position_entry_trade_id": position_entry_trade_id,
+                "position_id": position_id,
+                "entry_price": entry_price,
+                "old_stop_loss": old_sl,
+                "new_stop_loss": new_sl,
+                "old_take_profit": old_tp,
+                "new_take_profit": new_tp,
+                "old_sl_distance_pct": round(old_sl_dist, 4),
+                "new_sl_distance_pct": round(new_sl_dist, 4),
+                "timeframe_minutes": timeframe_minutes if timeframe_minutes is not None else 0,
+                "timeframe_bucket": self._timeframe_bucket(timeframe_minutes),
+                **policy_meta,
                 **exit_execution_context.to_dict(),
             }
         )
