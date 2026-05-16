@@ -171,6 +171,7 @@ class BrainContextProvider:
             "rr_strong_setup": thresholds.get("rr_strong_setup", 2.5),
             "trade_count": self.vector_memory.trade_count,
             "learned_keys": list(thresholds.keys()),
+            "sl_tightening": thresholds.get("sl_tightening"),
         }
 
     @staticmethod

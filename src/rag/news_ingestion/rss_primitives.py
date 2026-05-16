@@ -2,6 +2,9 @@
 
 These are the reusable building blocks shared between the runtime provider and
 the operator preview scripts.
+
+Sanitization ownership note: keep RSS/HTML cleanup and tracking-parameter
+normalization rules centralized in this module.
 """
 from __future__ import annotations
 

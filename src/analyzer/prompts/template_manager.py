@@ -70,6 +70,7 @@ class TemplateManager:
             "prompt_version": self.PROMPT_VERSION,
             "response_contract_version": self.RESPONSE_CONTRACT_VERSION,
             "prompt_variant": self.PROMPT_VARIANT,
+            "model_verbosity": self.config.MODEL_VERBOSITY,
         }
 
     def _build_exit_execution_guidance(self, timeframe: str) -> str:
@@ -293,7 +294,8 @@ class TemplateManager:
     def build_system_prompt(self, symbol: str, timeframe: str = "1h", previous_response: str | None = None,
                             performance_context: str | None = None, brain_context: str | None = None,
                             last_analysis_time: str | None = None,
-                            indicator_delta_alert: str = "") -> str:
+                            indicator_delta_alert: str = "",
+                            dynamic_thresholds: dict[str, Any] | None = None) -> str:
         # pylint: disable=too-many-arguments
         """Build the system prompt for trading decision AI.
 
@@ -305,10 +307,31 @@ class TemplateManager:
             brain_context: Distilled trading insights from closed trades
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             indicator_delta_alert: Alert string when many indicators changed significantly
+            dynamic_thresholds: Brain-learned thresholds for dynamic values
 
         Returns:
             str: Formatted system prompt
         """
+        _verbosity = self.config.MODEL_VERBOSITY
+        if _verbosity == "high":
+            _output_rule = (
+                "Output rule: use detailed parser-safe numbered labels (e.g., '1) MARKET STRUCTURE:'). "
+                "Each label: quantitative data first, then a brief interpretation. "
+                "Keep each label on one line. Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+                "prompt headings are organizational only."
+            )
+        elif _verbosity == "medium":
+            _output_rule = (
+                "Output rule: use expanded parser-safe numbered labels (e.g., '1) MARKET STRUCTURE:'). "
+                "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+                "prompt headings are organizational only."
+            )
+        else:
+            _output_rule = (
+                "Output rule: use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). "
+                "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
+                "prompt headings are organizational only."
+            )
         header_lines = [
             f"You are an Institutional-Grade Crypto Trading Analyst managing {symbol} on {timeframe} timeframe.",
             "Analyze technical indicators, price action, volume, patterns, provided chart if available, market sentiment, and news.",
@@ -318,7 +341,7 @@ class TemplateManager:
             "## Analytical Framework",
             "Follow the numbered **Analysis Steps** in the user prompt for internal reasoning.",
             "Your output must follow the Response Format sections exactly.",
-            "Output rule: use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). Do NOT use Markdown headings (#, ##, ###, ####) in your answer; prompt headings are organizational only.",
+            _output_rule,
             "",
             "## Decision Protocol",
             "- Classify regime first: trending, ranging, breakout, reversal, or unclear.",
@@ -356,14 +379,27 @@ class TemplateManager:
 
         # Add performance context if available
         if performance_context:
+            thresholds = dynamic_thresholds or {}
+            sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
+            sl_tightening_source = thresholds.get("sl_tightening_source", "config")
+            if sl_tightening_pct is not None:
+                tightening_rule = (
+                    f"Only move SL after price reaches {sl_tightening_pct}%+ of the entry-to-TP distance "
+                    f"(hybrid policy, source: {sl_tightening_source})."
+                )
+            else:
+                tightening_rule = (
+                    "Only move SL once the hybrid tightening policy confirms sufficient price progress "
+                    "(see SL Tightening Policy in position context)."
+                )
             header_lines.extend([
                 "",
                 performance_context.strip(),
                 "",
                 "",
                 "## Profit Maximization Strategy",
-                "- LET TRADES BREATHE: Do NOT tighten stops prematurely. Only move SL after price reaches 50%+ of the entry-to-TP distance. Premature tightening is the #1 cause of losing trades.",
-                "- UPDATE sparingly: tighten SL only after the 50%+ entry-to-TP progress rule; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
+                f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
+                "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
                 "- CLOSE proactively: signal CLOSE when thesis is invalidated — don't wait for SL.",
                 "- HOLD discipline: better to miss a trade than force a weak setup.",
                 "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
@@ -481,16 +517,77 @@ class TemplateManager:
                 "\n- **Safe Drawdown**: Insufficient trade data for MAE baseline — rely on ATR-based stops only."
             )
 
+        # SL tightening threshold for UPDATE signal guidance
+        sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
+        sl_tightening_source = thresholds.get("sl_tightening_source", "config")
+        if sl_tightening_pct is not None:
+            update_sl_rule = (
+                f"tighten SL only after {sl_tightening_pct}%+ of the entry-to-TP distance is covered "
+                f"(hybrid policy, source: {sl_tightening_source})"
+            )
+        else:
+            update_sl_rule = (
+                "tighten SL only when the hybrid tightening policy confirms sufficient progress "
+                "(see SL Tightening Policy in position context)"
+            )
+
+        verbosity = self.config.MODEL_VERBOSITY
+        if verbosity == "high":
+            _output_header = (
+                "Output: 10-13 plain-text numbered lines + JSON. JSON is truth. No markdown headings. "
+                "Each line: quantitative data first, then a brief interpretation of its trading implication. "
+                "Keep each label on one line."
+            )
+            _narrative_section = (
+                f"1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and what it implies for bias\n"
+                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement level and whether it confirms or challenges the signal\n"
+                f"3) MOMENTUM: RSI/MACD/Stoch values and whether momentum supports or contradicts the trade\n"
+                f"4) TREND & VOLATILITY: ADX strength, Choppiness, ATR — state regime quality and volatility context for sizing{chart_validation_line}\n"
+                f"5) VOLUME & FLOW: OBV/CMF/MFI direction and whether participation confirms the move\n"
+                f"6) KEY LEVELS: nearest support and resistance with distance and their structural significance\n"
+                f"7) NEWS & MACRO: most relevant narrative and its likely price implication\n"
+                f"8) BULL CASE: key conditions and evidence supporting the bullish scenario\n"
+                f"9) BEAR CASE: key conditions and evidence supporting the bearish scenario\n"
+                f"10) POSITION & RISK: current exposure, SL/TP progress, and hybrid tightening policy status\n"
+                f"11) RISK/REWARD: current R/R with data justification and whether entry still holds value\n"
+                f"12) DECISION: signal, invalidation condition, and confidence anchor\n"
+                f"13) EXECUTION NOTE: exact entry trigger, SL/TP placement logic, or position management action"
+            )
+            _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) major level context, (5) bull/bear scenario, (6) invalidation trigger, (7) next watch condition."
+        elif verbosity == "medium":
+            _output_header = (
+                "Output: 7-9 plain-text numbered lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
+            )
+            _narrative_section = (
+                f"1) MARKET STRUCTURE: trend regime, dominant direction, and key breakout/breakdown level\n"
+                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence\n"
+                f"3) INDICATOR ASSESSMENT: strongest momentum and trend signal{chart_validation_line}\n"
+                f"4) KEY LEVELS: nearest support, resistance, and distance from current price\n"
+                f"5) CONTEXT & CATALYST: news/macro if relevant\n"
+                f"6) POSITION & RISK: current exposure and SL/TP progress or management intent\n"
+                f"7) DECISION: signal, R/R quality, invalidation condition\n"
+                f"8) EXECUTION NOTE: conditional-entry/update/exit logic"
+            )
+            _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) invalidation trigger, (5) what to watch next."
+        else:  # low (default)
+            _output_header = (
+                "Output: max 5 plain-text lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
+            )
+            _narrative_section = (
+                f"1) MARKET STRUCTURE: trend regime + alignment\n"
+                f"2) INDICATOR ASSESSMENT: strongest confirming/conflicting signal{chart_validation_line}\n"
+                f"3) CONTEXT & CATALYST: news/macro if relevant\n"
+                f"4) DECISION: signal, R/R quality, invalidation\n"
+                f"5) EXECUTION NOTE: conditional-entry/update logic"
+            )
+            _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
+
         response_template = f'''## Response Format
 
-Output: max 5 plain-text lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines.
+{_output_header}
 
 Narrative (plain-text only):
-1) MARKET STRUCTURE: trend regime + alignment
-2) INDICATOR ASSESSMENT: strongest confirming/conflicting signal{chart_validation_line}
-3) CONTEXT & CATALYST: news/macro if relevant
-4) DECISION: signal, R/R quality, invalidation
-5) EXECUTION NOTE: conditional-entry/update logic
+{_narrative_section}
 
 JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluence = 0-100 integers. Price/size/ratio = numbers or null.
 
@@ -510,7 +607,7 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
         "stop_loss": 79750.0,
         "take_profit": 73114.0,
         "position_size": 0.0,
-        "reasoning": "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next.",
+        "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 32, "strength_daily": 41, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": 2.58
@@ -559,7 +656,7 @@ SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for over
 SIGNALS:
 - BUY/SELL: {conf_threshold}+ conf, min {min_rr:.1f}:1 R/R, clear SL/TP
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
-- UPDATE: tighten SL only after 50%+ of the entry-to-TP distance is covered; TP/thesis updates require material structure change and closed-candle confirmation
+- UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
 RISK/REWARD GUIDELINES:
 - R/R < {rr_borderline:.1f}: Very unfavorable — HOLD

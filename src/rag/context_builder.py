@@ -129,13 +129,14 @@ class ContextBuilder:
         )
 
     @profile_performance
-    def build_context(self, news_items: list[dict], max_tokens: int = 2000) -> str:
+    def build_context(self, news_items: list[dict], max_tokens: int | None = None) -> str:
         """
         Build a context string from news items using simple lead paragraph extraction.
 
         Args:
             news_items: list of news dictionaries
-            max_tokens: Maximum tokens for the entire context
+            max_tokens: Maximum tokens for the entire context. When omitted,
+                uses config-derived default: article_max_tokens * news_limit.
 
         Returns:
             Formatted context string
@@ -150,10 +151,13 @@ class ContextBuilder:
         # Use configured article_max_tokens to limit each article strictly
         # This ensures uniform article quality and control over content distribution
         article_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS
+        resolved_max_tokens = max_tokens
+        if resolved_max_tokens is None:
+            resolved_max_tokens = article_max_tokens * self.config.RAG_NEWS_LIMIT
 
         for item in news_items:
             # Stop if we're close to the total context limit
-            if current_tokens >= max_tokens:
+            if current_tokens >= resolved_max_tokens:
                 break
 
             # Process article with strict per-article token limit
@@ -163,7 +167,7 @@ class ContextBuilder:
                 token_count = self.token_counter.count_tokens(processed_text)
 
                 # Skip this article if including it would exceed total context limit
-                if current_tokens + token_count > max_tokens:
+                if current_tokens + token_count > resolved_max_tokens:
                     break
 
                 context_parts.append(processed_text)

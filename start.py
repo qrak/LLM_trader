@@ -83,6 +83,7 @@ from src.analyzer.prompts.context_builder import ContextBuilder as AnalyzerConte
 from src.analyzer.pattern_engine import ChartGenerator
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -547,13 +548,15 @@ class CompositionRoot:
             timeframe_minutes=timeframe_minutes,
         )
         exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
-        
+        tightening_policy = StopLossTighteningPolicy.from_config(self.config)
+
         brain_service = TradingBrainService(
             self.logger,
             persistence,
             vector_memory,
             exit_execution_context=exit_execution_context,
             timeframe_minutes=timeframe_minutes,
+            tightening_policy=tightening_policy,
         )
         brain_service.refresh_semantic_rules_if_stale()
         
@@ -572,7 +575,7 @@ class CompositionRoot:
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
-            PositionFactory(self.logger)
+            PositionFactory(self.logger), tightening_policy=tightening_policy
         )
         
         return {

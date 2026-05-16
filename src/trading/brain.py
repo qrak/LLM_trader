@@ -13,6 +13,7 @@ from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
 from .brain_experience import BrainExperienceRecorder
 from .brain_context import BrainContextProvider
+from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -60,6 +61,7 @@ class TradingBrainService:
         vector_memory: VectorMemoryService,
         exit_execution_context: "ExitExecutionContext | None" = None,
         timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
+        tightening_policy: StopLossTighteningPolicy | None = None,
     ):
         """Initialize trading brain service.
 
@@ -69,11 +71,16 @@ class TradingBrainService:
             vector_memory: Injected vector memory service (required)
             exit_execution_context: Configured fallback SL/TP execution context.
             timeframe_minutes: Active analysis timeframe in minutes.
+            tightening_policy: Stop-loss tightening policy for threshold exposure.
         """
         self.logger = logger
         self.persistence = persistence
         self.vector_memory = vector_memory
         self._default_exit_execution_context: ExitExecutionContext = exit_execution_context or ExitExecutionContext()
+        self._timeframe_minutes: int = timeframe_minutes
+        self._tightening_policy: StopLossTighteningPolicy = (
+            tightening_policy if tightening_policy is not None else StopLossTighteningPolicy()
+        )
         self.exit_profiles = ExitProfileResolver(self._default_exit_execution_context)
         self.pattern_analyzer = TradePatternAnalyzer(self.exit_profiles)
         self.reflection_engine = BrainReflectionEngine(
@@ -187,7 +194,20 @@ class TradingBrainService:
 
         Returns: dict with learned thresholds. Defaults used when insufficient data.
         """
-        return self.context_provider.get_dynamic_thresholds()
+        thresholds = self.context_provider.get_dynamic_thresholds()
+        base_threshold = self._tightening_policy.get_base_threshold(self._timeframe_minutes)
+        effective_threshold, source = self._tightening_policy._resolve_effective_threshold(
+            base_threshold, thresholds
+        )
+        thresholds["sl_tightening_pct"] = round(effective_threshold * 100)
+        thresholds["sl_tightening_source"] = source
+        sl_payload: dict[str, Any] = thresholds.get("sl_tightening") or {}
+        sl_payload["base_threshold"] = base_threshold
+        sl_payload["effective_threshold"] = effective_threshold
+        sl_payload["effective_threshold_pct"] = round(effective_threshold * 100)
+        sl_payload["source"] = source
+        thresholds["sl_tightening"] = sl_payload
+        return thresholds
 
     def _build_rich_context_string(
         self,
@@ -549,7 +569,8 @@ class TradingBrainService:
         new_tp: float,
         current_price: float,
         current_pnl_pct: float,
-        market_conditions: "MarketConditions | None" = None
+        market_conditions: "MarketConditions | None" = None,
+        tightening_evaluation: TighteningEvaluation | None = None,
     ) -> None:
         """Track position update decisions for learning.
 
@@ -562,6 +583,7 @@ class TradingBrainService:
             current_price: Current market price
             current_pnl_pct: Current unrealized P&L
             market_conditions: Market state at time of update
+            tightening_evaluation: Policy evaluation from StopLossTighteningPolicy (optional)
         """
         self.experience_recorder.track_position_update(
             position=position,
@@ -572,4 +594,6 @@ class TradingBrainService:
             current_price=current_price,
             current_pnl_pct=current_pnl_pct,
             market_conditions=market_conditions,
+            tightening_evaluation=tightening_evaluation,
+            timeframe_minutes=self._timeframe_minutes,
         )

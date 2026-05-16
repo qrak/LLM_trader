@@ -1,5 +1,45 @@
 # Changelog
 
+## 2026-05-16 - News Token Budget Contract Alignment
+
+### Changed
+
+- **config/config.ini** and **config/config.ini.example**: Set `[rag] article_max_tokens` to `1000` for runtime and example defaults.
+- **src/config/loader.py**: Updated `RAG_ARTICLE_MAX_TOKENS` fallback default from `256` to `1000` so missing-config behavior matches runtime target.
+- **src/rag/context_builder.py**: Removed hardcoded total-context default (`2000`) from `build_context()`. When `max_tokens` is omitted, it now resolves from config as `RAG_ARTICLE_MAX_TOKENS * RAG_NEWS_LIMIT`, while preserving strict per-article limiting via `RAG_ARTICLE_MAX_TOKENS`.
+- **src/rag/article_processor.py**: Removed hardcoded `[:10000]` body truncation in `detect_coins_in_article()`, so coin detection scans full article body instead of silently clipping long articles.
+- **src/rag/rag_engine.py**: Clarified retrieval-limit docstring contract that default total budget is derived from per-article config and article count.
+
+### Added
+
+- **tests/test_article_processor_contract.py**: Regression test proving late-body ticker mentions (beyond 10k chars) are still detected.
+- **tests/test_rag_engine_retrieval_contract.py**: Contract test for config-derived default retrieval budget.
+- **tests/test_rag_context_builder_contract.py**: Contract test verifying `build_context()` default budget resolves from config and passes per-article cap consistently.
+
+## 2026-05-16 - Hybrid Stop-Loss Tightening Policy
+
+### Added
+
+- **src/trading/stop_loss_tightening_policy.py** (new): `StopLossTighteningPolicy` — single authoritative gate for SL tightening decisions. Replaces inline executor logic with a deterministic, side-effect-free policy class. Evaluates tightening eligibility from per-timeframe config thresholds (scalping/intraday/swing/position), with optional brain override clamped within a configurable `[floor, ceiling]` range. Returns a `TighteningEvaluation` dataclass with full decision metadata.
+- **config/config.ini.example**: Seven new keys in `[risk_management]` documenting `sl_tightening_scalping`, `sl_tightening_intraday`, `sl_tightening_swing`, `sl_tightening_position`, `sl_tightening_floor`, `sl_tightening_ceiling`, and `sl_tightening_min_samples`.
+- **tests/test_stop_loss_tightening_policy.py** (new, 25 tests): Covers timeframe bucket defaults, `from_config()`, LONG/SHORT tightening allow/reject, zero TP distance, missing current price, brain override with sufficient/insufficient samples, floor/ceiling clamping, and all fallback paths.
+
+### Changed
+
+- **src/config/loader.py** and **src/config/protocol.py**: Seven new typed properties for `SL_TIGHTENING_*` config keys.
+- **start.py**: Single `StopLossTighteningPolicy` instance provisioned in `_provision_trading_layer()` and injected into both `TradingBrainService` and `TradingStrategy`.
+- **src/trading/trading_strategy.py**: Replaced hardcoded inline tightening progress guard with `policy.evaluate_update()`; blocked events recorded via `vector_memory.store_blocked_trade(guard_type="sl_tightening")`; blocked events now include position identity metadata (`position_id`, `position_entry_trade_id`, `position_entry_timestamp`); `_last_sl_tightening_evaluation` instance attribute captures the accepted evaluation and forwards it to `brain_service.track_position_update()`; `get_position_context()` now renders an `## SL Tightening Policy` section showing effective threshold, current progress, and eligibility.
+- **src/trading/brain.py**: `track_position_update()` accepts `tightening_evaluation: TighteningEvaluation | None` and `timeframe_minutes` and forwards them to the recorder. `get_dynamic_thresholds()` now populates a nested `sl_tightening` dict with `base_threshold`, `effective_threshold`, `effective_threshold_pct`, and `source` alongside existing flat keys.
+- **src/trading/brain_experience.py**: `track_position_update()` stores position identity (`position_id`, `position_entry_trade_id`, `position_entry_timestamp`), SL/TP values, distance percentages, timeframe bucket, and full policy evaluation metadata. `record_closed_trade()` stores position identity fields to enable update–close pairing. Added `_timeframe_bucket()` static helper.
+- **src/trading/brain_context.py**: `get_dynamic_thresholds()` now preserves the nested `sl_tightening` payload from `compute_optimal_thresholds()`.
+- **src/trading/vector_memory_analytics.py**: `compute_optimal_thresholds()` passes the full raw Chroma snapshot to the new `_learn_sl_tightening_threshold()` method. Added `_learn_sl_tightening_threshold()`: pairs accepted SL-tightening UPDATE records with their eventual WIN/LOSS close outcomes, deduplicates to one update per position, scans candidates `[0.05 … 0.40]`, selects the lowest with positive expectancy, and stores the result under `thresholds["sl_tightening"]`.
+- **src/analyzer/prompts/template_manager.py**: Replaced two hardcoded `"50%+"` thresholds in the system prompt and response template with dynamic rendering from `dynamic_thresholds["sl_tightening_pct"]`; falls back to generic guidance when the key is absent.
+- **src/analyzer/prompts/prompt_builder.py**: `build_system_prompt()` now receives `dynamic_thresholds` so the effective tightening threshold is visible in the system prompt.
+- **tests/test_brain_integration.py**: Added `TestTrackPositionUpdateWithPolicy` (recorder forwarding) and extended `TestGetDynamicThresholds` with nested `sl_tightening` payload tests (config-source fallback, brain-source override, flat/nested key parity).
+- **tests/test_vector_memory.py**: Added four tests under `TestAnalyticsAndThresholds` for `_learn_sl_tightening_threshold`: paired wins learn threshold, below min-samples no emission, no close pairs no emission, all-loss expectancy no emission.
+- **tests/test_trading_strategy_branches.py**: Updated four SL tightening tests to inject `StopLossTighteningPolicy` instances; renamed `test_not_is_tightening_but_generic_change` → `test_sl_tightening_no_current_price_rejected` to match new safety-reject behavior.
+- **tests/test_prompt_consistency.py**: Updated `test_update_progress_rule_has_no_competing_percentage_thresholds` to assert the static `50%+` string is gone and `"hybrid tightening policy"` is present.
+
 ## 2026-05-16 - Trading Brain Close Lifecycle and Vector Memory Hardening
 
 ### Changed

@@ -18,6 +18,7 @@ CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
 VALID_PROVIDERS = {"local", "googleai", "openrouter", "blockrun", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
+VALID_MODEL_VERBOSITIES = {"low", "medium", "high"}
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
@@ -33,6 +34,7 @@ class Config:
         self._validate_provider()
         self._validate_exit_monitoring()
         self._build_model_configs()
+        self._validate_model_verbosity()
 
     def _load_environment(self):
         """Load environment variables from keys.env file using python-dotenv."""
@@ -129,6 +131,22 @@ class Config:
             valid_options = ", ".join(f'"{item}"' for item in sorted(VALID_EXIT_TYPES))
             raise ValueError(f"Invalid {key} '{value}' in config.ini. Supported values are: {valid_options}.")
         return normalized
+
+    @staticmethod
+    def _normalize_model_verbosity(value: Any, key: str) -> str:
+        """Normalize and validate a model verbosity level."""
+        normalized = str(value).strip().lower()
+        if normalized not in VALID_MODEL_VERBOSITIES:
+            valid_options = ", ".join(f'"{item}"' for item in sorted(VALID_MODEL_VERBOSITIES))
+            raise ValueError(f"Invalid {key} '{value}' in config.ini. Supported values are: {valid_options}.")
+        return normalized
+
+    def _validate_model_verbosity(self) -> None:
+        """Validate model_verbosity config value at startup."""
+        self._normalize_model_verbosity(
+            self.get_config('model_config', 'model_verbosity', 'low'),
+            'model_verbosity',
+        )
 
     @staticmethod
     def _parse_exit_interval_minutes(value: Any, key: str) -> int:
@@ -268,6 +286,14 @@ class Config:
     def BLOCKRUN_MODEL(self):
         return self.get_config('ai_providers', 'blockrun_model', 'openai/gpt-4o')
 
+    # Model Config
+    @property
+    def MODEL_VERBOSITY(self) -> str:
+        return self._normalize_model_verbosity(
+            self.get_config('model_config', 'model_verbosity', 'low'),
+            'model_verbosity',
+        )
+
     # General Configuration
     @property
     def LOGGER_DEBUG(self):
@@ -377,7 +403,7 @@ class Config:
     @property
     def RAG_ARTICLE_MAX_TOKENS(self):
         """Maximum number of tokens per article (configurable via [rag] article_max_tokens)."""
-        return int(self.get_config('rag', 'article_max_tokens', 256))
+        return int(self.get_config('rag', 'article_max_tokens', 1000))
 
     @property
     def RAG_DENSITY_PENALTY_THRESHOLD(self):
@@ -520,6 +546,41 @@ class Config:
     def POSITION_SIZE_FALLBACK_HIGH(self) -> float:
         """Fallback position size for HIGH confidence when AI size is missing or invalid."""
         return float(self.get_config('risk_management', 'position_size_fallback_high', 0.03))
+
+    @property
+    def SL_TIGHTENING_SCALPING(self) -> float:
+        """Minimum progress fraction for SL tightening on sub-1h timeframes."""
+        return float(self.get_config('risk_management', 'sl_tightening_scalping', 0.25))
+
+    @property
+    def SL_TIGHTENING_INTRADAY(self) -> float:
+        """Minimum progress fraction for SL tightening on 1h–4h timeframes."""
+        return float(self.get_config('risk_management', 'sl_tightening_intraday', 0.20))
+
+    @property
+    def SL_TIGHTENING_SWING(self) -> float:
+        """Minimum progress fraction for SL tightening on 4h–1d timeframes."""
+        return float(self.get_config('risk_management', 'sl_tightening_swing', 0.15))
+
+    @property
+    def SL_TIGHTENING_POSITION(self) -> float:
+        """Minimum progress fraction for SL tightening on daily+ timeframes."""
+        return float(self.get_config('risk_management', 'sl_tightening_position', 0.10))
+
+    @property
+    def SL_TIGHTENING_FLOOR(self) -> float:
+        """Minimum clamp — brain cannot lower effective threshold below this."""
+        return float(self.get_config('risk_management', 'sl_tightening_floor', 0.05))
+
+    @property
+    def SL_TIGHTENING_CEILING(self) -> float:
+        """Maximum clamp — brain cannot raise effective threshold above this."""
+        return float(self.get_config('risk_management', 'sl_tightening_ceiling', 0.40))
+
+    @property
+    def SL_TIGHTENING_MIN_SAMPLES(self) -> int:
+        """Minimum paired update/outcome samples before trusting a brain override."""
+        return int(self.get_config('risk_management', 'sl_tightening_min_samples', 10))
 
     @property
     def STOP_LOSS_TYPE(self) -> str:

@@ -20,6 +20,7 @@ import pytest
 from src.dashboard.dashboard_state import DashboardState
 from src.managers.risk_manager import RiskManager
 from src.trading.data_models import MarketConditions, Position, TradeDecision
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 
 
@@ -42,6 +43,13 @@ def _make_config(**overrides):
         "STOP_LOSS_CHECK_INTERVAL": "15m",
         "TAKE_PROFIT_TYPE": "hard",
         "TAKE_PROFIT_CHECK_INTERVAL": "15m",
+        "SL_TIGHTENING_SCALPING": 0.25,
+        "SL_TIGHTENING_INTRADAY": 0.20,
+        "SL_TIGHTENING_SWING": 0.15,
+        "SL_TIGHTENING_POSITION": 0.10,
+        "SL_TIGHTENING_FLOOR": 0.05,
+        "SL_TIGHTENING_CEILING": 0.40,
+        "SL_TIGHTENING_MIN_SAMPLES": 10,
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -67,7 +75,7 @@ def _make_position(**overrides):
     return Position(**defaults)
 
 
-def _make_strategy(*, current_position=None, config=None, **overrides):
+def _make_strategy(*, current_position=None, config=None, tightening_policy=None, **overrides):
     """Build a minimal TradingStrategy with all deps mocked."""
     logger = MagicMock()
     persistence = MagicMock()
@@ -111,6 +119,7 @@ def _make_strategy(*, current_position=None, config=None, **overrides):
             config=cfg,
             position_extractor=extractor,
             position_factory=factory,
+            tightening_policy=tightening_policy,
         )
 
     # Override current_position if needed
@@ -118,11 +127,6 @@ def _make_strategy(*, current_position=None, config=None, **overrides):
         strategy.current_position = current_position
 
     return strategy, logger, persistence, brain, stats, factory
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 1: _update_position_parameters
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestUpdatePositionParameters:
@@ -152,11 +156,8 @@ class TestUpdatePositionParameters:
     def test_sl_tightening_rejected_when_progress_too_low(self):
         """Premature SL tightening is blocked by progress guard."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
-        strategy, _, _, _, _, factory = _make_strategy(current_position=pos)
-        strategy._min_progress_for_tightening = 0.20
-        # current_price=98.0: progress = (98-100)/(110-100) = -2/10 = -0.2 — negative!
-        # Actually need price above entry for LONG tightening
-        # progress = (102 - 100) / (110 - 100) = 2/10 = 0.2
+        policy = StopLossTighteningPolicy(swing_threshold=0.20)
+        strategy, _, _, _, _, factory = _make_strategy(current_position=pos, tightening_policy=policy)
 
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=99.0, take_profit=None, current_price=101.5,
@@ -168,8 +169,8 @@ class TestUpdatePositionParameters:
     def test_sl_tightening_allowed_when_progress_sufficient(self):
         """SL tightening passes when price progress exceeds threshold."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
-        strategy, _, persistence, _, _, factory = _make_strategy(current_position=pos)
-        strategy._min_progress_for_tightening = 0.15
+        policy = StopLossTighteningPolicy(swing_threshold=0.15)
+        strategy, _, persistence, _, _, factory = _make_strategy(current_position=pos, tightening_policy=policy)
         factory.create_updated_position.return_value = _make_position(stop_loss=99.0)
 
         updated = asyncio.run(strategy._update_position_parameters(
@@ -206,8 +207,8 @@ class TestUpdatePositionParameters:
     def test_sl_tightening_short_rejected(self):
         """SHORT SL tightening (moving SL lower) blocked by progress guard."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
-        strategy, _, _, _, _, factory = _make_strategy(current_position=pos)
-        strategy._min_progress_for_tightening = 0.20
+        policy = StopLossTighteningPolicy(swing_threshold=0.20)
+        strategy, _, _, _, _, factory = _make_strategy(current_position=pos, tightening_policy=policy)
         # For SHORT: tightening means stop_loss < old_sl (moving closer to entry)
         # price_progress = (entry_price - current_price) / tp_distance_total
         # tp_distance_total = |90 - 100| = 10
@@ -246,28 +247,27 @@ class TestUpdatePositionParameters:
     def test_sl_tightening_zero_tp_distance(self):
         """Edge case: tp_distance_total is 0 (TP=entry) — progress=0."""
         pos = _make_position(stop_loss=95.0, take_profit=100.0, entry_price=100.0, direction="LONG")
-        strategy, _, _, _, _, factory = _make_strategy(current_position=pos)
-        strategy._min_progress_for_tightening = 0.20
+        policy = StopLossTighteningPolicy(swing_threshold=0.20)
+        strategy, _, _, _, _, factory = _make_strategy(current_position=pos, tightening_policy=policy)
 
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=99.0, take_profit=None, current_price=102.0,
         ))
-        # tp_distance_total = 0, so price_progress = 0.0 < 0.20 → REJECTED
+        # tp_distance_total = 0 → policy returns allowed=False
         assert updated is False
 
-    def test_not_is_tightening_but_generic_change(self):
-        """Non-tightening non-widening SL change (same direction change)."""
+    def test_sl_tightening_no_current_price_rejected(self):
+        """Tightening without a valid current price is rejected for safety."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, _, _, _, _, factory = _make_strategy(current_position=pos)
-        factory.create_updated_position.return_value = _make_position(stop_loss=96.0)
 
-        # LONG: stop_loss=96.0 > old_sl=95.0 is tightening,
-        # but without current_price, _is_tightening=True but no price check
-        # So falls to else branch: generic change
+        # LONG: stop_loss=96.0 > old_sl=95.0 is tightening.
+        # Policy rejects when current_price is None/0 as a safety measure.
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=96.0, take_profit=None, current_price=None,
         ))
-        assert updated is True
+        assert updated is False
+        factory.create_updated_position.assert_not_called()
 
 
 # ═════════════════════════════════════════════════════════════════

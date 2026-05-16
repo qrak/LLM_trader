@@ -668,3 +668,131 @@ class TestAnalyticsAndThresholds:
 
         assert thresholds["min_rr_recommended"] == 1.6
         assert "rr_borderline_min" not in thresholds
+
+    # ── _learn_sl_tightening_threshold ──────────────────────────
+
+    def _make_raw_snapshot(self, update_records, close_records):
+        """Build a raw Chroma snapshot with UPDATE + WIN/LOSS records."""
+        ids = []
+        metas = []
+        for i, meta in enumerate(update_records):
+            ids.append(f"update_{i}")
+            metas.append({"outcome": "UPDATE", **meta})
+        for i, meta in enumerate(close_records):
+            ids.append(meta.get("_trade_id", f"trade_{i}"))
+            metas.append({k: v for k, v in meta.items() if k != "_trade_id"})
+        return {"ids": ids, "metadatas": metas}
+
+    def test_learn_sl_tightening_threshold_learns_from_paired_updates(self):
+        svc = _make_service()
+        position_id_base = "BTC/USDC|2026-04-30T10:00:00+00:00"
+        close_records = [
+            {
+                "_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+                "outcome": "WIN",
+                "pnl_pct": 4.0,
+                "position_id": f"{position_id_base}{i}",
+                "position_entry_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+            }
+            for i in range(8)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": f"{position_id_base}{i}",
+                "position_entry_trade_id": f"trade_2026-04-30T10:00:0{i}+00:00",
+            }
+            for i in range(8)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" in thresholds
+        sl = thresholds["sl_tightening"]
+        assert sl["learned_threshold"] <= 0.30
+        assert sl["source"] == "brain"
+        assert sl["basis"] == "paired_update_outcomes"
+        assert sl["expectancy_pct"] > 0
+
+    def test_learn_sl_tightening_threshold_no_emission_below_min_samples(self):
+        svc = _make_service()
+        close_records = [
+            {
+                "_trade_id": f"trade_pos{i}",
+                "outcome": "WIN",
+                "pnl_pct": 3.0,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(3)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(3)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds
+
+    def test_learn_sl_tightening_threshold_no_emission_when_unpaired(self):
+        svc = _make_service()
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.25,
+                "position_id": f"SYM|pos{i}",
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        close_records = []
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds
+
+    def test_learn_sl_tightening_threshold_no_emission_non_positive_expectancy(self):
+        svc = _make_service()
+        position_ids = [f"SYM|pos{i}" for i in range(8)]
+        close_records = [
+            {
+                "_trade_id": f"trade_pos{i}",
+                "outcome": "LOSS",
+                "pnl_pct": -3.0,
+                "position_id": position_ids[i],
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        update_records = [
+            {
+                "action_type": "SL_TRAIL",
+                "is_tightening": True,
+                "price_progress": 0.30,
+                "position_id": position_ids[i],
+                "position_entry_trade_id": f"trade_pos{i}",
+            }
+            for i in range(8)
+        ]
+        raw = self._make_raw_snapshot(update_records, close_records)
+
+        thresholds: dict = {}
+        svc._learn_sl_tightening_threshold(raw, min_sample_size=5, thresholds=thresholds)
+
+        assert "sl_tightening" not in thresholds
