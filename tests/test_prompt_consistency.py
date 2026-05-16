@@ -26,6 +26,25 @@ def _make_manager() -> TemplateManager:
     )
 
 
+def _make_manager_with_verbosity(level: str) -> TemplateManager:
+    """Create a TemplateManager with selected MODEL_VERBOSITY."""
+    config = SimpleNamespace(
+        STOP_LOSS_TYPE="soft",
+        STOP_LOSS_CHECK_INTERVAL="1h",
+        TAKE_PROFIT_TYPE="soft",
+        TAKE_PROFIT_CHECK_INTERVAL="1h",
+        MAX_POSITION_SIZE=0.10,
+        AI_CHART_CANDLE_LIMIT=120,
+        MODEL_VERBOSITY=level,
+    )
+    return TemplateManager(
+        config=config,
+        logger=MagicMock(),
+        timeframe_validator=TimeframeValidator,
+    )
+
+
+>>>>>>> bug-check
 def _previous_context(system_prompt: str) -> str:
     """Extract only the previous-analysis context from a system prompt."""
     section = system_prompt.split("## PREVIOUS ANALYSIS CONTEXT", 1)[1]
@@ -105,8 +124,133 @@ JSON rules: valid JSON only.
         assert "Analyze technical indicators" not in previous_section
         assert "JSON rules" not in previous_section
 
+    def test_previous_reasoning_keeps_low_verbosity_bare_labels_in_strict_mode(self) -> None:
+        previous_response = """
+## Response Format
+JSON rules: valid JSON only.
+CURRENT BIAS: Neutral due to conflicting momentum.
+KEY TRIGGER LEVEL: 70250.0 reclaim needed for bias upgrade.
+ACTION: HOLD until trigger is reclaimed.
+```json
+{"analysis": {"signal": "HOLD", "confidence": 69}}
+```
+"""
 
-class TestPromptContractWording:
+        system_prompt = self.manager.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        previous_section = _previous_context(system_prompt)
+        assert "CURRENT BIAS: Neutral due to conflicting momentum." in previous_section
+        assert "KEY TRIGGER LEVEL: 70250.0 reclaim needed for bias upgrade." in previous_section
+        assert "ACTION: HOLD until trigger is reclaimed." in previous_section
+        assert "JSON rules" not in previous_section
+
+    def test_previous_reasoning_keeps_medium_verbosity_bare_labels_in_strict_mode(self) -> None:
+        previous_response = """
+## Response Format
+Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
+MARKET & MOMENTUM SUMMARY: Trend is weak, RSI is flat near 50.
+CRITICAL LEVELS: Support 69100.0, resistance 70850.0.
+BULL/BEAR BIAS: Bull invalidates below 69100.0, bear invalidates above 70850.0.
+POSITION STATUS: Flat exposure, no active risk.
+FINAL DECISION & EXECUTION: HOLD and wait for breakout confirmation.
+```json
+{"analysis": {"signal": "HOLD", "confidence": 70}}
+```
+"""
+
+        system_prompt = self.manager.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        previous_section = _previous_context(system_prompt)
+        assert "MARKET & MOMENTUM SUMMARY: Trend is weak, RSI is flat near 50." in previous_section
+        assert "CRITICAL LEVELS: Support 69100.0, resistance 70850.0." in previous_section
+        assert "BULL/BEAR BIAS: Bull invalidates below 69100.0, bear invalidates above 70850.0." in previous_section
+        assert "POSITION STATUS: Flat exposure, no active risk." in previous_section
+        assert "FINAL DECISION & EXECUTION: HOLD and wait for breakout confirmation." in previous_section
+        assert "Allowed signals" not in previous_section
+
+    def test_previous_reasoning_keeps_high_verbosity_bare_labels_in_strict_mode(self) -> None:
+        previous_response = """
+## Response Format
+NARRATIVE (PLAIN-TEXT ONLY)
+TIMEFRAME ALIGNMENT: 4h and daily trends are aligned bullish.
+MOMENTUM: RSI 61, MACD histogram rising.
+TREND & VOLATILITY: ADX 31 with expanding ATR.
+VOLUME & FLOW: OBV rising and CMF positive.
+RISK/REWARD: 2.4:1 to first target.
+EXECUTION NOTE: Enter only after closed-candle reclaim.
+```json
+{"analysis": {"signal": "BUY", "confidence": 74}}
+```
+"""
+
+        system_prompt = self.manager.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        previous_section = _previous_context(system_prompt)
+        assert "TIMEFRAME ALIGNMENT: 4h and daily trends are aligned bullish." in previous_section
+        assert "MOMENTUM: RSI 61, MACD histogram rising." in previous_section
+        assert "TREND & VOLATILITY: ADX 31 with expanding ATR." in previous_section
+        assert "VOLUME & FLOW: OBV rising and CMF positive." in previous_section
+        assert "RISK/REWARD: 2.4:1 to first target." in previous_section
+        assert "EXECUTION NOTE: Enter only after closed-candle reclaim." in previous_section
+        assert "NARRATIVE (PLAIN-TEXT ONLY)" not in previous_section
+
+    def test_previous_reasoning_excludes_news_lines_from_continuity(self) -> None:
+        previous_response = """
+1) MARKET STRUCTURE: Bullish continuation with higher lows.
+NEWS & MACRO: ETF headline triggered short-term momentum.
+SENTIMENT: Social feeds skewed euphoric after breakout.
+2) DECISION: HOLD until breakout retest confirms support.
+```json
+{"analysis": {"signal": "HOLD", "confidence": 72}}
+```
+"""
+
+        system_prompt = self.manager.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        previous_section = _previous_context(system_prompt)
+        assert "1) MARKET STRUCTURE: Bullish continuation with higher lows." in previous_section
+        assert "2) DECISION: HOLD until breakout retest confirms support." in previous_section
+        assert "NEWS & MACRO" not in previous_section
+        assert "SENTIMENT:" not in previous_section
+
+    def test_previous_reasoning_preserves_non_labeled_analysis_lines(self) -> None:
+        previous_response = """
+Market is coiling below resistance with repeated failed breakdowns.
+Liquidity appears concentrated around 70200 and 70800.
+## Response Format
+Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
+```json
+{"analysis": {"signal": "HOLD", "confidence": 68}}
+```
+"""
+
+        system_prompt = self.manager.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        previous_section = _previous_context(system_prompt)
+        assert "Market is coiling below resistance with repeated failed breakdowns." in previous_section
+        assert "Liquidity appears concentrated around 70200 and 70800." in previous_section
+        assert "Allowed signals" not in previous_section
+
+    def test_previous_reasoning_verbosity_caps_scale_low_vs_high(self) -> None:
+        low_mgr = _make_manager_with_verbosity("low")
+        high_mgr = _make_manager_with_verbosity("high")
+
+        long_line = "Context sentence with tactical details and invalidation logic. "
+        long_block = (long_line * 200).strip()
+        previous_response = f"{long_block}\n```json\n{{\"analysis\": {{\"signal\": \"HOLD\", \"confidence\": 70}}}}\n```"
+
+        low_prompt = low_mgr.build_system_prompt("BTC/USDT", previous_response=previous_response)
+        high_prompt = high_mgr.build_system_prompt("BTC/USDT", previous_response=previous_response)
+
+        low_section = _previous_context(low_prompt)
+        high_section = _previous_context(high_prompt)
+
+        assert "[Previous reasoning truncated for prompt safety.]" in low_section
+        assert "[Previous reasoning truncated for prompt safety.]" in high_section
+        assert len(high_section) > len(low_section)
+
+>>>>>>> bug-check
+
     """Regression tests for prompt contract consistency."""
 
     def setup_method(self) -> None:

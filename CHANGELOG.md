@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-16 - Previous-Response Continuity Sanitizer Retention and News Exclusion
+
+### Changed
+
+- **src/analyzer/prompts/template_manager.py**: Updated previous-response sanitization to use verbosity-scaled retention caps (`low=1500`, `medium=3000`, `high=4500`) so continuity context preserves more technical narrative while still stripping prompt/schema artifacts.
+- **src/analyzer/prompts/template_manager.py**: Added explicit exclusion of prior news/sentiment lines from continuity context (for example `NEWS & MACRO`, `NEWS`, `SENTIMENT`, `MARKET SENTIMENT`) to restore technical-only carryover semantics between loops.
+- **src/analyzer/prompts/template_manager.py**: `build_system_prompt()` now passes normalized model verbosity into the sanitizer so continuity size is deterministic per verbosity level.
+
+### Added
+
+- **tests/test_prompt_consistency.py**: Added regression coverage for preserving non-labeled analytical continuity lines and verifying low-vs-high retention cap scaling.
+- **tests/test_prompt_consistency.py**: Added regression coverage proving news/sentiment lines are excluded from prior-context continuity while technical lines remain.
+
 ## 2026-05-16 - News Token Budget Contract Alignment
 
 ### Changed

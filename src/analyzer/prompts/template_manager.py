@@ -22,6 +22,11 @@ class TemplateManager:
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     PREVIOUS_REASONING_MAX_CHARS = 3000
+    PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY = {
+        "low": 1500,
+        "medium": 3000,
+        "high": 4500,
+    }
     PREVIOUS_REASONING_LINE_PATTERN = re.compile(r"^\d\)\s+[A-Z0-9 &/]+:")
     PREVIOUS_PROMPT_SECTION_MARKERS = (
         "## RESPONSE FORMAT",
@@ -149,7 +154,20 @@ class TemplateManager:
             self.logger.debug("Previous response JSON could not be parsed for snapshot")
         return None
 
-    def _sanitize_previous_reasoning(self, previous_response: str) -> str:
+    def _normalize_model_verbosity(self, value: str | None = None) -> str:
+        """Normalize verbosity value with safe fallback."""
+        raw_value = value if value is not None else getattr(self.config, "MODEL_VERBOSITY", "medium")
+        normalized = str(raw_value).strip().lower()
+        if normalized in self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY:
+            return normalized
+        return "medium"
+
+    def _get_previous_reasoning_char_cap(self, verbosity: str | None = None) -> int:
+        """Return max previous reasoning characters by verbosity level."""
+        normalized = self._normalize_model_verbosity(verbosity)
+        return self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY.get(normalized, self.PREVIOUS_REASONING_MAX_CHARS)
+
+    def _sanitize_previous_reasoning(self, previous_response: str, verbosity: str | None = None) -> str:
         """Keep only prior decision reasoning, removing echoed prompt/schema instructions."""
         text_without_json = re.sub(
             r'```json\s*.*?\s*```',
@@ -158,10 +176,6 @@ class TemplateManager:
             flags=re.DOTALL | re.IGNORECASE,
         )
         lines = text_without_json.splitlines()
-        strict_mode = any(
-            self._is_previous_prompt_instruction_line(line.strip())
-            for line in lines
-        )
         sanitized: list[str] = []
         skipping_instruction_block = False
         for line in lines:
@@ -178,15 +192,16 @@ class TemplateManager:
                     skipping_instruction_block = False
                 else:
                     continue
-            if strict_mode and not self._is_previous_reasoning_line(stripped):
+            if self._is_previous_news_line(stripped):
                 continue
             if self._is_previous_json_or_markdown_artifact(stripped):
                 continue
             sanitized.append(stripped)
         clean_text = re.sub(r"\n{3,}", "\n\n", "\n".join(sanitized)).strip()
-        if len(clean_text) <= self.PREVIOUS_REASONING_MAX_CHARS:
+        max_chars = self._get_previous_reasoning_char_cap(verbosity)
+        if len(clean_text) <= max_chars:
             return clean_text
-        truncated = clean_text[:self.PREVIOUS_REASONING_MAX_CHARS].rsplit("\n", 1)[0].strip()
+        truncated = clean_text[:max_chars].rsplit("\n", 1)[0].strip()
         return f"{truncated}\n[Previous reasoning truncated for prompt safety.]" if truncated else ""
 
     def _is_previous_prompt_instruction_line(self, line: str) -> bool:
@@ -210,7 +225,41 @@ class TemplateManager:
         """Return True for compact narrative lines that belong to a prior model answer."""
         if self.PREVIOUS_REASONING_LINE_PATTERN.match(line):
             return True
-        return line.startswith(("DECISION:", "EXECUTION NOTE:", "MARKET STRUCTURE:"))
+        return line.startswith((
+            "MARKET STRUCTURE:",
+            "TIMEFRAME ALIGNMENT:",
+            "MOMENTUM:",
+            "TREND & VOLATILITY:",
+            "VOLUME & FLOW:",
+            "KEY LEVELS:",
+            "BULL CASE:",
+            "BEAR CASE:",
+            "POSITION & RISK:",
+            "RISK/REWARD:",
+            "DECISION:",
+            "EXECUTION NOTE:",
+            "MARKET & MOMENTUM SUMMARY:",
+            "CRITICAL LEVELS:",
+            "BULL/BEAR BIAS:",
+            "POSITION STATUS:",
+            "FINAL DECISION & EXECUTION:",
+            "CURRENT BIAS:",
+            "KEY TRIGGER LEVEL:",
+            "ACTION:",
+        ))
+
+    def _is_previous_news_line(self, line: str) -> bool:
+        """Return True when a previous-response line is news/sentiment-specific context."""
+        upper_line = line.upper()
+        if upper_line.startswith("NEWS & MACRO:"):
+            return True
+        if upper_line.startswith("NEWS:"):
+            return True
+        if upper_line.startswith("SENTIMENT:"):
+            return True
+        if upper_line.startswith("MARKET SENTIMENT:"):
+            return True
+        return "NEWS" in upper_line and "HTTP" in upper_line
 
     def _is_previous_json_or_markdown_artifact(self, line: str) -> bool:
         """Filter leftover schema, JSON, table, and prompt heading artifacts."""
@@ -312,7 +361,7 @@ class TemplateManager:
         Returns:
             str: Formatted system prompt
         """
-        _verbosity = self.config.MODEL_VERBOSITY
+        _verbosity = self._normalize_model_verbosity(self.config.MODEL_VERBOSITY)
         if _verbosity == "high":
             _output_rule = (
                 "Output rule: use detailed parser-safe numbered labels (e.g., '1) MARKET STRUCTURE:'). "
@@ -413,7 +462,7 @@ class TemplateManager:
 
         # Add previous response context if available (strip JSON to save tokens)
         if previous_response:
-            text_reasoning = self._sanitize_previous_reasoning(previous_response)
+            text_reasoning = self._sanitize_previous_reasoning(previous_response, _verbosity)
             # Extract and format structured decision data from the prior JSON block
             prior_analysis = self._extract_previous_analysis(previous_response)
             decision_snapshot = (
