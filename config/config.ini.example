@@ -193,10 +193,10 @@ google_thinking_level = high
 # Available for Gemini 3 Flash+ models via Google AI Studio API only (not OpenRouter).
 # May increase token usage slightly but improves accuracy for complex visual analysis.
 google_code_execution = false
-# Response verbosity: how many narrative lines the model writes above the JSON block.
-# JSON is always mandatory and remains the execution source of truth regardless of level.
-# Options: "low" (max 5 lines, current default), "medium" (7-9 lines), "high" (10-13 lines with interpretation).
-model_verbosity = low
+# Controls narrative depth in the AI's analysis above the required fenced JSON block.
+# The JSON execution block is always present regardless of this setting.
+# Options: "low" (3-line signal-only), "medium" (5-line condensed), "high" (13-line deep technical breakdown).
+model_verbosity = high
 
 [dashboard]
 # Enable or disable the web dashboard entirely (true/false)

@@ -322,13 +322,13 @@ class TemplateManager:
             )
         elif _verbosity == "medium":
             _output_rule = (
-                "Output rule: use expanded parser-safe numbered labels (e.g., '1) MARKET STRUCTURE:'). "
+                "Output rule: use expanded parser-safe numbered labels (e.g., '1) MARKET & MOMENTUM SUMMARY:'). "
                 "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
                 "prompt headings are organizational only."
             )
         else:
             _output_rule = (
-                "Output rule: use compact plain-text labels only (e.g., '1) MARKET STRUCTURE:'). "
+                "Output rule: use compact plain-text labels only (e.g., '1) CURRENT BIAS:'). "
                 "Do NOT use Markdown headings (#, ##, ###, ####) in your answer; "
                 "prompt headings are organizational only."
             )
@@ -460,11 +460,13 @@ class TemplateManager:
         return "\n".join(header_lines)
 
     def build_response_template(self, has_chart_analysis: bool = False,
+                                model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None) -> str:
         """Build the response template for trading decision output.
 
         Args:
             has_chart_analysis: Whether chart image analysis is available
+            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
             dynamic_thresholds: Brain-learned thresholds for dynamic values
 
         Returns:
@@ -531,56 +533,50 @@ class TemplateManager:
                 "(see SL Tightening Policy in position context)"
             )
 
-        verbosity = self.config.MODEL_VERBOSITY
+        verbosity = (model_verbosity or self.config.MODEL_VERBOSITY).lower()
         if verbosity == "high":
             _output_header = (
-                "Output: 10-13 plain-text numbered lines + JSON. JSON is truth. No markdown headings. "
-                "Each line: quantitative data first, then a brief interpretation of its trading implication. "
-                "Keep each label on one line."
+                "Output: 13 plain-text numbered lines + JSON. JSON is truth. No markdown headings. "
+                "Each line must address its section using quantitative data first, then interpretation."
             )
             _narrative_section = (
-                f"1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and what it implies for bias\n"
-                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement level and whether it confirms or challenges the signal\n"
-                f"3) MOMENTUM: RSI/MACD/Stoch values and whether momentum supports or contradicts the trade\n"
-                f"4) TREND & VOLATILITY: ADX strength, Choppiness, ATR — state regime quality and volatility context for sizing{chart_validation_line}\n"
-                f"5) VOLUME & FLOW: OBV/CMF/MFI direction and whether participation confirms the move\n"
-                f"6) KEY LEVELS: nearest support and resistance with distance and their structural significance\n"
-                f"7) NEWS & MACRO: most relevant narrative and its likely price implication\n"
-                f"8) BULL CASE: key conditions and evidence supporting the bullish scenario\n"
-                f"9) BEAR CASE: key conditions and evidence supporting the bearish scenario\n"
-                f"10) POSITION & RISK: current exposure, SL/TP progress, and hybrid tightening policy status\n"
-                f"11) RISK/REWARD: current R/R with data justification and whether entry still holds value\n"
-                f"12) DECISION: signal, invalidation condition, and confidence anchor\n"
-                f"13) EXECUTION NOTE: exact entry trigger, SL/TP placement logic, or position management action"
+                f"1) MARKET STRUCTURE: trend regime, structure integrity (HH/HL or LH/LL), and directional bias\n"
+                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence and signal implication\n"
+                f"3) MOMENTUM: RSI, MACD, Stochastic values and momentum direction\n"
+                f"4) TREND & VOLATILITY: ADX strength, Choppiness index, ATR regime quality and sizing context{chart_validation_line}\n"
+                f"5) VOLUME & FLOW: CMF, OBV, MFI direction and institutional participation signal\n"
+                f"6) KEY LEVELS: pivot points, nearest support and resistance with structural significance\n"
+                f"7) NEWS & MACRO: most relevant fundamental driver and price implication\n"
+                f"8) BULL CASE: squeeze/relief conditions and evidence supporting the bullish scenario\n"
+                f"9) BEAR CASE: breakdown triggers, distribution targets and bearish evidence\n"
+                f"10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid tightening policy status\n"
+                f"11) RISK/REWARD: current R/R ratio, distance to target vs invalidation\n"
+                f"12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL / CLOSE)\n"
+                f"13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) major level context, (5) bull/bear scenario, (6) invalidation trigger, (7) next watch condition."
         elif verbosity == "medium":
             _output_header = (
-                "Output: 7-9 plain-text numbered lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
+                "Output: 5 plain-text numbered lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
             )
             _narrative_section = (
-                f"1) MARKET STRUCTURE: trend regime, dominant direction, and key breakout/breakdown level\n"
-                f"2) TIMEFRAME ALIGNMENT: short vs long-term agreement or divergence\n"
-                f"3) INDICATOR ASSESSMENT: strongest momentum and trend signal{chart_validation_line}\n"
-                f"4) KEY LEVELS: nearest support, resistance, and distance from current price\n"
-                f"5) CONTEXT & CATALYST: news/macro if relevant\n"
-                f"6) POSITION & RISK: current exposure and SL/TP progress or management intent\n"
-                f"7) DECISION: signal, R/R quality, invalidation condition\n"
-                f"8) EXECUTION NOTE: conditional-entry/update/exit logic"
-            )
-            _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) invalidation trigger, (5) what to watch next."
-        else:  # low (default)
-            _output_header = (
-                "Output: max 5 plain-text lines + JSON. JSON is truth. No markdown headings. Skip uncertain lines."
-            )
-            _narrative_section = (
-                f"1) MARKET STRUCTURE: trend regime + alignment\n"
-                f"2) INDICATOR ASSESSMENT: strongest confirming/conflicting signal{chart_validation_line}\n"
-                f"3) CONTEXT & CATALYST: news/macro if relevant\n"
-                f"4) DECISION: signal, R/R quality, invalidation\n"
-                f"5) EXECUTION NOTE: conditional-entry/update logic"
+                f"1) MARKET & MOMENTUM SUMMARY: merged trend regime, ADX status, and RSI reading\n"
+                f"2) CRITICAL LEVELS: immediate support and resistance lines only{chart_validation_line}\n"
+                f"3) BULL/BEAR BIAS: brief overview of validation and invalidation conditions\n"
+                f"4) POSITION STATUS: entry price, current P&L%, and risk/reward standing\n"
+                f"5) FINAL DECISION & EXECUTION: actionable signal and immediate next step"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
+        else:  # low
+            _output_header = (
+                "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. No commentary."
+            )
+            _narrative_section = (
+                f"1) CURRENT BIAS: Bearish / Bullish / Neutral{chart_validation_line}\n"
+                f"2) KEY TRIGGER LEVEL: the immediate level being watched\n"
+                f"3) ACTION: HOLD / ENTER SHORT / ENTER LONG / EXIT"
+            )
+            _reasoning_guidance = "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
 
         response_template = f'''## Response Format
 

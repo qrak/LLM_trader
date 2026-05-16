@@ -268,8 +268,6 @@ class ConfigProtocol(Protocol):
     @property
     def TAKE_PROFIT_CHECK_INTERVAL_SECONDS(self) -> int: ...
 
-
-
     @property
     def MODEL_VERBOSITY(self) -> str: ...
 
