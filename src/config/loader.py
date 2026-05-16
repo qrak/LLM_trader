@@ -144,7 +144,7 @@ class Config:
     def _validate_model_verbosity(self) -> None:
         """Validate model_verbosity config value at startup."""
         self._normalize_model_verbosity(
-            self.get_config('model_config', 'model_verbosity', 'low'),
+            self.get_config('model_config', 'model_verbosity', 'high'),
             'model_verbosity',
         )
 
@@ -286,11 +286,10 @@ class Config:
     def BLOCKRUN_MODEL(self):
         return self.get_config('ai_providers', 'blockrun_model', 'openai/gpt-4o')
 
-    # Model Config
     @property
     def MODEL_VERBOSITY(self) -> str:
         return self._normalize_model_verbosity(
-            self.get_config('model_config', 'model_verbosity', 'low'),
+            self.get_config('model_config', 'model_verbosity', 'high'),
             'model_verbosity',
         )
 

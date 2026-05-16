@@ -225,20 +225,20 @@ class ModelManager(ModelManagerProtocol):
     def _prepare_messages(self, prompt: str, system_message: str | None = None) -> list[dict[str, str]]:
         """Prepare message structure for API call."""
         self.token_counter.reset_session_stats()
-        messages = []
         if system_message:
-            combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
-            messages.append({"role": "user", "content": combined_prompt})
             system_tokens = self.token_counter.count_tokens(system_message)
             prompt_tokens = self.token_counter.count_tokens(prompt)
             self.logger.debug("Pre-call estimate: system=%s, prompt=%s", f"{system_tokens:,}", f"{prompt_tokens:,}")
+            combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
             self.logger.info("Full prompt content: %s", combined_prompt)
-        else:
-            messages.append({"role": "user", "content": prompt})
-            prompt_tokens = self.token_counter.count_tokens(prompt)
-            self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
-            self.logger.info("Full prompt content: %s", prompt)
-        return messages
+            return [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt},
+            ]
+        prompt_tokens = self.token_counter.count_tokens(prompt)
+        self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
+        self.logger.info("Full prompt content: %s", prompt)
+        return [{"role": "user", "content": prompt}]
 
     async def _process_result(self, result) -> str:
         """

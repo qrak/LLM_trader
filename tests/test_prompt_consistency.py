@@ -17,7 +17,7 @@ def _make_manager() -> TemplateManager:
         TAKE_PROFIT_CHECK_INTERVAL="1h",
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
-        MODEL_VERBOSITY="low",
+        MODEL_VERBOSITY="high",
     )
     return TemplateManager(
         config=config,
@@ -137,3 +137,42 @@ class TestPromptContractWording:
         assert "HOLD(open position) means no execution change" in response_template
         assert "must not repeat stale SL/TP values" in response_template
         assert "UPDATE is for an open position only" in response_template
+
+
+class TestVerbosityParserContract:
+    """Verify all verbosity levels preserve required parser contract sections."""
+
+    def _make_mgr(self, level: str) -> TemplateManager:
+        from types import SimpleNamespace
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY=level,
+        )
+        return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
+
+    import pytest
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_response_format_header_present(self, level: str) -> None:
+        tmpl = self._make_mgr(level).build_response_template()
+        assert "## Response Format" in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_fenced_json_block_present(self, level: str) -> None:
+        tmpl = self._make_mgr(level).build_response_template()
+        assert "```json" in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_analysis_wrapper_key_present(self, level: str) -> None:
+        tmpl = self._make_mgr(level).build_response_template()
+        assert '"analysis"' in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_allowed_signals_present(self, level: str) -> None:
+        tmpl = self._make_mgr(level).build_response_template()
+        assert "Allowed signals:" in tmpl

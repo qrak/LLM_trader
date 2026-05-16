@@ -16,7 +16,7 @@ def _make_manager(**overrides):
         TAKE_PROFIT_CHECK_INTERVAL="1h",
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
-        MODEL_VERBOSITY="low",
+        MODEL_VERBOSITY="high",
     )
     defaults = dict(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
     defaults.update(overrides)
@@ -59,7 +59,7 @@ class TestBuildSystemPrompt:
             STOP_LOSS_CHECK_INTERVAL="5m",
             TAKE_PROFIT_TYPE="hard",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
-            MODEL_VERBOSITY="low",
+            MODEL_VERBOSITY="high",
         )
         mgr = _make_manager(config=config)
 
@@ -74,7 +74,7 @@ class TestBuildSystemPrompt:
             STOP_LOSS_CHECK_INTERVAL="5m",
             TAKE_PROFIT_TYPE="soft",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
-            MODEL_VERBOSITY="low",
+            MODEL_VERBOSITY="high",
         )
         mgr = _make_manager(config=config)
 
@@ -490,3 +490,100 @@ class TestPreviousResponseSnapshot:
         assert "Some reasoning text" in prompt
         assert "Prior decision snapshot:" not in prompt
         assert '"signal"' not in prompt
+
+
+# ── Verbosity levels ──────────────────────────────────────────────
+
+
+class TestBuildResponseTemplateVerbosity:
+    """Tests for model_verbosity-driven narrative structure in build_response_template."""
+
+    def _make_mgr_with_verbosity(self, level: str) -> TemplateManager:
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY=level,
+        )
+        return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_all_levels_include_json_block(self, level: str) -> None:
+        tmpl = self._make_mgr_with_verbosity(level).build_response_template()
+        assert "```json" in tmpl
+        assert '"analysis"' in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_all_levels_include_response_format_header(self, level: str) -> None:
+        tmpl = self._make_mgr_with_verbosity(level).build_response_template()
+        assert "## Response Format" in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_all_levels_include_allowed_signals(self, level: str) -> None:
+        tmpl = self._make_mgr_with_verbosity(level).build_response_template()
+        assert "Allowed signals:" in tmpl
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_all_levels_include_narrative_section_label(self, level: str) -> None:
+        tmpl = self._make_mgr_with_verbosity(level).build_response_template()
+        assert "Narrative (plain-text only):" in tmpl
+
+    def test_low_verbosity_contains_correct_labels(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("low").build_response_template()
+        assert "CURRENT BIAS" in tmpl
+        assert "KEY TRIGGER LEVEL" in tmpl
+        assert "ACTION" in tmpl
+        assert "MARKET STRUCTURE" not in tmpl
+        assert "TIMEFRAME ALIGNMENT" not in tmpl
+
+    def test_medium_verbosity_contains_correct_labels(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("medium").build_response_template()
+        assert "MARKET & MOMENTUM SUMMARY" in tmpl
+        assert "FINAL DECISION & EXECUTION" in tmpl
+        assert "CURRENT BIAS" not in tmpl
+        assert "TIMEFRAME ALIGNMENT" not in tmpl
+
+    def test_high_verbosity_contains_all_13_labels(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("high").build_response_template()
+        expected = [
+            "MARKET STRUCTURE", "TIMEFRAME ALIGNMENT", "MOMENTUM",
+            "TREND & VOLATILITY", "VOLUME & FLOW", "KEY LEVELS",
+            "NEWS & MACRO", "BULL CASE", "BEAR CASE",
+            "POSITION & RISK", "RISK/REWARD", "DECISION", "EXECUTION NOTE",
+        ]
+        for label in expected:
+            assert label in tmpl, f"Missing label in high verbosity: {label}"
+
+    def test_chart_validation_line_present_in_high_with_chart(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("high").build_response_template(has_chart_analysis=True)
+        assert "CHART VALIDATION" in tmpl
+        assert "P1-price" in tmpl
+
+    def test_chart_validation_line_present_in_medium_with_chart(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("medium").build_response_template(has_chart_analysis=True)
+        assert "CHART VALIDATION" in tmpl
+        assert "P1-price" in tmpl
+
+    def test_chart_validation_absent_in_low_narrative_section(self) -> None:
+        tmpl = self._make_mgr_with_verbosity("low").build_response_template(has_chart_analysis=True)
+        assert "CURRENT BIAS" in tmpl
+        assert "CHART VALIDATION" in tmpl
+
+    def test_model_verbosity_parameter_overrides_config(self) -> None:
+        mgr = self._make_mgr_with_verbosity("high")
+        tmpl_low = mgr.build_response_template(model_verbosity="low")
+        assert "CURRENT BIAS" in tmpl_low
+        assert "MARKET STRUCTURE" not in tmpl_low
+
+    def test_levels_do_not_bleed_into_each_other(self) -> None:
+        low = self._make_mgr_with_verbosity("low").build_response_template()
+        med = self._make_mgr_with_verbosity("medium").build_response_template()
+        high = self._make_mgr_with_verbosity("high").build_response_template()
+        assert "MARKET & MOMENTUM SUMMARY" not in low
+        assert "TIMEFRAME ALIGNMENT" not in low
+        assert "CURRENT BIAS" not in med
+        assert "CURRENT BIAS" not in high
+        assert "MARKET & MOMENTUM SUMMARY" not in high
