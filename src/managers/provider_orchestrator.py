@@ -58,6 +58,7 @@ class ProviderOrchestrator:
                 default_model=self.config.OPENROUTER_BASE_MODEL,
                 config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
                 supports_chart=True,
+                fallback_model=self.config.OPENROUTER_FALLBACK_MODEL,
             ),
             'local': ProviderMetadata(
                 name='LM Studio',
@@ -128,13 +129,21 @@ class ProviderOrchestrator:
                 provider=provider,
                 model=self.resolve_model(provider, model)
             )
+        model_override_provided = model is not None
         effective_model = self.resolve_model(provider, model)
         if provider == "googleai":
             return await self._invoke_google(metadata, messages, effective_model, chart, chart_image)
         if provider == "local":
             return await self._invoke_local(metadata, messages, effective_model, chart)
         if provider == "openrouter":
-            return await self._invoke_openrouter(metadata, messages, effective_model, chart, chart_image)
+            return await self._invoke_openrouter(
+                metadata,
+                messages,
+                effective_model,
+                chart,
+                chart_image,
+                allow_model_fallback=not model_override_provided
+            )
         if provider == "blockrun":
             return await self._invoke_blockrun(metadata, messages, effective_model, chart, chart_image)
         return InvocationResult(
@@ -361,7 +370,8 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Union[io.BytesIO, bytes, str] | None
+        chart_image: Union[io.BytesIO, bytes, str] | None,
+        allow_model_fallback: bool
     ) -> InvocationResult:
         """Invoke OpenRouter provider."""
         if chart and chart_image:
@@ -371,6 +381,33 @@ class ProviderOrchestrator:
         else:
             response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
+        fallback_model = metadata.fallback_model
+        if not success and allow_model_fallback and fallback_model and fallback_model != effective_model:
+            error_detail = response.error if response else "no response"
+            self.logger.warning(
+                "OpenRouter model %s failed (%s); retrying once with fallback model %s",
+                effective_model,
+                error_detail,
+                fallback_model
+            )
+            if chart and chart_image:
+                response = await metadata.client.chat_completion_with_chart_analysis(
+                    fallback_model, messages, cast(Any, chart_image), metadata.config
+                )
+            else:
+                response = await metadata.client.chat_completion(fallback_model, messages, metadata.config)
+            success = self._is_valid_response(response) and not self._is_rate_limited(response)
+            if success:
+                self.logger.info("OpenRouter fallback model %s succeeded", fallback_model)
+            else:
+                fallback_error = response.error if response else "no response"
+                self.logger.error("OpenRouter fallback model %s failed: %s", fallback_model, fallback_error)
+            return InvocationResult(
+                success=success,
+                response=response,
+                provider="openrouter",
+                model=fallback_model
+            )
         return InvocationResult(
             success=success,
             response=response,
