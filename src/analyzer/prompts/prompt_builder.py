@@ -24,16 +24,16 @@ class PromptBuilder:
         self,
         timeframe: str = "1h",
         logger: Logger | None = None,
-        technical_calculator: TechnicalCalculator = None,
+        technical_calculator: TechnicalCalculator | None = None,
         config: Any = None,
-        format_utils: "FormatUtils" = None,
-        overview_formatter: MarketOverviewFormatter = None,
-        long_term_formatter: LongTermFormatter = None,
-        technical_formatter: TechnicalFormatter = None,
-        market_formatter: MarketFormatter = None,
+        format_utils: "FormatUtils | None" = None,
+        overview_formatter: MarketOverviewFormatter | None = None,
+        long_term_formatter: LongTermFormatter | None = None,
+        technical_formatter: TechnicalFormatter | None = None,
+        market_formatter: MarketFormatter | None = None,
         timeframe_validator: Any = None,
-        template_manager: TemplateManager = None,
-        context_builder: ContextBuilder = None
+        template_manager: TemplateManager | None = None,
+        context_builder: ContextBuilder | None = None
     ) -> None:
         """Initialize the PromptBuilder
 
@@ -176,7 +176,8 @@ class PromptBuilder:
         if coin_details_section:
             sections.append(coin_details_section)
 
-        sections.append(self.context_builder.build_market_data_section(context.ohlcv_candles))
+        if context.ohlcv_candles is not None:
+            sections.append(self.context_builder.build_market_data_section(context.ohlcv_candles))
         sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
         # Market period metrics
@@ -198,7 +199,7 @@ class PromptBuilder:
         if context.long_term_data:
             daily_section = self.long_term_formatter.format_long_term_analysis(
                 context.long_term_data,
-                context.current_price
+                context.current_price or 0.0
             )
             if daily_section:
                 long_term_sections.append(daily_section)
@@ -341,7 +342,7 @@ class PromptBuilder:
             brain_context,
             last_analysis_time,
             indicator_delta_alert=indicator_delta_alert,
-            dynamic_thresholds=dynamic_thresholds
+            dynamic_thresholds=dynamic_thresholds,
         )
 
         # Check if we have advanced support/resistance detected
@@ -381,6 +382,8 @@ class PromptBuilder:
         Returns:
             bool: True if advanced S/R indicators are available and valid
         """
+        if self.context is None:
+            return False
         td = self.context.technical_data
 
         # Get advanced indicators with defaults
