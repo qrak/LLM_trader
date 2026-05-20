@@ -2,11 +2,12 @@
 Google GenAI client implementation using the official Google GenAI SDK.
 Supports both text-only and multimodal (text + image) requests for pattern analysis.
 """
+import inspect
 import io
 from typing import Any, Union
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -38,8 +39,16 @@ class GoogleAIClient(BaseAIClient):
     async def close(self) -> None:
         """Close the client."""
         if self.client:
-            self.client = None
-            self.logger.debug("GoogleAIClient closed successfully")
+            try:
+                aio_client = getattr(self.client, "aio", None)
+                aclose = getattr(aio_client, "aclose", None)
+                if callable(aclose):
+                    close_result = aclose()
+                    if inspect.isawaitable(close_result):
+                        await close_result
+            finally:
+                self.client = None
+                self.logger.debug("GoogleAIClient closed successfully")
 
     def _ensure_client(self) -> genai.Client:
         """Ensure a client exists and return it."""
@@ -112,31 +121,69 @@ class GoogleAIClient(BaseAIClient):
             self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
+    def _supports_legacy_sampling(self, model_name: str) -> bool:
+        """Return whether a Gemini model supports legacy sampling request fields."""
+        normalized = model_name.lower().removeprefix("models/")
+        return normalized.startswith(("gemini-1.", "gemini-1-", "gemini-2.", "gemini-2-"))
+
+    def _supports_code_execution(self, model_name: str) -> bool:
+        """Return whether a Gemini model is known to support code execution tools."""
+        normalized = model_name.lower().removeprefix("models/")
+        return normalized.startswith(("gemini-3-flash", "gemini-3.5-flash"))
+
     def _create_generation_config(
         self,
         model_config: dict[str, Any],
+        effective_model: str | None = None,
         include_thinking: bool = True,
         include_code_execution: bool = False
     ) -> types.GenerateContentConfig:
         """Create a generation config from model configuration dictionary."""
+        model_name = effective_model or self.model
         thinking_config = None
         if include_thinking:
             thinking_level = model_config.get("thinking_level", "high")
-            if thinking_level and thinking_level in ("minimal", "low", "medium", "high"):
-                thinking_config = types.ThinkingConfig(thinking_level=thinking_level)
+            thinking_levels = {
+                "minimal": types.ThinkingLevel.MINIMAL,
+                "low": types.ThinkingLevel.LOW,
+                "medium": types.ThinkingLevel.MEDIUM,
+                "high": types.ThinkingLevel.HIGH,
+            }
+            if thinking_level in thinking_levels:
+                thinking_config = types.ThinkingConfig(thinking_level=thinking_levels[thinking_level])
 
         tools = []
-        if include_code_execution:
+        if include_code_execution and self._supports_code_execution(model_name):
             tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
 
-        return types.GenerateContentConfig(
-            temperature=model_config.get("temperature", 0.7),
-            top_p=model_config.get("top_p", 0.9),
-            top_k=model_config.get("top_k", 40),
-            max_output_tokens=model_config.get("max_tokens", 32768),
-            thinking_config=thinking_config,
-            tools=tools if tools else None,
-        )
+        config = {
+            "max_output_tokens": model_config.get("max_tokens", 32768),
+            "thinking_config": thinking_config,
+            "tools": tools if tools else None,
+        }
+        if self._supports_legacy_sampling(model_name):
+            for key in ("temperature", "top_p", "top_k"):
+                if model_config.get(key) is not None:
+                    config[key] = model_config[key]
+        return types.GenerateContentConfig.model_validate(config)
+
+    def _should_retry_without_thinking(self, exception: Exception) -> bool:
+        """Return whether a Google SDK error indicates unsupported thinking config."""
+        code = None
+        message = str(exception)
+        if isinstance(exception, errors.APIError):
+            code = getattr(exception, "code", None)
+            sdk_message = getattr(exception, "message", None)
+            status = getattr(exception, "status", None)
+            message = " ".join(str(part) for part in (sdk_message, status, exception) if part)
+
+        if code is not None and code != 400:
+            return False
+
+        error_text = message.lower()
+        if "thinking" not in error_text:
+            return False
+        return any(term in error_text for term in ("invalid", "unsupported", "unknown", "field", "400"))
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(
@@ -159,7 +206,9 @@ class GoogleAIClient(BaseAIClient):
         for include_thinking in (True, False):
             try:
                 generation_config = self._create_generation_config(
-                    model_config, include_thinking=include_thinking
+                    model_config,
+                    effective_model=effective_model,
+                    include_thinking=include_thinking
                 )
                 self.logger.debug("Sending request to Google AI with model: %s (thinking=%s)", effective_model, include_thinking)
                 response = await client.aio.models.generate_content(
@@ -172,8 +221,7 @@ class GoogleAIClient(BaseAIClient):
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
             except Exception as e: # pylint: disable=broad-exception-caught
-                error_str = str(e).lower()
-                if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
+                if include_thinking and self._should_retry_without_thinking(e):
                     self.logger.warning("Model may not support thinking_config, retrying without it: %s", e)
                     continue
                 self.logger.error("Error during Google AI request: %s", e)
@@ -210,13 +258,15 @@ class GoogleAIClient(BaseAIClient):
             try:
                 # Check for code execution config, default to True if not specified
                 include_code_execution = model_config.get("google_code_execution", False)
+                code_execution_enabled = include_code_execution and self._supports_code_execution(effective_model)
 
                 generation_config = self._create_generation_config(
                     model_config,
+                    effective_model=effective_model,
                     include_thinking=include_thinking,
                     include_code_execution=include_code_execution
                 )
-                self.logger.debug("Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)", effective_model, include_thinking, include_code_execution, len(img_data))
+                self.logger.debug("Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)", effective_model, include_thinking, code_execution_enabled, len(img_data))
                 response = await client.aio.models.generate_content(
                     model=effective_model,
                     contents=contents,
@@ -227,8 +277,7 @@ class GoogleAIClient(BaseAIClient):
                 self.logger.debug("Received successful chart analysis response from Google AI")
                 return self.create_response(content_text, usage=usage)
             except Exception as e: # pylint: disable=broad-exception-caught
-                error_str = str(e).lower()
-                if include_thinking and ("thinking" in error_str or "400" in error_str or "invalid" in error_str):
+                if include_thinking and self._should_retry_without_thinking(e):
                     self.logger.warning("Model may not support thinking_config for chart analysis, retrying without it: %s", e)
                     continue
                 self.logger.error("Error during Google AI chart analysis request: %s", e)
