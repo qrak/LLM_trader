@@ -17,6 +17,7 @@ class ProviderMetadata:
     config: dict[str, Any]
     supports_chart: bool
     paid_client: Any | None = None
+    fallback_model: str | None = None
 
     def is_available(self) -> bool:
         """Check if the provider's client is available."""
