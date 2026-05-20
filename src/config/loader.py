@@ -187,8 +187,8 @@ class Config:
             "temperature": self.get_config('model_config', 'temperature', None),
             "top_p": self.get_config('model_config', 'top_p', None),
             "top_k": self.get_config('model_config', 'top_k', None),
-            "freq_penalty": self.get_config('model_config', 'freq_penalty', None),
-            "pres_penalty": self.get_config('model_config', 'pres_penalty', None),
+            "frequency_penalty": self.get_config('model_config', 'frequency_penalty', self.get_config('model_config', 'freq_penalty', None)),
+            "presence_penalty": self.get_config('model_config', 'presence_penalty', self.get_config('model_config', 'pres_penalty', None)),
             "max_tokens": default_max_tokens
         }
 
@@ -199,12 +199,12 @@ class Config:
             raise RuntimeError("`google_max_tokens` is required in [model_config] of config.ini when using Google models")
 
         self._google_model_config = {
-            "temperature": self.get_config('model_config', 'google_temperature', None),
-            "top_p": self.get_config('model_config', 'google_top_p', None),
-            "top_k": self.get_config('model_config', 'google_top_k', None),
             "max_tokens": google_max_tokens,
             "thinking_level": self.get_config('model_config', 'google_thinking_level', 'high'),
-            "google_code_execution": self.get_config('model_config', 'google_code_execution', False)
+            "google_code_execution": self.get_config('model_config', 'google_code_execution', False),
+            "temperature": self.get_config('model_config', 'google_temperature', None),
+            "top_p": self.get_config('model_config', 'google_top_p', None),
+            "top_k": self.get_config('model_config', 'google_top_k', None)
         }
 
     def get_env(self, key: str, default: Any = None) -> Any:
@@ -273,6 +273,10 @@ class Config:
     @property
     def OPENROUTER_BASE_MODEL(self):
         return self.get_config('ai_providers', 'openrouter_base_model', 'google/gemini-2.5-pro')
+
+    @property
+    def OPENROUTER_FALLBACK_MODEL(self):
+        return self.get_config('ai_providers', 'openrouter_fallback_model', 'deepseek/deepseek-r1:free')
 
     @property
     def GOOGLE_STUDIO_MODEL(self):
