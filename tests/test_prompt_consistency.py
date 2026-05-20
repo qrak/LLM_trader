@@ -44,7 +44,6 @@ def _make_manager_with_verbosity(level: str) -> TemplateManager:
     )
 
 
->>>>>>> bug-check
 def _previous_context(system_prompt: str) -> str:
     """Extract only the previous-analysis context from a system prompt."""
     section = system_prompt.split("## PREVIOUS ANALYSIS CONTEXT", 1)[1]
@@ -248,13 +247,6 @@ Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
         assert "[Previous reasoning truncated for prompt safety.]" in low_section
         assert "[Previous reasoning truncated for prompt safety.]" in high_section
         assert len(high_section) > len(low_section)
-
->>>>>>> bug-check
-
-    """Regression tests for prompt contract consistency."""
-
-    def setup_method(self) -> None:
-        self.manager = _make_manager()
 
     def test_markdown_heading_rule_is_output_only(self) -> None:
         system_prompt = self.manager.build_system_prompt("BTC/USDT")
