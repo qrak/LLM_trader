@@ -12,8 +12,8 @@ scipy==1.16.1
 pandas==2.3.2
 discord.py==2.6.4
 plotly==6.3.0
-google-genai>=1.61.0
-openrouter==0.1.1
+google-genai>=2.4.0
+openrouter==0.9.1
 lmstudio==1.5.0
 blockrun-llm==0.3.6
 Pillow==12.2.0
