@@ -18,7 +18,7 @@ class BaseAIClient(ABC):
         self.logger = logger
         self.api_key: str | None = None
         # Common unsupported parameters to pre-filter
-        self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k'}
+        self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k', 'freq_penalty', 'pres_penalty'}
 
     async def __aenter__(self):
         """Async context manager entry - calls _initialize_client."""
