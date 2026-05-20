@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-05-20 - Model Pricing Corrections
+
+### Changed
+
+- **config/model_pricing.json**: Corrected `gemini-3.5-flash` pricing to $1.50 input / $9.00 output per million tokens (was $0.50/$12.00). Added `google/gemini-3.5-flash` to the OpenRouter reference section. Added deprecation note to `gemini-2.0-flash` (Google shutting down June 1 2026). Source: ai.google.dev/pricing (2026-05-19).
+- **tests/test_model_pricing.py**: Updated `gemini-3.5-flash` pricing regression assertion from $12.50 to $10.50.
+
+## 2026-05-20 - OpenRouter 0.9.1 and Gemini Sampling Compatibility
+
+### Changed
+
+- **requirements.txt**: Pinned the beta OpenRouter SDK to `openrouter==0.9.1`.
+- **src/config/loader.py** and **src/config/protocol.py**: Switched default model config output to canonical `frequency_penalty` and `presence_penalty` names while preserving deprecated `freq_penalty` and `pres_penalty` INI aliases.
+- **src/platforms/ai_providers/openrouter.py** and **src/managers/provider_orchestrator.py**: Wired OpenRouter `server_url` construction, explicit SDK cleanup, and a one-retry fallback model for validation or rate-limit failures.
+- **src/platforms/ai_providers/google.py**: Added model-aware gating so legacy sampling keys are sent only to Gemini 1.x/2.x models and code execution tools remain limited to known Gemini 3 Flash+ models.
+- **config/config.ini** and **config/config.ini.example**: Clarified OpenRouter fallback/base URL behavior, canonical penalty names, deprecated aliases, and optional Google legacy sampling settings.
+- **README.md**: Removed active legacy Google sampling from the normal configuration snippet and documented it as Gemini 1.x/2.x-only.
+- **config/model_pricing.json**: Updated pricing metadata date and added the active `gemini-3.5-flash` Google Studio model pricing reference.
+
+## 2026-05-20 - Google GenAI SDK 2.4 Compatibility Upgrade
+
+### Changed
+
+- **requirements.txt**: Raised the Google GenAI SDK minimum version to `google-genai>=2.4.0`.
+- **src/platforms/ai_providers/google.py**: Migrated `ThinkingConfig` to use `types.ThinkingLevel` enum values (`MINIMAL`, `LOW`, `MEDIUM`, `HIGH`) instead of raw strings to match SDK 2.4 API.
+- **src/platforms/ai_providers/google.py**: Switched `GenerateContentConfig` construction to `model_validate()` for forward-compatible field assignment.
+- **src/platforms/ai_providers/google.py**: Added SDK-native `errors.APIError`-aware thinking fallback handling via `_should_retry_without_thinking()` and explicit async SDK client cleanup in `close()`.
+- **tests/test_google_ai_provider.py**: Added focused Google provider tests for generation config, thinking fallback, chart-image request wiring, and async cleanup.
+
+## 2026-05-20 - Gemini 3.5 Flash Google Sampling-Parameter Migration
+
+### Changed
+
+- **config/config.ini** and **config/config.ini.example**: Removed `google_temperature`, `google_top_p`, and `google_top_k` from `[model_config]` and updated Google notes to align with Gemini 3.x migration guidance (sampling parameters omitted, model defaults used).
+- **src/config/loader.py**: Removed Google sampling-key mapping from `_google_model_config`; Google runtime config now forwards only `max_tokens`, `thinking_level`, and `google_code_execution`.
+- **src/platforms/ai_providers/google.py**: `GenerateContentConfig` no longer sends `temperature`, `top_p`, or `top_k` for Google requests, preventing deprecated/unsupported sampling-parameter usage on Gemini 3.5 Flash.
+
+## 2026-05-17 - Prompt Builder Type Fixes
+
+### Fixed
+
+- **src/analyzer/prompts/prompt_builder.py**: Added `| None` to all eight injected-dependency constructor parameters (`TechnicalCalculator`, `FormatUtils`, `MarketOverviewFormatter`, `LongTermFormatter`, `TechnicalFormatter`, `MarketFormatter`, `TemplateManager`, `ContextBuilder`) to resolve Pylance type errors.
+- **src/analyzer/prompts/prompt_builder.py**: Guarded `context_builder.build_market_data_section()` call with `if context.ohlcv_candles is not None` to satisfy `np.ndarray` (non-optional) parameter contract.
+- **src/analyzer/prompts/prompt_builder.py**: Replaced `context.current_price` (typed `float | None`) with `context.current_price or 0.0` in the `format_long_term_analysis()` call.
+- **src/analyzer/prompts/prompt_builder.py**: Added `if self.context is None: return False` guard at the top of `_has_advanced_support_resistance()` to fix `"technical_data" is not a known attribute of None` Pylance error.
+- **tests/test_prompt_builder.py**: Added `config=SimpleNamespace(MODEL_VERBOSITY="high")` to `_make_prompt_builder()` fixture to match updated constructor signature.
+- **tests/test_prompt_consistency.py**: Removed leftover `>>>>>>> bug-check` merge-conflict markers and orphaned dead class body (duplicate docstring and `setup_method`) introduced by the prior merge commit.
+
 ## 2026-05-16 - Previous-Response Continuity Sanitizer Retention and News Exclusion
 
 ### Changed
