@@ -14,11 +14,12 @@ lm_studio_model =
 # Enable streaming for LM Studio (true/false)
 lm_studio_streaming = false
 
-# Base URL for OpenRouter API
+# Base URL for OpenRouter API; passed to the SDK as server_url
 openrouter_base_url = https://openrouter.ai/api/v1
 # Primary model to use with OpenRouter
 openrouter_base_model = google/gemini-3-flash-preview
-# Fallback model to use if the primary OpenRouter model fails
+# One-retry fallback model if the primary OpenRouter model fails validation or is rate-limited.
+# For chart analysis, use a vision-capable fallback model.
 openrouter_fallback_model = deepseek/deepseek-r1:free
 
 # Model identifier for Google AI Studio (e.g., gemini-flash-latest, gemini-2.5-flash)
@@ -164,28 +165,28 @@ file_message_expiry = 168
 
 [model_config]
 # Default model configuration parameters
+# OpenRouter uses temperature, top_p, and canonical penalty names below; unsupported top_k is dropped.
 # Controls randomness: 0.0 = deterministic, 1.0 = creative
 temperature = 0.7
 # Nucleus sampling: considering tokens with top_p probability mass
 top_p = 0.9
 # Top-k sampling: considering the top k most likely tokens
 top_k = 40
-# Frequency penalty to reduce repetition
-#freq_penalty = 0.1
-# Presence penalty to encourage new topics
-#pres_penalty = 0.1
+# Frequency penalty to reduce repetition; old freq_penalty alias is still accepted but deprecated
+#frequency_penalty = 0.1
+# Presence penalty to encourage new topics; old pres_penalty alias is still accepted but deprecated
+#presence_penalty = 0.1
 # Maximum number of tokens to generate in the response
 max_tokens = 32768
 
-# Google configuration overrides (Google models often require specific settings)
-# Gemini 3 Flash Preview Specifics:
-# - Temperature: MUST be 1.0 (Default). Do not lower; use "Thinking Levels" for reasoning control.
-# - TopK: Fixed at 64 by the model.
-# - Thinking Level: Controls reasoning depth (minimal, low, medium, high). Default: high.
-#   Ignored for models that don't support it (e.g., Gemini 2.5).
-google_temperature = 1.0
-google_top_p = 0.95
-google_top_k = 64
+# Google configuration overrides for Gemini 3.5 Flash.
+# Optional legacy sampling keys are forwarded only for Google AI Studio Gemini 1.x/2.x models.
+# Gemini 3.x omits sampling to avoid 400 INVALID_ARGUMENT responses.
+#google_temperature = 1.0
+#google_top_p = 0.95
+#google_top_k = 40
+# Thinking Level: Controls reasoning depth (minimal, low, medium, high). Default: high.
+# Ignored for models that don't support thinking.
 google_max_tokens = 32768
 google_thinking_level = high
 # Agentic Vision (Code Execution): Enables the model to generate and run Python code
