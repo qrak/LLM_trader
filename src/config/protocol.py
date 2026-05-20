@@ -59,6 +59,9 @@ class ConfigProtocol(Protocol):
     def OPENROUTER_BASE_MODEL(self) -> str: ...
 
     @property
+    def OPENROUTER_FALLBACK_MODEL(self) -> str: ...
+
+    @property
     def GOOGLE_STUDIO_MODEL(self) -> str: ...
 
     @property
