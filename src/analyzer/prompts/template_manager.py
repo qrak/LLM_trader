@@ -401,6 +401,7 @@ class TemplateManager:
             "- Name the one condition that would prove your signal wrong.",
             "",
         ]
+
         header_lines.extend(self._build_timeframe_context(timeframe).splitlines())
 
         if last_analysis_time:
