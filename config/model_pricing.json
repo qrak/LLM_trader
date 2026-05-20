@@ -1,5 +1,5 @@
 {
-    "_comment": "Model pricing in USD per million tokens. Updated: January 2026",
+    "_comment": "Model pricing in USD per million tokens. Updated: May 20 2026",
     "_note": "Google AI free tier has no cost, but we track usage for analytics",
     "google": {
         "gemini-3-pro-preview": {
@@ -11,6 +11,11 @@
             "input_per_million": 0.50,
             "output_per_million": 3.00,
             "description": "Fast and cost-effective"
+        },
+        "gemini-3.5-flash": {
+            "input_per_million": 1.50,
+            "output_per_million": 9.00,
+            "description": "Active Google Studio model. Source: ai.google.dev/pricing (2026-05-19)"
         },
         "gemini-2.5-pro": {
             "input_per_million": 1.25,
@@ -30,7 +35,7 @@
         "gemini-2.0-flash": {
             "input_per_million": 0.10,
             "output_per_million": 0.40,
-            "description": "Legacy flash model"
+            "description": "Deprecated; Google shutting down June 1 2026. Migrate to a newer model."
         }
     },
     "openrouter": {
@@ -42,6 +47,10 @@
         "google/gemini-3-flash-preview": {
             "input_per_million": 0.50,
             "output_per_million": 3.00
+        },
+        "google/gemini-3.5-flash": {
+            "input_per_million": 1.50,
+            "output_per_million": 9.00
         },
         "openai/gpt-4o-mini": {
             "input_per_million": 0.15,
