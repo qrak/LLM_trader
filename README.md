@@ -113,8 +113,9 @@ crypto_pair = BTC/USDC
 timeframe = 4h
 
 [model_config]
-google_temperature = 1.0
 google_thinking_level = high
+# Optional for Google AI Studio Gemini 1.x/2.x only:
+# google_temperature = 1.0
 
 [dashboard]
 host = 0.0.0.0
