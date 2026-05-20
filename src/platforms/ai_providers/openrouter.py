@@ -5,6 +5,7 @@ Supports text-only and multimodal (text + image) requests with cost tracking.
 import asyncio
 import io
 import base64
+import inspect
 from typing import Any, Union
 
 from openrouter import OpenRouter
@@ -26,18 +27,49 @@ class OpenRouterClient(BaseAIClient):
 
     async def _initialize_client(self) -> None:
         """Initialize the OpenRouter SDK client."""
-        self._client = OpenRouter(api_key=self.api_key)
+        self._client = self._create_client()
 
     async def close(self) -> None:
         """Close the SDK client."""
-        if self._client:
+        client = self._client
+        if not client:
+            return
+        try:
             self.logger.debug("Closing OpenRouterClient SDK session")
+            async_exit = getattr(client, "__aexit__", None)
+            if callable(async_exit):
+                try:
+                    result = async_exit(None, None, None)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception as exc: # pylint: disable=broad-exception-caught
+                    self.logger.warning("OpenRouter async client cleanup failed: %s", exc)
+            sync_exit = getattr(client, "__exit__", None)
+            if callable(sync_exit):
+                try:
+                    sync_exit(None, None, None)
+                except Exception as exc: # pylint: disable=broad-exception-caught
+                    self.logger.warning("OpenRouter sync client cleanup failed: %s", exc)
+        finally:
             self._client = None
+
+    def _create_client(self) -> OpenRouter:
+        """Create an OpenRouter SDK client with SDK-version-compatible base URL handling."""
+        try:
+            return OpenRouter(api_key=self.api_key, server_url=self.base_url)
+        except TypeError as exc:
+            message = str(exc).lower()
+            if "server_url" not in message or not any(term in message for term in ("keyword", "argument", "unsupported", "unexpected")):
+                raise
+            self.logger.warning(
+                "Installed OpenRouter SDK does not support server_url; using SDK default API endpoint"
+            )
+            return OpenRouter(api_key=self.api_key)
 
     def _ensure_client(self) -> OpenRouter:
         """Ensure a client exists and return it."""
         if not self._client:
-            self._client = OpenRouter(api_key=self.api_key)
+            self._client = self._create_client()
         return self._client
 
 
