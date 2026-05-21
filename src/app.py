@@ -318,7 +318,6 @@ class CryptoTradingBot:
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
         
         if decision:
-            await self.discord_notifier.send_trading_decision(decision, self.config.MAIN_CHANNEL_ID)
             await self._handle_new_position(decision, current_price)
         else:
             self.logger.info("No trading action taken")
