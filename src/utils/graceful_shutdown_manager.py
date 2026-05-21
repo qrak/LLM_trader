@@ -154,19 +154,26 @@ class GracefulShutdownManager:
         await asyncio.sleep(0.5)
 
     @staticmethod
+    def _prompt_exit_confirmation() -> bool:
+        try:
+            response = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
+            return response in ['y', 'yes']
+        except (EOFError, KeyboardInterrupt):
+            return True
+
+    @staticmethod
     def show_exit_confirmation() -> bool:
         """
         Show a confirmation dialog before closing the application.
+
+        Falls back to a terminal prompt when a GUI dialog is unavailable. This
+        keeps Ctrl+C confirmation usable on Linux/macOS servers and SSH shells.
 
         Returns:
             True if user confirmed exit, False if they cancelled.
         """
         if not TKINTER_AVAILABLE:
-            try:
-                response = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
-                return response in ['y', 'yes']
-            except (EOFError, KeyboardInterrupt):
-                return True
+            return GracefulShutdownManager._prompt_exit_confirmation()
 
         root = None
         try:
@@ -180,8 +187,8 @@ class GracefulShutdownManager:
             )
             return bool(result)
         except Exception as e:
-            print(f"Warning: Could not show confirmation dialog: {e}. Proceeding with shutdown.")
-            return True
+            print(f"Warning: Could not show confirmation dialog: {e}. Falling back to terminal prompt.")
+            return GracefulShutdownManager._prompt_exit_confirmation()
         finally:
             if root is not None:
                 try:

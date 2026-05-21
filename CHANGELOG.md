@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-05-21 - Manual Main-Branch Compatibility Workflow and Cross-Platform Start Scripts
+
+### Added
+
+- **.github/workflows/compatibility_manual_main.yml**: Added a low-cost manual compatibility workflow with three tiers: Linux full tests, Windows medium static checks, and macOS smoke syntax checks.
+- **scripts/start_script.ps1**: Moved Windows main-branch startup script into `scripts/` and updated it to resolve repository-rooted paths after relocation.
+- **scripts/start_script_linux.sh**: Added Linux startup script for main branch with venv creation, optional dependency installation, and `start.py` launch support.
+- **scripts/start_script_macos.sh**: Added macOS startup script for main branch with venv creation, optional dependency installation, and `start.py` launch support.
+- **README.md**: Documented cross-platform startup script usage from both the repository root and the `scripts/` directory.
+
+### Changed
+
+- **.gitignore**: Removed the global `*.ps1` ignore rule so PowerShell scripts are tracked normally without exception rules.
+- **start_script.ps1**: Removed root-level script in favor of the new tracked path under `scripts/`.
+- **scripts/start_script.ps1**, **scripts/start_script_linux.sh**, and **scripts/start_script_macos.sh**: Made Git branch checkout best-effort so startup can continue when Git is not available on `PATH`.
+- **src/utils/graceful_shutdown_manager.py**: Exit confirmation now falls back to a terminal prompt when a Tkinter GUI dialog cannot be shown, improving Ctrl+C behavior on Linux/macOS and headless sessions.
+
 ## 2026-05-21 - Discord Analysis Message De-duplication
 
 ### Changed
