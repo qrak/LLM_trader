@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-21 - Discord Analysis Message De-duplication
+
+### Changed
+
+- **src/app.py**: Removed the direct per-cycle `send_trading_decision()` call so analysis cycles no longer emit a separate decision embed in addition to the analysis notification payload.
+- **src/notifiers/notifier.py**: Kept narrative reasoning delivery via existing `send_message()` chunking behavior (multiple Discord messages when reasoning exceeds Discord limits).
+- **tests/test_app_discord_message_flow.py**: Added orchestration-level regression test verifying the trading loop uses analysis notifications without sending an extra decision embed.
+
 ## 2026-05-20 - Model Pricing Corrections
 
 ### Changed
