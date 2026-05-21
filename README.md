@@ -8,6 +8,10 @@
 
 🔗 **[Live Dashboard](https://semanticsignal.qrak.org)** — Real-time view of the neural trading brain
 
+🔗 **[Code on GitHub (main)](https://github.com/qrak/LLM_trader/tree/main)** — Primary public repository branch
+
+🔗 **[Static Landing Workspace](website/)** — Astro/Tailwind engineering landing page source
+
 ## Key Features
 
 - **Vector-Only Trading Brain**: ChromaDB vector store for semantic trade retrieval and adaptive thresholds.
@@ -15,17 +19,8 @@
 - **Semantic Rule Learning**: Reflection loops generate best-practice, anti-pattern, corrective, and AI-mistake rules with diagnostics such as win/loss split, expectancy, and dominant exit profile.
 - **Hard Exit Monitoring**: Bot-side interval checks for stop-loss and take-profit against live ticker prices, independent of candle closes.
 - **RAG Engine**: Aggregates news from free RSS feeds with optional Crawl4AI enrichment, plus fundamentals from DefiLlama.
-- **AI & LLM Support**: Multi-provider support (Google Gemini, OpenRouter, BlockRun.AI, LM Studio) with fallback logic and vision-assisted trading.
+- **AI & LLM Support**: Multi-provider support (Google Gemini, OpenRouter, LM Studio) with fallback logic and vision-assisted trading.
 - **Multi-Exchange Aggregation**: Fetches data via `ccxt` from Binance, KuCoin, Gate.io, MEXC, Hyperliquid.
-
-![Semantic Signal LLM Dashboard - Overview](img/dashboard1.png)
-![Semantic Signal LLM Dashboard - Brain Activity](img/dashboard2.png)
-![Semantic Signal LLM Dashboard - Last Prompt](img/dashboard3.png)
-![Semantic Signal LLM Dashboard - Last Response](img/dashboard4.png)
-![Semantic Signal LLM Dashboard - Statistics](img/dashboard5.png)
-![Semantic Signal LLM Dashboard - Latest News](img/dashboard6.png)
-![Semantic Signal LLM Dashboard - Market Data](img/dashboard7.png)
-![Semantic Signal LLM Dashboard - Memory Bank](img/dashboard8.png)
 
 ## Tech Stack
 
@@ -33,7 +28,7 @@
 - **Database (Vector)**: ChromaDB
 - **Dashboard Backend**: FastAPI, WebSockets
 - **Dashboard Frontend**: HTML, Vanilla JS, Vis.js, ApexCharts
-- **AI Integrations**: Google Gemini, OpenRouter, BlockRun.AI, LM Studio
+- **AI Integrations**: Google Gemini, OpenRouter, LM Studio
 - **Market Data**: CCXT, [CoinGecko](https://www.coingecko.com), Alternative.me, DefiLlama
 - **Code Quality**: Ruff, Pylint, Mypy
 
@@ -134,7 +129,6 @@ Configure the following variables in `keys.env`:
 | `GOOGLE_STUDIO_API_KEY` | (Required) Google AI Studio API key (free tier). |
 | `GOOGLE_STUDIO_PAID_API_KEY` | (Optional) Google AI Studio API key (paid tier). |
 | `COINGECKO_API_KEY` | (Optional) Free demo key for market metrics. |
-| `BLOCKRUN_WALLET_KEY` | (Optional) Private key for BlockRun.AI x402 micropayments. |
 | `HF_TOKEN` | (Optional) Hugging Face token for improved model download/auth rate limits when embeddings/models are fetched. |
 
 ### 5. Bot Configuration
@@ -149,7 +143,7 @@ Key sections to configure:
 
 ```ini
 [ai_providers]
-# Options: "local", "googleai", "openrouter", "blockrun", "all"
+# Options: "local", "googleai", "openrouter", "all"
 provider = googleai
 google_studio_model = gemini-3-flash-preview
 openrouter_base_model = google/gemini-3-flash-preview
@@ -255,12 +249,10 @@ graph TD
         %% Provider Selection Logic (Sequential / Fallback)
         MM -.-> |Primary| Google["Google Gemini (Text + Vision)"]
         MM -.-> |Fallback| OR["OpenRouter (Text + Vision)"]
-        MM -.-> |Pay-per-request| BR["BlockRun.AI"]
         MM -.-> |Local| Local["LM Studio"]
         
         Google --> |Response| ARP[Analysis Result Processor]
         OR --> |Response| ARP
-        BR --> |Response| ARP
         Local --> |Response| ARP
     end
 
@@ -275,7 +267,9 @@ graph TD
 
 - `start.py`
   - The true entry point implementing the **Composition Root** and Dependency Injection (DI) pattern.
-  - Bootstraps API clients, memory layers, LLM managers, and the RAG engine concurrently.
+    - Acquires `SingleInstanceLock`, then runs sequenced dependency provisioning through `CompositionRoot.build_dependencies()`.
+    - Provisions layers in order: infrastructure, utilities, platforms, RAG, model, analyzer, trading, then notifiers.
+    - Starts async-first background orchestration (dashboard runtime, notifiers, keyboard commands) only after dependencies are wired.
   - Instantiates the `DashboardServer`.
 - `src/app.py`
   - Contains the `CryptoTradingBot` class. Manages the continuous polling rhythm, trading lifecycle, and real-time Discord alerts.
@@ -289,7 +283,13 @@ src/
 │   ├── formatters/    # Converts array flows and objects into markdown strings
 │   └── prompts/       # Dynamic composition of system/user blocks for LLM contexts
 ├── rag/               # Retrieval-Augmented Knowledge Engine
-├── trading/           # State, positions, risk metrics & biological "Brain" tracking  
+├── trading/           # Strategy execution, vector memory, exits, and brain facade
+│   ├── brain.py               # TradingBrainService facade
+│   ├── brain_context.py       # Context/query and threshold provider
+│   ├── brain_experience.py    # Closed-trade and update persistence
+│   ├── brain_exit_profiles.py # Exit profile normalization
+│   ├── brain_patterns.py      # Pattern factor and confluence extraction
+│   └── brain_reflection.py    # Semantic-rule reflection engine
 ├── managers/          # Shared state persistence and AI model routing
 ├── platforms/         # External REST/GraphQL integrations (CCXT, Gemini, OpenRouter)
 ├── dashboard/         # Real-time Web UI telemetry (FastAPI, WebSockets)
@@ -300,6 +300,15 @@ src/
 tests/                 # Extensive unit and integration validations with API knocking
 docs/                  # Deep technical documentation and component plans
 ```
+
+## Documentation Map
+
+- [Architecture documentation](docs/llm_agent_documentation.md)
+- [Detailed file documentation](docs/detailed_file_documentation.md)
+- [Cloudflare cache playbook](docs/cloudflare_free_cache_playbook.md)
+- [Refactoring status](docs/refactoring_plan.md)
+- [Changelog](CHANGELOG.md)
+- [Website workspace](website/)
 
 ### Runtime Mechanics
 
@@ -371,7 +380,6 @@ pytest tests/
 - [x] **Discord Integration** (Real-time signals, positions, and performance stats)
 - [x] **Interactive CLI** (Hotkeys for manual control)
 - [x] **Web Dashboard**: Real-time visualization of synaptic pathways and neural state.
-- [x] **BlockRun.AI Integration**: Pay-per-request AI access via x402 micropayments.
 - [x] **DefiLlama Fundamentals**: On-chain TVL context in the RAG pipeline.
 - [ ] **Multiple Trading Agent Personalities**: Diverse strategist personalities (conservative, aggressive, contrarian, trend-following).
 - [ ] **Multi-Model Consensus Decision-Making**: A "Council of Models" architecture.
@@ -393,7 +401,6 @@ Use of this repository is at your own risk. You are solely responsible for:
 No warranty is provided, and the authors and contributors assume no liability for losses, misuse, or regulatory non-compliance. See [LICENSE.md](LICENSE.md) for legal terms.
 
 ## Contributors
-- **Vicky (1bcMax)**: Implementation of BlockRun.AI provider and x402 payment integration.
 
 ## License
 Licensed under the [MIT License](LICENSE.md).

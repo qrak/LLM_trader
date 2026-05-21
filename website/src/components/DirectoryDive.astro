@@ -1,0 +1,59 @@
+---
+import CodeCarousel from "./CodeCarousel.astro";
+---
+
+<section class="panel mb-6 p-6 md:p-8">
+  <h2 class="text-xl font-semibold text-slate-100 md:text-2xl">Interactive Directory Dive</h2>
+  <div class="mt-4 flex flex-wrap gap-2">
+    <button class="dir-tab rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200" data-target="dir-analyzer">src/analyzer/</button>
+    <button class="dir-tab rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200" data-target="dir-platforms">src/platforms/</button>
+    <button class="dir-tab rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200" data-target="dir-trading">src/trading/</button>
+  </div>
+
+  <div class="mt-4 space-y-3 text-sm text-slate-300">
+    <article id="dir-analyzer" class="dir-panel rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+      <h3 class="font-semibold text-slate-100">Analyzer subsystem</h3>
+      <p class="mt-1 leading-relaxed">Builds market context from indicators, patterns, and formatted prompt blocks, then routes requests through model orchestration for structured outputs.</p>
+    </article>
+    <article id="dir-platforms" class="dir-panel hidden rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+      <h3 class="font-semibold text-slate-100">Platform clients</h3>
+      <p class="mt-1 leading-relaxed">Wraps exchange and market-data dependencies, including CCXT access, CoinGecko/Alternative.me/DefiLlama integrations, and provider-specific AI adapters.</p>
+    </article>
+    <article id="dir-trading" class="dir-panel hidden rounded-lg border border-slate-700 bg-slate-900/60 p-4">
+      <h3 class="font-semibold text-slate-100">Trading and memory layer</h3>
+      <p class="mt-1 leading-relaxed">Executes strategy decisions, stores vector memory, and runs modular brain collaboration for context retrieval, experience recording, reflection, and semantic rules.</p>
+    </article>
+  </div>
+
+  <div class="mt-5">
+    <CodeCarousel />
+  </div>
+</section>
+
+<script>
+  const dirTabs = Array.from(document.querySelectorAll(".dir-tab"));
+  const dirPanels = Array.from(document.querySelectorAll(".dir-panel"));
+
+  const setDirectory = (targetId) => {
+    dirPanels.forEach((panel) => {
+      panel.classList.toggle("hidden", panel.id !== targetId);
+    });
+    dirTabs.forEach((tab) => {
+      const active = tab.getAttribute("data-target") === targetId;
+      tab.classList.toggle("border-cyan-300", active);
+      tab.classList.toggle("text-cyan-100", active);
+      tab.classList.toggle("bg-cyan-500/10", active);
+    });
+  };
+
+  dirTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const targetId = tab.getAttribute("data-target");
+      if (targetId) {
+        setDirectory(targetId);
+      }
+    });
+  });
+
+  setDirectory("dir-analyzer");
+</script>

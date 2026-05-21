@@ -200,7 +200,6 @@ class _ConfigStub:
     OPENROUTER_BASE_MODEL = "primary/model"
     OPENROUTER_FALLBACK_MODEL = "fallback/model"
     LM_STUDIO_MODEL = "local/model"
-    BLOCKRUN_MODEL = "blockrun/model"
 
     def get_model_config(self, _model: str) -> dict[str, int]:
         return {"max_tokens": 16}

@@ -16,7 +16,7 @@ CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
 CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
-VALID_PROVIDERS = {"local", "googleai", "openrouter", "blockrun", "all"}
+VALID_PROVIDERS = {"local", "googleai", "openrouter", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high"}
 
@@ -241,10 +241,6 @@ class Config:
         return self.get_env('COINGECKO_API_KEY')
 
     @property
-    def BLOCKRUN_WALLET_KEY(self):
-        return self.get_env('BLOCKRUN_WALLET_KEY')
-
-    @property
     def ADMIN_USER_IDS(self):
         """Get list of admin user IDs from environment."""
         return self.get_env('ADMIN_USER_IDS', [])
@@ -281,14 +277,6 @@ class Config:
     @property
     def GOOGLE_STUDIO_MODEL(self):
         return self.get_config('ai_providers', 'google_studio_model', 'gemini-2.5-flash')
-
-    @property
-    def BLOCKRUN_BASE_URL(self):
-        return self.get_config('ai_providers', 'blockrun_base_url', 'https://blockrun.ai/api')
-
-    @property
-    def BLOCKRUN_MODEL(self):
-        return self.get_config('ai_providers', 'blockrun_model', 'openai/gpt-4o')
 
     @property
     def MODEL_VERBOSITY(self) -> str:

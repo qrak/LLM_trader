@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-21 - Documentation Alignment and Static Website Rollout
+
+### Added
+
+- Added a new static website workspace under `website/` using Astro + Tailwind for a standalone engineering landing page.
+- Added production-style simulated telemetry visuals (SVG/CSS panels) for dashboard, stream, and vector-memory sections without depending on outdated screenshot assets.
+
+### Changed
+
+- Updated architecture documentation in `docs/llm_agent_documentation.md` to match the real staged startup flow (`SingleInstanceLock` plus sequenced `CompositionRoot.build_dependencies()` provisioning).
+- Updated `docs/detailed_file_documentation.md` with the modular trading-brain collaborator map (`brain_context.py`, `brain_experience.py`, `brain_exit_profiles.py`, `brain_patterns.py`, `brain_reflection.py`) and indicator semantic translation details.
+- Updated `docs/INDEX.md` with a compact documentation map linking architecture docs, detailed file docs, cache playbook, refactoring status, README, changelog, and website workspace.
+- Updated `README.md` to include landing/deployment context, refreshed architecture tree for modular brain collaborators, and explicit paper-trading scope posture.
+
+### Removed
+
+- Removed outdated dashboard screenshot dependencies from public-facing release messaging in README and website rollout materials.
+- Completed cleanup of deprecated legacy runtime structure references in updated release-facing documentation.
+
 ## 2026-05-21 - Manual Main-Branch Compatibility Workflow and Cross-Platform Start Scripts
 
 ### Added
@@ -520,10 +539,10 @@ Primary commits: `926056e`, `349d49a`, `d6a72cc`, `551f67a`, `1e244da`, `be5e190
 
 ### Added
 
-- Replaced the old CryptoCompare-driven news flow with a full RSS ingestion stack under `src/rag/news_ingestion/`, including `rss_provider.py`, `rss_primitives.py`, `schema_mapper.py`, and optional Crawl4AI enrichment via `crawl4ai_enricher.py`.
-- Added `src/rag/scoring_policy.py`, `src/rag/news_repository.py`, and `src/rag/local_taxonomy.py` to support article scoring, storage, and local category handling without CryptoCompare category dependencies.
+- Replaced the old legacy-provider-driven news flow with a full RSS ingestion stack under `src/rag/news_ingestion/`, including `rss_provider.py`, `rss_primitives.py`, `schema_mapper.py`, and optional Crawl4AI enrichment via `crawl4ai_enricher.py`.
+- Added `src/rag/scoring_policy.py`, `src/rag/news_repository.py`, and `src/rag/local_taxonomy.py` to support article scoring, storage, and local category handling without legacy provider category dependencies.
 - Started tracking `data/categories.json` in Git as the local category/taxonomy snapshot used by the new RSS-driven news flow.
-- Added `src/platforms/ccxt_market_api.py` to formalize exchange market access outside the removed CryptoCompare market path.
+- Added `src/platforms/ccxt_market_api.py` to formalize exchange market access outside the removed legacy market path.
 - Added `src/trading/exit_monitor.py` and `src/trading/position_status_monitor.py` so stop-loss and take-profit execution can be checked on bot-side intervals instead of waiting only for candle-close logic.
 - Added two debugging scripts, `scripts/fetch_free_news_preview.py` and `scripts/compare_news_body_quality.py`, to inspect raw RSS ingestion and enrichment quality.
 - Added broad contract coverage for the new pipeline, including tests for news ingestion, RSS provider behavior, RAG retrieval/scoring contracts, exit monitoring, notifier rate limits, and CCXT migration.
@@ -531,11 +550,11 @@ Primary commits: `926056e`, `349d49a`, `d6a72cc`, `551f67a`, `1e244da`, `be5e190
 ### Changed
 
 - Reworked the configuration contract for news ingestion and exit handling. `config/config.ini.example` gained RSS source whitelisting, per-source feed URLs, page-enrichment controls, density/co-occurrence scoring knobs, lower-timeframe guidance, and the new `[risk_management]` hard-exit interval settings. Existing local `config/config.ini` files need the same keys added manually because `config/config.ini` is intentionally ignored.
-- Removed the obsolete `CRYPTOCOMPARE_API_KEY` entry from `keys.env.example` to match the news migration away from CryptoCompare.
+- Removed the obsolete legacy-news API key entry from `keys.env.example` to match the news migration away from the retired provider path.
 - Narrowed the `data/` ignore rule in `.gitignore` so the repo now keeps `data/categories.json` under version control while still ignoring the rest of the local runtime data directory.
 - Updated the bot runtime in `src/app.py`, `start.py`, `src/config/loader.py`, and `src/config/protocol.py` to wire the new RSS/news services, low-timeframe scheduling, exit-monitor settings, and richer config contracts.
 - Extended `src/dashboard/routers/brain.py` so dashboard state is derived from parsed analysis JSON and richer live-trading context instead of fragile regex-only extraction. The Apr 30 diff also shows position SL/TP distance fields being carried through the API more explicitly.
-- Reworked `src/rag/news_manager.py` and `src/rag/context_builder.py` so RAG assembly now pulls from the RSS repository, local taxonomy, and scoring policy instead of the previous CryptoCompare-oriented path.
+- Reworked `src/rag/news_manager.py` and `src/rag/context_builder.py` so RAG assembly now pulls from the RSS repository, local taxonomy, and scoring policy instead of the previous legacy-provider-oriented path.
 - Enhanced notifier output in `src/notifiers/base_notifier.py`, `src/notifiers/console_notifier.py`, and `src/notifiers/notifier.py` so trade alerts can include chart images and last-trade context.
 - Broadened `src/utils/indicator_classifier.py` and `src/utils/timeframe_validator.py` to support exit-execution context, lower timeframes, and more explicit runtime scheduling rules.
 
@@ -552,13 +571,13 @@ Primary commits: `926056e`, `349d49a`, `d6a72cc`, `551f67a`, `1e244da`, `be5e190
 
 ### Removed
 
-- Deleted `src/platforms/cryptocompare/categories_api.py`, `src/platforms/cryptocompare/data_processor.py`, `src/platforms/cryptocompare/market_api.py`, `src/rag/category_fetcher.py`, and `src/rag/news_category_analyzer.py` in the main release.
-- Deleted the remaining `src/platforms/cryptocompare/news_client.py` and package stub in follow-up commit `1e244da`, completing the migration away from CryptoCompare-backed news.
+- Deleted legacy provider categories/data/market clients plus `src/rag/category_fetcher.py` and `src/rag/news_category_analyzer.py` in the main release.
+- Deleted the remaining legacy provider news client and package stub in follow-up commit `1e244da`, completing the migration away from retired-provider-backed news.
 - Deleted the public `data_template/` tree in `be5e190` after it became clear that the directory no longer matched the private mainline.
 
 ### Notes
 
-- The Apr 30 release was published in two steps: the main feature sync landed first, then same-day cleanup commits removed merge-conflict markers from `README.md`, source files, and `config/config.ini.example`, and finished deleting leftover CryptoCompare and `data_template/` artifacts. This section describes the final cleaned-up public state.
+- The Apr 30 release was published in two steps: the main feature sync landed first, then same-day cleanup commits removed merge-conflict markers from `README.md`, source files, and `config/config.ini.example`, and finished deleting leftover legacy-provider artifacts and `data_template/` artifacts. This section describes the final cleaned-up public state.
 
 ## 2026-04-14 - Dependency Maintenance
 
@@ -607,7 +626,7 @@ Primary commits: `f03304b`, `8621585`, `5ba8169`
 
 ### Changed
 
-- Simplified the CryptoCompare news stack by collapsing the earlier multi-file `news_components` structure into a single `src/platforms/cryptocompare/news_client.py` paired with a leaner `src/rag/news_manager.py`.
+- Simplified the legacy news-provider stack by collapsing the earlier multi-file `news_components` structure into a single provider news client paired with a leaner `src/rag/news_manager.py`.
 - Expanded dashboard behavior again in `src/dashboard/routers/brain.py`, `monitor.py`, and `performance.py`, while also improving logging and monitor-route behavior.
 - Updated technical-calculation and risk-manager behavior alongside the dashboard and news refactor.
 - Reworked public-facing documentation and licensing so the Mar 4 release shipped with a cleaned-up README structure and MIT-oriented release files.
@@ -618,7 +637,7 @@ Primary commits: `f03304b`, `8621585`, `5ba8169`
 
 ### Removed
 
-- Removed the older `src/platforms/cryptocompare/news_api.py` and legacy `news_components/` modules after the refactor consolidated news fetching into a single client.
+- Removed the older provider news API module and legacy `news_components/` modules after the refactor consolidated news fetching into a single client.
 - Removed additional dashboard, RAG, start-up, and test code in the public release commit to produce a smaller public release snapshot.
 - Removed the remaining Polyform references from public documentation in the follow-up README cleanup commit.
 
@@ -629,7 +648,7 @@ Primary commit: `2f1a6ad`
 ### Changed
 
 - Improved dashboard server binding/runtime handling and startup orchestration in `start.py`.
-- Updated market/platform integrations around Alternative.me, CoinGecko, and CryptoCompare API handling.
+- Updated market/platform integrations around Alternative.me, CoinGecko, and legacy-provider API handling.
 - Extended configuration behavior and associated test coverage (including dashboard config/cors paths).
 
 ## 2026-02-24 - Data-Model and Provider Infrastructure Refactor
@@ -741,7 +760,7 @@ Primary commits: `2858c28`, `036954a`, `81f5c64`, `47c9dec` plus merged PRs (`71
 Primary commits: `d12bdfe`, `9684675`, `c31d755`, `4c034bc` (plus related updates)
 
 - Improved LONG-bias mitigation logic and upgraded security dependencies (aiohttp) with safer dashboard error handling.
-- Enforced UTC consistency in temporal/trading operations and tightened BlockRun provider compatibility.
+- Enforced UTC consistency in temporal/trading operations and tightened provider compatibility.
 
 ## 2026-01-14
 
@@ -839,7 +858,7 @@ Primary commits: broad infrastructure batch including `35c3a24`, `45490e5`, `72f
 
 Primary commits: `5b14c43`, `6e24348`, `3cf41f7`, `3d650fc`, `d701a80`, `30a596b`, `7946feb` and related fixes/tests
 
-- Added foundational RAG engine improvements, OpenRouter multimodal integration, CoinGecko/CryptoCompare market feeds, and core bot orchestration/prompt modularization.
+- Added foundational RAG engine improvements, OpenRouter multimodal integration, CoinGecko and legacy-provider market feeds, and core bot orchestration/prompt modularization.
 
 ## 2025-12-26
 
