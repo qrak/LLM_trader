@@ -66,13 +66,6 @@ class ProviderOrchestrator:
                 default_model=self.config.LM_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.LM_STUDIO_MODEL),
                 supports_chart=False,
-            ),
-            'blockrun': ProviderMetadata(
-                name='BlockRun.AI',
-                client=self.clients.blockrun,
-                default_model=self.config.BLOCKRUN_MODEL,
-                config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
-                supports_chart=True,
             )
         }
 
@@ -95,7 +88,7 @@ class ProviderOrchestrator:
     def supports_chart(self, provider: str) -> bool:
         """Check if provider supports chart analysis."""
         if provider == "all":
-            return self.is_available("googleai") or self.is_available("openrouter") or self.is_available("blockrun")
+            return self.is_available("googleai") or self.is_available("openrouter")
         metadata = self._providers.get(provider)
         return metadata.supports_chart if metadata and metadata.is_available() else False
 
@@ -144,8 +137,6 @@ class ProviderOrchestrator:
                 chart_image,
                 allow_model_fallback=not model_override_provided
             )
-        if provider == "blockrun":
-            return await self._invoke_blockrun(metadata, messages, effective_model, chart, chart_image)
         return InvocationResult(
             success=False,
             response=ChatResponseModel.from_error(f"Unknown provider '{provider}'"),
@@ -212,7 +203,7 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
-                ["googleai", "local", "openrouter", "blockrun"], messages, model=model
+                ["googleai", "local", "openrouter"], messages, model=model
             )
             return result
         if self.is_available(effective_provider):
@@ -248,7 +239,7 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
+                ["googleai", "openrouter"], messages, chart=True, chart_image=chart_image, model=model
             )
         if effective_provider == "local":
             return InvocationResult(
@@ -467,30 +458,5 @@ class ProviderOrchestrator:
                 self.logger.error("Google AI client not initialized. Check GOOGLE_STUDIO_API_KEY in keys.env")
             elif provider == "local":
                 self.logger.error("LM Studio client not initialized. Check LM_STUDIO_BASE_URL in config.ini")
-            elif provider == "blockrun":
-                self.logger.error("BlockRun client not initialized. Check BLOCKRUN_WALLET_KEY in keys.env")
         elif provider == "local":
             self.logger.error("Local models don't support image analysis")
-
-    async def _invoke_blockrun(
-        self,
-        metadata: ProviderMetadata,
-        messages: list[dict[str, str]],
-        effective_model: str,
-        chart: bool,
-        chart_image: Union[io.BytesIO, bytes, str] | None
-    ) -> InvocationResult:
-        """Invoke BlockRun provider."""
-        if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(
-                effective_model, messages, cast(Any, chart_image), metadata.config
-            )
-        else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
-        success = self._is_valid_response(response)
-        return InvocationResult(
-            success=success,
-            response=response,
-            provider="blockrun",
-            model=effective_model
-        )

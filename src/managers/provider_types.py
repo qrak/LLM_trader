@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
+    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
     from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
@@ -48,7 +48,6 @@ class ProviderClients:
     google_paid: "GoogleAIClient" | None = None
     openrouter: "OpenRouterClient" | None = None
     lmstudio: "LMStudioClient" | None = None
-    blockrun: "BlockRunClient" | None = None
 
     @classmethod
     def from_factory_dict(cls, clients: dict[str, Any]) -> "ProviderClients":
@@ -57,6 +56,5 @@ class ProviderClients:
             google=clients.get('google'),
             google_paid=clients.get('google_paid'),
             openrouter=clients.get('openrouter'),
-            lmstudio=clients.get('lmstudio'),
-            blockrun=clients.get('blockrun')
+            lmstudio=clients.get('lmstudio')
         )

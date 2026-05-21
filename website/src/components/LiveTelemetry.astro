@@ -1,0 +1,71 @@
+<section class="panel mb-6 p-6 md:p-8">
+  <div class="mb-4 flex items-center justify-between">
+    <h2 class="text-xl font-semibold text-slate-100 md:text-2xl">Live Telemetry Interactive Card</h2>
+    <span class="mono rounded-full border border-cyan-300/40 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-200">/ws stream active</span>
+  </div>
+  <div class="grid gap-4 lg:grid-cols-2">
+    <article class="rounded-lg border border-slate-700 bg-shell-800/65 p-4">
+      <p class="section-title">ApexCharts-style Performance Curve</p>
+      <svg viewBox="0 0 600 220" class="mt-3 w-full">
+        <rect x="0" y="0" width="600" height="220" rx="12" fill="#0f172a" />
+        <g stroke="rgba(148,163,184,0.2)">
+          <line x1="40" y1="30" x2="40" y2="190" />
+          <line x1="40" y1="190" x2="560" y2="190" />
+          <line x1="40" y1="150" x2="560" y2="150" />
+          <line x1="40" y1="110" x2="560" y2="110" />
+          <line x1="40" y1="70" x2="560" y2="70" />
+        </g>
+        <polyline
+          points="40,170 95,158 140,162 190,138 250,132 300,118 360,112 420,94 470,102 520,76 560,68"
+          fill="none"
+          stroke="#47d5ff"
+          stroke-width="4"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <p class="mono mt-2 text-xs text-slate-400">API: /api/performance/history</p>
+    </article>
+
+    <article class="rounded-lg border border-slate-700 bg-shell-800/65 p-4">
+      <p class="section-title">Vis.js-style Synapse Network</p>
+      <svg viewBox="0 0 600 220" class="mt-3 w-full">
+        <rect x="0" y="0" width="600" height="220" rx="12" fill="#0f172a" />
+        <g stroke="rgba(100,116,139,0.45)" stroke-width="2">
+          <line x1="120" y1="52" x2="290" y2="110" />
+          <line x1="290" y1="110" x2="460" y2="60" />
+          <line x1="120" y1="160" x2="290" y2="110" />
+          <line x1="290" y1="110" x2="450" y2="160" />
+          <line x1="460" y1="60" x2="450" y2="160" />
+        </g>
+        <g>
+          <circle cx="120" cy="52" r="16" fill="#47d5ff" />
+          <circle cx="120" cy="160" r="14" fill="#52f2b8" />
+          <circle cx="290" cy="110" r="18" fill="#ffd166" />
+          <circle cx="460" cy="60" r="14" fill="#47d5ff" />
+          <circle cx="450" cy="160" r="13" fill="#52f2b8" />
+        </g>
+      </svg>
+      <p class="mono mt-2 text-xs text-slate-400">API: /api/brain/memory</p>
+    </article>
+  </div>
+
+  <div class="mt-4 grid gap-4 lg:grid-cols-2">
+    <article class="rounded-lg border border-slate-700 bg-slate-900/70 p-4">
+      <p class="section-title">Last Prompt Matrix</p>
+      <div class="mono mt-3 space-y-2 text-xs text-slate-300">
+        <p>[context] trend=bullish | adx=28.3 | volatility=medium</p>
+        <p>[memory] 7 similar vectors | expectancy +1.84%</p>
+        <p>[rules] anti-pattern: avoid late breakout entries</p>
+      </div>
+    </article>
+    <article class="rounded-lg border border-slate-700 bg-slate-900/70 p-4">
+      <p class="section-title">Last Response Matrix</p>
+      <div class="mono mt-3 space-y-2 text-xs text-slate-300">
+        <p>signal=BUY | confidence=72</p>
+        <p>risk: sl=soft/4h tp=hard/15m</p>
+        <p>rationale: trend persistence + order flow alignment</p>
+      </div>
+    </article>
+  </div>
+</section>

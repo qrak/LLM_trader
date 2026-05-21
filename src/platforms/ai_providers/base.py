@@ -137,7 +137,7 @@ class BaseAIClient(ABC):
     ) -> ChatResponseModel:
         """
         Convert any Pydantic SDK response to ChatResponseModel.
-        Used by: BlockRun (unwrap_response=True), OpenRouter (no wrapper)
+        Used by: providers that return pydantic SDK responses.
         
         Args:
             response: SDK response (Pydantic model)

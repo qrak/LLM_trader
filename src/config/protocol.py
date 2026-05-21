@@ -33,9 +33,6 @@ class ConfigProtocol(Protocol):
     def GOOGLE_STUDIO_PAID_API_KEY(self) -> str | None: ...
 
     @property
-    def BLOCKRUN_WALLET_KEY(self) -> str | None: ...
-
-    @property
     def ADMIN_USER_IDS(self) -> list[int]: ...
 
 
@@ -63,12 +60,6 @@ class ConfigProtocol(Protocol):
 
     @property
     def GOOGLE_STUDIO_MODEL(self) -> str: ...
-
-    @property
-    def BLOCKRUN_BASE_URL(self) -> str: ...
-
-    @property
-    def BLOCKRUN_MODEL(self) -> str: ...
 
 
 

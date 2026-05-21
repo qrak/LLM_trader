@@ -15,7 +15,6 @@ plotly==6.3.0
 google-genai>=2.4.0
 openrouter==0.9.1
 lmstudio==1.5.0
-blockrun-llm==0.3.6
 Pillow==12.2.0
 python-dotenv>=1.0.0
 kaleido==1.1.0

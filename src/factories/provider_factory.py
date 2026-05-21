@@ -2,7 +2,7 @@
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
-from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
+from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
 
 if TYPE_CHECKING:
     from src.config.protocol import ConfigProtocol
@@ -97,30 +97,12 @@ class ProviderFactory:
         self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
         return client
 
-    def create_blockrun_client(self) -> BlockRunClient | None:
-        """
-        Create BlockRun client for x402 micropayments.
-
-        Returns:
-            BlockRunClient instance or None if wallet key not configured.
-        """
-        if not self.config.BLOCKRUN_WALLET_KEY:
-            return None
-
-        client = BlockRunClient(
-            wallet_key=self.config.BLOCKRUN_WALLET_KEY,
-            base_url=self.config.BLOCKRUN_BASE_URL,
-            logger=self.logger
-        )
-        self.logger.debug("BlockRun client initialized")
-        return client
-
     def create_all_clients(self) -> dict:
         """
         Create all available AI provider clients based on configuration.
 
         Returns:
-            Dictionary with keys: 'google', 'google_paid', 'openrouter', 'lmstudio', 'blockrun'.
+            Dictionary with keys: 'google', 'google_paid', 'openrouter', 'lmstudio'.
             Values are client instances or None if not configured.
         """
         google_client, google_paid_client = self.create_google_clients()
@@ -129,6 +111,5 @@ class ProviderFactory:
             'google': google_client,
             'google_paid': google_paid_client,
             'openrouter': self.create_openrouter_client(),
-            'lmstudio': self.create_lmstudio_client(),
-            'blockrun': self.create_blockrun_client()
+            'lmstudio': self.create_lmstudio_client()
         }
