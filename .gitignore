@@ -53,5 +53,4 @@ config/config.ini
 # Private keys and sensitive data
 keys.env
 *.env
-*.ps1
 node_modules/

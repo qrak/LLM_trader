@@ -2,7 +2,7 @@
 
 > **Status:** BETA / Research Edition
 >
-> **Note:** This project runs in demo-account and paper-trading mode. Real exchange order execution is not implemented in this public branch.
+> **Note:** This project runs in demo-account and paper-trading mode. Real exchange order execution is not implemented.
 >
 > **Autonomous, asyncio-first trading bot that turns market + news + chart context into structured BUY/SELL/HOLD decisions.**
 
@@ -52,6 +52,52 @@ cd LLM_trader
 ```
 
 ### 2. Setup Virtual Environment
+
+You can either use the platform startup scripts in `scripts/` or set up the environment manually.
+
+The startup scripts are safe to run from the repository root or from inside the `scripts/` directory. They resolve paths from the script location, create `.venv` when missing, optionally install `requirements.txt`, switch to the `main` branch when Git is available, and then launch `start.py`.
+
+Windows PowerShell:
+
+```powershell
+# From repository root
+pwsh -File .\scripts\start_script.ps1
+
+# Or from inside scripts/
+cd scripts
+pwsh -File .\start_script.ps1
+```
+
+Linux:
+
+```bash
+# From repository root
+bash ./scripts/start_script_linux.sh
+
+# Or from inside scripts/
+cd scripts
+bash ./start_script_linux.sh
+```
+
+macOS:
+
+```bash
+# From repository root
+bash ./scripts/start_script_macos.sh
+
+# Or from inside scripts/
+cd scripts
+bash ./start_script_macos.sh
+```
+
+On Linux or macOS, you can optionally make the scripts executable and run them directly:
+
+```bash
+chmod +x scripts/start_script_linux.sh scripts/start_script_macos.sh
+./scripts/start_script_linux.sh
+```
+
+Manual setup:
 
 ```powershell
 # Setup Virtual Environment
@@ -152,6 +198,17 @@ Run the bot directly via Python:
 
 ```powershell
 python start.py
+```
+
+Or use the platform startup scripts from step 2. Optional symbol and timeframe examples:
+
+```powershell
+pwsh -File .\scripts\start_script.ps1 ETH/USDT -Timeframe 4h
+```
+
+```bash
+bash ./scripts/start_script_linux.sh ETH/USDT -t 4h
+bash ./scripts/start_script_macos.sh ETH/USDT -t 4h
 ```
 
 The dashboard will be available at `http://localhost:8000`.
