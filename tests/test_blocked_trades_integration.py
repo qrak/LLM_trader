@@ -10,8 +10,6 @@ Uses a local ChromaDB instance (not mocked) to validate:
   7. Filtering by guard_type and max_age_hours
 """
 
-import tempfile
-from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import chromadb
@@ -252,8 +250,6 @@ class TestBlockedTradeFiltering:
 
     def test_max_age_filter_filters_old_entries(self, vector_memory):
         """max_age_hours parameter excludes entries older than threshold."""
-        from unittest.mock import patch
-        from datetime import datetime as dt, timezone as tz
 
         # Store a blocked trade normally (it gets current timestamp)
         _store_test_block(vector_memory)

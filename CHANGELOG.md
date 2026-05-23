@@ -4,14 +4,15 @@
 
 ### Added
 
-- Added an opt-in pre-execution order guard pipeline with symbol whitelist, explicit over-cap position size, and cooldown guards.
+- Added a default pre-execution order guard pipeline with configured-pair, explicit over-cap position size, and cooldown guards.
 - Added in-memory audit records for order intent creation, guard checks, approval, rejection, and execution lifecycle events.
-- Added `guard_pipeline_enabled` and `symbol_whitelist` risk-management configuration keys, defaulting the guard pipeline to disabled to preserve existing trading behavior.
-- Added regression coverage for order lifecycle transitions, guard audit capture, guard rejection handling, and default no-guard execution telemetry.
+- Added regression coverage for order lifecycle transitions, guard audit capture, guard rejection handling, max-position validation, and no-guard execution telemetry.
 
 ### Changed
 
-- `TradingStrategy` now wraps new position entries in order lifecycle/audit telemetry while keeping the existing risk-manager path active when the guard pipeline is disabled.
+- `TradingStrategy` now wraps new position entries in order lifecycle/audit telemetry while the composition root injects the guard pipeline by default.
+- Replaced optional extra symbol allow-list configuration with fixed configured-pair enforcement.
+- Removed stale Google sampling plumbing from the Google config/provider path and kept Gemini on model defaults.
 
 ## 2026-05-21 - Documentation Alignment and Static Website Rollout
 
@@ -71,8 +72,8 @@
 - **requirements.txt**: Pinned the beta OpenRouter SDK to `openrouter==0.9.1`.
 - **src/config/loader.py** and **src/config/protocol.py**: Switched default model config output to canonical `frequency_penalty` and `presence_penalty` names while preserving deprecated `freq_penalty` and `pres_penalty` INI aliases.
 - **src/platforms/ai_providers/openrouter.py** and **src/managers/provider_orchestrator.py**: Wired OpenRouter `server_url` construction, explicit SDK cleanup, and a one-retry fallback model for validation or rate-limit failures.
-- **src/platforms/ai_providers/google.py**: Added model-aware gating so legacy sampling keys are sent only to Gemini 1.x/2.x models and code execution tools remain limited to known Gemini 3 Flash+ models.
-- **config/config.ini** and **config/config.ini.example**: Clarified OpenRouter fallback/base URL behavior, canonical penalty names, deprecated aliases, and optional Google legacy sampling settings.
+- **src/platforms/ai_providers/google.py**: Kept code execution tools limited to known Gemini 3 Flash+ models.
+- **config/config.ini** and **config/config.ini.example**: Clarified OpenRouter fallback/base URL behavior and canonical penalty names.
 - **README.md**: Removed active legacy Google sampling from the normal configuration snippet and documented it as Gemini 1.x/2.x-only.
 - **config/model_pricing.json**: Updated pricing metadata date and added the active `gemini-3.5-flash` Google Studio model pricing reference.
 
@@ -90,7 +91,7 @@
 
 ### Changed
 
-- **config/config.ini** and **config/config.ini.example**: Removed `google_temperature`, `google_top_p`, and `google_top_k` from `[model_config]` and updated Google notes to align with Gemini 3.x migration guidance (sampling parameters omitted, model defaults used).
+- **config/config.ini** and **config/config.ini.example**: Removed Google sampling overrides from `[model_config]` and aligned with Gemini 3.x model-default behavior.
 - **src/config/loader.py**: Removed Google sampling-key mapping from `_google_model_config`; Google runtime config now forwards only `max_tokens`, `thinking_level`, and `google_code_execution`.
 - **src/platforms/ai_providers/google.py**: `GenerateContentConfig` no longer sends `temperature`, `top_p`, or `top_k` for Google requests, preventing deprecated/unsupported sampling-parameter usage on Gemini 3.5 Flash.
 

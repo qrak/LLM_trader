@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 import numpy as np
-import pytest
 
 from src.trading.vector_memory import VectorMemoryService
 from src.trading.data_models import ExitExecutionContext, VectorSearchResult

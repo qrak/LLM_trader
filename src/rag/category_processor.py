@@ -69,8 +69,7 @@ class CategoryProcessor:
         if not api_categories:
             return
 
-        # DO NOT clear existing mappings to preserve first-write-wins across calls
-        # self.category_word_map.clear()
+        # Preserve first-write-wins mappings across calls.
 
         # Categorize the data
         general_categories, ticker_categories = self._categorize_api_data(api_categories)

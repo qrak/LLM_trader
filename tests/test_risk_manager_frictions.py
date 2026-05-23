@@ -219,8 +219,8 @@ class TestGuardInvalidSlTp:
         """LONG with SL >= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         # Provide a clearly invalid SL, with no ATR to override the default dynamic calc
-        assessment = _entry(mgr, signal="BUY", stop_loss=102.0, current_price=100.0,
-                            market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
+        _entry(mgr, signal="BUY", stop_loss=102.0, current_price=100.0,
+               market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
 
         frictions = mgr.get_and_clear_frictions()
         assert any(f["guard_type"] == "sl_below_entry" for f in frictions)
@@ -228,8 +228,8 @@ class TestGuardInvalidSlTp:
     def test_tp_below_entry_for_long(self):
         """LONG with TP <= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
-        assessment = _entry(mgr, signal="BUY", take_profit=95.0, current_price=100.0,
-                            market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
+        _entry(mgr, signal="BUY", take_profit=95.0, current_price=100.0,
+               market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
 
         frictions = mgr.get_and_clear_frictions()
         # TP 5% below entry for LONG should be caught

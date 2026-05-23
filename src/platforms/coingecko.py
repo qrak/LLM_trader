@@ -37,7 +37,6 @@ class CoinGeckoAPI:
         self.global_api_url = global_api_url
         self._file_lock = asyncio.Lock()
 
-        # Ensure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
 
     async def initialize(self) -> None:
@@ -48,7 +47,6 @@ class CoinGeckoAPI:
 
             self.session = CachedSession(cache=self.cache_backend)
 
-            # Add API key to session headers if available
             if self.api_key:
                 self.session.headers.update({
                     "x-cg-demo-api-key": self.api_key
@@ -64,13 +62,11 @@ class CoinGeckoAPI:
             self.logger.error("Error initializing coin mappings: %s", e)
             self.symbol_to_id_map = {}
 
-        # Check if we have cached global data
         if os.path.exists(self.coingecko_cache_file):
             try:
                 cached_data = await self._read_cache_file()
                 if cached_data and "timestamp" in cached_data:
                     loaded_time = datetime.fromisoformat(cached_data["timestamp"])
-                    # Ensure timezone-aware (old caches may be naive)
                     if loaded_time.tzinfo is None:
                         loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                     self.last_update = loaded_time
@@ -117,7 +113,6 @@ class CoinGeckoAPI:
 
         Returns: list of CoinGecko coin IDs
         """
-        # Standard mapping for common symbols
         symbol_to_id = {
             "btc": "bitcoin",
             "eth": "ethereum",
@@ -140,7 +135,6 @@ class CoinGeckoAPI:
             "uni": "uniswap"
         }
 
-        # If dominance data provided, use those symbols
         if dominance_data:
             coin_ids = []
             for symbol in dominance_data.keys():
@@ -149,7 +143,6 @@ class CoinGeckoAPI:
                     coin_ids.append(symbol_to_id[symbol_lower])
             return coin_ids if coin_ids else list(symbol_to_id.values())[:10]
 
-        # Default: return top 10 most common coins
         return list(symbol_to_id.values())[:10]
 
     async def get_top_coins_by_dominance(self, dominance_coins: list[str]) -> list[dict[str, Any]]:
@@ -176,7 +169,7 @@ class CoinGeckoAPI:
             "page": 1,
             "sparkline": "false",
             "price_change_percentage": "1h,24h,7d",
-            "precision": "full"  # Get full precision from API, we'll format later
+            "precision": "full"
         }
 
         try:
@@ -228,7 +221,6 @@ class CoinGeckoAPI:
         """
         current_time = datetime.now(timezone.utc)
 
-        # Check if we should use cached data
         if not force_refresh and self.last_update and \
            current_time - self.last_update < self.update_interval:
             try:
@@ -239,45 +231,36 @@ class CoinGeckoAPI:
             except Exception as e:
                 self.logger.warning("Failed to read cached data: %s", e)
 
-        # Fetch fresh data from all endpoints in parallel
         self.logger.debug("Fetching fresh CoinGecko global, top coins, and DeFi data")
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
-        # First fetch global data to get dominance info
         global_data = await self._fetch_global()
 
         if isinstance(global_data, Exception):
             self.logger.error("Error fetching global data: %s", global_data)
             return await self._get_cached_global_data()
 
-        # Process global data to extract dominance
         processed_global = self._process_global_data(global_data)
         dominance_data = processed_global.get("dominance", {})
 
-        # Get coin IDs based on current dominance
         dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
 
-        # Now fetch top coins and DeFi in parallel
         top_coins, defi_data = await asyncio.gather(
             self.get_top_coins_by_dominance(dominance_coin_ids),
             self.get_defi_market_data(),
             return_exceptions=True
         )
 
-        # Start with processed global data
         processed_data = processed_global
 
-        # Add top coins if successful
         if top_coins and not isinstance(top_coins, Exception):
             processed_data["top_coins"] = top_coins
         elif isinstance(top_coins, Exception):
             self.logger.warning("Error fetching top coins: %s", top_coins)
 
-        # Add DeFi data if successful (with precision cleanup)
         if defi_data and not isinstance(defi_data, Exception):
             defi_dict = defi_data.get("data", {})
-            # Clean up precision on string numbers
             if defi_dict:
                 for key in ["defi_market_cap", "eth_market_cap", "defi_to_eth_ratio",
                            "trading_volume_24h", "defi_dominance"]:
@@ -290,7 +273,6 @@ class CoinGeckoAPI:
         elif isinstance(defi_data, Exception):
             self.logger.warning("Error fetching DeFi data: %s", defi_data)
 
-        # Save to cache
         cache_data = {
             "timestamp": current_time.isoformat(),
             "data": processed_data
@@ -325,7 +307,6 @@ class CoinGeckoAPI:
         except Exception as e:
             self.logger.error("Error reading cached global data: %s", e)
 
-        # Return empty dict if cache read fails
         return {}
 
     def _process_global_data(self, api_data: dict[str, Any]) -> dict[str, Any]:

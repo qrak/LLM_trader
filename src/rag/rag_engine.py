@@ -64,19 +64,14 @@ class RagEngine:
 
         self.coingecko_api = coingecko_api
 
-        # Update timestamps
         self.last_update: datetime | None = None
 
-        # Update intervals from config
         self.update_interval = timedelta(hours=config.RAG_UPDATE_INTERVAL_HOURS)
 
-        # Task management
         self._periodic_update_task = None
 
-        # Async lock to prevent concurrent updates
         self._update_lock = asyncio.Lock()
 
-        # Closure flag
         self._is_closed = False
 
         # Last retrieval metadata snapshot for external consumers.
@@ -85,13 +80,10 @@ class RagEngine:
     async def initialize(self) -> None:
         """Initialize RAG engine and load cached data"""
         try:
-            # Load known tickers
             await self.ticker_manager.load_known_tickers()
 
-            # Ensure categories are up to date
             await self._ensure_categories_updated()
 
-            # Load news database
             await self.news_manager.load_cached_news()
 
             if self.news_manager.get_database_size() > 0:

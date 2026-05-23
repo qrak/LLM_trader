@@ -8,13 +8,7 @@ from . import GuardResult
 
 
 class MaxPositionSizeGuard:
-    """Reject intents that would exceed the configured max position size.
-
-    If the AI explicitly requests a finite positive position size above
-    MAX_POSITION_SIZE, this guard rejects it rather than silently clamping.
-    Missing or invalid sizes are left to RiskManager's existing fallback
-    sizing policy so enabling the guard does not disable safe fallbacks.
-    """
+    """Reject intents that explicitly exceed the configured max position size."""
 
     name = "max_position_size"
 
@@ -60,20 +54,12 @@ class MaxPositionSizeGuard:
                 guard_name=self.name,
                 passed=False,
                 reason=f"Position size {requested_size * 100:.1f}% exceeds maximum {max_size * 100:.1f}%",
-                metadata={
-                    "max_size": max_size,
-                    "requested": requested_size,
-                    "direction": intent.direction,
-                },
+                metadata={"max_size": max_size, "requested": requested_size, "direction": intent.direction},
             )
 
         return GuardResult(
             guard_name=self.name,
             passed=True,
             reason=f"Position size {requested_size * 100:.1f}% within limit {max_size * 100:.1f}%",
-            metadata={
-                "max_size": max_size,
-                "requested": requested_size,
-                "direction": intent.direction,
-            },
+            metadata={"max_size": max_size, "requested": requested_size, "direction": intent.direction},
         )

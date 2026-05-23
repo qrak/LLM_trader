@@ -116,12 +116,10 @@ class ConsoleNotifier(BaseNotifier):
             channel_id: Ignored for console output
         """
         try:
-            # Get the corrected analysis dict (has R/R correction and other validations applied)
             analysis = result.get("analysis")
             if not analysis:
                 return
 
-            # Get reasoning text from raw_response (narrative text, not data)
             raw_response = result.get("raw_response", "")
             reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
@@ -132,7 +130,6 @@ class ConsoleNotifier(BaseNotifier):
             if reasoning:
                 print(f"\n{reasoning}")
 
-            # Use the corrected analysis dict (not re-parsed raw JSON)
             self._print_analysis_data(analysis, timeframe)
         except Exception as e:
             self.logger.error("Error printing analysis notification: %s", e)

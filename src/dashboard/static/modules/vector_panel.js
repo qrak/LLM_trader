@@ -42,14 +42,12 @@ function renderVectorPanel(data, rulesData, blockedData) {
     const container = document.getElementById('vector-content');
     if (!container) return;
 
-    // Save focus state before re-render
     const activeElement = document.activeElement;
     let focusedSortField = null;
     if (activeElement && activeElement.classList.contains('sortable-header')) {
         focusedSortField = activeElement.getAttribute('data-sort');
     }
 
-    // Build context indicator
     let readableContext = data.current_context || '';
     if (readableContext.includes('+')) {
         const parts = readableContext.split('+').map(p => escapeHtml(p.trim()));
@@ -72,15 +70,12 @@ function renderVectorPanel(data, rulesData, blockedData) {
         </div>
     `;
 
-    // Build stats cards
     const statsHtml = renderStatsCards(data);
 
-    // Build rules section
     const rulesHtml = renderSemanticRules(rulesData);
 
     const frictionHtml = renderTradeFriction(blockedData);
 
-    // Build experience table
     const tableHtml = renderExperienceTable(data.experiences || []);
 
     container.innerHTML = `
@@ -98,7 +93,6 @@ function renderVectorPanel(data, rulesData, blockedData) {
         </div>
     `;
 
-    // Attach sort handlers
     container.querySelectorAll('.sortable-header').forEach(header => {
         const field = header.getAttribute('data-sort');
         if (field) {
@@ -108,10 +102,9 @@ function renderVectorPanel(data, rulesData, blockedData) {
 
             header.addEventListener('click', handleSort);
 
-            // Add keyboard support (Enter/Space)
             header.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault(); // Prevent scroll on Space
+                    e.preventDefault();
                     handleSort();
                 }
             });

@@ -11,12 +11,9 @@ Covers:
 
 import asyncio
 import math
-import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import chromadb
 import pytest
@@ -24,7 +21,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.managers.risk_manager import RiskManager
 from src.trading.brain import TradingBrainService
-from src.trading.data_models import MarketConditions, Position, RiskAssessment
+from src.trading.data_models import MarketConditions
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 
@@ -246,7 +243,7 @@ class TestAsyncRaceConditions:
 
         start = time.monotonic()
         # Add artificial delay to store_blocked_trade to test timeout
-        async def slow_store(*args, **kwargs):
+        async def slow_store(*_args, **_kwargs):
             await asyncio.sleep(0.01)
             return True
         brain.vector_memory.store_blocked_trade = slow_store

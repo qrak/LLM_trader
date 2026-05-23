@@ -396,11 +396,11 @@ class TradingBrainService:
         text: str,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """Replace legacy unknown exit-profile text with resolved rule/default metadata."""
+        """Replace unknown exit-profile text with resolved rule/default metadata."""
         return self.exit_profiles.replace_unknown_exit_profile_text(text, metadata)
 
     def _render_rule_text(self, rule: dict[str, Any]) -> str:
-        """Return rule text with legacy unknown exit profile corrected for display."""
+        """Return rule text with unknown exit profile corrected for display."""
         return self.exit_profiles.render_rule_text(rule)
 
     def _dominant_exit_execution_context(self, metas: list[dict[str, Any]]) -> ExitExecutionContext:

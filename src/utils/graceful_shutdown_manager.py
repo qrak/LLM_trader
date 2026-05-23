@@ -35,7 +35,7 @@ class GracefulShutdownManager:
             return
 
         for sig in (signal.SIGINT, signal.SIGTERM):
-            self.loop.add_signal_handler(sig, lambda s=sig, *args: self.handle_signal(s))
+            self.loop.add_signal_handler(sig, lambda s=sig: self.handle_signal(s))
 
     def _request_shutdown(self):
         if self.loop.is_running() and not self.loop.is_closed():

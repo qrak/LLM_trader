@@ -308,7 +308,6 @@ class PromptBuilder:
         last_analysis_time: str | None = None,
         has_chart_analysis: bool = False,
         dynamic_thresholds: dict[str, Any] | None = None,
-        previous_indicators: dict[str, Any] | None = None
     ) -> str:
         """Build system prompt using template manager.
 
@@ -321,17 +320,12 @@ class PromptBuilder:
             last_analysis_time: Formatted timestamp of last analysis
             has_chart_analysis: Whether chart image analysis is available
             dynamic_thresholds: Brain-learned thresholds for response template
-            previous_indicators: Previous indicator values for delta alert computation
 
         Returns:
             str: Formatted system prompt with instructions
         """
         # Set context so _has_advanced_support_resistance can access it
         self.context = context
-
-        # Indicator delta alert removed — redundant with detailed Indicator Changes section below
-        # Use the detailed previous_indicators comparison instead for precise visibility
-        indicator_delta_alert = ""
 
         # Build base system prompt
         base_prompt = self.template_manager.build_system_prompt(
@@ -341,7 +335,7 @@ class PromptBuilder:
             performance_context,
             brain_context,
             last_analysis_time,
-            indicator_delta_alert=indicator_delta_alert,
+            indicator_delta_alert="",
             dynamic_thresholds=dynamic_thresholds,
         )
 

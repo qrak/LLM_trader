@@ -11,8 +11,7 @@ Covers:
   8. Edge cases: no tech data, no recency data
 """
 
-import math
-from unittest.mock import MagicMock, patch
+from typing import Any
 
 import pytest
 

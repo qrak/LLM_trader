@@ -367,12 +367,10 @@ class DiscordNotifier(BaseNotifier):
             chart_image: Optional PNG chart image buffer to attach
         """
         try:
-            # Get the corrected analysis dict (has R/R correction and other validations applied)
             analysis = result.get("analysis")
             if not analysis:
                 return
 
-            # Get reasoning text from raw_response (narrative text, not data)
             raw_response = result.get("raw_response", "")
             reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
@@ -382,7 +380,6 @@ class DiscordNotifier(BaseNotifier):
                     channel_id=channel_id
                 )
 
-            # Use the corrected analysis dict for the embed (not re-parsed raw JSON)
             embed = self._create_analysis_embed(analysis, symbol, timeframe)
             if embed:
                 await self._send_embed(embed, channel_id)
@@ -575,7 +572,6 @@ class DiscordNotifier(BaseNotifier):
             trend = fields['trend']
             if trend:
                 direction = trend.get('direction', 'N/A')
-                # Try legacy 'strength' field first, then prefer daily (macro), fall back to 4h
                 strength = trend.get('strength')
                 if strength is None:
                     strength = trend.get('strength_daily', trend.get('strength_4h', 0))

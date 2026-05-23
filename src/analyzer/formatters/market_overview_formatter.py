@@ -137,7 +137,6 @@ class MarketOverviewFormatter:
 
         lines = ["## On-Chain Fundamentals (DefiLlama):"]
 
-        # Macro Data (TVL & Stablecoins)
         macro = fundamentals.get("macro", {})
         if macro:
             tvl = macro.get("total_tvl", 0)
@@ -149,7 +148,6 @@ class MarketOverviewFormatter:
             if stables:
                 lines.append(f"  • Dry Powder (Stablecoins): ${self.format_utils.fmt(stables)} ({stable_change:+.1f}%)")
 
-        # Activity (DEX & Fees)
         activity_lines = []
         dex_data = fundamentals.get("dex_volumes", {})
         if dex_data and dex_data.get("total_24h"):
@@ -162,7 +160,6 @@ class MarketOverviewFormatter:
         fees_data = fundamentals.get("fees", {})
         if fees_data and fees_data.get("total_24h_fees"):
             fees = fees_data.get("total_24h_fees", 0)
-            # Only show top earner if we have valid fee data
             top_earner = fees_data.get("top_earners", [])
             top_earner_str = f" (Top: {top_earner[0].get('name')} ${self.format_utils.fmt(top_earner[0].get('total24h', 0))})" if top_earner else ""
             activity_lines.append(f"    - Protocol Fees: ${self.format_utils.fmt(fees)}{top_earner_str}")
@@ -171,9 +168,7 @@ class MarketOverviewFormatter:
             lines.append("  • Activity (24h):")
             lines.extend(activity_lines)
 
-        # Options (Smart Money)
         options_data = fundamentals.get("options", {})
-        # Only show section if we have non-zero notional volume
         if options_data and options_data.get("notional_volume_24h", 0) > 0:
             notional = options_data.get("notional_volume_24h", 0)
             premium = options_data.get("premium_volume_24h", 0)
@@ -202,17 +197,14 @@ class MarketOverviewFormatter:
 
         lines = [f"## {symbol} ({name}) Market Position:"]
 
-        # Rank and market share
         if rank and market_cap and total_market_cap:
             market_share = (market_cap / total_market_cap * 100) if total_market_cap > 0 else 0
             lines.append(f"  • Rank: #{rank} | Market Cap: ${self.format_utils.fmt(market_cap)} ({market_share:.2f}% of total)")
 
-        # Volume share and liquidity
         if coin_volume and total_volume:
             volume_share = (coin_volume / total_volume * 100) if total_volume > 0 else 0
             lines.append(f"  • 24h Volume: ${self.format_utils.fmt(coin_volume)} ({volume_share:.2f}% of total market volume)")
 
-        # Supply metrics
         if circ_supply:
             if max_supply:
                 supply_pct = (circ_supply / max_supply * 100)
@@ -220,7 +212,6 @@ class MarketOverviewFormatter:
             else:
                 lines.append(f"  • Circulating Supply: {self.format_utils.fmt(circ_supply)} (no max supply)")
 
-        # Market cap change
         mcap_change_24h = coin_data.get("market_cap_change_percentage_24h", 0)
         if mcap_change_24h:
             direction = "UP" if mcap_change_24h >= 0 else "DOWN"
@@ -250,7 +241,6 @@ class MarketOverviewFormatter:
             ath_date = coin.get("ath_date", "")
             coin_volume = coin.get("total_volume", 0)
 
-            # Parse ATH date if available
             ath_date_str = ""
             if ath_date:
                 try:
@@ -259,10 +249,8 @@ class MarketOverviewFormatter:
                 except (ValueError, TypeError):
                     pass
 
-            # Format: Rank #X Symbol (Name): $price (momentum data) | volume | ATH context
             line_parts = [f"  • #{rank} {symbol} ({name}): ${price:,.2f}"]
 
-            # Momentum: 1h, 24h, 7d
             momentum_parts = []
             if change_1h:
                 momentum_parts.append(f"{change_1h:+.1f}% 1h")
@@ -274,7 +262,6 @@ class MarketOverviewFormatter:
             if momentum_parts:
                 line_parts.append(f"({', '.join(momentum_parts)})")
 
-            # Volume share (if total volume provided)
             if coin_volume and total_volume:
                 volume_share = (coin_volume / total_volume * 100)
                 line_parts.append(f"| Vol: {volume_share:.1f}% of market")

@@ -3,10 +3,6 @@ from typing import Any
 
 import numpy as np
 
-# Note: Chart pattern detection (Head & Shoulders, Double Top/Bottom, Triangle, Wedge, Channel)
-# has been removed. The AI model detects these patterns visually from the chart image more accurately.
-# Only swing detection is kept for use by indicator pattern engine.
-
 from src.analyzer.pattern_engine.swing_detection import (
     detect_swing_highs_numba,
     detect_swing_lows_numba
@@ -24,12 +20,8 @@ class PatternEngine:
         """
         Detect patterns from OHLCV data.
 
-        Note: Chart patterns (H&S, Double Top/Bottom, Triangle, Wedge, Channel) removed.
-        AI model detects these visually from chart image. Only returns empty dict now
-        as indicator patterns are handled by IndicatorPatternEngine.
+        Indicator patterns are handled by IndicatorPatternEngine.
         """
-        # Chart pattern detection removed - AI detects from chart image visually
-        # Swing detection still available for other components via get_swing_points()
         return {}
 
     def get_swing_points(self, ohlcv: np.ndarray) -> tuple:

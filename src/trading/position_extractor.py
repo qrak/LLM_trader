@@ -175,23 +175,18 @@ class PositionExtractor:
 
         Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
         """
-        # Extract signal
         signal_match = self.signal_pattern.search(text)
         signal = signal_match.group(1).upper() if signal_match else "HOLD"
 
-        # Extract confidence
         confidence_match = self.confidence_pattern.search(text)
         confidence = confidence_match.group(1).upper() if confidence_match else "MEDIUM"
 
-        # Extract stop loss
         stop_loss_match = self.stop_loss_pattern.search(text)
         stop_loss = float(stop_loss_match.group(1).replace(",", "")) if stop_loss_match else None
 
-        # Extract take profit
         take_profit_match = self.take_profit_pattern.search(text)
         take_profit = float(take_profit_match.group(1).replace(",", "")) if take_profit_match else None
 
-        # Extract position size (convert percentage to decimal)
         position_size_match = self.position_size_pattern.search(text)
         position_size = None
         if position_size_match:
@@ -200,7 +195,6 @@ class PositionExtractor:
                 explicit_percent=position_size_match.group(2) is not None,
             )
 
-        # Extract reasoning (take first 200 chars of any found reasoning)
         reasoning_match = self.reasoning_pattern.search(text)
         reasoning = reasoning_match.group(1).strip()[:200] if reasoning_match else ""
 

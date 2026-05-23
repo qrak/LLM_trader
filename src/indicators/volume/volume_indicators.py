@@ -62,7 +62,6 @@ def mfi_numba(high, low, close, volume, length=14, drift=1):
     tp = np.empty(n)
     rmf = np.empty(n)
 
-    # Pre-calculate Typical Price and Raw Money Flow
     for i in range(n):
         tp[i] = (high[i] + low[i] + close[i]) / 3.0
         rmf[i] = tp[i] * volume[i]
@@ -70,7 +69,6 @@ def mfi_numba(high, low, close, volume, length=14, drift=1):
     pmf_arr = np.zeros(n)
     nmf_arr = np.zeros(n)
 
-    # Calculate positive and negative money flow
     for i in range(drift, n):
         tp_diff = tp[i] - tp[i - drift]
         if tp_diff > 0:
@@ -78,7 +76,6 @@ def mfi_numba(high, low, close, volume, length=14, drift=1):
         elif tp_diff < 0:
             nmf_arr[i] = rmf[i]
 
-    # Initialize sliding window
     pmf_sum = 0.0
     nmf_sum = 0.0
 
@@ -95,7 +92,6 @@ def mfi_numba(high, low, close, volume, length=14, drift=1):
         else:
             mfi[i] = 100.0 - (100.0 / (1.0 + (pmf_sum / nmf_sum)))
 
-        # Remove oldest element from window
         pmf_sum -= pmf_arr[i - length + 1]
         nmf_sum -= nmf_arr[i - length + 1]
 

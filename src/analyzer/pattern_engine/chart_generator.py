@@ -642,9 +642,6 @@ class ChartGenerator:
                 )
                 vol_labeled_count += 1
 
-        # Note: Data summary table removed to avoid overlapping with price chart elements
-        # OHLC annotations on individual candles (ENHANCEMENT 2) serve the same purpose
-
         # SMA legend annotation for AI comprehension (on price chart)
         sma_legend = []
         if sma_50_data is not None:

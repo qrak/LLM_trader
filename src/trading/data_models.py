@@ -65,11 +65,9 @@ class Position(SerializableMixin):
         """Update live performance metrics (MAE/MFE)."""
         pnl = self.calculate_pnl(current_price)
 
-        # Update Maximum Adverse Excursion (lowest negative P&L)
         if pnl < 0 and pnl < self.max_drawdown_pct:
             self.max_drawdown_pct = pnl
 
-        # Update Maximum Favorable Excursion (highest positive P&L)
         if pnl > 0 and pnl > self.max_profit_pct:
             self.max_profit_pct = pnl
 

@@ -70,14 +70,7 @@ function updateCostDisplay(data) {
     const orCost = costs.openrouter || 0;
     const googleCost = costs.google || 0;
 
-    // Update main total
     document.getElementById('overview-cost').textContent = formatCost(total);
-
-    // Update tooltip or detailed view if we add one, for now just ensures these elements exist if we want to show them
-    // The user requested removing LM Studio (free) from costs.
-    // We already have specific IDs in index.html for specific providers if we want to show them in a detail view, 
-    // but the request was "Overview with graph... Session Cost... I should have reset button". 
-    // The reset button is in HTML. We just need to make sure the costs are accurate.
 }
 
 
@@ -103,10 +96,6 @@ async function fetchBrainStatus() {
             statusDot.classList.add('connected');
         }
 
-        // Update Brain State Indicator
-        // (Legacy indicator removed from UI, skipping update)
-
-        // Direct update to Overview KPIs
         updateRiskPolicyDisplay(data.exit_management);
         updateLifecycleDisplay(data.brain_lifecycle);
 
@@ -130,13 +119,6 @@ async function fetchBrainStatus() {
         const actionEl = document.getElementById('overview-action');
         if (actionEl) {
             actionEl.textContent = data.action || 'WAITING';
-            // Styling logic for action (sub-label text color usually muted, but user had color logic)
-            // The previous logic colored the text. Let's keep it consistent if possible, 
-            // but usually sub-labels are muted. The legacy code colored #action-val.
-            // syncStatus copied text content, but NOT style. 
-            // WAIT - syncStatus did NOT copy style from action-val to overview-action.
-            // It only did: document.getElementById('overview-action').textContent = act;
-            // So visible UI was NOT colored. I will stick to text content to match visible behavior.
         }
 
         state.lastUpdateTime = new Date();
@@ -240,11 +222,9 @@ async function updateSlowLane() {
     await updateNewsData();
 }
 
-// Initialize application
 function initApp() {
     console.log('Initializing Dashboard App...');
 
-    // Make crucial functions global immediately
     window.updateAll = updateAll;
     window.refreshBrainPanels = refreshBrainPanels;
 

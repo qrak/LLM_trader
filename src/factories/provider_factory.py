@@ -42,7 +42,6 @@ class ProviderFactory:
         google_client: GoogleAIClient | None = None
         google_paid_client: GoogleAIClient | None = None
 
-        # Initialize Google AI client if API key is available
         if self.config.GOOGLE_STUDIO_API_KEY:
             google_client = GoogleAIClient(
                 api_key=self.config.GOOGLE_STUDIO_API_KEY,
@@ -51,7 +50,6 @@ class ProviderFactory:
             )
             self.logger.debug("Google AI client initialized")
 
-            # Initialize paid client if paid API key is available
             if self.config.GOOGLE_STUDIO_PAID_API_KEY:
                 google_paid_client = GoogleAIClient(
                     api_key=self.config.GOOGLE_STUDIO_PAID_API_KEY,

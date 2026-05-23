@@ -208,19 +208,15 @@ class ContextBuilder:
 
         article_body = "\n\n".join(paragraph.replace('\n', ' ') for paragraph in paragraphs)
 
-        # Format header
         header = f"📰 {title}\nSrc: {source} ({published})"
 
-        # Combine
         full_text = f"{header}\n{article_body}"
 
-        # Check token count and truncate if necessary
         current_count = self.token_counter.count_tokens(full_text)
 
         if current_count <= max_tokens:
             return full_text
 
-        # Truncation needed
         header_tokens = self.token_counter.count_tokens(header)
         body_token_budget = max(1, max_tokens - header_tokens)
         max_chars = body_token_budget * 4
@@ -280,13 +276,10 @@ class ContextBuilder:
         short_body = [idx for idx in candidate_sorted if idx not in full_body]
         sorted_indices = (full_body + short_body)[:k]
 
-        # Convert indices to article dicts
         articles = [news_database[idx] for idx in sorted_indices if idx < len(news_database)]
 
-        # Build context using simple method
         context_text = self.build_context(articles, max_tokens)
 
-        # Calculate actual token count
         total_tokens = self.token_counter.count_tokens(context_text)
 
         return context_text, total_tokens

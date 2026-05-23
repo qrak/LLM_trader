@@ -90,7 +90,7 @@ class ExitProfileResolver:
         text: str,
         metadata: dict[str, Any] | None = None,
     ) -> str:
-        """Replace legacy unknown exit-profile text with resolved rule/default metadata."""
+        """Replace unknown exit-profile text with resolved rule/default metadata."""
         if self.UNKNOWN_EXIT_PROFILE not in text:
             return text
         if metadata:
@@ -104,7 +104,7 @@ class ExitProfileResolver:
         return text.replace(self.UNKNOWN_EXIT_PROFILE, replacement_profile)
 
     def render_rule_text(self, rule: dict[str, Any]) -> str:
-        """Return rule text with legacy unknown exit profile corrected for display."""
+        """Return rule text with unknown exit profile corrected for display."""
         metadata = rule.get("metadata", {})
         return self.replace_unknown_exit_profile_text(rule.get("text", ""), metadata)
 

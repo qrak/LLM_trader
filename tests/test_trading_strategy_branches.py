@@ -13,13 +13,11 @@ import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from src.dashboard.dashboard_state import DashboardState
-from src.managers.risk_manager import RiskManager
-from src.trading.data_models import MarketConditions, Position, TradeDecision
+from src.trading.data_models import MarketConditions, Position
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 

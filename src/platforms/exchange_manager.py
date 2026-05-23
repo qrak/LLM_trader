@@ -42,11 +42,9 @@ class ExchangeManager:
     async def initialize(self) -> None:
         """Initialize the session for exchanges - no longer loads all exchanges upfront"""
         self.logger.debug("Initializing ExchangeManager with lazy loading")
-        # Create a single session for all exchanges to share
         self.session = aiohttp.ClientSession()
         self.exchange_config['session'] = self.session
 
-        # Start periodic update task, but it will only update already loaded exchanges
         self._update_task = asyncio.create_task(self._periodic_update())
         self._update_task.add_done_callback(self._handle_update_task_done)
 
@@ -78,7 +76,6 @@ class ExchangeManager:
             except Exception as e:
                 self.logger.error("Error closing %s connection: %s", exchange_id, e)
 
-        # Close the shared session last, after all exchanges have been closed
         if self.session:
             try:
                 self.logger.debug("Closing shared aiohttp session")
@@ -98,7 +95,6 @@ class ExchangeManager:
         """Load a single exchange and its markets"""
         self.logger.debug("Loading %s markets", exchange_id)
         try:
-            # Create exchange instance with the shared session
             try:
                 exchange_class = ccxt.__dict__[exchange_id]
             except KeyError:
@@ -106,16 +102,13 @@ class ExchangeManager:
                 return None
             exchange_config = self.exchange_config.copy()
 
-            # Add the session to the config
             if self.session:
                 exchange_config['session'] = self.session
 
             exchange = exchange_class(exchange_config)
 
-            # Load markets
             await exchange.load_markets()
 
-            # Update tracking
             self.exchanges[exchange_id] = exchange
             self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
             self.exchange_last_loaded[exchange_id] = datetime.now()
@@ -130,20 +123,16 @@ class ExchangeManager:
         """Ensure exchange is loaded and markets are up to date"""
         now = datetime.now()
 
-        # Check if exchange is already loaded
         if exchange_id in self.exchanges:
             last_loaded = self.exchange_last_loaded.get(exchange_id)
 
-            # Check if refresh is needed (based on MARKET_REFRESH_HOURS)
             if last_loaded and (now - last_loaded).total_seconds() < self.config.MARKET_REFRESH_HOURS * 3600:
-                # self.logger.debug("Using cached %s markets", exchange_id)
                 return self.exchanges[exchange_id]
             else:
                 self.logger.info("Refreshing %s markets (last loaded: %s)", exchange_id, last_loaded)
                 await self._refresh_exchange_markets(exchange_id)
                 return self.exchanges.get(exchange_id)
         else:
-            # Load exchange for the first time
             return await self._load_exchange(exchange_id)
 
     async def _refresh_exchange_markets(self, exchange_id: str) -> None:
@@ -162,22 +151,18 @@ class ExchangeManager:
             self.logger.error("Failed to refresh %s markets: %s", exchange_id, e)
             # Try to reconnect if refresh fails
             try:
-                # Close old exchange connection first
                 try:
                     await exchange.close()
                 except Exception as e_close:
                     self.logger.warning("Error closing old %s connection: %s", exchange_id, e_close)
 
-                # Create new exchange instance
                 new_exchange = await self._load_exchange(exchange_id)
                 if not new_exchange:
-                    # Remove failed exchange from dicts to avoid using a dead instance
                     self.exchanges.pop(exchange_id, None)
                     self.symbols_by_exchange.pop(exchange_id, None)
                     self.exchange_last_loaded.pop(exchange_id, None)
             except Exception as reconnect_err:
                 self.logger.error("Failed to reconnect to %s: %s", exchange_id, reconnect_err)
-                # Remove failed exchange from dicts to avoid using a dead instance
                 self.exchanges.pop(exchange_id, None)
                 self.symbols_by_exchange.pop(exchange_id, None)
                 self.exchange_last_loaded.pop(exchange_id, None)
@@ -186,18 +171,13 @@ class ExchangeManager:
         """Periodically refresh markets for loaded exchanges only"""
         while not self._shutdown_in_progress:
             try:
-                # Only refresh exchanges that are already loaded
                 loaded_exchanges = list(self.exchanges.keys())
                 if loaded_exchanges:
                     self.logger.info("Checking %s loaded exchanges for periodic refresh", len(loaded_exchanges))
 
                     for exchange_id in loaded_exchanges:
                         await self._refresh_exchange_markets(exchange_id)
-                else:
-                    pass
-                    # self.logger.debug("No exchanges loaded yet, skipping periodic refresh")
 
-                # Wait for next update cycle
                 sleep_hours = self.config.MARKET_REFRESH_HOURS
                 self.logger.debug("Next periodic update in %s hours", sleep_hours)
                 await asyncio.sleep(sleep_hours * 3600)
@@ -206,30 +186,23 @@ class ExchangeManager:
                 break
             except Exception as e:
                 self.logger.error("Error in periodic update: %s", e)
-                await asyncio.sleep(300)  # Wait 5 minutes before retrying on error
+                await asyncio.sleep(300)
 
     async def find_symbol_exchange(self, symbol: str) -> tuple[ccxt.Exchange | None, str | None]:
         """Find the first exchange that supports the given symbol using lazy loading"""
-        # self.logger.debug("Looking for symbol %s across exchanges", symbol)
-
         for exchange_id in self.exchange_names:
             try:
-                # Check if we already have this exchange loaded and symbol cached
                 if exchange_id in self.symbols_by_exchange and symbol in self.symbols_by_exchange[exchange_id]:
                     exchange = self.exchanges.get(exchange_id)
                     if exchange:
                         self.logger.debug("Found %s in cached %s markets", symbol, exchange_id)
                         return exchange, exchange_id
 
-                # Try to load/refresh the exchange to check for the symbol
                 exchange = await self._ensure_exchange_loaded(exchange_id)
                 if exchange and exchange_id in self.symbols_by_exchange:
                     if symbol in self.symbols_by_exchange[exchange_id]:
                         self.logger.info("Found %s on %s", symbol, exchange_id)
                         return exchange, exchange_id
-                    else:
-                        # self.logger.debug("Symbol %s not found on %s", symbol, exchange_id)
-                        pass
 
             except Exception as e:
                 self.logger.error("Error checking %s for symbol %s: %s", exchange_id, symbol, e)

@@ -95,13 +95,10 @@ class AnalysisResultProcessor:
                 "raw_response": cleaned_response
             }
         self._log_response_validation(parsed_response.get("response_validation"))
-        # Log the analysis result
         self._log_analysis_result(parsed_response)
 
-        # Validate LLM claims against computed data (trend ADX + pattern quality)
         self._validate_llm_claims(parsed_response)
 
-        # Format the final response
         return self._format_analysis_response(parsed_response, cleaned_response)
 
     def _log_analysis_result(self, parsed_response: dict[str, Any]) -> None:
@@ -109,20 +106,16 @@ class AnalysisResultProcessor:
         if "analysis" in parsed_response:
             analysis = parsed_response["analysis"]
 
-            # Check if this is trading analysis (has signal field)
             if "signal" in analysis:
                 signal = analysis.get("signal", "UNKNOWN")
                 confidence = analysis.get("confidence", 0)
                 trend_info = analysis.get("trend", {})
-                # No isinstance needed - analysis.get() with default {} always returns a dict
                 direction = trend_info.get("direction", "UNKNOWN")
 
-                # Try legacy 'strength' field first, then prefer daily (macro), fall back to 4h
                 strength = trend_info.get("strength")
                 if strength is None:
                     strength = trend_info.get("strength_daily", trend_info.get("strength_4h", 0))
 
-                # Log confluence factors if available (Chain-of-Thought scoring)
                 confluence_factors = analysis.get("confluence_factors", {})
                 if confluence_factors:
                     cf_str = ", ".join([f"{k}={v}" for k, v in confluence_factors.items()])
@@ -130,7 +123,6 @@ class AnalysisResultProcessor:
                 else:
                     self.logger.debug("Trading analysis complete: Signal %s, Confidence %s, Trend %s (%s%% strength)", signal, confidence, direction, strength)
             else:
-                # Legacy analysis format
                 bias = analysis.get("technical_bias", "UNKNOWN")
                 trend = analysis.get("observed_trend", "UNKNOWN")
                 confidence = analysis.get("confidence_score", 0)
@@ -139,7 +131,7 @@ class AnalysisResultProcessor:
             self.logger.warning("Analysis complete but response format may be incomplete")
 
     def _log_response_validation(self, validation: dict[str, Any] | None) -> None:
-        """Log response-contract validation metadata without blocking legacy parsing."""
+        """Log response-contract validation metadata."""
         if not validation:
             return
         status = validation.get("status")

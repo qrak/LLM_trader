@@ -6,7 +6,7 @@ Written for peer review by another agent. Author: Hermes, 2026-05-23.
 
 ## What Was Built
 
-7 new implementation files, 1 new regression test file, production wiring behind an opt-in config flag, existing trading behavior preserved by default.
+7 new implementation files, 1 new regression test file, production guard wiring active by default.
 
 ### New files
 
@@ -16,7 +16,7 @@ Written for peer review by another agent. Author: Hermes, 2026-05-23.
 | `src/trading/guards/__init__.py` | 66 | `GuardResult` (frozen Pydantic) + `GuardProtocol` base class |
 | `src/trading/guards/pipeline.py` | 69 | `GuardPipeline` orchestrator — runs guards sequentially, fail-fast |
 | `src/trading/guards/max_position_size.py` | 79 | Max Position Size Guard |
-| `src/trading/guards/symbol_whitelist.py` | 43 | Symbol Whitelist Guard |
+| `src/trading/guards/configured_symbol.py` | 29 | Configured Symbol Guard |
 | `src/trading/guards/cooldown_window.py` | 130 | Cooldown Window Guard |
 | `src/trading/audit.py` | 107 | `AuditRecord` (frozen Pydantic) + `AuditTrail` collector |
 
@@ -24,16 +24,16 @@ Written for peer review by another agent. Author: Hermes, 2026-05-23.
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `tests/test_order_governance.py` | 270 | Covers lifecycle rejection, guard audit records, strategy guard rejection, production guard composition, max-position guard fallback behavior, symbol whitelist behavior, and no-guard approval/execution audit telemetry |
+| `tests/test_order_governance.py` | 270 | Covers lifecycle rejection, guard audit records, strategy guard rejection, production guard composition, max-position guard fallback behavior, configured-symbol behavior, and no-guard approval/execution audit telemetry |
 
 ### Modified files
 
 | File | Changes |
 |------|---------|
 | `src/trading/trading_strategy.py` | Imports, constructor params, 4-phase lifecycle in `_open_new_position` |
-| `start.py` | Wires `AuditTrail` and opt-in guard pipeline when `guard_pipeline_enabled = true` |
-| `src/config/loader.py` / `src/config/protocol.py` | Adds `GUARD_PIPELINE_ENABLED` and `SYMBOL_WHITELIST` config accessors |
-| `config/config.ini` / `config/config.ini.example` | Adds disabled-by-default guard pipeline settings |
+| `start.py` | Wires `AuditTrail` and the default guard pipeline |
+| `src/config/loader.py` / `src/config/protocol.py` | Removes optional symbol allow-list configuration |
+| `config/config.ini` / `config/config.ini.example` | Removes optional symbol allow-list settings |
 | `README.md` / `CHANGELOG.md` | Documents guard pipeline behavior and release change |
 | `tests/test_trading_strategy_process_analysis.py` | 2 lines. `guard_pipeline=None`, `audit_trail=MagicMock()` in test builder |
 
@@ -80,16 +80,16 @@ This is not a new architectural style. The codebase already uses:
 
 The guard pipeline follows the same DI + protocol + pipeline patterns already established. It uses `pydantic.BaseModel` with `ConfigDict(frozen=True)` exactly like the existing models. It uses constructor injection (`guard_pipeline: GuardPipeline | None = None`) exactly like `tightening_policy`.
 
-### 4. Backward compatibility is preserved
+### 4. Production behavior is safer by default
 
-When `guard_pipeline_enabled = false` (the default), `start.py` passes no guard pipeline and the code path is:
+`start.py` now composes the configured-symbol, max-position-size, and cooldown guards before execution, and `TradingStrategy` evaluates that synchronous pipeline off the event loop. The normal code path is:
 
 ```
-INTENT → auto-advance to READY_FOR_REVIEW
+INTENT → guard pipeline → READY_FOR_REVIEW
 → existing R/R check → APPROVED → existing position creation → EXECUTED
 ```
 
-Zero trading behavior change by default. The lifecycle transitions are telemetry around the existing gate order, so a low R/R entry is not internally marked approved before rejection. The audit trail still records the governance path, but `audit_trail` is an in-memory list that no one reads yet — pure telemetry collection. When `guard_pipeline_enabled = true`, `start.py` composes the symbol whitelist, max-position-size, and cooldown guards before execution, and `TradingStrategy` evaluates that synchronous pipeline off the event loop.
+The guard pipeline is no longer hidden behind a disabled config flag. `TradingStrategy` still accepts `guard_pipeline: GuardPipeline | None` for tests and alternate composition, but production startup injects the guard pipeline by default.
 
 ### 5. What the guards actually protect against
 
@@ -116,7 +116,7 @@ None of this is possible with the current friction-report-to-ChromaDB approach, 
 
 ## Verdict
 
-The implementation is **minimal for the requirements given**. It doesn't change existing trading behavior by default, keeps guard enforcement opt-in through config, and follows the same DI + Protocol + Pydantic v2 patterns the codebase already uses. The new implementation code is ~600 lines across 7 files, all of which are net-new modules — no existing code was restructured beyond adding lifecycle/audit calls to `TradingStrategy` and composition-root wiring.
+The implementation is **minimal for the requirements given**. Guard enforcement is part of the default production composition, and the code follows the same DI + Protocol + Pydantic v2 patterns the codebase already uses. The new implementation code is ~600 lines across 7 files, all of which are net-new modules — no existing code was restructured beyond adding lifecycle/audit calls to `TradingStrategy` and composition-root wiring.
 
 If the goal is "ship a trading bot that works," these guards could be skipped. If the goal is "build auditable, governable trading infrastructure," this is the minimum viable foundation.
 
@@ -129,13 +129,13 @@ src/trading/order_lifecycle.py     — State machine (OrderLifecycle enum, Order
 src/trading/guards/__init__.py     — GuardResult + GuardProtocol base
 src/trading/guards/pipeline.py     — GuardPipeline orchestrator
 src/trading/guards/max_position_size.py
-src/trading/guards/symbol_whitelist.py
+src/trading/guards/configured_symbol.py
 src/trading/guards/cooldown_window.py
 src/trading/audit.py               — AuditRecord + AuditTrail
 src/trading/trading_strategy.py    — Modified: imports, constructor, _open_new_position (4-phase lifecycle)
-start.py                           — Modified: opt-in guard pipeline composition
-config/config.ini                  — Modified: guard pipeline config defaults
-config/config.ini.example          — Modified: guard pipeline config defaults
+start.py                           — Modified: default guard pipeline composition
+config/config.ini                  — Modified: removed optional symbol allow-list config
+config/config.ini.example          — Modified: removed optional symbol allow-list config
 tests/test_trading_strategy_process_analysis.py  — Modified: test builder attributes
 tests/test_order_governance.py                  — Added: lifecycle, guard pipeline, and audit regression coverage
 ```

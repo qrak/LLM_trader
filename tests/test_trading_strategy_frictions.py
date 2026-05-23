@@ -8,9 +8,8 @@ Validates the closed-loop feedback pipeline:
   5. Failures in friction storage are handled gracefully (non-fatal)
 """
 
-import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

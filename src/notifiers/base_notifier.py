@@ -209,7 +209,7 @@ class BaseNotifier(ABC):
 
     @staticmethod
     def _extract_close_reason(decision_dict: dict[str, Any]) -> str | None:
-        """Extract close reason from decision metadata or legacy reasoning text."""
+        """Extract close reason from decision metadata or reasoning text."""
         close_reason = decision_dict.get('close_reason')
         if close_reason:
             return str(close_reason)

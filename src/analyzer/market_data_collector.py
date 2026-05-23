@@ -58,7 +58,6 @@ class MarketDataCollector:
         self.exchange = exchange
         self.timeframe = timeframe
 
-        # Calculate limit dynamically if not provided
         if limit is None:
             target_days = 30
             self.limit = TimeframeValidator.get_candle_limit_for_days(timeframe, target_days)
@@ -81,7 +80,6 @@ class MarketDataCollector:
                 self.logger.error(error_msg)
                 return {"success": False, "errors": [error_msg]}
 
-            # Fetch OHLCV data
             ohlcv_success = await self.fetch_ohlcv(context)
             if not ohlcv_success:
                 result["errors"].append("Failed to fetch OHLCV data")
@@ -116,7 +114,6 @@ class MarketDataCollector:
 
             context.ohlcv_candles, context.current_price = result
 
-            # Convert timestamps once here for reuse across all components
             try:
                 context.timestamps = timestamps_from_ms_array(context.ohlcv_candles[:, 0])
             except Exception as e:
@@ -125,13 +122,10 @@ class MarketDataCollector:
 
             self._warn_if_insufficient_history(len(context.ohlcv_candles))
 
-            # Fetch long-term historical data for additional context
             await self.fetch_long_term_historical_data(context)
 
-            # Fetch weekly macro data for 200W SMA analysis
             await self.fetch_weekly_macro_data(context, target_weeks=300)
 
-            # Fetch and process market sentiment data
             await self.fetch_and_process_sentiment_data(context)
 
             return True
@@ -242,15 +236,12 @@ class MarketDataCollector:
         try:
             fear_greed_data = await self._fetch_fear_greed_index(limit=7)
 
-            # If no fear & greed data available, return early
             if not fear_greed_data or len(fear_greed_data) == 0:
                 self.logger.warning("No Fear & Greed data available")
                 return False
 
-            # Get the latest sentiment data
             latest_fg = fear_greed_data[0]
 
-            # Process the sentiment history
             historical = []
             for fg in fear_greed_data:
                 historical.append({
@@ -259,7 +250,6 @@ class MarketDataCollector:
                     'value_classification': fg["value_classification"]
                 })
 
-            # Set context sentiment with properly formatted data
             context.sentiment = {
                 'timestamp': datetime.fromtimestamp(int(latest_fg["timestamp"])),
                 'fear_greed_index': int(latest_fg["value"]),
@@ -267,7 +257,6 @@ class MarketDataCollector:
                 'historical': historical
             }
 
-            # self.logger.debug("Set sentiment data: %s", context.sentiment)
             return True
 
         except Exception as e:
@@ -277,12 +266,9 @@ class MarketDataCollector:
     async def _fetch_fear_greed_index(self, limit: int = 0) -> list[dict[str, Any]]:
         """Fetch Fear & Greed Index data using AlternativeMeAPI client"""
         try:
-            # Use the API client if available
             if self.alternative_me_api:
                 if limit > 0:
-                    # Get historical data if limit is specified
                     history = await self.alternative_me_api.get_historical_fear_greed(days=limit)
-                    # Convert to the format expected by the rest of the code
                     result = []
                     for item in history:
                         result.append({
@@ -292,7 +278,6 @@ class MarketDataCollector:
                         })
                     return result
 
-                # Get current data only
                 current = await self.alternative_me_api.get_fear_greed_index()
                 return [{
                     "value": str(current["value"]),
@@ -300,7 +285,6 @@ class MarketDataCollector:
                     "timestamp": str(current["timestamp"])
                 }]
 
-            # Fallback to direct API call if client not available
             self.logger.warning("AlternativeMeAPI client not available, falling back to direct API call")
             params = {"limit": limit, "format": "json"} if limit > 0 else {}
 

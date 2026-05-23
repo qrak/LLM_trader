@@ -81,7 +81,6 @@ class AnalysisEngine:
         self.logger = logger
 
         self.config = config
-        # Basic properties
         self.exchange = None
         self.symbol = None
         self.base_symbol = None
@@ -89,7 +88,6 @@ class AnalysisEngine:
         self.article_urls = {}
         self.previous_microstructure_snapshots: dict[str, dict[str, Any]] = {}
 
-        # Load configuration
         try:
             self.timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
             self.limit = self.config.CANDLE_LIMIT
@@ -99,7 +97,6 @@ class AnalysisEngine:
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.exception("Error loading configuration values: %s.", e)
             raise
-        # Store injected components
         self.model_manager = model_manager
         self.technical_calculator = technical_calculator
         self.pattern_analyzer = pattern_analyzer
@@ -110,15 +107,12 @@ class AnalysisEngine:
         self.chart_generator = chart_generator
         self.data_fetcher_factory = data_fetcher_factory
 
-        # Store references to external services
         self.rag_engine = rag_engine
         self.coingecko_api = coingecko_api
         self.market_api = market_api
 
-        # Use the token counter from model_manager
         self.token_counter = self.model_manager.token_counter
 
-        # Dashboard Monitoring Data
         self.last_generated_prompt: str | None = None
         self.last_prompt_timestamp: str | None = None
         self.last_system_prompt: str | None = None
@@ -142,10 +136,8 @@ class AnalysisEngine:
         self.exchange = exchange
         self.base_symbol = symbol.split('/')[0] if '/' in symbol else symbol
 
-        # Use provided timeframe or fall back to config
         effective_timeframe = timeframe if timeframe else self.timeframe
 
-        # Validate effective timeframe
         try:
             effective_timeframe = TimeframeValidator.validate_and_normalize(effective_timeframe)
         except ValueError as e:
@@ -156,7 +148,6 @@ class AnalysisEngine:
         self.context.exchange = exchange.name if exchange.name else str(exchange)
         self.context.timeframe = effective_timeframe
 
-        # Create data fetcher via factory
         data_fetcher = self.data_fetcher_factory.create(exchange)
 
         self.data_collector.initialize(
@@ -167,16 +158,13 @@ class AnalysisEngine:
             limit=self.limit
         )
 
-        # Update prompt builder and context builder with effective timeframe
         self.prompt_builder.timeframe = effective_timeframe
 
         if self.prompt_builder.context_builder:
             self.prompt_builder.context_builder.timeframe = effective_timeframe
 
-        # Reset analysis state
         self.article_urls = {}
 
-        # Reset token counter for new analysis using the model manager's token counter
         self.token_counter.reset_session_stats()
 
     async def close(self) -> None:
@@ -315,7 +303,6 @@ class AnalysisEngine:
         Args:
             current_ticker: Optional ticker data to reuse
         """
-        # Fetch market overview
         try:
             market_overview = await self.rag_engine.get_market_overview()
             self.context.market_overview = market_overview
@@ -323,7 +310,6 @@ class AnalysisEngine:
             self.logger.warning("Failed to fetch market overview: %s", e)
             self.context.market_overview = {}
 
-        # Fetch market microstructure
         try:
             microstructure = await self.data_collector.data_fetcher.fetch_market_microstructure(
                 self.symbol,
@@ -335,15 +321,11 @@ class AnalysisEngine:
             self.logger.warning("Failed to fetch market microstructure: %s", e)
             self.context.market_microstructure = {}
 
-        # Fetch cryptocurrency details
         if self.market_api:
             try:
                 coin_details = await self.market_api.get_coin_details(self.base_symbol)
                 self.context.coin_details = coin_details
-                if coin_details:
-                    # self.logger.debug("Coin details for %s fetched and added to context", self.base_symbol)
-                    pass
-                else:
+                if not coin_details:
                     self.logger.warning("No coin details found for %s", self.base_symbol)
             except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
@@ -450,16 +432,12 @@ class AnalysisEngine:
 
     async def _perform_technical_analysis(self) -> None:
         """Perform all technical analysis steps"""
-        # Calculate technical indicators
         await self._calculate_technical_indicators()
 
-        # Process long-term data
         await self._process_long_term_data()
 
-        # Calculate market metrics
         await asyncio.to_thread(self.metrics_calculator.update_period_metrics, self.context)
 
-        # Run technical pattern analysis
         technical_patterns = await asyncio.to_thread(
             self.pattern_analyzer.detect_patterns,
             self.context.ohlcv_candles,
@@ -487,11 +465,9 @@ class AnalysisEngine:
     ) -> dict[str, Any]:
         """Generate AI analysis using prompt builder and result processor"""
 
-        # Use precomputed chart if available, otherwise generate (fallback)
         if precomputed_chart:
             chart_image, has_chart_analysis = precomputed_chart
         else:
-            # Fallback for synchronous calls or if parallel logic bypassed
             has_chart_analysis = self.model_manager.supports_image_analysis(provider)
             chart_image: io.BytesIO | None = None
 
@@ -510,7 +486,6 @@ class AnalysisEngine:
             last_analysis_time,
             has_chart_analysis,
             dynamic_thresholds,
-            previous_indicators=previous_indicators
         )
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
@@ -524,12 +499,10 @@ class AnalysisEngine:
         self.last_prompt_lint = prompt_lint
         if prompt_lint["warnings"]:
             self.logger.warning("Prompt preflight warnings: %s", prompt_lint["warnings"])
-        # Process analysis
         analysis_result = await self._execute_ai_request(
             system_prompt, prompt, provider, model, chart_image
         )
 
-        # Add metadata to result
         analysis_result["article_urls"] = self.article_urls
         analysis_result["timeframe"] = self.context.timeframe
         actual_provider, actual_model = self.model_manager.describe_provider_and_model(
@@ -541,7 +514,6 @@ class AnalysisEngine:
         analysis_result["prompt_metadata"] = prompt_metadata
         analysis_result["prompt_lint"] = prompt_lint
 
-        # Add technical_data for persistence (will be saved to previous_response.json)
         if self.context.technical_data:
             analysis_result["technical_data"] = self.context.technical_data
 
@@ -551,7 +523,6 @@ class AnalysisEngine:
         if self.context.market_microstructure:
             analysis_result["market_microstructure"] = self.context.market_microstructure
 
-        # Add prompt for dashboard persistence
         if self.last_generated_prompt:
             analysis_result["generated_prompt"] = self.last_generated_prompt
 
@@ -607,19 +578,14 @@ class AnalysisEngine:
             BytesIO containing PNG chart image, or None if generation fails
         """
         try:
-            # Get OHLCV data from context
             if self.context.ohlcv_candles is None or len(self.context.ohlcv_candles) == 0:
                 self.logger.warning("No OHLCV data available for chart generation")
                 return None
 
-            # Get timestamps if available
             timestamps = self.context.timestamps
 
-            # Get technical history for RSI overlay (optional)
             technical_history = self.context.technical_history
 
-            # Generate chart image using chart generator
-            # The chart_generator will automatically limit candles based on AI_CHART_CANDLE_LIMIT
             chart_image = await self.chart_generator.create_chart_image(
                 ohlcv=self.context.ohlcv_candles,
                 technical_history=technical_history,
@@ -629,10 +595,7 @@ class AnalysisEngine:
                 timestamps=timestamps
             )
 
-            # If save_to_disk was True, chart_image will be a file path string
-            # Otherwise it's a BytesIO object
             if isinstance(chart_image, str):
-                # Chart was saved to disk, read it back into BytesIO
                 with open(chart_image, 'rb') as f:
                     img_buffer = io.BytesIO(f.read())
                     img_buffer.seek(0)
@@ -652,39 +615,29 @@ class AnalysisEngine:
             self.context.ohlcv_candles
         )
 
-        # Store history in context
         self.context.technical_history = indicators
 
-        # Extract latest values for each indicator for the technical_data
         technical_data = {}
         for key, values in indicators.items():
             try:
-                # Handle different types of NumPy array returns based on shape
                 if values is None or np.isnan(values).all():
                     continue
 
-                # Check if it's a standard 1D array (most indicators)
                 if isinstance(values, np.ndarray) and values.ndim == 1:
                     technical_data[key] = float(values[-1])
 
-                # Handle 2D arrays - common for indicators that return multiple series like vortex_indicator
                 elif isinstance(values, np.ndarray) and values.ndim > 1:
-                    # For 2D array, take the last value from each series
                     technical_data[key] = [float(values[i, -1]) for i in range(values.shape[0])]
 
-                # Handle tuples - common return type from indicator functions (e.g., MACD, support_resistance)
                 elif isinstance(values, tuple) and all(isinstance(item, np.ndarray) for item in values):
-                    # For tuple of arrays, store as list of last values
                     technical_data[key] = [float(array[-1]) for array in values]
 
-                # Handle lists - could be lists of arrays or scalar values
                 elif isinstance(values, list):
                     if all(isinstance(item, np.ndarray) for item in values):
                         technical_data[key] = [float(array[-1]) for array in values]
                     else:
                         technical_data[key] = values
 
-                # Handle scalar values
                 else:
                     technical_data[key] = float(values)
 
@@ -705,23 +658,18 @@ class AnalysisEngine:
             return
 
         try:
-            # Get long-term indicators and metrics
             long_term_indicators = await asyncio.to_thread(
                 self.technical_calculator.get_long_term_indicators,
                 self.context.long_term_data['data']
             )
 
-            # Update the context with calculated metrics
             self.context.long_term_data.update(long_term_indicators)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.error("Error processing long-term data: %s", str(e))
 
-        # Calculate weekly macro (if available)
-        # Check for dynamic attribute attached in DataCollector (see MarketDataCollector.collect_data)
         if self.context.weekly_ohlcv is not None:
             try:
-                # self.logger.info("Calculating weekly macro indicators...")
                 weekly_macro = await asyncio.to_thread(
                     self.technical_calculator.get_weekly_macro_indicators,
                     self.context.weekly_ohlcv
@@ -753,44 +701,32 @@ class AnalysisEngine:
             Formatted brain context string
         """
         # pylint: disable=too-many-branches, too-many-statements, too-many-locals
-        # Extract trend direction from +DI/-DI
         trend_direction = classify_trend_direction(technical_data)
 
-        # Extract ADX
         adx_value = technical_data.get("adx", 0.0)
 
-        # Extract volatility from ATR%
         volatility_level = classify_volatility_level(technical_data)
 
-        # Extract RSI level
         rsi_level = classify_rsi_level(technical_data)
 
-        # Extract MACD signal from macd_line vs macd_signal
         macd_signal = classify_macd_signal(technical_data)
 
-        # Extract volume state from obv_slope
         volume_state = classify_volume_state(technical_data)
 
-        # Extract BB position from bb_upper/bb_lower
         bb_position = classify_bb_position(technical_data, self.context.current_price)
 
-        # Extract weekend status (Saturday=5, Sunday=6)
         is_weekend = datetime.now().weekday() >= 5
 
-        # Extract market sentiment from Fear & Greed data
         market_sentiment = classify_market_sentiment(self.context.sentiment)
 
-        # Extract order book bias from microstructure
         order_book_bias = classify_order_book_bias(self.context.market_microstructure)
 
-        # Extract raw RSI for numeric embedding in query document
         rsi_value = technical_data.get("rsi", 50.0)
         exit_execution_context = build_exit_execution_context_from_config(
             self.config,
             self.timeframe,
         )
 
-        # Offload blocking ChromaDB + embedding calls to a thread to free the event loop
         return await asyncio.to_thread(
             brain_service.get_context,
             trend_direction=trend_direction,
