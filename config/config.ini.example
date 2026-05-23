@@ -133,6 +133,10 @@ stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
 # Maximum position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in code.
 max_position_size = 0.10
+# Optional pre-execution order guards. Disabled by default to preserve existing risk-manager behavior.
+guard_pipeline_enabled = false
+# Additional symbols allowed when guard_pipeline_enabled is true. The configured crypto_pair is always allowed.
+symbol_whitelist =
 # Fallback sizes used only when the AI omits position_size or returns an invalid value.
 position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02

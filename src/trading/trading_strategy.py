@@ -21,6 +21,9 @@ from .brain import TradingBrainService
 from .statistics import TradingStatisticsService
 from .memory import TradingMemoryService
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
+from .order_lifecycle import OrderIntent, OrderLifecycle
+from .audit import AuditTrail
+from .guards.pipeline import GuardPipeline
 
 if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
@@ -43,6 +46,8 @@ class TradingStrategy:
         position_factory=None,
         dashboard_state: "DashboardState | None" = None,
         tightening_policy: StopLossTighteningPolicy | None = None,
+        guard_pipeline: GuardPipeline | None = None,
+        audit_trail: AuditTrail | None = None,
     ):
         """Initialize the trading strategy with DI pattern.
 
@@ -58,6 +63,8 @@ class TradingStrategy:
             position_factory: PositionFactory instance (injected from start.py)
             dashboard_state: Optional dashboard state for UI lifecycle notifications
             tightening_policy: Stop-loss tightening policy (injected from start.py)
+            guard_pipeline: Pre-execution guard pipeline (injected from start.py)
+            audit_trail: Optional audit collector for governance events
         """
         self.logger = logger
         self.persistence = persistence
@@ -69,6 +76,12 @@ class TradingStrategy:
         self.extractor = position_extractor
         self.position_factory = position_factory
         self.dashboard_state = dashboard_state
+
+        # Governance: audit trail and guard pipeline
+        self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
+        self.guard_pipeline = guard_pipeline
+        if self.guard_pipeline is not None:
+            self.guard_pipeline.set_audit_trail(self.audit_trail)
 
         # Load any existing position
         self.current_position: Position | None = self.persistence.load_position()
@@ -426,9 +439,80 @@ class TradingStrategy:
         confluence_factors: tuple = (),
         market_conditions: MarketConditions | None = None,
     ) -> TradeDecision:
-        """Open a new trading position with dynamic parameter calculation."""
+        """Open a new trading position with guard-governed lifecycle."""
         direction = "LONG" if signal == "BUY" else "SHORT"
         market_conditions = market_conditions or {}
+
+        order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+        intent = OrderIntent(
+            order_id=order_id,
+            state=OrderLifecycle.INTENT,
+            signal=signal,
+            direction=direction,
+            symbol=symbol,
+            confidence=confidence,
+            current_price=current_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            position_size=position_size,
+            reasoning=reasoning,
+            confluence_factors=confluence_factors,
+            market_conditions=market_conditions,
+        )
+        self.logger.info("Order intent created: %s %s @ $%.2f (order_id=%s)", signal, symbol, current_price, order_id)
+        self.audit_trail.record(
+            order_id=order_id,
+            event_type="intent_created",
+            actor="TradingStrategy",
+            result="created",
+            reason=f"{signal} {symbol} @ {current_price}",
+            metadata={"signal": signal, "direction": direction, "symbol": symbol},
+        )
+
+        if self.guard_pipeline is not None:
+            capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
+            guard_results = await asyncio.to_thread(
+                self.guard_pipeline.evaluate,
+                intent,
+                capital=capital,
+                config=self.config,
+            )
+
+            all_passed = all(r.passed for r in guard_results)
+            if not all_passed:
+                failed = [r for r in guard_results if not r.passed]
+                failure_reasons = "; ".join(f"{r.guard_name}: {r.reason}" for r in failed)
+                intent.transition_to(OrderLifecycle.REJECTED, reason=failure_reasons)
+                self.audit_trail.record(
+                    order_id=order_id,
+                    event_type="rejection",
+                    actor="GuardPipeline",
+                    result="rejected",
+                    reason=failure_reasons,
+                    metadata={"failed_guards": [r.guard_name for r in failed]},
+                )
+                self.logger.warning("Order REJECTED by guard pipeline: %s", failure_reasons)
+                return TradeDecision(
+                    timestamp=datetime.now(timezone.utc),
+                    symbol=symbol,
+                    action="HOLD",
+                    confidence=confidence,
+                    price=current_price,
+                    fee=0.0,
+                    reasoning=f"Order {order_id} rejected by guard pipeline: {failure_reasons}",
+                )
+
+            intent.transition_to(OrderLifecycle.READY_FOR_REVIEW, reason="All pre-execution guards passed")
+            self.audit_trail.record(
+                order_id=order_id,
+                event_type="state_transition",
+                actor="GuardPipeline",
+                result="ready_for_review",
+                reason=f"Passed guards: {self.guard_pipeline.guard_names}",
+                metadata={"passed_guards": self.guard_pipeline.guard_names},
+            )
+        else:
+            intent.transition_to(OrderLifecycle.READY_FOR_REVIEW, reason="No guard pipeline configured")
 
         # Calculate quantity based on CURRENT capital (not initial)
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
@@ -513,6 +597,17 @@ class TradingStrategy:
             except Exception:
                 self.logger.warning("Failed to store blocked trade event", exc_info=True)
 
+            # Audit: R/R rejection
+            self.audit_trail.record(
+                order_id=order_id,
+                event_type="rejection",
+                actor="TradingStrategy",
+                result="rejected",
+                reason=f"R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}",
+                metadata={"rr_ratio": rr_ratio, "min_rr_for_entry": min_rr_for_entry},
+            )
+            intent.transition_to(OrderLifecycle.REJECTED, reason=f"R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}")
+
             return TradeDecision(
                 timestamp=datetime.now(timezone.utc),
                 symbol=symbol,
@@ -522,6 +617,16 @@ class TradingStrategy:
                 fee=0.0,
                 reasoning=f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}. {reasoning[:150]}" if reasoning else f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}.",
             )
+
+        intent.transition_to(OrderLifecycle.APPROVED, reason=f"R/R {rr_ratio:.2f} >= minimum {min_rr_for_entry}")
+        self.audit_trail.record(
+            order_id=order_id,
+            event_type="approval",
+            actor="TradingStrategy",
+            result="approved",
+            reason=f"R/R {rr_ratio:.2f} >= {min_rr_for_entry}",
+            metadata={"rr_ratio": rr_ratio, "min_rr_for_entry": min_rr_for_entry},
+        )
 
         # Create position using Factory
         self.current_position = self.position_factory.create_position(
@@ -539,6 +644,24 @@ class TradingStrategy:
 
         await self.persistence.async_save_position(self.current_position)
         self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
+
+        intent.transition_to(OrderLifecycle.EXECUTED, reason=f"Position created: {direction} @ {current_price}")
+        self.audit_trail.record(
+            order_id=order_id,
+            event_type="execution",
+            actor="TradingStrategy",
+            result="executed",
+            reason=f"Order {order_id} executed: {direction} {symbol} @ {current_price}",
+            metadata={
+                "direction": direction,
+                "symbol": symbol,
+                "entry_price": current_price,
+                "stop_loss": final_sl,
+                "take_profit": final_tp,
+                "position_size_pct": final_size_pct,
+                "quantity": quantity,
+            },
+        )
 
         # Create and save decision (store size_pct for history context)
         decision = TradeDecision(
