@@ -84,6 +84,11 @@ from src.analyzer.pattern_engine import ChartGenerator
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
+from src.trading.audit import AuditTrail
+from src.trading.guards.cooldown_window import CooldownWindowGuard
+from src.trading.guards.max_position_size import MaxPositionSizeGuard
+from src.trading.guards.pipeline import GuardPipeline
+from src.trading.guards.symbol_whitelist import SymbolWhitelistGuard
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -570,12 +575,27 @@ class CompositionRoot:
         statistics_service = TradingStatisticsService(self.logger, persistence)
         exit_monitor = ExitMonitor(self.config, timeframe, POSITION_UPDATE_INTERVAL)
         exit_monitor.validate()
+        audit_trail = AuditTrail()
+        guard_pipeline = None
+        if self.config.GUARD_PIPELINE_ENABLED:
+            guard_pipeline = GuardPipeline(
+                [
+                    SymbolWhitelistGuard(),
+                    MaxPositionSizeGuard(),
+                    CooldownWindowGuard(),
+                ],
+                audit_trail=audit_trail,
+            )
+            self.logger.info("Order guard pipeline enabled: %s", ", ".join(guard_pipeline.guard_names))
+        else:
+            self.logger.info("Order guard pipeline disabled; RiskManager guardrails remain active")
         
         from src.factories.position_factory import PositionFactory
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
-            PositionFactory(self.logger), tightening_policy=tightening_policy
+            PositionFactory(self.logger), tightening_policy=tightening_policy,
+            guard_pipeline=guard_pipeline, audit_trail=audit_trail
         )
         
         return {

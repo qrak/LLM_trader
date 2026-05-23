@@ -92,6 +92,8 @@ def _build_strategy() -> TradingStrategy:
         TAKE_PROFIT_CHECK_INTERVAL="4h",
     )
     strategy.current_position = None
+    strategy.guard_pipeline = None
+    strategy.audit_trail = MagicMock()
 
     parser = UnifiedParser(logger=MagicMock())
     strategy.extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)

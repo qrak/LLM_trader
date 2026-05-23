@@ -524,6 +524,21 @@ class Config:
         return float(self.get_config('risk_management', 'max_position_size', 0.10))
 
     @property
+    def GUARD_PIPELINE_ENABLED(self) -> bool:
+        """Whether to enable the opt-in pre-execution order guard pipeline."""
+        return bool(self.get_config('risk_management', 'guard_pipeline_enabled', False))
+
+    @property
+    def SYMBOL_WHITELIST(self) -> list[str]:
+        """Additional symbols allowed by the optional symbol whitelist guard."""
+        raw_symbols = self.get_config('risk_management', 'symbol_whitelist', [])
+        if not raw_symbols:
+            return []
+        if isinstance(raw_symbols, list):
+            return [str(symbol).strip() for symbol in raw_symbols if str(symbol).strip()]
+        return [symbol.strip() for symbol in str(raw_symbols).split(',') if symbol.strip()]
+
+    @property
     def POSITION_SIZE_FALLBACK_LOW(self) -> float:
         """Fallback position size for LOW confidence when AI size is missing or invalid."""
         return float(self.get_config('risk_management', 'position_size_fallback_low', 0.01))

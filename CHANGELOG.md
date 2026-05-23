@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-05-23 - Order Governance Foundation
+
+### Added
+
+- Added an opt-in pre-execution order guard pipeline with symbol whitelist, explicit over-cap position size, and cooldown guards.
+- Added in-memory audit records for order intent creation, guard checks, approval, rejection, and execution lifecycle events.
+- Added `guard_pipeline_enabled` and `symbol_whitelist` risk-management configuration keys, defaulting the guard pipeline to disabled to preserve existing trading behavior.
+- Added regression coverage for order lifecycle transitions, guard audit capture, guard rejection handling, and default no-guard execution telemetry.
+
+### Changed
+
+- `TradingStrategy` now wraps new position entries in order lifecycle/audit telemetry while keeping the existing risk-manager path active when the guard pipeline is disabled.
+
 ## 2026-05-21 - Documentation Alignment and Static Website Rollout
 
 ### Added
