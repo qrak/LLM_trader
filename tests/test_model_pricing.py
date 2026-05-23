@@ -58,28 +58,25 @@ def test_config_model_mapping_falls_back_to_legacy_penalty_aliases() -> None:
     assert config.OPENROUTER_FALLBACK_MODEL == "deepseek/deepseek-r1:free"
 
 
-def test_config_model_mapping_includes_optional_google_legacy_sampling_keys() -> None:
+def test_config_model_mapping_uses_google_runtime_keys() -> None:
     config = _make_config({
-        "ai_providers": {"provider": "googleai", "google_studio_model": "gemini-2.5-flash"},
+        "ai_providers": {"provider": "googleai", "google_studio_model": "gemini-3.5-flash"},
         "model_config": {
             "max_tokens": 256,
             "google_max_tokens": 128,
             "google_thinking_level": "medium",
             "google_code_execution": True,
-            "google_temperature": 0.8,
-            "google_top_p": 0.95,
-            "google_top_k": 32,
         },
     })
 
-    model_config = config.get_model_config("gemini-2.5-flash")
+    model_config = config.get_model_config("gemini-3.5-flash")
 
     assert model_config["max_tokens"] == 128
     assert model_config["thinking_level"] == "medium"
     assert model_config["google_code_execution"] is True
-    assert model_config["temperature"] == 0.8
-    assert model_config["top_p"] == 0.95
-    assert model_config["top_k"] == 32
+    assert "temperature" not in model_config
+    assert "top_p" not in model_config
+    assert "top_k" not in model_config
 
 
 def _make_config(config_data: dict[str, dict[str, Any]]) -> Any:

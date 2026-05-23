@@ -39,16 +39,17 @@ class TestGenerationConfig:
         assert "top_p" not in dumped or dumped["top_p"] is None
         assert "top_k" not in dumped or dumped["top_k"] is None
 
-    def test_config_includes_legacy_sampling_for_gemini_2_models(self) -> None:
+    def test_config_omits_sampling_for_gemini_2_models(self) -> None:
         client = _make_client()
         config = client._create_generation_config(
             {"max_tokens": 123, "temperature": 0.8, "top_p": 0.9, "top_k": 32},
             effective_model="gemini-2.5-flash",
         )
+        dumped = config.model_dump(exclude_none=False)
 
-        assert config.temperature == 0.8
-        assert config.top_p == 0.9
-        assert config.top_k == 32
+        assert "temperature" not in dumped or dumped["temperature"] is None
+        assert "top_p" not in dumped or dumped["top_p"] is None
+        assert "top_k" not in dumped or dumped["top_k"] is None
 
     def test_config_omits_sampling_for_unknown_models(self) -> None:
         client = _make_client()

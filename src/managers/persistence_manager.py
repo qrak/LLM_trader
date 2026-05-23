@@ -1,9 +1,10 @@
-from __future__ import annotations
 """Pure JSON I/O service for trading data persistence.
 
 This service handles all file system operations for trading data without any business logic.
 Follows Single Responsibility Principle by delegating calculations to other services.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json

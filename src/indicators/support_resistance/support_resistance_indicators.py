@@ -338,20 +338,15 @@ def pivot_points_numba(high, low, close):
     s4 = np.full(n, np.nan)
 
     for i in range(1, n):
-        # Calculate pivot point as simple average of H, L, C from previous period
         pivot_point[i] = (high[i - 1] + low[i - 1] + close[i - 1]) / 3
 
-        # Calculate resistance levels
         r1[i] = (2 * pivot_point[i]) - low[i - 1]
         r2[i] = pivot_point[i] + (high[i - 1] - low[i - 1])
-        # Additional higher resistance levels (extended multiples of the high-low range)
         r3[i] = pivot_point[i] + 2.0 * (high[i - 1] - low[i - 1])
         r4[i] = pivot_point[i] + 3.0 * (high[i - 1] - low[i - 1])
 
-        # Calculate support levels
         s1[i] = (2 * pivot_point[i]) - high[i - 1]
         s2[i] = pivot_point[i] - (high[i - 1] - low[i - 1])
-        # Additional lower support levels (extended multiples of the high-low range)
         s3[i] = pivot_point[i] - 2.0 * (high[i - 1] - low[i - 1])
         s4[i] = pivot_point[i] - 3.0 * (high[i - 1] - low[i - 1])
 
@@ -375,18 +370,14 @@ def fibonacci_pivot_points_numba(high, low, close):
     s3 = np.full(n, np.nan)
 
     for i in range(1, n):
-        # Calculate pivot point as simple average of H, L, C from previous period
         pivot_point[i] = (high[i - 1] + low[i - 1] + close[i - 1]) / 3
 
-        # Calculate range from previous period
         range_val = high[i - 1] - low[i - 1]
 
-        # Calculate Fibonacci resistance levels
         r1[i] = pivot_point[i] + (0.382 * range_val)
         r2[i] = pivot_point[i] + (0.618 * range_val)
         r3[i] = pivot_point[i] + (1.000 * range_val)
 
-        # Calculate Fibonacci support levels
         s1[i] = pivot_point[i] - (0.382 * range_val)
         s2[i] = pivot_point[i] - (0.618 * range_val)
         s3[i] = pivot_point[i] - (1.000 * range_val)

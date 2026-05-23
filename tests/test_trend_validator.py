@@ -12,7 +12,6 @@ Covers:
 """
 
 import math
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -315,7 +314,7 @@ class TestProcessorIntegration:
     def test_validate_with_context(self):
         """Full validation runs when context has both tech_data and long_term_data."""
         from types import SimpleNamespace
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         from src.analyzer.analysis_result_processor import AnalysisResultProcessor
 

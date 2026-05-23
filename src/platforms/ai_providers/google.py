@@ -121,11 +121,6 @@ class GoogleAIClient(BaseAIClient):
             self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
-    def _supports_legacy_sampling(self, model_name: str) -> bool:
-        """Return whether a Gemini model supports legacy sampling request fields."""
-        normalized = model_name.lower().removeprefix("models/")
-        return normalized.startswith(("gemini-1.", "gemini-1-", "gemini-2.", "gemini-2-"))
-
     def _supports_code_execution(self, model_name: str) -> bool:
         """Return whether a Gemini model is known to support code execution tools."""
         normalized = model_name.lower().removeprefix("models/")
@@ -161,10 +156,6 @@ class GoogleAIClient(BaseAIClient):
             "thinking_config": thinking_config,
             "tools": tools if tools else None,
         }
-        if self._supports_legacy_sampling(model_name):
-            for key in ("temperature", "top_p", "top_k"):
-                if model_config.get(key) is not None:
-                    config[key] = model_config[key]
         return types.GenerateContentConfig.model_validate(config)
 
     def _should_retry_without_thinking(self, exception: Exception) -> bool:

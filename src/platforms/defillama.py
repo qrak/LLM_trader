@@ -193,15 +193,12 @@ class DefiLlamaClient:
             if not stables or not chains:
                 return None
 
-            # Calculate Stablecoin Metrics
             total_stable_mc = sum(s.circulating for s in stables)
             total_stable_mc_prev = sum(s.circulatingPrevDay for s in stables)
             stable_change = ((total_stable_mc - total_stable_mc_prev) / total_stable_mc_prev * 100) if total_stable_mc_prev else 0
 
-            # Calculate TVL Metrics
             total_tvl = sum(c.tvl for c in chains)
 
-            # Sort chains by TVL and take top 5
             top_chains = sorted(chains, key=lambda x: x.tvl, reverse=True)[:5]
 
             return MacroMarketData(
@@ -238,7 +235,6 @@ class DefiLlamaClient:
                 if response.status == 200:
                     data = await response.json()
                     protocols = data.get("protocols", [])
-                    # Sort by 24h volume
                     top_protocols = sorted(
                         [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
                         key=lambda x: self._safe_float(x.get("total24h")),
@@ -266,14 +262,12 @@ class DefiLlamaClient:
                 if response.status == 200:
                     data = await response.json()
                     protocols = data.get("protocols", [])
-                    # Sort by 24h fees
                     top_earners = sorted(
                         [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
                         key=lambda x: self._safe_float(x.get("total24h")),
                         reverse=True
                     )[:5]
 
-                    # Calculate total revenue if not provided
                     total_revenue = sum(self._safe_float(p.get("total24hRevenue")) for p in protocols) if protocols else 0
 
                     return FeesData(
@@ -297,7 +291,6 @@ class DefiLlamaClient:
                 if response.status == 200:
                     data = await response.json()
                     protocols = data.get("protocols", [])
-                    # Sort by notional volume
                     top_protocols = sorted(
                         [p for p in protocols if self._safe_float(p.get("totalNotionalVolume")) > 0],
                         key=lambda x: self._safe_float(x.get("totalNotionalVolume")),
@@ -319,7 +312,6 @@ class DefiLlamaClient:
     async def get_defi_fundamentals(self) -> DeFiFundamentalsData | None:
         """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
 
-        # Check cache freshness
         current_time = datetime.now(timezone.utc)
         if self.last_update and (current_time - self.last_update < self.update_interval):
             try:
@@ -332,7 +324,6 @@ class DefiLlamaClient:
 
         self.logger.debug("Fetching fresh DefiLlama fundamentals...")
         try:
-            # Run all requests in parallel
             macro_task = self.get_macro_overview()
             dex_task = self.get_dex_volumes()
             fees_task = self.get_fees_data()
@@ -348,10 +339,9 @@ class DefiLlamaClient:
 
             macro, dex, fees, options = results
 
-            # Handle exceptions in results
             if isinstance(macro, Exception) or not macro:
                 self.logger.error("Failed to fetch macro data: %s", macro)
-                return None  # Macro is critical
+                return None
 
             if isinstance(dex, Exception):
                 self.logger.error("Failed to fetch DEX data: %s", dex)
@@ -370,7 +360,6 @@ class DefiLlamaClient:
                 options=options
             )
 
-            # Save to cache
             try:
                 cache_payload = {
                     "timestamp": current_time.isoformat(),

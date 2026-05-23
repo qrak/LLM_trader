@@ -231,7 +231,6 @@ class CryptoTradingBot:
             self.logger.error("Invalid timeframe or exit monitoring config '%s': %s", requested_timeframe, e)
             return
 
-        # Find exchange that supports the symbol
         exchange, exchange_id = await self.exchange_manager.find_symbol_exchange(symbol)
         if not exchange:
             self.logger.error("Symbol %s not found on any configured exchange", symbol)
@@ -241,18 +240,15 @@ class CryptoTradingBot:
         self.logger.info("Starting trading for %s on %s", symbol, exchange_id)
         self.logger.info("Timeframe: %s", self.current_timeframe)
 
-        # Initialize analyzer for this symbol
         self.market_analyzer.initialize_for_symbol(
             symbol=symbol,
             exchange=exchange,
             timeframe=self.current_timeframe
         )
 
-        # Enable running state before starting any async loops
         self.running = True
         check_count = 0
 
-        # Log current position if any
         if self.trading_strategy.current_position:
             position = self.trading_strategy.current_position
             self.logger.info("Existing position: %s @ $%s", position.direction, f"{position.entry_price:,.2f}")
@@ -260,10 +256,8 @@ class CryptoTradingBot:
         else:
             self.logger.info("No existing position")
 
-        # Fetch initial price for dashboard (one-time startup call)
         await self._fetch_current_ticker()
 
-        # Check if resuming from previous session (regardless of position status)
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
             self.logger.info(
@@ -273,7 +267,6 @@ class CryptoTradingBot:
             await self._wait_until_next_timeframe_after(last_analysis_time)
         self.logger.info("Ready for next analysis after wait")
 
-        # Initial run is considered regular (unless we want to skipping update on restart, but safer to update)
         is_regular_run = True
 
         while self.running:
@@ -281,12 +274,9 @@ class CryptoTradingBot:
                 check_count += 1
                 await self._execute_trading_check(check_count, force_news_update=is_regular_run, is_candle_close=is_regular_run)
 
-                # Check if still running before waiting
                 if not self.running:
                     break
 
-                # Wait for next timeframe
-                # Returns True if forced (interrupted), False if waited full duration (regular)
                 was_forced_wait = await self._wait_for_next_timeframe()
                 is_regular_run = not was_forced_wait
 
@@ -491,7 +481,6 @@ class CryptoTradingBot:
             timeframe = self.current_timeframe
             current_time_ms = int(time.time() * 1000)
 
-            # Calculate next candle start using validator (handles alignment)
             next_candle_ms = TimeframeValidator.calculate_next_candle_time(current_time_ms, timeframe)
             delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
             delay_seconds = max(0, delay_ms / 1000)
@@ -521,17 +510,14 @@ class CryptoTradingBot:
             if self.current_timeframe is None:
                 raise ValueError("current timeframe is not set")
             timeframe = self.current_timeframe
-            # Ensure last_time is timezone-aware (assume UTC if naive)
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
 
             current_time_ms = int(time.time() * 1000)
             last_time_ms = int(last_time.timestamp() * 1000)
 
-            # Calculate next candle after last analysis using validator (handles alignment)
             next_candle_ms = TimeframeValidator.calculate_next_candle_time(last_time_ms, timeframe)
 
-            # Check if we're past the next candle boundary
             if current_time_ms >= next_candle_ms:
                 self.logger.info(
                     "Resuming from last check at %s. Next candle already passed - proceeding immediately",
@@ -539,13 +525,10 @@ class CryptoTradingBot:
                 )
                 return
 
-            # Wait for next candle
-            # Use buffer to ensure we are safely into the next candle
             delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
             delay_seconds = max(0, delay_ms / 1000)
             next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
 
-            # Check if we're still within the same candle as the last analysis (for logging context)
             is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, timeframe)
 
             context_msg = "Still in same candle" if is_same else "Resuming wait"
@@ -578,9 +561,8 @@ class CryptoTradingBot:
         Returns:
             bool: True if sleep was interrupted by force_analysis, False otherwise
         """
-        start_time = time.monotonic()  # Use monotonic clock to track real elapsed time
+        start_time = time.monotonic()
 
-        # Only clear force analysis flag for main loop sleeps
         if respect_force_analysis:
             self._force_analysis.clear()
 
@@ -590,7 +572,6 @@ class CryptoTradingBot:
                 if elapsed >= seconds:
                     break
 
-                # Check for force analysis (only if this sleep respects it)
                 if respect_force_analysis and self._force_analysis.is_set():
                     self._force_analysis.clear()
                     self.logger.info("Force analysis triggered - interrupting wait")
@@ -600,7 +581,6 @@ class CryptoTradingBot:
                 sleep_time = min(SLEEP_CHUNK_SIZE, remaining)
                 await asyncio.sleep(sleep_time)
         except asyncio.CancelledError:
-            # Exit immediately on cancellation (graceful shutdown)
             self.logger.debug("Interruptible sleep cancelled during shutdown")
             return False
 

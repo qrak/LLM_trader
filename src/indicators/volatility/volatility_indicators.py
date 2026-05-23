@@ -218,7 +218,6 @@ def donchian_channels_numba(high, low, length=20):
             current_min = low[i]
             min_idx = i
 
-    # Calculate rolling max and min with O(N) amortized sliding window
     for i in range(length - 1, n):
         if math.isnan(high[i]):
             nan_count_high += 1
@@ -316,8 +315,6 @@ def choppiness_index_numba(high, low, close, length=14):
     if n <= length:
         return ci
 
-    # Pre-calculate True Range for the whole series
-    # tr[0] is 0 because there is no previous close, and the original loop skipped j=0
     tr = np.zeros(n)
     for i in range(1, n):
         tr[i] = max(
@@ -326,14 +323,11 @@ def choppiness_index_numba(high, low, close, length=14):
             abs(low[i] - close[i - 1])
         )
 
-    # Initial sum for the first window (at i = length)
-    # The window indices are from 1 to length (inclusive)
     current_tr_sum = 0.0
     for i in range(1, length + 1):
         current_tr_sum += tr[i]
 
     for i in range(length, n):
-        # Calculate highest high and lowest low over the period
         period_high = high[i - length + 1]
         period_low = low[i - length + 1]
         for j in range(i - length + 2, i + 1):
@@ -342,16 +336,13 @@ def choppiness_index_numba(high, low, close, length=14):
             if low[j] < period_low:
                 period_low = low[j]
 
-        # Calculate Choppiness Index
-        # CI = 100 * log10(sum(TR) / (highest_high - lowest_low)) / log10(length)
         range_hl = period_high - period_low
 
         if range_hl > 0 and current_tr_sum > 0:
             ci[i] = 100.0 * np.log10(current_tr_sum / range_hl) / np.log10(length)
         else:
-            ci[i] = 50.0  # Neutral value when range is zero
+            ci[i] = 50.0
 
-        # Update sum for next iteration
         if i < n - 1:
             current_tr_sum += tr[i + 1] - tr[i - length + 1]
 

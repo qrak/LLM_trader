@@ -194,7 +194,6 @@ class Config:
 
         google_max_tokens = self.get_config('model_config', 'google_max_tokens', None)
 
-        # Only enforce Google config if we are actually using it
         if google_max_tokens is None and self.PROVIDER in ('googleai', 'all'):
             raise RuntimeError("`google_max_tokens` is required in [model_config] of config.ini when using Google models")
 
@@ -202,9 +201,6 @@ class Config:
             "max_tokens": google_max_tokens,
             "thinking_level": self.get_config('model_config', 'google_thinking_level', 'high'),
             "google_code_execution": self.get_config('model_config', 'google_code_execution', False),
-            "temperature": self.get_config('model_config', 'google_temperature', None),
-            "top_p": self.get_config('model_config', 'google_top_p', None),
-            "top_k": self.get_config('model_config', 'google_top_k', None)
         }
 
     def get_env(self, key: str, default: Any = None) -> Any:
@@ -276,7 +272,7 @@ class Config:
 
     @property
     def GOOGLE_STUDIO_MODEL(self):
-        return self.get_config('ai_providers', 'google_studio_model', 'gemini-2.5-flash')
+        return self.get_config('ai_providers', 'google_studio_model', 'gemini-3.5-flash')
 
     @property
     def MODEL_VERBOSITY(self) -> str:
@@ -522,21 +518,6 @@ class Config:
     def MAX_POSITION_SIZE(self):
         """Maximum allowed position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in RiskManager."""
         return float(self.get_config('risk_management', 'max_position_size', 0.10))
-
-    @property
-    def GUARD_PIPELINE_ENABLED(self) -> bool:
-        """Whether to enable the opt-in pre-execution order guard pipeline."""
-        return bool(self.get_config('risk_management', 'guard_pipeline_enabled', False))
-
-    @property
-    def SYMBOL_WHITELIST(self) -> list[str]:
-        """Additional symbols allowed by the optional symbol whitelist guard."""
-        raw_symbols = self.get_config('risk_management', 'symbol_whitelist', [])
-        if not raw_symbols:
-            return []
-        if isinstance(raw_symbols, list):
-            return [str(symbol).strip() for symbol in raw_symbols if str(symbol).strip()]
-        return [symbol.strip() for symbol in str(raw_symbols).split(',') if symbol.strip()]
 
     @property
     def POSITION_SIZE_FALLBACK_LOW(self) -> float:

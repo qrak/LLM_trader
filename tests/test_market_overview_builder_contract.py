@@ -188,7 +188,7 @@ class TestBuildOverview:
         result = builder.build_overview(None, None)
         assert isinstance(result, dict)
 
-    def test_error_fallback_contains_timestamp(self, builder):
+    def test_error_fallback_contains_timestamp(self):
         # Force an error by making processor raise
         broken_builder = MarketOverviewBuilder(
             logger=MagicMock(),

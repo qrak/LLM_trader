@@ -90,7 +90,7 @@ class MarketFormatter:
 
 
     def format_coin_details_section(self, coin_details: dict[str, Any], max_description_tokens: int = 256) -> str:
-        """Format coin details into a compressed section (removed low-trading-value data)
+        """Format coin details into a compressed section.
 
         Args:
             coin_details: Dictionary containing coin details from market metadata provider
@@ -101,9 +101,6 @@ class MarketFormatter:
         """
         if not coin_details:
             return ""
-
-        # Only include high-value trading data (removed: Algorithm, Proof Type, Regulatory Classifications, Weiss Ratings)
-        # These rarely change and don't impact immediate trading decisions
 
         section = "## Cryptocurrency Details\n"
 

@@ -216,10 +216,8 @@ class _ApiRetryContext:
         """Check if the response indicates a retryable error. Supports both dict and SDK Pydantic objects."""
         if response is None:
             return False
-        # Handle dict responses (legacy HTTP-based clients)
         if isinstance(response, dict):
             return self._check_dict_response(response)
-        # Handle SDK Pydantic response objects (duck-typing)
         return self._check_sdk_response(response)
 
     def _check_dict_response(self, response: dict[str, Any]) -> bool:

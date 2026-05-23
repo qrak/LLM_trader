@@ -33,20 +33,17 @@ class AlternativeMeAPI:
         self.current_index: dict[str, Any] | None = None
         self.session: aiohttp.ClientSession | None = None
 
-        # Ensure cache directory exists
         os.makedirs(data_dir, exist_ok=True)
 
     async def initialize(self) -> None:
         """Initialize the API client and load cached data"""
         self.session = aiohttp.ClientSession()
 
-        # Check if we have cached fear & greed data
         if await asyncio.to_thread(os.path.exists, self.fear_greed_cache_file):
             try:
                 cached_data = await asyncio.to_thread(self._read_cache_file)
                 if "timestamp" in cached_data and "data" in cached_data:
                     loaded_time = datetime.fromisoformat(cached_data["timestamp"])
-                    # Ensure timezone-aware (old caches may be naive)
                     if loaded_time.tzinfo is None:
                         loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                     self.last_update = loaded_time
@@ -78,7 +75,6 @@ class AlternativeMeAPI:
         """
         current_time = datetime.now(timezone.utc)
 
-        # Check if we should use cached data
         if not force_refresh and self.last_update and self.current_index and \
            current_time - self.last_update < self.update_interval:
             self.logger.debug("Using cached Fear & Greed data from %s", self.last_update.isoformat())

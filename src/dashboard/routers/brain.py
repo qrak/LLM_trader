@@ -52,7 +52,7 @@ def _read_json_file(file_path: Path) -> Any:
 
 
 def _extract_persisted_technical_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Return persisted indicator values from new or legacy previous_response shapes."""
+    """Return persisted indicator values from previous response data."""
     technical_data = data.get("technical_data")
     if technical_data:
         return technical_data
@@ -244,7 +244,7 @@ class BrainRouter:
         return format_exit_execution_context(resolved, include_unknown=True).removeprefix("Exit Execution: ")
 
     def _render_rule_text(self, rule_text: str, metadata: dict[str, Any]) -> str:
-        """Return dashboard rule text with legacy unknown exit profile corrected."""
+        """Return dashboard rule text with unknown exit profile corrected."""
         if self.UNKNOWN_EXIT_PROFILE not in rule_text:
             return rule_text
         replacement_profile = self._resolve_rule_exit_profile(metadata)

@@ -10,7 +10,7 @@ from src.trading.guards import GuardResult
 from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
-from src.trading.guards.symbol_whitelist import SymbolWhitelistGuard
+from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.order_lifecycle import OrderIntent, OrderLifecycle
 from src.trading.trading_strategy import TradingStrategy
 
@@ -92,7 +92,6 @@ def _make_strategy(
         DEMO_QUOTE_CAPITAL=10000.0,
         TIMEFRAME="4h",
         CRYPTO_PAIR="BTC/USDC",
-        SYMBOL_WHITELIST=[],
         MAX_POSITION_SIZE=0.10,
         DATA_DIR="data",
         STOP_LOSS_TYPE="soft",
@@ -152,28 +151,65 @@ def test_max_position_guard_only_rejects_explicit_over_cap_size() -> None:
     invalid_size_intent.position_size = 0.0
     invalid_size_result = guard.check(invalid_size_intent, capital=10000.0, config=config)
 
+    string_max_size_result = guard.check(
+        _make_intent(),
+        capital=10000.0,
+        config=SimpleNamespace(MAX_POSITION_SIZE="0.10"),
+    )
+
     over_cap_intent = _make_intent()
     over_cap_intent.position_size = 0.42
     over_cap_result = guard.check(over_cap_intent, capital=10000.0, config=config)
 
     assert missing_size_result.passed is True
     assert invalid_size_result.passed is True
+    assert string_max_size_result.passed is True
+    assert string_max_size_result.metadata["max_size"] == 0.10
     assert over_cap_result.passed is False
     assert "exceeds maximum" in over_cap_result.reason
 
 
-def test_symbol_whitelist_guard_allows_primary_and_configured_extra_symbols() -> None:
-    guard = SymbolWhitelistGuard()
-    config = SimpleNamespace(CRYPTO_PAIR="BTC/USDC", SYMBOL_WHITELIST=["ETH/USDC"])
+def test_max_position_guard_rejects_invalid_max_position_size_config() -> None:
+    guard = MaxPositionSizeGuard()
+
+    text_config_result = guard.check(
+        _make_intent(),
+        capital=10000.0,
+        config=SimpleNamespace(MAX_POSITION_SIZE="not-a-number"),
+    )
+    nan_config_result = guard.check(
+        _make_intent(),
+        capital=10000.0,
+        config=SimpleNamespace(MAX_POSITION_SIZE=float("nan")),
+    )
+
+    assert text_config_result.passed is False
+    assert "not a valid number" in text_config_result.reason
+    assert nan_config_result.passed is False
+    assert "positive finite decimal" in nan_config_result.reason
+
+
+def test_max_position_guard_lets_non_finite_requested_size_fall_back_to_risk_manager() -> None:
+    guard = MaxPositionSizeGuard()
+    config = SimpleNamespace(MAX_POSITION_SIZE=0.10)
+    intent = _make_intent()
+    intent.position_size = float("inf")
+
+    result = guard.check(intent, capital=10000.0, config=config)
+
+    assert result.passed is True
+    assert "RiskManager fallback sizing" in result.reason
+
+
+def test_configured_symbol_guard_only_allows_configured_pair() -> None:
+    guard = ConfiguredSymbolGuard()
+    config = SimpleNamespace(CRYPTO_PAIR="BTC/USDC")
 
     primary_intent = _make_intent()
-    extra_intent = _make_intent()
-    extra_intent.symbol = "ETH/USDC"
     rejected_intent = _make_intent()
-    rejected_intent.symbol = "DOGE/USDC"
+    rejected_intent.symbol = "ETH/USDC"
 
     assert guard.check(primary_intent, capital=10000.0, config=config).passed is True
-    assert guard.check(extra_intent, capital=10000.0, config=config).passed is True
     assert guard.check(rejected_intent, capital=10000.0, config=config).passed is False
 
 
@@ -211,7 +247,7 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
     audit_trail = AuditTrail()
     pipeline = GuardPipeline(
         [
-            SymbolWhitelistGuard(),
+            ConfiguredSymbolGuard(),
             MaxPositionSizeGuard(),
             CooldownWindowGuard(),
         ],
@@ -238,7 +274,7 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
     strategy.risk_manager.calculate_entry_parameters.assert_not_called()
     assert [record.actor for record in audit_trail.all_records] == [
         "TradingStrategy",
-        "symbol_whitelist",
+        "configured_symbol",
         "max_position_size",
         "GuardPipeline",
     ]

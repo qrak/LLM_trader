@@ -1,213 +1,106 @@
 [ai_providers]
-# Options: "local", "googleai", "openrouter", "all"
-# - "local": Use LM Studio only
-# - "googleai": Use Google AI Studio only
-# - "openrouter": Use OpenRouter only
-# - "all": Use fallback system (tries primary providers first, then falls back)
 provider = googleai
 
-# Base URL for local LM Studio instance (e.g., http://localhost:1234/v1)
 lm_studio_base_url = http://localhost:1234/v1
-# Model identifier to use with LM Studio, leave empty for auto select
 lm_studio_model =
-# Enable streaming for LM Studio (true/false)
 lm_studio_streaming = false
 
-# Base URL for OpenRouter API; passed to the SDK as server_url
 openrouter_base_url = https://openrouter.ai/api/v1
-# Primary model to use with OpenRouter
 openrouter_base_model = google/gemini-3-flash-preview
-# One-retry fallback model if the primary OpenRouter model fails validation or is rate-limited.
-# For chart analysis, use a vision-capable fallback model.
 openrouter_fallback_model = deepseek/deepseek-r1:free
 
-# Model identifier for Google AI Studio (e.g., gemini-flash-latest, gemini-2.5-flash)
-google_studio_model = gemini-3-flash-preview
+google_studio_model = gemini-3.5-flash
 
 [general]
-# Default cryptocurrency pair to analyze if none specified
 crypto_pair = BTC/USDC
-# Default timeframe for technical analysis (e.g., 5m, 15m, 30m, 1h, 4h, 1d).
-# Lower timeframes than 1h are supported, but a fixed candle_limit covers fewer days of history.
 timeframe = 4h
-# Number of candles to fetch for internal technical analysis calculation
 candle_limit = 999
-# Number of candles to visualize in the chart images sent to the AI
 ai_chart_candle_limit = 125
-# Master switch to enable or disable the Discord bot integration
 discord_bot = false
 
-# Whether to include project description in coin details (useful for unknown tokens)
 include_coin_description = false
 
 [debug]
-# Save generated chart images to disk for debugging purposes
 save_chart_images = false
-# Directory path to save debug chart images
 chart_save_path = chart_images
-# Enable detailed logic (DEBUG level) logging
 logger_debug = true
 
 [directories]
-# Directory to store log files
 log_dir = logs
-# Directory to store persistent data
 data_dir = data
 
 [rag]
-# Cache validity duration (in hours).
-# - Automatic Analysis: ALWAYS fetches fresh news (ignores this).
-# - Manual Analysis ('a'): Uses cached news if younger than this interval. Set to 0 for always fresh.
 update_interval_hours = 4
-# Frequency (in hours) to update news categories
 categories_update_interval_hours = 168
-# Frequency (in hours) to refresh the CoinGecko coin list
 coingecko_update_interval_hours = 24
-# Frequency (in hours) to refresh DefiLlama fundamentals data (0.25 = 15 minutes)
 defillama_update_interval_hours = 0.25
-# API endpoint for CoinGecko global market data
 coingecko_global_api_url = https://api.coingecko.com/api/v3/global
-# Maximum number of news articles to include in the AI's context
 news_limit = 5
-# Maximum number of tokens per article chunk for processing
 article_max_tokens = 1000
-# Enabled RSS source keys (comma-separated).
-# This is a FILTER over the URL registry below. Leave empty to enable all
-# configured news_source_*_url entries.
 news_sources =
-# RSS source URL registry (key -> URL).
-# Keys here must match values used in `news_sources`.
 news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
 news_source_cointelegraph_url = https://cointelegraph.com/rss
 news_source_decrypt_url = https://decrypt.co/feed
 news_source_cryptoslate_url = https://cryptoslate.com/feed/
-# Enrich short RSS bodies by fetching article pages
 news_page_enrichment = true
-# Minimum body length before attempting page enrichment
 news_min_body_chars = 400
-# Timeout for RSS/page requests in seconds
 news_timeout_seconds = 20
-# Overall timeout budget for market knowledge refresh during trading checks.
-# If exceeded, the bot continues analysis using cached/partial news.
 rag_update_timeout_seconds = 180
-# Outer timeout for the full RSS fetch stage across all sources.
 news_fetch_total_timeout_seconds = 45
-# Outer timeout for full article-body enrichment batch.
 news_enrichment_timeout_seconds = 120
-# Max concurrent page-enrichment requests
 news_max_concurrency = 6
-# Cap articles fetched per source
 news_max_items_per_source = 100
-# Smart scoring: content density thresholds
 density_penalty_threshold = 300
 density_boost_threshold = 1000
 density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
-# Smart scoring: co-occurrence bonus when all query terms appear
 cooccurrence_multiplier = 1.5
-# Use Crawl4AI browser-based enrichment (true/false)
-# Requires: pip install crawl4ai && crawl4ai-setup
-# Default false - uses plain aiohttp HTML extraction instead
 news_crawl4ai_enabled = true
-# Per-page timeout for Crawl4AI in seconds (defaults to news_timeout_seconds)
 news_crawl_timeout = 120
 
 [exchanges]
-# List of exchanges to use for symbol lookup (in priority order)
 supported = binance,kucoin,gateio,mexc,hyperliquid
-# Frequency (in hours) to refresh exchange market data
 market_refresh_hours = 24
 
 [demo_trading]
-# Simulated capital in quote currency (e.g., USDC) for position size calculation
 demo_quote_capital = 10000
-# Transaction fee percentage for limit orders (0.00075 = 0.075%)
 transaction_fee_percent = 0.00075
 
 [risk_management]
-# Exit execution type: soft = candle-close checks, hard = bot-side interval checks on live ticker
 stop_loss_type = hard
 take_profit_type = hard
-# Hard-exit check intervals. Must be <= [general] timeframe.
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
-# Maximum position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in code.
 max_position_size = 0.10
-# Optional pre-execution order guards. Disabled by default to preserve existing risk-manager behavior.
-guard_pipeline_enabled = false
-# Additional symbols allowed when guard_pipeline_enabled is true. The configured crypto_pair is always allowed.
-symbol_whitelist =
-# Fallback sizes used only when the AI omits position_size or returns an invalid value.
 position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02
 position_size_fallback_high = 0.03
 
-# Stop-loss tightening policy: minimum price-to-TP progress required before tightening SL,
-# expressed as a decimal fraction (e.g. 0.20 = 20% of entry-to-TP distance must be covered).
-# Separate defaults per timeframe bucket preserve current executor behavior.
 sl_tightening_scalping = 0.25
 sl_tightening_intraday = 0.20
 sl_tightening_swing = 0.15
 sl_tightening_position = 0.10
-# Safety bounds: the brain cannot push the learned threshold outside [floor, ceiling].
 sl_tightening_floor = 0.05
 sl_tightening_ceiling = 0.40
-# Minimum number of paired update/outcome samples before trusting a brain override.
 sl_tightening_min_samples = 10
 
 [cooldowns]
-# File message expiry is configured in hours; loader converts it to seconds at runtime.
 file_message_expiry = 168
 
 [model_config]
-# Default model configuration parameters
-# OpenRouter uses temperature, top_p, and canonical penalty names below; unsupported top_k is dropped.
-# Controls randomness: 0.0 = deterministic, 1.0 = creative
 temperature = 0.7
-# Nucleus sampling: considering tokens with top_p probability mass
 top_p = 0.9
-# Top-k sampling: considering the top k most likely tokens
 top_k = 40
-# Frequency penalty to reduce repetition; old freq_penalty alias is still accepted but deprecated
-#frequency_penalty = 0.1
-# Presence penalty to encourage new topics; old pres_penalty alias is still accepted but deprecated
-#presence_penalty = 0.1
-# Maximum number of tokens to generate in the response
 max_tokens = 32768
 
-# Google configuration overrides for Gemini 3.5 Flash.
-# Optional legacy sampling keys are forwarded only for Google AI Studio Gemini 1.x/2.x models.
-# Gemini 3.x omits sampling to avoid 400 INVALID_ARGUMENT responses.
-#google_temperature = 1.0
-#google_top_p = 0.95
-#google_top_k = 40
-# Thinking Level: Controls reasoning depth (minimal, low, medium, high). Default: high.
-# Ignored for models that don't support thinking.
 google_max_tokens = 32768
 google_thinking_level = high
-# Agentic Vision (Code Execution): Enables the model to generate and run Python code
-# to analyze images more precisely (e.g., zooming, counting, calculations).
-# Available for Gemini 3 Flash+ models via Google AI Studio API only (not OpenRouter).
-# May increase token usage slightly but improves accuracy for complex visual analysis.
 google_code_execution = false
-# Controls narrative depth in the AI's analysis above the required fenced JSON block.
-# The JSON execution block is always present regardless of this setting.
-# Options: "low" (3-line signal-only), "medium" (5-line condensed), "high" (13-line deep technical breakdown).
 model_verbosity = high
 
 [dashboard]
-# Enable or disable the web dashboard entirely (true/false)
-# Can also be toggled at runtime via keyboard: 'd'
 enabled = true
-# Host to bind the dashboard server to
-# Use 127.0.0.1 for local access only (Recommended for security)
-# Use 0.0.0.0 to allow access from other devices on the network
 host = 0.0.0.0
-# Port to listen on
 port = 8000
-# Enable Cross-Origin Resource Sharing (CORS)
-# Set to true only if you need to access the API from a different domain/port (e.g. external tools)
 enable_cors = false
-# Comma-separated list of allowed origins (e.g. http://localhost:3000, http://example.com)
-# Use "*" to allow all origins (NOT recommended for production)
 cors_origins = *

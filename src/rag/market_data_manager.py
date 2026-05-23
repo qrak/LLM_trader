@@ -31,7 +31,6 @@ class MarketDataManager:
         self.file_handler = file_handler
         self.unified_parser = unified_parser
 
-        # Initialize specialized components
         self.fetcher = fetcher
         self.processor = processor
         self.cache = cache or MarketDataCache(logger=logger, file_handler=file_handler)
@@ -42,7 +41,7 @@ class MarketDataManager:
         self.exchange_manager = exchange_manager
     @property
     def current_market_overview(self) -> dict[str, Any] | None:
-        """Backward-compatible alias for cache-backed overview state."""
+        """Cache-backed overview state."""
         return self.cache.current_market_overview
 
     @current_market_overview.setter
@@ -52,22 +51,16 @@ class MarketDataManager:
     async def fetch_market_overview(self) -> dict[str, Any] | None:
         """Fetch overall market data from various sources concurrently."""
         try:
-            # Use fetcher component to get global data
             coingecko_data = await self.fetcher.fetch_global_market_data()
 
-            # Use processor to extract top coins
             top_coins = self.processor.extract_top_coins(coingecko_data)
 
-            # Use fetcher to get price data
             price_data = await self.fetcher.fetch_price_data(top_coins)
 
-            # Fetch macro data (DefiLlama) - keeping for backward compatibility
             macro_data = await self.fetcher.fetch_macro_data()
 
-            # Fetch comprehensive DeFi fundamentals (aggregated)
             defi_fundamentals = await self.fetcher.fetch_defi_fundamentals()
 
-            # Use overview builder to create final structure
             overview = self.overview_builder.build_overview(coingecko_data, price_data, top_coins)
 
             if macro_data:

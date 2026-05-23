@@ -6,7 +6,6 @@ let cachedPrompt = null;
 let cachedResponse = null;
 
 export async function updateLogs() {
-    // Legacy function - now we update dedicated tabs instead
     await updatePromptTab();
     await updateResponseTab();
 }

@@ -3,7 +3,7 @@
 import pytest
 
 from src.trading.data_models import Position
-from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 
 
 # ─────────────────────────────────────────────────────────────────

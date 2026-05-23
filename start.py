@@ -88,7 +88,7 @@ from src.trading.audit import AuditTrail
 from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
-from src.trading.guards.symbol_whitelist import SymbolWhitelistGuard
+from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -266,7 +266,7 @@ class CompositionRoot:
         self._init_directories()
         infra = await self._provision_infrastructure()
         utils = self._provision_utilities()
-        apis = await self._provision_platforms(infra, utils)
+        apis = await self._provision_platforms(infra)
         rag = await self._provision_rag_layer(infra, apis, utils)
         models = self._provision_model_layer(utils)
         analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
@@ -327,7 +327,6 @@ class CompositionRoot:
         os.makedirs(os.path.join(data_dir, "trading"), exist_ok=True)
         os.makedirs(os.path.join(data_dir, "charts"), exist_ok=True)
 
-        # Calculate symbol-specific brain dir
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_dir = os.path.join(data_dir, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
         os.makedirs(brain_dir, exist_ok=True)
@@ -351,7 +350,6 @@ class CompositionRoot:
         format_utils = FormatUtils()
         parser = UnifiedParser(self.logger, format_utils=format_utils)
         token_counter = TokenCounter()
-        # SentenceSplitter removed (simplified NLP)
         ti_factory = TechnicalIndicatorsFactory()
         timeframe_validator = TimeframeValidator()
         data_fetcher_factory = DataFetcherFactory(self.logger)
@@ -361,14 +359,13 @@ class CompositionRoot:
             'format_utils': format_utils,
             'parser': parser,
             'token_counter': token_counter,
-            # 'sentence_splitter': sentence_splitter, # Removed
             'ti_factory': ti_factory,
             'timeframe_validator': timeframe_validator,
             'data_fetcher_factory': data_fetcher_factory,
             'collision_resolver': collision_resolver
         }
 
-    async def _provision_platforms(self, infra: dict, utils: dict) -> dict:
+    async def _provision_platforms(self, infra: dict) -> dict:
         """Provision external API clients."""
         from aiohttp_client_cache import SQLiteBackend
         coingecko_backend = SQLiteBackend(cache_name='cache/coingecko_cache.db', expire_after=-1)
@@ -531,21 +528,17 @@ class CompositionRoot:
 
         _configure_hf_hub_auth()
 
-        # Calculate specialized brain path
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_path = os.path.join(self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
 
-        # Create symbol-specific chroma client
         chroma_client = chromadb.PersistentClient(path=brain_path)
 
-        # Auto-detect best hardware accelerator; log for observability
         embed_device = _get_best_device()
         self.logger.info("Embedding device: %s", embed_device)
         embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
         timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
         timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
 
-        # Inject chroma_client into VectorMemoryService
         vector_memory = VectorMemoryService(
             self.logger,
             chroma_client,
@@ -576,19 +569,15 @@ class CompositionRoot:
         exit_monitor = ExitMonitor(self.config, timeframe, POSITION_UPDATE_INTERVAL)
         exit_monitor.validate()
         audit_trail = AuditTrail()
-        guard_pipeline = None
-        if self.config.GUARD_PIPELINE_ENABLED:
-            guard_pipeline = GuardPipeline(
-                [
-                    SymbolWhitelistGuard(),
-                    MaxPositionSizeGuard(),
-                    CooldownWindowGuard(),
-                ],
-                audit_trail=audit_trail,
-            )
-            self.logger.info("Order guard pipeline enabled: %s", ", ".join(guard_pipeline.guard_names))
-        else:
-            self.logger.info("Order guard pipeline disabled; RiskManager guardrails remain active")
+        guard_pipeline = GuardPipeline(
+            [
+                ConfiguredSymbolGuard(),
+                MaxPositionSizeGuard(),
+                CooldownWindowGuard(),
+            ],
+            audit_trail=audit_trail,
+        )
+        self.logger.info("Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names))
         
         from src.factories.position_factory import PositionFactory
         strategy = TradingStrategy(
@@ -660,7 +649,7 @@ class CompositionRoot:
     
     async def run_async(self):
         """Async entry point for the application."""
-        def _asyncio_exception_handler(loop, context):
+        def _asyncio_exception_handler(_loop, context):
             exc = context.get("exception")
             msg = context.get("message", "Unknown asyncio error")
             if exc is not None:
@@ -678,7 +667,6 @@ class CompositionRoot:
 
         dependencies = await self.build_dependencies()
 
-        # Extract dashboard_server before passing to bot (bot doesn't accept it)
         dashboard_server = dependencies.pop('dashboard_server', None)
 
         bot = CryptoTradingBot(
@@ -706,7 +694,6 @@ class CompositionRoot:
             symbol = self.config.CRYPTO_PAIR
             timeframe = self.config.TIMEFRAME
 
-            # Track whether dashboard is currently running
             dashboard_running = False
 
             async def _toggle_dashboard():
@@ -728,26 +715,22 @@ class CompositionRoot:
 
             self.logger.info("Keyboard commands: 'a' = force analysis, 'd' = toggle dashboard, 'h' = help, 'q' = quit")
 
-            # Auto-start dashboard if enabled in config (fire-and-forget task)
             if dashboard_server and self.config.DASHBOARD_ENABLED:
                 await dashboard_server.start()
                 dashboard_running = True
             elif not self.config.DASHBOARD_ENABLED:
                 self.logger.info("Dashboard disabled (config). Press 'd' to start it.")
 
-            # Bot runs in the foreground here; dashboard lifecycle is managed by _toggle_dashboard.
             await bot.run(symbol, timeframe)
 
         except asyncio.CancelledError:
             self.logger.info("Trading cancelled, shutting down...")
         finally:
-            # Clean up dashboard server
             if dashboard_server:
                 await dashboard_server.stop()
     
     def start(self):
         """Main entry point with clean shutdown delegation."""
-        # Initialize lock manager
         single_instance_lock = SingleInstanceLock()
         
         if not single_instance_lock.acquire():

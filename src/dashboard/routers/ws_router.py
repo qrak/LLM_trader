@@ -63,7 +63,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Legacy reference for  compatibility (read-only usage recommended)
 connected_clients = manager.active_connections
 
 

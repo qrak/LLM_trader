@@ -389,7 +389,6 @@ class VectorMemoryService(
             if collection is None or collection.count() == 0:
                 return []
 
-            cutoff = datetime.now(timezone.utc).isoformat()
             all_blocks = collection.get(include=["metadatas", "documents"])
 
             if not all_blocks or not all_blocks.get("ids"):

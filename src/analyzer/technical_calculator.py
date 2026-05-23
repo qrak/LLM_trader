@@ -37,15 +37,11 @@ class TechnicalCalculator:
 
         indicators = {}
 
-        # Calculate indicators by category
         indicators.update(self._calculate_volume_indicators())
         indicators.update(self._calculate_momentum_indicators())
         indicators.update(self._calculate_volatility_indicators(ohlcv_data))
         indicators.update(self._calculate_trend_indicators())
         indicators.update(self._calculate_support_resistance_indicators())
-
-
-
         return indicators
 
     def _calculate_volume_indicators(self) -> dict[str, np.ndarray]:
@@ -108,30 +104,25 @@ class TechnicalCalculator:
             np.nan
         )
 
-        # Keltner Channels
         kc_upper, kc_middle, kc_lower = self.ti.keltner_channels(length=20, multiplier=2)
         indicators["kc_upper"] = kc_upper
         indicators["kc_middle"] = kc_middle
         indicators["kc_lower"] = kc_lower
 
-        # Donchian Channels (only retain extremes for formatting/patterns)
         donchian_upper, _, donchian_lower = self.ti.donchian_channels(length=20)
         indicators["donchian_upper"] = donchian_upper
         indicators["donchian_lower"] = donchian_lower
 
-        # Chandelier Exit
         long_exit, short_exit = self.ti.chandelier_exit(length=20, multiplier=3.0)
         indicators["chandelier_long"] = long_exit
         indicators["chandelier_short"] = short_exit
 
-        # Choppiness Index
         indicators["choppiness"] = self.ti.choppiness_index(length=14)
 
         return indicators
 
     def _calculate_trend_indicators(self) -> dict[str, np.ndarray]:
         """Calculate trend indicators"""
-        # Calculate ADX once
         adx, plus_di, minus_di = self.ti.adx(length=14)
 
         indicators = {
@@ -225,7 +216,6 @@ class TechnicalCalculator:
 
     def get_long_term_indicators(self, ohlcv_data: np.ndarray) -> dict[str, Any]:
         """Calculate long-term indicators for historical data - no caching, always fresh"""
-        # Create new TI instance for long-term calculations (avoid interference with regular timeframe indicators)
         ti_lt = self.ti_factory.create_for_long_term(ohlcv_data)
         available_days = len(ohlcv_data)
 
@@ -235,7 +225,6 @@ class TechnicalCalculator:
 
         daily_indicators = self._compute_daily_indicators(ti_lt, available_days)
 
-        # Add macro trend analysis based on SMA relationships (pass already-calculated price_change_pct)
         macro_trend_analysis = self._compute_macro_trend_analysis(ti_lt, available_days, sma_values, price_change_pct)
 
         result = {
@@ -480,38 +469,30 @@ class TechnicalCalculator:
 
         current_price = float(ti.close[-1])
 
-        # Use already-calculated price change percentage (no redundant calculation)
         analysis['long_term_price_change_pct'] = price_change_pct
-        if self.logger:
-            pass # self.logger.debug("Macro trend: %s-day price change = %s%%", available_days, f"{price_change_pct:.2f}")
 
-        # Check price position relative to key SMAs
         if 200 in sma_values:
             analysis['price_above_200sma'] = current_price > sma_values[200]
 
-        # Analyze SMA 50 vs SMA 200 relationship (Golden/Death Cross context)
         if 50 in sma_values and 200 in sma_values:
             sma_50 = sma_values[50]
             sma_200 = sma_values[200]
 
             if sma_50 > sma_200:
                 analysis['sma_50_vs_200'] = 'Bullish'
-                # Check if this could be a golden cross scenario
-                if available_days >= 250:  # Need enough data to check trend
-                    sma_50_prev = ti.sma(ti.close, 50)[-10]  # 10 periods ago
+                if available_days >= 250:
+                    sma_50_prev = ti.sma(ti.close, 50)[-10]
                     sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev <= sma_200_prev and sma_50 > sma_200:
                         analysis['golden_cross'] = True
             elif sma_50 < sma_200:
                 analysis['sma_50_vs_200'] = 'Bearish'
-                # Check if this could be a death cross scenario
                 if available_days >= 250:
                     sma_50_prev = ti.sma(ti.close, 50)[-10]
                     sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev >= sma_200_prev and sma_50 < sma_200:
                         analysis['death_cross'] = True
 
-        # Determine overall SMA alignment
         if 20 in sma_values and 50 in sma_values and 100 in sma_values and 200 in sma_values:
             smas = [sma_values[20], sma_values[50], sma_values[100], sma_values[200]]
             if all(smas[i] >= smas[i+1] for i in range(len(smas)-1)):
@@ -521,8 +502,6 @@ class TechnicalCalculator:
             else:
                 analysis['sma_alignment'] = 'Mixed'
 
-        # Determine overall trend direction with improved logic
-        # Count bullish signals
         bullish_signals = []
         if analysis['price_above_200sma']:
             bullish_signals.append('price_above_200sma')
@@ -532,14 +511,12 @@ class TechnicalCalculator:
             bullish_signals.append('golden_cross')
         if analysis['sma_alignment'] == 'Bullish (Ascending)':
             bullish_signals.append('sma_alignment')
-        # Add price change as a signal if significant
         if analysis['long_term_price_change_pct'] is not None:
-            if analysis['long_term_price_change_pct'] > 20:  # More than 20% gain
+            if analysis['long_term_price_change_pct'] > 20:
                 bullish_signals.append('strong_price_appreciation')
-            elif analysis['long_term_price_change_pct'] > 10:  # More than 10% gain
+            elif analysis['long_term_price_change_pct'] > 10:
                 bullish_signals.append('moderate_price_appreciation')
 
-        # Count bearish signals
         bearish_signals = []
         if not analysis['price_above_200sma']:
             bearish_signals.append('price_below_200sma')
@@ -549,17 +526,14 @@ class TechnicalCalculator:
             bearish_signals.append('death_cross')
         if analysis['sma_alignment'] == 'Bearish (Descending)':
             bearish_signals.append('sma_alignment')
-        # Add price change as a signal if significantly negative
         if analysis['long_term_price_change_pct'] is not None:
-            if analysis['long_term_price_change_pct'] < -20:  # More than 20% loss
+            if analysis['long_term_price_change_pct'] < -20:
                 bearish_signals.append('strong_price_decline')
-            elif analysis['long_term_price_change_pct'] < -10:  # More than 10% loss
+            elif analysis['long_term_price_change_pct'] < -10:
                 bearish_signals.append('moderate_price_decline')
 
         bullish_count = len(bullish_signals)
         bearish_count = len(bearish_signals)
-
-        # self.logger.debug("Macro trend bearish signals (%s): %s", bearish_count, bearish_signals)
 
         # Determine trend direction (need at least 2 signals for clear direction)
         if bullish_count >= 2 and bullish_count > bearish_count:

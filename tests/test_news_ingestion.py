@@ -18,7 +18,7 @@ import tempfile
 import time
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -29,7 +29,6 @@ from src.rag.news_ingestion.rss_primitives import (
     extract_html_body_text,
     parse_rss_items,
     dedupe_by_url,
-    sort_by_date,
 )
 from src.rag.news_ingestion.schema_mapper import make_article_id, to_article_schema
 from src.rag.local_taxonomy import LocalTaxonomyProvider

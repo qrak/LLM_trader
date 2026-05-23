@@ -6,7 +6,6 @@ build_context_string_from_technical_data.
 """
 from types import SimpleNamespace
 
-import pytest
 
 from src.utils.indicator_classifier import (
     classify_adx_label,

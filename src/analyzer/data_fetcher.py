@@ -194,11 +194,9 @@ class DataFetcher:
         """
 
         try:
-            # Validate exchange capabilities
             if not self._validate_exchange_support():
                 return {}
 
-            # Fetch and process ticker data
             tickers = await self.exchange.fetch_tickers(symbols)
             if not tickers:
                 self.logger.warning("No ticker data returned from exchange")
@@ -247,16 +245,13 @@ class DataFetcher:
     def _add_ticker_to_result(self, result: dict[str, Any], base_currency: str,
                             quote_currency: str, ticker: dict[str, Any]) -> None:
         """Add processed ticker data to result structure."""
-        # Initialize structure if needed
         if base_currency not in result["RAW"]:
             result["RAW"][base_currency] = {}
         if base_currency not in result["DISPLAY"]:
             result["DISPLAY"][base_currency] = {}
 
-        # Add RAW data
         result["RAW"][base_currency][quote_currency] = self._create_raw_ticker_data(ticker)
 
-        # Add DISPLAY data
         result["DISPLAY"][base_currency][quote_currency] = self._create_display_ticker_data(
             ticker, quote_currency
         )
@@ -421,7 +416,6 @@ class DataFetcher:
             Returns None if fetch fails or exchange doesn't support order books
         """
         try:
-            # Check exchange support
             if not self.exchange.has.get('fetchOrderBook', False):
                 self.logger.debug("Exchange %s does not support fetchOrderBook", self.exchange.id)
                 return None
@@ -520,7 +514,6 @@ class DataFetcher:
             Returns None if fetch fails or exchange doesn't support trades
         """
         try:
-            # Check exchange support
             if not self.exchange.has.get('fetchTrades', False):
                 self.logger.debug("Exchange %s does not support fetchTrades", self.exchange.id)
                 return None
@@ -531,17 +524,14 @@ class DataFetcher:
                 self.logger.warning("No trades returned for %s", pair)
                 return None
 
-            # Calculate buy/sell volumes
             buy_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'buy')
             sell_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'sell')
             total_volume = buy_volume + sell_volume
 
-            # Calculate time span and velocity
             time_span_ms = trades[-1]['timestamp'] - trades[0]['timestamp']
             time_span_minutes = time_span_ms / (1000 * 60) if time_span_ms > 0 else 1
             trade_velocity = len(trades) / time_span_minutes if time_span_minutes > 0 else 0
 
-            # Calculate buy/sell ratio
             buy_sell_ratio = buy_volume / sell_volume if sell_volume > 0 else float('inf')
             buy_pressure_percent = (buy_volume / total_volume * 100) if total_volume > 0 else 50
 
@@ -675,7 +665,6 @@ class DataFetcher:
             'timestamp': int(time.time() * 1000)
         }
 
-        # Fetch ticker data (or use cached)
         try:
             if cached_ticker:
                 result['ticker'] = cached_ticker
@@ -683,7 +672,6 @@ class DataFetcher:
             else:
                 ticker_data = await self.fetch_multiple_tickers([pair])
                 if ticker_data and 'RAW' in ticker_data:
-                    # Extract the ticker for this pair
                     base, quote = self._extract_currencies(pair)
                     if base and quote and base in ticker_data['RAW'] and quote in ticker_data['RAW'][base]:
                         result['ticker'] = ticker_data['RAW'][base][quote]
@@ -691,7 +679,6 @@ class DataFetcher:
         except Exception as e:
             self.logger.warning("Could not fetch ticker for %s: %s", pair, e)
 
-        # Fetch order book
         try:
             order_book = await self.fetch_order_book_depth(pair, limit=50)
             if order_book:
@@ -700,7 +687,6 @@ class DataFetcher:
         except Exception as e:
             self.logger.warning("Could not fetch order book for %s: %s", pair, e)
 
-        # Fetch recent trades
         try:
             trades = await self.fetch_recent_trades(pair, limit=500)
             if trades:
@@ -709,7 +695,6 @@ class DataFetcher:
         except Exception as e:
             self.logger.warning("Could not fetch recent trades for %s: %s", pair, e)
 
-        # Fetch funding rate (for futures only)
         try:
             funding = await self.fetch_funding_rate(pair)
             if funding:

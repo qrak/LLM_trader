@@ -143,9 +143,8 @@ Key sections to configure:
 
 ```ini
 [ai_providers]
-# Options: "local", "googleai", "openrouter", "all"
 provider = googleai
-google_studio_model = gemini-3-flash-preview
+google_studio_model = gemini-3.5-flash
 openrouter_base_model = google/gemini-3-flash-preview
 
 [general]
@@ -154,8 +153,6 @@ timeframe = 4h
 
 [model_config]
 google_thinking_level = high
-# Optional for Google AI Studio Gemini 1.x/2.x only:
-# google_temperature = 1.0
 
 [dashboard]
 host = 0.0.0.0
@@ -172,8 +169,6 @@ stop_loss_check_interval = 1h
 take_profit_type = soft
 take_profit_check_interval = 1h
 max_position_size = 0.10
-guard_pipeline_enabled = false
-symbol_whitelist =
 position_size_fallback_low = 0.03
 position_size_fallback_medium = 0.05
 position_size_fallback_high = 0.07
@@ -186,7 +181,7 @@ news_sources = coindesk,cointelegraph,decrypt
 news_crawl4ai_enabled = true
 ```
 
-Both exit check intervals must be less than or equal to `[general] timeframe`. Soft exits are evaluated only at candle close; hard exits are bot-side checks against live ticker price at the configured interval. Position sizing is capped by `max_position_size`, and fallback size tiers are used only when AI returns missing or invalid `position_size`. The optional pre-execution guard pipeline is disabled by default; when enabled, it applies symbol, explicit over-cap position size, and cooldown checks before opening a new simulated position.
+Both exit check intervals must be less than or equal to `[general] timeframe`. Soft exits are evaluated only at candle close; hard exits are bot-side checks against live ticker price at the configured interval. Position sizing is capped by `max_position_size`, and fallback size tiers are used only when AI returns missing or invalid `position_size`. The pre-execution guard pipeline is active by default and applies configured-pair, explicit over-cap position size, and cooldown checks before opening a new simulated position.
 
 ### 6. Start the Bot
 

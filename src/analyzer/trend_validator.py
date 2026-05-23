@@ -129,7 +129,6 @@ class TrendValidator:
         if self._is_valid_adx(computed_daily_adx):
             result.computed_daily_adx = float(computed_daily_adx)
 
-        # --- Validate 4H ADX ---
         llm_4h = result.llm_strength_4h
         comp_4h = result.computed_adx
 
@@ -145,14 +144,10 @@ class TrendValidator:
                         f"Using computed value."
                     )
             else:
-                # LLM didn't report, but we have computed — no discrepancy, just using computed
                 pass
         elif llm_4h is not None:
-            # No computed data, trust LLM
             result.validated_4h = float(llm_4h)
-        # else: neither — stays at DEFAULT_ADX_FALLBACK
 
-        # --- Validate Daily ADX ---
         llm_daily = result.llm_strength_daily
         comp_daily = result.computed_daily_adx
 

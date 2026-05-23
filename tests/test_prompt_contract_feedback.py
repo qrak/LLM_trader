@@ -10,9 +10,8 @@ Validates:
   7. Feedback survives interaction with other sections (direction bias, rules)
 """
 
-from unittest.mock import ANY, MagicMock, call, patch
+from unittest.mock import MagicMock
 
-import pytest
 
 from src.trading.brain import TradingBrainService
 
@@ -130,9 +129,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
 
         # Find the section order
         lines = ctx.split("\n")
-        critical_idx = next(i for i, l in enumerate(lines) if "CRITICAL FEEDBACK" in l)
-        confidence_idx = next(i for i, l in enumerate(lines) if "Confidence Calibration" in l)
-        vector_idx = next(i for i, l in enumerate(lines) if "Vector Context" in l)
+        critical_idx = next(i for i, line in enumerate(lines) if "CRITICAL FEEDBACK" in line)
+        confidence_idx = next(i for i, line in enumerate(lines) if "Confidence Calibration" in line)
+        vector_idx = next(i for i, line in enumerate(lines) if "Vector Context" in line)
 
         assert confidence_idx < critical_idx, "CRITICAL FEEDBACK must come AFTER confidence"
         assert critical_idx < vector_idx, "CRITICAL FEEDBACK must come BEFORE vector context"
@@ -183,7 +182,7 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         ctx = brain.get_context(adx=25)
 
         # Extract all lines that look like headers
-        header_lines = [l for l in ctx.split("\n") if l.startswith("#")]
+        header_lines = [line for line in ctx.split("\n") if line.startswith("#")]
         for line in header_lines:
             # Must be "## " or "### " (not "####" where '#' and text would merge)
             assert line.startswith("## ") or line.startswith("### "), \

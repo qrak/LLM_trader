@@ -91,7 +91,7 @@ class ExitMonitor:
         return self.config.TAKE_PROFIT_CHECK_INTERVAL_SECONDS
 
     def status_interval_seconds(self) -> int:
-        """Use the fastest hard-exit interval for status cadence, else the legacy interval."""
+        """Use the fastest hard-exit interval for status cadence."""
         hard_intervals = [
             self.interval_seconds(exit_kind)
             for exit_kind in self.exit_kinds()
