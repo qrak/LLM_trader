@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-25 - Config Parsing and Silent-Failure Regressions
+
+### Changed
+
+- Hardened INI loading to strip inline comments and disable percent interpolation for literal percentage text in configuration values or comments.
+- Sanitized non-finite statistics values before JSON persistence and rejected NaN/Infinity numeric payloads in AI parsing, position extraction, and market cache timestamp checks.
+
+### Added
+
+- Added regression coverage for config inline comments, signal-direction disambiguation, cooldown cache invalidation after execution, and nested tuple restoration for position confluence factors.
+- Added hidden-runtime-failure tests for non-finite persisted statistics, malformed AI numeric fields, non-finite position extraction values, and corrupt market overview timestamps.
+
 ## 2026-05-23 - Order Governance Foundation
 
 ### Added

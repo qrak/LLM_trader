@@ -34,3 +34,14 @@ class GuardPipeline:
     @property
     def guard_names(self) -> list[str]:
         return [g.name for g in self._guards]
+
+    def invalidate_cooldown_cache(self) -> None:
+        """Invalidate the CooldownWindowGuard cache after trade execution.
+
+        Safe no-op when no CooldownWindowGuard is in the pipeline or when
+        the guard doesn't support caching (e.g., older versions).
+        """
+        for guard in self._guards:
+            if guard.name == "cooldown_window" and hasattr(guard, "invalidate_cache"):
+                guard.invalidate_cache()
+                return

@@ -3,6 +3,7 @@ Market Data Cache Manager
 Handles caching and storage of market overview data.
 """
 from datetime import datetime, timedelta, timezone
+import math
 from typing import Any
 
 from src.logger.logger import Logger
@@ -35,10 +36,16 @@ class MarketDataCache:
             timestamp = normalize_timestamp_func(timestamp_field)
         else:
             # Fallback simple normalization
-            timestamp = float(timestamp_field)
+            try:
+                timestamp = float(timestamp_field)
+            except (TypeError, ValueError):
+                return True
 
-        if timestamp:
-            data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        if timestamp and math.isfinite(timestamp):
+            try:
+                data_time = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            except (OSError, OverflowError, ValueError):
+                return True
             current_time = datetime.now(timezone.utc)
             return current_time - data_time > timedelta(hours=max_age_hours)
 

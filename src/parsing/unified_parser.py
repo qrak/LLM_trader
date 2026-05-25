@@ -3,6 +3,7 @@ Unified parsing system that consolidates all parsing functionality.
 Eliminates duplication and unnecessary delegation layers.
 """
 import json
+import math
 import re
 from typing import Any, Set
 
@@ -25,8 +26,14 @@ class UnifiedParser:
         # Numeric fields that should be converted from strings with their defaults
         self._numeric_fields = {
             'risk_ratio': 1.0,
+            'risk_reward_ratio': None,
             'trend_strength': 50,
+            'confidence': 50,
             'confidence_score': 50,
+            'entry_price': None,
+            'stop_loss': None,
+            'take_profit': None,
+            'position_size': None,
             'bullish_scenario': 0.0,
             'bearish_scenario': 0.0
         }
@@ -231,18 +238,7 @@ class UnifiedParser:
         analysis = data.get('analysis', {})
         for field, default_value in self._numeric_fields.items():
             if field in analysis:
-                val = analysis[field]
-                if self.format_utils:
-                    parsed = self.format_utils.parse_value(val, default=None)
-                    if parsed is not None:
-                        analysis[field] = parsed
-                    else:
-                        analysis[field] = default_value
-                elif isinstance(val, str):
-                    try:
-                        analysis[field] = float(val)
-                    except ValueError:
-                        analysis[field] = default_value
+                analysis[field] = self._parse_numeric_field(field, analysis[field], default_value)
 
         # Normalize confluence_factors (new Chain-of-Thought scoring)
         confluence_factors = analysis.get('confluence_factors', {})
@@ -250,20 +246,9 @@ class UnifiedParser:
             for factor_key in ['trend_alignment', 'momentum_strength', 'volume_support',
                               'pattern_quality', 'support_resistance_strength']:
                 if factor_key in confluence_factors:
-                    value = confluence_factors[factor_key]
-                    if self.format_utils:
-                        # Default to 50.0 (Neutral) if parsing fails
-                        parsed = self.format_utils.parse_value(value, default=None)
-                        confluence_factors[factor_key] = parsed if parsed is not None else 50.0
-                    elif isinstance(value, str):
-                        try:
-                            confluence_factors[factor_key] = float(value)
-                        except ValueError:
-                            confluence_factors[factor_key] = 50.0
-                    elif isinstance(value, (int, float)):
-                        confluence_factors[factor_key] = float(value)
-                    else:
-                        confluence_factors[factor_key] = 50.0
+                    confluence_factors[factor_key] = self._parse_finite_number(
+                        confluence_factors[factor_key], 50.0
+                    )
 
         # Normalize key_levels arrays (support/resistance)
         key_levels = analysis.get('key_levels', {})
@@ -273,35 +258,53 @@ class UnifiedParser:
                 if isinstance(levels, list):
                     normalized_levels = []
                     for level in levels:
-                        if self.format_utils:
-                            val = self.format_utils.parse_value(level, default=None)
-                            if val is not None:
-                                normalized_levels.append(val)
-                        elif isinstance(level, (int, float)):
-                            normalized_levels.append(float(level))
-                        elif isinstance(level, str):
-                            try:
-                                normalized_levels.append(float(level))
-                            except ValueError:
-                                continue
+                        val = self._parse_finite_number(level, None)
+                        if val is not None:
+                            normalized_levels.append(val)
                     key_levels[level_type] = normalized_levels
 
         # Check root level
         for field, default_value in self._numeric_fields.items():
             if field in data:
-                if self.format_utils:
-                    parsed = self.format_utils.parse_value(data[field], default=None)
-                    if parsed is not None:
-                        data[field] = parsed
-                    else:
-                        data[field] = default_value
-                elif isinstance(data[field], str):
-                    try:
-                        data[field] = float(data[field])
-                    except ValueError:
-                        data[field] = default_value
+                data[field] = self._parse_numeric_field(field, data[field], default_value)
 
         return data
+
+    def _parse_numeric_field(self, field: str, value: Any, default_value: Any) -> float | int | None:
+        """Parse a known numeric field while rejecting NaN and infinity."""
+        numeric_value = self._parse_finite_number(value, None)
+        if numeric_value is None:
+            return default_value
+        if field == 'position_size':
+            explicit_percent = isinstance(value, str) and value.strip().endswith('%')
+            return numeric_value / 100 if explicit_percent or numeric_value > 1 else numeric_value
+        if isinstance(default_value, int) and float(numeric_value).is_integer():
+            return int(numeric_value)
+        return numeric_value
+
+    def _parse_finite_number(self, value: Any, default_value: Any) -> float | None:
+        """Parse a numeric value and discard non-finite results."""
+        if isinstance(value, bool):
+            return default_value
+        if self.format_utils:
+            parsed = self.format_utils.parse_value(value, default=None)
+        elif isinstance(value, (int, float)):
+            parsed = float(value)
+        elif isinstance(value, str):
+            try:
+                parsed = float(value.strip().replace(',', ''))
+            except ValueError:
+                return default_value
+        else:
+            return default_value
+
+        if parsed is None:
+            return default_value
+        try:
+            numeric_value = float(parsed)
+        except (TypeError, ValueError):
+            return default_value
+        return numeric_value if math.isfinite(numeric_value) else default_value
 
     def _attach_response_validation(self, data: dict[str, Any]) -> dict[str, Any]:
         """Attach non-blocking response validation metadata to parsed responses."""

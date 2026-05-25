@@ -1,6 +1,7 @@
 """Extract trading signals from AI responses."""
 
 import re
+import math
 from re import Pattern
 from typing import Any, TYPE_CHECKING
 
@@ -119,11 +120,11 @@ class PositionExtractor:
 
         stop_loss = data.get("stop_loss")
         if stop_loss is not None:
-            stop_loss = float(str(stop_loss).replace(",", "").replace("$", ""))
+            stop_loss = self._parse_finite_float(stop_loss)
 
         take_profit = data.get("take_profit")
         if take_profit is not None:
-            take_profit = float(str(take_profit).replace(",", "").replace("$", ""))
+            take_profit = self._parse_finite_float(take_profit)
 
         position_size = data.get("position_size")
         if position_size is not None:
@@ -142,12 +143,32 @@ class PositionExtractor:
         Returns:
             String confidence level
         """
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            return "MEDIUM"
+        if not math.isfinite(confidence):
+            return "MEDIUM"
         if confidence >= 70:
             return "HIGH"
         elif confidence >= 50:
             return "MEDIUM"
         else:
             return "LOW"
+
+    def _parse_finite_float(self, value: Any) -> float | None:
+        """Parse a trade numeric field and reject NaN/Infinity payloads."""
+        try:
+            numeric_value = float(str(value).replace(",", "").replace("$", ""))
+        except (TypeError, ValueError):
+            if self.logger:
+                self.logger.warning("Invalid numeric value from AI response: %s", value)
+            return None
+        if not math.isfinite(numeric_value):
+            if self.logger:
+                self.logger.warning("Non-finite numeric value from AI response: %s", value)
+            return None
+        return numeric_value
 
     def _normalize_position_size(self, value: Any, explicit_percent: bool = False) -> float | None:
         """Normalize position size values to decimal capital fractions."""
@@ -159,6 +180,10 @@ class PositionExtractor:
         try:
             numeric_value = float(value_text.replace("%", "").replace(",", ""))
         except (TypeError, ValueError):
+            if self.logger:
+                self.logger.warning("Invalid position_size value from AI response: %s", value)
+            return None
+        if not math.isfinite(numeric_value) or numeric_value < 0:
             if self.logger:
                 self.logger.warning("Invalid position_size value from AI response: %s", value)
             return None

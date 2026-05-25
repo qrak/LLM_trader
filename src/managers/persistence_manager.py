@@ -54,7 +54,12 @@ class PersistenceManager:
         self.statistics_file = self.data_dir / "statistics.json"
         self.position_monitor_file = self.data_dir / "position_monitor.json"
 
-        # In-memory caches to prevent blocking I/O on hot paths
+        # In-memory caches to prevent blocking I/O on hot paths.
+        # Cache contract: every cache entry is write-through — set on load AND on
+        # every save.  ``save_position(None)`` sets _position_cache = None and
+        # _position_cache_valid = True.  There is no external invalidation path.
+        # If the position file is modified by another process, the cache will be
+        # stale until the next save or a process restart.
         self._position_cache: "Position" | None = None
         self._position_cache_valid: bool = False
         self._last_analysis_time_cache: datetime | None = None
@@ -278,9 +283,10 @@ class PersistenceManager:
     def save_statistics(self, stats: "TradingStatistics") -> None:
         """Save trading statistics to disk."""
         try:
+            data = serialize_for_json(stats.to_dict())
             temp_path = str(self.statistics_file) + ".tmp"
             with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(stats.to_dict(), f, indent=2)
+                json.dump(data, f, indent=2)
             os.replace(temp_path, self.statistics_file)
             self.logger.debug("Saved statistics: %s trades", stats.total_trades)
         except Exception as e:

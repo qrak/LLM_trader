@@ -15,6 +15,7 @@ from typing import Optional
 
 # --- Third-party ---
 import aiohttp
+from aiohttp_client_cache import SQLiteBackend
 import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
 import chromadb
 
@@ -107,7 +108,7 @@ def _configure_hf_hub_auth() -> None:
         return
 
     os.environ["HF_TOKEN"] = token
-    os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", token)
+    os.environ["HUGGINGFACE_HUB_TOKEN"] = token
 
 
 def _get_best_device() -> str:
@@ -367,7 +368,6 @@ class CompositionRoot:
 
     async def _provision_platforms(self, infra: dict) -> dict:
         """Provision external API clients."""
-        from aiohttp_client_cache import SQLiteBackend
         coingecko_backend = SQLiteBackend(cache_name='cache/coingecko_cache.db', expire_after=-1)
 
         coingecko = CoinGeckoAPI(

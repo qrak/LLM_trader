@@ -1,16 +1,22 @@
+# === AI Providers ===
 [ai_providers]
+# local | googleai | openrouter | blockrun | all
 provider = googleai
 
+# LM Studio (local)
 lm_studio_base_url = http://localhost:1234/v1
 lm_studio_model =
 lm_studio_streaming = false
 
+# OpenRouter
 openrouter_base_url = https://openrouter.ai/api/v1
 openrouter_base_model = google/gemini-3-flash-preview
 openrouter_fallback_model = deepseek/deepseek-r1:free
 
+# Google AI Studio
 google_studio_model = gemini-3.5-flash
 
+# === General ===
 [general]
 crypto_pair = BTC/USDC
 timeframe = 4h
@@ -20,36 +26,40 @@ discord_bot = false
 
 include_coin_description = false
 
+# === Debug ===
 [debug]
 save_chart_images = false
 chart_save_path = chart_images
 logger_debug = true
 
+# === Paths ===
 [directories]
 log_dir = logs
 data_dir = data
 
+# === RAG / News ===
 [rag]
-update_interval_hours = 4
-categories_update_interval_hours = 168
-coingecko_update_interval_hours = 24
-defillama_update_interval_hours = 0.25
+update_interval_hours = 4               # hours between RAG rebuilds
+categories_update_interval_hours = 168  # hours between taxonomy refreshes
+coingecko_update_interval_hours = 24    # hours between coin-list refreshes
+defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
 coingecko_global_api_url = https://api.coingecko.com/api/v3/global
-news_limit = 5
-article_max_tokens = 1000
+news_limit = 5                          # max articles in AI context
+article_max_tokens = 1000               # max tokens per article
 news_sources =
 news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
 news_source_cointelegraph_url = https://cointelegraph.com/rss
 news_source_decrypt_url = https://decrypt.co/feed
 news_source_cryptoslate_url = https://cryptoslate.com/feed/
-news_page_enrichment = true
-news_min_body_chars = 400
+news_page_enrichment = true             # fetch full article body via Crawl4AI
+news_min_body_chars = 400               # skip articles with less body text
 news_timeout_seconds = 20
 rag_update_timeout_seconds = 180
 news_fetch_total_timeout_seconds = 45
 news_enrichment_timeout_seconds = 120
-news_max_concurrency = 6
+news_max_concurrency = 6                # parallel Crawl4AI fetches
 news_max_items_per_source = 100
+# Article scoring weights
 density_penalty_threshold = 300
 density_boost_threshold = 1000
 density_penalty_multiplier = 0.5
@@ -58,46 +68,54 @@ cooccurrence_multiplier = 1.5
 news_crawl4ai_enabled = true
 news_crawl_timeout = 120
 
+# === Exchanges ===
 [exchanges]
-supported = binance,kucoin,gateio,mexc,hyperliquid
+supported = binance,kucoin,gateio,mexc,hyperliquid  # priority order
 market_refresh_hours = 24
 
+# === Paper Trading ===
 [demo_trading]
 demo_quote_capital = 10000
 transaction_fee_percent = 0.00075
 
+# === Risk Management ===
 [risk_management]
+# SL/TP execution mode: soft (candle-close only) | hard (intra-candle polling)
 stop_loss_type = hard
 take_profit_type = hard
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
 max_position_size = 0.10
+# Fallback sizes when AI doesn't provide position_size (by confidence)
 position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02
 position_size_fallback_high = 0.03
+# SL tightening: minimum price progress toward TP before SL can be tightened
+sl_tightening_scalping = 0.25        # < 1h timeframe
+sl_tightening_intraday = 0.20        # 1h–4h
+sl_tightening_swing = 0.15           # 4h–1d
+sl_tightening_position = 0.10        # 1d+
+sl_tightening_floor = 0.05           # brain can't push below this
+sl_tightening_ceiling = 0.40         # brain can't push above this
+sl_tightening_min_samples = 10       # min paired samples before brain override
 
-sl_tightening_scalping = 0.25
-sl_tightening_intraday = 0.20
-sl_tightening_swing = 0.15
-sl_tightening_position = 0.10
-sl_tightening_floor = 0.05
-sl_tightening_ceiling = 0.40
-sl_tightening_min_samples = 10
-
+# === Cooldowns ===
 [cooldowns]
-file_message_expiry = 168
+file_message_expiry = 168  # hours before tracked messages are cleaned up
 
+# === Model Configuration ===
 [model_config]
 temperature = 0.7
 top_p = 0.9
 top_k = 40
 max_tokens = 32768
-
+# fre*q*uency_penalty and pres*ence*_penalty also accepted
 google_max_tokens = 32768
 google_thinking_level = high
 google_code_execution = false
 model_verbosity = high
 
+# === Dashboard ===
 [dashboard]
 enabled = true
 host = 0.0.0.0
