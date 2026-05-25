@@ -21,9 +21,21 @@ class CooldownWindowGuard:
       - Intraday (1h-3h): 3x timeframe
       - Swing (4h-12h): 2x timeframe
       - Position (1D+): 1x timeframe
+
+    The last execution timestamp is cached in-process after the first
+    read to avoid I/O on every guard evaluation. Call ``invalidate_cache()``
+    after a new trade is executed to force a re-read.
     """
 
     name = "cooldown_window"
+
+    def __init__(self) -> None:
+        self._cached_timestamp: datetime | None = None
+        self._cache_populated: bool = False
+
+    def invalidate_cache(self) -> None:
+        """Force the next ``check()`` call to re-read from persistence."""
+        self._cache_populated = False
 
     def check(self, intent, /, *, capital: float, config) -> GuardResult:
         last_execution_timestamp = self._get_last_execution_timestamp(config)
@@ -56,6 +68,10 @@ class CooldownWindowGuard:
                 },
             )
 
+        # Cooldown expired — invalidate cache so next execution re-reads the
+        # (now-stale) timestamp, which will be ahead of this check.
+        self.invalidate_cache()
+
         return GuardResult(
             guard_name=self.name,
             passed=True,
@@ -70,16 +86,31 @@ class CooldownWindowGuard:
             },
         )
 
-    @staticmethod
-    def _get_last_execution_timestamp(config) -> datetime | None:
+    def _get_last_execution_timestamp(self, config) -> datetime | None:
         """Retrieve the timestamp of the last executed buy/sell decision.
+
+        Uses a process-local cache; only re-reads from disk after an
+        explicit invalidation or on first call.
 
         Subclasses or integration layers can override this to read from
         persistence, trade history, or in-memory state. The default
         implementation reads from TradeHistory in the data directory.
         """
+        if self._cache_populated:
+            return self._cached_timestamp
+
+        last_ts = self._read_last_execution_from_disk(config)
+        self._cached_timestamp = last_ts
+        self._cache_populated = True
+        return last_ts
+
+    @staticmethod
+    def _read_last_execution_from_disk(config) -> datetime | None:
+        """Read the last BUY/SELL timestamp from trade_history.json."""
         try:
             history_path = Path(config.DATA_DIR) / "trading" / "trade_history.json"
+            if not history_path.exists():
+                return None
             with history_path.open("r", encoding="utf-8") as fh:
                 trades = json.load(fh)
             if not trades:
@@ -94,7 +125,8 @@ class CooldownWindowGuard:
                             dt = dt.replace(tzinfo=timezone.utc)
                         return dt
             return None
-        except Exception:
+        except (json.JSONDecodeError, OSError, ValueError, KeyError):
+            # Corrupt or missing file disables cooldown (fail-open).
             return None
 
     @staticmethod

@@ -120,11 +120,17 @@ class StatisticsCalculator:
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
                 quantity = open_position.get("quantity", 0)
+                # Guard against zero/negative entry prices that would produce
+                # bogus PnL values (pnl_pct division by zero, pnl_quote
+                # phantom profit from unconstrained multiplication).
+                if entry_price <= 0:
+                    open_position = None
+                    continue
                 if open_position.get("action", "").upper() == "BUY":
-                    pnl_pct = ((exit_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+                    pnl_pct = ((exit_price - entry_price) / entry_price) * 100
                     pnl_quote = (exit_price - entry_price) * quantity
                 else:
-                    pnl_pct = ((entry_price - exit_price) / entry_price) * 100 if entry_price > 0 else 0
+                    pnl_pct = ((entry_price - exit_price) / entry_price) * 100
                     pnl_quote = (entry_price - exit_price) * quantity
                 closed_trades.append(ClosedTradeResult(
                     entry_price=entry_price,

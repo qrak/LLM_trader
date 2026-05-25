@@ -424,7 +424,17 @@ class CryptoTradingBot:
     
     async def _handle_new_position(self, decision, current_price: float | None):
         """Handle new position creation and status updates"""
-        if decision.action not in ('BUY', 'SELL') or not self.trading_strategy.current_position:
+        if decision.action not in ('BUY', 'SELL'):
+            self.logger.debug(
+                "_handle_new_position skipped for non-entry action: %s", decision.action
+            )
+            return
+        if not self.trading_strategy.current_position:
+            self.logger.warning(
+                "Expected current_position after %s action but position is None — "
+                "skipping position monitor start",
+                decision.action,
+            )
             return
 
         await self._require_position_monitor().handle_new_position(current_price)

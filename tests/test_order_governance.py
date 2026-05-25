@@ -304,3 +304,31 @@ async def test_strategy_without_guards_records_approval_and_execution_audit() ->
         "execution",
     ]
     assert audit_trail.all_records[-1].result == "executed"
+
+
+@pytest.mark.asyncio
+async def test_strategy_invalidates_cooldown_cache_after_execution() -> None:
+    cooldown_guard = MagicMock()
+    cooldown_guard.name = "cooldown_window"
+    cooldown_guard.check.return_value = GuardResult(
+        guard_name="cooldown_window",
+        passed=True,
+        reason="passed",
+        metadata={},
+    )
+    cooldown_guard.invalidate_cache = MagicMock()
+    strategy = _make_strategy(guard_pipeline=GuardPipeline([cooldown_guard]))
+
+    decision = await strategy._open_new_position(
+        signal="BUY",
+        confidence="HIGH",
+        stop_loss=95.0,
+        take_profit=115.0,
+        position_size=0.05,
+        current_price=100.0,
+        symbol="BTC/USDC",
+        reasoning="test",
+    )
+
+    assert decision.action == "BUY"
+    cooldown_guard.invalidate_cache.assert_called_once_with()

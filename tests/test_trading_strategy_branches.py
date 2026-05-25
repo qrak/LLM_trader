@@ -647,6 +647,28 @@ class TestExtractMarketConditions:
         conditions = strategy._extract_market_conditions(result)
         assert conditions.trend_direction == "BEARISH"
 
+    def test_market_conditions_signal_buy_disambiguates_mixed_raw_response(self):
+        """Explicit BUY signal wins over mixed bullish/bearish scenario text."""
+        strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
+        result = {
+            "analysis": {"trend": {}},
+            "technical_data": {},
+            "raw_response": "Medium-term bearish risk remains, but signal: BUY on bullish reclaim.",
+        }
+        conditions = strategy._extract_market_conditions(result)
+        assert conditions.trend_direction == "BULLISH"
+
+    def test_market_conditions_signal_sell_disambiguates_mixed_raw_response(self):
+        """Explicit SELL signal wins over mixed bullish/bearish scenario text."""
+        strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
+        result = {
+            "analysis": {"trend": {}},
+            "technical_data": {},
+            "raw_response": "Short-term bullish bounce possible, but signal: SELL after bearish break.",
+        }
+        conditions = strategy._extract_market_conditions(result)
+        assert conditions.trend_direction == "BEARISH"
+
     def test_market_conditions_exception_handling(self):
         """Exception during extraction returns empty dict."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())

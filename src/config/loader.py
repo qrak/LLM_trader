@@ -74,7 +74,10 @@ class Config:
             )
 
         try:
-            config = configparser.ConfigParser()
+            config = configparser.ConfigParser(
+                interpolation=None,
+                inline_comment_prefixes=("#", ";"),
+            )
             config.read(CONFIG_INI_PATH, encoding='utf-8')
 
             for section_name in config.sections():
@@ -161,16 +164,26 @@ class Config:
 
     @staticmethod
     def _convert_value(value: str) -> Any:
-        """Convert string values to appropriate Python types."""
-        if value.lower() in ('true', 'yes', 'on', '1'):
+        """Convert string values to appropriate Python types.
+
+        Conversion order (first match wins):
+        1. Boolean literals (true/false/yes/no/on/off/1/0)
+        2. Integers (pure digits, no sign)
+        3. Floats (decimal point or scientific notation, e.g., 1.5, 1e5, 2.5e-3)
+        4. Comma-separated lists (string list)
+        5. Raw string fallback
+        """
+        value = value.strip()
+        lowered = value.lower()
+        if lowered in ('true', 'yes', 'on', '1'):
             return True
-        elif value.lower() in ('false', 'no', 'off', '0'):
+        if lowered in ('false', 'no', 'off', '0'):
             return False
         if value.isdigit():
             return int(value)
+        # Check for float (handles '1.5', '-3.14', '1e5', '2.5e-3')
         try:
-            if '.' in value:
-                return float(value)
+            return float(value)
         except ValueError:
             pass
         if ',' in value:
@@ -178,7 +191,12 @@ class Config:
         return value
 
     def _build_model_configs(self):
-        """Build model configuration dictionaries as instance variables."""
+        """Build model configuration dictionaries as instance variables.
+
+        Config key fallbacks (for backward compatibility):
+          - ``frequency_penalty`` ← ``freq_penalty`` (prefer the full name)
+          - ``presence_penalty`` ← ``pres_penalty`` (prefer the full name)
+        """
         default_max_tokens = self.get_config('model_config', 'max_tokens', None)
         if default_max_tokens is None:
             raise RuntimeError("`max_tokens` is required in [model_config] of config.ini")

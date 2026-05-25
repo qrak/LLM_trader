@@ -1,6 +1,7 @@
 """Trading strategy that wraps analysis with position management."""
 
 import asyncio
+import re
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
@@ -621,6 +622,10 @@ class TradingStrategy:
             ),
         )
 
+        # Invalidate cooldown guard cache now that a new position was opened
+        if self.guard_pipeline is not None:
+            self.guard_pipeline.invalidate_cooldown_cache()
+
         await self.persistence.async_save_position(self.current_position)
         self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
 
@@ -891,15 +896,37 @@ class TradingStrategy:
             conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
             conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
 
-            # Fallback: try to extract from raw response keywords
+            # Fallback: extract trend direction from trading signal context in
+            # the raw response, not from standalone keyword presence.
+            # Prefer signal=BUY/SELL context over scattered keyword matches
+            # since trading analyses routinely discuss both bullish and bearish
+            # scenarios (e.g., "near-term bullish but medium-term bearish").
             raw_response = result.get("raw_response", "").lower()
             if not conditions.get("trend_direction"):
-                if "bullish" in raw_response or "uptrend" in raw_response:
-                    conditions["trend_direction"] = "BULLISH"
-                elif "bearish" in raw_response or "downtrend" in raw_response:
-                    conditions["trend_direction"] = "BEARISH"
+                # Extract the signal to disambiguate which scenario is the
+                # actual trading recommendation, not just analysis context.
+                signal_match = re.search(
+                    r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE)\b', raw_response, re.IGNORECASE
+                )
+                if signal_match:
+                    signal_word = signal_match.group(1).upper()
+                    if signal_word == "BUY":
+                        conditions["trend_direction"] = "BULLISH"
+                    elif signal_word == "SELL":
+                        conditions["trend_direction"] = "BEARISH"
+                    else:
+                        conditions["trend_direction"] = "NEUTRAL"
                 else:
-                    conditions["trend_direction"] = "NEUTRAL"
+                    # Last resort: keyword majority check with explicit
+                    # tie-breaker (NEUTRAL when both appear)
+                    bullish_hits = len(re.findall(r'\b(bullish|uptrend)\b', raw_response))
+                    bearish_hits = len(re.findall(r'\b(bearish|downtrend)\b', raw_response))
+                    if bullish_hits > bearish_hits:
+                        conditions["trend_direction"] = "BULLISH"
+                    elif bearish_hits > bullish_hits:
+                        conditions["trend_direction"] = "BEARISH"
+                    else:
+                        conditions["trend_direction"] = "NEUTRAL"
         except Exception as e:
             self.logger.warning("Could not extract market conditions: %s", e)
         return MarketConditions(

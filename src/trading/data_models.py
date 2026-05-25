@@ -172,6 +172,8 @@ class TradingMemory(SerializableMixin):
         """Get the n most recent decisions."""
         return self.decisions[-n:]
 
+    MAX_DECISIONS_SORTED = 5
+
     def get_context_summary(
         self,
         full_history: list['TradeDecision'] | None = None,
@@ -195,15 +197,20 @@ class TradingMemory(SerializableMixin):
         if recent:
             lines.append("## Recent Trading History (Last 5 Decisions):")
 
-        # Calculate P&L from FULL trade history, not just recent decisions
+        # Calculate P&L from FULL trade history, not just recent decisions.
+        # Only sort once and only when full_history is provided (it may have
+        # unsorted entries mixed across dates). In-memory decisions are already
+        # append-ordered.  For the common code path where full_history is plain
+        # self.decisions, we skip the sort entirely.
         history_to_analyze = full_history if full_history else self.decisions
         # Helper to ensure timezone-aware timestamps for sorting
         def _ensure_utc(dt: datetime) -> datetime:
             if dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
             return dt
-        # Ensure chronological order for P&L calculation (handle mixed tz-aware/naive)
-        history_to_analyze = sorted(history_to_analyze, key=lambda x: _ensure_utc(x.timestamp))
+        # Only sort when we have a full_history that differs from self.decisions
+        if full_history is not None and full_history is not self.decisions:
+            history_to_analyze = sorted(history_to_analyze, key=lambda x: _ensure_utc(x.timestamp))
         total_pnl_quote = 0.0
         sum_trade_pnl_pct = 0.0
         total_entry_quote = 0.0

@@ -197,6 +197,19 @@ class SerializableMixin:
     def _convert_value(value: Any, target_type: Type) -> Any:
         """Recursively convert values to match target types."""
         if value is None:
+            # For non-Optional primitives, return a safe zero-value instead of
+            # None to prevent silent type corruption when NaN/inf are serialized
+            # to null and then deserialized back.
+            origin = get_origin(target_type)
+            if origin is not Union:
+                if target_type is float:
+                    return 0.0
+                if target_type is int:
+                    return 0
+                if target_type is str:
+                    return ""
+                if target_type is bool:
+                    return False
             return None
 
         origin = get_origin(target_type)
@@ -208,17 +221,27 @@ class SerializableMixin:
             if len(non_none_args) == 1:
                 return SerializableMixin._convert_value(value, non_none_args[0])
 
-        # Handle List[T]
-        if (origin is list) and isinstance(value, list):
-            item_type = args[0]
-            return [SerializableMixin._convert_value(item, item_type) for item in value]
+        # Handle List[T] — also handles plain list (get_origin returns None)
+        if (origin is list or target_type is list) and isinstance(value, list):
+            if args:
+                item_type = args[0]
+                return [SerializableMixin._convert_value(item, item_type) for item in value]
+            return value
 
-        if origin is tuple and isinstance(value, (list, tuple)):
+        # Handle Tuple[T, ...] — also handles plain tuple (get_origin returns None)
+        if (origin is tuple or target_type is tuple) and isinstance(value, (list, tuple)):
             if len(args) == 2 and args[1] is Ellipsis:
                 return tuple(SerializableMixin._convert_value(item, args[0]) for item in value)
+            if args:
+                return tuple(
+                    SerializableMixin._convert_value(item, args[index]) if index < len(args) else item
+                    for index, item in enumerate(value)
+                )
+            # Plain tuple (no type args) — convert list to tuple and
+            # recursively convert inner lists/tuples too
             return tuple(
-                SerializableMixin._convert_value(item, args[index]) if index < len(args) else item
-                for index, item in enumerate(value)
+                tuple(item) if isinstance(item, (list, tuple)) else item
+                for item in value
             )
 
         # Handle datetime
@@ -226,7 +249,9 @@ class SerializableMixin:
             try:
                 value = datetime.fromisoformat(value)
             except ValueError:
-                pass
+                raise ValueError(
+                    f"Cannot convert {value!r} to datetime for field of type {target_type}"
+                ) from None
 
         # Handle nested dataclasses
         if dataclasses.is_dataclass(target_type) and isinstance(value, dict):
