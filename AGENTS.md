@@ -1,435 +1,350 @@
-# LLM Trader — Master Agent Instructions
+# LLM Trader — Master Architecture Blueprint
 
-> Consolidated from all instruction files, skills, playbooks, and documentation in the LLM Trader repository. This single file replaces fragmented `.github/`, `docs/`, `.cursorrules`, `.windsurfrules`, and template files as the authoritative guide for any agent or developer working on this codebase.
+> **Repository:** [https://github.com/qrak/LLM_trader.git](https://github.com/qrak/LLM_trader.git)
+> **Python:** 3.13, `.venv/`, `python start.py`
+> **Status:** BETA / Research Edition — paper-trading mode only
+> **Live Dashboard:** [https://semanticsignal.qrak.org](https://semanticsignal.qrak.org)
 
 ---
 
-## 1. System Overview & Architecture
+## 1. System Overview
 
-### 1.1 What Is LLM Trader
+**SEMANTIC SIGNAL LLM (LLM Trader)** is an autonomous, asyncio-first trading bot that converts market data, news (via RAG), and chart images into structured BUY / SELL / HOLD decisions via large language models. The system operates a **distributed multi-agent intelligence architecture**: specialized agents for technical analysis, pattern recognition, news retrieval, risk validation, outcome-aware learning, and reflection-based rule synthesis — all coordinated through a central trading loop.
 
-**SEMANTIC SIGNAL LLM (LLM Trader)** is a BETA / Research Edition autonomous, asyncio-first trading bot. It converts market data, news (via RAG), and chart context into structured BUY / SELL / HOLD decisions via large language models. The bot runs in **demo-account and paper-trading mode** — real exchange order execution is not yet implemented.
+```mermaid
+flowchart TB
+    subgraph External["External Layer"]
+        EX["Exchanges<br/>(Binance, KuCoin, Gate.io,<br/>MEXC, Hyperliquid)<br/>&#8209; CCXT"]
+        CG["CoinGecko<br/>Alternative.me<br/>DeFiLlama"]
+        RSS["RSS Feeds<br/>(CoinDesk, CoinTelegraph,<br/>Decrypt, CryptoSlate)"]
+        AI_PROV["AI Providers<br/>Google Gemini (primary)<br/>LM Studio (local text fallback)<br/>OpenRouter (secondary configurable provider)"]
+    end
 
-- **Repository:** https://github.com/qrak/LLM_trader.git
-- **Python:** 3.13, Linux (bash), virtual environment at `.venv/`
-- **Entry point:** `python start.py` or cross-platform scripts in `scripts/`
-- **Live dashboard:** https://semanticsignal.qrak.org
-- **License:** MIT
+    subgraph DataIngestion["Data Ingestion Layer"]
+        DF["DataFetcher<br/>OHLCV + Order Book + Trade Flow"]
+        RAG["RAG Engine Agent<br/>News + Fundamentals<br/><a href='./src/rag/AGENTS.md'>📄 README</a>"]
+    end
 
-### 1.2 Application Lifecycle
+    subgraph AnalysisLayer["Analysis Layer"]
+        TA["Analysis Engine Agent<br/>Technical Calculator<br/>40+ Indicators<br/><a href='./src/analyzer/AGENTS.md'>📄 README</a>"]
+        PE["Pattern Engine<br/>Chart Patterns +<br/>Indicator Patterns<br/>Numba JIT compiled"]
+        CGEN["Chart Generator<br/>4K PNG Candlestick<br/>SMA/RSI/Volume/CMF+OBV"]
+    end
+
+    subgraph BrainLayer["Learning & Memory Layer"]
+        BRAIN["🧠 Brain Agent<br/>TradingBrainService<br/><a href='./src/trading/AGENTS.md'>📄 README</a>"]
+        VM["Vector Memory<br/>ChromaDB<br/>Trade Experiences<br/>Semantic Rules<br/>Confidence Stats"]
+        REFL["Reflection Engine<br/>Best‑practice Rules<br/>Anti‑patterns<br/>AI Mistake Rules"]
+    end
+
+    subgraph RiskLayer["Risk & Execution Layer"]
+        RP["Risk Manager<br/>Dynamic SL/TP<br/>Position Sizing<br/><a href='./src/managers/AGENTS.md'>📄 README</a>"]
+        GP["Order Governance Pipeline<br/>Symbol Guard<br/>Cooldown Guard<br/>Max Size Guard<br/><a href='./src/trading/guards/AGENTS.md'>📄 README</a>"]
+        STRAT["Trading Strategy<br/>Exit Monitor<br/>Position Status Monitor"]
+    end
+
+    subgraph Output["Output Layer"]
+        DASH["📊 Dashboard<br/>FastAPI + WebSocket<br/><a href='./src/dashboard/AGENTS.md'>📄 README</a>"]
+        LOGS["Audit Trail<br/>Position Logs<br/>Trade History"]
+    end
+
+    subgraph Providers["Provider Orchestration"]
+        PO["Provider Orchestrator<br/>Fallback Chain<br/><a href='./src/managers/AGENTS.md'>📄 README</a>"]
+    end
+
+    %% Data Flow
+    EX --> DF
+    RSS --> RAG
+    CG --> RAG
+    DF --> TA
+    TA --> PE
+    TA --> CGEN
+    
+    RAG --> TA
+    TA --> PO
+    PO --> AI_PROV
+    
+    AI_PROV -->|"Structured Signal"| RP
+    RP --> GP
+    GP --> STRAT
+    
+    STRAT -->|"Closed Trade"| BRAIN
+    BRAIN --> VM
+    VM -->|"Reflection Loop"| REFL
+    REFL -->|"Rules"| VM
+    VM -->|"Context Injection"| BRAIN
+    BRAIN -->|"Confidence + Rules"| TA
+    
+    TA --> DASH
+    STRAT --> DASH
+    STRAT --> LOGS
+```
+
+---
+
+## 2. Agent Inventory
+
+| # | Agent Name | Primary Responsibility | Core Model | Local Doc |
+|---|------------|----------------------|------------|-----------|
+| 1 | **🧠 Brain Agent** (TradingBrainService) | Outcome-aware decision enricher, semantic rule learning via reflection loops, confidence calibration | Gemini 3.5 Flash | [📄 README](./src/trading/AGENTS.md) |
+| 2 | **🔬 Analysis Engine Agent** | Market data collection, 40+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Gemini 3.5 Flash (multimodal) | [📄 README](./src/analyzer/AGENTS.md) |
+| 3 | **📰 RAG Engine Agent** | News aggregation (RSS + Crawl4AI), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [📄 README](./src/rag/AGENTS.md) |
+| 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [📄 README](./src/managers/AGENTS.md) |
+| 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [📄 README](./src/managers/AGENTS.md) |
+| 6 | **🛡️ Governance Pipeline** | Pre-execution guard chain: symbol whitelist, cooldown, max position size | Deterministic | [📄 README](./src/trading/guards/AGENTS.md) |
+| 7 | **📊 Dashboard Agent** | Real-time FastAPI + WebSocket monitoring, performance analytics, brain state inspection | — | [📄 README](./src/dashboard/AGENTS.md) |
+
+---
+
+## 3. Application Lifecycle
+
+### 3.1 Startup (CompositionRoot)
+
+`start.py` → `SingleInstanceLock` → Event loop with `GracefulShutdownManager` → 8-stage dependency provisioning:
+
+| Stage | Provisioner | Dependencies Created |
+|-------|------------|---------------------|
+| 1 | `_provision_infrastructure` | ExchangeManager, aiohttp session, KeyboardHandler |
+| 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TechnicalIndicatorsFactory, TimeframeValidator |
+| 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS/Crawl4AI news client |
+| 4 | `_provision_rag_layer` | RagEngine, NewsManager, LocalTaxonomyProvider, TickerManager |
+| 5 | `_provision_model_layer` | AI provider clients, ProviderOrchestrator, ModelManager |
+| 6 | `_provision_analyzer_layer` | AnalysisEngine, MarketDataCollector, TechnicalCalculator, PatternAnalyzer |
+| 7 | `_provision_trading_layer` | TradingStrategy, ExitMonitor, VectorMemoryService, TradingStatisticsService, TradingBrainService |
+| 8 | `_provision_notifiers` | Discord notifier, console notifier, file notifier |
+
+**Architectural invariant:** All services are instantiated in the composition layer and injected via constructor parameters. **Never** construct service dependencies inside other service classes.
+
+### 3.2 Main Loop
 
 ```
-start.py (CompositionRoot)
-  -> SingleInstanceLock
-  -> Event loop setup with GracefulShutdownManager
-  -> 8-stage dependency provisioning:
-       1. _provision_infrastructure   (logger, config, persistence)
-       2. _provision_utilities        (token counter, profiler, keyboard)
-       3. _provision_platforms        (exchanges, CCXT, CoinGecko, Alternative.me, DeFiLlama)
-       4. _provision_rag              (RAG engine, news manager, taxonomy)
-       5. _provision_model            (AI providers with fallback chain)
-       6. _provision_analyzer         (AnalysisEngine, data fetcher, indicators)
-       7. _provision_trading          (TradingStrategy, ExitMonitor, VectorMemory, Statistics)
-       8. _provision_notifiers        (Discord, console, file notifier)
-  -> App loop: AnalysisEngine -> TradingBrainService -> TradingStrategy -> ExitMonitor
+AnalysisEngine.analyze()
+  ├── MarketDataCollector → DataFetcher (OHLCV + order book + trade flow)
+  ├── TechnicalCalculator (40+ indicators) + LongTerm data + Weekly macro
+  ├── PatternAnalyzer (chart patterns + indicator patterns)
+  ├── ChartGenerator (4K PNG)
+  ├── RAG context retrieval
+  ├── Brain context injection (confidence + rules similar to current conditions)
+  ├── AI provider call → TradingAnalysisResponseModel
+  └── Structured dict returned to TradingStrategy
+       ↓
+TradingStrategy.evaluate()
+  ├── UnifiedParser → validate signal
+  ├── GuardPipeline (symbol → cooldown → max size)
+  ├── RiskManager → RiskAssessment (SL/TP scaling, computes R:R)
+  ├── TradingStrategy → R:R minimum check against brain-learned threshold (default 1.5)
+  ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → APPROVED → EXECUTED
+  ├── RiskManager friction drain → store_blocked_trade feedback for brain learning
+  └── ExitMonitor (dual-mode: soft at candle close; hard at configurable interval per SL/TP type)
+       └── PositionStatusMonitor → background asyncio loop with dynamic rescheduling
+       ↓
+BrainAgent.update_from_closed_trade()
+  ├── BrainExperienceRecorder → store vector memory
+  ├── trade_count++ → schedule reflection if interval reached
+  └── ReflectionEngine → sequential: best-practice → anti-pattern → AI-mistake rules
 ```
 
-### 1.3 Dependency Injection
+### 3.3 Shutdown
 
-All services are instantiated in the **composition layer** (`start.py` / `app.py`) and injected via constructor parameters. **Never** construct service dependencies inside other service classes. This is the single most important architectural convention.
+`GracefulShutdownManager` handles:
+- SIGINT/SIGTERM → drain active analysis → persist state → close providers → flush logs
+- Keyboard handler → manual stop with state preservation
 
-### 1.4 Core Module Map
+---
 
-| Layer | Key Modules | Responsibility |
-|-------|-------------|----------------|
-| **Brain** | `trading/brain.py` (facade) + 5 collaborators | LLM-driven decision engine |
-| | `brain_context.py` | Context assembly for prompts |
-| | `brain_experience.py` | Outcome-aware memory with recency decay |
-| | `brain_exit_profiles.py` | Exit strategy profiles |
-| | `brain_patterns.py` | Chart pattern integration |
-| | `brain_reflection.py` | Semantic rule learning via reflection loops |
-| **Analyzer** | `AnalysisEngine`, `TechnicalCalculator`, `PatternAnalyzer` | Market data analysis, indicator calculation, pattern detection |
-| | `analysis_context.py` | Context aggregation for analysis pipeline |
-| | `analysis_result_processor.py` | Post-analysis result processing |
-| | `market_data_collector.py` | Market data aggregation |
-| | `market_metrics_calculator.py` | Market metrics computation |
-| | `pattern_quality_scorer.py` | Pattern quality scoring |
-| | `trend_validator.py` | Trend validation logic |
-| | `formatters/` | Technical, market, overview, period, long-term formatters |
-| | `prompts/` | Prompt builder, context builder, template manager |
-| | `pattern_engine/` | Chart, swing, trendline patterns |
-| | `indicator_patterns/` | RSI, MACD, MA crossover, volume, stochastic, divergence, volatility patterns |
-| **Trading** | `TradingStrategy`, `ExitMonitor`, `PositionStatusMonitor` | Strategy execution, exit monitoring, position tracking |
-| | `VectorMemoryService` (+ context, rules, analytics) | ChromaDB-based vector memory (ChromaDB client injected via DI from `start.py`) |
-| | `Statistics`, `StatisticsCalculator` | Trade statistics, performance tracking |
-| | `PositionExtractor`, `StopLossTighteningPolicy` | Position parsing, SL policy |
-| | `audit.py` | Trade audit logging |
-| | `data_models.py` | Shared trading data models |
-| | `memory.py` | Memory abstraction layer |
-| | `order_lifecycle.py` | Order lifecycle management |
-| | `guards/` | Order governance pipeline (`configured_symbol.py`, `cooldown_window.py`, `max_position_size.py`, `pipeline.py`) |
-| **RAG** | `RagEngine`, `NewsManager`, `NewsRepository` | Retrieval-Augmented Generation |
-| | `news_ingestion/` | RSS provider, Crawl4AI enricher, schema mapper |
-| | `market_components/` | Market data cache, fetcher, processor, overview builder |
-| | `ScoringPolicy`, `LocalTaxonomy`, `TickerManager` | Scoring, categorization, ticker management |
-| | `article_processor.py`, `category_processor.py` | Article processing & categorization |
-| | `collision_resolver.py`, `context_builder.py` | Cache collision resolution, RAG context building |
-| | `file_handler.py`, `index_manager.py` | File-based storage & index management |
-| | `market_data_manager.py` | Market data lifecycle management |
-| **Indicators** | `indicators/` (20+ modules) | Full technical indicator library (momentum, overlap, price, trend, volatility, volume, statistical, support/resistance, sentiment) |
-| **Platforms** | `CCXtMarketApi`, `CoinGecko`, `AlternativeMe`, `DeFillama` | External data providers |
-| | `ExchangeManager` | Multi-exchange connection management |
-| | `ai_providers/` | Google AI, OpenRouter, LM Studio, BlockRun, Mock — with fallback chain |
-| | `cryptocompare/` | CryptoCompare market/news API |
-| | `free_news/` | Free news source integration |
-| **Evals** | `evals/` | Evaluation framework (`baselines.py`, `prompt_response_scoring.py`, `replay_fixture.py`) |
-| **Dashboard** | `DashboardServer` (FastAPI) + 5 routers | Real-time web dashboard with WebSocket streams |
-| | `static/` | HTML/CSS/JS frontend |
-| **Managers** | `ModelManager`, `PersistenceManager`, `RiskManager`, `ProviderOrchestrator` | Model lifecycle, state persistence, risk management, provider orchestration |
-| | `provider_types.py` | Provider type definitions |
-| **Config** | `config/loader.py`, `config/protocol.py`, `contracts/` | Configuration loading, model/risk contracts |
-| **Factories** | 4 factory modules | Data fetcher, position, provider, technical indicators factories |
-| **Utils** | `profiler.py`, `token_counter.py`, `graceful_shutdown_manager.py`, `keyboard_handler.py`, `decorators.py`, `timeframe_validator.py`, `indicator_classifier.py`, `data_utils.py`, `format_utils.py` | Cross-cutting utilities |
+## 4. Core Data Flow
 
-### 1.5 Active Platform Integrations
+### 4.1 Decision Cycle
 
-- **Exchanges:** Binance, KuCoin, Gate.io, MEXC, Hyperliquid (via CCXT)
-- **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CryptoCompare
-- **AI Providers:** Google AI (primary — Gemini 3.5 Flash), OpenRouter (fallback — DeepSeek), BlockRun.AI, LM Studio (local), Mock
-- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, CryptoCompare, free news feed (RSS + Crawl4AI enrichment)
+```
+┌──────────────┐    ┌──────────────────────┐    ┌───────────────────┐
+│  DataFetcher  │───▶│   AnalysisEngine     │───▶│  ProviderOrch.    │
+│  (CCXT/API)   │    │  TechCalc + Pattern  │    │  (Fallback Chain) │
+└──────────────┘    │  Chart + RAG + Brain  │    └────────┬──────────┘
+                    └──────────────────────┘             │
+                                    ▲                    ▼
+                                    │           ┌──────────────────┐
+                                    │           │   UnifiedParser   │
+                                    │           │  → TradingSignal  │
+                                    │           └────────┬──────────┘
+                                    │                    ▼
+                                    │           ┌──────────────────┐
+                                    │           │  GuardPipeline   │
+                                    │           │  3 Guards (pass?)│
+                                    │           └────────┬──────────┘
+                                    │                    ▼
+                                    │           ┌──────────────────┐
+                                    │           │   RiskManager    │
+                                    │           │  SL/TP/Size/R:R  │
+                                    │           └────────┬──────────┘
+                                    │                    │
+                                    │                    ▼
+                                    │           ┌──────────────────────┐
+                                    │           │ TradingStrategy      │
+                                    │           │ R:R check (min 1.5)  │
+                                    │           │ + ExitMonitor        │
+                                    │           └────────┬─────────────┘
+                                    │                    │
+                                    │                    ▼ (on close)
+                                    │           ┌──────────────────────┐
+                                    └───────────│   BrainAgent         │
+                                                │  Experience +        │
+                                                │  Reflection + Rules  │
+                                                └──────────────────────┘
+```
 
-### 1.6 Configuration
+### 4.2 Learning Loop
+
+```
+Closed Trade ──▶ BrainExperienceRecorder ──▶ ChromaDB (vector memory)
+                                                   │
+                          trade_count % interval == 0
+                                                   │
+                                                   ▼
+                                          ReflectionEngine
+                                          ├── Best-practice rules
+                                          ├── Anti-pattern rules
+                                          └── AI-mistake rules
+                                                   │
+                                                   ▼
+                                          Next Cycle: BrainContextProvider
+                                          queries ChromaDB for:
+                                          - Similar past trades (top-5)
+                                          - Relevant rules (matched to conditions)
+                                          - Confidence stats by level
+                                          - Blocked trade feedback
+                                                   │
+                                                   ▼
+                                          Injected into LLM prompt
+```
+
+---
+
+## 5. Configuration
 
 Active config at `config/config.ini`. Key settings:
 
-- **Pair:** BTC/USDC, **Timeframe:** 4h, **Candles:** 999 (125 for AI chart)
-- **Capital:** $10,000 simulated, **Fee:** 0.075%
-- **Max Position:** 10%, **Fallback sizes:** 1% / 2% / 3%
-- **News update:** every 4 hours, 5 articles max
-- **Model:** Google Gemini 3.5 Flash (temperature 1.0), OpenRouter fallback
-- **Dashboard:** 0.0.0.0:8000
+| Setting | Value |
+|---------|-------|
+| **Pair** | BTC/USDC |
+| **Timeframe** | 4h |
+| **Candles** | 999 (125 for AI chart) |
+| **Capital** | $10,000 simulated |
+| **Fee** | 0.075% |
+| **Max Position** | 10% of portfolio |
+| **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
+| **News update** | Every 4 hours, 5 articles max |
+| **Model** | Google Gemini 3.5 Flash (provider=`googleai`), OpenRouter base model `google/gemini-3-flash-preview`, OpenRouter fallback `deepseek/deepseek-r1:free` |
+| **Dashboard** | 0.0.0.0:8000 |
 
 ---
 
-## 2. Core Coding Style & Standards
-
-### 2.1 Language & Documentation
-
-- **English only** for code, comments, docstrings, and documentation.
-- Use **docstrings** for documentation. Keep `#` comments rare — only for logic that is not self-evident.
-- **No decorative section headers** made from `#` and `=` in Python files.
-- **Never** more than one consecutive blank line. Avoid extra horizontal spacing.
-- Update `CHANGELOG.md` whenever a change materially affects behavior, configuration, dependencies, public APIs, user workflows, or release packaging.
-
-### 2.2 Python Typing
-
-- **Explicit type hints** on class attributes, function signatures, and return values.
-- **Modern Python 3.10+ syntax:** `list[str]`, `dict[str, int]`, `str | None`, `type[X]`.
-- Investigate call sites and object construction before defining or assuming types.
-- For known contracts, use **direct attribute access** and `None` checks instead of `hasattr()` or `getattr()`.
-- Avoid redundant `isinstance()` checks when type hints or interfaces already define the contract. Prefer `typing.Protocol` where appropriate.
-- Do not add delegation methods that only forward to a member object. Expose or use the member directly.
-- Prefer **class-owned behavior** over new module-level helper functions. Keep standalone functions only for established stateless utility modules.
-
-### 2.3 Design Principles
-
-- **DRY is good, but not at the cost of readability.** Avoid excessive abstraction or indirection.
-- **Simple, idiomatic solutions** — prefer standard libraries or established packages over custom parsing or over-engineered helpers.
-- **Dependency Injection:** Instantiate services in the composition/app wiring layer. Do not construct service dependencies inside other service classes.
-
-### 2.4 Pydantic v2 Modeling
-
-- Use **Pydantic v2** for schemas, API responses, and configuration objects. Use standard `dataclass` only for simple internal state without validation needs.
-- Configure with `model_config = ConfigDict(...)` — **not** `class Config:`.
-- Use `@field_validator` and `@model_validator` — **not** legacy `validator()` / `root_validator()`.
-- Use `model_dump()` and `model_validate()` — **not** `dict()` / `parse_obj()`.
-- Prefer **strict types** or strict model configuration where silent coercion would be risky.
-- Use **attribute access** (`response.content`) — **not** dictionary-style lookups.
-- Reference implementation: `src/platforms/ai_providers/response_models.py`.
-
-### 2.5 Linting & Code Quality
-
-- Initialize attributes in `__init__`.
-- **No** undefined variables, unused imports, unused variables, or unused arguments.
-- Imports at the top of the module. Standard library before third-party ordering.
-- Tools: `ruff` (lint), `pylint`, `mypy` (type check), `pytest` (tests).
-
-### 2.6 Refactoring Approach
-
-**Golden rules:**
-1. Behavior is preserved — refactoring changes how, not what.
-2. Small steps — test after each change.
-3. Version control — commit before and after each safe state.
-4. Tests are essential — without tests, you are editing, not refactoring.
-5. One thing at a time — do not mix refactoring with feature changes.
-6. Avoid redundant test loops — after a focused suite passes, do not rerun it unless the changed slice can affect it.
-
-**When NOT to refactor:**
-- Code that works and will not change again.
-- Critical production code without tests (add tests first).
-- When under a tight deadline.
-
----
-
-## 3. Operational Rules & Playbooks
-
-### 3.1 Python Execution
-
-- **Always** use the local virtual environment:
-  ```bash
-  source .venv/bin/activate
-  python start.py
-  ```
-- **Do not use global system Python.** The interpreter must resolve inside `.venv/`.
-- Use **Linux bash syntax** — never PowerShell or `.venv/Scripts/` paths.
-- For tool-driven terminal calls, use `.venv/bin/python` and `git` without path anchors — Hermes agents set their working directory to the project root automatically.
-
-### 3.2 Testing
-
-```bash
-source .venv/bin/activate
-python -m pytest tests/                         # Full suite
-python -m pytest tests/test_vector_memory.py -q  # Focused file
-python -m pytest tests/test_vector_memory.py -k fallback -q  # Specific test
-```
-
-- **55 test files** in `tests/` (`test_*.py`) + `conftest.py`, `__init__.py`.
-- Redirect structured output to a temporary file, then read the file:
-  ```bash
-  python -m pytest tests/test_indicator_classifier.py -q > temp_pytest.txt
-  cat temp_pytest.txt
-  ```
-- `tests/conftest.py` monkeypatches `src.config.loader` — config behavior under tests may differ from normal runtime.
-- Keep unrelated pre-existing failures out of scope unless they block the current task.
-- Prefer validating the exact file or test name affected by the change.
-
-### 3.3 Data Directory
-
-- **`data/` is local-only state.** Do not commit `data/` runtime files.
-- `data/trading/` contains: API costs, brain vector DBs (ChromaDB), positions, statistics, trade history.
-- `data/news_cache/` contains: recent news JSON.
-- `data/news_fetch_preview/` contains: per-source raw and normalized JSON artifacts.
-- `data/market_data/` contains: CoinGecko global JSON.
-
-### 3.4 Cloudflare Free Cache Playbook
-
-**Goal:** Increase edge cache hit ratio while preserving data freshness for the live dashboard.
-
-**6 Cache Rules (ordered top to bottom):**
-1. **Bypass** `/api/brain/refresh-price` — volatile price endpoint
-2. **Bypass** `/api/brain/vectors?query=*` — high-cardinality search
-3. **Cache** `/api/status/countdown`
-4. **Cache** `/api/*` — safe GET traffic
-5. **Cache** HTML shell pages
-6. **Cache** static assets (or skip, using CF defaults)
-
-**Deployment modes:** Conservative (default) and Public High-Offload profiles.
-
-**Origin contract:** Versioned static assets, HTML shell, API defaults, explicit no-store bypasses.
-
-**Validation:** Check `CF-Cache-Status` headers, review CF analytics.
-
-**Rollback:** Revert rules to previous configuration via CF dashboard.
-
-### 3.5 CI/CD Pipeline
-
-**Workflow:** `.github/workflows/compatibility_manual_main.yml` (manual trigger via `workflow_dispatch`)
-
-| Job | OS | Python | Scope |
-|-----|----|--------|-------|
-| `guard-main` | — | — | Branch guard (only `main`) |
-| `linux-full` | Ubuntu | 3.11 | Full `pytest tests/` |
-| `windows-medium` | Windows | 3.11 | `ruff check` + `compileall` |
-| `macos-smoke` | macOS | 3.11 | Syntax compilation check |
-
-### 3.6 Branch & Git Strategy
-
-- **Primary development branch** varies by release cycle — check `git branch --show-current` before starting work.
-- **Feature branches** branch from and PR back to the active development branch (not `main`).
-- **Other branches:** `main`, `develop`, `master_public`.
-- **Remote:** single `origin` at `https://github.com/qrak/LLM_trader.git`
-
-### 3.7 Private-to-Public Sync
-
-**Procedure:**
-1. Start from `master_public`, squash private changes into a local sync branch.
-2. Create sync branch: `git checkout -B sync/private-to-public master_public`
-3. Squash merge: `git merge --squash release/v1.0-rc2 --allow-unrelated-histories`
-4. Safety gate: `git diff --cached --stat` — verify no secrets or private assets.
-5. Commit: `git commit -m "chore(sync): publish private changes to public as single squashed commit"`
-6. Push: `git push public sync/private-to-public:master`
-7. Verify parity: `git diff --stat public/master..release/v1.0-rc2`
-
-**Important:** Do not use raw `git rev-list public/master...release/v1.0-rc2` counts in release summaries — public syncs are squashed, so ancestry counts overstate the real delta.
-
-### 3.8 PR Process
-
-**Review workflow:**
-1. Fetch PR metadata and changed files/diff.
-2. Review for: logic regressions, type hints, edge cases, security, performance.
-3. Run targeted tests for touched areas. Add regression tests if coverage is missing.
-4. Fix issues on PR branch, commit, push.
-5. Merge only if code is correct and tests are green locally.
-6. Post-merge: `git fetch --prune origin`, switch to target branch, `git pull --ff-only origin`.
-
----
-
-## 4. Guardrails & Deployment Restrictions
-
-### 4.1 Trading Safety
-
-- **Paper trading only.** Real exchange order execution is not yet implemented.
-- **Soft exits** enabled. Exit monitor checks every 15 minutes.
-- **Max position size:** 10% of portfolio.
-- **Fallback position sizes:** 1% / 2% / 3%.
-- **Simulated capital:** $10,000 with 0.075% fee model.
-
-### 4.2 Agent Governance
-
-- Treat **trading actions, external provider calls, and persistent memory writes** as high-risk operations.
-- Prefer **append-only logs** or traceable audit events for decisions affecting positions, signals, or external notifications.
-- **Fail-closed behavior** if governance logic cannot decide safely.
-- Keep governance configuration **declarative** so it can be reviewed without reading code paths.
-- Order governance pipeline at `src/trading/guards/` provides configurable pre-execution checks (symbol whitelist, cooldown windows, position size limits).
-
-### 4.3 LLM Output Quality (Agentic Eval)
-
-**When to evaluate:**
-- Prompt or output quality issues are recurring.
-- Explicit pass criteria needed for LLM responses.
-- Comparing variants instead of relying on intuition.
-
-**Evaluation criteria for trading decisions:**
-- Structured output validity
-- Consistency with indicators
-- Risk framing accuracy
-- Fallback robustness
-- Schema compliance
-
-**Procedure:**
-1. Define a small rubric before changing the prompt or logic.
-2. Generate one baseline output.
-3. Evaluate against explicit criteria.
-4. Refine prompt, parser, or post-processing only for failed dimensions.
-5. Re-run and compare. Stop after a small number of iterations or once improvement stalls.
-
-### 4.4 Safety Checklists
-
-**Before every push:**
-- [ ] No secrets or credentials added
-- [ ] Type hints and docstrings updated where needed
-- [ ] Changes follow existing repository conventions
-- [ ] `CHANGELOG.md` updated (if behavior/config/API/workflow changed)
-- [ ] `README.md` updated (if user-facing behavior changed)
-- [ ] Tests pass locally
-
-### 4.5 Context Mapping (Before Changes)
-
-**Procedure for any task:**
-1. Start from the most concrete anchor: file, symbol, test, or failing behavior.
-2. Identify the controlling code path — not just a wrapper or registration layer.
-3. Find the smallest set of related files:
-   - Owning implementation
-   - Direct dependencies
-   - Nearest tests
-   - One similar pattern if needed
-4. Stop once there is one falsifiable hypothesis and one cheap validating check.
-5. Do not widen exploration until that check is tried.
-
----
-
-## 5. Project Structure Reference
+## 6. Project Structure Reference
 
 ```
 LLM_trader/
-  start.py                         # Entry point + CompositionRoot
-  AGENTS.md                        # This file — master agent instructions
-  CLAUDE.md                        # Pointer to AGENTS.md
-  README.md                        # Project overview, setup, roadmap
-  CONTRIBUTING.md                  # Contribution guidelines
-  CHANGELOG.md                     # Version history
-  requirements.txt / requirements-dev.txt
-  keys.env / keys.env.example      # Secrets
-  .pylintrc / pytest.ini           # Lint & test config
-  .cursorrules / .windsurfrules    # Agent entry points (delegate here)
-  .github/
-    copilot-instructions.md        # GitHub Copilot instructions
-    workflows/compatibility_manual_main.yml    # CI/CD
-  config/
-    config.ini / config.ini.example
-    model_pricing.json
-    rag_priorities.json
-  src/
-    app.py                     # Main application module
-    analyzer/                  # AnalysisEngine, TechnicalCalculator, PatternAnalyzer,
-                               #   analysis_context, analysis_result_processor,
-                               #   market_data_collector, market_metrics_calculator,
-                               #   pattern_quality_scorer, trend_validator,
-                               #   formatters, prompts, pattern_engine
-    config/                    # loader.py, protocol.py
-    contracts/                 # model_contract.py, risk_contract.py
-    dashboard/                 # FastAPI server, 5 routers, static frontend
-    evals/                     # Evaluation framework (baselines, scoring, replay)
-    factories/                 # 4 factory modules
-    indicators/                # 8 sub-packages (base, momentum, overlap, price, trend,
-                               #   volatility, volume, statistical, support/resistance, sentiment)
-    logger/                    # logger.py
-    managers/                  # ModelManager, PersistenceManager, RiskManager,
-                               #   ProviderOrchestrator, provider_types
-    notifiers/                 # Base, console, file notifier + components, notifier.py
-    parsing/                   # unified_parser.py
-    platforms/                 # AI providers, CCXT, CoinGecko, Alternative.me,
-                               #   DeFiLlama, ExchangeManager, CryptoCompare, free_news
-    rag/                       # RagEngine, news ingestion (RSS, Crawl4AI),
-                               #   market components, scoring, taxonomy,
-                               #   article_processor, context_builder, index_manager
-    trading/                   # TradingBrainService + 5 collaborators, strategy,
-                               #   memory, statistics, monitors, audit, data_models,
-                               #   order_lifecycle, guards (governance pipeline)
-    utils/                     # Profiler, token counter, graceful shutdown, decorators, etc.
-  tests/                       # 55 test_*.py files + conftest.py
-  docs/
-    plans/                     # Planning documents
-  scripts/                     # Cross-platform startup scripts (Linux, macOS, Windows)
-  data/                        # Runtime state (not committed)
-  website/                     # Astro 5 + Tailwind CSS 3 landing page (separate from live dashboard)
-                               #   - Framework: Astro 5 (static output), TypeScript, PostCSS
-                               #   - Styling: Tailwind CSS 3 (`tailwind.config.mjs`),
-                               #     Autoprefixer, custom shell/signal color palette
-                               #   - Entry: `src/pages/index.astro` — imports all components
-                               #   - Components: Hero, LiveTelemetry, ArchitectureBento,
-                               #     DirectoryDive, EdgeInfrastructure, RiskFooter
-                               #   - Layout: `src/layouts/BaseLayout.astro` — dark theme,
-                               #     Space Grotesk font, `.ambient-grid` background overlay
-                               #   - Styles: `src/styles/global.css` — Tailwind directives,
-                               #     dark scheme, body gradient, ambient grid, panel/mono
-                               #     utilities, custom scrollbars, reduced-motion support
-                               #   - Data: `src/data/site.ts` — copy/text constants
-                               #   - Build: npm run build (generates static dist/)
-  img/                         # Dashboard screenshots
-  logs/                        # Bot logs by date
+├── start.py                     # Entry point + CompositionRoot
+├── AGENTS.md                    # THIS FILE — master architecture blueprint
+├── CLAUDE.md                    # Pointer to AGENTS.md
+├── README.md                    # Project overview, setup, roadmap
+├── CHANGELOG.md                 # Version history
+├── requirements.txt / -dev.txt
+├── keys.env / keys.env.example  # Secrets
+├── config/
+│   ├── config.ini               # Active configuration
+│   ├── model_pricing.json       # Per-model cost data
+│   └── rag_priorities.json      # News source priority weights
+├── src/
+│   ├── app.py                   # Main application wiring
+│   ├── trading/                 # 🧠 Brain Agent + Strategy + Monitors
+│   │   ├── AGENTS.md            # Agent docs
+│   │   ├── brain.py             # TradingBrainService (facade)
+│   │   ├── brain_*.py           # 5 collaborators
+│   │   ├── trading_strategy.py  # Strategy orchestration
+│   │   ├── exit_monitor.py      # Hard/soft exit checks
+│   │   ├── vector_memory.py     # ChromaDB interface
+│   │   ├── statistics.py        # P&L tracking
+│   │   └── guards/              # 🛡️ Governance Pipeline
+│   │       └── AGENTS.md
+│   ├── analyzer/                # 🔬 Analysis Engine
+│   │   ├── AGENTS.md            # Agent docs
+│   │   ├── analysis_engine.py   # Orchestrator
+│   │   ├── technical_calculator.py # 40+ indicators
+│   │   ├── pattern_engine/      # Chart + indicator patterns
+│   │   ├── prompts/             # System prompt construction
+│   │   ├── formatters/          # Context formatting (5 modules)
+│   │   ├── data_fetcher.py      # Exchange data abstraction
+│   │   └── ...                  # 15+ supporting modules
+│   ├── rag/                     # 📰 RAG Engine
+│   │   ├── AGENTS.md            # Agent docs
+│   │   ├── rag_engine.py        # Orchestrator
+│   │   ├── news_manager.py      # News lifecycle
+│   │   ├── news_ingestion/      # RSS + Crawl4AI
+│   │   └── ...                  # 15+ supporting modules
+│   ├── managers/                # ⚙️ Risk Manager + ☁️ Provider Orchestrator
+│   │   ├── AGENTS.md            # Agent docs
+│   │   ├── risk_manager.py      # Signal safety layer
+│   │   ├── provider_orchestrator.py  # AI fallback chain
+│   │   └── model_manager.py     # Model lifecycle
+│   ├── dashboard/               # 📊 Dashboard
+│   │   ├── AGENTS.md            # Agent docs
+│   │   ├── server.py            # FastAPI app
+│   │   └── routers/             # 5 API routers
+│   ├── indicators/              # Indicator library (50+ functions)
+│   ├── platforms/               # AI providers + exchange APIs
+│   ├── evals/                   # Evaluation framework
+│   ├── factories/               # 4 factory modules
+│   ├── contracts/               # Data contracts (model, risk)
+│   ├── parsing/                 # UnifiedParser
+│   ├── logger/                  # Structured logging
+│   ├── notifiers/               # Discord, console, file
+│   └── utils/                   # Profiler, token counter, etc.
+├── tests/                       # 55 test_*.py files + conftest.py
+├── data/                        # Runtime state (not committed)
+├── website/                     # Astro 5 + Tailwind landing page
+├── scripts/                     # Cross-platform startup scripts
+└── docs/
+    └── plans/                   # Planning documents
 ```
 
 ---
 
-## 6. Quick Reference — Command Cheat Sheet
+## 7. Active Platform Integrations
+
+- **Exchanges:** Binance, KuCoin, Gate.io, MEXC, Hyperliquid (via CCXT)
+- **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
+- **AI Providers:** Google AI (primary — Gemini 3.5 Flash), LM Studio (local text fallback), OpenRouter (secondary provider with configurable base + fallback models)
+- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, RSS feeds with Crawl4AI enrichment
+
+---
+
+## 8. Operational Rules
+
+See individual agent READMEs for detailed prompts, inputs, outputs, and edge cases. For coding conventions, testing procedures, and CI/CD, refer to the legacy `AGENTS.md` sections or `CONTRIBUTING.md`.
+
+### Quick Reference
 
 ```bash
 # Start the bot
 source .venv/bin/activate && python start.py
 
 # Run full test suite
-.venv/bin/python -m pytest tests/ > temp_pytest.txt
+.venv/bin/python -m pytest tests/
 
 # Run focused test
 .venv/bin/python -m pytest tests/test_vector_memory.py -k fallback -q
 
-# Lint check
+# Lint
 .venv/bin/python -m ruff check src tests start.py
 
 # Type check
 .venv/bin/python -m mypy src/
-
-# Git status
-git status
 ```
+
+### Safety
+
+- **Paper trading only** — real exchange order execution not implemented
+- **Soft exits** enabled, ExitMonitor checks every 15 minutes
+- **Max position:** 10% of portfolio
+- **Simulated capital:** $10,000 with 0.075% fee model
+- **Fail-closed behavior** if governance/risk validation cannot decide safely
