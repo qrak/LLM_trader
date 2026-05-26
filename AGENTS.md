@@ -1,6 +1,6 @@
 # LLM Trader — Master Agent Instructions
 
-> Consolidated from all instruction files, skills, playbooks, and documentation in the LLM Trader repository. This single file replaces fragmented `.github/instructions/`, `.github/skills/`, `docs/`, `.clinerules`, and template files as the authoritative guide for any agent or developer working on this codebase.
+> Consolidated from all instruction files, skills, playbooks, and documentation in the LLM Trader repository. This single file replaces fragmented `.github/`, `docs/`, `.cursorrules`, `.windsurfrules`, and template files as the authoritative guide for any agent or developer working on this codebase.
 
 ---
 
@@ -10,8 +10,8 @@
 
 **SEMANTIC SIGNAL LLM (LLM Trader)** is a BETA / Research Edition autonomous, asyncio-first trading bot. It converts market data, news (via RAG), and chart context into structured BUY / SELL / HOLD decisions via large language models. The bot runs in **demo-account and paper-trading mode** — real exchange order execution is not yet implemented.
 
-- **Repository:** `/home/qrak/LLM_trader` (private) + GitHub public mirror
-- **Python:** 3.13+, Linux (bash), virtual environment at `.venv/`
+- **Repository:** https://github.com/qrak/LLM_trader.git
+- **Python:** 3.13, Linux (bash), virtual environment at `.venv/`
 - **Entry point:** `python start.py` or cross-platform scripts in `scripts/`
 - **Live dashboard:** https://semanticsignal.qrak.org
 - **License:** MIT
@@ -49,24 +49,44 @@ All services are instantiated in the **composition layer** (`start.py` / `app.py
 | | `brain_patterns.py` | Chart pattern integration |
 | | `brain_reflection.py` | Semantic rule learning via reflection loops |
 | **Analyzer** | `AnalysisEngine`, `TechnicalCalculator`, `PatternAnalyzer` | Market data analysis, indicator calculation, pattern detection |
+| | `analysis_context.py` | Context aggregation for analysis pipeline |
+| | `analysis_result_processor.py` | Post-analysis result processing |
+| | `market_data_collector.py` | Market data aggregation |
+| | `market_metrics_calculator.py` | Market metrics computation |
+| | `pattern_quality_scorer.py` | Pattern quality scoring |
+| | `trend_validator.py` | Trend validation logic |
 | | `formatters/` | Technical, market, overview, period, long-term formatters |
 | | `prompts/` | Prompt builder, context builder, template manager |
 | | `pattern_engine/` | Chart, swing, trendline patterns |
-| | `indicator_patterns/` | RSI, MACD, MA crossover, volume, stochastic patterns |
+| | `indicator_patterns/` | RSI, MACD, MA crossover, volume, stochastic, divergence, volatility patterns |
 | **Trading** | `TradingStrategy`, `ExitMonitor`, `PositionStatusMonitor` | Strategy execution, exit monitoring, position tracking |
 | | `VectorMemoryService` (+ context, rules, analytics) | ChromaDB-based vector memory (ChromaDB client injected via DI from `start.py`) |
 | | `Statistics`, `StatisticsCalculator` | Trade statistics, performance tracking |
 | | `PositionExtractor`, `StopLossTighteningPolicy` | Position parsing, SL policy |
+| | `audit.py` | Trade audit logging |
+| | `data_models.py` | Shared trading data models |
+| | `memory.py` | Memory abstraction layer |
+| | `order_lifecycle.py` | Order lifecycle management |
+| | `guards/` | Order governance pipeline (`configured_symbol.py`, `cooldown_window.py`, `max_position_size.py`, `pipeline.py`) |
 | **RAG** | `RagEngine`, `NewsManager`, `NewsRepository` | Retrieval-Augmented Generation |
 | | `news_ingestion/` | RSS provider, Crawl4AI enricher, schema mapper |
 | | `market_components/` | Market data cache, fetcher, processor, overview builder |
 | | `ScoringPolicy`, `LocalTaxonomy`, `TickerManager` | Scoring, categorization, ticker management |
+| | `article_processor.py`, `category_processor.py` | Article processing & categorization |
+| | `collision_resolver.py`, `context_builder.py` | Cache collision resolution, RAG context building |
+| | `file_handler.py`, `index_manager.py` | File-based storage & index management |
+| | `market_data_manager.py` | Market data lifecycle management |
 | **Indicators** | `indicators/` (20+ modules) | Full technical indicator library (momentum, overlap, price, trend, volatility, volume, statistical, support/resistance, sentiment) |
 | **Platforms** | `CCXtMarketApi`, `CoinGecko`, `AlternativeMe`, `DeFillama` | External data providers |
+| | `ExchangeManager` | Multi-exchange connection management |
 | | `ai_providers/` | Google AI, OpenRouter, LM Studio, BlockRun, Mock — with fallback chain |
+| | `cryptocompare/` | CryptoCompare market/news API |
+| | `free_news/` | Free news source integration |
+| **Evals** | `evals/` | Evaluation framework (`baselines.py`, `prompt_response_scoring.py`, `replay_fixture.py`) |
 | **Dashboard** | `DashboardServer` (FastAPI) + 5 routers | Real-time web dashboard with WebSocket streams |
-| | `static/` | HTML/CSS/JS frontend (7 CSS files, 9 JS modules) |
+| | `static/` | HTML/CSS/JS frontend |
 | **Managers** | `ModelManager`, `PersistenceManager`, `RiskManager`, `ProviderOrchestrator` | Model lifecycle, state persistence, risk management, provider orchestration |
+| | `provider_types.py` | Provider type definitions |
 | **Config** | `config/loader.py`, `config/protocol.py`, `contracts/` | Configuration loading, model/risk contracts |
 | **Factories** | 4 factory modules | Data fetcher, position, provider, technical indicators factories |
 | **Utils** | `profiler.py`, `token_counter.py`, `graceful_shutdown_manager.py`, `keyboard_handler.py`, `decorators.py`, `timeframe_validator.py`, `indicator_classifier.py`, `data_utils.py`, `format_utils.py` | Cross-cutting utilities |
@@ -74,19 +94,19 @@ All services are instantiated in the **composition layer** (`start.py` / `app.py
 ### 1.5 Active Platform Integrations
 
 - **Exchanges:** Binance, KuCoin, Gate.io, MEXC, Hyperliquid (via CCXT)
-- **Market Data:** CoinGecko, Alternative.me, DeFiLlama
-- **AI Providers:** Google AI (primary — Gemini 3 Flash Preview), OpenRouter (fallback — DeepSeek), BlockRun.AI, LM Studio (local), Mock
-- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate (RSS + Crawl4AI enrichment)
+- **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CryptoCompare
+- **AI Providers:** Google AI (primary — Gemini 3.5 Flash), OpenRouter (fallback — DeepSeek), BlockRun.AI, LM Studio (local), Mock
+- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, CryptoCompare, free news feed (RSS + Crawl4AI enrichment)
 
 ### 1.6 Configuration
 
-Active config at `config/config.ini` (202 lines). Key settings:
+Active config at `config/config.ini`. Key settings:
 
 - **Pair:** BTC/USDC, **Timeframe:** 4h, **Candles:** 999 (125 for AI chart)
 - **Capital:** $10,000 simulated, **Fee:** 0.075%
 - **Max Position:** 10%, **Fallback sizes:** 1% / 2% / 3%
 - **News update:** every 4 hours, 5 articles max
-- **Model:** temperature 0.7 (Google: 1.0), top_p 0.9, max_tokens 32768
+- **Model:** Google Gemini 3.5 Flash (temperature 1.0), OpenRouter fallback
 - **Dashboard:** 0.0.0.0:8000
 
 ---
@@ -149,17 +169,6 @@ Active config at `config/config.ini` (202 lines). Key settings:
 - Critical production code without tests (add tests first).
 - When under a tight deadline.
 
-**Refactoring priority** (per current plan):
-1. **DONE** — `TradingBrainService` (1276 lines -> 5 collaborator modules)
-2. **Next** — `Config` (596 lines, 60+ property getters -> `ConfigSection` helper, ~250 lines)
-3. **Then** — `AnalysisEngine` (798 lines -> extract `OrderBookAnalyzer` + `AnalysisDashboardState`, ~450 lines)
-
-**Refactoring removal order for LLM Trader:**
-1. `getattr`/`hasattr`/`setattr` removal first
-2. Decorative headers + dead code
-3. Typing modernization (protocol -> contract -> config -> app -> leaf modules)
-4. DI violations
-
 ---
 
 ## 3. Operational Rules & Playbooks
@@ -173,11 +182,7 @@ Active config at `config/config.ini` (202 lines). Key settings:
   ```
 - **Do not use global system Python.** The interpreter must resolve inside `.venv/`.
 - Use **Linux bash syntax** — never PowerShell or `.venv/Scripts/` paths.
-- For tool-driven terminal calls where cwd may drift, use path-anchored invocations:
-  ```bash
-  git -C /home/qrak/LLM_trader status
-  /home/qrak/LLM_trader/.venv/bin/python -m pytest tests/
-  ```
+- For tool-driven terminal calls, use `.venv/bin/python` and `git` without path anchors — Hermes agents set their working directory to the project root automatically.
 
 ### 3.2 Testing
 
@@ -188,7 +193,7 @@ python -m pytest tests/test_vector_memory.py -q  # Focused file
 python -m pytest tests/test_vector_memory.py -k fallback -q  # Specific test
 ```
 
-- **51 test files** in `tests/` (`test_*.py`).
+- **55 test files** in `tests/` (`test_*.py`) + `conftest.py`, `__init__.py`.
 - Redirect structured output to a temporary file, then read the file:
   ```bash
   python -m pytest tests/test_indicator_classifier.py -q > temp_pytest.txt
@@ -201,40 +206,12 @@ python -m pytest tests/test_vector_memory.py -k fallback -q  # Specific test
 ### 3.3 Data Directory
 
 - **`data/` is local-only state.** Do not commit `data/` runtime files.
-- Treat `data_template/` as the safe reference structure.
 - `data/trading/` contains: API costs, brain vector DBs (ChromaDB), positions, statistics, trade history.
 - `data/news_cache/` contains: recent news JSON.
 - `data/news_fetch_preview/` contains: per-source raw and normalized JSON artifacts.
 - `data/market_data/` contains: CoinGecko global JSON.
 
-### 3.4 News Ingestion Pipeline
-
-**Debug scripts:**
-```bash
-# Fetch and normalize news preview
-source .venv/bin/activate
-python scripts/fetch_free_news_preview.py --enrich-from-article-pages > temp_news_preview.txt
-
-# With cryptocurrency.cv source
-python scripts/fetch_free_news_preview.py --enrich-from-article-pages --include-cryptocurrency-cv > temp_news_preview_extended.txt
-
-# Compare cache vs fresh body quality
-python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
-```
-
-**Artifacts:**
-- `data/news_fetch_preview/news_raw_*.json` — per-source raw payload
-- `data/news_fetch_preview/news_normalized_*.json` — deduped normalized items
-- `data/news_fetch_preview/body_quality_*.json` — cache-vs-fresh quality comparison
-- `data/news_cache/recent_news.json` — cached recent news
-
-**Debug workflow:**
-1. Identify failure class: endpoint access, normalized quality, body text completeness, cache mismatch.
-2. Run relevant script, capture output to file.
-3. Inspect generated JSON artifacts.
-4. Only after artifact confirms the issue should you change code.
-
-### 3.5 Cloudflare Free Cache Playbook
+### 3.4 Cloudflare Free Cache Playbook
 
 **Goal:** Increase edge cache hit ratio while preserving data freshness for the live dashboard.
 
@@ -254,9 +231,9 @@ python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
 
 **Rollback:** Revert rules to previous configuration via CF dashboard.
 
-### 3.6 CI/CD Pipeline
+### 3.5 CI/CD Pipeline
 
-**Workflow:** `compatibility_manual_main.yml` (manual trigger via `workflow_dispatch`)
+**Workflow:** `.github/workflows/compatibility_manual_main.yml` (manual trigger via `workflow_dispatch`)
 
 | Job | OS | Python | Scope |
 |-----|----|--------|-------|
@@ -265,29 +242,27 @@ python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
 | `windows-medium` | Windows | 3.11 | `ruff check` + `compileall` |
 | `macos-smoke` | macOS | 3.11 | Syntax compilation check |
 
-### 3.7 Branch & Git Strategy
+### 3.6 Branch & Git Strategy
 
-- **Main development branch:** `main`
-- **Release branch:** `release/v1.0-rc1`
-- **Feature branches** from `main`, PR back to `main`.
-- Existing branches: `master`, `release`, `release/v1.0-rc1`, `test`
+- **Primary development branch** varies by release cycle — check `git branch --show-current` before starting work.
+- **Feature branches** branch from and PR back to the active development branch (not `main`).
+- **Other branches:** `main`, `develop`, `master_public`.
+- **Remote:** single `origin` at `https://github.com/qrak/LLM_trader.git`
 
-### 3.8 Private-to-Public Sync
+### 3.7 Private-to-Public Sync
 
 **Procedure:**
-1. Start from `public/master`, squash private `main` into a local sync branch.
-2. Create sync branch: `git checkout -B sync/private-to-public public/master`
-3. Squash merge: `git merge --squash main --allow-unrelated-histories`
+1. Start from `master_public`, squash private changes into a local sync branch.
+2. Create sync branch: `git checkout -B sync/private-to-public master_public`
+3. Squash merge: `git merge --squash release/v1.0-rc2 --allow-unrelated-histories`
 4. Safety gate: `git diff --cached --stat` — verify no secrets or private assets.
 5. Commit: `git commit -m "chore(sync): publish private changes to public as single squashed commit"`
 6. Push: `git push public sync/private-to-public:master`
-7. Verify parity: `git diff --stat public/master..main`
+7. Verify parity: `git diff --stat public/master..release/v1.0-rc2`
 
-**Important:** Do not use raw `git rev-list public/master...main` counts in release summaries — public syncs are squashed, so ancestry counts overstate the real delta.
+**Important:** Do not use raw `git rev-list public/master...release/v1.0-rc2` counts in release summaries — public syncs are squashed, so ancestry counts overstate the real delta.
 
-### 3.9 PR Process
-
-**Template fields:** Summary, Related Issues, Change Type (bug/feature/refactor/docs/test-only), Validation, Documentation Checklist, Safety Checklist.
+### 3.8 PR Process
 
 **Review workflow:**
 1. Fetch PR metadata and changed files/diff.
@@ -295,7 +270,7 @@ python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
 3. Run targeted tests for touched areas. Add regression tests if coverage is missing.
 4. Fix issues on PR branch, commit, push.
 5. Merge only if code is correct and tests are green locally.
-6. Post-merge: `git fetch --prune origin`, switch to `main`, `git pull --ff-only origin main`.
+6. Post-merge: `git fetch --prune origin`, switch to target branch, `git pull --ff-only origin`.
 
 ---
 
@@ -315,6 +290,7 @@ python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
 - Prefer **append-only logs** or traceable audit events for decisions affecting positions, signals, or external notifications.
 - **Fail-closed behavior** if governance logic cannot decide safely.
 - Keep governance configuration **declarative** so it can be reviewed without reading code paths.
+- Order governance pipeline at `src/trading/guards/` provides configurable pre-execution checks (symbol whitelist, cooldown windows, position size limits).
 
 ### 4.3 LLM Output Quality (Agentic Eval)
 
@@ -362,106 +338,81 @@ python scripts/compare_news_body_quality.py > temp_news_body_quality.txt
 
 ---
 
-## 5. Editor & IDE Configuration (Windows — VS Code)
-
-These settings live in `.vscode/settings.json` on the Windows machine and enforce consistent code quality:
-
-```json
-{
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
-  "python.terminal.activateEnvironment": false,
-  "editor.formatOnSave": true,
-  "python.analysis.typeCheckingMode": "basic",
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.python",
-    "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll.ruff": "explicit",
-      "source.organizeImports.ruff": "explicit"
-    }
-  },
-  "terminal.integrated.automationProfile.windows": {
-    "path": "powershell.exe",
-    "args": ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass"]
-  },
-  "chat.tools.terminal.autoApprove": {
-    "git remote": true,
-    "&": true
-  }
-}
-```
-
-- **Formatter:** Ruff (fix all + organize imports on save)
-- **Type checking:** basic mode via Pylance
-- **Terminal:** PowerShell with bypass execution policy
-- **Interpreter:** `.venv/Scripts/python.exe` (Windows layout)
-
----
-
-## 6. Project Structure Reference
+## 5. Project Structure Reference
 
 ```
 LLM_trader/
   start.py                         # Entry point + CompositionRoot
+  AGENTS.md                        # This file — master agent instructions
+  CLAUDE.md                        # Pointer to AGENTS.md
   README.md                        # Project overview, setup, roadmap
   CONTRIBUTING.md                  # Contribution guidelines
   CHANGELOG.md                     # Version history
   requirements.txt / requirements-dev.txt
   keys.env / keys.env.example      # Secrets
   .pylintrc / pytest.ini           # Lint & test config
-  .clinerules                      # Agent entry point (delegates here)
-
+  .cursorrules / .windsurfrules    # Agent entry points (delegate here)
   .github/
-    instructions/llm-trader.instructions.md   # Project guidelines (source of this file)
-    skills/                                    # 10 reusable agent skills (source of this file)
-    prompts/review-single-pr.prompt.md         # PR review template
-    ISSUE_TEMPLATE/                            # Bug report, feature request
-    pull_request_template.md
+    copilot-instructions.md        # GitHub Copilot instructions
     workflows/compatibility_manual_main.yml    # CI/CD
-
   config/
     config.ini / config.ini.example
     model_pricing.json
     rag_priorities.json
-
   src/
     app.py                     # Main application module
-    analyzer/                  # AnalysisEngine, TechnicalCalculator, PatternAnalyzer, formatters, prompts, pattern_engine
+    analyzer/                  # AnalysisEngine, TechnicalCalculator, PatternAnalyzer,
+                               #   analysis_context, analysis_result_processor,
+                               #   market_data_collector, market_metrics_calculator,
+                               #   pattern_quality_scorer, trend_validator,
+                               #   formatters, prompts, pattern_engine
     config/                    # loader.py, protocol.py
     contracts/                 # model_contract.py, risk_contract.py
-    dashboard/                 # FastAPI server, routers, static frontend
+    dashboard/                 # FastAPI server, 5 routers, static frontend
+    evals/                     # Evaluation framework (baselines, scoring, replay)
     factories/                 # 4 factory modules
-    indicators/                # 20+ indicator modules (base, momentum, overlap, trend, volatility, etc.)
+    indicators/                # 8 sub-packages (base, momentum, overlap, price, trend,
+                               #   volatility, volume, statistical, support/resistance, sentiment)
     logger/                    # logger.py
-    managers/                  # ModelManager, PersistenceManager, RiskManager, ProviderOrchestrator
-    notifiers/                 # Base, console, file notifier + components
+    managers/                  # ModelManager, PersistenceManager, RiskManager,
+                               #   ProviderOrchestrator, provider_types
+    notifiers/                 # Base, console, file notifier + components, notifier.py
     parsing/                   # unified_parser.py
-    platforms/                 # AI providers, CCXT, CoinGecko, Alternative.me, DeFiLlama
-    rag/                       # RagEngine, news ingestion, market components, scoring, taxonomy
-    trading/                   # TradingBrainService + 5 collaborators, strategy, memory, statistics, monitors
+    platforms/                 # AI providers, CCXT, CoinGecko, Alternative.me,
+                               #   DeFiLlama, ExchangeManager, CryptoCompare, free_news
+    rag/                       # RagEngine, news ingestion (RSS, Crawl4AI),
+                               #   market components, scoring, taxonomy,
+                               #   article_processor, context_builder, index_manager
+    trading/                   # TradingBrainService + 5 collaborators, strategy,
+                               #   memory, statistics, monitors, audit, data_models,
+                               #   order_lifecycle, guards (governance pipeline)
     utils/                     # Profiler, token counter, graceful shutdown, decorators, etc.
-
-  tests/                       # 59 test files, conftest.py
-
+  tests/                       # 55 test_*.py files + conftest.py
   docs/
-    INDEX.md
-    llm_agent_documentation.md
-    detailed_file_documentation.md
-    cloudflare_free_cache_playbook.md
-    documentation_plan.md
-    refactoring_plan.md
-    plans/                     # Dated planning documents
-
-  scripts/                     # Cross-platform startup + news scripts
+    plans/                     # Planning documents
+  scripts/                     # Cross-platform startup scripts (Linux, macOS, Windows)
   data/                        # Runtime state (not committed)
-  website/                     # Astro-based project website
+  website/                     # Astro 5 + Tailwind CSS 3 landing page (separate from live dashboard)
+                               #   - Framework: Astro 5 (static output), TypeScript, PostCSS
+                               #   - Styling: Tailwind CSS 3 (`tailwind.config.mjs`),
+                               #     Autoprefixer, custom shell/signal color palette
+                               #   - Entry: `src/pages/index.astro` — imports all components
+                               #   - Components: Hero, LiveTelemetry, ArchitectureBento,
+                               #     DirectoryDive, EdgeInfrastructure, RiskFooter
+                               #   - Layout: `src/layouts/BaseLayout.astro` — dark theme,
+                               #     Space Grotesk font, `.ambient-grid` background overlay
+                               #   - Styles: `src/styles/global.css` — Tailwind directives,
+                               #     dark scheme, body gradient, ambient grid, panel/mono
+                               #     utilities, custom scrollbars, reduced-motion support
+                               #   - Data: `src/data/site.ts` — copy/text constants
+                               #   - Build: npm run build (generates static dist/)
   img/                         # Dashboard screenshots
   logs/                        # Bot logs by date
 ```
 
 ---
 
-## 7. Quick Reference — Command Cheat Sheet
+## 6. Quick Reference — Command Cheat Sheet
 
 ```bash
 # Start the bot
@@ -479,57 +430,6 @@ source .venv/bin/activate && python start.py
 # Type check
 .venv/bin/python -m mypy src/
 
-# News preview
-python scripts/fetch_free_news_preview.py --enrich-from-article-pages
-
-# News body quality comparison
-python scripts/compare_news_body_quality.py
-
-# Git status (path-anchored)
-git -C /home/qrak/LLM_trader status
-
-# Measure private-to-public divergence
-git rev-list --left-right --count public/master...main
+# Git status
+git status
 ```
-
----
-
-## 8. File Discovery Summary
-
-The following files were discovered and integrated into this master document:
-
-| Source File | Location | Content |
-|-------------|----------|---------|
-| `llm-trader.instructions.md` | `.github/instructions/` | Core project guidelines (env, style, typing, Pydantic v2, tooling, sync, linting) — 75 lines |
-| `.clinerules` | root | Agent entry point, delegates to instructions + skills — 30 lines |
-| `agent-governance/SKILL.md` | `.github/skills/` | Safety boundaries, tool restrictions, auditability for autonomous trading — 36 lines |
-| `agentic-eval/SKILL.md` | `.github/skills/` | Rubric-based LLM output evaluation for trading quality — 33 lines |
-| `context-map/SKILL.md` | `.github/skills/` | Smallest-slice codebase mapping before changes — 48 lines |
-| `mentoring-juniors/SKILL.md` | `.github/skills/` | Socratic mentoring methodology, PEAR loop, progressive clues — 309 lines |
-| `news-pipeline-debugging/SKILL.md` | `.github/skills/` | News ingestion debugging workflow with scripts and artifacts — 72 lines |
-| `private-public-sync/SKILL.md` | `.github/skills/` | 6-step private-to-public sync procedure with safety gates — 124 lines |
-| `pydantic-v2-modeling/SKILL.md` | `.github/skills/` | Pydantic v2 patterns, validators, strict config — 34 lines |
-| `refactor/SKILL.md` | `.github/skills/` | Code smells, design patterns, refactoring checklist — 645 lines |
-| `repo-python-execution/SKILL.md` | `.github/skills/` | Python execution patterns for this repo (venv, bash, file-first) — 53 lines |
-| `targeted-pytest-debugging/SKILL.md` | `.github/skills/` | Focused test debugging with captured output — 49 lines |
-| `review-single-pr.prompt.md` | `.github/prompts/` | End-to-end PR review workflow with hard rules — 73 lines |
-| `pull_request_template.md` | `.github/` | PR template with summary, validation, safety checklist — 34 lines |
-| `bug_report.md` | `.github/ISSUE_TEMPLATE/` | Bug report template with reproduction steps — 37 lines |
-| `feature_request.md` | `.github/ISSUE_TEMPLATE/` | Feature request with problem statement, scope, test strategy — 27 lines |
-| `compatibility_manual_main.yml` | `.github/workflows/` | CI/CD pipeline (Linux full, Windows medium, macOS smoke) — 89 lines |
-| `INDEX.md` | `docs/` | Documentation navigation hub — 26 lines |
-| `llm_agent_documentation.md` | `docs/` | Architecture overview (lifecycle, DI, brain, dashboard, platforms) — 107 lines |
-| `detailed_file_documentation.md` | `docs/` | File-by-file responsibility mapping — 101 lines |
-| `cloudflare_free_cache_playbook.md` | `docs/` | CF cache rules, deployment modes, validation, guardrails — 267 lines |
-| `documentation_plan.md` | `docs/` | Doc status, automation, completed updates, gaps — 60 lines |
-| `refactoring_plan.md` | `docs/` | Refactoring status (P1 done, P2 Config, P3 AnalysisEngine) — 286 lines |
-| `README.md` | root | Project overview, features, setup, roadmap, controls — 407 lines |
-| `CONTRIBUTING.md` | root | Contribution guidelines, code standards, testing, docs — 67 lines |
-| `config.ini` | `config/` | Active bot configuration (pair, timeframe, AI, RAG, risk, dashboard) — 202 lines |
-| `.vscode/settings.json` | `.vscode/` (Windows) | IDE config: Python interpreter, Ruff formatter, PowerShell terminal profile |
-
-**Total files integrated: 26 files across 8 directories.**
-
----
-
-*Consolidated on 2026-05-23 from the LLM Trader repository at `/home/qrak/LLM_trader`.*
