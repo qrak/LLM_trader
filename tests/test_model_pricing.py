@@ -1,7 +1,9 @@
 """Tests for model pricing metadata."""
+import io
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from unittest.mock import patch
 
 from src.utils.token_counter import ModelPricing
 
@@ -77,6 +79,22 @@ def test_config_model_mapping_uses_google_runtime_keys() -> None:
     assert "temperature" not in model_config
     assert "top_p" not in model_config
     assert "top_k" not in model_config
+
+
+def test_model_pricing_returns_empty_pricing_when_file_missing() -> None:
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        pricing = ModelPricing()
+
+    assert pricing._pricing == {"google": {}, "openrouter": {}}
+    assert pricing.get_cost("google", "gemini-3.5-flash", input_tokens=1000, output_tokens=1000) is None
+
+
+def test_model_pricing_returns_empty_pricing_when_json_corrupted() -> None:
+    with patch("builtins.open", return_value=io.StringIO("{not-json")):
+        pricing = ModelPricing()
+
+    assert pricing._pricing == {"google": {}, "openrouter": {}}
+    assert pricing.get_cost("openrouter", "any-model", input_tokens=1000, output_tokens=1000) is None
 
 
 def _make_config(config_data: dict[str, dict[str, Any]]) -> Any:
