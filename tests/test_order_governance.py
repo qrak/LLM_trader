@@ -132,6 +132,18 @@ def test_guard_pipeline_returns_fail_fast_check_results_without_audit_side_effec
     assert [result.guard_name for result in results] == ["passing_guard", "rejecting_guard"]
 
 
+def test_guard_pipeline_invalidate_cooldown_cache_is_safe_when_pipeline_is_empty() -> None:
+    pipeline = GuardPipeline([])
+
+    pipeline.invalidate_cooldown_cache()
+
+
+def test_guard_pipeline_invalidate_cooldown_cache_is_safe_without_cooldown_guard() -> None:
+    pipeline = GuardPipeline([PassingGuard(), RejectingGuard()])
+
+    pipeline.invalidate_cooldown_cache()
+
+
 def test_max_position_guard_only_rejects_explicit_over_cap_size() -> None:
     guard = MaxPositionSizeGuard()
     config = SimpleNamespace(MAX_POSITION_SIZE=0.10)
