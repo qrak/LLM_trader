@@ -29,8 +29,6 @@ class TradingBrainService:
     - Get dynamic thresholds
     """
 
-    UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
-    UNKNOWN_EXIT_PROFILE_KEY = "sl_unknown_unknown|tp_unknown_unknown"
     DEFAULT_REFLECTION_TIMEFRAME_MINUTES = 240
     SCALPING_REFLECTION_INTERVAL = 10
     INTRADAY_REFLECTION_INTERVAL = 7
@@ -242,57 +240,6 @@ class TradingBrainService:
             exit_execution_context=exit_execution_context,
         )
 
-    def _build_query_document(
-        self,
-        trend_direction: str,
-        adx: float,
-        rsi: float,
-        volatility_level: str,
-        rsi_level: str,
-        macd_signal: str,
-        volume_state: str,
-        bb_position: str,
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: "ExitExecutionContext | None" = None,
-    ) -> str:
-        """Build a query document that mirrors _build_experience_document format.
-
-        Reduces embedding asymmetry between stored documents and query by using
-        the same structural format (Indicators line with numeric values).
-
-        Args:
-            trend_direction: Current trend direction
-            adx: Current ADX numeric value
-            rsi: Current RSI numeric value
-            volatility_level: Current volatility label
-            rsi_level: RSI label (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
-            macd_signal: MACD signal label
-            volume_state: Volume state label
-            bb_position: BB position label
-            is_weekend: Whether current day is Saturday or Sunday
-            market_sentiment: Fear & Greed label
-            order_book_bias: Order book bias label
-
-        Returns:
-            Query string formatted like stored experience documents.
-        """
-        return self.context_provider.build_query_document(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-        )
-
     def get_vector_context(
         self,
         trend_direction: str = "NEUTRAL",
@@ -346,187 +293,9 @@ class TradingBrainService:
             k=k,
         )
 
-    def _get_cached_stats(self, key: str, compute_fn) -> dict[str, Any]:
-        """Get stats from cache or compute and cache them.
-
-        Args:
-            key: Cache key for the stats type.
-            compute_fn: Function to call if cache miss.
-
-        Returns:
-            Computed or cached statistics.
-        """
-        return self.context_provider.get_cached_stats(key, compute_fn)
-
-    def _extract_factor_scores(self, confluence_factors: tuple) -> dict[str, float]:
-        """Extract factor scores into flat dict for vector metadata."""
-        return self.pattern_analyzer.extract_factor_scores(confluence_factors)
-
-    def _count_strong_confluences(self, confluence_factors: tuple) -> int:
-        """Count factors with score > 50 (supporting the trade)."""
-        return self.pattern_analyzer.count_strong_confluences(confluence_factors)
-
-    @staticmethod
-    def _as_float(value: Any, default: float = 0.0) -> float:
-        """Return a float for optional numeric metadata values."""
-        return TradePatternAnalyzer.as_float(value, default)
-
-    @staticmethod
-    def _safe_key_part(value: Any, default: str = "unknown") -> str:
-        """Normalize metadata values for deterministic semantic rule IDs."""
-        return ExitProfileResolver.safe_key_part(value, default)
-
-    def _resolve_exit_execution_context(
-        self,
-        metadata: dict[str, Any] | None = None,
-    ) -> ExitExecutionContext:
-        """Return SL/TP execution metadata with configured defaults filled in."""
-        return self.exit_profiles.resolve_exit_execution_context(metadata)
-
-    def _resolve_rule_exit_execution_context(self, metadata: dict[str, Any]) -> ExitExecutionContext:
-        """Resolve exit execution context from semantic-rule metadata."""
-        return self.exit_profiles.resolve_rule_exit_execution_context(metadata)
-
-    def _format_exit_profile_from_context(self, context: ExitExecutionContext) -> str:
-        """Format a normalized SL/TP execution context."""
-        return self.exit_profiles.format_exit_profile_from_context(context)
-
-    def _replace_unknown_exit_profile_text(
-        self,
-        text: str,
-        metadata: dict[str, Any] | None = None,
-    ) -> str:
-        """Replace unknown exit-profile text with resolved rule/default metadata."""
-        return self.exit_profiles.replace_unknown_exit_profile_text(text, metadata)
-
-    def _render_rule_text(self, rule: dict[str, Any]) -> str:
-        """Return rule text with unknown exit profile corrected for display."""
-        return self.exit_profiles.render_rule_text(rule)
-
-    def _dominant_exit_execution_context(self, metas: list[dict[str, Any]]) -> ExitExecutionContext:
-        """Return the most common resolved SL/TP execution context for a trade group."""
-        return self.exit_profiles.dominant_exit_execution_context(metas)
-
-    def _legacy_unknown_exit_pattern_key(self, pattern_key: str) -> str:
-        """Return the equivalent rule key that used the old unknown exit profile."""
-        return self.exit_profiles.legacy_unknown_exit_pattern_key(pattern_key)
-
-    def _deactivate_legacy_unknown_exit_rule(self, rule_id_prefix: str, pattern_key: str) -> None:
-        """Deactivate the stale unknown-profile rule once a resolved replacement exists."""
-        self.reflection_engine.deactivate_legacy_unknown_exit_rule(rule_id_prefix, pattern_key)
-
     def refresh_semantic_rules_if_stale(self) -> None:
         """Refresh semantic rules once when active rules still use unknown exit profiles."""
         self.reflection_engine.refresh_semantic_rules_if_stale()
-
-    def _sanitize_rule_key(self, value: str) -> str:
-        """Create a stable Chroma ID suffix from a composite rule key."""
-        return self.exit_profiles.sanitize_rule_key(value)
-
-    def _normalize_close_reason(self, reason: Any) -> str:
-        """Normalize exit reasons while preserving stop-loss semantics."""
-        return self.pattern_analyzer.normalize_close_reason(reason)
-
-    def _is_stop_loss_reason(self, reason: Any) -> bool:
-        """Return whether a close reason represents any stop-loss style exit."""
-        return self.pattern_analyzer.is_stop_loss_reason(reason)
-
-    def _adx_bucket_for_meta(self, meta: dict[str, Any]) -> str:
-        """Classify ADX into the reflection buckets used for rule keys."""
-        return self.pattern_analyzer.adx_bucket_for_meta(meta)
-
-    @staticmethod
-    def _adx_level_from_bucket(adx_bucket: str) -> str:
-        """Format an ADX bucket for rule text."""
-        return TradePatternAnalyzer.adx_level_from_bucket(adx_bucket)
-
-    def _build_exit_profile_key(self, meta: dict[str, Any]) -> str:
-        """Build a deterministic key for hard/soft SL/TP execution settings."""
-        return self.exit_profiles.build_exit_profile_key(meta)
-
-    @staticmethod
-    def _format_exit_profile(
-        stop_type: str,
-        stop_interval: str,
-        take_profit_type: str,
-        take_profit_interval: str,
-    ) -> str:
-        """Format a hard/soft SL/TP profile for rules and dashboard metadata."""
-        return ExitProfileResolver.format_exit_profile(
-            stop_type,
-            stop_interval,
-            take_profit_type,
-            take_profit_interval,
-        )
-
-    def _meta_values(
-        self,
-        metas: list[dict[str, Any]],
-        key: str,
-        *,
-        absolute: bool = False,
-        positive_only: bool = False,
-        non_zero: bool = False,
-    ) -> list[float]:
-        """Return normalized numeric metadata values with optional filtering."""
-        return self.pattern_analyzer.meta_values(
-            metas,
-            key,
-            absolute=absolute,
-            positive_only=positive_only,
-            non_zero=non_zero,
-        )
-
-    def _average_meta(self, metas: list[dict[str, Any]], key: str, **filters: Any) -> float:
-        """Average a numeric metadata field after applying optional filters."""
-        return self.pattern_analyzer.average_meta(metas, key, **filters)
-
-    def _compute_loss_diagnostics(self, losses: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute reused diagnostic averages for losing trades."""
-        return self.pattern_analyzer.compute_loss_diagnostics(losses)
-
-    def _build_rule_metadata(
-        self,
-        rule_type: str,
-        source_pattern: str,
-        metrics: dict[str, Any],
-        **extra: Any,
-    ) -> dict[str, Any]:
-        """Build common semantic-rule metadata for best, loss, and AI-mistake rules."""
-        return self.pattern_analyzer.build_rule_metadata(rule_type, source_pattern, metrics, **extra)
-
-    def _is_sideways_failure(self, meta: dict[str, Any]) -> bool:
-        """Identify losses or flat outcomes where the market failed to trend."""
-        return self.pattern_analyzer.is_sideways_failure(meta)
-
-    def _classify_ai_mistake(self, meta: dict[str, Any]) -> str:
-        """Classify whether an outcome contradicts the AI's entry confidence."""
-        return self.pattern_analyzer.classify_ai_mistake(meta)
-
-    def _derive_ai_assumption(self, metas: list[dict[str, Any]]) -> str:
-        """Summarize the failed assumption from stored AI reasoning text."""
-        return self.pattern_analyzer.derive_ai_assumption(metas)
-
-    def _derive_ai_mistake_reason(
-        self,
-        mistake_metas: list[dict[str, Any]],
-        mistake_type: str,
-        failed_assumption: str,
-    ) -> str:
-        """Explain what the AI got wrong for a repeated mistake cluster."""
-        return self.pattern_analyzer.derive_ai_mistake_reason(
-            mistake_metas,
-            mistake_type,
-            failed_assumption,
-        )
-
-    def _derive_ai_mistake_adjustment(
-        self,
-        mistake_metas: list[dict[str, Any]],
-        mistake_type: str,
-    ) -> str:
-        """Generate prompt-ready corrections for repeated AI judgment mistakes."""
-        return self.pattern_analyzer.derive_ai_mistake_adjustment(mistake_metas, mistake_type)
 
     def _trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize best-practice semantic rules.
@@ -547,18 +316,6 @@ class TradingBrainService:
     def _trigger_ai_mistake_reflection(self) -> None:
         """Reflect on cases where the AI's confidence or premise was wrong."""
         self.reflection_engine.trigger_ai_mistake_reflection()
-
-    def _compute_group_metrics(self, group_metas: list[dict[str, Any]]) -> dict[str, Any]:
-        """Compute outcome statistics for a group of trade metadata records."""
-        return self.pattern_analyzer.compute_group_metrics(group_metas)
-
-    def _derive_failure_reason(self, metrics: dict[str, Any]) -> str:
-        """Derive the primary cause of losses from trade group metrics."""
-        return self.pattern_analyzer.derive_failure_reason(metrics)
-
-    def _derive_recommended_adjustment(self, metrics: dict[str, Any]) -> str:
-        """Generate actionable guidance to improve profitability for this pattern."""
-        return self.pattern_analyzer.derive_recommended_adjustment(metrics)
 
     def track_position_update(
         self,

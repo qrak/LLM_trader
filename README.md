@@ -293,7 +293,7 @@ src/
 ├── indicators/        # Massive suite of NumPy/Numba powered array calculation files
 ├── parsing/           # Resilient LLM JSON output bounds checking
 ├── notifiers/         # Markdown-styled embedded notifications for Discord/Console
-└── factories/         # Safe DI dependency construction masking internal logic
+└── utils/             # Shared utilities for formatting, profiling, and token accounting
 tests/                 # Extensive unit and integration validations with API knocking
 docs/                  # Deep technical documentation and component plans
 ```
@@ -364,8 +364,19 @@ docs/                  # Deep technical documentation and component plans
 The codebase contains a rigorous `tests/` directory covering integration logic, mocking, and unit testing validation. This minimizes regressions specifically in LLM parsing behavior.
 
 ```powershell
-# Run the test suite using pytest (make sure pytest is installed)
-pytest tests/
+.venv\Scripts\python.exe -m pytest tests -q
+.venv\Scripts\python.exe -m pytest tests\test_vector_memory.py -k fallback -q
+.venv\Scripts\python.exe -m ruff check src tests start.py
+.venv\Scripts\python.exe -m mypy src
+```
+
+Linux/macOS:
+
+```bash
+.venv/bin/python -m pytest tests -q
+.venv/bin/python -m pytest tests/test_vector_memory.py -k fallback -q
+.venv/bin/python -m ruff check src tests start.py
+.venv/bin/python -m mypy src
 ```
 
 ## Roadmap

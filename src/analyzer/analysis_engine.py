@@ -11,8 +11,6 @@ from datetime import datetime
 import numpy as np
 
 from src.utils.timeframe_validator import TimeframeValidator
-from src.platforms.alternative_me import AlternativeMeAPI
-from src.platforms.coingecko import CoinGeckoAPI
 from src.utils.profiler import profile_performance
 from src.utils.indicator_classifier import (
     classify_trend_direction,
@@ -26,11 +24,12 @@ from src.utils.indicator_classifier import (
     build_exit_execution_context_from_config,
 )
 from src.logger.logger import Logger
+from src.analyzer.data_fetcher import DataFetcher
 from .analysis_context import AnalysisContext
 
 if TYPE_CHECKING:
-    from src.contracts.model_contract import ModelManagerProtocol
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
+    from src.managers.model_manager import ModelManager
     from src.rag import RagEngine
 
 
@@ -41,19 +40,16 @@ class AnalysisEngine:
         self,
         logger: Logger,
         rag_engine: "RagEngine",
-        coingecko_api: CoinGeckoAPI,
-        model_manager: "ModelManagerProtocol",
-        _alternative_me_api: AlternativeMeAPI,
+        model_manager: "ModelManager",
         market_api,
-        config: "ConfigProtocol",
+        config: "Config",
         technical_calculator=None,
         pattern_analyzer=None,
         prompt_builder=None,
         data_collector=None,
         metrics_calculator=None,
         result_processor=None,
-        chart_generator=None,
-        data_fetcher_factory=None
+        chart_generator=None
     ) -> None:
         """
         Initialize AnalysisEngine with injected dependencies (DI pattern).
@@ -61,13 +57,11 @@ class AnalysisEngine:
         Args:
             logger: Logger instance
             rag_engine: RAG engine for news and context
-            coingecko_api: CoinGecko API client
             model_manager: AI model manager (Protocol-based)
-            _alternative_me_api: AlternativeMeAPI (Unused)
             market_api: Market metadata API client
             format_utils: Formatting utilities
             data_processor: Data processing utilities
-            config: Configuration instance (Protocol-based)
+            config: Configuration instance
             technical_calculator: TechnicalCalculator instance (injected from app.py)
             pattern_analyzer: PatternAnalyzer instance (injected from app.py)
             prompt_builder: PromptBuilder instance (injected from app.py)
@@ -75,7 +69,6 @@ class AnalysisEngine:
             metrics_calculator: MarketMetricsCalculator instance (injected from app.py)
             result_processor: AnalysisResultProcessor instance (injected from app.py)
             chart_generator: ChartGenerator instance (injected from app.py)
-            data_fetcher_factory: DataFetcherFactory instance (injected from app.py)
         """
         # pylint: disable=too-many-arguments, too-many-locals
         self.logger = logger
@@ -105,10 +98,8 @@ class AnalysisEngine:
         self.metrics_calculator = metrics_calculator
         self.result_processor = result_processor
         self.chart_generator = chart_generator
-        self.data_fetcher_factory = data_fetcher_factory
 
         self.rag_engine = rag_engine
-        self.coingecko_api = coingecko_api
         self.market_api = market_api
 
         self.token_counter = self.model_manager.token_counter
@@ -148,7 +139,7 @@ class AnalysisEngine:
         self.context.exchange = exchange.name if exchange.name else str(exchange)
         self.context.timeframe = effective_timeframe
 
-        data_fetcher = self.data_fetcher_factory.create(exchange)
+        data_fetcher = DataFetcher(exchange, self.logger)
 
         self.data_collector.initialize(
             data_fetcher=data_fetcher,
@@ -159,9 +150,6 @@ class AnalysisEngine:
         )
 
         self.prompt_builder.timeframe = effective_timeframe
-
-        if self.prompt_builder.context_builder:
-            self.prompt_builder.context_builder.timeframe = effective_timeframe
 
         self.article_urls = {}
 

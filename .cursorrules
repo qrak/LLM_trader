@@ -1,7 +1,0 @@
-# LLM Trader — Master Agent Instructions
-
-> See AGENTS.md for the canonical master instructions. This file delegates to AGENTS.md.
-
-**Python:** 3.13, `.venv/`
-**Entry point:** `python start.py`
-**Live dashboard:** https://semanticsignal.qrak.org

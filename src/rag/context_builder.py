@@ -16,7 +16,7 @@ from src.utils.profiler import profile_performance
 from src.utils.token_counter import TokenCounter
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 ArticleContent = namedtuple('ArticleContent', ['title', 'body', 'categories', 'tags', 'detected_coins'])
 
@@ -27,7 +27,7 @@ class ContextBuilder:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config: "ConfigProtocol",
+        config: "Config",
         scoring_policy: ArticleScoringPolicy,
         article_processor=None,
         symbol_name_map: dict[str, str] | None = None,

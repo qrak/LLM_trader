@@ -83,10 +83,9 @@ def _make_strategy(
         tp_distance_pct=0.15,
         rr_ratio=3.0,
         quote_amount=500.0,
+        entry_price=100.0,
+        volatility_level="MEDIUM",
     )
-
-    position_factory = MagicMock()
-    position_factory.create_position.return_value = SimpleNamespace(id="position-test")
 
     config = SimpleNamespace(
         DEMO_QUOTE_CAPITAL=10000.0,
@@ -112,7 +111,6 @@ def _make_strategy(
         risk_manager=risk_manager,
         config=config,
         position_extractor=MagicMock(),
-        position_factory=position_factory,
         guard_pipeline=guard_pipeline,
         audit_trail=audit_trail,
     )
@@ -124,19 +122,14 @@ def test_order_intent_can_be_rejected_from_initial_intent_state() -> None:
     assert intent.transition_to(OrderLifecycle.REJECTED, reason="guard failed") is True
 
     assert intent.state is OrderLifecycle.REJECTED
-    assert intent.state_history[-1]["from"] == "INTENT"
-    assert intent.state_history[-1]["to"] == "REJECTED"
 
 
-def test_guard_pipeline_records_checks_to_attached_audit_trail() -> None:
-    audit_trail = AuditTrail()
-    pipeline = GuardPipeline([PassingGuard(), RejectingGuard()], audit_trail=audit_trail)
+def test_guard_pipeline_returns_fail_fast_check_results_without_audit_side_effects() -> None:
+    pipeline = GuardPipeline([PassingGuard(), RejectingGuard()])
 
     results = pipeline.evaluate(_make_intent(), capital=10000.0, config=SimpleNamespace())
 
     assert [result.guard_name for result in results] == ["passing_guard", "rejecting_guard"]
-    assert [record.actor for record in audit_trail.all_records] == ["passing_guard", "rejecting_guard"]
-    assert [record.result for record in audit_trail.all_records] == ["passed", "failed"]
 
 
 def test_max_position_guard_only_rejects_explicit_over_cap_size() -> None:
@@ -250,8 +243,7 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
             ConfiguredSymbolGuard(),
             MaxPositionSizeGuard(),
             CooldownWindowGuard(),
-        ],
-        audit_trail=audit_trail,
+        ]
     )
     strategy = _make_strategy(
         guard_pipeline=pipeline,

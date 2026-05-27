@@ -80,8 +80,7 @@ def _build_strategy() -> TradingStrategy:
     strategy.memory_service = MagicMock()
 
     strategy.risk_manager = MagicMock()
-    strategy.position_factory = MagicMock()
-    strategy.position_factory.create_position = MagicMock(return_value=SimpleNamespace(id="pos-1"))
+    strategy.brain_service.get_dynamic_thresholds.return_value = {"rr_borderline_min": 1.5}
 
     strategy.config = SimpleNamespace(
         DEMO_QUOTE_CAPITAL=10000.0,
@@ -105,6 +104,7 @@ async def test_process_analysis_compact_buy_uses_json_fields_for_risk_inputs() -
     strategy = _build_strategy()
 
     risk_assessment = SimpleNamespace(
+        entry_price=77880.0,
         stop_loss=76480.0,
         take_profit=80720.0,
         size_pct=0.40,
@@ -114,6 +114,7 @@ async def test_process_analysis_compact_buy_uses_json_fields_for_risk_inputs() -
         tp_distance_pct=0.036,
         rr_ratio=2.0,
         quote_amount=4000.0,
+        volatility_level="HIGH",
     )
     strategy.risk_manager.calculate_entry_parameters = MagicMock(return_value=risk_assessment)
 
@@ -171,6 +172,7 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
     strategy = _build_strategy()
 
     risk_assessment = SimpleNamespace(
+        entry_price=99.0,
         stop_loss=76480.0,
         take_profit=80720.0,
         size_pct=0.40,
@@ -180,6 +182,7 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
         tp_distance_pct=0.036,
         rr_ratio=2.0,
         quote_amount=4000.0,
+        volatility_level="HIGH",
     )
     strategy.risk_manager.calculate_entry_parameters = MagicMock(return_value=risk_assessment)
 
@@ -227,9 +230,9 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
     assert market_conditions.market_sentiment == "EXTREME_GREED"
     assert market_conditions.order_book_bias == "BUY_PRESSURE"
 
-    position_kwargs = strategy.position_factory.create_position.call_args.kwargs
-    assert position_kwargs["market_conditions"] == market_conditions
-    assert position_kwargs["confluence_factors"] == (
+    assert strategy.current_position is not None
+    assert strategy.current_position.adx_at_entry == 28.0
+    assert strategy.current_position.confluence_factors == (
         ("trend_alignment", 80.0),
         ("momentum_strength", 77.0),
         ("volume_support", 71.0),

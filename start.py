@@ -21,7 +21,7 @@ import chromadb
 
 # --- Local ---
 from src.config.loader import config
-from src.app import CryptoTradingBot, POSITION_UPDATE_INTERVAL
+from src.app import BotServices, CryptoTradingBot, POSITION_UPDATE_INTERVAL
 from sentence_transformers import SentenceTransformer
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
@@ -38,7 +38,7 @@ from src.rag.news_ingestion import RSSCrawl4AINewsProvider, Crawl4AIEnricher
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.utils.format_utils import FormatUtils
 from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
-from src.factories import ProviderFactory
+from src.platforms.ai_providers import GoogleAIClient, OpenRouterClient, LMStudioClient
 from src.managers.persistence_manager import PersistenceManager
 from src.managers.risk_manager import RiskManager
 from src.trading import (
@@ -51,10 +51,8 @@ from src.dashboard.server import DashboardServer
 from src.notifiers import DiscordNotifier, ConsoleNotifier
 from src.utils.keyboard_handler import KeyboardHandler
 from src.parsing.unified_parser import UnifiedParser
-from src.factories import TechnicalIndicatorsFactory, DataFetcherFactory
 from src.rag.article_processor import ArticleProcessor
 from src.rag.collision_resolver import CategoryCollisionResolver
-from src.analyzer.pattern_engine import PatternEngine
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.analyzer.formatters import (
     MarketOverviewFormatter,
@@ -78,10 +76,11 @@ from src.analyzer import (
     MarketMetricsCalculator, AnalysisResultProcessor,
     TechnicalFormatter
 )
+from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.prompts import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
-from src.analyzer.prompts.context_builder import ContextBuilder as AnalyzerContextBuilder
 from src.analyzer.pattern_engine import ChartGenerator
+from src.analyzer.trend_validator import TrendValidator
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
@@ -351,18 +350,14 @@ class CompositionRoot:
         format_utils = FormatUtils()
         parser = UnifiedParser(self.logger, format_utils=format_utils)
         token_counter = TokenCounter()
-        ti_factory = TechnicalIndicatorsFactory()
         timeframe_validator = TimeframeValidator()
-        data_fetcher_factory = DataFetcherFactory(self.logger)
         collision_resolver = CategoryCollisionResolver()
 
         return {
             'format_utils': format_utils,
             'parser': parser,
             'token_counter': token_counter,
-            'ti_factory': ti_factory,
             'timeframe_validator': timeframe_validator,
-            'data_fetcher_factory': data_fetcher_factory,
             'collision_resolver': collision_resolver
         }
 
@@ -459,8 +454,43 @@ class CompositionRoot:
 
     def _provision_model_layer(self, utils: dict) -> dict:
         """Provision AI model managers and providers."""
-        provider_factory = ProviderFactory(self.logger, self.config)
-        provider_clients = ProviderClients.from_factory_dict(provider_factory.create_all_clients())
+        google_client: GoogleAIClient | None = None
+        google_paid_client: GoogleAIClient | None = None
+        if self.config.GOOGLE_STUDIO_API_KEY:
+            google_client = GoogleAIClient(
+                api_key=self.config.GOOGLE_STUDIO_API_KEY,
+                model=self.config.GOOGLE_STUDIO_MODEL,
+                logger=self.logger,
+            )
+            self.logger.debug("Google AI client initialized")
+            if self.config.GOOGLE_STUDIO_PAID_API_KEY:
+                google_paid_client = GoogleAIClient(
+                    api_key=self.config.GOOGLE_STUDIO_PAID_API_KEY,
+                    model=self.config.GOOGLE_STUDIO_MODEL,
+                    logger=self.logger,
+                )
+                self.logger.debug("Google AI paid client initialized as fallback for overloaded free tier")
+        openrouter_client: OpenRouterClient | None = None
+        if self.config.OPENROUTER_API_KEY:
+            openrouter_client = OpenRouterClient(
+                api_key=self.config.OPENROUTER_API_KEY,
+                base_url=self.config.OPENROUTER_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("OpenRouter client initialized")
+        lmstudio_client: LMStudioClient | None = None
+        if self.config.LM_STUDIO_BASE_URL:
+            lmstudio_client = LMStudioClient(
+                base_url=self.config.LM_STUDIO_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
+        provider_clients = ProviderClients(
+            google=google_client,
+            google_paid=google_paid_client,
+            openrouter=openrouter_client,
+            lmstudio=lmstudio_client,
+        )
         orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients)
 
         manager = ModelManager(
@@ -484,9 +514,8 @@ class CompositionRoot:
             overview_fmt, period_fmt, long_term_fmt
         )
 
-        tech_calc = TechnicalCalculator(self.logger, utils['format_utils'], utils['ti_factory'])
+        tech_calc = TechnicalCalculator(self.logger, utils['format_utils'])
         pattern_analyzer = PatternAnalyzer(
-            pattern_engine=PatternEngine(lookback=5, lookahead=5),
             indicator_pattern_engine=IndicatorPatternEngine(),
             logger=self.logger
         )
@@ -495,28 +524,24 @@ class CompositionRoot:
         except Exception as warmup_error:
             self.logger.warning("Pattern analyzer warm-up could not run: %s", warmup_error)
 
-        ctx_builder = AnalyzerContextBuilder(
-            self.config.TIMEFRAME, self.logger, utils['format_utils'],
-            market_fmt, period_fmt, long_term_fmt, utils['timeframe_validator']
-        )
-        
         prompt_builder = PromptBuilder(
-            self.config.TIMEFRAME, self.logger, tech_calc, self.config, utils['format_utils'],
+            self.config.TIMEFRAME, self.logger, self.config, utils['format_utils'],
             overview_fmt, long_term_fmt, TechnicalFormatter(tech_calc, self.logger, utils['format_utils']),
             market_fmt, utils['timeframe_validator'],
-            TemplateManager(self.config, self.logger, utils['timeframe_validator']), ctx_builder
+            TemplateManager(self.config, self.logger, utils['timeframe_validator'])
         )
         
         engine = AnalysisEngine(
-            self.logger, rag, apis['coingecko'], models['manager'], apis['alternative_me'],
-            apis['market'], self.config, tech_calc, pattern_analyzer, prompt_builder,
+            self.logger, rag, models['manager'], apis['market'], self.config,
+            tech_calc, pattern_analyzer, prompt_builder,
             MarketDataCollector(self.logger, rag, apis['alternative_me'], session=infra['session']),
             MarketMetricsCalculator(self.logger),
-            AnalysisResultProcessor(models['manager'], self.logger, utils['parser']),
+            AnalysisResultProcessor(
+                models['manager'], self.logger, utils['parser'], TrendValidator(), PatternQualityScorer()
+            ),
             ChartGenerator(
                 self.logger, self.config, formatter=utils['format_utils'].fmt, format_utils=utils['format_utils']
             ),
-            data_fetcher_factory=utils['data_fetcher_factory']
         )
         
         return {'engine': engine}
@@ -574,16 +599,14 @@ class CompositionRoot:
                 ConfiguredSymbolGuard(),
                 MaxPositionSizeGuard(),
                 CooldownWindowGuard(),
-            ],
-            audit_trail=audit_trail,
+            ]
         )
         self.logger.info("Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names))
         
-        from src.factories.position_factory import PositionFactory
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
-            PositionFactory(self.logger), tightening_policy=tightening_policy,
+            tightening_policy=tightening_policy,
             guard_pipeline=guard_pipeline, audit_trail=audit_trail
         )
         
@@ -604,9 +627,6 @@ class CompositionRoot:
         if self.config.DISCORD_BOT_ENABLED and self.config.BOT_TOKEN_DISCORD:
             try:
                 import discord
-                from src.notifiers.filehandler_components import (
-                    TrackingPersistence, MessageTracker, CleanupScheduler, MessageDeleter
-                )
                 from src.notifiers.filehandler import DiscordFileHandler
                 
                 intents = discord.Intents.default()
@@ -617,19 +637,12 @@ class CompositionRoot:
                 
                 bot = discord.Client(intents=intents)
                 
-                persistence = TrackingPersistence("data/tracked_messages.json", self.logger)
-                tracker = MessageTracker(persistence, self.logger, self.config)
-                scheduler = CleanupScheduler(7200, self.logger)
-                deleter = MessageDeleter(bot, self.logger)
-                
                 file_handler = DiscordFileHandler(
                     bot=bot,
                     logger=self.logger,
                     config=self.config,
-                    persistence=persistence,
-                    tracker=tracker,
-                    scheduler=scheduler,
-                    deleter=deleter
+                    tracking_file="data/tracked_messages.json",
+                    cleanup_interval=7200,
                 )
                 
                 notifier = DiscordNotifier(
@@ -669,24 +682,27 @@ class CompositionRoot:
 
         dashboard_server = dependencies.pop('dashboard_server', None)
 
-        bot = CryptoTradingBot(
+        def _create_position_monitor(bot: CryptoTradingBot) -> PositionStatusMonitor:
+            return PositionStatusMonitor(
+                logger=self.logger,
+                config=self.config,
+                persistence=dependencies['persistence'],
+                trading_strategy=dependencies['trading_strategy'],
+                exit_monitor=dependencies['exit_monitor'],
+                notifier=dependencies['discord_notifier'],
+                active_tasks=bot.active_tasks,
+                is_running=lambda: bot.running,
+                fetch_current_ticker=bot._fetch_current_ticker,
+                interruptible_sleep=bot._interruptible_sleep,
+                get_symbol=lambda: bot.current_symbol,
+            )
+
+        bot = CryptoTradingBot(BotServices(
             logger=self.logger,
             config=self.config,
             shutdown_manager=self.shutdown_manager,
+            position_monitor_factory=_create_position_monitor,
             **dependencies
-        )
-        bot.set_position_monitor(PositionStatusMonitor(
-            logger=self.logger,
-            config=self.config,
-            persistence=dependencies['persistence'],
-            trading_strategy=dependencies['trading_strategy'],
-            exit_monitor=dependencies['exit_monitor'],
-            notifier=dependencies['discord_notifier'],
-            active_tasks=bot.active_tasks,
-            is_running=lambda: bot.running,
-            fetch_current_ticker=bot._fetch_current_ticker,
-            interruptible_sleep=bot._interruptible_sleep,
-            get_symbol=lambda: bot.current_symbol,
         ))
 
         try:

@@ -9,16 +9,16 @@ from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
 class ExchangeManager:
-    def __init__(self, logger: Logger, config: "ConfigProtocol"):
+    def __init__(self, logger: Logger, config: "Config"):
         """Initialize ExchangeManager with logger and self.config.
 
         Args:
             logger: Logger instance
-            config: ConfigProtocol instance for exchange settings
+            config: Config instance for exchange settings
 
         Raises:
             ValueError: If config is None

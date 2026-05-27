@@ -8,19 +8,19 @@ from typing import TYPE_CHECKING
 from src.logger.logger import Logger
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
 class RagFileHandler:
     NEWS_FILE = "crypto_news.json"
     MARKET_DATA_DIR = "market_data"
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol", unified_parser=None):
+    def __init__(self, logger: Logger, config: "Config", unified_parser=None):
         """Initialize RagFileHandler with logger and config.
 
         Args:
             logger: Logger instance
-            config: ConfigProtocol instance for data directory path
+            config: Config instance for data directory path
             unified_parser: UnifiedParser instance (must be injected from app.py)
         """
 

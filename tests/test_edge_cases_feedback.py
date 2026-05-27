@@ -215,19 +215,9 @@ class TestAsyncRaceConditions:
         memory_service = MagicMock()
         risk_mgr = RiskManager(logger=MagicMock(), config=config)
 
-        from datetime import datetime, timezone
-        from src.trading.data_models import Position
-
         extractor = MagicMock()
         extractor.extract_trading_info.return_value = ("BUY", "HIGH", 95.0, 115.0, 0.05, "Good")
         extractor.validate_signal.return_value = True
-        factory = MagicMock()
-        factory.create_position.return_value = Position(
-            entry_price=100.0, stop_loss=95.0, take_profit=115.0,
-            size=5.0, entry_time=datetime.now(timezone.utc),
-            confidence="HIGH", direction="LONG", symbol="BTC/USDC",
-            size_pct=0.05,
-        )
 
         strategy = TradingStrategy(
             logger=logger,
@@ -238,7 +228,6 @@ class TestAsyncRaceConditions:
             risk_manager=risk_mgr,
             config=config,
             position_extractor=extractor,
-            position_factory=factory,
         )
 
         start = time.monotonic()

@@ -317,11 +317,15 @@ class TestProcessorIntegration:
         from unittest.mock import MagicMock
 
         from src.analyzer.analysis_result_processor import AnalysisResultProcessor
+        from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+        from src.analyzer.trend_validator import TrendValidator
 
         proc = AnalysisResultProcessor(
             model_manager=MagicMock(),
             logger=MagicMock(),
             unified_parser=MagicMock(),
+            trend_validator=TrendValidator(),
+            quality_scorer=PatternQualityScorer(),
         )
 
         # Build a minimal context
@@ -363,6 +367,8 @@ class TestProcessorIntegration:
             model_manager=MagicMock(),
             logger=MagicMock(),
             unified_parser=MagicMock(),
+            trend_validator=MagicMock(),
+            quality_scorer=MagicMock(),
         )
         proc.context = None
 
@@ -381,6 +387,8 @@ class TestProcessorIntegration:
             model_manager=MagicMock(),
             logger=MagicMock(),
             unified_parser=MagicMock(),
+            trend_validator=MagicMock(),
+            quality_scorer=MagicMock(),
         )
         proc.context = SimpleNamespace(
             technical_data={"adx": 35.0},
@@ -398,12 +406,16 @@ class TestProcessorIntegration:
         from unittest.mock import MagicMock
 
         from src.analyzer.analysis_result_processor import AnalysisResultProcessor
+        from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+        from src.analyzer.trend_validator import TrendValidator
 
         logger = MagicMock()
         proc = AnalysisResultProcessor(
             model_manager=MagicMock(),
             logger=logger,
             unified_parser=MagicMock(),
+            trend_validator=TrendValidator(),
+            quality_scorer=PatternQualityScorer(),
         )
         proc.context = SimpleNamespace(
             technical_data={"adx": 35.0, "rsi": 55.0},

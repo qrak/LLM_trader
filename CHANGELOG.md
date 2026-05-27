@@ -1,5 +1,133 @@
 # Changelog
 
+## 2026-05-27 - Dependency Injection Cleanup and Docs Separation (Pass 4)
+
+### Changed
+
+- **`src/analyzer/analysis_result_processor.py`**: `AnalysisResultProcessor.__init__` now requires `trend_validator: TrendValidator` and `quality_scorer: PatternQualityScorer` as explicit constructor parameters instead of constructing them internally. Removes the last internal DI violation in the analyzer layer.
+- **`start.py`**: Composition root now instantiates `TrendValidator()` and `PatternQualityScorer()` inline at the `AnalysisResultProcessor` construction site in `_provision_analyzer_layer()`.
+- **`src/utils/token_counter.py`**: Retired `ModelPricing.__new__` singleton pattern (`_instance`, `_pricing` class-level state, `__new__` override). Each `ModelPricing()` instance now loads pricing from `config/model_pricing.json` independently. Public `get_cost()` API is unchanged.
+- **`AGENTS.md`**: Removed stale `factories/` entry from the project-structure tree (source files were already deleted in Pass 2). Replaced the cross-platform Linux/macOS/Windows command matrix and hardcoded absolute Windows paths with a two-line "Operator Commands" pointer to `README.md`. Terminal guardrail policy rules are retained.
+- **`README.md`**: Removed stale `factories/` entry from the directory structure description; replaced it with `utils/`. Replaced single bare `pytest tests/` command in the Testing section with a concise relative-path command block covering pytest, ruff, and mypy for both Windows and Linux/macOS.
+
+### Removed
+
+- **`src/factories/__pycache__/`** and the now-empty **`src/factories/`** directory: bytecode residue from the factory modules deleted in Pass 2 is gone.
+
+### Tests updated
+
+- **`tests/test_trend_validator.py`**: Updated 4 `AnalysisResultProcessor` construction sites in `TestProcessorIntegration` to pass `trend_validator=` and `quality_scorer=` keyword arguments.
+
+### Validation
+
+- Pylance (`get_errors`): 0 diagnostics workspace-wide.
+- `tests/test_model_pricing.py`: 4 passed.
+- Full `pytest tests -q --tb=short`: run in progress at time of entry; see terminal for authoritative result.
+- `ruff check src tests start.py`: run in progress at time of entry; see terminal for authoritative result.
+
+---
+
+## 2026-05-27 - AGENTS-Only Instruction Authority Migration
+
+### Changed
+
+- **`AGENTS.md`**: Added explicit instruction-authority contract making AGENTS files canonical across IDEs/harnesses.
+- **`AGENTS.md`**: Added terminal guardrails and Windows command examples so execution policy is no longer IDE-specific.
+- **`AGENTS.md`**: Added documentation-governance checklist and anti-drift rule to block reintroduction of tool-specific policy docs.
+
+### Removed
+
+- Deleted IDE/harness-specific instruction files:
+	- **`.github/copilot-instructions.md`**
+	- **`.github/instructions/terminal-guardrails.instructions.md`**
+	- **`CLAUDE.md`**
+	- **`.windsurfrules`**
+
+### Notes
+
+- Kept **`.github/workflows/compatibility_manual_main.yml`** as CI execution configuration only; it is not an instruction-authority source.
+
+## 2026-05-27 - Dead Code Deletion and Contract Flattening (Pass 3)
+
+### Removed
+
+- Removed 30+ private `TradingBrainService` delegation wrappers that only forwarded to extracted collaborators and had no live production or test call sites.
+- Deleted `src/notifiers/filehandler_components/` after folding its four single-use tracking, persistence, scheduling, and deletion classes into `DiscordFileHandler`.
+- Deleted `src/contracts/` model/risk protocol files and the obsolete contracts README; `ModelManager` and `RiskManager` are now used as concrete injected services.
+- Removed unused `AnalysisEngine` constructor dependencies for CoinGecko and Alternative.me; those clients remain wired only where they are actually used.
+
+### Changed
+
+- **`src/notifiers/filehandler.py`**: Flattened Discord message tracking into one class that owns JSON persistence, expiry scanning, retry-backed deletion, and cleanup task scheduling.
+- **`start.py`**: Simplified Discord file-handler construction and `AnalysisEngine` provisioning after removing unused dependency layers.
+- **`src/app.py`**, **`src/analyzer/analysis_engine.py`**, **`src/analyzer/analysis_result_processor.py`**, **`src/managers/model_manager.py`**, **`src/managers/risk_manager.py`**, and **`src/trading/trading_strategy.py`**: Replaced single-implementation protocol annotations/inheritance with direct concrete service types.
+- **`AGENTS.md`**: Removed the stale `src/contracts` project-structure entry.
+
+### Validation
+
+- Focused brain/vector-memory pytest: `97 passed in 0.42s`.
+- Focused analyzer/app wiring pytest: `4 passed in 1.56s`.
+- Focused Discord notifier pytest after flattening: `7 passed in 1.12s`.
+- Focused trading/risk/response pytest after protocol removal: `69 passed in 2.15s`.
+- Full pytest validation is not claimed for this pass; the attempted PowerShell capture command was malformed (`^U` prefix and `$pytestOut` variable failure), making its `PYTEST_EXIT:0` output unreliable.
+- Full ruff validation: `ruff check src tests start.py` passed.
+- Pylance (`get_errors`): no errors on modified files or workspace-wide final check.
+
+## 2026-05-27 - Dead Code Deletion and Factory Flattening (Pass 2)
+
+### Removed
+
+- Deleted `src/analyzer/pattern_engine/pattern_engine.py` — `PatternEngine.detect_patterns()` always returned `{}` and was never wired after its Numba deprecation.
+- Deleted `src/analyzer/pattern_engine/pattern_matchers.py`, `swing_detection.py`, `trendline_fitting.py` — the three Numba JIT support files that `PatternEngine` depended on; now fully unreachable.
+- Deleted `src/platforms/ai_providers/mock.py` — `MockClient` (133 LoC) was never instantiated anywhere in production or test code.
+- Deleted `src/factories/provider_factory.py`, `data_fetcher_factory.py`, `position_factory.py`, and `src/factories/__init__.py` — all three factories were single-method wrappers that added indirection without logic; the module is now empty.
+
+### Changed
+
+- **`src/analyzer/pattern_engine/__init__.py`**: Stripped to a single re-export of `ChartGenerator`; removed the 12 dead symbol exports for the now-deleted pattern-engine stack.
+- **`src/analyzer/pattern_analyzer.py`**: Removed `PatternEngine` constructor dependency and its `detect_patterns()` call; `warmup()` now uses a fixed 64-sample count instead of deriving it from the dead engine's `lookback`; removed unreachable `get_all_patterns()` method.
+- **`src/analyzer/analysis_engine.py`**: Inlined `DataFetcher(exchange, logger)` construction in `initialize_for_symbol()`; removed `data_fetcher_factory` constructor parameter and all references.
+- **`src/trading/trading_strategy.py`**: Inlined `Position(...)` construction in `_open_new_position()`; replaced `position_factory.create_updated_position()` call in `_update_position_parameters()` with `dataclasses.replace(self.current_position, stop_loss=..., take_profit=...)`; removed `position_factory` constructor parameter.
+- **`src/managers/provider_types.py`**: Removed `ProviderClients.from_factory_dict()` classmethod that was only called by the now-deleted `ProviderFactory`.
+- **`start.py`**: Replaced `ProviderFactory` usage with inline `GoogleAIClient`, `OpenRouterClient`, `LMStudioClient` construction in `_provision_model_layer()`; removed `DataFetcherFactory` from `_provision_utilities()`; removed `PositionFactory` and `PatternEngine` from `_provision_analyzer_layer()` and `_provision_trading_layer()`.
+
+### Tests
+
+- Updated 5 test files (`test_trading_strategy_branches.py`, `test_trading_strategy_frictions.py`, `test_trading_strategy_process_analysis.py`, `test_order_governance.py`, `test_edge_cases_feedback.py`) to remove `position_factory` constructor arg and add `entry_price`/`volatility_level` fields to `RiskAssessment` mocks that now flow through inline `Position(...)` construction.
+- Position-update assertions changed from `factory.create_updated_position.assert_called_once()` to direct `strategy.current_position.stop_loss == ...` attribute checks.
+
+### Validation
+
+- Full pytest: **816 passed** (baseline maintained).
+- Full ruff validation: `ruff check src tests start.py` — all checks passed.
+- Pylance (`get_errors`): no errors on any modified file.
+
+## 2026-05-27 - Overengineering Simplification Pass
+
+### Changed
+
+- **src/app.py** and **start.py**: Replaced the wide `CryptoTradingBot` constructor surface with a compact `BotServices` bundle and moved position-monitor provisioning into construction via a factory callback.
+- **src/analyzer/technical_calculator.py**: Inlined technical indicator construction and removed the redundant factory layer.
+- **src/analyzer/prompts/prompt_builder.py**: Folded analyzer prompt context-section helpers directly into `PromptBuilder`, keeping prompt assembly in one owner instead of a pass-through collaborator.
+- **src/logger/logger.py**, **src/utils/profiler.py**, and **tests/conftest.py**: Removed broad config-loader test monkeypatching by making config singleton access lazy and local to fallback paths.
+- **src/trading/trading_strategy.py** and **src/trading/guards/pipeline.py**: Simplified guard/audit ownership so `TradingStrategy` records audit events and `GuardPipeline` only evaluates guards.
+- **src/config/loader.py** and config consumers: Retired the oversized config protocol type surface in favor of concrete config injection with type-check-only hints.
+
+### Removed
+
+- Removed `TechnicalIndicatorsFactory` and `src/factories/technical_indicators_factory.py`.
+- Removed `src/config/protocol.py` after replacing `ConfigProtocol` annotations.
+- Removed analyzer `ContextBuilder` and `src/analyzer/prompts/context_builder.py`.
+- Removed unused prompt delta-alert helper coverage along with the helper itself.
+- Removed unused order lifecycle states/history (`APPROVED`, `CANCELLED`, `state_history`) and the unused guard-pipeline audit compatibility shim.
+
+### Validation
+
+- Focused pytest after final pass: `138 passed in 1.86s`.
+- Full pytest after final pass: `816 passed in 27.11s`.
+- Full ruff validation: `ruff check src tests start.py` passed.
+- Targeted stale-symbol scan found no live Python/Markdown references to the removed protocol, factories, prompt context builder, guard audit shim, or old order lifecycle states.
+
 ## 2026-05-25 - Config Parsing and Silent-Failure Regressions
 
 ### Changed

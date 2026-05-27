@@ -15,17 +15,9 @@ from src.trading.data_models import ProviderCostStats, SessionCosts
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
-    _instance: "ModelPricing | None" = None
-    _pricing: dict[str, Any] | None = None
-
-    def __new__(cls) -> "ModelPricing":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
     def __init__(self):
-        if ModelPricing._pricing is None:
-            ModelPricing._pricing = self._load_pricing()
+        self._pricing = self._load_pricing()
 
     def _load_pricing(self) -> dict[str, Any]:
         """Load pricing data from JSON file."""

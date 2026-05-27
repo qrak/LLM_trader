@@ -8,7 +8,7 @@ from typing import Any, TYPE_CHECKING
 from .base_notifier import BaseNotifier
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
 
@@ -17,12 +17,12 @@ if TYPE_CHECKING:
 class ConsoleNotifier(BaseNotifier):
     """Console-based notifier as fallback when Discord is disabled."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
+    def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
         """Initialize ConsoleNotifier.
 
         Args:
             logger: Logger instance
-            config: ConfigProtocol instance
+            config: Config instance
             unified_parser: UnifiedParser for JSON extraction (DRY)
             formatter: FormatUtils instance for value formatting
         """

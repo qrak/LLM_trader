@@ -1,12 +1,12 @@
 """Trading strategy that wraps analysis with position management."""
 
 import asyncio
+import dataclasses
 import re
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
-from src.contracts.risk_contract import RiskManagerProtocol
 from src.utils.indicator_classifier import (
     build_exit_execution_context_from_config,
     classify_bb_position,
@@ -28,6 +28,7 @@ from .guards.pipeline import GuardPipeline
 
 if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
+    from src.managers.risk_manager import RiskManager
     from src.managers.persistence_manager import PersistenceManager
 
 
@@ -41,10 +42,9 @@ class TradingStrategy:
         brain_service: TradingBrainService,
         statistics_service: TradingStatisticsService,
         memory_service: TradingMemoryService,
-        risk_manager: RiskManagerProtocol,
+        risk_manager: "RiskManager",
         config: Any = None,
         position_extractor=None,
-        position_factory=None,
         dashboard_state: "DashboardState | None" = None,
         tightening_policy: StopLossTighteningPolicy | None = None,
         guard_pipeline: GuardPipeline | None = None,
@@ -61,7 +61,6 @@ class TradingStrategy:
             risk_manager: Risk Manager for position sizing and SL/TP
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
-            position_factory: PositionFactory instance (injected from start.py)
             dashboard_state: Optional dashboard state for UI lifecycle notifications
             tightening_policy: Stop-loss tightening policy (injected from start.py)
             guard_pipeline: Pre-execution guard pipeline (injected from start.py)
@@ -75,13 +74,10 @@ class TradingStrategy:
         self.risk_manager = risk_manager
         self.config = config
         self.extractor = position_extractor
-        self.position_factory = position_factory
         self.dashboard_state = dashboard_state
 
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
-        if self.guard_pipeline is not None:
-            self.guard_pipeline.set_audit_trail(self.audit_trail)
 
         self.current_position: Position | None = self.persistence.load_position()
 
@@ -430,48 +426,6 @@ class TradingStrategy:
             metadata=metadata,
         )
 
-    def _reject_intent(
-        self,
-        intent: OrderIntent,
-        order_id: str,
-        actor: str,
-        reason: str,
-        **metadata: Any,
-    ) -> None:
-        """Transition intent to REJECTED and record audit entry."""
-        intent.transition_to(OrderLifecycle.REJECTED, reason=reason)
-        self._audit(order_id, "rejection", actor, "rejected", reason, **metadata)
-
-    def _advance_state(
-        self,
-        intent: OrderIntent,
-        order_id: str,
-        target: OrderLifecycle,
-        reason: str,
-        actor: str,
-        **metadata: Any,
-    ) -> None:
-        """Transition intent to *target* and record audit entry."""
-        event_types = {
-            OrderLifecycle.READY_FOR_REVIEW: "state_transition",
-            OrderLifecycle.APPROVED: "approval",
-            OrderLifecycle.EXECUTED: "execution",
-        }
-        results = {
-            OrderLifecycle.READY_FOR_REVIEW: "ready_for_review",
-            OrderLifecycle.APPROVED: "approved",
-            OrderLifecycle.EXECUTED: "executed",
-        }
-        intent.transition_to(target, reason=reason)
-        self._audit(
-            order_id,
-            event_types.get(target, "state_transition"),
-            actor,
-            results.get(target, target.value),
-            reason,
-            **metadata,
-        )
-
     async def _open_new_position(
         self,
         signal: str,
@@ -491,7 +445,7 @@ class TradingStrategy:
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
         intent = OrderIntent(
-            order_id=order_id, state=OrderLifecycle.INTENT,
+            order_id=order_id,
             signal=signal, direction=direction, symbol=symbol,
             confidence=confidence, current_price=current_price,
             stop_loss=stop_loss, take_profit=take_profit,
@@ -505,23 +459,33 @@ class TradingStrategy:
 
         if self.guard_pipeline is not None:
             capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
-            guard_results = await asyncio.to_thread(
-                self.guard_pipeline.evaluate, intent, capital=capital, config=self.config)
+            guard_results = self.guard_pipeline.evaluate(intent, capital=capital, config=self.config)
+
+            for result in guard_results:
+                self._audit(
+                    order_id,
+                    "guard_check",
+                    result.guard_name,
+                    "passed" if result.passed else "failed",
+                    result.reason,
+                    **result.metadata,
+                )
 
             if not all(r.passed for r in guard_results):
                 failed = [r for r in guard_results if not r.passed]
                 failure_reasons = "; ".join(f"{r.guard_name}: {r.reason}" for r in failed)
-                self._reject_intent(intent, order_id, "GuardPipeline", failure_reasons,
-                                   failed_guards=[r.guard_name for r in failed])
+                intent.transition_to(OrderLifecycle.REJECTED, reason=failure_reasons)
+                self._audit(
+                    order_id, "rejection", "GuardPipeline", "rejected", failure_reasons,
+                    failed_guards=[r.guard_name for r in failed]
+                )
                 self.logger.warning("Order REJECTED by guard pipeline: %s", failure_reasons)
                 return TradeDecision(
                     timestamp=datetime.now(timezone.utc), symbol=symbol,
                     action="HOLD", confidence=confidence, price=current_price, fee=0.0,
                     reasoning=f"Order {order_id} rejected by guard pipeline: {failure_reasons}")
 
-            self._advance_state(intent, order_id, OrderLifecycle.READY_FOR_REVIEW,
-                               f"Passed guards: {self.guard_pipeline.guard_names}", "GuardPipeline",
-                               passed_guards=self.guard_pipeline.guard_names)
+            intent.transition_to(OrderLifecycle.READY_FOR_REVIEW, reason="Passed guard pipeline")
         else:
             intent.transition_to(OrderLifecycle.READY_FOR_REVIEW, reason="No guard pipeline configured")
 
@@ -596,30 +560,66 @@ class TradingStrategy:
             except Exception:
                 self.logger.warning("Failed to store blocked trade event", exc_info=True)
 
-            self._reject_intent(intent, order_id, "TradingStrategy",
-                              f"R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}",
-                              rr_ratio=rr_ratio, min_rr_for_entry=min_rr_for_entry)
+            intent.transition_to(OrderLifecycle.REJECTED, reason=f"R/R {rr_ratio:.2f} below minimum")
+            self._audit(
+                order_id,
+                "rejection",
+                "TradingStrategy",
+                "rejected",
+                f"R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}",
+                rr_ratio=rr_ratio,
+                min_rr_for_entry=min_rr_for_entry,
+            )
             return TradeDecision(
                 timestamp=datetime.now(timezone.utc), symbol=symbol,
                 action="HOLD", confidence=confidence, price=current_price, fee=0.0,
                 reasoning=f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}. {reasoning[:150]}" if reasoning else f"Entry blocked: R/R {rr_ratio:.2f} below minimum {min_rr_for_entry}.",
             )
 
-        self._advance_state(intent, order_id, OrderLifecycle.APPROVED,
-                           f"R/R {rr_ratio:.2f} >= minimum {min_rr_for_entry}", "TradingStrategy",
-                           rr_ratio=rr_ratio, min_rr_for_entry=min_rr_for_entry)
+        self._audit(
+            order_id,
+            "approval",
+            "TradingStrategy",
+            "approved",
+            f"R/R {rr_ratio:.2f} >= minimum {min_rr_for_entry}",
+            rr_ratio=rr_ratio,
+            min_rr_for_entry=min_rr_for_entry,
+        )
 
-        self.current_position = self.position_factory.create_position(
-            symbol=symbol,
-            direction=direction,
+        _mc = market_conditions or MarketConditions()
+        _ec = build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME)
+        self.current_position = Position(
+            entry_price=risk_assessment.entry_price,
+            stop_loss=risk_assessment.stop_loss,
+            take_profit=risk_assessment.take_profit,
+            size=risk_assessment.quantity,
+            entry_time=datetime.now(timezone.utc),
             confidence=confidence,
-            risk_assessment=risk_assessment,
+            direction=direction,
+            symbol=symbol,
             confluence_factors=confluence_factors,
-            market_conditions=market_conditions,
-            exit_execution_context=build_exit_execution_context_from_config(
-                self.config,
-                self.config.TIMEFRAME,
-            ),
+            entry_fee=risk_assessment.entry_fee,
+            quote_amount=risk_assessment.quote_amount,
+            size_pct=risk_assessment.size_pct,
+            atr_at_entry=_mc.atr,
+            volatility_level=risk_assessment.volatility_level,
+            sl_distance_pct=risk_assessment.sl_distance_pct,
+            tp_distance_pct=risk_assessment.tp_distance_pct,
+            rr_ratio_at_entry=risk_assessment.rr_ratio,
+            adx_at_entry=_mc.adx,
+            rsi_at_entry=_mc.rsi,
+            trend_direction_at_entry=_mc.trend_direction,
+            macd_signal_at_entry=_mc.macd_signal,
+            bb_position_at_entry=_mc.bb_position,
+            volume_state_at_entry=_mc.volume_state,
+            market_sentiment_at_entry=_mc.market_sentiment,
+            order_book_bias_at_entry=_mc.order_book_bias,
+            stop_loss_type_at_entry=_ec.stop_loss_type,
+            stop_loss_check_interval_at_entry=_ec.stop_loss_check_interval,
+            take_profit_type_at_entry=_ec.take_profit_type,
+            take_profit_check_interval_at_entry=_ec.take_profit_check_interval,
+            max_drawdown_pct=0.0,
+            max_profit_pct=0.0,
         )
 
         # Invalidate cooldown guard cache now that a new position was opened
@@ -629,11 +629,21 @@ class TradingStrategy:
         await self.persistence.async_save_position(self.current_position)
         self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
 
-        self._advance_state(intent, order_id, OrderLifecycle.EXECUTED,
-                           f"Order {order_id} executed: {direction} {symbol} @ {current_price}", "TradingStrategy",
-                           direction=direction, symbol=symbol, entry_price=current_price,
-                           stop_loss=final_sl, take_profit=final_tp,
-                           position_size_pct=final_size_pct, quantity=quantity)
+        intent.transition_to(OrderLifecycle.EXECUTED, reason="Position persisted")
+        self._audit(
+            order_id,
+            "execution",
+            "TradingStrategy",
+            "executed",
+            f"Order {order_id} executed: {direction} {symbol} @ {current_price}",
+            direction=direction,
+            symbol=symbol,
+            entry_price=current_price,
+            stop_loss=final_sl,
+            take_profit=final_tp,
+            position_size_pct=final_size_pct,
+            quantity=quantity,
+        )
 
         decision = TradeDecision(
             timestamp=datetime.now(timezone.utc),
@@ -760,11 +770,10 @@ class TradingStrategy:
             updated = True
 
         if updated:
-            # Create new position with updated values using factory
-            self.current_position = self.position_factory.create_updated_position(
-                original_position=self.current_position,
-                new_stop_loss=new_sl,
-                new_take_profit=new_tp
+            self.current_position = dataclasses.replace(
+                self.current_position,
+                stop_loss=new_sl,
+                take_profit=new_tp,
             )
             await self.persistence.async_save_position(self.current_position)
 

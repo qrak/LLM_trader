@@ -12,7 +12,7 @@ from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
 class TemplateManager:
@@ -57,7 +57,7 @@ class TemplateManager:
         "MANDATORY:",
     )
 
-    def __init__(self, config: "ConfigProtocol", logger: Logger | None = None, timeframe_validator: Any = None):
+    def __init__(self, config: "Config", logger: Logger | None = None, timeframe_validator: Any = None):
         """Initialize the template manager.
 
         Args:

@@ -3,17 +3,7 @@
 These tests bypass the conftest.py mock by importing the source module directly.
 """
 
-import sys
 import pytest
-
-
-@pytest.fixture(autouse=True)
-def _unmock_config():
-    """Remove conftest's mock for this module so we can test the real Config."""
-    mock = sys.modules.pop('src.config.loader', None)
-    yield
-    if mock is not None:
-        sys.modules['src.config.loader'] = mock
 
 
 # ═══════════════════════════════════════════════════════════════════════

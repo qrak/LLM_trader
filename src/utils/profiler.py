@@ -2,7 +2,14 @@ import time
 import functools
 import asyncio
 from typing import Callable, Any
-from src.config.loader import config
+
+
+def _logger_debug_enabled() -> bool:
+    try:
+        from src.config.loader import config
+        return bool(config.LOGGER_DEBUG)
+    except Exception:
+        return False
 
 def profile_performance(func: Callable) -> Callable:
     """
@@ -12,7 +19,7 @@ def profile_performance(func: Callable) -> Callable:
     @functools.wraps(func)
     async def wrapper(*args, **kwargs) -> Any:
         # Check config at runtime to allow hot reloading
-        if not config.LOGGER_DEBUG:
+        if not _logger_debug_enabled():
             return await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) \
                 else func(*args, **kwargs)
 
@@ -41,7 +48,7 @@ def profile_performance(func: Callable) -> Callable:
 
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs) -> Any:
-        if not config.LOGGER_DEBUG:
+        if not _logger_debug_enabled():
             return func(*args, **kwargs)
 
         instance = args[0]

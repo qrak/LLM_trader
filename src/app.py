@@ -6,13 +6,13 @@ between various components like the market analyzer, trading strategy, and exter
 import asyncio
 import io
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
 from src.managers.persistence_manager import PersistenceManager
-from src.contracts.model_contract import ModelManagerProtocol
 from src.trading import (
     ExitMonitor,
     PositionStatusMonitor,
@@ -21,6 +21,9 @@ from src.trading import (
     TradingMemoryService
 )
 
+if TYPE_CHECKING:
+    from src.managers.model_manager import ModelManager
+
 
 # Configuration Constants
 POSITION_UPDATE_INTERVAL = 3600  # 1 hour
@@ -28,6 +31,34 @@ SLEEP_CHUNK_SIZE = 1.0  # Check for interruptions every second
 CANDLE_BUFFER_SECONDS = 2  # Seconds to wait after candle start
 ERROR_WAIT_SHORT = 60   # Seconds to wait after minor error
 ERROR_WAIT_LONG = 300   # Seconds to wait after major error
+
+
+@dataclass
+class BotServices:
+    """Runtime services required by CryptoTradingBot."""
+
+    logger: Logger
+    config: Any
+    shutdown_manager: Any | None
+    exchange_manager: Any
+    market_analyzer: Any
+    trading_strategy: Any
+    discord_notifier: Any
+    keyboard_handler: Any
+    rag_engine: Any
+    coingecko_api: Any
+    market_api: Any
+    alternative_me_api: Any
+    http_session: Any
+    persistence: PersistenceManager
+    model_manager: "ModelManager"
+    brain_service: TradingBrainService
+    statistics_service: TradingStatisticsService
+    memory_service: TradingMemoryService
+    exit_monitor: ExitMonitor
+    dashboard_state: Any = None
+    discord_task: asyncio.Task | None = None
+    position_monitor_factory: Callable[[Any], PositionStatusMonitor] | None = None
 
 
 class CryptoTradingBot:
@@ -44,84 +75,55 @@ class CryptoTradingBot:
             f"/ {local_dt.strftime('%Y-%m-%d %H:%M:%S')} {local_zone}"
         )
 
-    def __init__(
-        self,
-        logger: Logger,
-        config,
-        shutdown_manager: Any | None,
-        exchange_manager,
-        market_analyzer,
-        trading_strategy,
-        discord_notifier,
-        keyboard_handler,
-        rag_engine,
-        coingecko_api,
-        market_api,
-        alternative_me_api,
-        http_session,
-        persistence: PersistenceManager,
-        model_manager: ModelManagerProtocol,
-        brain_service: TradingBrainService,
-        statistics_service: TradingStatisticsService,
-        memory_service: TradingMemoryService,
-        exit_monitor: ExitMonitor,
-        dashboard_state = None,
-        discord_task: asyncio.Task | None = None
-    ):
-        # pylint: disable=too-many-arguments, too-many-locals
-        # Reason: Dependency Injection pattern requires all components to be injected.
-        """Initialize bot with all dependencies injected.
-
-        All components are injected via constructor following the Dependency
-        Injection pattern, with start.py acting as the composition root.
-        """
-        self.logger = logger
-        self.config = config
-        self.shutdown_manager = shutdown_manager
+    def __init__(self, services: BotServices):
+        """Initialize bot with runtime services assembled by the composition root."""
+        self.logger = services.logger
+        self.config = services.config
+        self.shutdown_manager = services.shutdown_manager
 
         # Injected core components
-        self.exchange_manager = exchange_manager
-        self.market_analyzer = market_analyzer
-        self.trading_strategy = trading_strategy
-        self.discord_notifier = discord_notifier
-        self.keyboard_handler = keyboard_handler
-        self.rag_engine = rag_engine
+        self.exchange_manager = services.exchange_manager
+        self.market_analyzer = services.market_analyzer
+        self.trading_strategy = services.trading_strategy
+        self.discord_notifier = services.discord_notifier
+        self.keyboard_handler = services.keyboard_handler
+        self.rag_engine = services.rag_engine
 
         # Injected API clients
-        self.coingecko_api = coingecko_api
-        self.market_api = market_api
-        self.alternative_me_api = alternative_me_api
-        self.http_session = http_session
+        self.coingecko_api = services.coingecko_api
+        self.market_api = services.market_api
+        self.alternative_me_api = services.alternative_me_api
+        self.http_session = services.http_session
 
         # Injected trading services
-        self.persistence = persistence
-        self.model_manager = model_manager
-        self.brain_service = brain_service
-        self.statistics_service = statistics_service
-        self.memory_service = memory_service
-        self.exit_monitor = exit_monitor
-        self.dashboard_state = dashboard_state
+        self.persistence = services.persistence
+        self.model_manager = services.model_manager
+        self.brain_service = services.brain_service
+        self.statistics_service = services.statistics_service
+        self.memory_service = services.memory_service
+        self.exit_monitor = services.exit_monitor
+        self.dashboard_state = services.dashboard_state
 
         # Runtime state
         self.tasks = []
         self.running = False
         self._active_tasks = set()
         self._force_analysis = asyncio.Event()
-        self._discord_task = discord_task
+        self._discord_task = services.discord_task
 
         # Trading state
-        self.position_monitor: PositionStatusMonitor | None = None
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
+        self.position_monitor = (
+            services.position_monitor_factory(self)
+            if services.position_monitor_factory is not None
+            else None
+        )
 
     @property
     def active_tasks(self) -> set[asyncio.Task]:
         """Return bot-managed background tasks for composition-root wiring."""
         return self._active_tasks
-
-    def set_position_monitor(self, position_monitor: PositionStatusMonitor) -> None:
-        """Inject the position monitor after bot-bound callbacks are available."""
-        self.position_monitor = position_monitor
 
     def _require_position_monitor(self) -> PositionStatusMonitor:
         if self.position_monitor is None:

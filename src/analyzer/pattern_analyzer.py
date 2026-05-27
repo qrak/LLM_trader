@@ -1,7 +1,6 @@
 from typing import Any
 import numpy as np
 
-from src.analyzer.pattern_engine import PatternEngine
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
@@ -12,12 +11,10 @@ class PatternAnalyzer:
 
     def __init__(
         self,
-        pattern_engine: PatternEngine,
         indicator_pattern_engine: IndicatorPatternEngine,
         logger: Logger | None = None
     ):
         self.logger = logger
-        self.pattern_engine = pattern_engine
         self.indicator_pattern_engine = indicator_pattern_engine
         self._warmed_up = False
 
@@ -42,29 +39,20 @@ class PatternAnalyzer:
                 if self.logger:
                     self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
 
-        # Detect chart patterns
-        chart_patterns = self.pattern_engine.detect_patterns(ohlcv_data, timestamps)
-
         # Extract SMA values for MA crossover detection
         sma_values = None
         if long_term_data is not None and 'sma_values' in long_term_data:
             sma_values = long_term_data['sma_values']
 
         # Detect indicator patterns
-        indicator_patterns = {}
+        patterns = {}
         try:
-            indicator_patterns = self.indicator_pattern_engine.detect_patterns(
+            patterns = self.indicator_pattern_engine.detect_patterns(
                 technical_history, ohlcv_data, sma_values, timestamps
             )
         except Exception as e:
             if self.logger:
                 self.logger.warning("Error detecting indicator patterns: %s", e)
-
-        # Combine both types of patterns
-        patterns = {
-            **chart_patterns,  # candlestick, trend, reversal patterns
-            **indicator_patterns  # RSI, MACD, divergence, volatility, stochastic, MA, volume patterns
-        }
 
         return patterns
 
@@ -73,12 +61,10 @@ class PatternAnalyzer:
         if self._warmed_up:
             return
 
-        sample_count = max(self.pattern_engine.lookback + self.pattern_engine.lookahead + 5, 64)
+        sample_count = 64
         try:
             dummy_ohlcv = self._build_dummy_ohlcv(sample_count)
             dummy_history = self._build_dummy_history(sample_count, dummy_ohlcv[:, 4])
-            # Run engines to trigger numba compilation
-            self.pattern_engine.get_swing_points(dummy_ohlcv)  # Warm up swing detection
             self.indicator_pattern_engine.detect_patterns(dummy_history, dummy_ohlcv, None, None)
             self._warmed_up = True
             if self.logger:
@@ -131,22 +117,4 @@ class PatternAnalyzer:
             'sma_200': close_series.astype(np.float64)
         }
 
-    def get_all_patterns(
-        self,
-        ohlcv_data: np.ndarray,
-        technical_history: dict[str, np.ndarray],
-        long_term_data: dict | None = None
-    ) -> list[dict]:
-        try:
-            patterns_dict = self.detect_patterns(ohlcv_data, technical_history, long_term_data)
 
-            all_patterns = []
-            for _, patterns_list in patterns_dict.items():
-                all_patterns.extend(patterns_list)
-
-            return all_patterns
-
-        except Exception as e:
-            if self.logger:
-                self.logger.warning("Error in pattern detection: %s", e)
-            return []
