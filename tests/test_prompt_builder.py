@@ -8,26 +8,20 @@ from src.analyzer.prompts.prompt_builder import PromptBuilder
 
 
 def _make_prompt_builder() -> PromptBuilder:
-    context_builder = MagicMock()
-    context_builder.build_trading_context.return_value = "## TRADING CONTEXT\nSymbol: BTC/USDT"
-    context_builder.build_sentiment_section.return_value = ""
-    context_builder.build_coin_details_section.return_value = ""
-    context_builder.build_market_data_section.return_value = ""
-    context_builder.build_market_period_metrics_section.return_value = ""
-
     technical_formatter = MagicMock()
     technical_formatter.format_technical_analysis.return_value = ""
+    market_formatter = MagicMock()
+    market_formatter.period_formatter = MagicMock()
+    market_formatter.format_coin_details_section.return_value = ""
 
     return PromptBuilder(
-        technical_calculator=MagicMock(),
-            config=SimpleNamespace(MODEL_VERBOSITY="high"),
+        config=SimpleNamespace(MODEL_VERBOSITY="high"),
         format_utils=MagicMock(),
         overview_formatter=MagicMock(),
         long_term_formatter=MagicMock(),
         technical_formatter=technical_formatter,
-        market_formatter=MagicMock(),
+        market_formatter=market_formatter,
         template_manager=MagicMock(),
-        context_builder=context_builder,
     )
 
 

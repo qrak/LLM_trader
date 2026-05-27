@@ -22,8 +22,6 @@ VALID_MODEL_VERBOSITIES = {"low", "medium", "high"}
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
-
-    Implements ConfigProtocol for type safety and dependency injection.
     """
 
     def __init__(self):

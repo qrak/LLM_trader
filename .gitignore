@@ -47,7 +47,6 @@ htmlcov/
 !/data/categories.json
 /cache/
 /logs/
-/research_papers/
 config/config.ini
 # Updated configuration file management
 # Private keys and sensitive data

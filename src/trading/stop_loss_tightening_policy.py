@@ -72,7 +72,7 @@ class StopLossTighteningPolicy:
 
     @classmethod
     def from_config(cls, config: Any) -> "StopLossTighteningPolicy":
-        """Construct policy from a ConfigProtocol-compatible config object."""
+        """Construct policy from a config object."""
         return cls(
             scalping_threshold=config.SL_TIGHTENING_SCALPING,
             intraday_threshold=config.SL_TIGHTENING_INTRADAY,

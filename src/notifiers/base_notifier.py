@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
 
@@ -21,12 +21,12 @@ EXIT_ACTIONS = {'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'}
 class BaseNotifier(ABC):
     """Abstract base class for notifiers with shared calculation logic."""
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
+    def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
         """Initialize BaseNotifier.
 
         Args:
             logger: Logger instance
-            config: ConfigProtocol instance
+            config: Config instance
             unified_parser: UnifiedParser for JSON extraction (DRY)
             formatter: FormatUtils instance for value formatting
         """

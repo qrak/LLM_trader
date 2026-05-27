@@ -50,13 +50,3 @@ class ProviderClients:
     google_paid: "GoogleAIClient" | None = None
     openrouter: "OpenRouterClient" | None = None
     lmstudio: "LMStudioClient" | None = None
-
-    @classmethod
-    def from_factory_dict(cls, clients: dict[str, Any]) -> "ProviderClients":
-        """Create from ProviderFactory.create_all_clients() output."""
-        return cls(
-            google=clients.get('google'),
-            google_paid=clients.get('google_paid'),
-            openrouter=clients.get('openrouter'),
-            lmstudio=clients.get('lmstudio')
-        )

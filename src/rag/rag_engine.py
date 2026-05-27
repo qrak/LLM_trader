@@ -10,7 +10,7 @@ from src.utils.token_counter import TokenCounter
 
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.platforms.coingecko import CoinGeckoAPI
 
 
@@ -19,7 +19,7 @@ class RagEngine:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config: "ConfigProtocol",
+        config: "Config",
         coingecko_api: "CoinGeckoAPI" | None = None,
         file_handler=None,
         news_manager=None,
@@ -35,7 +35,7 @@ class RagEngine:
         Args:
             logger: Logger instance
             token_counter: TokenCounter instance
-            config: ConfigProtocol instance for RAG update intervals
+            config: Config instance for RAG update intervals
             coingecko_api: CoinGecko API client (optional)
             file_handler: RagFileHandler instance (injected from app.py)
             news_manager: NewsManager instance (injected from app.py)

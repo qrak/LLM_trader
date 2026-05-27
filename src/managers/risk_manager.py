@@ -4,19 +4,18 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
-from src.contracts.risk_contract import RiskManagerProtocol
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.trading.data_models import RiskAssessment, MarketConditions
 
-class RiskManager(RiskManagerProtocol):
+class RiskManager:
     """
     Manages risk calculations including position sizing, stop-loss/take-profit dynamic adjustment,
     and circuit breakers.
     """
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol"):
+    def __init__(self, logger: Logger, config: "Config"):
         self.logger = logger
         self.config = config
         self._last_frictions: list[dict[str, Any]] = []

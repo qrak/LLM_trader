@@ -9,9 +9,15 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
-from src.config.loader import config
-
 install_rich_traceback()
+
+
+def _resolve_default_log_dir() -> str:
+    try:
+        from src.config.loader import config
+        return config.LOG_DIR
+    except Exception:
+        return "logs"
 
 
 class DailyRotatingFileHandler(TimedRotatingFileHandler):
@@ -70,8 +76,7 @@ class Logger(logging.Logger):
         self.log_filename_prefix = log_filename_prefix
 
         if log_dir is None:
-            # Import config here to avoid circular imports
-            self.log_dir = config.LOG_DIR
+            self.log_dir = _resolve_default_log_dir()
         else:
             self.log_dir = log_dir
 

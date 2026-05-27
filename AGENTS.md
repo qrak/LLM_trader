@@ -7,6 +7,17 @@
 
 ---
 
+## 0. Instruction Authority
+
+`AGENTS.md` files are the only instruction source of truth in this repository across all IDEs and harnesses.
+
+- Root `AGENTS.md` is canonical for system-wide rules, coding standards, testing, terminal behavior, and governance.
+- Module-level `src/*/AGENTS.md` files extend root guidance with component-specific behavior only.
+- IDE-specific instruction files are non-authoritative and should not contain policy that is missing from `AGENTS.md`.
+- `.github/workflows/*` defines CI execution behavior, not instruction authority.
+
+---
+
 ## 1. System Overview
 
 **SEMANTIC SIGNAL LLM (LLM Trader)** is an autonomous, asyncio-first trading bot that converts market data, news (via RAG), and chart images into structured BUY / SELL / HOLD decisions via large language models. The system operates a **distributed multi-agent intelligence architecture**: specialized agents for technical analysis, pattern recognition, news retrieval, risk validation, outcome-aware learning, and reflection-based rule synthesis — all coordinated through a central trading loop.
@@ -105,7 +116,7 @@ flowchart TB
 | Stage | Provisioner | Dependencies Created |
 |-------|------------|---------------------|
 | 1 | `_provision_infrastructure` | ExchangeManager, aiohttp session, KeyboardHandler |
-| 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TechnicalIndicatorsFactory, TimeframeValidator |
+| 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TimeframeValidator |
 | 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS/Crawl4AI news client |
 | 4 | `_provision_rag_layer` | RagEngine, NewsManager, LocalTaxonomyProvider, TickerManager |
 | 5 | `_provision_model_layer` | AI provider clients, ProviderOrchestrator, ModelManager |
@@ -245,7 +256,6 @@ Active config at `config/config.ini`. Key settings:
 LLM_trader/
 ├── start.py                     # Entry point + CompositionRoot
 ├── AGENTS.md                    # THIS FILE — master architecture blueprint
-├── CLAUDE.md                    # Pointer to AGENTS.md
 ├── README.md                    # Project overview, setup, roadmap
 ├── CHANGELOG.md                 # Version history
 ├── requirements.txt / -dev.txt
@@ -290,11 +300,9 @@ LLM_trader/
 │   │   ├── AGENTS.md            # Agent docs
 │   │   ├── server.py            # FastAPI app
 │   │   └── routers/             # 5 API routers
-│   ├── indicators/              # Indicator library (50+ functions)
+│   ├── indicators/              # Indicator library — 50+ Numba functions<br/>(<a href='./src/indicators/AGENTS.md'>📄 README</a>)
 │   ├── platforms/               # AI providers + exchange APIs
 │   ├── evals/                   # Evaluation framework
-│   ├── factories/               # 4 factory modules
-│   ├── contracts/               # Data contracts (model, risk)
 │   ├── parsing/                 # UnifiedParser
 │   ├── logger/                  # Structured logging
 │   ├── notifiers/               # Discord, console, file
@@ -320,26 +328,21 @@ LLM_trader/
 
 ## 8. Operational Rules
 
-See individual agent READMEs for detailed prompts, inputs, outputs, and edge cases. For coding conventions, testing procedures, and CI/CD, refer to the legacy `AGENTS.md` sections or `CONTRIBUTING.md`.
+See individual agent READMEs for detailed prompts, inputs, outputs, and edge cases. Use this root `AGENTS.md` as the canonical source for global standards.
 
-### Quick Reference
+### Terminal Guardrails (All Agents)
 
-```bash
-# Start the bot
-source .venv/bin/activate && python start.py
+- Send one terminal command per tool call.
+- Never include control-key text in commands (for example `^U`, `^C`, `^[`).
+- Never chain validation commands with `;`, `&&`, variable assignment, redirect/capture, and readback in one line.
+- For pytest validation, trust only raw output from a direct pytest command.
+- If terminal output is empty or malformed, do not claim success.
+- Never infer pass/fail from a trailing `PYTEST_EXIT` marker when earlier commands in that same line failed.
 
-# Run full test suite
-.venv/bin/python -m pytest tests/
+### Operator Commands
 
-# Run focused test
-.venv/bin/python -m pytest tests/test_vector_memory.py -k fallback -q
-
-# Lint
-.venv/bin/python -m ruff check src tests start.py
-
-# Type check
-.venv/bin/python -m mypy src/
-```
+Keep platform-specific setup, startup, test, lint, and type-check commands in `README.md`.
+This file documents agent architecture and execution policy only.
 
 ### Safety
 
@@ -348,3 +351,21 @@ source .venv/bin/activate && python start.py
 - **Max position:** 10% of portfolio
 - **Simulated capital:** $10,000 with 0.075% fee model
 - **Fail-closed behavior** if governance/risk validation cannot decide safely
+
+---
+
+## 9. Documentation Governance
+
+### AGENTS-Only Policy Checklist
+
+Use this checklist for every documentation or tooling-policy PR:
+
+1. All behavioral policy changes are documented in root `AGENTS.md` and, when needed, the relevant `src/*/AGENTS.md` file.
+2. Do not introduce IDE-specific policy files (for example Copilot, Claude, or Windsurf instruction docs) as authoritative guidance.
+3. `.github/workflows/*` may define CI execution logic only; workflow comments must not replace policy documentation in `AGENTS.md`.
+4. If a command, validation rule, or safety guard changes, update the related AGENTS section in the same PR.
+5. Before merge, run a repository search to ensure no stale references point to removed tool-specific instruction files.
+
+### Drift Prevention Rule
+
+- Any new tool-specific instruction file must be a non-authoritative pointer to `AGENTS.md`; if it contains independent policy, it should be rejected in review.

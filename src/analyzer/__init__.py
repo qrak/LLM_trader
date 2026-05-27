@@ -7,7 +7,7 @@ This module provides a clean, logical organization of analysis components:
 - data/: Data collection, fetching, and processing components
 - calculations/: All calculation logic including indicators, metrics, and patterns
 - formatting/: Output formatting for AI prompts and console display
-- prompts/: Prompt building, context construction, and template management
+- prompts/: Prompt building and template management
 
 Key Components:
 - AnalysisEngine: Main analysis orchestrator
@@ -35,7 +35,7 @@ from .formatters.technical_formatter import TechnicalFormatter
 from .formatters.market_formatter import MarketFormatter
 
 # Prompt components
-from .prompts import PromptBuilder, ContextBuilder, TemplateManager
+from .prompts import PromptBuilder, TemplateManager
 
 __all__ = [
     # Core
@@ -58,6 +58,5 @@ __all__ = [
 
     # Prompts
     'PromptBuilder',
-    'ContextBuilder',
     'TemplateManager'
 ]

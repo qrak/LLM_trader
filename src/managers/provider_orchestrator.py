@@ -7,7 +7,7 @@ from src.platforms.ai_providers.response_models import ChatResponseModel
 from src.managers.provider_types import ProviderMetadata, InvocationResult, ProviderClients
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
 class ProviderOrchestrator:
@@ -25,7 +25,7 @@ class ProviderOrchestrator:
     def __init__(
         self,
         logger: Logger,
-        config: "ConfigProtocol",
+        config: "Config",
         clients: ProviderClients
     ) -> None:
         """

@@ -3,7 +3,7 @@ Technical Calculator Module.
 
 Calculates technical indicators for market analysis.
 """
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import numpy as np
 import math
@@ -16,24 +16,25 @@ from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import
     detect_golden_cross_numba, detect_death_cross_numba
 )
 
-if TYPE_CHECKING:
-    from src.factories import TechnicalIndicatorsFactory
-
-
 class TechnicalCalculator:
     """Core calculator for technical indicators"""
 
-    def __init__(self, logger: Logger | None = None, format_utils=None, ti_factory: "TechnicalIndicatorsFactory" = None):
+    def __init__(self, logger: Logger | None = None, format_utils=None):
         """Initialize the technical indicator calculator"""
         self.logger = logger
         self.format_utils = format_utils
-        self.ti_factory = ti_factory
         self.ti: TechnicalIndicators | None = None
+
+    @staticmethod
+    def _create_indicators(ohlcv_data: np.ndarray) -> TechnicalIndicators:
+        indicators = TechnicalIndicators()
+        indicators.get_data(ohlcv_data)
+        return indicators
 
     @profile_performance
     def get_indicators(self, ohlcv_data: np.ndarray) -> dict[str, np.ndarray]:
         """Calculate all technical indicators - no caching, always fresh"""
-        self.ti = self.ti_factory.create_for_current_timeframe(ohlcv_data)
+        self.ti = self._create_indicators(ohlcv_data)
 
         indicators = {}
 
@@ -216,7 +217,7 @@ class TechnicalCalculator:
 
     def get_long_term_indicators(self, ohlcv_data: np.ndarray) -> dict[str, Any]:
         """Calculate long-term indicators for historical data - no caching, always fresh"""
-        ti_lt = self.ti_factory.create_for_long_term(ohlcv_data)
+        ti_lt = self._create_indicators(ohlcv_data)
         available_days = len(ohlcv_data)
 
         sma_values, volume_sma_values = self._compute_sma_sets(ti_lt, available_days)
@@ -247,7 +248,7 @@ class TechnicalCalculator:
 
     def get_weekly_macro_indicators(self, weekly_ohlcv_data: np.ndarray) -> dict[str, Any]:
         """Calculate macro indicators using weekly data (200W SMA methodology) - no caching, always fresh"""
-        ti_weekly = self.ti_factory.create_for_weekly(weekly_ohlcv_data)
+        ti_weekly = self._create_indicators(weekly_ohlcv_data)
         available_weeks = len(weekly_ohlcv_data)
 
         # REUSE existing helper methods (already timeframe-agnostic)

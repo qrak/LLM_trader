@@ -25,7 +25,7 @@ from .rss_primitives import (
 from .schema_mapper import to_article_schema
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
 class RSSCrawl4AINewsProvider:
@@ -38,7 +38,7 @@ class RSSCrawl4AINewsProvider:
     * ``filter_by_age(articles, max_age_hours) -> list[dict]``
     """
 
-    def __init__(self, logger: Logger, config: "ConfigProtocol", enricher: Crawl4AIEnricher) -> None:
+    def __init__(self, logger: Logger, config: "Config", enricher: Crawl4AIEnricher) -> None:
         self.logger = logger
         self.config = config
         self._enricher = enricher

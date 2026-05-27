@@ -29,7 +29,7 @@ class MarketFormatter:
         Args:
             logger: Optional logger instance
             format_utils: Format utilities for value formatting
-            config: Configuration instance (ConfigProtocol)
+            config: Configuration instance
             token_counter: Utility for counting tokens
             overview_formatter: MarketOverviewFormatter instance
             period_formatter: MarketPeriodFormatter instance

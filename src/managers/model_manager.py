@@ -3,15 +3,14 @@ import io
 from typing import Union, TYPE_CHECKING
 from src.logger.logger import Logger
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
-from src.contracts.model_contract import ModelManagerProtocol
 from src.managers.provider_types import ProviderClients, InvocationResult
 from src.managers.provider_orchestrator import ProviderOrchestrator
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
 
 
-class ModelManager(ModelManagerProtocol):
+class ModelManager:
     """
     Public API for AI model interactions.
 
@@ -27,7 +26,7 @@ class ModelManager(ModelManagerProtocol):
     def __init__(
         self,
         logger: Logger,
-        config: "ConfigProtocol",
+        config: "Config",
         unified_parser=None,
         token_counter: TokenCounter | None = None,
         cost_storage: CostStorage | None = None,
@@ -40,7 +39,7 @@ class ModelManager(ModelManagerProtocol):
 
         Args:
             logger: Logger instance for logging
-            config: ConfigProtocol instance for configuration access
+            config: Config instance for configuration access
             unified_parser: UnifiedParser instance (must be injected from app.py)
             token_counter: TokenCounter instance
             cost_storage: CostStorage instance

@@ -13,20 +13,27 @@ from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
-    from src.contracts.model_contract import ModelManagerProtocol
+    from src.managers.model_manager import ModelManager
 
 
 class AnalysisResultProcessor:
     """Processes and formats market analysis results from AI models"""
 
-    def __init__(self, model_manager: "ModelManagerProtocol", logger: Logger, unified_parser=None):
+    def __init__(
+        self,
+        model_manager: "ModelManager",
+        logger: Logger,
+        unified_parser,
+        trend_validator: TrendValidator,
+        quality_scorer: PatternQualityScorer,
+    ):
         """Initialize the processor"""
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
         self.context: "AnalysisContext" | None = None
-        self._trend_validator = TrendValidator()
-        self._quality_scorer = PatternQualityScorer()
+        self._trend_validator = trend_validator
+        self._quality_scorer = quality_scorer
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: Union[io.BytesIO, bytes, str] | None = None,

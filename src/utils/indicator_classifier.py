@@ -8,7 +8,7 @@ between the AnalysisEngine (live trading) and the dashboard router.
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.trading.data_models import ExitExecutionContext
 
 
@@ -53,7 +53,7 @@ def build_exit_execution_context(
 
 
 def build_exit_execution_context_from_config(
-    config: "ConfigProtocol",
+    config: "Config",
     timeframe: str = EXIT_EXECUTION_UNKNOWN,
 ) -> "ExitExecutionContext":
     """Build risk-execution context from config attributes."""

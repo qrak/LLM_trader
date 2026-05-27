@@ -16,7 +16,7 @@ from .filehandler import DiscordFileHandler
 ENTRY_ACTIONS = {'BUY', 'SELL'}
 
 if TYPE_CHECKING:
-    from src.config.protocol import ConfigProtocol
+    from src.config.loader import Config
     from src.parsing.unified_parser import UnifiedParser
     from src.utils.format_utils import FormatUtils
 
@@ -29,12 +29,12 @@ class DiscordNotifier(BaseNotifier):
     _DISCORD_SEND_MAX_ATTEMPTS = 3
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
 
-    def __init__(self, logger, config: "ConfigProtocol", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
+    def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
         """Initialize DiscordNotifier.
 
         Args:
             logger: Logger instance
-            config: ConfigProtocol instance for Discord settings
+            config: Config instance for Discord settings
             unified_parser: UnifiedParser for JSON extraction (DRY)
             formatter: FormatUtils instance for value formatting
             bot: Injected Discord client instance

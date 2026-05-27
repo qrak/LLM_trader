@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 from typing import Any, TYPE_CHECKING
 
 import math
@@ -5,7 +6,6 @@ import numpy as np
 
 from src.logger.logger import Logger
 from ..analysis_context import AnalysisContext
-from ..technical_calculator import TechnicalCalculator
 from .template_manager import TemplateManager
 from ..formatters import (
     MarketFormatter,
@@ -13,7 +13,6 @@ from ..formatters import (
     LongTermFormatter,
     MarketOverviewFormatter
 )
-from .context_builder import ContextBuilder
 
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
@@ -24,7 +23,6 @@ class PromptBuilder:
         self,
         timeframe: str = "1h",
         logger: Logger | None = None,
-        technical_calculator: TechnicalCalculator | None = None,
         config: Any = None,
         format_utils: "FormatUtils | None" = None,
         overview_formatter: MarketOverviewFormatter | None = None,
@@ -33,14 +31,12 @@ class PromptBuilder:
         market_formatter: MarketFormatter | None = None,
         timeframe_validator: Any = None,
         template_manager: TemplateManager | None = None,
-        context_builder: ContextBuilder | None = None
     ) -> None:
         """Initialize the PromptBuilder
 
         Args:
             timeframe: The primary timeframe for analysis (e.g. "1h")
             logger: Optional logger instance for debugging
-            technical_calculator: Calculator for technical indicators (required)
             config: Configuration instance
             format_utils: Format utilities (required)
             overview_formatter: MarketOverviewFormatter instance (required)
@@ -49,15 +45,11 @@ class PromptBuilder:
             market_formatter: MarketFormatter instance (required)
             timeframe_validator: TimeframeValidator instance (injected)
             template_manager: TemplateManager instance (required)
-            context_builder: ContextBuilder instance (required)
         """
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
         self.context: AnalysisContext | None = None
-        if technical_calculator is None:
-            raise ValueError("technical_calculator is required for PromptBuilder")
-        self.technical_calculator = technical_calculator
         self.config = config
         if format_utils is None:
             raise ValueError("format_utils is required for PromptBuilder")
@@ -77,14 +69,12 @@ class PromptBuilder:
         if technical_formatter is None:
             raise ValueError("technical_formatter is required for PromptBuilder")
         self.technical_analysis_formatter = technical_formatter
-
-        # Use injected ContextBuilder
-        if context_builder is None:
-            raise ValueError("context_builder is required for PromptBuilder")
-        self.context_builder = context_builder
         if market_formatter is None:
             raise ValueError("market_formatter is required for PromptBuilder")
         self.market_formatter = market_formatter
+        self.period_formatter = market_formatter.period_formatter
+        if self.period_formatter is None:
+            raise ValueError("market_formatter.period_formatter is required for PromptBuilder")
 
     def build_prompt(
         self,
@@ -108,14 +98,14 @@ class PromptBuilder:
         self.context = context
 
         sections = [
-            self.context_builder.build_trading_context(context),
+            self.build_trading_context(context),
         ]
 
         # Add position context early in user query (adjacent to current price for context)
         if position_context:
             sections.append(f"## CURRENT POSITION & PERFORMANCE\n{position_context.strip()}")
 
-        sections.append(self.context_builder.build_sentiment_section(context.sentiment))
+        sections.append(self.build_sentiment_section(context.sentiment))
 
         # Add market overview first before technical analysis to give it more prominence
         if context.market_overview:
@@ -170,22 +160,22 @@ class PromptBuilder:
                     sections.append(funding_section)
 
         # Add cryptocurrency details if available
-        coin_details_section = self.context_builder.build_coin_details_section(
+        coin_details_section = self.build_coin_details_section(
             context.coin_details
         )
         if coin_details_section:
             sections.append(coin_details_section)
 
         if context.ohlcv_candles is not None:
-            sections.append(self.context_builder.build_market_data_section(context.ohlcv_candles))
+            sections.append(self.build_market_data_section(context.ohlcv_candles))
         sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
         # Market period metrics
-        sections.append(self.context_builder.build_market_period_metrics_section(context.market_metrics))
+        sections.append(self.build_market_period_metrics_section(context.market_metrics))
 
         # Add previous indicators comparison section if available
         if previous_indicators:
-            prev_section = self.context_builder.build_previous_indicators_section(
+            prev_section = self.build_previous_indicators_section(
                 previous_indicators,
                 context.technical_data
             )
@@ -232,6 +222,265 @@ class PromptBuilder:
         final_prompt = "\n\n".join(filter(None, sections))
 
         return final_prompt
+
+    def build_trading_context(self, context: AnalysisContext) -> str:
+        current_time = datetime.now(timezone.utc)
+        candle_status = ""
+        timeframe_minutes = 60
+        if self.timeframe_validator:
+            timeframe_minutes = self.timeframe_validator.to_minutes(self.timeframe)
+
+        if timeframe_minutes < 1440:
+            total_minutes = current_time.hour * 60 + current_time.minute
+            minutes_into_candle = total_minutes % timeframe_minutes
+            minutes_until_close = timeframe_minutes - minutes_into_candle
+            candle_status = f"\n- Next Candle Close: in {minutes_until_close} minutes"
+            candle_status += "\n- Data Quality: All indicators based on CLOSED CANDLES ONLY (professional trading standard)"
+
+        analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"
+        day_of_week = current_time.strftime("%A")
+        weekend_note = ""
+        if day_of_week in ["Saturday", "Sunday"]:
+            weekend_note = (
+                "\n        - WEEKEND MODE: Trading volume/liquidity is typically lower. "
+                "Be cautious of fakeouts/manipulation."
+            )
+
+        milestones = self._get_market_milestones(current_time)
+
+        return f"""
+        ## Trading Context
+        - Symbol: {context.symbol}
+        - Current Day: {day_of_week} (UTC)
+        - Current Price: {context.current_price}
+        - Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}
+        - Primary Timeframe: {self.timeframe} ({timeframe_minutes} min/candle)
+        - Analysis Includes: {analysis_timeframes}
+
+        ### Market Milestones (UTC)
+{milestones}"""
+
+    @staticmethod
+    def _get_market_milestones(current_time: datetime) -> str:
+        milestones = []
+
+        def format_delta(delta: timedelta) -> str:
+            total_seconds = int(delta.total_seconds())
+            hours, remainder = divmod(total_seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            return f"{hours}h {minutes}m"
+
+        next_daily = (current_time + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        milestones.append(f"        - Daily Close: in {format_delta(next_daily - current_time)} (00:00 UTC)")
+
+        if current_time.weekday() == 6:
+            cme_open = current_time.replace(hour=22, minute=0, second=0, microsecond=0)
+            if current_time < cme_open:
+                milestones.append(
+                    f"        - CME/Service Open: in {format_delta(cme_open - current_time)} (Today 22:00 UTC)"
+                )
+            else:
+                milestones.append("        - CME/Service Open: Currently Active (since 22:00 UTC)")
+
+        if current_time.weekday() >= 5:
+            days_until_monday = (7 - current_time.weekday()) % 7 or 7
+            next_weekly = (current_time + timedelta(days=days_until_monday)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            milestones.append(
+                f"        - Weekly Open: in {format_delta(next_weekly - current_time)} (Mon 00:00 UTC)"
+            )
+
+        return "\n".join(milestones) if milestones else "        - No major milestones within 24h"
+
+    def build_sentiment_section(self, sentiment_data: dict[str, Any] | None) -> str:
+        if not sentiment_data:
+            return ""
+
+        historical_data = sentiment_data.get("historical", [])
+        sentiment_section = f"""
+        ## Market Sentiment
+        - Current Fear & Greed Index: {sentiment_data.get('fear_greed_index', 'N/A')}
+        - Classification: {sentiment_data.get('value_classification', 'N/A')}"""
+
+        if historical_data:
+            sentiment_section += "\n\n        ### Historical Fear & Greed (Last 7 days):"
+            for day in historical_data:
+                if isinstance(day["timestamp"], datetime):
+                    date_str = day["timestamp"].strftime("%Y-%m-%d")
+                elif isinstance(day["timestamp"], (int, float)):
+                    date_str = self.format_utils.format_date_from_timestamp(day["timestamp"])
+                else:
+                    date_str = str(day["timestamp"])
+                sentiment_section += f"\n    - {date_str}: {day['value']} ({day['value_classification']})"
+
+        return sentiment_section
+
+    def _calculate_period_candles(self) -> dict[str, int]:
+        base_minutes = 60
+        if self.timeframe_validator:
+            base_minutes = self.timeframe_validator.to_minutes(self.timeframe)
+
+        period_targets = {
+            "4h": 4 * 60,
+            "12h": 12 * 60,
+            "24h": 24 * 60,
+            "3d": 72 * 60,
+            "7d": 168 * 60,
+        }
+
+        result = {}
+        for name, target_mins in period_targets.items():
+            candles_needed = target_mins // base_minutes
+            if candles_needed >= 1:
+                result[name] = candles_needed
+        return result
+
+    def build_market_data_section(self, ohlcv_candles: np.ndarray) -> str:
+        if ohlcv_candles is None or ohlcv_candles.size == 0:
+            return "MARKET DATA:\nNo OHLCV data available"
+
+        if ohlcv_candles.shape[0] < 24:
+            return "MARKET DATA:\nInsufficient historical data (less than 25 candles)"
+
+        available_candles = ohlcv_candles.shape[0]
+        data = "## Market Data\n"
+
+        if available_candles >= 100:
+            last_close = float(ohlcv_candles[-1, 4])
+            periods = self._calculate_period_candles()
+
+            data += f"\nMulti-Timeframe Price Summary (Based on {self.timeframe} candles):\n"
+            for period_name, candle_count in periods.items():
+                if (candle_count + 1) <= available_candles:
+                    period_start = float(ohlcv_candles[-(candle_count + 1), 4])
+                    change_pct = ((last_close / period_start) - 1) * 100
+                    high = max(float(candle[2]) for candle in ohlcv_candles[-candle_count:])
+                    low = min(float(candle[3]) for candle in ohlcv_candles[-candle_count:])
+                    data += (
+                        f"{period_name}: {change_pct:.2f}% change | "
+                        f"High: {self.format_utils.fmt(high)} | Low: {self.format_utils.fmt(low)}\n"
+                    )
+
+        return data if data != "MARKET DATA:\n" else ""
+
+    def build_market_period_metrics_section(self, market_metrics: dict[str, Any] | None) -> str:
+        if not market_metrics:
+            return ""
+        return self.period_formatter.format_market_period_metrics(market_metrics)
+
+    def build_coin_details_section(self, coin_details: dict[str, Any] | None) -> str:
+        if not coin_details:
+            return ""
+        return self.market_formatter.format_coin_details_section(coin_details)
+
+    @staticmethod
+    def _resolve_indicator_value(raw_val: Any) -> float | None:
+        if raw_val is None:
+            return None
+        if isinstance(raw_val, (list, tuple, np.ndarray)):
+            raw_val = raw_val[-1] if len(raw_val) > 0 else None
+        if raw_val is None:
+            return None
+        try:
+            return float(raw_val)
+        except (ValueError, TypeError):
+            return None
+
+    def build_previous_indicators_section(self, previous_indicators: dict[str, Any], current_indicators: dict[str, Any]) -> str:
+        if not previous_indicators or not current_indicators:
+            return ""
+
+        lines = ["### Indicator Changes (Previous → Current):", ""]
+        key_indicators = [
+            ("rsi", "RSI"),
+            ("macd_line", "MACD Line"),
+            ("macd_signal", "MACD Signal"),
+            ("macd_hist", "MACD Histogram"),
+            ("ppo", "PPO"),
+            ("stoch_k", "Stochastic %K"),
+            ("stoch_d", "Stochastic %D"),
+            ("williams_r", "Williams %R"),
+            ("tsi", "TSI"),
+            ("roc_14", "ROC"),
+            ("mfi", "MFI"),
+            ("adx", "ADX"),
+            ("plus_di", "+DI"),
+            ("minus_di", "-DI"),
+            ("trix", "TRIX"),
+            ("vortex_plus", "Vortex VI+"),
+            ("vortex_minus", "Vortex VI-"),
+            ("obv", "OBV"),
+            ("obv_slope", "OBV Slope"),
+            ("cci", "CCI"),
+            ("cmf", "Chaikin MF"),
+            ("atr", "ATR"),
+            ("atr_percent", "ATR%"),
+            ("bb_percent_b", "BB %B"),
+            ("choppiness", "Choppiness"),
+            ("sma_20", "20 SMA"),
+            ("sma_50", "50 SMA"),
+            ("sma_200", "200 SMA"),
+            ("linreg_slope", "LinReg Slope"),
+            ("linreg_r2", "LinReg R²"),
+        ]
+        zero_cross_indicators = {
+            "macd_line", "macd_hist", "macd_signal", "roc_14", "cci", "cmf",
+            "trix", "tsi", "ppo", "linreg_slope", "coppock", "kst",
+        }
+
+        changes = []
+        for key, label in key_indicators:
+            prev_val = self._resolve_indicator_value(previous_indicators.get(key))
+            curr_val = self._resolve_indicator_value(current_indicators.get(key))
+            if prev_val is None or curr_val is None:
+                continue
+            line = self._format_indicator_change(label, prev_val, curr_val, key in zero_cross_indicators)
+            if line:
+                changes.append(line)
+
+        if not changes:
+            lines.append("No significant indicator changes observed since last analysis.")
+        else:
+            lines.extend(changes)
+            lines.append("")
+            lines.append("(Note: Indicators with < 1.0% change or specific zero-cross logic are filtered)")
+
+        lines.append("")
+        lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
+        return "\n".join(lines)
+
+    def _format_indicator_change(
+        self,
+        label: str,
+        prev_val: float,
+        curr_val: float,
+        is_zero_cross_type: bool,
+    ) -> str | None:
+        diff = curr_val - prev_val
+        abs_prev = abs(prev_val)
+        if abs(diff) < 0.000001:
+            return None
+
+        crossed_zero = prev_val * curr_val < 0
+        arrow = "↑" if diff > 0 else "↓"
+        sign = "+" if diff > 0 else ""
+
+        if (is_zero_cross_type and crossed_zero) or (abs_prev < 0.1 and is_zero_cross_type):
+            change_desc = f"({arrow} zero-cross)" if crossed_zero else f"({arrow} Δ{diff:+.4f})"
+            if abs(curr_val) >= 1:
+                return f"- {label}: {prev_val:.2f} → {curr_val:.2f} {change_desc}"
+            return f"- {label}: {prev_val:.4f} → {curr_val:.4f} {change_desc}"
+
+        if abs_prev > 0.0001:
+            change_pct = (diff / abs_prev) * 100
+            if abs(change_pct) >= 1.0:
+                if abs(curr_val) >= 1:
+                    return f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)"
+                return f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)"
+        else:
+            return f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} Δ{diff:+.4f})"
+        return None
 
     def get_prompt_metadata(self) -> dict[str, str]:
         """Return prompt metadata for logs, persistence, and dashboard observability."""
@@ -342,8 +591,8 @@ class PromptBuilder:
         # Check if we have advanced support/resistance detected
         advanced_support_resistance_detected = self._has_advanced_support_resistance()
 
-        # Get available periods from context builder for dynamic prompt generation
-        available_periods = self.context_builder._calculate_period_candles()
+        # Get available periods for dynamic prompt generation
+        available_periods = self._calculate_period_candles()
 
         # Add analysis steps (instructions go in system prompt)
         analysis_steps = self.template_manager.build_analysis_steps(

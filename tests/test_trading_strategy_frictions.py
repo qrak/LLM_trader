@@ -64,26 +64,6 @@ def _make_mock_extractor():
     return ext
 
 
-def _make_mock_position_factory():
-    """Create a mock position_factory that returns a Position."""
-    from datetime import datetime, timezone
-    from src.trading.data_models import Position
-
-    factory = MagicMock()
-    factory.create_position.return_value = Position(
-        entry_price=100.0,
-        stop_loss=95.0,
-        take_profit=110.0,
-        size=5.0,
-        entry_time=datetime.now(timezone.utc),
-        confidence="HIGH",
-        direction="LONG",
-        symbol="BTC/USDC",
-        size_pct=0.05,
-    )
-    return factory
-
-
 def _make_strategy(
     *,
     risk_manager=None,
@@ -113,8 +93,6 @@ def _make_strategy(
         "BUY", "HIGH", stop_loss, take_profit, position_size, "AI reasoning"
     )
 
-    factory = _make_mock_position_factory()
-
     return TradingStrategy(
         logger=logger,
         persistence=persistence,
@@ -124,7 +102,6 @@ def _make_strategy(
         risk_manager=risk_mgr,
         config=config,
         position_extractor=extractor,
-        position_factory=factory,
     )
 
 
