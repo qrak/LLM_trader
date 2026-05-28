@@ -1,12 +1,13 @@
+"""Tests for market period metrics formatting via MarketFormatter."""
 from unittest.mock import MagicMock
 
-from src.analyzer.formatters.market_period_formatter import MarketPeriodFormatter
+from src.analyzer.formatters.market_formatter import MarketFormatter
 
 
 def _make_formatter():
     format_utils = MagicMock()
     format_utils.fmt.side_effect = lambda value: f"{value:.2f}" if isinstance(value, float) else str(value)
-    return MarketPeriodFormatter(format_utils=format_utils)
+    return MarketFormatter(format_utils=format_utils)
 
 
 def test_format_market_period_metrics_shows_partial_period_label():

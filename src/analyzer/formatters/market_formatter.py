@@ -1,18 +1,16 @@
-"""
-Consolidated Market Analysis Formatter - Main Coordinator.
-Delegates to specialized formatters.
+"""Consolidated Market Analysis Formatter.
+Formats market overview, period metrics, long-term data.
 """
 from datetime import datetime, timezone
 from typing import Any
 
 from src.logger.logger import Logger
 from .market_overview_formatter import MarketOverviewFormatter
-from .market_period_formatter import MarketPeriodFormatter
 from .long_term_formatter import LongTermFormatter
 
 
 class MarketFormatter:
-    """Main coordinator for market analysis formatting."""
+    """Formats market analysis data: overview, period metrics, long-term."""
 
     def __init__(
         self,
@@ -21,10 +19,9 @@ class MarketFormatter:
         config=None,
         token_counter=None,
         overview_formatter: MarketOverviewFormatter | None = None,
-        period_formatter: MarketPeriodFormatter | None = None,
         long_term_formatter: LongTermFormatter | None = None
     ):
-        """Initialize the market formatter and its specialized components.
+        """Initialize the market formatter.
 
         Args:
             logger: Optional logger instance
@@ -32,7 +29,6 @@ class MarketFormatter:
             config: Configuration instance
             token_counter: Utility for counting tokens
             overview_formatter: MarketOverviewFormatter instance
-            period_formatter: MarketPeriodFormatter instance
             long_term_formatter: LongTermFormatter instance
         """
         self.logger = logger
@@ -41,7 +37,6 @@ class MarketFormatter:
         self.token_counter = token_counter
 
         self.overview_formatter = overview_formatter
-        self.period_formatter = period_formatter
         self.long_term_formatter = long_term_formatter
 
     def _format_snapshot_timestamp(self, timestamp_ms: int | None) -> str:
@@ -230,6 +225,78 @@ class MarketFormatter:
             lines.append(f"  • Current Position in Range: {position_in_range:.1f}%")
 
         return "\n".join(lines)
+
+
+    def format_market_period_metrics(self, market_metrics: dict) -> str:
+        """Format market metrics for different periods (compressed format)."""
+        if not market_metrics:
+            return ""
+
+        sections = ["## Period Metrics"]
+
+        for period, period_data in market_metrics.items():
+            if not period_data:
+                continue
+            metrics = period_data.get('metrics', {})
+            if not metrics:
+                continue
+
+            parts = []
+            avg_price = metrics.get('avg_price')
+            lowest_price = metrics.get('lowest_price')
+            highest_price = metrics.get('highest_price')
+            price_change_percent = metrics.get('price_change_percent')
+
+            if avg_price:
+                parts.append(f"Avg${self.format_utils.fmt(avg_price)}")
+            if lowest_price and highest_price:
+                parts.append(f"Range${self.format_utils.fmt(lowest_price)}-{self.format_utils.fmt(highest_price)}")
+            if price_change_percent is not None:
+                direction = "\u2191" if price_change_percent >= 0 else "\u2193"
+                parts.append(f"\u0394{direction}{self.format_utils.fmt(abs(price_change_percent))}%")
+
+            total_volume = metrics.get('total_volume')
+            if total_volume:
+                parts.append(f"Vol:{self.format_utils.fmt(total_volume)}")
+
+            if 'indicator_changes' in period_data:
+                ind_parts = self._format_indicator_changes_compressed(period_data['indicator_changes'])
+                if ind_parts:
+                    parts.append(ind_parts)
+
+            if parts:
+                period_label = str(metrics.get('period') or period).upper()
+                sections.append(f"\n{period_label}: {' | '.join(parts)}")
+
+        return "".join(sections)
+
+    def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
+        """Format indicator changes in compressed format."""
+        if not indicator_changes:
+            return ""
+
+        parts = []
+        rsi_change = indicator_changes.get('rsi_change')
+        if rsi_change is not None and abs(rsi_change) > 0.1:
+            direction = "\u2191 " if rsi_change >= 0 else "\u2193 "
+            parts.append(f"RSI {direction}{self.format_utils.fmt(abs(rsi_change))}")
+
+        macd_change = indicator_changes.get('macd_line_change')
+        if macd_change is not None and abs(macd_change) > 1:
+            direction = "\u2191 " if macd_change >= 0 else "\u2193 "
+            parts.append(f"MACD {direction}{self.format_utils.fmt(abs(macd_change))}")
+
+        adx_change = indicator_changes.get('adx_change')
+        if adx_change is not None and abs(adx_change) > 0.5:
+            direction = "\u2191 " if adx_change >= 0 else "\u2193 "
+            parts.append(f"ADX {direction}{self.format_utils.fmt(abs(adx_change))}")
+
+        stoch_change = indicator_changes.get('stoch_k_change')
+        if stoch_change is not None and abs(stoch_change) > 1:
+            direction = "\u2191 " if stoch_change >= 0 else "\u2193 "
+            parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change))}")
+
+        return " ".join(parts) if parts else ""
 
 
     def format_order_book_depth(self, order_book: dict, symbol: str, timeframe: str) -> str:

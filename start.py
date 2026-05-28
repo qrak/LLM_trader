@@ -58,7 +58,6 @@ from src.analyzer.formatters import (
     MarketOverviewFormatter,
     LongTermFormatter,
     MarketFormatter,
-    MarketPeriodFormatter
 )
 from src.rag import (
     RagFileHandler, NewsManager, MarketDataManager,
@@ -507,11 +506,10 @@ class CompositionRoot:
         """Provision the market analysis engine."""
         overview_fmt = MarketOverviewFormatter(self.logger, utils['format_utils'])
         long_term_fmt = LongTermFormatter(self.logger, utils['format_utils'])
-        period_fmt = MarketPeriodFormatter(self.logger, utils['format_utils'])
 
         market_fmt = MarketFormatter(
             self.logger, utils['format_utils'], self.config, utils['token_counter'],
-            overview_fmt, period_fmt, long_term_fmt
+            overview_fmt, long_term_fmt
         )
 
         tech_calc = TechnicalCalculator(self.logger, utils['format_utils'])
