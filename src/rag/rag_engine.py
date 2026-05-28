@@ -72,6 +72,12 @@ class RagEngine:
 
         self._update_lock = asyncio.Lock()
 
+        # Tracks when the last update ATTEMPT was made, even if it failed or timed out.
+        # Used to prevent rapid retries in the retrieve_context hot path when the main
+        # loop's update attempt already failed.
+        self._last_update_attempt: datetime | None = None
+        self._minimum_retry_interval = timedelta(minutes=5)
+
         self._is_closed = False
 
         # Last retrieval metadata snapshot for external consumers.
@@ -110,6 +116,7 @@ class RagEngine:
 
     async def update_if_needed(self, force_update: bool = False) -> bool:
         """Update market data if needed based on time intervals or forced update"""
+        self._last_update_attempt = datetime.now(timezone.utc)
         async with self._update_lock:
             if not self.last_update:
                 self.logger.debug("No previous update, refreshing market knowledge base")
@@ -143,30 +150,38 @@ class RagEngine:
             return False
 
     async def refresh_market_data(self) -> None:
-        """Refresh all market data from external sources"""
-        await self._ensure_categories_updated()
+        """Refresh all market data from external sources in parallel where possible."""
+        # All three operations are independent I/O calls — run concurrently
+        _, articles, _ = await asyncio.gather(
+            self._ensure_categories_updated(),
+            self._safe_fetch_news(),
+            self._safe_update_market_overview(),
+            return_exceptions=True
+        )
 
-        # Fetch news
-        try:
-            articles = await self.news_manager.fetch_fresh_news(
-                self.ticker_manager.get_known_tickers()
-            )
-        except Exception as e:
-            self.logger.error("Error fetching crypto news: %s", e)
-            articles = []
-
-        # Update market overview if needed
-        try:
-            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
-        except Exception as e:
-            self.logger.error("Error updating market overview: %s", e)
-
-        # Process articles
-        if articles:
+        # Process articles if any were fetched (gather converts exceptions to values with return_exceptions=True)
+        if isinstance(articles, list) and articles:
             updated = self.news_manager.update_news_database(articles)
             if updated:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
+
+    async def _safe_fetch_news(self) -> list:
+        """Fetch news articles with error isolation."""
+        try:
+            return await self.news_manager.fetch_fresh_news(
+                self.ticker_manager.get_known_tickers()
+            )
+        except Exception as e:
+            self.logger.error("Error fetching crypto news: %s", e)
+            return []
+
+    async def _safe_update_market_overview(self) -> None:
+        """Update market overview with error isolation."""
+        try:
+            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
+        except Exception as e:
+            self.logger.error("Error updating market overview: %s", e)
 
     def _resolve_retrieval_limits(self, k: int | None, max_tokens: int | None) -> tuple[int, int]:
         """Resolve retrieval limits from explicit values or config with safe fallbacks.
@@ -255,7 +270,13 @@ class RagEngine:
                 self._build_indices()
 
             if not self.last_update or datetime.now(timezone.utc) - self.last_update > timedelta(minutes=30):
-                await self.update_if_needed()
+                # Avoid retrying if an update was already attempted recently
+                # (e.g., main loop's _execute_market_knowledge_update timed out)
+                if (not self._last_update_attempt
+                        or datetime.now(timezone.utc) - self._last_update_attempt > self._minimum_retry_interval):
+                    await self.update_if_needed()
+                else:
+                    self.logger.debug("Skipping redundant retrieve-path update — last attempt was within backoff window")
 
             keywords = self._extract_query_keywords(query)
 

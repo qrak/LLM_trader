@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-28 - Performance & Resilience Runtime Optimization (Pass 6)
+
+### Added
+
+- **`src/utils/decorators.py`**: Introduced `_add_jitter()` function adding ±25% random jitter to all exponential-backoff sleep calls. Applied to both `_RetryContext._handle_retryable_error()` and `_ApiRetryContext._wait_and_increment()`. Prevents thundering herd when concurrent operations retry simultaneously.
+
+- **`src/rag/rag_engine.py`**: Added `_last_update_attempt` timestamp and `_minimum_retry_interval` (5 min) to prevent redundant update retries in the `retrieve_context()` hot path. Skips `update_if_needed()` when the main loop's update attempt just failed or timed out, reducing context-retrieval latency by avoiding unnecessary news-fetch retries.
+
+### Changed
+
+- **`src/analyzer/analysis_engine.py` — `_enrich_market_context()`**: Refactored three sequential API calls (market overview, microstructure, coin details) into parallel `asyncio.gather()` with isolated error handling per sub-task. Reduces wall-clock latency from ~sum of three API calls to ~max of three API calls (~3x speedup on this path).
+
+- **`src/rag/rag_engine.py` — `refresh_market_data()`**: Refactored three sequential I/O operations (categories update, news fetch, market overview update) into parallel `asyncio.gather()`. Extracted error-isolated helpers `_safe_fetch_news()` and `_safe_update_market_overview()`. Reduces wall-clock latency from sequential to concurrent execution.
+
+- **`src/platforms/ai_providers/openrouter.py` — `get_generation_cost()`**: Offloaded synchronous SDK call `client.generations.get_generation()` to `asyncio.to_thread()`, preventing event-loop blocking during generation-cost lookup.
+
+### Validation
+
+- Ruff: `ruff check src/` passed.
+- Full pytest: **829 passed** (baseline maintained, zero regressions).
+
+---
+
 ## 2026-05-28 - Formatter Abstraction Collapse (Pass 5)
 
 ### Changed

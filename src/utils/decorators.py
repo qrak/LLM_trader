@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import random
 import traceback
 import socket
 from typing import Any
@@ -80,6 +81,11 @@ def retry_async(max_retries: int = -1, initial_delay: float = 1, backoff_factor:
 class _RetryContext:
     """Helper class to manage retry logic and reduce complexity."""
 
+    @staticmethod
+    def _add_jitter(delay: float) -> float:
+        """Add ±25% random jitter to prevent thundering herd on concurrent retries."""
+        return delay * (0.75 + random.random() * 0.5)
+
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
         self.logger = instance.logger
         self.pair = kwargs.get('pair') or (args[0] if args else None)
@@ -118,7 +124,7 @@ class _RetryContext:
              f"{prefix}{template.format(self.attempt)} for {self.class_name}.{self.func_name} "
              f"in {self.delay:.2f} seconds. Type: {type(error).__name__}, Error: {error}")
 
-        await asyncio.sleep(self.delay)
+        await asyncio.sleep(self._add_jitter(self.delay))
         self.delay = min(self.delay * self.backoff_factor, self.max_delay)
         return True
 
@@ -306,7 +312,7 @@ class _ApiRetryContext:
         """Wait before next retry attempt."""
         wait_time = min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay)
         self.logger.warning("API returned error for model %s. Retrying in %.2fs (%s/%s)", self.model, wait_time, attempt + 1, self.max_retries)
-        await asyncio.sleep(wait_time)
+        await asyncio.sleep(_RetryContext._add_jitter(wait_time))
 
     def _log_exception(self, e: Exception):
         """Log exception details."""
