@@ -12,7 +12,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 def _make_builder(timeframe="1h", timeframe_validator=None):
     """Build a minimal PromptBuilder with mocked dependencies."""
     market_formatter = MagicMock()
-    market_formatter.period_formatter = MagicMock()
     market_formatter.format_coin_details_section.return_value = ""
 
     return PromptBuilder(

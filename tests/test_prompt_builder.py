@@ -11,7 +11,6 @@ def _make_prompt_builder() -> PromptBuilder:
     technical_formatter = MagicMock()
     technical_formatter.format_technical_analysis.return_value = ""
     market_formatter = MagicMock()
-    market_formatter.period_formatter = MagicMock()
     market_formatter.format_coin_details_section.return_value = ""
 
     return PromptBuilder(

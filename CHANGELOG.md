@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-05-28 - Formatter Abstraction Collapse (Pass 5)
+
+### Changed
+
+- **`src/analyzer/formatters/market_formatter.py`**: Absorbed `MarketPeriodFormatter` — its `format_market_period_metrics()` and `_format_indicator_changes_compressed()` methods now live directly on `MarketFormatter`. Removed the `period_formatter` constructor parameter and `MarketPeriodFormatter` import. `MarketFormatter` no longer acts as a pass-through carrier for a sub-formatter; it owns period formatting directly.
+
+- **`src/analyzer/prompts/prompt_builder.py`**: Replaced leaky `self.period_formatter = market_formatter.period_formatter` with direct call `self.market_formatter.format_market_period_metrics()`. Eliminates the reach-through abstraction where `PromptBuilder` reached into `MarketFormatter` to grab a sub-component.
+
+- **`start.py`**: Removed `MarketPeriodFormatter` construction and injection from `_provision_analyzer_layer()`. Removed `MarketPeriodFormatter` import.
+
+- **`src/analyzer/__init__.py`**: Replaced stale multi-line docstring referencing non-existent `core/`, `data/`, `calculations/` subdirectory layout. Removed duplicate comment header.
+
+- **`src/analyzer/formatters/__init__.py`**: Removed `MarketPeriodFormatter` re-export.
+
+### Removed
+
+- **`src/analyzer/formatters/market_period_formatter.py`**: Deleted. All 109 lines of its logic folded into `MarketFormatter` — eliminated the leaky abstraction where `PromptBuilder` was reaching through `MarketFormatter` to grab a separately-injected sub-formatter.
+
+### Tests updated
+
+- **`tests/test_market_period_formatter.py`**: Imports `MarketFormatter` instead of the deleted `MarketPeriodFormatter`; test logic unchanged.
+- **`tests/test_prompt_builder.py`**: Removed `market_formatter.period_formatter = MagicMock()` fixture line (no longer needed).
+- **`tests/test_prompt_context_helpers.py`**: Same fixture cleanup.
+
+### Validation
+
+- Ruff: `ruff check src/ start.py` passed.
+- Full pytest: **829 passed** (baseline maintained, +13 over previous 816).
+- 1 file deleted, 9 files modified.
+- **Net: -66 lines, -1 file.**
+
+---
+
+## 2026-05-28 - TechnicalIndicators Composition-to-Inheritance Refactor (Pass 6)
+
+### Changed
+
+- **`src/indicators/base/technical_indicators.py`**: Changed `TechnicalIndicators` from composing `IndicatorBase` via `self._base` (composition) to directly inheriting from `IndicatorBase`. Eliminated 5 trivial delegation properties (`open`, `high`, `low`, `close`, `volume`) and the `get_data()` pass-through method — all now inherited. Replaced 77 `self._base.calculate_indicator(...)` calls with `self.calculate_indicator(...)`. Removed unused `Union` and `pandas` imports.
+
+### Tests updated
+
+- No test changes needed — `TechnicalIndicators` exposes the identical API through inheritance.
+
+### Validation
+
+- Ruff: `ruff check src/` passed.
+- Full pytest: **829 passed** (baseline maintained).
+- 1 file modified.
+- **Net: -61 lines, -2 files cumulative this session.**
+
+---
+
 ## 2026-05-27 - Dependency Injection Cleanup and Docs Separation (Pass 4)
 
 ### Changed

@@ -72,9 +72,6 @@ class PromptBuilder:
         if market_formatter is None:
             raise ValueError("market_formatter is required for PromptBuilder")
         self.market_formatter = market_formatter
-        self.period_formatter = market_formatter.period_formatter
-        if self.period_formatter is None:
-            raise ValueError("market_formatter.period_formatter is required for PromptBuilder")
 
     def build_prompt(
         self,
@@ -367,7 +364,7 @@ class PromptBuilder:
     def build_market_period_metrics_section(self, market_metrics: dict[str, Any] | None) -> str:
         if not market_metrics:
             return ""
-        return self.period_formatter.format_market_period_metrics(market_metrics)
+        return self.market_formatter.format_market_period_metrics(market_metrics)
 
     def build_coin_details_section(self, coin_details: dict[str, Any] | None) -> str:
         if not coin_details:

@@ -1,21 +1,5 @@
-"""
-Analyzer module with improved organization and structure.
+"""Analyzer module for market analysis logic."""
 
-This module provides a clean, logical organization of analysis components:
-
-- core/: Main analysis engine, context management, and result processing
-- data/: Data collection, fetching, and processing components
-- calculations/: All calculation logic including indicators, metrics, and patterns
-- formatting/: Output formatting for AI prompts and console display
-- prompts/: Prompt building and template management
-
-Key Components:
-- AnalysisEngine: Main analysis orchestrator
-- TechnicalCalculator: Technical indicator calculations
-- PromptBuilder: AI prompt construction
-"""
-
-# Core analysis components
 # Core analysis components
 from .analysis_engine import AnalysisEngine
 from .analysis_context import AnalysisContext
