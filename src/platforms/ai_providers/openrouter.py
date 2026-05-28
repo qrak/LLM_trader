@@ -156,7 +156,11 @@ class OpenRouterClient(BaseAIClient):
         await asyncio.sleep(retry_delay)
         client = self._ensure_client()
         try:
-            generation = client.generations.get_generation(id=generation_id)
+            # Offload synchronous SDK call to thread pool to avoid blocking event loop
+            generation = await asyncio.to_thread(
+                client.generations.get_generation,
+                id=generation_id
+            )
             if generation and generation.data:
                 data = generation.data
                 try:

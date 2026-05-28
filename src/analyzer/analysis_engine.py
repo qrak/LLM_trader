@@ -286,38 +286,54 @@ class AnalysisEngine:
 
     async def _enrich_market_context(self, current_ticker: dict[str, Any] | None = None) -> None:
         """
-        Enrich market context with overview, microstructure, and coin details
+        Enrich market context with overview, microstructure, and coin details.
+        Uses asyncio.gather to fetch all three data sources in parallel.
 
         Args:
             current_ticker: Optional ticker data to reuse
         """
-        try:
-            market_overview = await self.rag_engine.get_market_overview()
-            self.context.market_overview = market_overview
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.warning("Failed to fetch market overview: %s", e)
-            self.context.market_overview = {}
-
-        try:
-            microstructure = await self.data_collector.data_fetcher.fetch_market_microstructure(
-                self.symbol,
-                cached_ticker=current_ticker
-            )
-            microstructure = self._apply_microstructure_snapshot_context(microstructure)
-            self.context.market_microstructure = microstructure
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.warning("Failed to fetch market microstructure: %s", e)
-            self.context.market_microstructure = {}
-
-        if self.market_api:
+        async def _fetch_overview():
             try:
-                coin_details = await self.market_api.get_coin_details(self.base_symbol)
-                self.context.coin_details = coin_details
-                if not coin_details:
+                overview = await self.rag_engine.get_market_overview()
+                return overview
+            except Exception as e:
+                self.logger.warning("Failed to fetch market overview: %s", e)
+                return {}
+
+        async def _fetch_microstructure():
+            try:
+                ms = await self.data_collector.data_fetcher.fetch_market_microstructure(
+                    self.symbol,
+                    cached_ticker=current_ticker
+                )
+                ms = self._apply_microstructure_snapshot_context(ms)
+                return ms
+            except Exception as e:
+                self.logger.warning("Failed to fetch market microstructure: %s", e)
+                return {}
+
+        async def _fetch_coin_details():
+            if not self.market_api:
+                return {}
+            try:
+                details = await self.market_api.get_coin_details(self.base_symbol)
+                if not details:
                     self.logger.warning("No coin details found for %s", self.base_symbol)
-            except Exception as e:  # pylint: disable=broad-exception-caught
+                return details
+            except Exception as e:
                 self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
-                self.context.coin_details = {}
+                return {}
+
+        market_overview, microstructure, coin_details = await asyncio.gather(
+            _fetch_overview(),
+            _fetch_microstructure(),
+            _fetch_coin_details(),
+            return_exceptions=False
+        )
+
+        self.context.market_overview = market_overview
+        self.context.market_microstructure = microstructure
+        self.context.coin_details = coin_details
 
     def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
         """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
