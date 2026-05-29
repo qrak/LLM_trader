@@ -11,7 +11,7 @@
 The Dashboard is the **real-time monitoring and visualization interface** for the LLM Trader system. It provides:
 
 - **Live decision streaming** — WebSocket push of each analysis cycle result
-- **Performance analytics** — trade history, P&L curves, win rates
+- **Performance analytics** — SQLite-backed trade history, P&L curves, win rates
 - **Brain state inspection** — vector memory contents, learned rules, confidence stats
 - **System health monitoring** — provider status, token costs, cycle timing
 
@@ -53,6 +53,14 @@ DashboardServer(
 - **Static files:** Mounted from `static/` directory
 - **Lifecycle:** Managed via FastAPI lifespan context manager
 - **State:** Shared via `dashboard_state.py` singleton
+- **Trade history:** Performance and brain endpoints read via injected `PersistenceManager`; direct `trade_history.json` reads are forbidden
+
+## Persistence Contract
+
+- `PerformanceRouter` receives `persistence` from `DashboardServer` and calls persistence-backed history APIs.
+- Brain/vector endpoints use `persistence.load_trade_history()` when they need trade-history context.
+- Dashboard routes must not open runtime files directly for trade history; SQLite access stays behind `PersistenceManager` / `SQLiteTradeHistory`.
+- Empty SQLite history should render empty dashboard state gracefully, not as an error.
 
 ---
 
@@ -75,6 +83,7 @@ DashboardServer(
 |----------|----------|
 | **WebSocket disconnect** | Client auto-reconnects, resends subscription |
 | **No data yet** | Returns empty state gracefully |
+| **No SQLite trade history rows** | Performance and brain routes return empty history/state gracefully |
 | **Backend restart** | DashboardState retains last-known values across restarts |
 | **Large vector memory queries** | Truncated/paginated API responses |
 | **Concurrent dashboard access** | FastAPI async handles concurrent requests |

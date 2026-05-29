@@ -1,5 +1,176 @@
 # Changelog
 
+## 2026-05-29 — Timeframe-Aware Semantic Rule Freshness (Pass 11)
+
+### Changed
+
+- Added timeframe-aware semantic-rule influence scoring. Active rules remain physically preserved, but prompt retrieval now ranks by similarity, evidence quality, timeframe freshness, and contradiction penalty.
+- Semantic rules now carry lifecycle metadata including `created_at`, `support_count`, validation/contradiction counters, and source timeframe fields.
+- Closed-trade recording now updates matched semantic-rule validation or contradiction metadata so old rules can be down-weighted by live evidence without age-only deletion.
+- Brain prompt context and dashboard active-rule responses now expose concise freshness/evidence fields.
+
+### Validation
+
+- Focused pytest: `tests/test_vector_memory.py tests/test_vector_memory_pruning_safety.py tests/test_brain_integration.py tests/test_dashboard_brain_router.py -q` -> **116 passed**.
+- Full pytest: `tests -q` -> **900 passed**.
+- Targeted Ruff on touched trading/dashboard/test files -> **passed**.
+
+## 2026-05-29 — SQLite-Only Trade History Cleanup (Pass 10)
+
+### Changed
+
+- Removed runtime trade-history JSON compatibility paths. Trade decisions now save to SQLite only, history reads export from SQLite only, and entry-decision lookup no longer scans legacy JSON files.
+- Removed SQLite auto-migration constructor support and the one-shot JSON migration helper from the trade-history store.
+- Updated tests to seed SQLite directly instead of writing legacy history files.
+- Removed old-history fee inference from notifier performance stats; stats now use persisted fee values.
+- Updated AGENTS documentation for SQLite-only persistence, persistence-backed cooldown/dashboard paths, active semantic-rule pruning safety, and Windows PowerShell terminal guardrails.
+
+## 2026-05-29 — Production Readiness Integration Fixes (Pass 9)
+
+### Fixed
+
+- **SQLite runtime integration gaps closed**:
+    - `src/dashboard/routers/brain.py`: `get_vector_memory()` now reads trades via `persistence.load_trade_history()` (SQLite-backed) instead of direct `trade_history.json` file reads.
+    - `src/dashboard/routers/performance.py`: `get_performance_history()` now reads trades through injected persistence instead of direct JSON file reads.
+    - `src/dashboard/server.py`: passes `persistence` into `PerformanceRouter`.
+
+- **Cooldown guard no longer depends on legacy JSON**:
+    - `src/trading/guards/cooldown_window.py` now uses injected persistence (`get_last_execution_timestamp`) instead of disk reads from `trade_history.json`.
+    - Guard now fails closed when persistence is not wired or cannot read execution history, avoiding silent fail-open behavior under persistence failures.
+    - `start.py` now wires `CooldownWindowGuard(persistence=persistence)` in the production guard pipeline.
+
+- **SQLite API hardening**:
+    - `src/managers/sqlite_trade_history.py`:
+        - validates `order` (`ASC`/`DESC`) before SQL generation,
+        - clamps/validates pagination inputs,
+        - adds `get_last_execution_timestamp(actions=("BUY", "SELL"))` helper for guard usage.
+    - `src/managers/persistence_manager.py`:
+        - `load_trade_history()` now uses SQLite export directly,
+        - adds `get_last_execution_timestamp()` facade for DI-friendly guard consumers.
+
+- **ChromaDB pruning policy corrected for semantic safety**:
+    - `src/trading/vector_memory.py`: `prune_aged_documents()` now parses timestamps as datetimes and preserves active semantic rules (`active=True`) instead of deleting by age-only policy.
+
+- **Lint cleanup**:
+    - `scripts/query_trade_history.py` and `src/managers/sqlite_trade_history.py` cleaned up to satisfy Ruff.
+
+### Added
+
+- `tests/test_sqlite_trade_history.py`:
+    - SQLite initialization coverage,
+    - query input validation,
+    - execution timestamp helper behavior.
+
+- `tests/test_vector_memory_pruning_safety.py`:
+    - verifies old experience/blocked-trade pruning,
+    - verifies active semantic-rule preservation,
+    - verifies malformed timestamp handling.
+
+### Changed Tests
+
+- `tests/test_dashboard_brain_router.py`: adds persistence-backed trade-history read assertion for vector memory endpoint.
+- `tests/test_dashboard_performance_router.py`: adds persistence-backed history assertion and updates constructor usage.
+- `tests/test_order_governance.py`: adds cooldown fail-closed and no-history allow-path assertions.
+
+### Validation
+
+- Ruff (targeted):
+    - `python -m ruff check src/managers/sqlite_trade_history.py scripts/query_trade_history.py` -> **passed**.
+
+- Ruff (broad scope):
+    - `python -m ruff check src start.py scripts tests` -> **passed**.
+
+- Pytest (targeted integration set):
+    - `pytest tests/test_position_persistence.py tests/test_order_governance.py tests/test_sqlite_trade_history.py tests/test_dashboard_brain_router.py tests/test_dashboard_performance_router.py tests/test_vector_memory_pruning_safety.py -q` -> **42 passed**.
+
+- Pytest (pruning safety):
+    - `pytest tests/test_vector_memory_pruning_safety.py -q` -> **3 passed**.
+
+- Full-suite pytest:
+    - `pytest -q` -> **895 passed**.
+
+### Live Data Migration
+
+- `data/trading/trade_history.json` was migrated into `data/trading/trade_history.db`.
+- Migration inserted **12 records** into the SQLite `trade_history` table.
+- The legacy JSON file was renamed to `data/trading/trade_history.json.migrated` and kept as backup.
+
+## 2026-05-29 — Production Readiness: SQLite Migration, Headless Shutdown & State Validation (Pass 8)
+
+### Added
+
+- **`src/managers/sqlite_trade_history.py`**: SQLite-backed trade history store replacing JSON file accumulation. Provides O(1) INSERT appends, indexed timestamp/symbol/action queries, WAL journal mode with NORMAL synchronous for performance, and a `get_stats()` method returning aggregate data for the dashboard.
+
+- **`scripts/query_trade_history.py`**: CLI utility for querying the trade history SQLite database directly from the terminal. Supports `recent`, `search`, and `stats` commands with filtering by symbol, action, date range, limit/offset pagination, and sort direction. Also works with raw `sqlite3` command for ad-hoc queries.
+
+- **`PersistenceManager.validate_loaded_position()`**: Startup state validation that checks `positions.json` for config mismatches (symbol vs `CRYPTO_PAIR`, unrecognized fields). Logs actionable `STARTUP STATE WARNING` messages without discarding the position — the operator decides.
+
+- **`/api/monitor/health` endpoint**: Lightweight liveness probe returning `{"status": "ok", "timestamp": "..."}` with zero I/O. Suitable for Docker healthchecks, systemd `ExecStartPost` probes, and local watchdog scripts without touching Cloudflare routing.
+
+- **`VectorMemoryService.prune_aged_documents()`**: Safe ChromaDB collection maintenance that removes only documents definitively beyond the relevance window (3× `_max_age_days`). Runs once at startup on all three collections (`trading_experiences`, `semantic_rules`, `system_constraints_rejections`). Uses the existing `PRUNE_AGE_MULTIPLIER` constant — at a 4h timeframe, keeps ~168 days of history while preventing unbounded disk/RAM growth.
+
+### Changed
+
+- **CoinGecko cache TTL** (`start.py:365`): Changed `expire_after=-1` (never expire) to `RAG_COINGECKO_UPDATE_INTERVAL_HOURS * 3600` seconds (24h by default). Cache entries now expire on the same cadence as the data refresh cycle, preventing unbounded SQLite growth.
+
+- **`GracefulShutdownManager.show_exit_confirmation()`**: Added `_is_headless()` detection — when `DISPLAY` env var is not set AND `sys.stdin` is not a TTY (systemd/WSL/Docker), skips ALL blocking prompts (tkinter dialog and `input()`) and returns `True` immediately. Enables unattended systemd/Wired restarts without hanging.
+
+- **`TradingStrategy.__init__()`**: Now calls `persistence.validate_loaded_position()` after loading an existing position. Any symbol/config mismatches are logged as warnings.
+
+- **`PersistenceManager`**: `save_trade_decision()` now writes to SQLite, `load_trade_history()` reads from SQLite, and `get_entry_decision_for_position()` uses SQLite's indexed timestamp range query for O(log n) lookup instead of scanning all JSON records.
+
+### SQLite Schema
+
+```sql
+CREATE TABLE trade_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    action TEXT NOT NULL,
+    confidence TEXT,
+    price REAL,
+    stop_loss REAL,
+    take_profit REAL,
+    position_size REAL,
+    quote_amount REAL,
+    quantity REAL,
+    fee REAL,
+    reasoning TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_th_timestamp ON trade_history(timestamp DESC);
+CREATE INDEX idx_th_symbol ON trade_history(symbol);
+CREATE INDEX idx_th_action ON trade_history(action);
+```
+
+### Validation
+
+- Ruff: `ruff check src/ start.py scripts/` — All checks passed.
+- Full pytest: **875 passed** (baseline maintained, zero regressions).
+
+## 2026-05-29 — Chaos Engineering Test Suite (Pass 7)
+
+### Added
+
+- **`tests/test_llm_output_corruption.py`** (15 assertions): Coverage for LLM output corruption, schema violations, and fallback-loop resilience. Scenarios: truncated/malformed JSON, string injection in numeric fields, Infinity/NaN in confidence/price, missing required execution fields (stop_loss, take_profit, entry_price) for BUY/SELL/UPDATE signals, empty choices list, HTML/script injection in reasoning, massive 100KB reasoning field overflow, fallback chain survival when all providers return corrupt data, and mixed corruption-then-recovery patterns.
+
+- **`tests/test_async_concurrency_race.py`** (9 assertions): Async concurrency, latency injection, race condition, and state safety tests. Scenarios: slow news-fetch inside `asyncio.gather` (wall-clock == max not sum), timeout of one gather task not killing siblings, out-of-order completion verification, `threading.Lock` serialization in `VectorMemoryService._encode_embedding`, cancelled `update_if_needed` not corrupting `last_update` state, and double-update serialization via `asyncio.Lock`.
+
+- **`tests/test_api_rate_limiting_backoff.py`** (16 assertions): HTTP 429 rate-limit, 5xx server error, exponential backoff with jitter, and circuit-breaker boundary tests. Scenarios: rate-limited provider triggers fallback to next provider, all providers rate-limited returns last failure, 503 error retry via `retry_api_call`, `_add_jitter` ±25% range verification with 200 samples, jitter randomness proving, zero-delay jitter edge case, exponential delay growth across retries, exhausted retries return last response, retryable-then-success recovery, `retry_async` handling of `ClientConnectorError`, `ccxt.RateLimitExceeded` exchange error retry, and non-retryable `ccxt.BadSymbol` propagation.
+
+- **`tests/test_vector_db_context_poisoning.py`** (15 assertions): ChromaDB vector store boundaries, context poisoning, and metadata corruption tests. Scenarios: empty news database returns empty context, zero-matching keyword search, empty collection in `VectorMemoryService`, `get_context_for_prompt` with zero experiences, perfect-similarity (distance=0.0) edge case, `_sanitize_metadata` handling of NaN/Inf/None/lists, missing `outcome` key in ChromaDB metadata, corrupted timestamps, `_parse_trade_timestamp` edge cases, 200-article token budget enforcement, malformed articles missing body, null-title crash proof (production bug fix: `_process_article_simple` now handles `None` titles), UPDATE store with zero PnL, failed initialization graceful False return, NaN `suggested_rr` in blocked trades, keyword_search exception isolation in `retrieve_context`.
+
+### Changed
+
+- **`src/rag/context_builder.py` — `_process_article_simple()`**: Added null-title guard. Previously `item.get('title', 'No Title').strip()` would crash with `AttributeError` when the title field existed but was set to `None`. Now falls through to `'No Title'` when title is `None`, matching the existing missing-key behavior. Discovered by chaos test `test_build_context_with_null_title_does_not_crash`.
+
+### Validation
+
+- Ruff: `ruff check src/ tests/` — All checks passed.
+- Full pytest: **884 passed** (baseline 829 + 55 new chaos tests, zero regressions).
+
+---
+
 ## 2026-05-28 - Performance & Resilience Runtime Optimization (Pass 6)
 
 ### Added

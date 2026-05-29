@@ -18,8 +18,8 @@ The pipeline follows the **Chain of Responsibility pattern** — each guard runs
 ```
 TradingStrategy → GuardPipeline.run(signal, position)
     ├── ConfiguredSymbolGuard     (whitelist check)
-     ├── MaxPositionSizeGuard       (portfolio exposure limit)
-     └── CooldownWindowGuard        (time since last trade)
+    ├── MaxPositionSizeGuard       (portfolio exposure limit)
+    └── CooldownWindowGuard        (time since last SQLite-recorded BUY/SELL)
          ↓
     Result: pass → TradingStrategy proceeds
             fail → Friction recorded → Brain Agent learns
@@ -52,7 +52,8 @@ TradingStrategy → GuardPipeline.run(signal, position)
 **Purpose:** Prevents rapid-fire trading by enforcing a minimum time window between consecutive executed BUY/SELL trades.
 
 **Logic:**
-- Reads the most recent executed BUY/SELL timestamp from trade history
+- Reads the most recent executed BUY/SELL timestamp through injected `PersistenceManager.get_last_execution_timestamp()`
+- `PersistenceManager` queries SQLite `trade_history.db`; the guard must not read `trade_history.json` or any file path directly
 - Cooldown = minimum `cooldown_minutes` (configurable)
 - If elapsed < cooldown → block
 
@@ -60,6 +61,8 @@ TradingStrategy → GuardPipeline.run(signal, position)
 - No prior trade → immediately passes
 - Cooldown applies uniformly after the most recent BUY/SELL; direction is not treated specially
 - Cooldown = 0 → disabled effectively
+- Missing persistence injection → fail closed
+- Persistence/SQLite read failure → fail closed so execution cannot bypass cooldown due to storage errors
 
 ---
 
@@ -102,7 +105,7 @@ All guard parameters are set in `config/config.ini`:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `max_position_size` | 0.10 (10%) | Maximum portfolio exposure |
-| `cooldown_minutes` | 60 | Minimum minutes between same-direction trades |
+| `cooldown_minutes` | 60 | Minimum minutes after the most recent BUY/SELL execution |
 | `configured_symbols` | BTC/USDC | Active trading pairs |
 
 Guards are **declarative** — they can be reviewed and modified without reading any code paths.

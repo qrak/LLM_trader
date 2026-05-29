@@ -152,6 +152,10 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["stop_loss_check_interval"] == "15m"
         assert call_kwargs["metadata"]["take_profit_type"] == "soft"
         assert call_kwargs["metadata"]["take_profit_check_interval"] == "4h"
+        self.brain.vector_memory.update_rule_validation_feedback.assert_called_once_with(
+            current_context=call_kwargs["market_context"],
+            outcome="WIN",
+        )
 
     def test_closed_trade_fills_unknown_exit_execution_from_configured_default(self):
         brain = _make_brain(ExitExecutionContext(
@@ -515,6 +519,7 @@ class TestReflectionRuleFormatting:
         assert meta["win_rate"] == pytest.approx(80.0, abs=0.1)
         assert meta["avg_pnl_pct"] == pytest.approx(1.4, abs=0.1)
         assert meta["profit_factor"] > 1.0
+        assert meta["source_trades"] == 10
 
     def test_reflection_fills_missing_exit_profile_and_retires_legacy_unknown_rule(self):
         brain = _make_brain(ExitExecutionContext(

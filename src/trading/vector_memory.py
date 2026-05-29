@@ -32,6 +32,10 @@ class VectorMemoryService(
     MAX_DECAY_HALF_LIFE_DAYS = 30
     MAX_AGE_MULTIPLIER = 4
     RETRIEVAL_OVERFETCH_MULTIPLIER = 5
+    # Safety margin for collection pruning: documents must be this many times
+    # older than _max_age_days before they are eligible for removal.
+    # At 3×, a 4h timeframe (_max_age=56d) keeps ~168 days of history.
+    PRUNE_AGE_MULTIPLIER = 3
 
     FACTOR_BUCKETS = ("LOW", "MEDIUM", "HIGH")
     FACTOR_NAMES = (
@@ -74,6 +78,7 @@ class VectorMemoryService(
         self._embedding_model = embedding_model
         self._embedding_lock = threading.Lock()
         self._initialized = False
+        self._timeframe_minutes = timeframe_minutes
         self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
             timeframe_minutes
         )
@@ -530,3 +535,85 @@ class VectorMemoryService(
         ])
 
         return "\n".join(lines)
+
+    def prune_aged_documents(self) -> dict[str, int]:
+        """Remove documents well beyond the relevance window from all collections.
+
+        Uses a conservative age threshold (PRUNE_AGE_MULTIPLIER × _max_age_days)
+        so documents that still carry semantic weight via recency decay are
+        never removed prematurely. Only documents that are definitively and
+        permanently out of scope are pruned.
+
+        This runs once at startup — not every analysis cycle — to keep disk/RAM
+        usage bounded without adding latency to the hot path.
+
+        Returns:
+            Dict mapping collection name → number of documents removed.
+        """
+        if not self._ensure_initialized():
+            return {}
+
+        from datetime import timedelta
+
+        prune_cutoff = datetime.now(timezone.utc) - timedelta(
+            days=self._max_age_days * self.PRUNE_AGE_MULTIPLIER
+        )
+
+        collections = [
+            (self._collection, "trading_experiences"),
+            (self._semantic_rules_collection, "semantic_rules"),
+            (self._blocked_collection, "system_constraints_rejections"),
+        ]
+
+        removed: dict[str, int] = {}
+
+        for coll, name in collections:
+            if coll is None or coll.count() == 0:
+                removed[name] = 0
+                continue
+
+            try:
+                before = coll.count()
+                # ChromaDB's built-in delete does not support timestamp range
+                # queries natively, so we fetch all metadata, identify aged-out
+                # IDs, and delete them in one batch.
+                all_data = coll.get(include=["metadatas"])
+                if not all_data or not all_data.get("ids"):
+                    removed[name] = 0
+                    continue
+
+                aged_ids: list[str] = []
+                for i, doc_id in enumerate(all_data["ids"]):
+                    meta = all_data["metadatas"][i] if all_data["metadatas"] else {}
+                    if name == "semantic_rules" and meta.get("active", True):
+                        continue
+
+                    ts = meta.get("timestamp", "")
+                    parsed_ts = self._parse_trade_timestamp(ts)
+                    if parsed_ts == datetime.min.replace(tzinfo=timezone.utc):
+                        continue
+
+                    if parsed_ts < prune_cutoff:
+                        aged_ids.append(doc_id)
+
+                if aged_ids:
+                    coll.delete(ids=aged_ids)
+                    after = coll.count()
+                    removed[name] = before - after
+                    self.logger.info(
+                        "Pruned %d documents from %s (cutoff: %s, removed: %d → %d)",
+                        len(aged_ids), name,
+                        prune_cutoff.strftime("%Y-%m-%d"),
+                        before, after,
+                    )
+                else:
+                    removed[name] = 0
+                    self.logger.debug(
+                        "No prunable documents in %s (cutoff: %s, total: %d)",
+                        name, prune_cutoff.strftime("%Y-%m-%d"), before,
+                    )
+            except Exception as e:
+                self.logger.warning("Collection prune failed for %s: %s", name, e)
+                removed[name] = 0
+
+        return removed

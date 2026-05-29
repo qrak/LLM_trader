@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import GuardResult
+
+if TYPE_CHECKING:
+    from src.managers.persistence_manager import PersistenceManager
 
 
 class CooldownWindowGuard:
@@ -29,7 +31,8 @@ class CooldownWindowGuard:
 
     name = "cooldown_window"
 
-    def __init__(self) -> None:
+    def __init__(self, persistence: "PersistenceManager" | None = None) -> None:
+        self.persistence = persistence
         self._cached_timestamp: datetime | None = None
         self._cache_populated: bool = False
 
@@ -38,7 +41,23 @@ class CooldownWindowGuard:
         self._cache_populated = False
 
     def check(self, intent, /, *, capital: float, config) -> GuardResult:
-        last_execution_timestamp = self._get_last_execution_timestamp(config)
+        if self.persistence is None:
+            return GuardResult(
+                guard_name=self.name,
+                passed=False,
+                reason="Cooldown guard is not wired with persistence (fail-closed)",
+                metadata={"error": "persistence_not_configured"},
+            )
+
+        try:
+            last_execution_timestamp = self._get_last_execution_timestamp(config)
+        except RuntimeError as exc:
+            return GuardResult(
+                guard_name=self.name,
+                passed=False,
+                reason="Cooldown guard could not read execution history (fail-closed)",
+                metadata={"error": str(exc)},
+            )
 
         if last_execution_timestamp is None:
             return GuardResult(
@@ -99,35 +118,20 @@ class CooldownWindowGuard:
         if self._cache_populated:
             return self._cached_timestamp
 
-        last_ts = self._read_last_execution_from_disk(config)
+        last_ts = self._read_last_execution_from_persistence(config)
         self._cached_timestamp = last_ts
         self._cache_populated = True
         return last_ts
 
-    @staticmethod
-    def _read_last_execution_from_disk(config) -> datetime | None:
-        """Read the last BUY/SELL timestamp from trade_history.json."""
+    def _read_last_execution_from_persistence(self, config) -> datetime | None:
+        """Read the last BUY/SELL timestamp from persistence (SQLite-backed)."""
+        if self.persistence is None:
+            return None
+
         try:
-            history_path = Path(config.DATA_DIR) / "trading" / "trade_history.json"
-            if not history_path.exists():
-                return None
-            with history_path.open("r", encoding="utf-8") as fh:
-                trades = json.load(fh)
-            if not trades:
-                return None
-            # Walk backwards to find the most recent BUY or SELL
-            for trade in reversed(trades):
-                if trade.get("action") in ("BUY", "SELL"):
-                    ts_str = trade.get("timestamp")
-                    if ts_str:
-                        dt = datetime.fromisoformat(ts_str)
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                        return dt
-            return None
-        except (json.JSONDecodeError, OSError, ValueError, KeyError):
-            # Corrupt or missing file disables cooldown (fail-open).
-            return None
+            return self.persistence.get_last_execution_timestamp(actions=("BUY", "SELL"))
+        except Exception as exc:  # pragma: no cover - defensive fail-closed path
+            raise RuntimeError("Cooldown guard could not read execution history") from exc
 
     @staticmethod
     def _compute_cooldown_minutes(config) -> float:

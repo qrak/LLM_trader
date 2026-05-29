@@ -254,7 +254,6 @@ class BaseNotifier(ABC):
         for decision_dict in trade_history:
             action = decision_dict.get('action', '')
             price = decision_dict.get('price', 0)
-            quantity = decision_dict.get('quantity', 0.0)
 
             if action in ENTRY_ACTIONS:
                 open_position = decision_dict
@@ -272,12 +271,6 @@ class BaseNotifier(ABC):
 
                 entry_fee = open_position.get('fee', 0.0)
                 exit_fee = decision_dict.get('fee', 0.0)
-
-                # Fallback for old history if fee is 0.0 (though migration should have fixed this)
-                if entry_fee == 0.0 and open_quantity > 0:
-                     entry_fee = open_price * open_quantity * self.config.TRANSACTION_FEE_PERCENT
-                if exit_fee == 0.0 and quantity > 0:
-                     exit_fee = price * quantity * self.config.TRANSACTION_FEE_PERCENT
 
                 total_fees += entry_fee + exit_fee
                 total_pnl_quote += pnl_quote

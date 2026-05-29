@@ -191,7 +191,8 @@ class ContextBuilder:
         Returns:
             Formatted string: "Title\nSource (Date)\nArticle body..."
         """
-        title = item.get('title', 'No Title').strip()
+        title = item.get('title', 'No Title')
+        title = str(title).strip() if title is not None else 'No Title'
         source = item.get('source_info', {'name': 'Unknown Source'}).get('name', 'Unknown Source')
         published_on = item.get('published_on', 0)
         published = datetime.fromtimestamp(published_on).strftime('%Y-%m-%d %H:%M UTC')
