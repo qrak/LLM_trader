@@ -3,6 +3,8 @@ import json
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pytest
+
 from src.managers.persistence_manager import PersistenceManager
 from src.trading.data_models import Position
 
@@ -67,35 +69,33 @@ def test_position_persistence_defaults_missing_exit_execution_snapshot_to_unknow
 def test_entry_decision_matching_prefers_nearest_symbol_match(tmp_path):
     manager = PersistenceManager(MagicMock(), data_dir=str(tmp_path))
     entry_time = datetime(2026, 4, 30, 12, 0, 0, tzinfo=timezone.utc)
-    manager.history_file.write_text(
-        json.dumps([
-            {
-                "timestamp": "2026-04-30T12:00:00.010000+00:00",
-                "symbol": "ETH/USDC",
-                "action": "BUY",
-                "confidence": "HIGH",
-                "price": 2000.0,
-                "reasoning": "Wrong symbol",
-            },
-            {
-                "timestamp": "2026-04-30T12:00:00.020000+00:00",
-                "symbol": "BTC/USDC",
-                "action": "BUY",
-                "confidence": "MEDIUM",
-                "price": 100.0,
-                "reasoning": "Expected entry",
-            },
-            {
-                "timestamp": "2026-04-30T12:00:00.400000+00:00",
-                "symbol": "BTC/USDC",
-                "action": "BUY",
-                "confidence": "LOW",
-                "price": 101.0,
-                "reasoning": "Later entry",
-            },
-        ]),
-        encoding="utf-8",
-    )
+    for record in [
+        {
+            "timestamp": "2026-04-30T12:00:00.010000+00:00",
+            "symbol": "ETH/USDC",
+            "action": "BUY",
+            "confidence": "HIGH",
+            "price": 2000.0,
+            "reasoning": "Wrong symbol",
+        },
+        {
+            "timestamp": "2026-04-30T12:00:00.020000+00:00",
+            "symbol": "BTC/USDC",
+            "action": "BUY",
+            "confidence": "MEDIUM",
+            "price": 100.0,
+            "reasoning": "Expected entry",
+        },
+        {
+            "timestamp": "2026-04-30T12:00:00.400000+00:00",
+            "symbol": "BTC/USDC",
+            "action": "BUY",
+            "confidence": "LOW",
+            "price": 101.0,
+            "reasoning": "Later entry",
+        },
+    ]:
+        manager.sqlite_history.insert(record)
 
     decision = manager.get_entry_decision_for_position(entry_time, symbol="BTC/USDC")
 
@@ -121,3 +121,11 @@ def test_failed_position_write_does_not_mark_cache_valid(tmp_path):
         manager.save_position(position)
 
     assert manager._position_cache_valid is False
+
+
+def test_last_execution_timestamp_propagates_sqlite_failure(tmp_path):
+    manager = PersistenceManager(MagicMock(), data_dir=str(tmp_path))
+    manager.sqlite_history.get_last_execution_timestamp = MagicMock(side_effect=RuntimeError("db down"))
+
+    with pytest.raises(RuntimeError, match="db down"):
+        manager.get_last_execution_timestamp()

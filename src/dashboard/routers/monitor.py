@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter
 from src.utils.token_counter import CostStorage
 
@@ -25,6 +27,9 @@ class MonitorRouter:
         self.router.add_api_route("/system_prompt", self.get_system_prompt, methods=["GET"])
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
+        # Lightweight health check for local watchdogs, Docker healthchecks,
+        # and systemd ExecStartPost probes without touching Cloudflare routing.
+        self.router.add_api_route("/health", self.get_health, methods=["GET"])
 
     def _load_prev_response_sync(self) -> dict[str, Any]:
         """Helper to load previous response data synchronously."""
@@ -143,3 +148,14 @@ class MonitorRouter:
                         self.logger.error("Failed to load news from %s", news_path, exc_info=True)
         self.dashboard_state.set_cached("news", articles)
         return {"articles": articles, "count": len(articles)}
+
+    async def get_health(self) -> dict[str, Any]:
+        """Lightweight liveness probe for Docker healthchecks and systemd watchdogs.
+
+        Returns immediately with no I/O and no side effects — safe for polling
+        at high frequency behind a local watchdog or Cloudflare bypass.
+        """
+        return {
+            "status": "ok",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }

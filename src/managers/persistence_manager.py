@@ -1,7 +1,11 @@
-"""Pure JSON I/O service for trading data persistence.
+"""Pure I/O service for trading data persistence.
 
-This service handles all file system operations for trading data without any business logic.
-Follows Single Responsibility Principle by delegating calculations to other services.
+This service handles all file system operations for trading data without any
+business logic. Follows Single Responsibility Principle by delegating
+calculations to other services.
+
+Trade history is now stored in SQLite (not JSON) for O(1) appends and indexed
+queries.
 """
 
 from __future__ import annotations
@@ -9,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +21,7 @@ from src.logger.logger import Logger
 from src.utils.data_utils import serialize_for_json
 from src.trading.data_models import Position, TradeDecision
 from src.trading.statistics_calculator import TradingStatistics
+from src.managers.sqlite_trade_history import SQLiteTradeHistory
 
 
 class PersistenceManager:
@@ -48,7 +53,6 @@ class PersistenceManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.positions_file = self.data_dir / "positions.json"
-        self.history_file = self.data_dir / "trade_history.json"
         self.previous_response_file = self.data_dir / "previous_response.json"
         self.last_analysis_file = self.data_dir / "last_analysis.json"
         self.statistics_file = self.data_dir / "statistics.json"
@@ -64,6 +68,18 @@ class PersistenceManager:
         self._position_cache_valid: bool = False
         self._last_analysis_time_cache: datetime | None = None
         self._last_analysis_time_cache_valid: bool = False
+
+        # SQLite trade history store.
+        sqlite_db_path = self.data_dir / "trade_history.db"
+        self._sqlite = SQLiteTradeHistory(
+            logger=self.logger,
+            db_path=str(sqlite_db_path),
+        )
+
+    @property
+    def sqlite_history(self) -> SQLiteTradeHistory:
+        """Expose the SQLite trade history store for dashboard/query access."""
+        return self._sqlite
 
     def save_position(self, position: "Position" | None) -> None:
         """Save current position to disk."""
@@ -185,39 +201,106 @@ class PersistenceManager:
             self.logger.error("Error loading position: %s", e)
             return None
 
-    def save_trade_decision(self, decision: "TradeDecision") -> None:
-        """Save a trade decision to history."""
+    def validate_loaded_position(self, expected_symbol: str | None = None) -> list[str]:
+        """Check the loaded position for config mismatches and return warnings.
+
+        Call after load_position() to detect stale or misconfigured state.
+        Does NOT modify the position file — only reports issues.
+
+        Args:
+            expected_symbol: The trading pair from the current config. If
+                             provided and the loaded position's symbol doesn't
+                             match, a conflict warning is generated.
+
+        Returns:
+            List of human-readable warning strings (empty if no issues found).
+        """
+        warnings: list[str] = []
+        position = self._position_cache if self._position_cache_valid else None
+        if position is None:
+            return warnings
+
+        if not self.positions_file.exists():
+            return warnings
+
         try:
-            history = self.load_trade_history()
+            raw = json.loads(self.positions_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as e:
+            warnings.append(
+                f"positions.json exists but could not be parsed: {e}. "
+                "The file may be corrupt — consider removing it."
+            )
+            return warnings
 
-            decision_dict = decision.to_dict()
-            sanitized_decision = serialize_for_json(decision_dict)
-            history.append(sanitized_decision)
+        if expected_symbol and position.symbol != expected_symbol:
+            warnings.append(
+                f"CONFIG MISMATCH: Existing position is for {position.symbol}, "
+                f"but the current config targets {expected_symbol}. "
+                "The loaded position will be used, but SL/TP levels may be "
+                "invalid for the current trading pair. Review before trading."
+            )
 
-            temp_path = str(self.history_file) + ".tmp"
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(history, f, indent=2)
-            os.replace(temp_path, self.history_file)
+        unknown_keys = [k for k in raw if k not in {
+            "entry_price", "stop_loss", "take_profit", "size", "entry_time",
+            "confidence", "direction", "symbol", "confluence_factors",
+            "entry_fee", "quote_amount", "size_pct", "atr_at_entry",
+            "volatility_level", "sl_distance_pct", "tp_distance_pct",
+            "rr_ratio_at_entry", "adx_at_entry", "rsi_at_entry",
+            "trend_direction_at_entry", "macd_signal_at_entry",
+            "bb_position_at_entry", "volume_state_at_entry",
+            "market_sentiment_at_entry", "order_book_bias_at_entry",
+            "stop_loss_type_at_entry", "stop_loss_check_interval_at_entry",
+            "take_profit_type_at_entry", "take_profit_check_interval_at_entry",
+            "max_drawdown_pct", "max_profit_pct",
+        }]
+        if unknown_keys:
+            warnings.append(
+                f"positions.json contains unrecognized fields: {', '.join(sorted(unknown_keys))}. "
+                "This may indicate a version mismatch or corrupted state."
+            )
 
-            self.logger.info("Saved trade decision: %s @ $%s", decision.action, f"{decision.price:,.2f}")
+        return warnings
+
+    def save_trade_decision(self, decision: "TradeDecision") -> None:
+        """Save a trade decision to SQLite history."""
+        decision_dict = decision.to_dict()
+        sanitized = serialize_for_json(decision_dict)
+
+        try:
+            row_id = self._sqlite.insert(sanitized)
+            if row_id:
+                self.logger.debug("Saved trade decision to SQLite (row %d): %s @ $%s",
+                                  row_id, decision.action, f"{decision.price:,.2f}")
+                return
         except Exception as e:
-            self.logger.error("Error saving trade decision: %s", e)
+            self.logger.error("SQLite save failed: %s", e)
+        raise RuntimeError("Failed to save trade decision to SQLite")
 
     async def async_save_trade_decision(self, decision: "TradeDecision") -> None:
         """Non-blocking save_trade_decision: runs on a thread-pool worker."""
         await asyncio.to_thread(self.save_trade_decision, decision)
 
     def load_trade_history(self) -> list[dict[str, Any]]:
-        """Load full trade history."""
-        if not self.history_file.exists():
-            return []
+        """Load full trade history from SQLite."""
+        return self._sqlite.export_json()
 
+    def get_last_execution_timestamp(self, actions: tuple[str, ...] = ("BUY", "SELL")) -> datetime | None:
+        """Return the newest execution timestamp from trade history.
+
+        Args:
+            actions: Action labels used to identify execution entries.
+
+        Returns:
+            UTC-aware datetime if found, else None.
+        """
         try:
-            with open(self.history_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            ts = self._sqlite.get_last_execution_timestamp(actions=actions)
+            if not ts:
+                return None
+            return self._ensure_utc(datetime.fromisoformat(ts))
         except Exception as e:
-            self.logger.error("Error loading trade history: %s", e)
-            return []
+            self.logger.error("Failed to read last execution timestamp from SQLite: %s", e)
+            raise
 
     def get_entry_decision_for_position(
         self,
@@ -225,6 +308,9 @@ class PersistenceManager:
         symbol: str | None = None,
     ) -> "TradeDecision" | None:
         """Retrieve the entry decision from trade history for a given position.
+
+        Uses SQLite's indexed timestamp query for O(log n) lookup instead of
+        scanning all JSON records.
 
         Args:
             entry_time: The entry_time of the position to find.
@@ -234,21 +320,31 @@ class PersistenceManager:
             TradeDecision with the original entry reasoning, or None if not found
         """
         try:
-            history = self.load_trade_history()
-            entry_actions = {"BUY", "SELL"}
-
             entry_time_utc = self._ensure_utc(entry_time)
+            since = (entry_time_utc - timedelta(seconds=self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS)).isoformat()
+            until = (entry_time_utc + timedelta(seconds=self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS)).isoformat()
+
+            candidates = self._sqlite.query(
+                symbol=symbol,
+                limit=10,
+                since=since,
+                until=until,
+            )
+            entry_actions = {"BUY", "SELL"}
             best_match: tuple[float, dict[str, Any], datetime] | None = None
-            for decision_dict in history:
+
+            for decision_dict in candidates:
                 action = decision_dict.get("action", "")
                 timestamp_str = decision_dict.get("timestamp", "")
 
                 if action not in entry_actions or not timestamp_str:
                     continue
-                if symbol and decision_dict.get("symbol", symbol) != symbol:
+
+                try:
+                    decision_time = self._ensure_utc(datetime.fromisoformat(timestamp_str))
+                except (TypeError, ValueError):
                     continue
 
-                decision_time = self._ensure_utc(datetime.fromisoformat(timestamp_str))
                 time_diff = abs((decision_time - entry_time_utc).total_seconds())
                 if time_diff > self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS:
                     continue
@@ -277,7 +373,7 @@ class PersistenceManager:
             return None
 
         except Exception as e:
-            self.logger.error("Error retrieving entry decision: %s", e)
+            self.logger.error("Error retrieving entry decision from SQLite: %s", e)
             return None
 
     def save_statistics(self, stats: "TradingStatistics") -> None:

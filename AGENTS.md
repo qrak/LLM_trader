@@ -56,7 +56,7 @@ flowchart TB
 
     subgraph Output["Output Layer"]
         DASH["📊 Dashboard<br/>FastAPI + WebSocket<br/><a href='./src/dashboard/AGENTS.md'>📄 README</a>"]
-        LOGS["Audit Trail<br/>Position Logs<br/>Trade History"]
+        LOGS["Audit Trail<br/>Position Logs<br/>SQLite Trade History"]
     end
 
     subgraph Providers["Provider Orchestration"]
@@ -145,6 +145,7 @@ TradingStrategy.evaluate()
   ├── RiskManager → RiskAssessment (SL/TP scaling, computes R:R)
   ├── TradingStrategy → R:R minimum check against brain-learned threshold (default 1.5)
   ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → APPROVED → EXECUTED
+    ├── PersistenceManager → SQLite-only trade_history.db append (no JSON fallback/migration)
   ├── RiskManager friction drain → store_blocked_trade feedback for brain learning
   └── ExitMonitor (dual-mode: soft at candle close; hard at configurable interval per SL/TP type)
        └── PositionStatusMonitor → background asyncio loop with dynamic rescheduling
@@ -209,6 +210,8 @@ BrainAgent.update_from_closed_trade()
 ```
 Closed Trade ──▶ BrainExperienceRecorder ──▶ ChromaDB (vector memory)
                                                    │
+                                                   ├── Update matched semantic-rule validation/contradiction counters
+                                                   │
                           trade_count % interval == 0
                                                    │
                                                    ▼
@@ -221,13 +224,28 @@ Closed Trade ──▶ BrainExperienceRecorder ──▶ ChromaDB (vector memory
                                           Next Cycle: BrainContextProvider
                                           queries ChromaDB for:
                                           - Similar past trades (top-5)
-                                          - Relevant rules (matched to conditions)
+                                                                                    - Relevant rules (matched to conditions,
+                                                                                        scored by similarity + evidence + timeframe freshness)
                                           - Confidence stats by level
                                           - Blocked trade feedback
                                                    │
                                                    ▼
                                           Injected into LLM prompt
 ```
+
+Semantic-rule policy:
+- Active semantic rules are durable learned policy and are not deleted by age-only pruning.
+- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, and contradiction count.
+- Closed trades that match active rules update validation or contradiction metadata for later ranking.
+- Inactive old rules may be physically pruned as storage maintenance; active rules should be deactivated by evidence, not age.
+
+### 4.3 Trade Persistence
+
+- Trade history is SQLite-only at `data/trading/trade_history.db` via `SQLiteTradeHistory` and `PersistenceManager`.
+- Runtime code must not read, write, or auto-migrate `trade_history.json`.
+- `PersistenceManager.save_trade_decision()` fails loudly if SQLite persistence fails; do not add JSON fallback paths.
+- Dashboard, cooldown guards, brain entry-decision lookup, and query scripts must consume trade history through injected persistence or SQLite APIs.
+- Historical `.json.migrated` files are backups only, not runtime inputs.
 
 ---
 
@@ -294,6 +312,8 @@ LLM_trader/
 │   ├── managers/                # ⚙️ Risk Manager + ☁️ Provider Orchestrator
 │   │   ├── AGENTS.md            # Agent docs
 │   │   ├── risk_manager.py      # Signal safety layer
+│   │   ├── persistence_manager.py # Position/state facade + SQLite trade history access
+│   │   ├── sqlite_trade_history.py # SQLite-only trade history store
 │   │   ├── provider_orchestrator.py  # AI fallback chain
 │   │   └── model_manager.py     # Model lifecycle
 │   ├── dashboard/               # 📊 Dashboard
@@ -311,6 +331,7 @@ LLM_trader/
 ├── data/                        # Runtime state (not committed)
 ├── website/                     # Astro 5 + Tailwind landing page
 ├── scripts/                     # Cross-platform startup scripts
+│   └── install_agent_terminal_guard.ps1 # Optional session-local PowerShell literal ^U guard
 └── docs/
     └── plans/                   # Planning documents
 ```
@@ -334,6 +355,10 @@ See individual agent READMEs for detailed prompts, inputs, outputs, and edge cas
 
 - Send one terminal command per tool call.
 - Never include control-key text in commands (for example `^U`, `^C`, `^[`).
+- On Windows/PowerShell in VS Code, prompt-edit control text such as `^U` is sent literally and becomes part of the command name. Do not assume Linux/readline behavior.
+- Never send terminal follow-up probes or marker echoes (for example `Write-Output $LASTEXITCODE`, `echo DONE`, or a "flush" command) to recover hidden or truncated validation output.
+- If validation output is incomplete, either trust the user's visible terminal output when provided or rerun the exact validation command once with a generous timeout.
+- `scripts/install_agent_terminal_guard.ps1` can be dot-sourced as a session-local safety net for accidental literal `^U` prefixes; it is not a substitute for clean commands.
 - Never chain validation commands with `;`, `&&`, variable assignment, redirect/capture, and readback in one line.
 - For pytest validation, trust only raw output from a direct pytest command.
 - If terminal output is empty or malformed, do not claim success.

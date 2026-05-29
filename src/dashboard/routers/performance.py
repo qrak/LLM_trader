@@ -11,11 +11,12 @@ from src.trading.statistics_calculator import StatisticsCalculator, TradingStati
 
 class PerformanceRouter:
     """Handles performance history and statistics endpoints."""
-    def __init__(self, config, logger, dashboard_state):
+    def __init__(self, config, logger, dashboard_state, persistence=None):
         self.router = APIRouter(prefix="/api/performance", tags=["performance"])
         self.config = config
         self.logger = logger
         self.dashboard_state = dashboard_state
+        self.persistence = persistence
 
         self.router.add_api_route("/history", self.get_performance_history, methods=["GET"])
         self.router.add_api_route("/stats", self.get_statistics, methods=["GET"])
@@ -72,7 +73,6 @@ class PerformanceRouter:
         if cached:
             return cached
         data_dir = self.config.DATA_DIR
-        trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         equity_curve = []
         stats = self._default_statistics()
@@ -81,9 +81,9 @@ class PerformanceRouter:
                 stats = await asyncio.to_thread(self._load_json_file, stats_file)
             except Exception:
                 self.logger.error("Failed to load stats file", exc_info=True)
-        if trade_history_file.exists():
+        if self.persistence:
             try:
-                trades = await asyncio.to_thread(self._load_json_file, trade_history_file)
+                trades = await asyncio.to_thread(self.persistence.load_trade_history)
                 equity_curve = await asyncio.to_thread(self._process_trade_history, trades, stats)
             except Exception:
                 self.logger.error("Failed to process trade history", exc_info=True)

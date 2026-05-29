@@ -144,6 +144,33 @@ def test_guard_pipeline_invalidate_cooldown_cache_is_safe_without_cooldown_guard
     pipeline.invalidate_cooldown_cache()
 
 
+def test_cooldown_guard_fails_closed_when_persistence_missing() -> None:
+    guard = CooldownWindowGuard()
+    result = guard.check(_make_intent(), capital=10000.0, config=SimpleNamespace(TIMEFRAME="4h"))
+    assert result.passed is False
+    assert "fail-closed" in result.reason
+
+
+def test_cooldown_guard_allows_when_no_prior_execution_exists() -> None:
+    persistence = MagicMock()
+    persistence.get_last_execution_timestamp.return_value = None
+    guard = CooldownWindowGuard(persistence=persistence)
+
+    result = guard.check(_make_intent(), capital=10000.0, config=SimpleNamespace(TIMEFRAME="4h"))
+    assert result.passed is True
+    assert "No prior execution" in result.reason
+
+
+def test_cooldown_guard_fails_closed_when_persistence_read_fails() -> None:
+    persistence = MagicMock()
+    persistence.get_last_execution_timestamp.side_effect = RuntimeError("db unavailable")
+    guard = CooldownWindowGuard(persistence=persistence)
+
+    result = guard.check(_make_intent(), capital=10000.0, config=SimpleNamespace(TIMEFRAME="4h"))
+    assert result.passed is False
+    assert "fail-closed" in result.reason
+
+
 def test_max_position_guard_only_rejects_explicit_over_cap_size() -> None:
     guard = MaxPositionSizeGuard()
     config = SimpleNamespace(MAX_POSITION_SIZE=0.10)

@@ -33,7 +33,7 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
 - `Position` — entry/exit/PNL, confidence, confluence factors, drawdown metrics
 - `close_price` — exit price at time of close
 - `close_reason` — stop_loss / take_profit / analysis_signal
-- `entry_decision` — original entry TradeDecision (retrieved from trade history for reasoning context)
+- `entry_decision` — original entry TradeDecision (retrieved from SQLite trade history through `PersistenceManager` for reasoning context)
 - `market_conditions` — MarketConditions at close time (or from entry if preferred)
 
 ### From VectorMemoryService (ChromaDB)
@@ -52,7 +52,7 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
 - Blocked-trade feedback (recent 5, ≤ 168h)
 - Vector-retrieved similar past experiences (top-5 semantic similarity search)
 - CoT Step 6 — Historical Evidence instructions (win-rate < 50% → reduce confidence, anti-pattern matching, AI-mistake memory, exit-execution memory)
-- Learned trading rules matched to current conditions (similarity %, tagged by type)
+- Learned trading rules matched to current conditions (similarity %, timeframe freshness, evidence score, tagged by type)
 
 ### `get_dynamic_thresholds()` — ~15 learned parameters
 - R/R minimum thresholds, ADX thresholds, SL tightening progress thresholds
@@ -102,6 +102,17 @@ The brain context is injected as a structured section in the LLM prompt **after*
 - `build_rich_context_string()` — categorical labels for storage/retrieval
 - `build_query_document()` — embedding query mirrors stored format but includes raw numeric values, reducing embedding asymmetry
 - Hybrid retrieval: 70% similarity + 30% recency decay
+
+### Semantic Rule Influence Scoring
+
+Active semantic rules are durable learned policy, not raw trade examples. They are preserved while active, but their prompt influence is soft-ranked by:
+
+- Semantic similarity to the current market context
+- Evidence quality (`wins`, `losses`, `source_trades`, `expectancy_pct`, `profit_factor`)
+- Timeframe-aware freshness using the same half-life model as trade experiences
+- Contradiction penalty from matched closed trades that disagree with the rule
+
+For the default 4h timeframe, the rule freshness half-life is about 14 days. Older active rules are not deleted automatically; they receive lower freshness labels (`maturing`, `stale`, `legacy`) unless recently validated by matching outcomes.
 
 ### Confidence Threshold — Adaptive Learning
 
@@ -161,7 +172,7 @@ if hours_since_last < self._min_update_interval_hours:
 
 | Scenario | Handling |
 |----------|----------|
-| **Empty trade history** | `get_context()` returns empty string — brain section skipped entirely in prompt |
+| **Empty SQLite trade history** | `get_context()` returns empty string — brain section skipped entirely in prompt |
 | **Insufficient data for reflection** | <5 wins → skip best-practice; <3 losses → skip loss reflection; <2 mistakes → skip AI mistake reflection |
 | **Low win rate (<60%)** | Best-practice rule rejected |
 | **Single-occurrence patterns** | Skipped (need ≥3 wins / ≥2 losses / ≥2 mistakes for pattern) |
@@ -175,6 +186,20 @@ if hours_since_last < self._min_update_interval_hours:
 | **Unknown profile in vector context** | Replaced with resolved rule defaults in `get_context()` |
 | **"LIMITED DATA" flag detected** | Swaps full CoT instructions for "rely on standard TA" note |
 
+### Vector Memory Maintenance
+
+- `VectorMemoryService.prune_aged_documents()` may prune stale experiences and blocked-trade feedback beyond the relevance window.
+- Active semantic rules (`active=True`) are preserved even when old; do not delete active learned rules by age alone.
+- Active semantic rules are ranked with timeframe-aware freshness/evidence scoring before prompt injection; age lowers influence but does not physically delete a rule.
+- Matched closed trades update semantic-rule `validation_hit_count`, `last_validated_at`, `contradiction_count`, and `last_contradicted_at` metadata.
+- Timestamp parsing must be datetime-aware so malformed timestamps are skipped safely instead of corrupting prune decisions.
+
+### Trade Persistence Contract
+
+- Trading code records decisions through `PersistenceManager.async_save_trade_decision()` and must not write trade-history files directly.
+- Trade history is SQLite-only (`trade_history.db`). Do not reintroduce `trade_history.json` readers, fallback writes, or auto-migration paths.
+- Entry-decision recovery for close-time brain learning uses SQLite timestamp-window lookup with optional symbol filtering.
+
 ---
 
 ## Data Flow
@@ -185,6 +210,8 @@ Market Data + Indicators
 AnalysisEngine ──→ Position + MarketConditions
     ↓
 TradingStrategy ──→ closed trade
+    ├── PersistenceManager.get_entry_decision_for_position()
+    │     └── SQLite trade_history lookup by timestamp + symbol
     ↓
 TradingBrainService.update_from_closed_trade()
     ├── BrainExperienceRecorder.record_closed_trade()

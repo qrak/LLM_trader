@@ -108,6 +108,16 @@ class TradingStrategy:
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
 
+        # Validate loaded position against current config — warn about mismatches
+        # but don't discard the position (operator should decide).
+        try:
+            expected_symbol = config.CRYPTO_PAIR if config else None
+            state_warnings = self.persistence.validate_loaded_position(expected_symbol)
+            for warning in state_warnings:
+                self.logger.warning("STARTUP STATE WARNING: %s", warning)
+        except Exception as e:
+            self.logger.warning("Could not validate loaded position: %s", e)
+
     def set_dashboard_state(self, dashboard_state: "DashboardState | None") -> None:
         """Inject dashboard state after dashboard server construction."""
         self.dashboard_state = dashboard_state

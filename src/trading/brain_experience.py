@@ -146,6 +146,10 @@ class BrainExperienceRecorder:
                 **self.pattern_analyzer.extract_factor_scores(position.confluence_factors),
             }
         )
+        self.vector_memory.update_rule_validation_feedback(
+            current_context=condition_str,
+            outcome="WIN" if is_win else "LOSS",
+        )
         self.logger.info(
             "Updated brain from %s trade (%s, P&L: %s%%)",
             position.direction,

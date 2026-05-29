@@ -162,16 +162,34 @@ class GracefulShutdownManager:
             return True
 
     @staticmethod
+    def _is_headless() -> bool:
+        """Detect headless environments: no display server + no interactive terminal.
+
+        Returns True when there is no user to interact with — the process is
+        running under systemd, Wired, Docker, or an unattended WSL terminal
+        where a blocking prompt would stall the shutdown indefinitely.
+        """
+        import os as _os
+        return not _os.environ.get("DISPLAY") and not sys.stdin.isatty()
+
+    @staticmethod
     def show_exit_confirmation() -> bool:
         """
         Show a confirmation dialog before closing the application.
 
-        Falls back to a terminal prompt when a GUI dialog is unavailable. This
-        keeps Ctrl+C confirmation usable on Linux/macOS servers and SSH shells.
+        In headless environments (no DISPLAY + non-TTY stdin) skips all prompts
+        and proceeds with shutdown immediately so systemd / Wired / Docker can
+        recycle the process without blocking.
+
+        In interactive environments, falls back to a terminal prompt when a GUI
+        dialog is unavailable.
 
         Returns:
-            True if user confirmed exit, False if they cancelled.
+            True if user confirmed exit or environment is unattended, False if cancelled.
         """
+        if GracefulShutdownManager._is_headless():
+            return True
+
         if not TKINTER_AVAILABLE:
             return GracefulShutdownManager._prompt_exit_confirmation()
 

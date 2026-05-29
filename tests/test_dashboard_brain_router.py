@@ -183,7 +183,17 @@ async def test_get_active_rules_maps_ai_mistake_and_exit_metadata():
                 "dominant_stop_loss_interval": "1m",
                 "dominant_take_profit_type": "soft",
                 "dominant_take_profit_interval": "15m",
+                "freshness_label": "fresh",
+                "freshness_score": 97.5,
+                "evidence_score": 70.0,
+                "final_score": 82.0,
+                "support_count": 3,
+                "validation_hit_count": 2,
+                "contradiction_count": 1,
+                "source_timeframe_minutes": 240,
+                "source_timeframe_bucket": "swing",
             },
+            "final_score": 82.0,
         }
     ]
     router = BrainRouter(
@@ -207,6 +217,13 @@ async def test_get_active_rules_maps_ai_mistake_and_exit_metadata():
     assert rules[0]["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
     assert rules[0]["dominant_stop_loss_interval"] == "1m"
     assert rules[0]["dominant_take_profit_interval"] == "15m"
+    assert rules[0]["freshness_label"] == "fresh"
+    assert rules[0]["freshness_score"] == 97.5
+    assert rules[0]["final_score"] == 82.0
+    assert rules[0]["support_count"] == 3
+    assert rules[0]["validation_hit_count"] == 2
+    assert rules[0]["contradiction_count"] == 1
+    assert rules[0]["source_timeframe_bucket"] == "swing"
 
 
 @pytest.mark.asyncio
@@ -414,3 +431,46 @@ async def test_get_vector_details_sorts_legacy_pnl_metadata_safely():
     result = await router.get_vector_details(request, query="BULLISH", limit=3)
 
     assert [item["id"] for item in result["experiences"]] == ["high", "missing", "low"]
+
+
+@pytest.mark.asyncio
+async def test_get_vector_memory_reads_trades_from_persistence():
+    dashboard_state = DashboardState()
+    persistence = MagicMock()
+    persistence.load_trade_history.return_value = [
+        {
+            "timestamp": "2026-05-28T10:00:00+00:00",
+            "action": "BUY",
+            "price": 100.0,
+            "confidence": "HIGH",
+            "reasoning": "entry",
+        },
+        {
+            "timestamp": "2026-05-28T12:00:00+00:00",
+            "action": "CLOSE_LONG",
+            "price": 102.5,
+            "confidence": "HIGH",
+            "reasoning": "exit",
+        },
+    ]
+
+    vector_memory = MagicMock()
+    vector_memory.experience_count = 7
+    vector_memory.compute_confidence_stats.return_value = {"HIGH": {"win_rate": 70.0}}
+
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused", TIMEFRAME="4h"),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=vector_memory,
+        unified_parser=None,
+        persistence=persistence,
+        exchange_manager=None,
+    )
+
+    result = await router.get_vector_memory(limit=10)
+
+    persistence.load_trade_history.assert_called_once_with()
+    assert result["experience_count"] == 7
+    assert len(result["trades"]) == 2
+    assert result["trades"][0]["action"] == "BUY"

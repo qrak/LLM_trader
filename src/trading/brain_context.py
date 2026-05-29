@@ -140,7 +140,18 @@ class BrainContextProvider:
                 }
                 type_tag = type_tags.get(rule_type, "")
                 rule_text = self.exit_profiles.render_rule_text(rule)
-                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule_text}")
+                freshness = meta.get("freshness_label")
+                support = meta.get("support_count") or meta.get("source_trades")
+                final_score = meta.get("final_score") or rule.get("final_score")
+                evidence_bits = []
+                if freshness:
+                    evidence_bits.append(f"freshness: {freshness}")
+                if support:
+                    evidence_bits.append(f"evidence: {support} trades")
+                if final_score is not None:
+                    evidence_bits.append(f"score: {float(final_score):.0f}%")
+                evidence_text = f" ({', '.join(evidence_bits)})" if evidence_bits else ""
+                lines.append(f"- [{similarity:.0f}% match]{type_tag} {rule_text}{evidence_text}")
                 failure = meta.get("failure_reason")
                 if failure:
                     lines.append(f"  → Why it failed: {failure}")

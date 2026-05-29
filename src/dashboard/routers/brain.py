@@ -40,6 +40,19 @@ RULE_METADATA_FIELDS = (
     "dominant_stop_loss_interval",
     "dominant_take_profit_type",
     "dominant_take_profit_interval",
+    "created_at",
+    "last_validated_at",
+    "last_contradicted_at",
+    "age_days",
+    "freshness_score",
+    "freshness_label",
+    "evidence_score",
+    "final_score",
+    "support_count",
+    "validation_hit_count",
+    "contradiction_count",
+    "source_timeframe_minutes",
+    "source_timeframe_bucket",
 )
 
 
@@ -319,7 +332,6 @@ class BrainRouter:
         cached = self.dashboard_state.get_cached(f"memory_{limit}", ttl_seconds=30.0)
         if cached:
             return cached
-        data_dir = self.config.DATA_DIR
         result = {
             "experience_count": 0,
             "trades": [],
@@ -328,10 +340,9 @@ class BrainRouter:
         if self.vector_memory:
             result["experience_count"] = self.vector_memory.experience_count
             result["stats"] = self.vector_memory.compute_confidence_stats()
-        trade_history_file = Path(data_dir) / "trading" / "trade_history.json"
         try:
-            if trade_history_file.exists():
-                trades = await asyncio.to_thread(_read_json_file, trade_history_file)
+            if self.persistence:
+                trades = await asyncio.to_thread(self.persistence.load_trade_history)
                 result["trades"] = [
                     {
                         "id": f"trade_{i}",
@@ -363,9 +374,14 @@ class BrainRouter:
                 mapped_rule = dict(r)
                 meta = r.get("metadata", {})
                 mapped_rule["rule_text"] = self._render_rule_text(r.get("text", ""), meta)
-                mapped_rule["source_trades"] = meta.get("source_trades") or meta.get("source_loss_count")
+                mapped_rule["source_trades"] = (
+                    meta.get("source_trades")
+                    or meta.get("source_loss_count")
+                    or meta.get("support_count")
+                )
                 for field in RULE_METADATA_FIELDS:
                     mapped_rule[field] = meta.get(field)
+                mapped_rule["final_score"] = mapped_rule.get("final_score") or r.get("final_score")
                 if mapped_rule.get("dominant_exit_profile") in (None, "", self.UNKNOWN_EXIT_PROFILE):
                     resolved_exit_profile = self._resolve_rule_exit_profile(meta)
                     mapped_rule["dominant_exit_profile"] = resolved_exit_profile

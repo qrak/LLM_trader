@@ -470,6 +470,12 @@ class TestSemanticRules:
         assert metadata["rule_type"] == "best_practice"
         assert metadata["win_rate"] == 66.7
         assert "timestamp" in metadata
+        assert "created_at" in metadata
+        assert metadata["support_count"] == 0
+        assert metadata["validation_hit_count"] == 0
+        assert metadata["contradiction_count"] == 0
+        assert metadata["source_timeframe_minutes"] == 240
+        assert metadata["source_timeframe_bucket"] == "swing"
 
     def test_get_relevant_rules_filters_below_similarity_threshold(self):
         svc = _make_service()
@@ -488,6 +494,91 @@ class TestSemanticRules:
 
         assert [rule["rule_id"] for rule in rules] == ["rule-strong"]
         assert rules[0]["similarity"] == 80.0
+
+    def test_get_relevant_rules_downweights_stale_rule_when_similarity_matches(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._semantic_rules_collection = MagicMock()
+        svc._semantic_rules_collection.count.return_value = 2
+        now = datetime.now(timezone.utc)
+        svc._semantic_rules_collection.query.return_value = {
+            "ids": [["rule-old", "rule-fresh"]],
+            "documents": [["Old rule", "Fresh rule"]],
+            "metadatas": [[
+                {
+                    "rule_type": "best_practice",
+                    "timestamp": (now - timedelta(days=90)).isoformat(),
+                    "source_trades": 10,
+                    "win_rate": 70.0,
+                    "expectancy_pct": 1.0,
+                },
+                {
+                    "rule_type": "best_practice",
+                    "timestamp": now.isoformat(),
+                    "source_trades": 10,
+                    "win_rate": 70.0,
+                    "expectancy_pct": 1.0,
+                },
+            ]],
+            "distances": [[0.1, 0.1]],
+        }
+        svc._embedding_model.encode.return_value.tolist.return_value = [0.7, 0.8]
+
+        rules = svc.get_relevant_rules("BULLISH", n_results=2, min_similarity=0.4)
+
+        assert [rule["rule_id"] for rule in rules] == ["rule-fresh", "rule-old"]
+        assert rules[0]["metadata"]["freshness_label"] == "fresh"
+        assert rules[1]["metadata"]["freshness_label"] == "legacy"
+        assert rules[0]["final_score"] > rules[1]["final_score"]
+
+    def test_rule_freshness_score_is_timeframe_aware(self):
+        timestamp = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+        scalping = VectorMemoryService(MagicMock(), MagicMock(), MagicMock(), timeframe_minutes=15)
+        swing = VectorMemoryService(MagicMock(), MagicMock(), MagicMock(), timeframe_minutes=240)
+
+        scalping_score = scalping._score_rule_metadata({"timestamp": timestamp}, similarity=1.0)
+        swing_score = swing._score_rule_metadata({"timestamp": timestamp}, similarity=1.0)
+
+        assert scalping_score["freshness_score"] < swing_score["freshness_score"]
+        assert scalping_score["freshness_label"] == "legacy"
+        assert swing_score["freshness_label"] == "fresh"
+
+    def test_update_rule_validation_feedback_updates_support_and_contradiction_counts(self):
+        svc = _make_service()
+        svc._initialized = True
+        svc._semantic_rules_collection = MagicMock()
+        with patch.object(
+            svc,
+            "get_relevant_rules",
+            return_value=[
+                {
+                    "rule_id": "rule-best",
+                    "metadata": {
+                        "rule_type": "best_practice",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "validation_hit_count": 1,
+                    },
+                },
+                {
+                    "rule_id": "rule-avoid",
+                    "metadata": {
+                        "rule_type": "anti_pattern",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "contradiction_count": 2,
+                    },
+                },
+            ],
+        ):
+            updated = svc.update_rule_validation_feedback("BULLISH", outcome="WIN")
+
+        assert updated == 2
+        update_kwargs = svc._semantic_rules_collection.update.call_args.kwargs
+        assert update_kwargs["ids"] == ["rule-best", "rule-avoid"]
+        best_meta, avoid_meta = update_kwargs["metadatas"]
+        assert best_meta["validation_hit_count"] == 2
+        assert "last_validated_at" in best_meta
+        assert avoid_meta["contradiction_count"] == 3
+        assert "last_contradicted_at" in avoid_meta
 
     def test_deactivate_semantic_rules_marks_existing_rules_inactive(self):
         svc = _make_service()

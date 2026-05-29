@@ -1,7 +1,7 @@
-# ⚙️ Risk Manager & Provider Orchestrator
+# ⚙️ Risk Manager, Persistence Manager & Provider Orchestrator
 
-> **Module path:** `src/managers/risk_manager.py` + `src/managers/provider_orchestrator.py`
-> **Type:** Signal Execution Safety + AI Provider Fallback Chain
+> **Module path:** `src/managers/risk_manager.py` + `src/managers/persistence_manager.py` + `src/managers/sqlite_trade_history.py` + `src/managers/provider_orchestrator.py`
+> **Type:** Signal Execution Safety + SQLite Persistence + AI Provider Fallback Chain
 
 ---
 
@@ -95,7 +95,52 @@ if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
 
 ---
 
-## 2. Provider Orchestrator Agent
+## 2. Persistence Manager Agent
+
+> **Files:** `src/managers/persistence_manager.py`, `src/managers/sqlite_trade_history.py`
+
+### Agent Persona & Role
+
+Persistence Manager is the **single persistence facade for trading runtime state.** It owns positions, statistics, monitor state, previous/last analysis snapshots, and trade-history access. Trade history is SQLite-only and must not fall back to legacy JSON files.
+
+### SQLite Trade History Contract
+
+| Responsibility | Owner | Rule |
+|----------------|-------|------|
+| Trade append | `PersistenceManager.save_trade_decision()` → `SQLiteTradeHistory.insert()` | SQLite-only; raise if persistence fails |
+| Full history export | `PersistenceManager.load_trade_history()` | Export from SQLite only |
+| Entry-decision lookup | `get_entry_decision_for_position()` | Query SQLite by timestamp window and optional symbol |
+| Cooldown timestamp | `get_last_execution_timestamp()` | Query newest BUY/SELL timestamp from SQLite |
+| Dashboard history | Dashboard routers via injected persistence | No direct file reads |
+
+### Non-Negotiable Rules
+
+- Do not reintroduce `trade_history.json` runtime reads, writes, fallback paths, or auto-migration.
+- Do not pass `json_path` into `SQLiteTradeHistory`; its constructor accepts only `logger` and `db_path`.
+- Historical `.json.migrated` files are backups only and are not runtime inputs.
+- SQLite write failure is a hard persistence failure; do not silently continue with an alternate store.
+- Keep all service dependencies injected from the composition root; do not construct persistence dependencies inside trading, dashboard, or guard classes.
+
+### SQLite Store Behavior
+
+- WAL journal mode and `synchronous=NORMAL` are enabled per connection.
+- Inserts coerce `TradeDecision` fields into stable SQLite column types.
+- Queries validate sort direction (`ASC`/`DESC`) and clamp pagination.
+- `get_stats()` provides aggregate dashboard data without scanning JSON files.
+
+### Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| **No trade history rows** | Returns empty list / `None` timestamp; callers decide no-history behavior |
+| **Invalid query order** | Raises `ValueError` before SQL generation |
+| **SQLite insert returns no row id** | `PersistenceManager.save_trade_decision()` raises `RuntimeError` |
+| **Entry timestamp not found** | Returns `None` and logs warning |
+| **Malformed persisted timestamp** | Entry lookup skips malformed candidate rows |
+
+---
+
+## 3. Provider Orchestrator Agent
 
 > **File:** `src/managers/provider_orchestrator.py`
 

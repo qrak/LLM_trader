@@ -347,7 +347,8 @@ class DashboardServer:
         performance_router = performance.PerformanceRouter(
             config=self.config,
             logger=self.logger,
-            dashboard_state=self.dashboard_state
+            dashboard_state=self.dashboard_state,
+            persistence=self.persistence,
         )
         visuals_router = visuals.VisualsRouter(
             analysis_engine=self.analysis_engine

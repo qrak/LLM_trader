@@ -362,7 +362,11 @@ class CompositionRoot:
 
     async def _provision_platforms(self, infra: dict) -> dict:
         """Provision external API clients."""
-        coingecko_backend = SQLiteBackend(cache_name='cache/coingecko_cache.db', expire_after=-1)
+        coingecko_cache_ttl_seconds = int(self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS * 3600)
+        coingecko_backend = SQLiteBackend(
+            cache_name='cache/coingecko_cache.db',
+            expire_after=coingecko_cache_ttl_seconds,
+        )
 
         coingecko = CoinGeckoAPI(
             logger=self.logger,
@@ -581,6 +585,16 @@ class CompositionRoot:
         )
         brain_service.refresh_semantic_rules_if_stale()
         
+        # Run startup collection maintenance: prune ChromaDB documents that are
+        # definitively beyond the relevance window (~3× _max_age_days).
+        try:
+            prune_results = vector_memory.prune_aged_documents()
+            for coll_name, count in prune_results.items():
+                if count > 0:
+                    self.logger.info("ChromaDB maintenance: removed %d documents from %s", count, coll_name)
+        except Exception as e:
+            self.logger.warning("ChromaDB startup maintenance failed: %s", e)
+        
         memory_service = TradingMemoryService(
             self.logger,
             persistence,
@@ -596,7 +610,7 @@ class CompositionRoot:
             [
                 ConfiguredSymbolGuard(),
                 MaxPositionSizeGuard(),
-                CooldownWindowGuard(),
+                CooldownWindowGuard(persistence=persistence),
             ]
         )
         self.logger.info("Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names))
