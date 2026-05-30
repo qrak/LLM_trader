@@ -75,9 +75,9 @@ if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
 
 | Confidence Level | Fallback Size |
 |-----------------|---------------|
-| HIGH (≥75) | 3% |
-| MEDIUM (50–74) | 2% |
-| LOW (<50) | 1% |
+| HIGH (string; numeric extractor maps ≥70) | 3% |
+| MEDIUM (numeric extractor maps 50–69) | 2% |
+| LOW (numeric extractor maps <50) | 1% |
 | Max position | 10% of portfolio (configurable) |
 
 ### Edge Cases & Guardrails
@@ -89,7 +89,7 @@ if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
 | **No position for UPDATE signal** | Friction: "No existing position to update" |
 | **ATR unavailable** | Falls back to percentage-based SL (2% of current price) |
 | **Brain thresholds unavailable** | Uses config defaults from `config.ini` |
-| **Confidence below minimum** | Signal downgraded or rejected based on threshold |
+| **Invalid configured fallback size** | Falls back to configured MEDIUM size and logs warning |
 | **R:R below minimum** | Enforced in TradingStrategy (not RiskManager) — blocked as `guard_type="rr_minimum"` with brain-learned default 1.5 |
 | **SL on wrong side of entry** | SL above entry for BUY / below entry for SELL → dynamic SL substituted, friction logged |
 
@@ -154,10 +154,11 @@ The Provider Orchestrator manages the **AI provider lifecycle and fallback chain
 |------|--------|---------------|---------------|----------------|
 | `googleai` | `GoogleAIClient` | Google Gemini 3.5 Flash | ✅ Yes | Google paid tier |
 | `openrouter` | `OpenRouterClient` | Configurable base model (`google/gemini-3-flash-preview` by default) | ✅ Yes | `deepseek/deepseek-r1:free` by default |
-| `local` | `LMStudioClient` | LM Studio model | ❌ No | — |
+| `local` | `LMStudioClient` | LM Studio model | Disabled in orchestrator | — |
 
 ### Fallback Chain Strategy
 
+**Text requests:**
 ```
 Primary: googleai (Gemini 3.5 Flash)
   → Rate limited / auth error? → googleai paid tier
@@ -167,11 +168,21 @@ Primary: googleai (Gemini 3.5 Flash)
   → All providers failed? → HOLD with error
 ```
 
+**Chart (multimodal) requests:**
+```
+Primary: googleai (Gemini 3.5 Flash)
+  → Rate limited / auth error? → googleai paid tier
+  → Still failing? → openrouter (configured base model)
+  → Still failing? → openrouter fallback model
+  → All providers failed? → HOLD with error
+```
+Note: `local` is skipped in the orchestrator's chart fallback chain because provider metadata marks it as chart-unsupported, even though the LM Studio client has a chart-analysis method.
+
 ### Key Behaviors
 
-- **Parameter auto-retry:** `_execute_with_param_retry()` catches unsupported parameter errors, strips the offending parameter, and retries (up to 3×)
+- **Parameter auto-retry:** provider clients use `_execute_with_param_retry()` to catch unsupported parameter errors, strip the offending parameter, and retry (up to 3×)
 - **Known unsupported params** filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`
-- **Chart analysis routing:** Only `googleai` and `openrouter` support multimodal (text + image) requests — `local` falls back to text-only
+- **Chart analysis routing:** Only `googleai` and `openrouter` are enabled for orchestrated multimodal (text + image) requests; explicit `local` chart requests return an error before fallback
 - **Cost tracking via OpenRouter** `get_generation_cost()` — async query after response for token + cost data
 - **Error classification:** quota, auth, timeout, overloaded, connection — each maps to a specific error response the caller uses for fallback decisions
 - **API key redaction:** `_sanitize_error_message()` redacts API keys from all error logs
@@ -182,8 +193,7 @@ Primary: googleai (Gemini 3.5 Flash)
 |--------|-----------|---------------|-------|
 | `GoogleAIClient` | Official `google.genai` SDK | Base64-encoded inline | `@retry_api_call` |
 | `OpenRouterClient` | Official `openrouter` SDK (`OpenRouter`) | Base64 data URI | `@retry_api_call` + param retry |
-| `LMStudioClient` | Official LM Studio Python SDK (`lmstudio.AsyncClient`) | Available in client, but not used by orchestrator chart fallback chain | `@retry_api_call` |
-| `MockClient` | Deterministic responses | None | N/A |
+| `LMStudioClient` | Official LM Studio Python SDK (`lmstudio.AsyncClient`) | Available in client, but disabled by orchestrator metadata and skipped by the chart fallback chain | `@retry_api_call` |
 
 ### Edge Cases
 
@@ -193,6 +203,6 @@ Primary: googleai (Gemini 3.5 Flash)
 | **Unsupported parameter** → retry without it | Detected via error message regex, stripped from config, retried |
 | **SDK version mismatch** | OpenRouter: falls back to `OpenRouter(api_key=...)` without `server_url` |
 | **All providers fail** | Returns HOLD signal via fallback response |
-| **Chart provider doesn't support images** | Orchestrator returns an error for `local`; chart fallback chain only includes `googleai` and `openrouter` |
+| **Chart provider disabled for images** | Orchestrator returns an error for `local`; chart fallback chain only includes `googleai` and `openrouter` |
 | **Non-text response parts** (Google) | Silently filtered, text parts extracted |
 | **Provider not in registry** | `get_metadata()` returns None → caller uses provider not found error |

@@ -9,25 +9,25 @@
 
 The Governance Pipeline is the **last line of defense before any order signal reaches the simulated market.** It enforces declarative, configurable rules that every trading signal must pass before execution: symbol whitelist checks, cooldown windows, and position size limits.
 
-The pipeline follows the **Chain of Responsibility pattern** — each guard runs independently, accumulating pass/fail decisions. If any guard fails, the order is blocked and the friction is recorded for Brain Agent learning.
+The pipeline follows the **Chain of Responsibility pattern** — guards run sequentially and fail fast. If any guard fails, the order is blocked and an audit rejection is recorded.
 
 ---
 
 ## Pipeline Architecture
 
 ```
-TradingStrategy → GuardPipeline.run(signal, position)
+TradingStrategy → GuardPipeline.evaluate(intent, capital, config)
     ├── ConfiguredSymbolGuard     (whitelist check)
-    ├── MaxPositionSizeGuard       (portfolio exposure limit)
+    ├── MaxPositionSizeGuard       (explicit requested size cap)
     └── CooldownWindowGuard        (time since last SQLite-recorded BUY/SELL)
          ↓
     Result: pass → TradingStrategy proceeds
-            fail → Friction recorded → Brain Agent learns
+            fail → audit rejection recorded
 ```
 
 ### GuardPipeline (`pipeline.py`)
-- Runs all guards in order, collecting results
-- Returns `GuardResult(passed: bool, reason: str | None)`
+- Runs guards in order and stops at the first failure
+- Returns `list[GuardResult]` for the guards that were evaluated
 - All guards must pass for order execution
 - First failure short-circuits remaining guards (fail-fast)
 
@@ -38,12 +38,11 @@ TradingStrategy → GuardPipeline.run(signal, position)
 **Purpose:** Ensures the trading signal targets a configured symbol.
 
 **Logic:**
-- Signal must reference a symbol in the active configuration
+- Signal must reference `config.CRYPTO_PAIR`
 - Prevents phantom pairs or misconfigured symbols
 
 **Edge Cases:**
-- Unknown symbol → blocked with friction "Symbol not in configured trading pairs"
-- Multi-symbol signals → each symbol checked individually (future capability)
+- Unknown symbol → blocked with reason "does not match configured trading pair"
 
 ---
 
@@ -54,7 +53,7 @@ TradingStrategy → GuardPipeline.run(signal, position)
 **Logic:**
 - Reads the most recent executed BUY/SELL timestamp through injected `PersistenceManager.get_last_execution_timestamp()`
 - `PersistenceManager` queries SQLite `trade_history.db`; the guard must not read `trade_history.json` or any file path directly
-- Cooldown = minimum `cooldown_minutes` (configurable)
+- Cooldown is derived from `config.TIMEFRAME`: <1h → 4× timeframe, 1h–3h → 3×, 4h–23h → 2×, daily+ → 1×
 - If elapsed < cooldown → block
 
 **Edge Cases:**
@@ -68,30 +67,31 @@ TradingStrategy → GuardPipeline.run(signal, position)
 
 ## Guard: MaxPositionSizeGuard (`max_position_size.py`)
 
-**Purpose:** Caps total portfolio exposure across all open positions.
+**Purpose:** Rejects an explicitly requested position size that exceeds the configured cap.
 
 **Logic:**
-- Tracks current open position exposure as fraction of portfolio
-- New position size + existing exposure must ≤ `MAX_POSITION_SIZE` (default 10%)
-- Falls back to tiered sizing: HIGH → 3%, MEDIUM → 2%, LOW → 1%
+- Reads `MAX_POSITION_SIZE` from config and validates it is positive and finite
+- If AI provides a positive finite `position_size`, it must be ≤ `MAX_POSITION_SIZE` (default 10%)
+- Missing, non-finite, or non-positive requested sizes pass through so `RiskManager` can apply fallback sizing
 
 **Edge Cases:**
-- No open positions → check is purely against max size
-- Multi-symbol portfolio → checks aggregate exposure
-- Position close / TP hit → recalculates available exposure
-- Brain-learned thresholds may override default max position size
+- Missing `position_size` → passes with reason that RiskManager fallback sizing will apply
+- Non-finite requested size → passes with reason that RiskManager fallback sizing will apply
+- Invalid `MAX_POSITION_SIZE` config → fails closed
 
 ---
 
 ## Friction Recording
 
-When a guard blocks an order, the friction is recorded:
+Risk and strategy-level blocked trade feedback is recorded through vector memory:
 
 ```
-VectorMemoryService.block_trade_feedback(guard_type, reason, context)
+VectorMemoryService.store_blocked_trade(...)
 ```
 
-This feeds the Brain Agent's `get_context()` which shows the LLM:
+This is currently used for RiskManager frictions, R:R minimum blocks, and premature SL-tightening blocks. Guard-pipeline failures are audit-recorded before risk calculation and do not call vector memory directly.
+
+Stored blocked-trade feedback feeds the Brain Agent's `get_context()` which shows the LLM:
 - Recent blocked trades (last 5, max 168h old)
 - Guard type + reason for each block
 - Enables the LLM to understand why previous similar signals were rejected
@@ -104,8 +104,8 @@ All guard parameters are set in `config/config.ini`:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `max_position_size` | 0.10 (10%) | Maximum portfolio exposure |
-| `cooldown_minutes` | 60 | Minimum minutes after the most recent BUY/SELL execution |
-| `configured_symbols` | BTC/USDC | Active trading pairs |
+| `max_position_size` | 0.10 (10%) | Maximum explicit/requested position size; RiskManager also clamps fallback sizing to this cap |
+| `timeframe` | 4h | Cooldown duration source |
+| `crypto_pair` | BTC/USDC | Single configured trading pair |
 
 Guards are **declarative** — they can be reviewed and modified without reading any code paths.

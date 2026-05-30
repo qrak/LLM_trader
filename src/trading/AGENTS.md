@@ -2,7 +2,7 @@
 
 > **Module path:** `src/trading/brain.py` (facade) + 5 collaborators in `src/trading/`
 > **Type:** Central LLM Decision Engine & Outcome-Aware Learning Loop
-> **Core Model:** Google Gemini 3.5 Flash (primary), with secondary provider routing handled by ProviderOrchestrator (OpenRouter base model configurable; DeepSeek is the default OpenRouter fallback model)
+> **Core Model:** No direct LLM calls; deterministic/vector-memory service whose context is injected into AnalysisEngine prompts routed by ProviderOrchestrator
 
 ---
 
@@ -75,9 +75,9 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
 | Timeframe Bucket | Trade Interval |
 |-----------------|----------------|
 | Scalping (≤ 30 min) | Every 10 trades |
-| Intraday (31–240 min) | Every 7 trades |
-| Swing (241–1440 min) | Every 5 trades |
-| Position (> 1440 min) | Every 3 trades |
+| Intraday (60–239 min) | Every 7 trades |
+| Swing (240–1439 min) | Every 5 trades |
+| Position (≥ 1440 min) | Every 3 trades |
 
 On each reflection tick, three reflection loops fire **sequentially** (not parallel):
 1. `trigger_reflection()` — best-practice rules from winning clusters
@@ -144,9 +144,9 @@ The `StopLossTighteningPolicy` enforces a **price-progress gate** before allowin
 ### Blending with Brain-Learned Thresholds
 
 The effective threshold is resolved by `_resolve_effective_threshold()`:
-1. Start with timeframe base threshold
-2. If a brain-learned SL tightening threshold exists (from `vector_memory_analytics`), select the **more conservative** (higher %) of the two
-3. Exposed via `get_dynamic_thresholds()` as `sl_tightening_pct`, `sl_tightening_source`
+1. Start with the timeframe base threshold
+2. If a brain-learned SL tightening threshold exists with enough samples, use the learned value clamped to the configured floor/ceiling
+3. Expose the result via `get_dynamic_thresholds()` as `sl_tightening_pct`, `sl_tightening_source`, and the nested `sl_tightening` payload
 
 ### Position Update Gating
 
