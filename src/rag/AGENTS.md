@@ -24,7 +24,7 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 | `TickerManager` | `ticker_manager.py` | Coin/ticker ↔ name mapping for symbol detection |
 | `ArticleProcessor` | `article_processor.py` | Normalization, body extraction, boilerplate stripping |
 | `CategoryProcessor` | `category_processor.py` | News → taxonomy category classification |
-| `IndexManager` | `index_manager.py` | 4 dedicated indices: body, summary, title, ticker_hash |
+| `IndexManager` | `index_manager.py` | 4 in-memory indices: category, tag, coin, keyword |
 | `RSSProvider` | `news_ingestion/rss_provider.py` | RSS feed polling from configured sources |
 | `Crawl4AIEnricher` | `news_ingestion/crawl4ai_enricher.py` | Web-page enrichment via Crawl4AI (optional) |
 | `SchemaMapper` | `news_ingestion/schema_mapper.py` | Maps source-specific schemas to unified format |
@@ -45,7 +45,6 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 ### From External APIs
 - CoinGecko — market-wide stats (dominance, volume, BTC dominance)
 - DeFiLlama — TVL data, protocol fundamentals
-- Alternative.me — Fear & Greed Index
 
 ### From Configuration
 - `config/config.ini`: news update interval (4h), max articles (5)
@@ -71,18 +70,18 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 - `data/backup/news_cache/` — cold storage for historical retrieval
 
 ### Indexed Artifacts (via IndexManager)
-4 indices maintained in sync:
-- **body** cache — full article body text (deduplication key)
-- **summary** — condensed article summary
-- **title** — article title index
-- **ticker_hash** — ticker→article mapping for quick symbol lookup
+4 in-memory indices maintained in sync:
+- **category_index** — taxonomy category → article indices
+- **tag_index** — article tag → article indices
+- **coin_index** — detected coin/ticker → article indices
+- **keyword_index** — category and title keywords → article indices
 
 ---
 
 ## Pipeline: News Ingestion Flow
 
 ```
-RSS Provider polls 6 sources (every 4h)
+RSS Provider polls configured RSS sources (4 by default, every 4h)
     ↓
 Crawl4AI Enricher (optional — degrades to aiohttp on failure)
     ↓
@@ -96,7 +95,7 @@ ScoringPolicy (5-factor relevance scoring)
     ↓
 CollisionResolver (handle cache collisions)
     ↓
-NewsRepository → IndexManager (body/summary/title/ticker_hash)
+NewsRepository → IndexManager (category/tag/coin/keyword)
     ↓
 ContextBuilder → token-limited formatted context block
 ```

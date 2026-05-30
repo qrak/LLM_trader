@@ -48,7 +48,7 @@ DashboardServer(
 ## Key Behaviors
 
 - **Startup:** Bound to `0.0.0.0:8000` (configurable)
-- **CORS:** Enabled for dashboard frontend access
+- **CORS:** Disabled by default; enabled only when `config.ini` sets `dashboard.enable_cors = true`
 - **GZip:** Compression enabled for API responses
 - **Static files:** Mounted from `static/` directory
 - **Lifecycle:** Managed via FastAPI lifespan context manager
@@ -84,6 +84,6 @@ DashboardServer(
 | **WebSocket disconnect** | Client auto-reconnects, resends subscription |
 | **No data yet** | Returns empty state gracefully |
 | **No SQLite trade history rows** | Performance and brain routes return empty history/state gracefully |
-| **Backend restart** | DashboardState retains last-known values across restarts |
+| **Dashboard server toggle/restart in-process** | DashboardState retains last-known values while the Python process remains alive |
 | **Large vector memory queries** | Truncated/paginated API responses |
 | **Concurrent dashboard access** | FastAPI async handles concurrent requests |
