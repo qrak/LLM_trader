@@ -109,8 +109,8 @@ RSI, MACD (line/signal/histogram), Stochastic (%K/%D), ROC, Momentum, Williams %
 ADX (+DI/-DI), Supertrend, Ichimoku Cloud (tenkan/kijun/senkou/chikou), Parabolic SAR, Vortex (+VI/-VI), TRIX, PFE, TD Sequential (setup/countdown)
 
 **Utility files:**
-- `trend_calculation_utils.py` — true range, ATR helper, directional movement, rolling true range sum
-- `sar_utils.py` — acceleration factor logic, SAR point stepping
+- `trend/trend_calculation_utils.py` — true range, ATR helper, directional movement, rolling true range sum
+- `trend/sar_utils.py` — acceleration factor logic, SAR point stepping
 
 ### Volume (13 functions)
 MFI, OBV, OBV Slope, PVT, Chaikin Money Flow, Accumulation/Distribution Line, Force Index, Ease of Movement, Volume Profile, Rolling VWAP, TWAP, Average Quote Volume, CCI
@@ -122,8 +122,8 @@ ATR, Bollinger Bands (upper/lower/%B/width), Chandelier Exit (long/short), VHF, 
 Kurtosis, Skewness, Standard Deviation, Variance, Z-Score, MAD, Quantile, Entropy, Hurst Exponent, Linear Regression (slope/r²/intercept), APA Adaptive EOT, EOT Calculation
 
 **Utility sub-package** `statistical/utils/`:
-- `correlation_analysis.py` — 4 functions: autocorrelation, rolling correlation, cross-correlation, Spearman rank
-- `dsp_filters.py` — 2 functions: low-pass filter, high-pass filter (basic IIR-style)
+- `statistical/utils/correlation_analysis.py` — 4 functions: autocorrelation, rolling correlation, cross-correlation, Spearman rank
+- `statistical/utils/dsp_filters.py` — 2 functions: low-pass filter, high-pass filter (basic IIR-style)
 
 ### Support/Resistance (9 functions)
 Support & Resistance (basic), Find S/R (swing-point based), Advanced S/R (cluster detection), Pivot Points (classic), Fibonacci Pivot Points, Fibonacci Retracement, Floating Levels, Fibonacci Bollinger Bands

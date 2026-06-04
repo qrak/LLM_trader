@@ -110,19 +110,12 @@ The `PromptBuilder` composes the system prompt from these sections:
 **Weekly Macro** uses 200W SMA methodology: 5 bullish/bearish criteria scored for cycle phase confidence.
 
 ### PatternEngine (`pattern_engine/`)
+
 All detection is Numba `@njit(cache=True)` compiled for performance.
 
-**Chart Patterns** (via `pattern_matchers.py`):
-| Pattern | Tolerance | Min Swings |
-|---------|-----------|------------|
-| Head & Shoulders | 3.5% shoulder diff | 3 swing points |
-| Double Top/Bottom | 3.5% price diff | 2 swing points |
-| Triangle | Monotonic check | 5 swing points |
-| Wedge | Both sides same direction | 5 swing points |
-| Channel | Slope diff < 0.1 | 4 swings each side |
-| Multiple Tops/Bottoms | 3.5% tolerance | 3+ swing points |
+**Chart Patterns** are visually detected by the LLM from the chart image (via `ChartGenerator`). The `PatternAnalyzer` (`pattern_analyzer.py`) orchestrates indicator pattern detection only.
 
-**Indicator Patterns** (via `indicator_pattern_engine.py`):
+**Indicator Patterns** (via `pattern_engine/indicator_patterns/indicator_pattern_engine.py`):
 7 categories — RSI (oversold/overbought, W-bottom, M-top), MACD (crossovers, histogram), Divergence (bull/bear with 5-candle min spacing), Volume (spike, climax, dry-up, accumulation/distribution), Stochastic (oversold/overbought, crossovers), MA Crossovers (golden/death, alignments), Volatility (ATR spike, BB squeeze, TTM squeeze).
 
 ### ChartGenerator (`pattern_engine/chart_generator.py`)
