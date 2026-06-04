@@ -27,7 +27,7 @@ LLM Trader does **not** use TA-Lib or pandas-ta. Every indicator is implemented 
 ### Layer Diagram
 
 ```
-TechnicalIndicators (facade — 890 lines, methods directly on class)
+TechnicalIndicators (facade — 862 lines, methods directly on class)
   └── IndicatorBase (data holder — 160 lines)
         ├── get_data(OHLCV) → numpy arrays
         └── calculate_indicator(func, *args) → timing + CSV logging wrapper
@@ -185,7 +185,7 @@ Several bugs were found and fixed during development that would have been invisi
 | Scenario | Handling |
 |----------|----------|
 | **Zero volume array** | Division by zero guards in VWAP, MFI, CMF — result `np.nan` with downstream fallback |
-| **Flat price (all identical)** | RSI = 100 (static at oversold boundary), ADX = 0, volatility = 0 |
+| **Flat price (all identical)** | RSI = 100 (overbought/no-loss endpoint — average loss is zero), ADX = 0, volatility = 0 |
 | **Single candle** | All indicators return all-NaN — `required_length` validation catches this upstream |
 | **Non-float64 input** | `get_data()` normalizes to `np.float64` — int/timestamps auto-converted |
 | **Extreme values (>1e10)** | Floating point saturation possible — no explicit clamp (BTC/USDC at <10⁶ is safe) |

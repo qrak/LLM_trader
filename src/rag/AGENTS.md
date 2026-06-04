@@ -19,7 +19,7 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 | `NewsManager` | `news_manager.py` | Fetch → deduplicate → persist news lifecycle |
 | `NewsRepository` | `news_repository.py` | Read/write interface for news storage |
 | `ContextBuilder` | `context_builder.py` | Keyword search + token-limited context formatting |
-| `ScoringPolicy` | `scoring_policy.py` | 5-factor relevance scoring for news articles |
+| `ArticleScoringPolicy` | `scoring_policy.py` | 5-factor relevance scoring for news articles |
 | `LocalTaxonomy` | `local_taxonomy.py` | Domain-specific crypto category hierarchy |
 | `TickerManager` | `ticker_manager.py` | Coin/ticker ↔ name mapping for symbol detection |
 | `ArticleProcessor` | `article_processor.py` | Normalization, body extraction, boilerplate stripping |
@@ -48,7 +48,7 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 
 ### From Configuration
 - `config/config.ini`: news update interval (4h), max articles (5)
-- `rag_priorities.json`: per-ticker/category priority weights
+- `rag_priorities.json`: important categories and generic category priorities (not per-ticker weights)
 - `LocalTaxonomy`: predefined category hierarchy for news classification
 
 ### From Query (Consumer-side — AnalysisEngine)
@@ -91,21 +91,23 @@ ArticleProcessor (dedup, normalize, strip boilerplate)
     ↓
 CategoryProcessor → LocalTaxonomy mapping
     ↓
-ScoringPolicy (5-factor relevance scoring)
+ArticleScoringPolicy (5-factor relevance scoring)
     ↓
-CollisionResolver (handle cache collisions)
+CategoryCollisionResolver (category-word priority collisions in collision_resolver.py)
     ↓
 NewsRepository → IndexManager (category/tag/coin/keyword)
     ↓
 ContextBuilder → token-limited formatted context block
 ```
 
-### Scoring Policy — 5 Factors
+### Scoring Policy — Scoring Factors
+
+Current scoring uses keyword, category, coin, importance, density, cooccurrence, coin-relevance, and recency logic (no source-authority weighting).
+
 1. **Recency** — newer articles score higher
-2. **Source authority** — configured per-source weights
-3. **Ticker relevance** — coin/ticker mention count
-4. **Category match** — alignment with trading pair category
-5. **Body length / completeness** — penalizes truncated or thin articles
+2. **Ticker relevance** — coin/ticker mention count
+3. **Category match** — alignment with trading pair category
+4. **Body length / completeness** — penalizes truncated or thin articles
 
 ### Enrichment Fallback Chain
 ```
@@ -120,10 +122,10 @@ Crawl4AI (primary) → aiohttp direct fetch (degradation) → store raw RSS text
 |----------|----------|
 | **Crawl4AI unavailable** | Degrades gracefully to aiohttp direct fetch |
 | **RSS feed down** | Skips source, logs warning, continues with other sources |
-| **Duplicate article detected** | `CollisionResolver` uses body-length-aware dedup (exact + fuzzy matching) |
+| **Duplicate article detected** | Article deduplication is URL-first via `news_manager.py` and `rss_primitives.py` (no fuzzy matching) |
 | **Empty news cycle** | Returns empty context — AnalysisEngine continues without news |
 | **Provider rate-limited** | Cache fallback — serves stale data from `news_cache/` |
-| **Body too short (<100 chars)** | Treated as low-quality, penalized in scoring |
+| **Body too short / low density** | Density penalty defaults to 300 in `loader.py`; body re-enrichment threshold mirrors 400 in `news_manager.py` |
 | **Token limit exceeded** | `ContextBuilder` truncates to token budget, keeps highest-scored articles |
 | **Index corruption** | `file_handler.py` provides file-based fallback storage |
 | **New ticker not in TickerManager** | Dynamic symbol detection with name→ticker resolution |

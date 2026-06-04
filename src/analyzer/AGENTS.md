@@ -111,9 +111,9 @@ The `PromptBuilder` composes the system prompt from these sections:
 
 ### PatternEngine (`pattern_engine/`)
 
-All detection is Numba `@njit(cache=True)` compiled for performance.
+All deterministic indicator-pattern detection is Numba `@njit(cache=True)` compiled for performance.
 
-**Chart Patterns** are visually detected by the LLM from the chart image (via `ChartGenerator`). The `PatternAnalyzer` (`pattern_analyzer.py`) orchestrates indicator pattern detection only.
+**Chart Patterns** are visually detected by the LLM from the chart image (via `ChartGenerator`, processed through `analysis_result_processor.py`). The `PatternAnalyzer` (`pattern_analyzer.py`) orchestrates indicator pattern detection only, delegating to `IndicatorPatternEngine` (`indicator_pattern_engine.py`).
 
 **Indicator Patterns** (via `pattern_engine/indicator_patterns/indicator_pattern_engine.py`):
 7 categories — RSI (oversold/overbought, W-bottom, M-top), MACD (crossovers, histogram), Divergence (bull/bear with 5-candle min spacing), Volume (spike, climax, dry-up, accumulation/distribution), Stochastic (oversold/overbought, crossovers), MA Crossovers (golden/death, alignments), Volatility (ATR spike, BB squeeze, TTM squeeze).

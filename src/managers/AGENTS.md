@@ -161,7 +161,7 @@ The Provider Orchestrator manages the **AI provider lifecycle and fallback chain
 **Text requests:**
 ```
 Primary: googleai (Gemini 3.5 Flash)
-  → Rate limited / auth error? → googleai paid tier
+  → Rate limited / overloaded? → googleai paid tier (auth errors fall through to next provider)
   → Still failing? → local (LM Studio, text-only path)
   → Still failing? → openrouter (configured base model)
   → Still failing? → openrouter fallback model
@@ -171,7 +171,7 @@ Primary: googleai (Gemini 3.5 Flash)
 **Chart (multimodal) requests:**
 ```
 Primary: googleai (Gemini 3.5 Flash)
-  → Rate limited / auth error? → googleai paid tier
+  → Rate limited / overloaded? → googleai paid tier (auth errors fall through to next provider)
   → Still failing? → openrouter (configured base model)
   → Still failing? → openrouter fallback model
   → All providers failed? → HOLD with error
