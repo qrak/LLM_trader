@@ -39,7 +39,7 @@ flowchart TB
 
     subgraph AnalysisLayer["Analysis Layer"]
         TA["Analysis Engine Agent<br/>Technical Calculator<br/>40+ Indicators<br/><a href='./src/analyzer/AGENTS.md'>📄 README</a>"]
-        PE["Pattern Engine<br/>Chart Patterns +<br/>Indicator Patterns<br/>Numba JIT compiled"]
+        PE["Pattern Engine<br/>Deterministic Indicator<br/>Pattern Detection<br/>Numba JIT compiled"]
         CGEN["Chart Generator<br/>4K PNG Candlestick<br/>SMA/RSI/Volume/CMF+OBV"]
     end
 
@@ -134,8 +134,8 @@ flowchart TB
 AnalysisEngine.analyze_market()
   ├── MarketDataCollector → DataFetcher (OHLCV + order book + trade flow)
   ├── TechnicalCalculator (40+ indicators) + LongTerm data + Weekly macro
-  ├── PatternAnalyzer (chart patterns + indicator patterns)
-  ├── ChartGenerator (4K PNG)
+  ├── PatternAnalyzer → IndicatorPatternEngine (deterministic indicator-pattern kernels)
+  ├── ChartGenerator (4K PNG) → LLM visual chart-pattern analysis (via analysis_result_processor.py)
   ├── RAG context retrieval
   ├── Brain context injection (confidence + rules similar to current conditions)
   ├── AI provider call → TradingAnalysisResponseModel
@@ -284,7 +284,7 @@ LLM_trader/
 ├── config/
 │   ├── config.ini               # Active configuration
 │   ├── model_pricing.json       # Per-model cost data
-│   └── rag_priorities.json      # News source priority weights
+│   └── rag_priorities.json      # Category/generic RAG priority config (important_categories + generic_priorities)
 ├── src/
 │   ├── app.py                   # Main application wiring
 │   ├── trading/                 # 🧠 Brain Agent + Strategy + Monitors
@@ -303,7 +303,7 @@ LLM_trader/
 │   │   ├── technical_calculator.py # 40+ indicators
 │   │   ├── pattern_engine/      # Chart + indicator patterns
 │   │   ├── prompts/             # System prompt construction
-│   │   ├── formatters/          # Context formatting (5 modules)
+│   │   ├── formatters/          # Context formatting (4 non-init source modules)
 │   │   ├── data_fetcher.py      # Exchange data abstraction
 │   │   └── ...                  # 15+ supporting modules
 │   ├── rag/                     # 📰 RAG Engine

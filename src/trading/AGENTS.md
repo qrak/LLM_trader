@@ -172,7 +172,7 @@ if hours_since_last < self._min_update_interval_hours:
 
 | Scenario | Handling |
 |----------|----------|
-| **Empty SQLite trade history** | `get_context()` returns empty string — brain section skipped entirely in prompt |
+| **No prior trade data** | `get_context()` builds context from vector memory (blocked-trade feedback, similar experiences, semantic rules); if all are empty, it returns an empty string and the brain section is skipped |
 | **Insufficient data for reflection** | <5 wins → skip best-practice; <3 losses → skip loss reflection; <2 mistakes → skip AI mistake reflection |
 | **Low win rate (<60%)** | Best-practice rule rejected |
 | **Single-occurrence patterns** | Skipped (need ≥3 wins / ≥2 losses / ≥2 mistakes for pattern) |
