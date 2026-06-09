@@ -1,17 +1,15 @@
 <#
-start_script.ps1
-Purpose: Prepare .venv, ensure on 'main' git branch (if repo), install requirements, and run start.py
-Usage: pwsh.exe -File .\scripts\start_script.ps1 [symbol] [-Timeframe <tf>]
+start_script_release_candidate_rc2.ps1 (scripts/)
+Purpose: Prepare .venv, ensure on 'release/v1.0-rc2' git branch when available, install requirements, and run start.py
+Usage: pwsh.exe -File .\scripts\start_script_release_candidate_rc2.ps1 [symbol] [-Timeframe <tf>]
 Examples:
-  .\scripts\start_script.ps1                           # Run with default from config.ini
-  .\scripts\start_script.ps1 ETH/USDT                  # Trade ETH/USDT
-  .\scripts\start_script.ps1 BTC/USDT -Timeframe 4h    # Trade BTC/USDT on 4h timeframe
-  .\scripts\start_script.ps1 -SkipInstall              # Skip pip install step
+    .\scripts\start_script_release_candidate_rc2.ps1
+    .\scripts\start_script_release_candidate_rc2.ps1 BTC/USDC -Timeframe 4h
 Parameters:
-  -Symbol <string>     Trading symbol (e.g., BTC/USDT, ETH/USDT)
-  -Timeframe <string>  Timeframe for trading (e.g., 1h, 4h, 1d)
-  -Venv <path>         Path to virtual environment relative to repository root (default: .venv)
-  -SkipInstall         Skip pip install step
+  -Symbol <pair>       Optional trading pair override.
+  -Timeframe <tf>      Optional timeframe override.
+  -Venv <path>         Path to virtual environment (default: .venv).
+  -SkipInstall         Skip pip install step.
 #>
 param(
     [string]$Symbol = "",
@@ -21,6 +19,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$ReleaseBranch = 'release/v1.0-rc2'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $VenvPath = Join-Path $RepoRoot $Venv
@@ -29,25 +28,26 @@ $RequirementsPath = Join-Path $RepoRoot 'requirements.txt'
 $StartPath = Join-Path $RepoRoot 'start.py'
 $GitPath = Join-Path $RepoRoot '.git'
 
-Write-Host "== scripts/start_script.ps1 (main) =="
+Write-Host "== scripts/start_script_release_candidate_rc2.ps1 ($ReleaseBranch) =="
+Write-Host "Graceful stop: use Ctrl+C (app shows confirmation popup)." -ForegroundColor Yellow
+Write-Host "Closing the terminal window/tab with X terminates host process immediately." -ForegroundColor Yellow
 Write-Host "Repository root: $RepoRoot"
 
-# Checkout branch if this is a git repo
 if (Test-Path $GitPath) {
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-        Write-Host "Switching to 'main' branch..."
+    Write-Host "Switching to '$ReleaseBranch' branch (Release Candidate 2)..."
+    try {
         git -C $RepoRoot fetch --all --prune
-        git -C $RepoRoot checkout main
+        git -C $RepoRoot checkout $ReleaseBranch
     }
-    else {
-        Write-Host "Git command not found; skipping branch checkout."
+    catch {
+        Write-Host "Git branch checkout failed; continuing with the current working tree." -ForegroundColor Yellow
+        Write-Host $_.Exception.Message -ForegroundColor Yellow
     }
 }
 else {
     Write-Host "No .git folder found; skipping branch checkout."
 }
 
-# Create virtual environment if missing
 if (-not (Test-Path $VenvPath)) {
     Write-Host "Creating virtual environment at '$VenvPath'..."
     python -m venv $VenvPath
@@ -58,7 +58,7 @@ else {
 
 if (-not (Test-Path $ActivatePath)) {
     Write-Host "Activation script not found at $ActivatePath"
-    Write-Host "If the venv was just created, ensure Python created Scripts/Activate.ps1."
+    Write-Host "If the venv was just created, ensure Python created the Scripts/Activate.ps1 file."
     exit 1
 }
 
@@ -71,18 +71,17 @@ if (-not $SkipInstall) {
         $reqs = Get-Content $RequirementsPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($_ -match '^(\s*#)') }
         $installed = & pip freeze
         $missing = @()
-        foreach ($r in $reqs) {
-            $name = ($r -split '[=<>!~]')[0].Trim()
-            if ($r -match '==') {
-                $pattern = '^' + [regex]::Escape($r) + '$'
-                if (-not ($installed -match $pattern)) { $missing += $r }
+        foreach ($req in $reqs) {
+            $name = ($req -split '[=<>!~]')[0].Trim()
+            if ($req -match '==') {
+                $pattern = '^' + [regex]::Escape($req) + '$'
+                if (-not ($installed -match $pattern)) { $missing += $req }
             }
             else {
                 $pattern = '^' + [regex]::Escape($name) + '=='
-                if (-not ($installed -match $pattern)) { $missing += $r }
+                if (-not ($installed -match $pattern)) { $missing += $req }
             }
         }
-
         if ($missing.Count -eq 0) {
             Write-Host "All requirements satisfied; skipping pip install."
         }
@@ -98,13 +97,15 @@ if (-not $SkipInstall) {
     }
 }
 else {
-    Write-Host "Skipping dependency installation (--SkipInstall provided)."
+    Write-Host "Skipping dependency installation (-SkipInstall provided)."
 }
+
+Set-Location $RepoRoot
 
 if (Test-Path $StartPath) {
     $startArgs = @()
     if ($Symbol) { $startArgs += $Symbol }
-    if ($Timeframe) { $startArgs += "-t", $Timeframe }
+    if ($Timeframe) { $startArgs += '-t', $Timeframe }
 
     if ($startArgs.Count -gt 0) {
         Write-Host "Running start.py with arguments: $($startArgs -join ' ')..."
@@ -117,7 +118,7 @@ if (Test-Path $StartPath) {
 
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
-        Write-Host "`n=== Process exited with error code: $exitCode ===" -ForegroundColor Red
+        Write-Host "`n=== Process exited with error code: $exitCode ===`n" -ForegroundColor Red
     }
 }
 else {

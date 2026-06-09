@@ -2,9 +2,9 @@
 set -euo pipefail
 
 #
-# start_script_macos.sh
-# Purpose: Prepare .venv, ensure on 'main' git branch (if repo), install requirements, and run start.py
-# Usage: ./scripts/start_script_macos.sh [symbol] [-t timeframe] [--skip-install]
+# start_script_release_candidate_linux.sh
+# Purpose: Prepare .venv, ensure on 'release/v1.0-rc1' git branch (if repo), install requirements, and run start.py
+# Usage: ./scripts/start_script_release_candidate_linux.sh [symbol] [-t timeframe] [--skip-install]
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: ./scripts/start_script_macos.sh [symbol] [-t timeframe] [--skip-install]"
+            echo "Usage: ./scripts/start_script_release_candidate_linux.sh [symbol] [-t timeframe] [--skip-install]"
             exit 0
             ;;
         *)
@@ -43,14 +43,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "== scripts/start_script_macos.sh (main) =="
+echo "== scripts/start_script_release_candidate_linux.sh (release/v1.0-rc1) =="
+echo "Graceful stop: use Ctrl+C (app shows confirmation popup)."
 echo "Repository root: ${REPO_ROOT}"
 
 if [[ -d "${REPO_ROOT}/.git" ]]; then
     if command -v git >/dev/null 2>&1; then
-        echo "Switching to 'main' branch..."
+        echo "Switching to 'release/v1.0-rc1' branch (Release Candidate)..."
         git -C "${REPO_ROOT}" fetch --all --prune
-        git -C "${REPO_ROOT}" checkout main
+        git -C "${REPO_ROOT}" checkout release/v1.0-rc1
     else
         echo "Git command not found; skipping branch checkout."
     fi
@@ -95,5 +96,7 @@ if [[ ${#START_ARGS[@]} -gt 0 ]]; then
 else
     echo "Running start.py with default settings..."
 fi
+
+cd "${REPO_ROOT}"
 
 "${PYTHON_BIN}" "${REPO_ROOT}/start.py" "${START_ARGS[@]}"

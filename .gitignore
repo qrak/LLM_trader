@@ -53,3 +53,5 @@ config/config.ini
 keys.env
 *.env
 node_modules/
+website/.astro/
+website/dist/

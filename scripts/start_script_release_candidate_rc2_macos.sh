@@ -2,9 +2,9 @@
 set -euo pipefail
 
 #
-# start_script_linux.sh
-# Purpose: Prepare .venv, ensure on 'main' git branch (if repo), install requirements, and run start.py
-# Usage: ./scripts/start_script_linux.sh [symbol] [-t timeframe] [--skip-install]
+# start_script_release_candidate_rc2_macos.sh
+# Purpose: Prepare .venv, ensure on 'release/v1.0-rc2' git branch when available, install requirements, and run start.py
+# Usage: ./scripts/start_script_release_candidate_rc2_macos.sh [symbol] [-t timeframe] [--skip-install]
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENV_PATH="${REPO_ROOT}/.venv"
 PYTHON_BIN="${VENV_PATH}/bin/python"
 PIP_BIN="${VENV_PATH}/bin/pip"
+RELEASE_BRANCH="release/v1.0-rc2"
 
 SYMBOL=""
 TIMEFRAME=""
@@ -28,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: ./scripts/start_script_linux.sh [symbol] [-t timeframe] [--skip-install]"
+            echo "Usage: ./scripts/start_script_release_candidate_rc2_macos.sh [symbol] [-t timeframe] [--skip-install]"
             exit 0
             ;;
         *)
@@ -43,14 +44,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "== scripts/start_script_linux.sh (main) =="
+echo "== scripts/start_script_release_candidate_rc2_macos.sh (${RELEASE_BRANCH}) =="
+echo "Graceful stop: use Ctrl+C (app shows confirmation popup)."
 echo "Repository root: ${REPO_ROOT}"
 
 if [[ -d "${REPO_ROOT}/.git" ]]; then
     if command -v git >/dev/null 2>&1; then
-        echo "Switching to 'main' branch..."
-        git -C "${REPO_ROOT}" fetch --all --prune
-        git -C "${REPO_ROOT}" checkout main
+        echo "Switching to '${RELEASE_BRANCH}' branch (Release Candidate 2)..."
+        git -C "${REPO_ROOT}" fetch --all --prune || true
+        git -C "${REPO_ROOT}" checkout "${RELEASE_BRANCH}" 2>/dev/null || {
+            echo "Git branch checkout failed; continuing with the current working tree." >&2
+        }
     else
         echo "Git command not found; skipping branch checkout."
     fi
@@ -95,5 +99,7 @@ if [[ ${#START_ARGS[@]} -gt 0 ]]; then
 else
     echo "Running start.py with default settings..."
 fi
+
+cd "${REPO_ROOT}"
 
 "${PYTHON_BIN}" "${REPO_ROOT}/start.py" "${START_ARGS[@]}"
