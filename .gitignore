@@ -55,3 +55,6 @@ keys.env
 node_modules/
 website/.astro/
 website/dist/
+
+# AI-generated artifacts (plans, drafts, research — never committed)
+.ai/
