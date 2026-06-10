@@ -33,13 +33,14 @@ python start.py               # dashboard at http://localhost:8000
 
 | Script | Purpose |
 |--------|---------|
+| `scripts/start_script_main.ps1` | Start the bot (Windows) |
+| `scripts/start_script_main_linux.sh` | Start the bot (Linux) |
+| `scripts/start_script_main_macos.sh` | Start the bot (macOS) |
 | `scripts/start_website.ps1` | Start the Astro landing page (Windows) |
 | `scripts/start_website_linux.sh` | Start the Astro landing page (Linux) |
 | `scripts/start_website_macos.sh` | Start the Astro landing page (macOS) |
 | `scripts/run_all_tests.sh` | Run full test suite in `.venv` |
 | `scripts/query_trade_history.py` | CLI utility to inspect SQLite trade history |
-
-Start scripts for other branches (develop, release) live on their respective branches — checkout first, then run.
 </details>
 
 ### Runtime Controls
