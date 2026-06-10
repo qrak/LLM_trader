@@ -84,6 +84,13 @@ class BrainExperienceRecorder:
         """Extract insights from a closed trade and store them in vector memory."""
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
+        # Surprise ratio: |realized P&L - expected P&L at entry| / expected P&L
+        # Measures how much the outcome differed from the TP thesis at entry.
+        # High surprise on a win = lucky outcome, not evidence of correct reasoning.
+        expected_pnl_pct = position.tp_distance_pct * 100
+        surprise_ratio = round(
+            abs(pnl_pct - expected_pnl_pct) / max(abs(expected_pnl_pct), 0.01), 4
+        )
         conditions = market_conditions or MarketConditions()
         exit_execution_context = build_exit_execution_context_from_position(position).with_defaults(
             self.default_exit_execution_context
@@ -126,6 +133,7 @@ class BrainExperienceRecorder:
                 "volatility_level": position.volatility_level,
                 "sl_distance_pct": position.sl_distance_pct,
                 "tp_distance_pct": position.tp_distance_pct,
+                "surprise_ratio": surprise_ratio,
                 "rr_ratio": position.rr_ratio_at_entry,
                 "max_drawdown_pct": position.max_drawdown_pct,
                 "max_profit_pct": position.max_profit_pct,

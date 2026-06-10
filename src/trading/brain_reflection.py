@@ -89,6 +89,10 @@ class BrainReflectionEngine:
                 return
             group_metas = [meta for meta in all_metas if build_win_key(meta) == pattern_key]
             metrics = self.analyzer.compute_group_metrics(group_metas)
+            # Average surprise ratio for the group — high values indicate
+            # outcomes driven by luck rather than thesis accuracy.
+            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in group_metas if m.get("surprise_ratio") is not None]
+            avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             if metrics["win_rate"] < 0.6:
                 self.logger.debug(
                     "Pattern %s rejected: win rate %s < 60%% (%s/%s trades)",
@@ -104,8 +108,12 @@ class BrainReflectionEngine:
             rule_text = (
                 f"{direction} trades perform well in {regime} market with {adx_level}. "
                 f"Exit profile: {exit_profile}. "
-                f"({win_count} wins, {losses} losses — {metrics['win_rate']:.0%} win rate)"
+                f"({win_count} wins, {losses} losses — {metrics['win_rate']:.0%} win rate"
             )
+            if avg_surprise > 0:
+                flag = " ⚠️ high surprise" if avg_surprise > 1.5 else ""
+                rule_text += f", avg surprise: {avg_surprise:.2f}{flag}"
+            rule_text += ")"
             rule_id = f"rule_best_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
             stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
@@ -154,6 +162,8 @@ class BrainReflectionEngine:
                 return
             group_metas = [meta for meta in all_metas if build_loss_key(meta) == pattern_key]
             metrics = self.analyzer.compute_group_metrics(group_metas)
+            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in group_metas if m.get("surprise_ratio") is not None]
+            avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             failure_reason = self.analyzer.derive_failure_reason(metrics)
             recommended_adjustment = self.analyzer.derive_recommended_adjustment(metrics)
             sample_meta = group_metas[0] if group_metas else {}
@@ -166,8 +176,11 @@ class BrainReflectionEngine:
             rule_text = (
                 f"{type_label}: {direction} trades in {regime} market often exit via {close_reason}. "
                 f"Exit profile: {exit_profile}. "
-                f"({loss_count} losses, {metrics['wins']} wins — {metrics['win_rate']:.0%} win rate)"
+                f"({loss_count} losses, {metrics['wins']} wins — {metrics['win_rate']:.0%} win rate"
             )
+            if avg_surprise > 0:
+                rule_text += f", avg surprise: {avg_surprise:.2f}"
+            rule_text += ")"
             rule_id = f"rule_{rule_type}_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
             stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
@@ -240,6 +253,8 @@ class BrainReflectionEngine:
             base_key = "|".join(base_parts[1:])
             comparison_group = [meta for meta in all_metas if build_base_key(meta) == base_key]
             metrics = self.analyzer.compute_group_metrics(comparison_group or matched_mistakes)
+            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in (comparison_group or matched_mistakes) if m.get("surprise_ratio") is not None]
+            avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             failed_assumption = self.analyzer.derive_ai_assumption(matched_mistakes)
             failure_reason = self.analyzer.derive_ai_mistake_reason(
                 matched_mistakes, mistake_type, failed_assumption
@@ -249,8 +264,11 @@ class BrainReflectionEngine:
                 f"🧠 AI MISTAKE: {confidence} confidence {direction} calls in {regime} market repeated "
                 f"{mistake_type.replace('_', ' ')}. Exit profile: {metrics['dominant_exit_profile']}. "
                 f"Failed assumption: {failed_assumption}. "
-                f"({mistake_count} mistake(s), {metrics['win_rate']:.0%} win rate in comparable trades)"
+                f"({mistake_count} mistake(s), {metrics['win_rate']:.0%} win rate in comparable trades"
             )
+            if avg_surprise > 0:
+                rule_text += f", avg surprise: {avg_surprise:.2f}"
+            rule_text += ")"
             rule_id = f"rule_ai_mistake_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
             stored = self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
