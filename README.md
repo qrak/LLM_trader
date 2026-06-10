@@ -29,21 +29,17 @@ python start.py               # dashboard at http://localhost:8000
 <details>
 <summary>Detailed setup for Windows, Linux, macOS →</summary>
 
-**Platform-specific scripts** live in `scripts/` — they handle venv creation, dependency install, and branch checkout:
+**Platform-specific scripts** live in `scripts/` — they handle venv creation, dependency install, and startup:
 
-| Platform | Command |
-|----------|---------|
-| Windows PowerShell | `pwsh -File .\scripts\start_script.ps1` |
-| Linux | `bash ./scripts/start_script_linux.sh` |
-| macOS | `bash ./scripts/start_script_macos.sh` |
+| Script | Purpose |
+|--------|---------|
+| `scripts/start_website.ps1` | Start the Astro landing page (Windows) |
+| `scripts/start_website_linux.sh` | Start the Astro landing page (Linux) |
+| `scripts/start_website_macos.sh` | Start the Astro landing page (macOS) |
+| `scripts/run_all_tests.sh` | Run full test suite in `.venv` |
+| `scripts/query_trade_history.py` | CLI utility to inspect SQLite trade history |
 
-Optional symbol and timeframe override:
-
-```bash
-bash ./scripts/start_script_linux.sh ETH/USDT -t 4h
-```
-
-See `scripts/` for all available start scripts per branch.
+Start scripts for other branches (develop, release) live on their respective branches — checkout first, then run.
 </details>
 
 ### Runtime Controls
@@ -82,6 +78,8 @@ See `scripts/` for all available start scripts per branch.
 ---
 
 ## Architecture
+
+> **Also in this repo:** [`website/`](website/) is a standalone Astro landing page for the project, deployable separately from the trading dashboard.
 
 ```mermaid
 flowchart TB
@@ -158,23 +156,28 @@ Key settings in `config/config.ini`:
 | `provider` | googleai | AI provider (googleai, openrouter, lmstudio) |
 | `demo_quote_capital` | 10000 | Simulated capital |
 | `max_position_size` | 0.10 | Max position as fraction of capital |
-| `stop_loss_type` | soft | soft (candle close) or hard (interval check) |
+| `stop_loss_type` | hard | hard (interval check) or soft (candle close) |
 
 Required API keys in `keys.env`:
 
 | Variable | Required | For |
 |----------|----------|-----|
 | `GOOGLE_STUDIO_API_KEY` | Yes | Primary AI provider (free tier) |
+| `GOOGLE_STUDIO_PAID_API_KEY` | If used | Paid tier Google AI |
 | `OPENROUTER_API_KEY` | If used | Secondary AI provider |
-| `COINGECKO_API_KEY` | No | Market metrics |
+| `BOT_TOKEN_DISCORD` | If used | Discord notifications |
+| `MAIN_CHANNEL_ID` | If used | Discord notification channel |
+| `COINGECKO_API_KEY` | No | Market metrics (rate limit boost) |
+| `HF_TOKEN` | No | HuggingFace model access |
 
 ---
 
-## Coming Next
+## Roadmap
 
-- [ ] **Multiple Trading Agent Personalities** — Conservative, aggressive, contrarian, trend-following strategists
-- [ ] **Multi-Model Consensus** — "Council of Models" architecture for collective decision-making
-- [ ] **Live Trading** — Exchange order execution layer (plan at `.ai/plans/real_trading_implementation_plan.md`)
+- **Multiple Trading Agent Personalities** — Conservative, aggressive, contrarian, trend-following strategists *(aspirational)*
+- **Multi-Model Consensus** — "Council of Models" architecture for collective decision-making *(aspirational)*
+- **Live Trading** — Exchange order execution layer *(plan at `.ai/plans/real_trading_implementation_plan.md`)*
+- **Admin Dashboard** — Web GUI for bot configuration (replaces manual `config.ini` editing) *(plan at `.ai/plans/admin-dashboard-plan.md`)*
 
 ---
 
