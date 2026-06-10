@@ -342,8 +342,9 @@ LLM_trader/
 ├── website/                     # Astro 5 + Tailwind landing page
 ├── scripts/                     # Cross-platform startup scripts
 │   └── install_agent_terminal_guard.ps1 # Optional session-local PowerShell literal ^U guard
-└── docs/
-    └── plans/                   # Planning documents
+├── docs/
+├── .ai/
+│   └── plans/                   # AI-generated planning documents (gitignored)
 ```
 
 ---
