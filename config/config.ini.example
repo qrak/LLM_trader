@@ -1,6 +1,6 @@
 # === AI Providers ===
 [ai_providers]
-# local | googleai | openrouter | blockrun | all
+# local | googleai | openrouter | all
 provider = googleai
 
 # LM Studio (local)
