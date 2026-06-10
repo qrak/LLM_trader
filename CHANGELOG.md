@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-06-10 — Ticker Fetch Retry + Cascading Error Protection
+
+### Fixed
+
+- **Ticker fetch retries restored** (`src/app.py`): Applied `@retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)` to `_fetch_current_ticker()` and removed the internal `try/except Exception` that swallowed all errors before the decorator could see them. Transient network errors, timeouts, and rate limits now retry with exponential backoff; non-retryable exchange errors (e.g. `BadSymbol`) propagate immediately. The startup ticker fetch (`run()`) wraps the call in a try/except that logs and continues without a price.
+- **Zero-division guard in notifier** (`src/notifiers/base_notifier.py`): `calculate_stop_target_distances()` returns `(0.0, 0.0)` when `current_price` is `None` or `<= 0`, preventing the cascading `ZeroDivisionError` in `send_position_status`.
+- **Skip status on unavailable price** (`src/trading/position_status_monitor.py`): `_loop()` and `handle_new_position()` now skip the position-status notification when the ticker price is unavailable instead of sending a misleading `$0.00`.
+
+### Added
+
+- **Ticker retry tests** (`tests/test_ticker_retry.py`): Covers retry-then-succeed on `RequestTimeout`/`RateLimitExceeded`, exhaustion on `ClientConnectorError`, non-retry on `BadSymbol`, the zero/None price guard, and the monitor skip-on-no-price behavior.
+
+### Validation
+
+- Focused pytest: `tests/test_ticker_retry.py tests/test_brain_integration.py -q` -> **66 passed**.
+
+## 2026-06-10 — Invalidation Check Prompt + Surprise Ratio Reflection (Pass 12)
+
+### Added
+
+- **Step 5.5 invalidation check** (`src/analyzer/prompts/template_manager.py`): Replaced the generic "BULL vs BEAR CASE: Which side wins?" with a falsification-based prompt that forces the model to name a specific price level or indicator condition that would prove its signal wrong. Signals without a falsifiable invalidation trigger are rejected (HOLD).
+- **Surprise ratio computation** (`src/trading/brain_experience.py`): On every closed trade, the system now computes `surprise_ratio = |realized_pnl - expected_pnl| / |expected_pnl|` where expected P&L is the TP distance at entry. Stored in ChromaDB metadata as `surprise_ratio`.
+- **Surprise ratio in reflection rules** (`src/trading/brain_reflection.py`): All three reflection passes (best-practice, anti-pattern/corrective, AI-mistake) now compute the average surprise ratio for the trade group and include it in the rule text. Best-practice rules with `avg_surprise > 1.5` are flagged as "⚠️ high surprise" so the LLM can distinguish thesis-validated wins from lucky outcomes.
+- Overridden prompt section `5.5 BULL vs BEAR CASE` → `5.5 INVALIDATION CHECK` in the analysis steps.
+
+### Changed
+
+- `template_manager.py`: Step 5.5 in `build_analysis_steps()` rewritten from opinion-prompting to falsification-prompting.
+- `brain_experience.py`: `record_closed_trade()` computes and persists `surprise_ratio` in trade metadata.
+- `brain_reflection.py`: `trigger_reflection()`, `trigger_loss_reflection()`, and `trigger_ai_mistake_reflection()` all compute `avg_surprise` from grouped trades and surface it in rule text.
+
+### Validation
+
+- Focused AST parse: `src/analyzer/prompts/template_manager.py` → OK
+- AST parse: `src/trading/brain_experience.py` → OK
+- AST parse: `src/trading/brain_reflection.py` → OK
+- No breaking test changes: existing `test_prompt_consistency.py` and `test_template_manager.py` unaffected (step 5.5 string not under test assertion).
+
 ## 2026-05-29 — Timeframe-Aware Semantic Rule Freshness (Pass 11)
 
 ### Changed

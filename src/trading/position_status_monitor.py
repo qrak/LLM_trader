@@ -66,7 +66,11 @@ class PositionStatusMonitor:
         try:
             if current_price is None:
                 ticker = await self.fetch_current_ticker()
-                current_price = float(ticker.get('last', ticker.get('close', 0))) if ticker else 0.0
+                if ticker:
+                    current_price = float(ticker.get('last', ticker.get('close', 0)))
+                else:
+                    self.logger.warning("No ticker available for initial position status, skipping")
+                    return
 
             if self.notifier:
                 await self.notifier.send_position_status(
@@ -190,10 +194,10 @@ class PositionStatusMonitor:
                         await self.handle_position_closed(close_reason)
                         break
 
-                    if self.notifier and self.trading_strategy.current_position and self.exit_monitor.is_status_due(now, state):
+                    if self.notifier and self.trading_strategy.current_position and current_price is not None and self.exit_monitor.is_status_due(now, state):
                         await self.notifier.send_position_status(
                             position=self.trading_strategy.current_position,
-                            current_price=current_price if current_price is not None else 0.0,
+                            current_price=current_price,
                             channel_id=self.config.MAIN_CHANNEL_ID,
                         )
                         await self.save_state(last_status_sent_at=now)

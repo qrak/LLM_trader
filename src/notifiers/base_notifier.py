@@ -182,6 +182,8 @@ class BaseNotifier(ABC):
 
         Returns: tuple of (stop_distance_pct, target_distance_pct)
         """
+        if current_price is None or current_price <= 0:
+            return 0.0, 0.0
         if position.direction == 'LONG':
             stop_distance_pct = ((position.stop_loss - current_price) / current_price) * 100
             target_distance_pct = ((position.take_profit - current_price) / current_price) * 100

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, TYPE_CHECKING
 
 from src.logger.logger import Logger
+from src.utils.decorators import retry_async
 from src.utils.timeframe_validator import TimeframeValidator
 from src.managers.persistence_manager import PersistenceManager
 from src.trading import (
@@ -258,7 +259,10 @@ class CryptoTradingBot:
         else:
             self.logger.info("No existing position")
 
-        await self._fetch_current_ticker()
+        try:
+            await self._fetch_current_ticker()
+        except Exception:
+            self.logger.warning("Initial ticker fetch failed, continuing without price")
 
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
@@ -470,20 +474,17 @@ class CryptoTradingBot:
             generated_prompt = result.get("generated_prompt")
             self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
 
+    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:
         """Fetch current ticker from exchange."""
-        try:
-            if self.current_exchange is None or self.current_symbol is None:
-                return None
-            ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
-            if ticker and self.dashboard_state:
-                price = float(ticker.get('last', ticker.get('close', 0)))
-                if price > 0:
-                    await self.dashboard_state.update_price(price)
-            return ticker
-        except Exception as e:
-            self.logger.error("Error fetching current ticker: %s", e)
+        if self.current_exchange is None or self.current_symbol is None:
             return None
+        ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
+        if ticker and self.dashboard_state:
+            price = float(ticker.get('last', ticker.get('close', 0)))
+            if price > 0:
+                await self.dashboard_state.update_price(price)
+        return ticker
 
     async def _wait_for_next_timeframe(self):
         """Wait until the next timeframe candle starts."""

@@ -806,7 +806,9 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         analysis_steps += """
     Fear & Greed Index (extremes) | Asset alignment with market | Relevant events
 
-5.5. BULL vs BEAR CASE: Which side wins? If unclear, HOLD.
+5.5. INVALIDATION CHECK: Name the ONE specific price level or indicator condition
+     that would prove your signal wrong. If you cannot name a falsifiable invalidation
+     trigger, the signal is not actionable — HOLD.
 
 6. NEWS & SENTIMENT: Asset news, sentiment, institutional activity
 

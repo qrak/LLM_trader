@@ -138,7 +138,8 @@ AnalysisEngine.analyze_market()
   ├── ChartGenerator (4K PNG) → LLM visual chart-pattern analysis (via analysis_result_processor.py)
   ├── RAG context retrieval
   ├── Brain context injection (confidence + rules similar to current conditions)
-  ├── AI provider call → TradingAnalysisResponseModel
+  ├── AI provider call → TradingAnalysisResponseModel (prompt includes step 5.5 invalidation check:
+  │      model must name a specific invalidation trigger or HOLD)
   └── Structured dict returned to TradingStrategy
        ↓
 TradingStrategy.process_analysis()
@@ -238,8 +239,9 @@ Closed Trade ──▶ BrainExperienceRecorder ──▶ ChromaDB (vector memory
 
 Semantic-rule policy:
 - Active semantic rules are durable learned policy and are not deleted by age-only pruning.
-- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, and contradiction count.
+- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, contradiction count, and **surprise ratio** (see below).
 - Closed trades that match active rules update validation or contradiction metadata for later ranking.
+- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high surprise ratio (>1.5) means the outcome was driven by factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Rules derived from high-surprise trades carry a `⚠️ high surprise` annotation in their rule text, allowing the LLM to discount lucky outcomes when forming policy.
 - Inactive old rules may be physically pruned as storage maintenance; active rules should be deactivated by evidence, not age.
 
 ### 4.3 Trade Persistence
@@ -332,6 +334,11 @@ LLM_trader/
 │   └── utils/                   # Profiler, token counter, etc.
 ├── tests/                       # 63 test_*.py files + conftest.py
 ├── data/                        # Runtime state (not committed)
+├── logs/                        # Rotated daily log output
+│   └── Bot/                     # Logger name (defined in logger init)
+│       └── YYYY_MM_DD/          # One folder per day
+│           ├── Bot.log          # Full structured log (all levels)
+│           └── errors.log       # Error-level only log
 ├── website/                     # Astro 5 + Tailwind landing page
 ├── scripts/                     # Cross-platform startup scripts
 │   └── install_agent_terminal_guard.ps1 # Optional session-local PowerShell literal ^U guard
