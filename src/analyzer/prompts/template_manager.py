@@ -314,14 +314,6 @@ class TemplateManager:
             if trend_parts:
                 lines.append("- " + " | ".join(trend_parts))
 
-        confluence = analysis.get("confluence_factors")
-        if confluence:
-            cf_parts = [
-                f"{k.replace('_', ' ')}: {int(v)}" for k, v in confluence.items()
-            ]
-            if cf_parts:
-                lines.append(f"- Confluence: {', '.join(cf_parts)}")
-
         key_levels = analysis.get("key_levels")
         if key_levels:
             kl_parts = []
@@ -398,7 +390,6 @@ class TemplateManager:
             "- HOLD when bull/bear cases are both plausible, R/R is poor, or invalidation is unclear.",
             "- UPDATE only when an open-position thesis still holds AND changed SL/TP levels improve risk control or reward capture.",
             "- CLOSE immediately when original thesis is invalidated — don't wait for SL.",
-            "- Name the one condition that would prove your signal wrong.",
             "",
         ]
 
@@ -450,7 +441,6 @@ class TemplateManager:
                 "## Profit Maximization Strategy",
                 f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
                 "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
-                "- CLOSE proactively: signal CLOSE when thesis is invalidated — don't wait for SL.",
                 "- HOLD discipline: better to miss a trade than force a weak setup.",
                 "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
             ])
@@ -569,19 +559,10 @@ class TemplateManager:
                 "\n- **Safe Drawdown**: Insufficient trade data for MAE baseline — rely on ATR-based stops only."
             )
 
-        # SL tightening threshold for UPDATE signal guidance
-        sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
-        sl_tightening_source = thresholds.get("sl_tightening_source", "config")
-        if sl_tightening_pct is not None:
-            update_sl_rule = (
-                f"tighten SL only after {sl_tightening_pct}%+ of the entry-to-TP distance is covered "
-                f"(hybrid policy, source: {sl_tightening_source})"
-            )
-        else:
-            update_sl_rule = (
-                "tighten SL only when the hybrid tightening policy confirms sufficient progress "
-                "(see SL Tightening Policy in position context)"
-            )
+        update_sl_rule = (
+            "tighten SL only after the hybrid tightening policy threshold is met "
+            "(see SL Tightening Policy in position context)"
+        )
 
         verbosity = (model_verbosity or self.config.MODEL_VERBOSITY).lower()
         if verbosity == "high":
@@ -831,9 +812,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
         analysis_steps += f"""
 
-{step_number}. SYNTHESIS: Regime, winning case, conflict, SL/TP, R/R, confidence, invalidation trigger
-
-NOTE: Indicators from CLOSED CANDLES ONLY. No pattern = state "No clear pattern"."""
+{step_number}. SYNTHESIS: Regime, winning case, conflict, SL/TP, R/R, confidence, invalidation trigger"""
 
         if has_advanced_support_resistance:
             analysis_steps += """

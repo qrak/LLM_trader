@@ -173,7 +173,7 @@ class TestBuildSystemPrompt:
         assert "Classify regime first" in prompt
         assert "Resolve conflicts explicitly" in prompt
         assert "HOLD when bull/bear cases are both plausible" in prompt
-        assert "prove your signal wrong" in prompt
+        assert "CLOSE immediately when original thesis is invalidated" in prompt
 
     def test_deterministic_time_check_with_previous(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response="test analysis")

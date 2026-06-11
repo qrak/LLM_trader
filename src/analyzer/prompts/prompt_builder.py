@@ -216,6 +216,14 @@ class PromptBuilder:
                 f"{custom_context}"
             )
 
+        sections.append(
+            "## TASK\n"
+            "Based on all the data above, perform a fresh analysis following the numbered Analysis Steps. "
+            "Re-derive every confluence score from the CURRENT indicators — do not reuse prior scores. "
+            "Treat any previous thesis as a hypothesis to retest against current evidence, not a template to repeat. "
+            "If the current data contradicts the prior view, change the decision accordingly."
+        )
+
         final_prompt = "\n\n".join(filter(None, sections))
 
         return final_prompt
@@ -232,7 +240,7 @@ class PromptBuilder:
             minutes_into_candle = total_minutes % timeframe_minutes
             minutes_until_close = timeframe_minutes - minutes_into_candle
             candle_status = f"\n- Next Candle Close: in {minutes_until_close} minutes"
-            candle_status += "\n- Data Quality: All indicators based on CLOSED CANDLES ONLY (professional trading standard)"
+            candle_status += "\n- Data Quality: All indicators based on CLOSED CANDLES ONLY"
 
         analysis_timeframes = f"{self.timeframe.upper()}, 1D, 7D, 30D, 365D, and WEEKLY timeframes"
         day_of_week = current_time.strftime("%A")
