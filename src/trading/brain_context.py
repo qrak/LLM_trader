@@ -95,7 +95,7 @@ class BrainContextProvider:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
-            k=5,
+            k=3,
         )
         if vector_context:
             vector_context = self.exit_profiles.replace_unknown_exit_profile_text(vector_context)
@@ -105,12 +105,9 @@ class BrainContextProvider:
             lines.extend([
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
-                "- MANDATORY: If win rate in similar conditions <50%, reduce your confidence by 10 points and state this adjustment.",
-                "- MANDATORY: If AVOID PATTERNS match current conditions (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\" and justify any override.",
-                "- AI MISTAKE MEMORY: If an AI-mistake rule matches, compare the current setup to the failed assumption and downgrade confidence unless the missing confirmation is now present.",
-                "- EXIT EXECUTION MEMORY: Treat hard/soft SL/TP settings as part of the setup. Do not reuse a rule learned under a different exit profile without explaining the mismatch.",
-                "- REGIME MISMATCH: If a retrieved experience's Context or Match Factors show a fundamentally different regime (e.g., High ADX vs current Low ADX, different volatility level marked ⚠️), treat it as informational only — not as a statistical prior for confidence adjustment.",
-                "- OUTCOME BALANCE: Weight both wins AND losses. If a corrective or anti-pattern rule matches, explicitly state the adjustment you are applying (e.g. stricter confluences, higher R/R, reduced position size) before finalising your decision.",
+                "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and state it. Weight both wins AND losses, not just the favorable cases.",
+                "- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\", compare the current setup to the failed assumption, and downgrade confidence unless the missing confirmation is now present. State the adjustment you apply (stricter confluences, higher R/R, or reduced size).",
+                "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime (ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; do not use it as a confidence prior without explaining the mismatch.",
                 "",
             ])
         elif lines and has_limited_data:
