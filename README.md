@@ -54,13 +54,11 @@ python start.py               # dashboard at http://localhost:8000
 
 ---
 
-## 📸 Dashboard Preview
+## 📸 Screenshots
 
 ![Dashboard Overview](img/1.png)
-*Brain dashboard overview — market state, position tracking, countdown, and system status.*
 
 ![Memory Synapse Graph](img/2.png)
-*Interactive vector memory browser — past trades, similarity scores, and rule learning visualized.*
 
 ---
 
