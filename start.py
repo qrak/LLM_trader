@@ -297,8 +297,18 @@ class CompositionRoot:
             'exit_monitor': trading['exit_monitor'],
         }
 
+        # Create shared force_analysis event (used by both bot keyboard handler and admin console)
+        force_analysis_event = asyncio.Event()
+
         # Always instantiate DashboardServer so the 'd' keyboard toggle can start/stop it at runtime.
         # The server socket is NOT opened until start() is called, so this is safe even when disabled.
+        from pathlib import Path
+        config_path = str(Path(__file__).parent / "config" / "config.ini")
+        admin_credentials = {
+            "username": self.config.ADMIN_USERNAME,
+            "password_hash": self.config.ADMIN_PASSWORD_HASH,
+            "signing_key": self.config.ADMIN_SIGNING_KEY,
+        }
         dashboard_server = DashboardServer(
             brain_service=trading['brain_service'],
             vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
@@ -309,11 +319,15 @@ class CompositionRoot:
             persistence=trading['persistence'],
             exchange_manager=infra['exchange_manager'],
             host=self.config.DASHBOARD_HOST,
-            port=self.config.DASHBOARD_PORT
+            port=self.config.DASHBOARD_PORT,
+            force_analysis_event=force_analysis_event,
+            config_path=config_path,
+            admin_credentials=admin_credentials,
         )
 
         deps['dashboard_server'] = dashboard_server
         deps['dashboard_state'] = dashboard_server.dashboard_state
+        deps['force_analysis_event'] = force_analysis_event
         trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
 
         return deps
@@ -693,6 +707,7 @@ class CompositionRoot:
         dependencies = await self.build_dependencies()
 
         dashboard_server = dependencies.pop('dashboard_server', None)
+        force_analysis_event = dependencies.pop('force_analysis_event', None)
 
         def _create_position_monitor(bot: CryptoTradingBot) -> PositionStatusMonitor:
             return PositionStatusMonitor(
@@ -714,6 +729,7 @@ class CompositionRoot:
             config=self.config,
             shutdown_manager=self.shutdown_manager,
             position_monitor_factory=_create_position_monitor,
+            force_analysis_event=force_analysis_event,
             **dependencies
         ))
 

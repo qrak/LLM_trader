@@ -36,9 +36,6 @@ python start.py               # dashboard at http://localhost:8000
 | `scripts/start_script_main.ps1` | Start the bot (Windows) |
 | `scripts/start_script_main_linux.sh` | Start the bot (Linux) |
 | `scripts/start_script_main_macos.sh` | Start the bot (macOS) |
-| `scripts/start_website.ps1` | Start the Astro landing page (Windows) |
-| `scripts/start_website_linux.sh` | Start the Astro landing page (Linux) |
-| `scripts/start_website_macos.sh` | Start the Astro landing page (macOS) |
 | `scripts/run_all_tests.sh` | Run full test suite in `.venv` |
 | `scripts/query_trade_history.py` | CLI utility to inspect SQLite trade history |
 </details>
@@ -78,7 +75,6 @@ python start.py               # dashboard at http://localhost:8000
 
 ## Architecture
 
-> **Also in this repo:** [`website/`](website/) is a standalone Astro landing page for the project, deployable separately from the trading dashboard.
 
 ```mermaid
 flowchart TB

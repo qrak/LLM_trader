@@ -60,6 +60,7 @@ class BotServices:
     dashboard_state: Any = None
     discord_task: asyncio.Task | None = None
     position_monitor_factory: Callable[[Any], PositionStatusMonitor] | None = None
+    force_analysis_event: asyncio.Event | None = None
 
 
 class CryptoTradingBot:
@@ -109,7 +110,7 @@ class CryptoTradingBot:
         self.tasks = []
         self.running = False
         self._active_tasks = set()
-        self._force_analysis = asyncio.Event()
+        self._force_analysis = services.force_analysis_event or asyncio.Event()
         self._discord_task = services.discord_task
 
         # Trading state

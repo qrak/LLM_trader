@@ -37,6 +37,16 @@ DashboardServer(
 | **Performance** | `routers/performance.py` | `/api/performance/*` — P&L, statistics, trade history |
 | **Visuals** | `routers/visuals.py` | `/api/visuals/*` — chart data, indicator plots |
 | **WebSocket** | `routers/ws_router.py` | `/ws/*` — real-time streaming |
+| **Admin** | `routers/admin.py` | `/api/admin/*` — config CRUD, system control, log streaming, auth |
+
+### Admin Console (`/admin`)
+- **Auth:** HMAC-SHA256 cookie sessions. Credentials from `keys.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_SIGNING_KEY`)
+- **Config write:** `WritableConfig` (async atomic INI writes via `os.replace()`). Hot-reload signal via `asyncio.Event`
+- **Control:** Force analysis (`POST /api/admin/system/trigger-analysis`), toggle feed (`POST /api/admin/system/toggle-feed`)
+- **Human input:** `POST /api/admin/system/human-input` — consumed by bot on next cycle
+- **Log streaming:** `LogStreamHandler` → subscriber `asyncio.Queue`s. WS at `/api/admin/logs/stream?token=...`
+- **Console WS:** Bidirectional at `/api/admin/console?token=...` — accepts `force_analysis`, `toggle_feed`, `human_input`, `get_status`
+- **Frontend:** Vanilla JS + Tailwind CDN at `src/dashboard/static/admin/index.html`
 
 ### Static Frontend
 - `src/dashboard/static/` — HTML, Vanilla JS, Vis.js, ApexCharts
