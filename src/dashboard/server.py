@@ -14,7 +14,11 @@ from fastapi.responses import JSONResponse, Response
 from starlette.middleware.gzip import GZipMiddleware
 
 from .routers import brain, monitor, visuals, performance, ws_router
+from .routers.admin import AdminRouter
 from .dashboard_state import dashboard_state
+from .auth import AdminAuthMiddleware, init_auth
+from .log_stream import LogStreamManager
+from ..config.writable_config import WritableConfig
 
 class DashboardServer:
     """Main application server combining all API routers."""
@@ -29,7 +33,10 @@ class DashboardServer:
                  persistence=None,
                  exchange_manager=None,
                  host="0.0.0.0",
-                 port=8000):
+                 port=8000,
+                 force_analysis_event=None,
+                 config_path=None,
+                 admin_credentials=None):
         self.brain_service = brain_service
         self.vector_memory = vector_memory
         self.analysis_engine = analysis_engine
@@ -43,6 +50,21 @@ class DashboardServer:
         self.server_task = None
         self._server = None
         self.dashboard_state = dashboard_state
+
+        # Admin console dependencies
+        self._force_analysis_event = force_analysis_event
+        _config_path = config_path or os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.ini")
+        self.writable_config = WritableConfig(_config_path)
+        self.log_stream_manager = LogStreamManager()
+
+        # Initialize auth if credentials provided
+        if admin_credentials:
+            init_auth(
+                signing_key=admin_credentials.get("signing_key", ""),
+                admin_username=admin_credentials.get("username", ""),
+                admin_password_hash=admin_credentials.get("password_hash", ""),
+            )
+
         self.app = self._create_app()
 
     def _create_app(self) -> FastAPI:
@@ -168,10 +190,11 @@ class DashboardServer:
             csp = (
                 "default-src 'self'; "
                 "frame-ancestors 'none'; "
-                "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
+                "https://cdn.tailwindcss.com "
                 "https://*.cloudflare.com https://ajax.cloudflare.com "
                 "https://static.cloudflareinsights.com; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
                 "font-src 'self' https://fonts.gstatic.com; "
                 "img-src 'self' data: https:; "
                 "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
@@ -320,6 +343,8 @@ class DashboardServer:
         app.state.persistence = self.persistence
         app.state.exchange_manager = self.exchange_manager
         app.state.dashboard_state = self.dashboard_state
+        app.state.writable_config = self.writable_config
+        app.state.log_stream_manager = self.log_stream_manager
         # Expose for testing/monitoring
         app.state.request_counts = request_counts
 
@@ -364,6 +389,25 @@ class DashboardServer:
         app.include_router(visuals_router.router)
         app.include_router(performance_router.router)
         app.include_router(websocket_router.router)
+
+        # Admin console router
+        admin_router = AdminRouter(
+            writable_config=self.writable_config,
+            log_stream_manager=self.log_stream_manager,
+            config=self.config,
+            logger=self.logger,
+            brain_service=self.brain_service,
+            analysis_engine=self.analysis_engine,
+            exchange_manager=self.exchange_manager,
+            dashboard_state=self.dashboard_state,
+            force_analysis_event=self._force_analysis_event,
+        )
+        app.include_router(admin_router.router)
+        # Expose admin_router on app.state for testing and cross-router access
+        app.state.admin_router = admin_router
+
+        # Admin auth middleware (protects /api/admin/* except login and health)
+        app.add_middleware(AdminAuthMiddleware)
 
         # Mount Static Files (Frontend)
         # We assume the static folder is in the same directory as this file
