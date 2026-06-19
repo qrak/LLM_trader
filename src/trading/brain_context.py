@@ -16,10 +16,16 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
-    def __init__(self, vector_memory: VectorMemoryService, exit_profiles: ExitProfileResolver):
+    def __init__(
+        self,
+        vector_memory: VectorMemoryService,
+        exit_profiles: ExitProfileResolver,
+        post_mortem_repo: Any | None = None,
+    ):
         """Initialize context provider dependencies and cache state."""
         self.vector_memory = vector_memory
         self.exit_profiles = exit_profiles
+        self.post_mortem_repo = post_mortem_repo
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
 
@@ -156,7 +162,40 @@ class BrainContextProvider:
                 if recommended:
                     lines.append(f"  → Apply: {recommended}")
             lines.append("")
+
+        # --- Trade Journal (Post-Mortem Lessons) ---
+        journal_context = self._build_trade_journal_context()
+        if journal_context:
+            lines.extend([
+                "",
+                "### Trade Journal (Recent Post-Mortem Lessons):",
+                journal_context,
+                "",
+            ])
+
         return "\n".join(lines)
+
+    def _build_trade_journal_context(self) -> str:
+        """Build a formatted string of recent post-mortem lessons for prompt injection.
+
+        Returns:
+            Formatted multi-line string, or empty string if no post-mortems exist.
+        """
+        if not self.post_mortem_repo:
+            return ""
+        try:
+            recent = self.post_mortem_repo.get_recent_post_mortems(limit=5)
+            if not recent:
+                return ""
+            lines = []
+            for pm in recent:
+                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get('pnl_pct') is not None else ""
+                lines.append(
+                    f"— {pm['verdict']} ({pm['created_at'][:10]}, {pm['symbol']}): {pm['lesson_learned']}{pnl_str}"
+                )
+            return "\n".join(lines)
+        except Exception:
+            return ""
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
         """Get brain-learned thresholds from vector store."""

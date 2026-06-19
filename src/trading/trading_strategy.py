@@ -49,6 +49,7 @@ class TradingStrategy:
         tightening_policy: StopLossTighteningPolicy | None = None,
         guard_pipeline: GuardPipeline | None = None,
         audit_trail: AuditTrail | None = None,
+        post_mortem_service: Any | None = None,
     ):
         """Initialize the trading strategy with DI pattern.
 
@@ -78,6 +79,7 @@ class TradingStrategy:
 
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
+        self.post_mortem_service = post_mortem_service
 
         self.current_position: Position | None = self.persistence.load_position()
 
@@ -240,6 +242,23 @@ class TradingStrategy:
             self.logger.error("Error retrieving entry decision: %s", e)
 
         await self._record_trade_decision(decision)
+
+        # --- Post-Mortem Analysis ---
+        # Trigger LLM post-mortem after the CLOSE row is persisted to SQLite.
+        # Skip if no entry_decision (can't analyze without original reasoning).
+        # Graceful degradation: any failure is logged and swallowed.
+        if self.post_mortem_service and entry_decision:
+            try:
+                await self.post_mortem_service.analyze_closed_trade(
+                    closed_position=closed_position,
+                    entry_decision=entry_decision,
+                    exit_decision=decision,
+                    pnl=pnl,
+                    reason=reason,
+                    market_conditions=market_conditions,
+                )
+            except Exception:
+                self.logger.warning("Post-mortem analysis failed", exc_info=True)
 
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
