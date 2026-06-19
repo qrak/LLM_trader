@@ -36,7 +36,8 @@ class DashboardServer:
                  port=8000,
                  force_analysis_event=None,
                  config_path=None,
-                 admin_credentials=None):
+                 admin_credentials=None,
+                 post_mortem_repo=None):
         self.brain_service = brain_service
         self.vector_memory = vector_memory
         self.analysis_engine = analysis_engine
@@ -45,6 +46,7 @@ class DashboardServer:
         self.unified_parser = unified_parser
         self.persistence = persistence
         self.exchange_manager = exchange_manager
+        self.post_mortem_repo = post_mortem_repo
         self.host = host
         self.port = port
         self.server_task = None
@@ -355,7 +357,8 @@ class DashboardServer:
             vector_memory=self.vector_memory,
             unified_parser=self.unified_parser,
             persistence=self.persistence,
-            exchange_manager=self.exchange_manager
+            exchange_manager=self.exchange_manager,
+            post_mortem_repo=self.post_mortem_repo,
         )
         try:
             rag_engine = self.brain_service.rag_engine if self.brain_service else None

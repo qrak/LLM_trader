@@ -60,6 +60,7 @@ class TradingBrainService:
         exit_execution_context: "ExitExecutionContext | None" = None,
         timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
         tightening_policy: StopLossTighteningPolicy | None = None,
+        post_mortem_repo: Any | None = None,
     ):
         """Initialize trading brain service.
 
@@ -70,6 +71,7 @@ class TradingBrainService:
             exit_execution_context: Configured fallback SL/TP execution context.
             timeframe_minutes: Active analysis timeframe in minutes.
             tightening_policy: Stop-loss tightening policy for threshold exposure.
+            post_mortem_repo: Optional PostMortemRepository for trade journal injection.
         """
         self.logger = logger
         self.persistence = persistence
@@ -96,6 +98,7 @@ class TradingBrainService:
         self.context_provider = BrainContextProvider(
             vector_memory=self.vector_memory,
             exit_profiles=self.exit_profiles,
+            post_mortem_repo=post_mortem_repo,
         )
 
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)

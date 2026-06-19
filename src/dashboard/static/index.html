@@ -8,7 +8,7 @@
     <meta name="description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
     <meta property="og:title" content="Semantic Signal LLM">
     <meta property="og:description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
-    <link rel="stylesheet" href="css/style.css?v=6.1">
+    <link rel="stylesheet" href="css/style.css?v=6.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -120,6 +120,13 @@
                             <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
                             <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
                         </svg></span> Memory Bank
+                </span>
+                <span class="tab-btn" data-target="tab-journal" role="tab" aria-selected="false"
+                    aria-controls="tab-journal" id="nav-journal" tabindex="0">
+                    <span class="icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                        </svg></span> Trade Journal
                 </span>
             </div>
 
@@ -412,6 +419,31 @@
                         <div class="empty-state">
                             <div class="spinner"></div>
                             <div class="empty-state-text">Loading vector database…</div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Tab: Trade Journal -->
+            <div id="tab-journal" class="tab-content" role="tabpanel" aria-labelledby="nav-journal">
+                <header class="tab-header">
+                    <h2>Trade Journal <span style="font-size:0.7em; font-weight:400; color:var(--text-muted);">AI Post-Mortem Analysis</span></h2>
+                </header>
+
+                <div class="pm-toolbar">
+                    <div class="pm-search-group">
+                        <input type="text" id="pm-search-input" class="pm-search-input" placeholder="Search post-mortems (FTS5)...">
+                        <button id="pm-search-btn" class="toolbar-btn pm-search-btn" title="Search">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <section id="panel-post-mortems" class="panel full-height-panel">
+                    <div id="post-mortem-content">
+                        <div class="empty-state">
+                            <div class="spinner"></div>
+                            <div class="empty-state-text">Loading trade journal…</div>
                         </div>
                     </div>
                 </section>

@@ -1,5 +1,54 @@
 # Changelog
 
+## 2026-06-19 — AI Trade Journal Post-Mortem
+
+### Added
+
+- **Post-mortem analysis on every position close** (`src/trading/post_mortem.py`): After a position closes, the LLM analyzes what happened (entry reasoning, exit data, market conditions) and extracts an actionable lesson. Produces a structured `PostMortemResult` with verdict, analysis, expected vs actual, and lesson. Fires after the CLOSE row is written to SQLite, wrapped in try/except so failures never break the close flow.
+- **SQLite + FTS5 storage layer** (`src/managers/post_mortem_repository.py`): New `trade_post_mortem` and `trade_post_mortem_fts` tables in the existing `trade_history.db`. Thread-safe via `threading.Lock` and per-call connections matching the `SQLiteTradeHistory` pattern. Supports insert, recent listing, keyword search via FTS5 MATCH, and count. Schema is `CREATE TABLE IF NOT EXISTS` — zero impact on existing tables, no migration needed.
+- **Trade journal injected into brain context** (`src/trading/brain_context.py`): `BrainContextProvider` appends the 5 most recent post-mortem lessons as a `"### Trade Journal (Recent Post-Mortem Lessons):"` section in the system prompt, so the LLM sees past mistakes before every trading decision.
+- **Dashboard Trade Journal tab** (`src/dashboard/static/modules/post_mortem_panel.js`): New sidebar tab with searchable post-mortem viewer. Displays verdict, symbol, P&L, close reason, and lesson learned per card. Expandable full-analysis details. FTS5 search bar with result highlighting. Updates every 30s in the slow-lane cycle.
+- **Dashboard API endpoint** (`src/dashboard/routers/brain.py`): `GET /api/brain/post-mortems?q=breakout&limit=20` returns post-mortems with optional FTS5 keyword search. Error-returning, never crashes.
+
+### Fixed
+
+- **LLM response parsing resilience** (`src/trading/post_mortum.py`): Added raw `json.loads()` fallback in `_parse_response` when the LLM returns plain JSON without markdown fences. The primary extraction path (`UnifiedParser.extract_json_block`) handles ` ```json ` blocks; the fallback catches model output that skips the fence syntax.
+- **Test timestamp ordering** (`tests/test_post_mortem_repository.py`): Replaced `time.sleep(1.5)` with direct SQL timestamp override, eliminating a test smell. Ordering test now runs in 0.02s instead of 1.5s.
+- **Mock safety in context tests** (`tests/test_brain_context_journal.py`): Configured all mock return values explicitly (`trade_count=0`, `get_context_for_prompt.return_value=""`, etc.) to prevent `MagicMock` truthyness from corrupting `BrainContextProvider` control flow.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src/managers/post_mortem_repository.py` | SQLite + FTS5 storage (insert, search, recent, count) |
+| `src/trading/post_mortem.py` | `PostMortemResult` Pydantic model + `PostMortemService` (LLM orchestration) |
+| `src/dashboard/static/modules/post_mortem_panel.js` | Dashboard frontend module with search and card rendering |
+| `tests/test_post_mortem_repository.py` | 10 tests: insert, FTS5 search, ordering, count, error handling |
+| `tests/test_post_mortem_service.py` | 6 tests: success, empty/malformed/missing response, LLM exception, repo exception |
+| `tests/test_brain_context_journal.py` | 7 tests: journal section present/absent, multi-entry, P&L formatting, error skip |
+| `tests/test_post_mortem_contract.py` | 10 tests: Pydantic model validation, empty/missing rejection, extra fields |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `src/trading/trading_strategy.py` | `close_position()` triggers post-mortem after CLOSE row, before stats recalc |
+| `src/trading/brain_context.py` | Trade journal section injected into `get_context()` output |
+| `src/trading/brain.py` | `post_mortem_repo` wired through to `BrainContextProvider` |
+| `src/dashboard/routers/brain.py` | `GET /api/brain/post-mortems` endpoint + `post_mortem_repo` param |
+| `src/dashboard/server.py` | `post_mortem_repo` threaded into `BrainRouter` |
+| `src/dashboard/static/index.html` | Trade Journal nav item + tab content panel + search toolbar |
+| `src/dashboard/static/main.js` | Import + slow lane + init for post-mortem panel |
+| `src/dashboard/static/css/panels.css` | Full `.pm-*` styling for cards, search bar, verdict colors, details |
+| `start.py` | DI wiring for `PostMortemRepository` + `PostMortemService` into strategy, brain, dashboard |
+
+### Validation
+
+- Full pytest (no Playwright): `1060 passed`
+- New test suite: `33 passed in 0.16s`
+- Live LLM validation: end-to-end call via gemini-3.5-flash confirmed prompt → response → parse → store → search
+- Ruff lint: all checks passed on new and modified files
+
 ## 2026-06-10 — Ticker Fetch Retry + Cascading Error Protection
 
 ### Fixed

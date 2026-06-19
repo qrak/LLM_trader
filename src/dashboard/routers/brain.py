@@ -219,7 +219,7 @@ class BrainRouter:
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-instance-attributes
-    def __init__(self, config, logger, dashboard_state, vector_memory, unified_parser, persistence, exchange_manager):
+    def __init__(self, config, logger, dashboard_state, vector_memory, unified_parser, persistence, exchange_manager, post_mortem_repo=None):
         self.router = APIRouter(prefix="/api/brain", tags=["brain"])
         self.config = config
         self.logger = logger
@@ -228,6 +228,7 @@ class BrainRouter:
         self.unified_parser = unified_parser
         self.persistence = persistence
         self.exchange_manager = exchange_manager
+        self.post_mortem_repo = post_mortem_repo
 
         self.router.add_api_route("/status", self.get_brain_status, methods=["GET"])
         self.router.add_api_route("/memory", self.get_vector_memory, methods=["GET"])
@@ -238,6 +239,7 @@ class BrainRouter:
         self.router.add_api_route("/blocked-trades", self.get_blocked_trades, methods=["GET"])
         self.router.add_api_route("/lifecycle", self.get_brain_lifecycle, methods=["GET"])
         self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"])
+        self.router.add_api_route("/post-mortems", self.get_post_mortems, methods=["GET"])
 
     def _resolve_rule_exit_profile(self, metadata: dict[str, Any]) -> str:
         """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
@@ -627,3 +629,28 @@ class BrainRouter:
         except Exception:
             self.logger.error("Failed to retrieve blocked trades for dashboard", exc_info=True)
             return {"blocked_count": 0, "blocked_trades": [], "error": "Internal error"}
+
+    async def get_post_mortems(self, q: str | None = None, limit: int = 20) -> dict[str, Any]:
+        """Get post-mortem analyses, optionally filtered by FTS5 search query.
+
+        Args:
+            q: Optional FTS5 search query (e.g. "breakout AND resistance").
+            limit: Maximum number of results (default 20, max 100).
+
+        Returns:
+            Dict with 'count' and 'post_mortems' list.
+        """
+        if not self.post_mortem_repo:
+            return {"count": 0, "post_mortems": []}
+
+        limit = min(limit, 100)
+
+        try:
+            if q and q.strip():
+                results = self.post_mortem_repo.search_post_mortems(q.strip(), limit=limit)
+            else:
+                results = self.post_mortem_repo.get_recent_post_mortems(limit=limit)
+            return {"count": len(results), "post_mortems": results}
+        except Exception as e:
+            self.logger.error("Error fetching post-mortems: %s", e)
+            return {"count": 0, "post_mortems": [], "error": str(e)}

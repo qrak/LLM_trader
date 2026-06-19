@@ -49,6 +49,8 @@ from src.trading import (
 from src.trading.vector_memory import VectorMemoryService
 from src.dashboard.server import DashboardServer
 from src.notifiers import DiscordNotifier, ConsoleNotifier
+from src.managers.post_mortem_repository import PostMortemRepository
+from src.trading.post_mortem import PostMortemService
 from src.utils.keyboard_handler import KeyboardHandler
 from src.parsing.unified_parser import UnifiedParser
 from src.rag.article_processor import ArticleProcessor
@@ -269,7 +271,7 @@ class CompositionRoot:
         rag = await self._provision_rag_layer(infra, apis, utils)
         models = self._provision_model_layer(utils)
         analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
-        trading = self._provision_trading_layer(utils)
+        trading = self._provision_trading_layer(utils, models)
         notifiers = await self._provision_notifiers(utils)
 
         end_time = time.perf_counter()
@@ -323,6 +325,7 @@ class CompositionRoot:
             force_analysis_event=force_analysis_event,
             config_path=config_path,
             admin_credentials=admin_credentials,
+            post_mortem_repo=trading.get('post_mortem_repo'),
         )
 
         deps['dashboard_server'] = dashboard_server
@@ -562,9 +565,14 @@ class CompositionRoot:
         
         return {'engine': engine}
 
-    def _provision_trading_layer(self, utils: dict) -> dict:
+    def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
         """Provision trading strategy and memory services."""
         persistence = PersistenceManager(self.logger, data_dir="data/trading")
+
+        # --- Post-Mortem Repository (same trade_history.db, FTS5) ---
+        trade_db_path = os.path.join(self.config.DATA_DIR, "trading", "trade_history.db")
+        post_mortem_repo = PostMortemRepository(logger=self.logger, db_path=trade_db_path)
+
         risk_manager = RiskManager(self.logger, self.config)
 
         _configure_hf_hub_auth()
@@ -596,6 +604,7 @@ class CompositionRoot:
             exit_execution_context=exit_execution_context,
             timeframe_minutes=timeframe_minutes,
             tightening_policy=tightening_policy,
+            post_mortem_repo=post_mortem_repo,
         )
         brain_service.refresh_semantic_rules_if_stale()
         
@@ -629,11 +638,19 @@ class CompositionRoot:
         )
         self.logger.info("Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names))
         
+        post_mortem_service = PostMortemService(
+            logger=self.logger,
+            model_manager=models['manager'],
+            unified_parser=utils['parser'],
+            repository=post_mortem_repo,
+        )
+
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
             tightening_policy=tightening_policy,
-            guard_pipeline=guard_pipeline, audit_trail=audit_trail
+            guard_pipeline=guard_pipeline, audit_trail=audit_trail,
+            post_mortem_service=post_mortem_service,
         )
         
         return {
@@ -642,7 +659,8 @@ class CompositionRoot:
             'brain_service': brain_service,
             'memory_service': memory_service,
             'statistics_service': statistics_service,
-            'exit_monitor': exit_monitor
+            'exit_monitor': exit_monitor,
+            'post_mortem_repo': post_mortem_repo,
         }
 
     async def _provision_notifiers(self, utils: dict) -> dict:
