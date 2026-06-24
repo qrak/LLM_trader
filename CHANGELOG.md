@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-06-24 — v1.0 Release — Security Hardening & Dependabot Cleanup
+
+### Security Fixes
+
+- **aiohttp 3.13.4 → 3.14.1**: Patched 11 CVEs including deserialization RCE (CVE-2026-34993, CVSS 6.4), cross-origin cookie leak (CVE-2026-47265), unbounded pipelined requests DoS (CVE-2026-54273), WebSocket memory limit bypass (CVE-2026-54274), TLS SNI bypass on reused connections (CVE-2026-54275), DigestAuth credential leak via redirect (CVE-2026-54276), HTTP parser `max_line_size` bypass (CVE-2026-54277), zip-bomb unbounded decompression (CVE-2026-54278), host-only cookie persistence downgrade (CVE-2026-54279), mid-disconnect resource leak (CVE-2026-54280), CRLF injection in multipart headers (CVE-2026-50269).
+- **fastapi 0.128.0 → 0.138.0**: Unblocks starlette ≥1.x for 4 additional CVEs.
+- **starlette 0.50.0 → 1.3.1**: Patched host header SSRF (CVE-2026-54282), path-based authorization bypass (PYSEC-2026-161), HTTPEndpoint method smuggling via non-standard verbs (CVE-2026-48817), Windows StaticFiles UNC path NTLM leak (CVE-2026-48818, Linux not affected), unbound urlencoded form parsing DoS (CVE-2026-54283).
+- **python-multipart 0.0.27 → 0.0.31**: Patched quadratic-complexity DoS in `;`-separated form parsing (CVE-2026-53539), HTTP parameter pollution via `;`/`&` parser differential (CVE-2026-53538), negative Content-Length unbounded read (CVE-2026-53540).
+- **lxml 5.4.0 → 6.1.1**: Patched XXE via default `resolve_entities=True` allowing local file reads from untrusted XML input (PYSEC-2026-87).
+- **cryptography 48.0.0 → 48.0.1**: Patched statically-linked OpenSSL vulnerability in wheels (GHSA-537c-gmf6-5ccf).
+- **pydantic-settings 2.14.1 → 2.14.2**: Patched out-of-tree symlink read bypassing `secrets_dir_max_size` (GHSA-4xgf-cpjx-pc3j).
+- **pynacl 1.5.0 → 1.6.2**: Patched libsodium ed25519 point validation (CVE-2025-69277).
+- **tornado 6.5.6 → 6.5.7**: Patched `CurlAsyncHTTPClient` credential leakage via pycurl handle reuse (GHSA-pw6j-qg29-8w7f).
+
+### Web (npm) Security Fixes
+
+- **astro <6.4.6 → 6.4.6**: Patched 5 CVEs including reflected XSS via slot name (CVE-2026-50146, HIGH), Host header SSRF in prerendered error page fetch (CVE-2026-54299, HIGH), XSS via unescaped spread props (CVE-2026-54298, MEDIUM), XSS via incomplete `</script>` sanitization (CVE-2026-41067, MEDIUM), server island encrypted parameter replay (CVE-2026-45028, LOW).
+- **vite ≤6.4.2 → 6.4.3**: Patched `server.fs.deny` bypass on Windows (CVE-2026-53571, HIGH), NTLMv2 hash disclosure via launch-editor UNC path (CVE-2026-53632, MEDIUM).
+- **js-yaml ≤4.1.1 → 4.2.0**: Patched quadratic-complexity DoS in merge key handling via repeated aliases (CVE-2026-53550, MEDIUM).
+- **esbuild <0.28.1 → 0.28.1**: Patched arbitrary file read when running dev server on Windows (GHSA).
+
+### Changed
+
+- Removed `data_template/` tree from public repo.
+- Cleaned public README, AGENTS.md, and removed outdated CI workflow and stale start scripts.
+- Merged `develop` branch into `master` for v1.0 release.
+
+### Validation
+
+- **1021 pytest passed** (Playwright/live excluded — pre-existing).
+- **pip-audit**: 0 fixable vulnerabilities remaining. Only unfixed: `chromadb` CVE-2026-45829 (no patch available yet, ChromaDB runs localhost-only — not exploitable).
+- **Dependabot**: 40 alerts auto-resolved to `fixed` state.
+
+---
+
+# Changelog
+
 ## 2026-06-19 — AI Trade Journal Post-Mortem
 
 ### Added
