@@ -257,6 +257,21 @@ class Config:
         """Get list of admin user IDs from environment."""
         return self.get_env('ADMIN_USER_IDS', [])
 
+    @property
+    def ADMIN_USERNAME(self):
+        """Admin console username from keys.env."""
+        return self.get_env('ADMIN_USERNAME', '')
+
+    @property
+    def ADMIN_PASSWORD_HASH(self):
+        """Admin console password hash from keys.env (salt_hex:hash_hex format)."""
+        return self.get_env('ADMIN_PASSWORD_HASH', '')
+
+    @property
+    def ADMIN_SIGNING_KEY(self):
+        """Admin session signing key from keys.env (auto-generated if empty)."""
+        return self.get_env('ADMIN_SIGNING_KEY', '')
+
     # AI Provider Configuration
     @property
     def PROVIDER(self):

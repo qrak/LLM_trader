@@ -1,0 +1,717 @@
+/* Admin Console styles — reuses the main dashboard design tokens.
+   base.css provides :root variables, scrollbar, focus-visible, skip-link,
+   and reduced-motion rules shared with the main Semantic Signal dashboard. */
+@import url('../css/base.css');
+
+/* ─── Generic helpers ─────────────────────────────────────────────── */
+.hidden {
+    display: none !important;
+}
+
+body {
+    overflow: hidden;
+}
+
+button {
+    font-family: inherit;
+}
+
+/* ─── Login screen ────────────────────────────────────────────────── */
+.login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+    padding: 24px;
+    background:
+        radial-gradient(circle at 20% 15%, rgba(0, 240, 255, 0.08), transparent 45%),
+        radial-gradient(circle at 80% 85%, rgba(0, 255, 157, 0.06), transparent 45%),
+        var(--bg-dark-0);
+}
+
+.login-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--bg-dark-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.login-brand {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.login-brand h1 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin: 0 0 6px;
+    color: var(--text-main);
+}
+
+.login-brand .highlight {
+    color: var(--accent-primary);
+}
+
+.login-brand p {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.field-input,
+.input {
+    width: 100%;
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-main);
+    font-size: 14px;
+    font-family: var(--font-body);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field-input:focus,
+.input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--glow-primary);
+}
+
+.login-error {
+    color: var(--accent-danger);
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 14px;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────── */
+.btn {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: #00171a;
+}
+
+.btn-primary:hover {
+    background: #4df6ff;
+}
+
+.btn-success {
+    background: var(--accent-success);
+    color: #04210d;
+}
+
+.btn-success:hover {
+    background: #58cf6a;
+}
+
+.btn-warning {
+    background: var(--accent-warning);
+    color: #251a00;
+}
+
+.btn-warning:hover {
+    background: #e6ad2e;
+}
+
+.btn-ghost {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border-subtle);
+    color: var(--text-main);
+}
+
+.btn-ghost:hover {
+    background: var(--bg-dark-3);
+}
+
+.btn-sm {
+    padding: 7px 12px;
+    font-size: 12px;
+}
+
+/* ─── App shell ───────────────────────────────────────────────────── */
+.admin-shell {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+.admin-sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    background: var(--bg-dark-1);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 20px 22px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-header h1 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.sidebar-header .highlight {
+    color: var(--accent-primary);
+}
+
+.sidebar-user {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-btn:hover {
+    background: var(--bg-dark-2);
+    color: var(--text-main);
+}
+
+.nav-btn.active {
+    background: var(--bg-dark-2);
+    color: var(--accent-primary);
+    border-color: var(--border-glow);
+    box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.sidebar-footer {
+    padding: 12px;
+    border-top: 1px solid var(--border-subtle);
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.logout-btn:hover {
+    background: var(--bg-dark-2);
+    color: var(--accent-danger);
+}
+
+.admin-main {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.page {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    max-width: 1100px;
+}
+
+.page-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+/* ─── Cards ───────────────────────────────────────────────────────── */
+.card {
+    background: var(--bg-dark-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0 0 14px;
+}
+
+.card-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+}
+
+/* ─── Stat grid ───────────────────────────────────────────────────── */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.stat-card {
+    background: var(--bg-dark-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 18px 20px;
+}
+
+.stat-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin: 0 0 8px;
+}
+
+.stat-value {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.value-on {
+    color: var(--accent-success);
+}
+
+.value-off {
+    color: var(--accent-danger);
+}
+
+/* ─── Action rows ─────────────────────────────────────────────────── */
+.action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.input-row .input {
+    flex: 1;
+}
+
+.field-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ─── Command grid (control panel) ────────────────────────────────── */
+.command-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+
+.command-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.command-card:hover {
+    background: var(--bg-dark-3);
+    border-color: var(--border-glow);
+}
+
+.command-card .cmd-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.command-card .cmd-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    margin: 0;
+}
+
+.command-card .cmd-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 2px 0 0;
+}
+
+/* ─── Connection status ───────────────────────────────────────────── */
+.status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-danger);
+    flex-shrink: 0;
+}
+
+.status-dot.connected {
+    background: var(--accent-success);
+}
+
+.status-text {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.console-log {
+    margin-top: 14px;
+    max-height: 260px;
+    overflow-y: auto;
+    background: var(--bg-dark-0);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+}
+
+.log-line {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    word-break: break-word;
+}
+
+/* Log level colors */
+.lvl-error {
+    color: var(--accent-danger);
+}
+
+.lvl-warning {
+    color: var(--accent-warning);
+}
+
+.lvl-info {
+    color: var(--text-main);
+}
+
+.lvl-debug {
+    color: var(--text-dim);
+}
+
+.lvl-other {
+    color: var(--text-muted);
+}
+
+.lvl-success {
+    color: var(--accent-success);
+}
+
+/* ─── Logs page ───────────────────────────────────────────────────── */
+.logs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.logs-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.select {
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: var(--text-main);
+    font-size: 13px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.log-container {
+    background: var(--bg-dark-0);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 16px;
+    height: calc(100vh - 200px);
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.log-container .log-line {
+    padding: 1px 0;
+}
+
+/* ─── Config editor ───────────────────────────────────────────────── */
+.config-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.config-section {
+    background: var(--bg-dark-1);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.config-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: var(--bg-dark-2);
+    border: none;
+    padding: 14px 18px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.config-section-header:hover {
+    background: var(--bg-dark-3);
+}
+
+.config-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.config-section-tag {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.config-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.config-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+
+.config-field-label {
+    width: 32%;
+    min-width: 180px;
+    flex-shrink: 0;
+}
+
+.config-field-label .key {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.config-field-label .desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 2px 0 6px;
+}
+
+.config-input-row {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 220px;
+}
+
+.config-input-row .input,
+.config-input-row .select {
+    flex: 1;
+}
+
+.range-value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-main);
+    width: 60px;
+    text-align: right;
+}
+
+.badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-hot {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--accent-success);
+}
+
+.badge-cycle {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--accent-warning);
+}
+
+.badge-restart {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--accent-danger);
+}
+
+/* ─── Toasts ──────────────────────────────────────────────────────── */
+.toast-container {
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    padding: 11px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text-main);
+    max-width: 340px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    animation: toastIn 0.25s ease-out;
+}
+
+.toast-info {
+    background: var(--bg-dark-2);
+    border-left: 3px solid var(--accent-primary);
+}
+
+.toast-success {
+    background: var(--bg-dark-2);
+    border-left: 3px solid var(--accent-success);
+}
+
+.toast-error {
+    background: var(--bg-dark-2);
+    border-left: 3px solid var(--accent-danger);
+}
+
+.toast-warn {
+    background: var(--bg-dark-2);
+    border-left: 3px solid var(--accent-warning);
+}
+
+@keyframes toastIn {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+    .admin-sidebar {
+        width: 200px;
+    }
+
+    .config-field-label {
+        width: 100%;
+    }
+
+    .page {
+        padding: 18px;
+    }
+}

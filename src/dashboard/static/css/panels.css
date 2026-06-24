@@ -704,3 +704,164 @@
     color: var(--text-dim);
     margin-top: 10px;
 }
+
+/* ── Trade Journal (Post-Mortem) ── */
+
+.pm-toolbar {
+    margin-bottom: 16px;
+}
+
+.pm-search-group {
+    display: flex;
+    gap: 8px;
+    max-width: 420px;
+}
+
+.pm-search-input {
+    flex: 1;
+    padding: 8px 12px;
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.pm-search-input:focus {
+    border-color: var(--accent-primary);
+}
+
+.pm-search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+}
+
+.pm-search-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.pm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pm-card {
+    background: rgba(22, 27, 34, 0.7);
+    border: 1px solid var(--border-glow);
+    border-radius: 12px;
+    padding: 16px;
+    transition: border-color 0.2s;
+}
+
+.pm-card:hover {
+    border-color: var(--accent-primary);
+}
+
+.pm-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.pm-verdict {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pm-symbol {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.pm-pnl-positive {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-success);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.pm-pnl-negative {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-danger);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.pm-date {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: auto;
+}
+
+.pm-reason {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.pm-lesson {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.pm-lesson mark {
+    background: rgba(0, 240, 255, 0.2);
+    color: var(--accent-primary);
+    border-radius: 2px;
+    padding: 0 2px;
+}
+
+.pm-details {
+    margin-top: 8px;
+}
+
+.pm-details summary {
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.pm-details summary:hover {
+    color: var(--accent-primary);
+}
+
+.pm-analysis-body {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    white-space: pre-wrap;
+}
+
+.pm-analysis-body mark {
+    background: rgba(0, 240, 255, 0.2);
+    color: var(--accent-primary);
+    border-radius: 2px;
+    padding: 0 2px;
+}

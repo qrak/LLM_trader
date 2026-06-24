@@ -339,7 +339,6 @@ LLM_trader/
 │       └── YYYY_MM_DD/          # One folder per day
 │           ├── Bot.log          # Full structured log (all levels)
 │           └── errors.log       # Error-level only log
-├── website/                     # Astro 5 + Tailwind landing page
 ├── scripts/                     # Cross-platform startup scripts
 │   └── install_agent_terminal_guard.ps1 # Optional session-local PowerShell literal ^U guard
 ├── docs/
