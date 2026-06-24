@@ -9,6 +9,7 @@ import { initPositionPanel, updatePositionData } from './modules/position_panel.
 import { initUI } from './modules/ui.js?v=4.5';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.5';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.5';
+import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.0';
 
 const state = {
     isConnected: false,
@@ -220,6 +221,7 @@ async function updateSlowLane() {
     await updateVectorData();
     await updateStatisticsData();
     await updateNewsData();
+    await updatePostMortemData();
 }
 
 function initApp() {
@@ -264,6 +266,7 @@ function initApp() {
         initPositionPanel();
         initStatisticsPanel();
         initNewsPanel();
+        initPostMortemPanel();
         initWebSocket();
         initUI();
         startCountdownLoop();

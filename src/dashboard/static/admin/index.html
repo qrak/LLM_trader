@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Trader — Admin Console</title>
+    <meta name="color-scheme" content="dark">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="admin.css?v=1">
+</head>
+
+<body>
+    <!-- ═══ LOGIN SCREEN ═══ -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-card">
+            <div class="login-brand">
+                <h1>LLM <span class="highlight">Trader</span></h1>
+                <p>Admin Console — Authentication Required</p>
+            </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <label class="field-label" for="login-user">Username</label>
+                    <input type="text" id="login-user" autocomplete="username" class="field-input" placeholder="admin"
+                        required>
+                </div>
+                <div class="form-group">
+                    <label class="field-label" for="login-pass">Password</label>
+                    <input type="password" id="login-pass" autocomplete="current-password" class="field-input"
+                        placeholder="••••••••" required>
+                </div>
+                <div id="login-error" class="login-error hidden"></div>
+                <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ═══ MAIN APP ═══ -->
+    <div id="app" class="admin-shell hidden">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <h1>ADMIN <span class="highlight">CONSOLE</span></h1>
+                <p class="sidebar-user" id="sidebar-user"></p>
+            </div>
+            <nav class="sidebar-nav">
+                <button data-page="dashboard" class="nav-btn">📊 Dashboard</button>
+                <button data-page="control" class="nav-btn">🎮 Control Panel</button>
+                <button data-page="config" class="nav-btn">⚙️ Configuration</button>
+                <button data-page="logs" class="nav-btn">📜 Live Logs</button>
+            </nav>
+            <div class="sidebar-footer">
+                <button id="btn-logout" class="logout-btn">🚪 Sign Out</button>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="admin-main">
+            <div id="page-dashboard" class="page">
+                <h2 class="page-title">Dashboard</h2>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <p class="stat-label">Uptime</p>
+                        <p class="stat-value" id="stat-uptime">--</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Dashboard Feed</p>
+                        <p class="stat-value" id="stat-feed">--</p>
+                    </div>
+                    <div class="stat-card">
+                        <p class="stat-label">Log Subscribers</p>
+                        <p class="stat-value" id="stat-subscribers">--</p>
+                    </div>
+                </div>
+                <!-- Quick Actions -->
+                <div class="card">
+                    <h3 class="card-title">Quick Actions</h3>
+                    <div class="action-row">
+                        <button id="btn-force-analysis" class="btn btn-primary">⚡ Force Analysis</button>
+                        <button id="btn-toggle-feed" class="btn btn-warning">📡 Toggle Feed</button>
+                    </div>
+                </div>
+                <!-- Human Input -->
+                <div class="card">
+                    <h3 class="card-title">Human-in-the-Loop Input</h3>
+                    <p class="card-hint">Type an iteration goal or execution target for the bot. It will be consumed on
+                        the next analysis cycle.</p>
+                    <div class="input-row">
+                        <input type="text" id="human-input-text" class="input"
+                            placeholder="e.g. Focus on RSI divergence patterns only...">
+                        <button id="btn-submit-input" class="btn btn-success">Submit</button>
+                    </div>
+                    <div id="human-input-status" class="field-hint"></div>
+                </div>
+            </div>
+
+            <div id="page-control" class="page hidden">
+                <h2 class="page-title">Control Panel</h2>
+                <div class="card">
+                    <h3 class="card-title">System Commands</h3>
+                    <p class="card-hint">These mirror the keyboard commands available in the bot's terminal console.</p>
+                    <div class="command-grid">
+                        <button id="ctrl-force-analysis" class="command-card">
+                            <span class="cmd-icon">⚡</span>
+                            <div>
+                                <p class="cmd-title">Force Analysis</p>
+                                <p class="cmd-desc">Triggers immediate analysis (key: 'a')</p>
+                            </div>
+                        </button>
+                        <button id="ctrl-toggle-feed" class="command-card">
+                            <span class="cmd-icon">📡</span>
+                            <div>
+                                <p class="cmd-title">Toggle Dashboard Feed</p>
+                                <p class="cmd-desc">Enable/disable live updates (key: 'd')</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                <!-- Console Status -->
+                <div class="card">
+                    <h3 class="card-title">Console Connection</h3>
+                    <div class="status-row">
+                        <span id="ws-status-dot" class="status-dot"></span>
+                        <span id="ws-status-text" class="status-text">Disconnected</span>
+                    </div>
+                    <div id="console-log" class="console-log"></div>
+                </div>
+            </div>
+
+            <div id="page-config" class="page hidden">
+                <h2 class="page-title">Configuration</h2>
+                <div id="config-sections">
+                    <p class="card-hint">Loading configuration...</p>
+                </div>
+            </div>
+
+            <div id="page-logs" class="page hidden">
+                <div class="logs-header">
+                    <h2 class="page-title">Live Logs</h2>
+                    <div class="logs-controls">
+                        <select id="log-filter" class="select">
+                            <option value="all">All Levels</option>
+                            <option value="ERROR">Errors Only</option>
+                            <option value="WARNING">Warnings+</option>
+                            <option value="INFO">Info+</option>
+                        </select>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="log-autoscroll" checked>
+                            Auto-scroll
+                        </label>
+                        <button id="log-clear" class="btn btn-ghost btn-sm">Clear</button>
+                    </div>
+                </div>
+                <div id="log-container" class="log-container"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // ─── State ────────────────────────────────────────────────────
+            let authToken = null;          // in-memory WS/bearer token; never persisted
+            let consoleWs = null;
+            let logWs = null;
+            let currentPage = 'dashboard';
+            let statusPollTimer = null;
+            let sessionActive = false;     // gates WS auto-reconnect to live sessions
+
+            // ─── Helpers ──────────────────────────────────────────────────
+            function $(sel) { return document.querySelector(sel); }
+            function $$(sel) { return document.querySelectorAll(sel); }
+
+            async function api(method, path, body) {
+                const opts = { method, headers: {}, credentials: 'same-origin' };
+                if (body) {
+                    opts.headers['Content-Type'] = 'application/json';
+                    opts.body = JSON.stringify(body);
+                }
+                if (authToken) {
+                    opts.headers['Authorization'] = 'Bearer ' + authToken;
+                }
+                const res = await fetch('/api/admin' + path, opts);
+                if (res.status === 401) { logout(); throw new Error('Session expired'); }
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'API error');
+                return data;
+            }
+
+            function showToast(msg, type = 'info') {
+                const variants = { info: 'toast-info', success: 'toast-success', error: 'toast-error', warn: 'toast-warn' };
+                const el = document.createElement('div');
+                el.className = `toast ${variants[type] || variants.info}`;
+                el.textContent = msg;
+                $('#toast-container').appendChild(el);
+                setTimeout(() => el.remove(), 4000);
+            }
+
+            function formatUptime(seconds) {
+                if (seconds < 60) return seconds + 's';
+                if (seconds < 3600) return Math.floor(seconds / 60) + 'm ' + (seconds % 60) + 's';
+                const h = Math.floor(seconds / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                return h + 'h ' + m + 'm';
+            }
+
+            function setFeedIndicator(enabled) {
+                const el = $('#stat-feed');
+                el.textContent = enabled ? 'ON' : 'OFF';
+                el.classList.toggle('value-on', !!enabled);
+                el.classList.toggle('value-off', !enabled);
+            }
+
+            function showLoginError(msg) {
+                const el = $('#login-error');
+                el.textContent = msg;
+                el.classList.remove('hidden');
+            }
+
+            // ─── Auth ─────────────────────────────────────────────────────
+            async function login(username, password) {
+                try {
+                    const res = await fetch('/api/admin/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password }),
+                        credentials: 'same-origin',
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok) {
+                        authToken = data.token || '';
+                        $('#login-error').classList.add('hidden');
+                        showApp(data.username || username);
+                    } else {
+                        showLoginError(data.error || 'Invalid credentials');
+                    }
+                } catch (e) {
+                    showLoginError('Connection failed: ' + e.message);
+                }
+            }
+
+            async function logout() {
+                sessionActive = false;
+                authToken = null;
+                if (consoleWs) { consoleWs.close(); consoleWs = null; }
+                if (logWs) { logWs.close(); logWs = null; }
+                if (statusPollTimer) { clearInterval(statusPollTimer); statusPollTimer = null; }
+                try {
+                    await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+                } catch { }
+                $('#app').classList.add('hidden');
+                $('#login-screen').classList.remove('hidden');
+            }
+
+            // ─── App Init ─────────────────────────────────────────────────
+            function showApp(username) {
+                sessionActive = true;
+                $('#login-screen').classList.add('hidden');
+                $('#app').classList.remove('hidden');
+                $('#sidebar-user').textContent = 'Signed in as ' + username;
+                navigateTo('dashboard');
+                connectConsoleWs();
+                connectLogWs();
+                pollStatus();
+                statusPollTimer = setInterval(pollStatus, 10000);
+                loadConfig();
+            }
+
+            // ─── Navigation ───────────────────────────────────────────────
+            function navigateTo(page) {
+                currentPage = page;
+                $$('.page').forEach(el => el.classList.add('hidden'));
+                const target = $('#page-' + page);
+                if (target) target.classList.remove('hidden');
+                $$('.nav-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.page === page);
+                });
+            }
+
+            // ─── WebSocket: Console ───────────────────────────────────────
+            function connectConsoleWs() {
+                if (!sessionActive || !authToken) return;
+                if (consoleWs) consoleWs.close();
+                const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${proto}//${location.host}/api/admin/console?token=${encodeURIComponent(authToken)}`;
+                consoleWs = new WebSocket(url);
+
+                consoleWs.onopen = () => {
+                    $('#ws-status-dot').classList.add('connected');
+                    $('#ws-status-text').textContent = 'Connected';
+                    appendConsoleLog('Connected to console', 'success');
+                };
+
+                consoleWs.onmessage = (e) => {
+                    try { handleConsoleMessage(JSON.parse(e.data)); } catch { }
+                };
+
+                consoleWs.onclose = () => {
+                    $('#ws-status-dot').classList.remove('connected');
+                    if (sessionActive) {
+                        $('#ws-status-text').textContent = 'Disconnected — reconnecting...';
+                        setTimeout(connectConsoleWs, 3000);
+                    } else {
+                        $('#ws-status-text').textContent = 'Disconnected';
+                    }
+                };
+
+                consoleWs.onerror = () => { };
+            }
+
+            function handleConsoleMessage(msg) {
+                if (msg.type === 'ack') {
+                    const detail = msg.status || (msg.enabled !== undefined ? (msg.enabled ? 'enabled' : 'disabled') : 'ok');
+                    appendConsoleLog(`✓ ${msg.action}: ${detail}`, 'success');
+                    showToast(`${msg.action} executed`, 'success');
+                    if (msg.action === 'toggle_feed' && msg.enabled !== undefined) {
+                        setFeedIndicator(msg.enabled);
+                    }
+                } else if (msg.type === 'error') {
+                    appendConsoleLog('✗ ' + msg.detail, 'error');
+                    showToast(msg.detail, 'error');
+                }
+            }
+
+            function appendConsoleLog(text, level) {
+                const log = $('#console-log');
+                const cls = { success: 'lvl-success', error: 'lvl-error', info: 'lvl-info' };
+                const line = document.createElement('div');
+                line.className = `log-line ${cls[level] || cls.info}`;
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+                log.appendChild(line);
+                log.scrollTop = log.scrollHeight;
+                while (log.children.length > 200) log.removeChild(log.firstChild);
+            }
+
+            function sendConsoleCommand(action, extra) {
+                if (!consoleWs || consoleWs.readyState !== WebSocket.OPEN) {
+                    showToast('Console not connected', 'error');
+                    return;
+                }
+                consoleWs.send(JSON.stringify({ action, ...extra }));
+            }
+
+            // ─── WebSocket: Logs ──────────────────────────────────────────
+            function connectLogWs() {
+                if (!sessionActive || !authToken) return;
+                if (logWs) logWs.close();
+                const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${proto}//${location.host}/api/admin/logs/stream?token=${encodeURIComponent(authToken)}`;
+                logWs = new WebSocket(url);
+
+                logWs.onmessage = (e) => {
+                    try {
+                        const msg = JSON.parse(e.data);
+                        if (msg.type === 'log') appendLogLine(msg.line);
+                    } catch { }
+                };
+
+                logWs.onclose = () => {
+                    if (sessionActive) setTimeout(connectLogWs, 3000);
+                };
+
+                logWs.onerror = () => { };
+            }
+
+            // Log level hierarchy: higher rank = more severe.
+            const LOG_RANK = { ERROR: 4, WARNING: 3, INFO: 2, DEBUG: 1, OTHER: 0 };
+
+            function lineLevel(line) {
+                if (line.includes('[ERROR]')) return 'ERROR';
+                if (line.includes('[WARNING]')) return 'WARNING';
+                if (line.includes('[INFO]')) return 'INFO';
+                if (line.includes('[DEBUG]')) return 'DEBUG';
+                return 'OTHER';
+            }
+
+            function levelPasses(level, filter) {
+                if (filter === 'all') return true;
+                if (filter === 'ERROR') return level === 'ERROR';
+                return LOG_RANK[level] >= (LOG_RANK[filter] || 0);
+            }
+
+            function levelClass(level) {
+                return {
+                    ERROR: 'lvl-error', WARNING: 'lvl-warning',
+                    INFO: 'lvl-info', DEBUG: 'lvl-debug',
+                }[level] || 'lvl-other';
+            }
+
+            function appendLogLine(line) {
+                const container = $('#log-container');
+                const filter = $('#log-filter').value;
+                const level = lineLevel(line);
+                const div = document.createElement('div');
+                div.className = 'log-line ' + levelClass(level);
+                div.dataset.level = level;
+                div.textContent = line;
+                if (!levelPasses(level, filter)) div.classList.add('hidden');
+                container.appendChild(div);
+                if ($('#log-autoscroll').checked) container.scrollTop = container.scrollHeight;
+                while (container.children.length > 2000) container.removeChild(container.firstChild);
+            }
+
+            function applyLogFilter() {
+                const filter = $('#log-filter').value;
+                $('#log-container').querySelectorAll('.log-line').forEach(node => {
+                    node.classList.toggle('hidden', !levelPasses(node.dataset.level || 'OTHER', filter));
+                });
+            }
+
+            // ─── Status Polling ───────────────────────────────────────────
+            async function pollStatus() {
+                try {
+                    const data = await api('GET', '/system/status');
+                    $('#stat-uptime').textContent = formatUptime(data.uptime_seconds);
+                    setFeedIndicator(data.feed_enabled);
+                    $('#stat-subscribers').textContent = data.log_subscribers;
+                } catch { }
+            }
+
+            // ─── Config Editor ────────────────────────────────────────────
+            async function loadConfig() {
+                try {
+                    renderConfig(await api('GET', '/config'));
+                } catch (e) {
+                    const container = $('#config-sections');
+                    container.innerHTML = '';
+                    const p = document.createElement('p');
+                    p.className = 'card-hint';
+                    p.style.color = 'var(--accent-danger)';
+                    p.textContent = 'Failed to load config: ' + e.message;
+                    container.appendChild(p);
+                }
+            }
+
+            function optionEl(value, selected) {
+                const o = document.createElement('option');
+                o.value = value;
+                o.textContent = value;
+                o.selected = !!selected;
+                return o;
+            }
+
+            function renderConfig(schema) {
+                const container = $('#config-sections');
+                container.innerHTML = '';
+                const stack = document.createElement('div');
+                stack.className = 'config-stack';
+
+                for (const [sectionName, section] of Object.entries(schema)) {
+                    const sectionEl = document.createElement('div');
+                    sectionEl.className = 'config-section';
+
+                    const header = document.createElement('button');
+                    header.className = 'config-section-header';
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = 'config-section-title';
+                    titleSpan.textContent = section.title;
+                    const tagSpan = document.createElement('span');
+                    tagSpan.className = 'config-section-tag';
+                    tagSpan.textContent = '[' + sectionName + ']';
+                    header.appendChild(titleSpan);
+                    header.appendChild(tagSpan);
+
+                    const body = document.createElement('div');
+                    body.className = 'config-body hidden';
+                    for (const [key, meta] of Object.entries(section.keys)) {
+                        body.appendChild(renderConfigField(sectionName, key, meta));
+                    }
+
+                    header.onclick = () => body.classList.toggle('hidden');
+                    sectionEl.appendChild(header);
+                    sectionEl.appendChild(body);
+                    stack.appendChild(sectionEl);
+                }
+                container.appendChild(stack);
+            }
+
+            function renderConfigField(section, key, meta) {
+                const wrap = document.createElement('div');
+                wrap.className = 'config-field';
+
+                const labelCol = document.createElement('div');
+                labelCol.className = 'config-field-label';
+                const keyEl = document.createElement('label');
+                keyEl.className = 'key';
+                keyEl.textContent = key;
+                const descEl = document.createElement('p');
+                descEl.className = 'desc';
+                descEl.textContent = meta.description || '';
+                const badge = document.createElement('span');
+                const badgeCls = { hot: 'badge-hot', cycle: 'badge-cycle' }[meta.category] || 'badge-restart';
+                badge.className = 'badge ' + badgeCls;
+                badge.textContent = meta.category;
+                labelCol.appendChild(keyEl);
+                labelCol.appendChild(descEl);
+                labelCol.appendChild(badge);
+
+                const inputCol = document.createElement('div');
+                inputCol.className = 'config-input-row';
+
+                let input;
+                if (meta.type === 'bool') {
+                    input = document.createElement('select');
+                    input.className = 'select';
+                    input.appendChild(optionEl('true', meta.value === 'true'));
+                    input.appendChild(optionEl('false', meta.value === 'false'));
+                } else if (meta.type === 'enum') {
+                    input = document.createElement('select');
+                    input.className = 'select';
+                    for (const opt of (meta.options || [])) {
+                        input.appendChild(optionEl(opt, meta.value === opt));
+                    }
+                } else if (meta.type === 'float' && meta.step) {
+                    input = document.createElement('input');
+                    input.type = 'range';
+                    input.min = meta.min != null ? meta.min : 0;
+                    input.max = meta.max != null ? meta.max : 100;
+                    input.step = meta.step;
+                    input.value = meta.value || 0;
+                    input.style.flex = '1';
+                    const valSpan = document.createElement('span');
+                    valSpan.className = 'range-value';
+                    valSpan.textContent = meta.value || '0';
+                    input.oninput = () => valSpan.textContent = input.value;
+                    inputCol.appendChild(input);
+                    inputCol.appendChild(valSpan);
+                    input = null; // already appended
+                } else {
+                    input = document.createElement('input');
+                    input.type = (meta.type === 'int' || meta.type === 'float') ? 'number' : 'text';
+                    input.className = 'input';
+                    input.value = meta.value || '';
+                    if (meta.min !== undefined) input.min = meta.min;
+                    if (meta.max !== undefined) input.max = meta.max;
+                    if (meta.step) input.step = meta.step;
+                }
+
+                if (input) inputCol.appendChild(input);
+
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn btn-primary btn-sm';
+                saveBtn.textContent = 'Save';
+                saveBtn.onclick = async () => {
+                    const ctrl = input || inputCol.querySelector('select, input');
+                    const val = ctrl ? ctrl.value : '';
+                    try {
+                        const result = await api('PATCH', `/config/${section}/${key}`, { value: val });
+                        showToast(`${key} saved (${result.category})`, 'success');
+                    } catch (e) {
+                        showToast(e.message, 'error');
+                    }
+                };
+                inputCol.appendChild(saveBtn);
+
+                wrap.appendChild(labelCol);
+                wrap.appendChild(inputCol);
+                return wrap;
+            }
+
+            // ─── Event Bindings ───────────────────────────────────────────
+            function init() {
+                $('#login-form').onsubmit = (e) => {
+                    e.preventDefault();
+                    login($('#login-user').value, $('#login-pass').value);
+                };
+
+                $$('.nav-btn').forEach(btn => {
+                    btn.onclick = () => navigateTo(btn.dataset.page);
+                });
+
+                $('#btn-logout').onclick = logout;
+
+                $('#btn-force-analysis').onclick = () => sendConsoleCommand('force_analysis');
+                $('#btn-toggle-feed').onclick = () => sendConsoleCommand('toggle_feed');
+                $('#ctrl-force-analysis').onclick = () => sendConsoleCommand('force_analysis');
+                $('#ctrl-toggle-feed').onclick = () => sendConsoleCommand('toggle_feed');
+
+                $('#btn-submit-input').onclick = async () => {
+                    const text = $('#human-input-text').value.trim();
+                    if (!text) return;
+                    try {
+                        await api('POST', '/system/human-input', { text });
+                        $('#human-input-status').textContent = 'Submitted: ' + text;
+                        $('#human-input-text').value = '';
+                        showToast('Input submitted', 'success');
+                    } catch (e) {
+                        showToast(e.message, 'error');
+                    }
+                };
+
+                $('#log-filter').onchange = applyLogFilter;
+                $('#log-clear').onclick = () => { $('#log-container').innerHTML = ''; };
+
+                // Restore an existing session through the httponly cookie. The
+                // bearer/WS token is requested fresh and kept in memory only — never
+                // persisted to localStorage (avoids XSS token-theft persistence).
+                fetch('/api/admin/ws-token', { credentials: 'same-origin' })
+                    .then(r => r.ok ? r.json() : null)
+                    .then(data => {
+                        if (data && data.token) {
+                            authToken = data.token;
+                            showApp(data.username || 'admin');
+                        }
+                    })
+                    .catch(() => { });
+            }
+
+            document.addEventListener('DOMContentLoaded', init);
+        })();
+    </script>
+</body>
+
+</html>
