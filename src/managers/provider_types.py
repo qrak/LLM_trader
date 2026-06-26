@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient
+    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
     from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
@@ -50,3 +50,4 @@ class ProviderClients:
     google_paid: "GoogleAIClient" | None = None
     openrouter: "OpenRouterClient" | None = None
     lmstudio: "LMStudioClient" | None = None
+    blockrun: "BlockRunClient" | None = None
