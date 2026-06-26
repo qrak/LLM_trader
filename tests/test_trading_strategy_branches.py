@@ -666,3 +666,193 @@ class TestExtractMarketConditions:
         result = {"analysis": None}  # .get() on None will fail
         conditions = strategy._extract_market_conditions(result)
         assert conditions == MarketConditions()
+
+
+# ═════════════════════════════════════════════════════════════════
+# SECTION 4: check_position — SL/TP hit exit detection
+# ═════════════════════════════════════════════════════════════════
+
+
+class TestCheckPositionHitDetection:
+    """Verify check_position correctly detects SL and TP hits for both directions."""
+
+    def test_long_sl_hit(self):
+        """LONG: price below stop-loss triggers close_position('stop_loss')."""
+        pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy.check_position(94.0))
+        assert result == "stop_loss"
+        assert strategy.current_position is None
+
+    def test_long_tp_hit(self):
+        """LONG: price above take-profit triggers close_position('take_profit')."""
+        pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy.check_position(116.0))
+        assert result == "take_profit"
+        assert strategy.current_position is None
+
+    def test_short_sl_hit(self):
+        """SHORT: price above stop-loss triggers close_position."""
+        pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy.check_position(106.0))
+        assert result == "stop_loss"
+        assert strategy.current_position is None
+
+    def test_short_tp_hit(self):
+        """SHORT: price below take-profit triggers close_position."""
+        pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy.check_position(84.0))
+        assert result == "take_profit"
+        assert strategy.current_position is None
+
+    def test_price_in_range_no_exit(self):
+        """Price between SL and TP triggers no exit."""
+        pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy.check_position(105.0))
+        assert result is None
+        assert strategy.current_position is not None
+
+    def test_no_position_returns_none(self):
+        """check_position with no open position returns None."""
+        strategy, _, _, _, _, _ = _make_strategy(current_position=None)
+        result = asyncio.run(strategy.check_position(100.0))
+        assert result is None
+
+
+# ═════════════════════════════════════════════════════════════════
+# SECTION 5: _handle_existing_position — CLOSE signal + UPDATE flow
+# ═════════════════════════════════════════════════════════════════
+
+
+class TestHandleExistingPosition:
+    """Verify signal handling for existing positions."""
+
+    def test_close_signal_exits(self):
+        """CLOSE signal triggers close_position."""
+        pos = _make_position(direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE", confidence="MEDIUM",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Market reversing",
+        ))
+        assert result is not None
+        assert result.action == "CLOSE"
+        assert strategy.current_position is None
+
+    def test_close_long_signal_exits(self):
+        """CLOSE_LONG signal also triggers close."""
+        pos = _make_position(direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE_LONG", confidence="HIGH",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Target reached",
+        ))
+        assert result is not None
+        assert result.action == "CLOSE"
+        assert strategy.current_position is None
+
+    def test_update_rejected_too_soon(self):
+        """UPDATE rejected when min interval hasn't elapsed."""
+        pos = _make_position(direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        strategy._last_position_update_time = datetime.now(timezone.utc)
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=96.0, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Tighten SL",
+        ))
+        assert result is None
+
+    def test_update_sl_succeeds(self):
+        """UPDATE with SL change works after interval."""
+        pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=92.0, take_profit=115.0,  # must pass TP to avoid format bug @ L434
+            current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+        ))
+        assert result is not None
+        assert result.action == "UPDATE"
+
+    def test_update_tp_succeeds(self):
+        """UPDATE with TP change works."""
+        pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="HIGH",
+            stop_loss=95.0, take_profit=120.0,  # must pass SL to avoid format bug @ L434
+            current_price=105.0, symbol="BTC/USDC", reasoning="Extended TP",
+        ))
+        assert result is not None
+        assert result.action == "UPDATE"
+
+
+# ═════════════════════════════════════════════════════════════════
+# SECTION 6: get_position_context — regression guard for SHORT sentinel
+# ═════════════════════════════════════════════════════════════════
+
+
+class TestPositionContextSlTightening:
+    """Regression guard for bd4e43b: sentinel must nudge SL toward entry."""
+
+    def test_short_progress_not_zero(self):
+        """SHORT: price_progress MUST NOT be 0% after the fix."""
+        pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
+        strategy, _, _, brain, _, _ = _make_strategy(current_position=pos)
+        brain.get_dynamic_thresholds = MagicMock(return_value={})
+        strategy.brain_service = brain
+        ctx = strategy.get_position_context(current_price=95.0)
+        # Progress = (100 - 95) / (100 - 85) = 5/15 = 33.3%
+        assert "price progress" in ctx.lower()
+        lines = ctx.split("\n")
+        progress_line = [l for l in lines if "progress" in l.lower()]
+        assert progress_line, "No progress line in context"
+        assert "0.0%" not in progress_line[0], (
+            f"BUG REGRESSION: SHORT price_progress is 0.0%. Context:\n{ctx}"
+        )
+
+    def test_no_position_context(self):
+        """get_position_context without position shows capital status."""
+        strategy, _, _, _, _, _ = _make_strategy(current_position=None)
+        ctx = strategy.get_position_context()
+        assert "CURRENT POSITION: None" in ctx
+
+
+# ═════════════════════════════════════════════════════════════════
+# SECTION 7: SL widening — directional log branches
+# ═════════════════════════════════════════════════════════════════
+
+
+class TestSlWideningDirectionalLogs:
+    """Verify correct log branches for LONG vs SHORT SL widening."""
+
+    def test_short_sl_widening_log(self):
+        """SHORT: SL moved higher (wider) logs SHORT-specific message."""
+        pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=108.0, take_profit=None, current_price=100.0,
+        ))
+        assert updated is True
+        widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "SHORT" in str(c)]
+        assert len(widening_logs) > 0, f"No SHORT widening log in: {[c[0][0] for c in logger.info.call_args_list]}"
+
+    def test_long_sl_widening_log(self):
+        """LONG: SL moved lower (wider) logs LONG-specific message."""
+        pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=90.0, take_profit=None, current_price=105.0,
+        ))
+        assert updated is True
+        widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "LONG" in str(c)]
+        assert len(widening_logs) > 0

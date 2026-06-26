@@ -38,7 +38,7 @@ from src.rag.news_ingestion import RSSCrawl4AINewsProvider, Crawl4AIEnricher
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.utils.format_utils import FormatUtils
 from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
-from src.platforms.ai_providers import GoogleAIClient, OpenRouterClient, LMStudioClient
+from src.platforms.ai_providers import GoogleAIClient, OpenRouterClient, LMStudioClient, BlockRunClient
 from src.managers.persistence_manager import PersistenceManager
 from src.managers.risk_manager import RiskManager
 from src.trading import (
@@ -505,11 +505,20 @@ class CompositionRoot:
                 logger=self.logger,
             )
             self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
+        blockrun_client: BlockRunClient | None = None
+        if self.config.BLOCKRUN_WALLET_KEY:
+            blockrun_client = BlockRunClient(
+                wallet_key=self.config.BLOCKRUN_WALLET_KEY,
+                base_url=self.config.BLOCKRUN_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("BlockRun client initialized")
         provider_clients = ProviderClients(
             google=google_client,
             google_paid=google_paid_client,
             openrouter=openrouter_client,
             lmstudio=lmstudio_client,
+            blockrun=blockrun_client,
         )
         orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients)
 
