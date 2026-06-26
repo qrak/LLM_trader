@@ -1071,9 +1071,10 @@ class TradingStrategy:
             context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
+        sentinel_sl = pos.stop_loss - 1e-8 if pos.direction == "SHORT" else pos.stop_loss + 1e-8
         sl_eval = self._tightening_policy.evaluate_update(
             position=pos,
-            proposed_sl=pos.stop_loss + 1e-8,  # sentinel: minimal upward nudge forces tightening path
+            proposed_sl=sentinel_sl,  # sentinel: minimal nudge toward entry forces tightening path
             current_price=current_price or 0.0,
             tf_minutes=self._tf_minutes,
             brain_thresholds=brain_thresholds,
