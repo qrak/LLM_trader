@@ -9,7 +9,7 @@ import { initPositionPanel, updatePositionData } from './modules/position_panel.
 import { initUI } from './modules/ui.js?v=4.5';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.5';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.5';
-import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.0';
+import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.1';
 
 const state = {
     isConnected: false,
@@ -234,13 +234,15 @@ function initApp() {
 
     // Mobile menu is fully managed by setupMobileMenu() in modules/ui.js
 
+    // Event listeners for static buttons — independent of panel inits
     try {
-        // Event listeners for static buttons
         const btnMinimize = document.getElementById('btn-minimize-visuals');
         if (btnMinimize) {
             btnMinimize.addEventListener('click', () => togglePanelMinimize('panel-visuals'));
         }
+    } catch (e) { console.error('btn-minimize-visuals setup failed:', e); }
 
+    try {
         const btnLightbox = document.getElementById('btn-lightbox-visuals');
         if (btnLightbox) {
             btnLightbox.addEventListener('click', () => {
@@ -248,64 +250,69 @@ function initApp() {
                 if (img && img.src && window.openLightbox) window.openLightbox(img.src);
             });
         }
+    } catch (e) { console.error('btn-lightbox-visuals setup failed:', e); }
 
+    try {
         const btnCopyPrompt = document.getElementById('btn-copy-prompt');
         if (btnCopyPrompt && window.copyPromptContent) {
             btnCopyPrompt.addEventListener('click', window.copyPromptContent);
         }
+    } catch (e) { console.error('btn-copy-prompt setup failed:', e); }
 
+    try {
         const btnCopyResponse = document.getElementById('btn-copy-response');
         if (btnCopyResponse && window.copyResponseContent) {
             btnCopyResponse.addEventListener('click', window.copyResponseContent);
         }
+    } catch (e) { console.error('btn-copy-response setup failed:', e); }
 
-        initPerformanceChart();
-        initSynapseNetwork();
-        initVectorPanel();
-        initFullscreen();
-        initPositionPanel();
-        initStatisticsPanel();
-        initNewsPanel();
-        initPostMortemPanel();
-        initWebSocket();
-        initUI();
-        startCountdownLoop();
+    // Panel initializers — each isolated so one failure doesn't cascade
+    const _safeInit = (name, fn) => { try { fn(); } catch (e) { console.error(name + ' init failed:', e); } };
 
-        // Initial update
-        updateAll();
+    _safeInit('initPerformanceChart', initPerformanceChart);
+    _safeInit('initSynapseNetwork', initSynapseNetwork);
+    try { initVectorPanel(); } catch (e) { console.error('initVectorPanel failed:', e); }
+    _safeInit('initFullscreen', initFullscreen);
+    _safeInit('initPositionPanel', initPositionPanel);
+    try { initStatisticsPanel(); } catch (e) { console.error('initStatisticsPanel failed:', e); }
+    try { initNewsPanel(); } catch (e) { console.error('initNewsPanel failed:', e); }
+    try { initPostMortemPanel(); } catch (e) { console.error('initPostMortemPanel failed:', e); }
+    _safeInit('initWebSocket', initWebSocket);
+    _safeInit('initUI', initUI);
+    _safeInit('startCountdownLoop', startCountdownLoop);
 
-        // Start polling lanes: fast for critical status/position, slow for heavier panels.
-        setInterval(updateFastLane, state.fastPollInterval);
-        setInterval(updateSlowLane, state.slowPollInterval);
+    // Initial update
+    try { updateAll(); } catch (e) { console.error('updateAll failed:', e); }
 
-        // Listen for WS analysis complete
-        document.addEventListener('analysis-complete', () => {
-            console.log('Analysis complete, refreshing...');
+    // Start polling lanes: fast for critical status/position, slow for heavier panels.
+    setInterval(updateFastLane, state.fastPollInterval);
+    setInterval(updateSlowLane, state.slowPollInterval);
+
+    // Listen for WS analysis complete
+    document.addEventListener('analysis-complete', () => {
+        console.log('Analysis complete, refreshing...');
+        updateFastLane();
+        updateSlowLane();
+    });
+
+    document.addEventListener('brain-lifecycle-update', (event) => {
+        updateLifecycleDisplay(event.detail);
+        if (event.detail && ['rebuilt', 'error'].includes(event.detail.status)) {
             updateFastLane();
             updateSlowLane();
-        });
+        }
+    });
 
-        document.addEventListener('brain-lifecycle-update', (event) => {
-            updateLifecycleDisplay(event.detail);
-            if (event.detail && ['rebuilt', 'error'].includes(event.detail.status)) {
-                updateFastLane();
-                updateSlowLane();
-            }
-        });
+    document.addEventListener('brain-state-updated', () => {
+        updateFastLane();
+        updateSlowLane();
+    });
 
-        document.addEventListener('brain-state-updated', () => {
-            updateFastLane();
-            updateSlowLane();
-        });
+    document.addEventListener('trade-closed-detected', () => {
+        refreshBrainPanels();
+    });
 
-        document.addEventListener('trade-closed-detected', () => {
-            refreshBrainPanels();
-        });
-
-        console.log('Dashboard App Initialized');
-    } catch (e) {
-        console.error('Error initializing dashboard:', e);
-    }
+    console.log('Dashboard App Initialized');
 }
 
 // Run init when DOM is ready
