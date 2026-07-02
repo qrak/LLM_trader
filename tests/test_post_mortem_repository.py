@@ -109,7 +109,7 @@ class TestPostMortemRepository:
         assert repo.get_post_mortem_count() == 2
 
     def test_get_recent_returns_correct_fields(self, tmp_path):
-        """get_recent_post_mortems should return expected field subset."""
+        """get_recent_post_mortems should return expected fields including llm_analysis."""
         repo = self._make_repo(tmp_path)
         repo.insert_post_mortem(**self._make_data())
         recent = repo.get_recent_post_mortems()
@@ -120,6 +120,7 @@ class TestPostMortemRepository:
         assert pm["direction"] == "LONG"
         assert pm["verdict"] == "overestimated_breakout"
         assert pm["lesson_learned"]
+        assert pm["llm_analysis"]  # should be present (was missing before fix)
         assert pm["pnl_pct"] == -3.2
         assert pm["close_reason"] == "stop_loss"
         assert "created_at" in pm

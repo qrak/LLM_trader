@@ -474,3 +474,111 @@ async def test_get_vector_memory_reads_trades_from_persistence():
     assert result["experience_count"] == 7
     assert len(result["trades"]) == 2
     assert result["trades"][0]["action"] == "BUY"
+
+
+# ── get_post_mortems endpoint tests ──────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_post_mortems_returns_empty_when_repo_is_none():
+    """When no post_mortem_repo is configured, return empty list."""
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=DashboardState(),
+        vector_memory=None,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+        post_mortem_repo=None,
+    )
+    result = await router.get_post_mortems()
+    assert result == {"count": 0, "post_mortems": []}
+
+
+@pytest.mark.asyncio
+async def test_get_post_mortems_returns_recent_post_mortems():
+    """When no query is provided, returns recent post-mortems."""
+    mock_repo = MagicMock()
+    mock_repo.get_recent_post_mortems.return_value = [
+        {"id": 1, "symbol": "BTC/USDC", "verdict": "good_exit",
+         "lesson_learned": "Follow the plan", "pnl_pct": 2.5}
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=DashboardState(),
+        vector_memory=None,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+        post_mortem_repo=mock_repo,
+    )
+    result = await router.get_post_mortems()
+    assert result["count"] == 1
+    assert result["post_mortems"][0]["verdict"] == "good_exit"
+    mock_repo.get_recent_post_mortems.assert_called_once_with(limit=20)
+
+
+@pytest.mark.asyncio
+async def test_get_post_mortems_searches_with_query():
+    """When q param is provided, delegates to FTS5 search."""
+    mock_repo = MagicMock()
+    mock_repo.search_post_mortems.return_value = [
+        {"id": 2, "symbol": "BTC/USDC", "verdict": "held_too_long",
+         "lesson_learned": "Take profit earlier", "llm_analysis": "Breakout failed"}
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=DashboardState(),
+        vector_memory=None,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+        post_mortem_repo=mock_repo,
+    )
+    result = await router.get_post_mortems(q="breakout")
+    assert result["count"] == 1
+    assert result["post_mortems"][0]["verdict"] == "held_too_long"
+    mock_repo.search_post_mortems.assert_called_once_with("breakout", limit=20)
+
+
+@pytest.mark.asyncio
+async def test_get_post_mortems_clamps_limit():
+    """Limit is clamped to max 100."""
+    mock_repo = MagicMock()
+    mock_repo.get_recent_post_mortems.return_value = []
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=DashboardState(),
+        vector_memory=None,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+        post_mortem_repo=mock_repo,
+    )
+    await router.get_post_mortems(limit=500)
+    mock_repo.get_recent_post_mortems.assert_called_once_with(limit=100)
+
+
+@pytest.mark.asyncio
+async def test_get_post_mortems_handles_repo_exception():
+    """When repo throws, return empty result with error info instead of crashing."""
+    mock_repo = MagicMock()
+    mock_repo.get_recent_post_mortems.side_effect = RuntimeError("DB locked")
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=DashboardState(),
+        vector_memory=None,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+        post_mortem_repo=mock_repo,
+    )
+    result = await router.get_post_mortems()
+    assert result["count"] == 0
+    assert result["post_mortems"] == []
+    assert "error" in result
+    assert "DB locked" in result["error"]
