@@ -431,7 +431,9 @@ class TradingStrategy:
                 reasoning=f"Updated position parameters. {reasoning}",
             )
             await self._record_trade_decision(decision)
-            self.logger.info("Position updated: New SL=$%s, TP=$%s", f"{stop_loss:,.2f}", f"{take_profit:,.2f}")
+            self.logger.info("Position updated: New SL=$%s, TP=$%s",
+                             f"{stop_loss:,.2f}" if stop_loss else "unchanged",
+                             f"{take_profit:,.2f}" if take_profit else "unchanged")
             return decision
 
         return None

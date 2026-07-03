@@ -306,6 +306,18 @@ class Config:
         return self.get_config('ai_providers', 'google_studio_model', 'gemini-3.5-flash')
 
     @property
+    def BLOCKRUN_BASE_URL(self):
+        return self.get_config('ai_providers', 'blockrun_base_url', 'https://blockrun.ai/api')
+
+    @property
+    def BLOCKRUN_MODEL(self):
+        return self.get_config('ai_providers', 'blockrun_model', 'deepseek/deepseek-reasoner')
+
+    @property
+    def BLOCKRUN_WALLET_KEY(self):
+        return self.get_env('BLOCKRUN_WALLET_KEY')
+
+    @property
     def MODEL_VERBOSITY(self) -> str:
         return self._normalize_model_verbosity(
             self.get_config('model_config', 'model_verbosity', 'high'),

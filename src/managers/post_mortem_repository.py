@@ -125,7 +125,7 @@ class PostMortemRepository:
 
         Returns:
             List of dicts with keys: id, symbol, direction, verdict,
-            lesson_learned, pnl_pct, close_reason, created_at.
+            lesson_learned, llm_analysis, pnl_pct, close_reason, created_at.
         """
         with self._lock:
             conn = self._get_conn()
@@ -133,7 +133,7 @@ class PostMortemRepository:
                 rows = conn.execute(
                     """
                     SELECT id, symbol, direction, verdict, lesson_learned,
-                           pnl_pct, close_reason, created_at
+                           llm_analysis, pnl_pct, close_reason, created_at
                     FROM trade_post_mortem
                     ORDER BY created_at DESC
                     LIMIT ?
