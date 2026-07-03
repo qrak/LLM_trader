@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-03 — v1.0.2 — BlockRun AI (optional) + Post-Mortem llm_analysis + Dashboard Resilience
+
+### Added
+
+- **BlockRun.AI provider** (fully optional) — x402 micropayment-based AI provider via `blockrun-llm` SDK. Gated behind `BLOCKRUN_WALLET_KEY` env var; no-op when unset.
+- **`llm_analysis` field in post-mortem API response** — `get_recent_post_mortems()` now returns the full LLM analysis text that was already stored but missing from the query result.
+- **96 new tests**: BlockRun provider unit/integration tests, post-mortem API endpoint tests, trading strategy check_position/exit handling tests.
+
+### Fixed
+
+- **Dashboard resilience** — each panel initializer now has its own try/catch. A single panel failure no longer cascades and kills the entire dashboard.
+- **SL/TP logging crash** — `trading_strategy.py` no longer crashes when formatting a position update with `None` stop_loss or take_profit.
+
 ## 2026-06-24 — v1.0 Release — Security Hardening & Dependabot Cleanup
 
 ### Security Fixes
