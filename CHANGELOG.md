@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-07-08 — Executor Audit & Short Model Fix
+
+### Changed
+
+- **Executor audit**: 10-point security review of `llm_trader_executor` (separate repo) completed and pushed to `main`.
+- **SPOT_SHORT_ALLOWED** (new `.env` flag in executor, default `true`): SELL signals on spot are now capped to actual held base-asset balance instead of hard-blocked. When `false`, any insufficiently-backed SELL is rejected outright.
+- **UPDATE quantity fix**: `place_sl_tp_oco()` now overrides quantity from the tracked position's real size instead of accepting `quantity=0.0` from the LLM decision (which would cancel SL/TP without replacing them).
+- **set_leverage()** now called before entry on non-spot markets (previously leverage from the LLM prompt was validated but never applied).
+- **PositionTracker** refactored from single-global to `dict[symbol, Position]` — multi-pair ready.
+- **OCO fallback**: `create_order('oco')` attempted directly with try/except instead of relying on `exchange.has['createOrder']['oco']` (which crashes on most exchanges because `has` values are booleans, not dicts).
+- **UTF-8 stdout** forced on Windows to prevent `UnicodeEncodeError` crashes from emoji log prints.
+- **Notional check** in safety guard uses live ticker price as fallback for market orders (previously `entry_price=None` would bypass the check entirely).
+
+### Integration Notes
+
+- Executor payload format from `_save_execution_decision()` is fully compatible — no changes needed on this side.
+- The executor now clamps SELL quantity to <99% of available base balance. For example, a SELL 6 BTC signal with 1 BTC held executes as 0.99 BTC sell instead of failing.
+- Restart executor (`scripts/start.ps1` in `llm_trader_executor`) to pick up changes.
+
 ## 2026-06-24 — v1.0 Release — Security Hardening & Dependabot Cleanup
 
 ### Security Fixes
