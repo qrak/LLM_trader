@@ -106,6 +106,15 @@ sl_tightening_floor = 0.05           # brain can't push below this
 sl_tightening_ceiling = 0.40         # brain can't push above this
 sl_tightening_min_samples = 10       # min paired samples before brain override
 
+# === Executor API ===
+# Forward trading decisions to the separate llm_trader_executor service
+# (https://github.com/qrak/llm_trader_executor) which executes real exchange
+# orders via CCXT. File-based fallback (latest_decision.json) still works
+# when the executor is offline or disabled.
+[executor_api]
+enabled = false
+url = http://127.0.0.1:9199/decision
+
 # === Cooldowns ===
 [cooldowns]
 file_message_expiry = 168  # hours before tracked messages are cleaned up
