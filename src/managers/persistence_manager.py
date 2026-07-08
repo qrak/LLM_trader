@@ -482,6 +482,38 @@ class PersistenceManager:
         except Exception as e:
             self.logger.error("Error saving previous response: %s", e)
 
+    def save_latest_decision(self, decision_data: dict[str, Any]) -> None:
+        """Atomically write the latest trading decision for external bot consumption.
+
+        Writes to a temp file first, then atomically renames to prevent
+        the reader getting a partial write.
+
+        Args:
+            decision_data: Dict with CCXT-ready trade parameters
+        """
+        import tempfile
+
+        decision_path = self.data_dir / "latest_decision.json"
+        decision_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(decision_path.parent), suffix=".json"
+            )
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(decision_data, f, indent=2)
+                os.replace(tmp_path, str(decision_path))
+            except Exception:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+            self.logger.debug("Saved latest decision: signal=%s", decision_data.get("signal"))
+        except Exception as e:
+            self.logger.error("Error saving latest decision: %s", e)
+
     async def async_load_previous_response(self) -> dict[str, Any] | None:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_previous_response)

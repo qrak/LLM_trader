@@ -652,6 +652,22 @@ class Config:
         """Take-profit monitor interval in seconds."""
         return self.TAKE_PROFIT_CHECK_INTERVAL_MINUTES * 60
 
+    # ── llm_trader_executor integration ─────────────────────────────────────
+    # When enabled, LLM_trader POSTs every trading decision to the separate
+    # llm_trader_executor repo (https://github.com/qrak/llm_trader_executor)
+    # which handles real exchange order execution via CCXT.
+    # The file latest_decision.json is still written as a fallback.
+
+    @property
+    def EXECUTOR_API_ENABLED(self) -> bool:
+        """Forward decisions to llm_trader_executor via HTTP? (default: false)"""
+        return self.get_config('executor_api', 'enabled', False)
+
+    @property
+    def EXECUTOR_API_URL(self) -> str:
+        """URL of the llm_trader_executor REST API."""
+        return self.get_config('executor_api', 'url', 'http://127.0.0.1:9199/decision')
+
     @property
     def QUOTE_CURRENCY(self):
         """Extract quote currency from CRYPTO_PAIR (e.g., 'USDC' from 'BTC/USDC')."""

@@ -321,6 +321,8 @@ class CryptoTradingBot:
 
         await self._send_discord_notification(result)
         self._save_analysis_data(result)
+        self._save_execution_decision(result)
+        await self._send_to_executor(result)
     
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
@@ -474,6 +476,88 @@ class CryptoTradingBot:
             technical_data = result.get("technical_data")
             generated_prompt = result.get("generated_prompt")
             self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
+
+    def _save_execution_decision(self, result: dict[str, Any]):
+        """Extract CCXT-ready fields and atomically write to latest_decision.json."""
+        analysis = result.get("analysis")
+        if not analysis:
+            return
+
+        signal = analysis.get("signal")
+        # Only write actionable decisions
+        if signal not in ("BUY", "SELL", "CLOSE", "UPDATE"):
+            return
+
+        decision = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "symbol": self.current_symbol,
+            "signal": signal,
+            "order_type": analysis.get("order_type", "limit"),
+            "quantity": analysis.get("quantity", 0.0),
+            "entry_price": analysis.get("entry_price"),
+            "stop_loss": analysis.get("stop_loss"),
+            "take_profit": analysis.get("take_profit"),
+            "reduce_only": analysis.get("reduce_only", False),
+            "leverage": analysis.get("leverage", 1),
+            "confidence": analysis.get("confidence"),
+            "reasoning": analysis.get("reasoning", ""),
+        }
+
+        self.persistence.save_latest_decision(decision)
+
+    async def _send_to_executor(self, result: dict[str, Any]):
+        """Forward actionable trading decisions to the llm_trader_executor REST API.
+
+        The separate llm_trader_executor repo (https://github.com/qrak/llm_trader_executor)
+        runs a FastAPI server that receives decisions here and executes them on the user's
+        exchange account through CCXT — handling entry, stop-loss, take-profit, OCO, and
+        position close with real exchange orders.
+
+        Enabled via config: [executor_api] enabled=true, url=http://127.0.0.1:9199/decision
+        Disabled by default. Silently ignores connection errors (file fallback).
+        """
+        if not self.config.EXECUTOR_API_ENABLED:
+            return
+
+        analysis = result.get("analysis")
+        if not analysis:
+            return
+
+        signal = analysis.get("signal")
+        if signal not in ("BUY", "SELL", "CLOSE", "UPDATE"):
+            return
+
+        # Build the same decision payload that _save_execution_decision writes to disk
+        decision = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "symbol": self.current_symbol,
+            "signal": signal,
+            "order_type": analysis.get("order_type", "limit"),
+            "quantity": analysis.get("quantity", 0.0),
+            "entry_price": analysis.get("entry_price"),
+            "stop_loss": analysis.get("stop_loss"),
+            "take_profit": analysis.get("take_profit"),
+            "reduce_only": analysis.get("reduce_only", False),
+            "leverage": analysis.get("leverage", 1),
+            "confidence": analysis.get("confidence"),
+            "reasoning": analysis.get("reasoning", ""),
+        }
+
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    self.config.EXECUTOR_API_URL,
+                    json=decision,
+                )
+                if resp.status_code == 200:
+                    self.logger.info("Executor queued decision: %s %s", signal, self.current_symbol)
+                else:
+                    self.logger.warning("Executor returned %s: %s", resp.status_code, resp.text)
+        except Exception:
+            # Executor may be offline — file fallback (latest_decision.json) covers this
+            pass
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:

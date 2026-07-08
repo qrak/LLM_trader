@@ -637,20 +637,35 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 32, "strength_daily": 41, "timeframe_alignment": "DIVERGENT"}},
-        "risk_reward_ratio": 2.58
+        "risk_reward_ratio": 2.58,
+        "symbol": "BTC/USDC",
+        "order_type": "limit",
+        "quantity": 0.0,
+        "reduce_only": false,
+        "leverage": 1
     }}
 }}
 ```
 
 Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
 JSON rules by signal:
-| Signal | entry_price | stop_loss | take_profit | position_size | risk_reward_ratio |
-|--------|-------------|-----------|-------------|---------------|-------------------|
-| BUY/SELL | number | number | number | 0.0-1.0 | number |
-| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | number |
-| HOLD (open position) | null | null | null | 0.0 | null |
-| UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | number (from current) |
-| CLOSE | current price | null | null | 0.0 | null |
+| Signal | entry_price | stop_loss | take_profit | position_size | quantity | order_type | reduce_only | risk_reward_ratio |
+|--------|-------------|-----------|-------------|---------------|----------|------------|-------------|-------------------|
+| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | "limit" or "market" | false | number |
+| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | 0.0 | null | false | number |
+| HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |
+| UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | 0.0 | null | false | number (from current) |
+| CLOSE | current price | null | null | 0.0 | 0.0 | "market" | true | null |
+
+EXECUTION FIELDS (for automated trade execution bots):
+- symbol: Trading pair. Must match exactly the symbol from Trading Context.
+- order_type: "limit" (use entry_price) or "market" (for CLOSE, high urgency).
+  BUY/SELL default to "limit". CLOSE must be "market" to guarantee exit.
+- quantity: Actual base-currency amount (e.g., 0.015 BTC).
+  BUY/SELL: quantity = (available_capital × position_size) / entry_price, rounded down.
+  HOLD/UPDATE: 0.0. CLOSE: use current open position quantity.
+- reduce_only: false (new positions), true (CLOSE only). Prevents position flipping.
+- leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.
 
 HOLD semantics: HOLD(no position) may describe a conditional setup; HOLD(open position) means no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 
@@ -673,6 +688,11 @@ POSITION SIZING:
 - Max {max_pos:.2f} ({max_pos*100:.0f}% capital). Base = confidence/100 × {max_pos:.2f}.
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
 - Weak trend (ADX < {adx_weak}): smaller. Min normal: {min_pos_size:.3f}. Don't round up.
+
+QUANTITY CALCULATION (for automated execution):
+- quantity = (available_capital × position_size) / entry_price
+- available_capital is your configured capital (currently in quote currency).
+- Round down to exchange precision. For HOLD: 0.0. For CLOSE: current position quantity.
 
 MACRO CONFLICT:
 If 365D trend conflicts with trade: need 4+ confluences. Both 365D+Weekly conflict: need 5+ or HOLD.
