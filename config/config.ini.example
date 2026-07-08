@@ -112,7 +112,7 @@ sl_tightening_min_samples = 10       # min paired samples before brain override
 # orders via CCXT. File-based fallback (latest_decision.json) still works
 # when the executor is offline or disabled.
 [executor_api]
-enabled = false
+enabled = true
 url = http://127.0.0.1:9199/decision
 
 # === Cooldowns ===
