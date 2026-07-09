@@ -88,7 +88,7 @@ class DashboardState:
         """Remove dashboard caches affected by trade close and brain learning."""
         for key in ("brain_status", "position", "rules", "performance_history", "statistics", "decision_summary"):
             self.invalidate_cache(key)
-        for prefix in ("memory_", "vectors_", "decision_summary"):
+        for prefix in ("vectors_", "decision_summary"):
             self.invalidate_cache_prefix(prefix)
 
     def get_brain_lifecycle(self) -> dict[str, Any]:

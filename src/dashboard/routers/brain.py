@@ -518,7 +518,6 @@ class BrainRouter:
         self.post_mortem_repo = post_mortem_repo
 
         self.router.add_api_route("/status", self.get_brain_status, methods=["GET"])
-        self.router.add_api_route("/memory", self.get_vector_memory, methods=["GET"])
         self.router.add_api_route("/rules", self.get_active_rules, methods=["GET"])
         self.router.add_api_route("/vectors", self.get_vector_details, methods=["GET"])
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
@@ -616,39 +615,6 @@ class BrainRouter:
             "refreshed_at": datetime.now(timezone.utc).isoformat(),
             "lifecycle": self.dashboard_state.get_brain_lifecycle(),
         }
-
-    async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
-        """Get recent vector memories (synapses)."""
-        cached = self.dashboard_state.get_cached(f"memory_{limit}", ttl_seconds=30.0)
-        if cached:
-            return cached
-        result = {
-            "experience_count": 0,
-            "trades": [],
-            "stats": {}
-        }
-        if self.vector_memory:
-            result["experience_count"] = self.vector_memory.experience_count
-            result["stats"] = self.vector_memory.compute_confidence_stats()
-        try:
-            if self.persistence:
-                trades = await asyncio.to_thread(self.persistence.load_trade_history)
-                result["trades"] = [
-                    {
-                        "id": f"trade_{i}",
-                        "timestamp": t.get("timestamp"),
-                        "action": t.get("action"),
-                        "price": t.get("price"),
-                        "confidence": t.get("confidence"),
-                        "reasoning": t.get("reasoning", "")[:100]
-                    }
-                    for i, t in enumerate(trades[-limit:])
-                ]
-        except Exception:
-            self.logger.error("Failed to load trade history for memory", exc_info=True)
-
-        self.dashboard_state.set_cached(f"memory_{limit}", result)
-        return result
 
     async def get_active_rules(self) -> list[dict[str, Any]]:
         """Get currently active semantic rules."""

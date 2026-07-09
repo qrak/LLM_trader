@@ -350,7 +350,7 @@ async def test_get_brain_status_includes_lifecycle_from_cache(tmp_path):
 @pytest.mark.asyncio
 async def test_refresh_brain_state_invalidates_related_caches():
     dashboard_state = DashboardState()
-    for key in ("brain_status", "position", "rules", "memory_50", "vectors_50_date_desc", "statistics"):
+    for key in ("brain_status", "position", "rules", "decision_summary", "vectors_50_date_desc", "statistics"):
         dashboard_state.set_cached(key, {"cached": True})
     router = BrainRouter(
         config=SimpleNamespace(DATA_DIR="unused", TIMEFRAME="4h"),
@@ -368,7 +368,7 @@ async def test_refresh_brain_state_invalidates_related_caches():
     assert dashboard_state.get_cached("brain_status") is None
     assert dashboard_state.get_cached("position") is None
     assert dashboard_state.get_cached("rules") is None
-    assert dashboard_state.get_cached("memory_50") is None
+    assert dashboard_state.get_cached("decision_summary") is None
     assert dashboard_state.get_cached("vectors_50_date_desc") is None
     assert dashboard_state.get_cached("statistics") is None
 
@@ -432,48 +432,6 @@ async def test_get_vector_details_sorts_legacy_pnl_metadata_safely():
 
     assert [item["id"] for item in result["experiences"]] == ["high", "missing", "low"]
 
-
-@pytest.mark.asyncio
-async def test_get_vector_memory_reads_trades_from_persistence():
-    dashboard_state = DashboardState()
-    persistence = MagicMock()
-    persistence.load_trade_history.return_value = [
-        {
-            "timestamp": "2026-05-28T10:00:00+00:00",
-            "action": "BUY",
-            "price": 100.0,
-            "confidence": "HIGH",
-            "reasoning": "entry",
-        },
-        {
-            "timestamp": "2026-05-28T12:00:00+00:00",
-            "action": "CLOSE_LONG",
-            "price": 102.5,
-            "confidence": "HIGH",
-            "reasoning": "exit",
-        },
-    ]
-
-    vector_memory = MagicMock()
-    vector_memory.experience_count = 7
-    vector_memory.compute_confidence_stats.return_value = {"HIGH": {"win_rate": 70.0}}
-
-    router = BrainRouter(
-        config=SimpleNamespace(DATA_DIR="unused", TIMEFRAME="4h"),
-        logger=MagicMock(),
-        dashboard_state=dashboard_state,
-        vector_memory=vector_memory,
-        unified_parser=None,
-        persistence=persistence,
-        exchange_manager=None,
-    )
-
-    result = await router.get_vector_memory(limit=10)
-
-    persistence.load_trade_history.assert_called_once_with()
-    assert result["experience_count"] == 7
-    assert len(result["trades"]) == 2
-    assert result["trades"][0]["action"] == "BUY"
 
 
 # ── get_post_mortems endpoint tests ──────────────────────────────

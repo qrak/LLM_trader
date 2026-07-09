@@ -259,25 +259,6 @@ button:hover {
 
 
 
-.dot {
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    margin-right: 4px;
-}
-
-.dot.buy {
-    background-color: #238636;
-}
-
-.dot.close {
-    background-color: #00e396;
-}
-
-.dot.update {
-    background-color: #8b949e;
-}
 
 /* Progress Bars */
 .metric-bar-container {

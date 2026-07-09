@@ -219,7 +219,7 @@ The real-time web dashboard started as a debug tool and became one of the most u
 - **Market Data** — Real-time indicators, order book, funding rates, active position
 - **Memory Bank** — Vector database browser — inspect ChromaDB contents and similarity scores
 
-All panels are collapsible, fullscreen-able, and update via WebSocket. Zero build step — vanilla JavaScript, Vis.js for the synapse graph, ApexCharts for performance charts.
+All panels are collapsible, fullscreen-able, and update via WebSocket. Zero build step — vanilla JavaScript, Vis.js for Decision Pathways, ApexCharts for performance charts.
 
 ---
 

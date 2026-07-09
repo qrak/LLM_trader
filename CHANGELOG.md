@@ -8,6 +8,8 @@
 
 ### Removed
 - `synapse_viewer.js` trade-history BUY/SELL/CLOSE graph consumer for Brain Activity (vis-network retained for the new graph).
+- `GET /api/brain/memory` + `BrainRouter.get_vector_memory` and its dashboard cache prefix `memory_*` (no UI consumers; Decision Pathways is the only source).
+- Dead legend CSS `.dot.buy/.close/.update` from the old synaptic graph legend.
 
 ### Tests
 - `tests/test_decision_summary_api.py`
