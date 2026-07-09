@@ -1,12 +1,12 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.5';
-import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=1.0';
+import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=1.1';
 import { updateLogs, updatePromptTab, updateResponseTab } from './modules/log_viewer.js?v=4.5';
 import { updateVisuals } from './modules/visuals.js?v=4.5';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.6';
-import { initFullscreen } from './modules/fullscreen.js?v=4.5';
+import { initFullscreen } from './modules/fullscreen.js?v=4.6';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.6';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.6';
-import { initUI } from './modules/ui.js?v=4.5';
+import { initUI } from './modules/ui.js?v=4.6';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.5';
 import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.5';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.1';

@@ -28,7 +28,8 @@ Develop production batch: readable multi-source Brain Activity graph, dead synap
 - Discord trading-check path remains green with executor API disabled in fixtures.
 
 ### Ops notes
-- Hard-refresh dashboard clients for Decision Pathways JS/CSS cache bust (`style.css?v=6.3`, `decision_pathways_panel.js?v=1.0`).
+- Hard-refresh dashboard clients for Decision Pathways JS/CSS cache bust (`main.js?v=6.0`, `style.css?v=6.3`, `decision_pathways_panel.js?v=1.1`).
+- Production was briefly stuck loading synopsis because Cloudflare caches `main.js?v=*` as immutable and origin still had old `synapse_viewer` major path under `main.js?v=5.2` while HTML already pointed at Decision Pathways markup.
 - Restart trading bot process to pick up brain router + executor bridge changes.
 - Executor HTTP remains optional via `[executor_api]`; `latest_decision.json` stays as file fallback.
 
