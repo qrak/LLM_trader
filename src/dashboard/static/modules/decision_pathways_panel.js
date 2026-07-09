@@ -1,6 +1,6 @@
 /**
  * Decision Pathways panel — multi-source hierarchical graph + synopsis + detail.
- * Replaces the old trade-history-only synapse_viewer graph.
+ * Hierarchical multi-source decision graph for Brain Activity.
  */
 
 let network = null;

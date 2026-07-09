@@ -55,7 +55,7 @@ python start.py               # dashboard at http://localhost:8000
 
 ![Dashboard Overview](img/1.png)
 
-![Memory Synapse Graph](img/2.png)
+![Decision Pathways](img/2.png)
 
 ---
 

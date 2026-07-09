@@ -133,7 +133,7 @@ export function openFullscreen(panelId) {
 function getContentId(panelId) {
     const mapping = {
         'panel-performance': 'performance-chart',
-        'panel-synapses': 'decision-graph',
+        'panel-decision-pathways': 'decision-graph',
         'panel-thoughts': 'log-viewer',
         'panel-visuals': 'visual-container',
         'panel-position': 'position-content',
@@ -163,7 +163,7 @@ function resizeContent(panelId, contentEl) {
                 }
             }, 100);
         }
-    } else if (panelId === 'panel-synapses') {
+    } else if (panelId === 'panel-decision-pathways') {
         const network = window.decisionNetwork;
         if (network && typeof network.fit === 'function') {
             contentEl.style.width = '100%';
@@ -229,7 +229,7 @@ function restoreContent(panelId, contentEl) {
                 }
             }, 150);
         }
-    } else if (panelId === 'panel-synapses') {
+    } else if (panelId === 'panel-decision-pathways') {
         const network = window.decisionNetwork;
         if (network && typeof network.fit === 'function') {
             contentEl.style.width = '';

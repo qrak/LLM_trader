@@ -33,7 +33,7 @@ def test_decision_pathways_panel_bindings():
     html = (DASHBOARD_STATIC / "index.html").read_text(encoding="utf-8")
     main_js = (DASHBOARD_STATIC / "main.js").read_text(encoding="utf-8")
 
-    assert 'id="panel-synapses"' in html
+    assert 'id="panel-decision-pathways"' in html
     assert "Decision Pathways" in html
     assert 'id="decision-synopsis"' in html
     assert 'id="decision-graph"' in html
