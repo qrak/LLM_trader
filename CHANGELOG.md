@@ -1,31 +1,36 @@
 # Changelog
 
-## 2026-07-09 — Executor bridge cleanup (DRY + errors)
+## 2026-07-09 — Decision Pathways + executor bridge production cleanup
 
-### Changed
-- Shared `_build_execution_decision()` payload builder used by both file write and HTTP forward (no duplicated decision dict).
-- `_forward_decision_to_executor` receives the same payload returned by `_save_execution_decision`.
-- Executor network failures now log with `exc_info=True` (no silent `except: pass`).
-- `save_latest_decision` re-raises after logging so callers can react; still returns built payload if HTTP path can recover.
-
-### Tests
-- `tests/test_execution_decision_bridge.py`
-
-
-## 2026-07-09 — Decision Pathways replaces Synaptic Pathways graph
+Develop production batch: readable multi-source Brain Activity graph, dead synaptic/API path removal, and hardened llm_trader_executor integration.
 
 ### Added
 - `GET /api/brain/decision-summary` aggregates active position, vector experiences, semantic rules, blocked trades, trade-journal post-mortems, and last response into a synopsis + hierarchical multi-source graph payload.
-- Brain Activity **Decision Pathways** panel: readable labeled graph (not action-only dots), synopsis strip, type legend, click-to-detail card.
+- Brain Activity **Decision Pathways** panel: labeled hierarchical graph (Position / Memory / Rules / Journal / Decision), synopsis strip, type legend, click-to-detail card.
+- Shared `_build_execution_decision()` CCXT-ready payload used by both file write and HTTP forward.
+- `tests/test_decision_summary_api.py`, `tests/test_execution_decision_bridge.py`.
+
+### Changed
+- `_save_execution_decision` returns the written payload; `_forward_decision_to_executor` reuses it so disk + HTTP stay identical.
+- Executor network/HTTP failures log full traceback (`exc_info=True`); silent `except: pass` removed.
+- `PersistenceManager.save_latest_decision` logs with traceback and re-raises after atomic write failures.
+- `httpx>=0.27,<1` declared in `requirements.txt`.
+- Panel DOM id renamed `panel-synapses` → `panel-decision-pathways`; README screenshot caption retitled **Decision Pathways**.
 
 ### Removed
-- `synapse_viewer.js` trade-history BUY/SELL/CLOSE graph consumer for Brain Activity (vis-network retained for the new graph).
-- `GET /api/brain/memory` + `BrainRouter.get_vector_memory` and its dashboard cache prefix `memory_*` (no UI consumers; Decision Pathways is the only source).
-- Dead legend CSS `.dot.buy/.close/.update` from the old synaptic graph legend.
+- `synapse_viewer.js` trade-history BUY/SELL/CLOSE graph consumer (vis-network retained for Decision Pathways only).
+- `GET /api/brain/memory` + `BrainRouter.get_vector_memory` + dashboard cache prefix `memory_*` (no back-compat).
+- Dead legend CSS `.dot.buy/.close/.update`.
 
-### Tests
-- `tests/test_decision_summary_api.py`
-- Updated `tests/test_dashboard_static_bindings.py`
+### Tests / validation
+- Decision summary + static bindings + brain router + server cache.
+- Executor bridge unit tests (payload, SKIP HOLD, HTTP forward, error logging, atomic latest_decision write).
+- Discord trading-check path remains green with executor API disabled in fixtures.
+
+### Ops notes
+- Hard-refresh dashboard clients for Decision Pathways JS/CSS cache bust (`style.css?v=6.3`, `decision_pathways_panel.js?v=1.0`).
+- Restart trading bot process to pick up brain router + executor bridge changes.
+- Executor HTTP remains optional via `[executor_api]`; `latest_decision.json` stays as file fallback.
 
 
 ## 2026-07-08 — Executor Audit & Short Model Fix
