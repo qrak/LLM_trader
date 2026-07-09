@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-07-09 — Decision Pathways replaces Synaptic Pathways graph
+
+### Added
+- `GET /api/brain/decision-summary` aggregates active position, vector experiences, semantic rules, blocked trades, trade-journal post-mortems, and last response into a synopsis + hierarchical multi-source graph payload.
+- Brain Activity **Decision Pathways** panel: readable labeled graph (not action-only dots), synopsis strip, type legend, click-to-detail card.
+
+### Removed
+- `synapse_viewer.js` trade-history BUY/SELL/CLOSE graph consumer for Brain Activity (vis-network retained for the new graph).
+
+### Tests
+- `tests/test_decision_summary_api.py`
+- Updated `tests/test_dashboard_static_bindings.py`
+
+
 ## 2026-07-08 — Executor Audit & Short Model Fix
 
 ### Changed

@@ -661,3 +661,108 @@ button:hover {
     height: 100% !important;
     max-height: none !important;
 }
+
+
+/* Decision Pathways panel */
+.decision-synopsis {
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin: 0 12px 10px;
+    line-height: 1.45;
+    color: var(--text-main, #e6edf3);
+}
+.decision-synopsis-text {
+    margin: 0;
+    font-size: 13.5px;
+}
+.decision-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: center;
+    padding: 0 12px 10px;
+    font-size: 11px;
+    color: var(--text-muted, #8b949e);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.decision-legend .dl {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: -1px;
+}
+.dl-decision { background: #58a6ff; }
+.dl-position { background: #3fb950; border-radius: 2px; }
+.dl-exp { background: #238636; }
+.dl-rule { background: #d2a8ff; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); border-radius: 0; }
+.dl-journal { background: #f2cc60; border-radius: 2px; }
+.dl-blocked { background: #f85149; }
+.decision-body {
+    display: grid;
+    grid-template-columns: 1.4fr 0.9fr;
+    gap: 12px;
+    padding: 0 12px 16px;
+    min-height: 380px;
+}
+.decision-graph {
+    min-height: 380px;
+    height: 420px;
+    width: 100%;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+}
+.decision-detail {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color, #30363d);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
+}
+.decision-detail h4 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #8b949e);
+}
+.decision-kv {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12.5px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.decision-excerpt {
+    margin-top: 10px;
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+.decision-excerpt p {
+    margin: 6px 0 0;
+    color: var(--text-main, #e6edf3);
+}
+.decision-empty {
+    color: var(--text-muted, #8b949e);
+    font-size: 13px;
+}
+@media (max-width: 768px) {
+    .decision-body {
+        grid-template-columns: 1fr;
+        min-height: 0;
+    }
+    .decision-graph {
+        min-height: 320px;
+        height: 320px;
+    }
+    .decision-detail {
+        max-height: 260px;
+    }
+}

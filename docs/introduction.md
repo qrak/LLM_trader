@@ -211,7 +211,7 @@ The real-time web dashboard started as a debug tool and became one of the most u
 **What you see — 8 tabs:**
 
 - **Overview** — Position state, P&L, equity curve, system status at a glance
-- **Brain Activity** — Neural network status, synaptic pathway graph (Vis.js), and visual cortex input (charts the bot sent to the AI)
+- **Brain Activity** — Decision Pathways hierarchical multi-source graph (position, memory, rules, journal, last decision) plus visual cortex input
 - **Last Prompt** — The full trading context sent to the LLM
 - **Last Response** — The raw LLM analysis output
 - **Statistics** — Performance history, win/loss ratios, trade metrics

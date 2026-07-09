@@ -1,5 +1,5 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.5';
-import { initSynapseNetwork, updateSynapses } from './modules/synapse_viewer.js?v=4.5';
+import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=1.0';
 import { updateLogs, updatePromptTab, updateResponseTab } from './modules/log_viewer.js?v=4.5';
 import { updateVisuals } from './modules/visuals.js?v=4.5';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.6';
@@ -215,7 +215,7 @@ async function updateSlowLane() {
     await fetchRules();
     await fetchCosts();
     await updatePerformanceData();
-    await updateSynapses();
+    await updateDecisionPathways();
     await updateLogs();
     await updateVisuals();
     await updateVectorData();
@@ -270,7 +270,7 @@ function initApp() {
     const _safeInit = (name, fn) => { try { fn(); } catch (e) { console.error(name + ' init failed:', e); } };
 
     _safeInit('initPerformanceChart', initPerformanceChart);
-    _safeInit('initSynapseNetwork', initSynapseNetwork);
+    try { initDecisionPathwaysPanel(); } catch (e) { console.error('initDecisionPathwaysPanel failed:', e); }
     try { initVectorPanel(); } catch (e) { console.error('initVectorPanel failed:', e); }
     _safeInit('initFullscreen', initFullscreen);
     _safeInit('initPositionPanel', initPositionPanel);

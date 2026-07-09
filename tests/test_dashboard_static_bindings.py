@@ -27,3 +27,21 @@ def test_dashboard_scripts_reference_existing_new_bindings():
     assert "brain-lifecycle-badge" in main_js
     assert "brain_rebuild_completed" in websocket_js
     assert "trade-closed-detected" in position_js
+
+
+def test_decision_pathways_panel_bindings():
+    html = (DASHBOARD_STATIC / "index.html").read_text(encoding="utf-8")
+    main_js = (DASHBOARD_STATIC / "main.js").read_text(encoding="utf-8")
+
+    assert 'id="panel-synapses"' in html
+    assert "Decision Pathways" in html
+    assert 'id="decision-synopsis"' in html
+    assert 'id="decision-graph"' in html
+    assert 'id="decision-detail"' in html
+    assert 'id="decision-legend"' in html
+    assert "decision_pathways_panel.js" in main_js
+    assert "updateDecisionPathways" in main_js
+    assert "synapse_viewer.js" not in main_js
+    assert "initSynapseNetwork" not in main_js
+    assert "vis-network" in html
+    assert "synapse-network" not in html

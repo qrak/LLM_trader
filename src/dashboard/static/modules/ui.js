@@ -1,5 +1,4 @@
 
-import { initSynapseNetwork } from './synapse_viewer.js';
 
 /**
  * UI Controller for Sidebar and Tabs
@@ -73,11 +72,10 @@ function setupSidebarNavigation() {
                 // Trigger resize event for charts/graphs
                 window.dispatchEvent(new Event('resize'));
                 
-                // Specific fix for vis-network graph in Brain Activity tab
+                // Fit decision pathways graph when Brain Activity tab becomes visible
                 if (targetId === 'tab-brain') {
-                    // Small delay to ensure the div is fully visible/rendered
                     setTimeout(() => {
-                        if (window.fitSynapseNetwork) window.fitSynapseNetwork();
+                        if (window.fitDecisionNetwork) window.fitDecisionNetwork();
                     }, 50);
                 }
             }
