@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-09 — Executor bridge cleanup (DRY + errors)
+
+### Changed
+- Shared `_build_execution_decision()` payload builder used by both file write and HTTP forward (no duplicated decision dict).
+- `_forward_decision_to_executor` receives the same payload returned by `_save_execution_decision`.
+- Executor network failures now log with `exc_info=True` (no silent `except: pass`).
+- `save_latest_decision` re-raises after logging so callers can react; still returns built payload if HTTP path can recover.
+
+### Tests
+- `tests/test_execution_decision_bridge.py`
+
+
 ## 2026-07-09 — Decision Pathways replaces Synaptic Pathways graph
 
 ### Added

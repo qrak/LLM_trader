@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -491,8 +492,6 @@ class PersistenceManager:
         Args:
             decision_data: Dict with CCXT-ready trade parameters
         """
-        import tempfile
-
         decision_path = self.data_dir / "latest_decision.json"
         decision_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -512,7 +511,8 @@ class PersistenceManager:
                 raise
             self.logger.debug("Saved latest decision: signal=%s", decision_data.get("signal"))
         except Exception as e:
-            self.logger.error("Error saving latest decision: %s", e)
+            self.logger.error("Error saving latest decision: %s", e, exc_info=True)
+            raise
 
     async def async_load_previous_response(self) -> dict[str, Any] | None:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""

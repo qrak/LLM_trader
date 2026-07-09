@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, TYPE_CHECKING
 
+import httpx
+
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 from src.utils.timeframe_validator import TimeframeValidator
@@ -32,6 +34,38 @@ SLEEP_CHUNK_SIZE = 1.0  # Check for interruptions every second
 CANDLE_BUFFER_SECONDS = 2  # Seconds to wait after candle start
 ERROR_WAIT_SHORT = 60   # Seconds to wait after minor error
 ERROR_WAIT_LONG = 300   # Seconds to wait after major error
+ACTIONABLE_EXECUTION_SIGNALS = frozenset({"BUY", "SELL", "CLOSE", "UPDATE"})
+EXECUTOR_HTTP_TIMEOUT_SECONDS = 5.0
+
+
+def _build_execution_decision(
+    analysis: dict[str, Any] | None,
+    *,
+    symbol: str | None,
+    timestamp: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a CCXT-ready decision payload or return None if not actionable."""
+    if not isinstance(analysis, dict):
+        return None
+    if not symbol:
+        return None
+    signal = analysis.get("signal")
+    if signal not in ACTIONABLE_EXECUTION_SIGNALS:
+        return None
+    return {
+        "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
+        "symbol": symbol,
+        "signal": signal,
+        "order_type": analysis.get("order_type", "limit"),
+        "quantity": analysis.get("quantity", 0.0),
+        "entry_price": analysis.get("entry_price"),
+        "stop_loss": analysis.get("stop_loss"),
+        "take_profit": analysis.get("take_profit"),
+        "reduce_only": analysis.get("reduce_only", False),
+        "leverage": analysis.get("leverage", 1),
+        "confidence": analysis.get("confidence"),
+        "reasoning": analysis.get("reasoning", ""),
+    }
 
 
 @dataclass
@@ -321,8 +355,8 @@ class CryptoTradingBot:
 
         await self._send_discord_notification(result)
         self._save_analysis_data(result)
-        self._save_execution_decision(result)
-        await self._send_to_executor(result)
+        decision_payload = self._save_execution_decision(result)
+        await self._forward_decision_to_executor(decision_payload)
     
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
@@ -477,87 +511,71 @@ class CryptoTradingBot:
             generated_prompt = result.get("generated_prompt")
             self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
 
-    def _save_execution_decision(self, result: dict[str, Any]):
-        """Extract CCXT-ready fields and atomically write to latest_decision.json."""
-        analysis = result.get("analysis")
-        if not analysis:
-            return
+    def _save_execution_decision(self, result: dict[str, Any]) -> dict[str, Any] | None:
+        """Extract CCXT-ready fields and atomically write to latest_decision.json.
 
-        signal = analysis.get("signal")
-        # Only write actionable decisions
-        if signal not in ("BUY", "SELL", "CLOSE", "UPDATE"):
-            return
-
-        decision = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "symbol": self.current_symbol,
-            "signal": signal,
-            "order_type": analysis.get("order_type", "limit"),
-            "quantity": analysis.get("quantity", 0.0),
-            "entry_price": analysis.get("entry_price"),
-            "stop_loss": analysis.get("stop_loss"),
-            "take_profit": analysis.get("take_profit"),
-            "reduce_only": analysis.get("reduce_only", False),
-            "leverage": analysis.get("leverage", 1),
-            "confidence": analysis.get("confidence"),
-            "reasoning": analysis.get("reasoning", ""),
-        }
-
-        self.persistence.save_latest_decision(decision)
-
-    async def _send_to_executor(self, result: dict[str, Any]):
-        """Forward actionable trading decisions to the llm_trader_executor REST API.
-
-        The separate llm_trader_executor repo (https://github.com/qrak/llm_trader_executor)
-        runs a FastAPI server that receives decisions here and executes them on the user's
-        exchange account through CCXT — handling entry, stop-loss, take-profit, OCO, and
-        position close with real exchange orders.
-
-        Enabled via config: [executor_api] enabled=true, url=http://127.0.0.1:9199/decision
-        Disabled by default. Silently ignores connection errors (file fallback).
+        Returns the payload that was written, or None when the signal is not
+        actionable / analysis is missing. Callers should reuse this payload for
+        HTTP forwarding so file + API stay byte-identical for a given decision.
         """
-        if not self.config.EXECUTOR_API_ENABLED:
-            return
-
-        analysis = result.get("analysis")
-        if not analysis:
-            return
-
-        signal = analysis.get("signal")
-        if signal not in ("BUY", "SELL", "CLOSE", "UPDATE"):
-            return
-
-        # Build the same decision payload that _save_execution_decision writes to disk
-        decision = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "symbol": self.current_symbol,
-            "signal": signal,
-            "order_type": analysis.get("order_type", "limit"),
-            "quantity": analysis.get("quantity", 0.0),
-            "entry_price": analysis.get("entry_price"),
-            "stop_loss": analysis.get("stop_loss"),
-            "take_profit": analysis.get("take_profit"),
-            "reduce_only": analysis.get("reduce_only", False),
-            "leverage": analysis.get("leverage", 1),
-            "confidence": analysis.get("confidence"),
-            "reasoning": analysis.get("reasoning", ""),
-        }
-
-        import httpx
-
+        analysis = result.get("analysis") if isinstance(result, dict) else None
+        decision = _build_execution_decision(
+            analysis if isinstance(analysis, dict) else None,
+            symbol=self.current_symbol,
+        )
+        if not decision:
+            return None
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.post(
-                    self.config.EXECUTOR_API_URL,
-                    json=decision,
-                )
-                if resp.status_code == 200:
-                    self.logger.info("Executor queued decision: %s %s", signal, self.current_symbol)
-                else:
-                    self.logger.warning("Executor returned %s: %s", resp.status_code, resp.text)
+            self.persistence.save_latest_decision(decision)
         except Exception:
-            # Executor may be offline — file fallback (latest_decision.json) covers this
-            pass
+            self.logger.error(
+                "Failed to persist latest_decision.json for %s %s",
+                decision.get("signal"),
+                decision.get("symbol"),
+                exc_info=True,
+            )
+            # Still return the decision so HTTP forward may succeed even if disk write fails.
+        return decision
+
+    async def _forward_decision_to_executor(self, decision: dict[str, Any] | None) -> None:
+        """POST an actionable decision to llm_trader_executor (optional).
+
+        Uses the already-built decision payload from `_save_execution_decision`
+        so the HTTP body matches the on-disk fallback. Connection/errors are
+        logged with full traceback; file fallback remains independently.
+        """
+        if not decision:
+            return
+        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
+            return
+
+        url = getattr(self.config, "EXECUTOR_API_URL", None)
+        if not url:
+            self.logger.warning("EXECUTOR_API_ENABLED but EXECUTOR_API_URL is empty; skip forward")
+            return
+
+        signal = decision.get("signal")
+        symbol = decision.get("symbol")
+        try:
+            async with httpx.AsyncClient(timeout=EXECUTOR_HTTP_TIMEOUT_SECONDS) as client:
+                resp = await client.post(url, json=decision)
+            if resp.status_code == 200:
+                self.logger.info("Executor queued decision: %s %s", signal, symbol)
+            else:
+                self.logger.warning(
+                    "Executor returned %s for %s %s: %s",
+                    resp.status_code,
+                    signal,
+                    symbol,
+                    resp.text,
+                )
+        except Exception:
+            self.logger.error(
+                "Executor forward failed for %s %s (file fallback still available)",
+                signal,
+                symbol,
+                exc_info=True,
+            )
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:

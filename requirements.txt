@@ -27,3 +27,4 @@ uvicorn==0.40.0
 wsproto>=1.2.0
 jinja2>=3.1.2
 crawl4ai>=0.5.0
+httpx>=0.27,<1
