@@ -73,9 +73,13 @@ function setupSidebarNavigation() {
                 window.dispatchEvent(new Event('resize'));
                 
                 // Fit decision pathways graph when Brain Activity tab becomes visible
+                // If the network was never initialized (due to hidden container at
+                // page load), trigger a full update to create it with real dimensions.
                 if (targetId === 'tab-brain') {
                     setTimeout(() => {
-                        if (window.fitDecisionNetwork) window.fitDecisionNetwork();
+                        if (window.updateDecisionPathways) {
+                            window.updateDecisionPathways().catch(function(){});
+                        }
                     }, 50);
                 }
             }

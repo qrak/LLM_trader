@@ -97,6 +97,13 @@ function fitNetwork() {
 function ensureNetwork() {
     const container = document.getElementById('decision-graph');
     if (!container) return null;
+
+    // Never initialize vis-network when the container has zero dimensions
+    // (e.g. Brain tab is hidden with display:none at page load). The canvas
+    // will get 0×0 and fit() cannot recover. Defer until the tab is visible.
+    const rect = container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+
     if (typeof vis === 'undefined' || !vis.Network) {
         console.error('vis-network unavailable');
         return null;
@@ -142,6 +149,7 @@ function ensureNetwork() {
     network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, options);
     window.decisionNetwork = network;
     window.fitDecisionNetwork = fitNetwork;
+    window.updateDecisionPathways = updateDecisionPathways;
 
     network.on('selectNode', (params) => {
         const id = params.nodes && params.nodes[0];
