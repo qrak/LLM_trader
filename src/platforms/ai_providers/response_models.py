@@ -16,6 +16,7 @@ class UsageModel(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    thoughts_token_count: int = 0
 
 
 class ChoiceModel(BaseModel):

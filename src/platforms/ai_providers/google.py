@@ -99,21 +99,31 @@ class GoogleAIClient(BaseAIClient):
                     prompt = metadata.prompt_token_count
                 except AttributeError:
                     prompt = 0
-                
+
                 try:
                     completion = metadata.candidates_token_count
                 except AttributeError:
                     completion = 0
-                
+
+                try:
+                    thoughts = metadata.thoughts_token_count
+                except AttributeError:
+                    thoughts = 0
+
                 try:
                     total = metadata.total_token_count
                 except AttributeError:
                     total = 0
-                
+
+                # Google bills thinking tokens as output ("Output price including thinking tokens").
+                # Sum candidates + thoughts so cost calculations match actual billing.
+                output_tokens = completion + thoughts
+
                 return UsageModel(
                     prompt_tokens=prompt,
-                    completion_tokens=completion,
+                    completion_tokens=output_tokens,
                     total_tokens=total,
+                    thoughts_token_count=thoughts,
                 )
         except AttributeError:
             pass
