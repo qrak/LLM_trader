@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-10 — Fixed Google cost tracking missing thinking tokens
+
+### Fixed
+- `_extract_usage_metadata` now captures `thoughts_token_count` (`UsageModel.thoughts_token_count`) and sums it with `candidates_token_count` so `completion_tokens` reflects total billable output — Google bills thinking tokens as output ("Output price including thinking tokens"). Previously only visible candidate tokens were counted, causing ~3.5x underreporting vs actual Google Cloud charges.
+- `UsageModel.thoughts_token_count` added to `response_models.py` for downstream display.
+
 ## 2026-07-09 — Decision Pathways + executor bridge production cleanup
 
 Develop production batch: readable multi-source Brain Activity graph, dead synaptic/API path removal, and hardened llm_trader_executor integration.
