@@ -105,10 +105,7 @@ class GoogleAIClient(BaseAIClient):
                 except AttributeError:
                     completion = 0
 
-                try:
-                    thoughts = metadata.thoughts_token_count
-                except AttributeError:
-                    thoughts = 0
+                thoughts = metadata.thoughts_token_count
 
                 try:
                     total = metadata.total_token_count
