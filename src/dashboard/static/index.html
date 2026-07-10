@@ -8,7 +8,7 @@
     <meta name="description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
     <meta property="og:title" content="Semantic Signal LLM">
     <meta property="og:description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
-    <link rel="stylesheet" href="css/style.css?v=6.3">
+    <link rel="stylesheet" href="css/style.css?v=7.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -268,6 +268,11 @@
                             <span class="dl dl-rule"></span> Rule
                             <span class="dl dl-journal"></span> Journal
                             <span class="dl dl-blocked"></span> Blocked
+                            <span class="decision-zoom-controls">
+                                <button id="zoom-in-btn" class="zoom-btn" title="Zoom in" aria-label="Zoom in">+</button>
+                                <button id="zoom-out-btn" class="zoom-btn" title="Zoom out" aria-label="Zoom out">−</button>
+                                <button id="zoom-fit-btn" class="zoom-btn" title="Fit to view" aria-label="Fit to view">⟲</button>
+                            </span>
                         </div>
                         <div class="decision-body">
                             <div id="decision-graph" class="network-container decision-graph" role="img"
@@ -468,7 +473,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js?v=6.0"></script>
+    <script type="module" src="main.js?v=7.3"></script>
 </body>
 
 </html>

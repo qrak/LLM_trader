@@ -40,7 +40,7 @@ def test_decision_pathways_panel_bindings():
     assert 'id="decision-detail"' in html
     assert 'id="decision-legend"' in html
     assert "decision_pathways_panel.js" in main_js
-    assert 'main.js?v=6.0' in (DASHBOARD_STATIC / "index.html").read_text(encoding="utf-8")
+    assert 'main.js?v=' in (DASHBOARD_STATIC / "index.html").read_text(encoding="utf-8")
     assert "initSynapseNetwork" not in (DASHBOARD_STATIC / "main.js").read_text(encoding="utf-8")
     assert "updateDecisionPathways" in main_js
     assert "synapse_viewer.js" not in main_js

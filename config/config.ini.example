@@ -26,6 +26,11 @@ google_studio_model = gemini-3.5-flash
 # === General ===
 [general]
 crypto_pair = BTC/USDC
+# ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
+# signals with high noise, frequent false breakouts, and reduced win rates.
+# The bot was designed and tested for 4h+ swing/positional trading. Smaller
+# timeframes will degrade performance significantly and increase costs due to
+# more frequent LLM calls. You have been warned.
 timeframe = 4h
 candle_limit = 999
 ai_chart_candle_limit = 125

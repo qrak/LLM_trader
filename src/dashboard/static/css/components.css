@@ -683,6 +683,32 @@ button:hover {
 .dl-rule { background: #d2a8ff; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); border-radius: 0; }
 .dl-journal { background: #f2cc60; border-radius: 2px; }
 .dl-blocked { background: #f85149; }
+.decision-zoom-controls {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+.zoom-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 4px;
+    color: var(--text-main, #e6edf3);
+    font-size: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+}
+.zoom-btn:hover {
+    background: rgba(88,166,255,0.15);
+    border-color: rgba(88,166,255,0.35);
+}
 .decision-body {
     display: grid;
     grid-template-columns: 1.4fr 0.9fr;

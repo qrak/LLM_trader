@@ -72,17 +72,30 @@ function escapeHtml(text) {
 
 function toVisNode(n) {
     const data = n.data || {};
+    const rawLabel = n.label || n.id;
+    // Truncate long labels to prevent overlap; full text on hover via title.
+    // Leaf nodes (experience, journal, rule, blocked) get shorter labels since
+    // they pack densely at the bottom level.
+    const isLeaf = ['experience', 'journal', 'rule', 'blocked'].includes(n.type);
+    const maxLen = isLeaf ? 18 : 28;
+    const label = rawLabel.length > maxLen ? rawLabel.substring(0, maxLen - 1) + '…' : rawLabel;
+    const level = n.level ?? 1;
     return {
         id: n.id,
-        label: n.label || n.id,
-        level: n.level ?? 1,
+        label: label,
+        level: level,
         group: n.group || n.type,
-        title: n.title || n.label || '',
+        title: n.title || rawLabel || '',
         shape: shapeFor(n.type),
         size: sizeFor(n.type),
         color: colorFor(n.type, n.group, data),
-        font: { size: 13, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
+        font: { size: 14, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
         borderWidth: 2,
+        margin: { top: 8, bottom: 8, left: 12, right: 12 },
+        // Pre-compute positions from level to avoid relying on layout engine
+        // for dynamically-added nodes (vis-network doesn't reposition them).
+        x: 0,
+        y: level * 160,
         raw: data,
         nodeType: n.type,
     };
@@ -92,6 +105,27 @@ function fitNetwork() {
     if (network && typeof network.fit === 'function') {
         network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
     }
+}
+
+function zoomIn() {
+    if (!network) return;
+    const scale = network.getScale();
+    network.moveTo({ scale: Math.min(scale * 1.3, 5.0) });
+}
+
+function zoomOut() {
+    if (!network) return;
+    const scale = network.getScale();
+    network.moveTo({ scale: Math.max(scale / 1.3, 0.1) });
+}
+
+function setupZoomControls() {
+    const zi = document.getElementById('zoom-in-btn');
+    const zo = document.getElementById('zoom-out-btn');
+    const zf = document.getElementById('zoom-fit-btn');
+    if (zi) zi.addEventListener('click', zoomIn);
+    if (zo) zo.addEventListener('click', zoomOut);
+    if (zf) zf.addEventListener('click', fitNetwork);
 }
 
 function ensureNetwork() {
@@ -114,7 +148,7 @@ function ensureNetwork() {
     edgesDS = new vis.DataSet([]);
     const options = {
         nodes: {
-            font: { size: 13, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
+            font: { size: 14, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
             borderWidth: 2,
             shadow: false,
             margin: 10,
@@ -130,9 +164,9 @@ function ensureNetwork() {
                 enabled: true,
                 direction: 'UD',
                 sortMethod: 'directed',
-                levelSeparation: 110,
-                nodeSpacing: 140,
-                treeSpacing: 160,
+                levelSeparation: 150,
+                nodeSpacing: 180,
+                treeSpacing: 200,
                 blockShifting: true,
                 edgeMinimization: true,
             },
@@ -144,12 +178,20 @@ function ensureNetwork() {
             zoomView: true,
             dragView: true,
             selectConnectedEdges: true,
+            keyboard: {
+                enabled: true,
+                bindToWindow: false,
+                autoFocus: false,
+                speed: { zoom: 0.3 },
+            },
         },
     };
     network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, options);
     window.decisionNetwork = network;
     window.fitDecisionNetwork = fitNetwork;
-    window.updateDecisionPathways = updateDecisionPathways;
+    window.decisionZoomIn = zoomIn;
+    window.decisionZoomOut = zoomOut;
+    setupZoomControls();
 
     network.on('selectNode', (params) => {
         const id = params.nodes && params.nodes[0];
@@ -246,8 +288,6 @@ function renderDetail(id, payload) {
         ].join('');
     } else if (type === 'context') {
         body = `<div class="decision-excerpt"><p>${escapeHtml(data.current_context || '')}</p></div>`;
-    } else if (type === 'blocked') {
-        body = Object.entries(data).slice(0, 12).map(([k, v]) => kv(k, typeof v === 'object' ? JSON.stringify(v) : v)).join('');
     } else {
         body = Object.entries(data).slice(0, 12).map(([k, v]) => kv(k, typeof v === 'object' ? JSON.stringify(v) : v)).join('');
     }
@@ -260,7 +300,7 @@ function renderDetail(id, payload) {
 
 function updateGraph(graph) {
     ensureNetwork();
-    if (!nodesDS || !edgesDS) return;
+    if (!nodesDS || !edgesDS || !network) return;
     nodePayloads.clear();
     const visNodes = (graph.nodes || []).map((n) => {
         const vn = toVisNode(n);
@@ -277,7 +317,32 @@ function updateGraph(graph) {
     edgesDS.clear();
     nodesDS.add(visNodes);
     edgesDS.add(visEdges);
-    setTimeout(fitNetwork, 50);
+    // Spread same-level nodes horizontally — vis-network doesn't reposition
+    // dynamically-added nodes with hierarchical layout + physics off.
+    const levelNodes = {};
+    visNodes.forEach(function (vn) {
+        const lv = vn.level || 0;
+        if (!levelNodes[lv]) levelNodes[lv] = [];
+        levelNodes[lv].push(vn);
+    });
+    Object.keys(levelNodes).forEach(function (lv) {
+        const group = levelNodes[lv];
+        // Size row to fill available space with a generous minimum spacing
+        // to prevent label overlap. Wider-than-container rows scroll naturally.
+        const container = document.getElementById('decision-graph');
+        const containerW = container ? container.getBoundingClientRect().width : 600;
+        const minSpacing = 120;
+        const desiredWidth = Math.max(containerW * 0.9, (group.length - 1) * minSpacing);
+        const spacing = group.length > 1 ? desiredWidth / (group.length - 1) : 0;
+        const totalWidth = (group.length - 1) * spacing;
+        group.forEach(function (vn, i) {
+            vn.x = i * spacing - totalWidth / 2;
+        });
+        nodesDS.update(group);
+    });
+    setTimeout(function () {
+        network.fit({ animation: { duration: 200 } });
+    }, 150);
 }
 
 function renderChrome(data) {
@@ -305,6 +370,9 @@ function renderError(err) {
 }
 
 export async function initDecisionPathwaysPanel() {
+    // Expose updateDecisionPathways early so tab-switch handlers can call it
+    // even before the vis-network is created (deferred until tab is visible).
+    window.updateDecisionPathways = updateDecisionPathways;
     ensureNetwork();
     renderDetailEmpty();
     await updateDecisionPathways();

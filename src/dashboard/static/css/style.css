@@ -1,7 +1,7 @@
-@import url('base.css');
-@import url('layout.css');
-@import url('components.css');
-@import url('panels.css');
-@import url('tables.css');
-@import url('animations.css');
-@import url('responsive.css');
+@import url('base.css?v=7.2');
+@import url('layout.css?v=7.2');
+@import url('components.css?v=7.2');
+@import url('panels.css?v=7.2');
+@import url('tables.css?v=7.2');
+@import url('animations.css?v=7.2');
+@import url('responsive.css?v=7.2');

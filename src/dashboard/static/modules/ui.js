@@ -80,7 +80,7 @@ function setupSidebarNavigation() {
                         if (window.updateDecisionPathways) {
                             window.updateDecisionPathways().catch(function(){});
                         }
-                    }, 50);
+                    }, 300);
                 }
             }
 
