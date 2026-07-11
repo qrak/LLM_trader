@@ -137,8 +137,6 @@ class VectorMemoryService(
         """Keep only Chroma-compatible finite primitive metadata values."""
         sanitized: dict[str, Any] = {}
         serialized = serialize_for_json(metadata)
-        if not isinstance(serialized, dict):
-            return sanitized
 
         for key, value in serialized.items():
             if value is None:

@@ -123,17 +123,11 @@ class PatternQualityScorer:
         if patterns is None:
             return []
         names: list[str] = []
-        for category, pattern_list in patterns.items():
-            if isinstance(pattern_list, list):
-                for p in pattern_list:
-                    if isinstance(p, dict):
-                        name = p.get("name") or p.get("pattern") or p.get("type", "")
-                        if name:
-                            names.append(str(name))
-                    elif isinstance(p, str):
-                        names.append(p)
-            elif isinstance(pattern_list, str):
-                names.append(pattern_list)
+        for _category, pattern_list in patterns.items():
+            for p in pattern_list:
+                name = p.get("name") or p.get("pattern") or p.get("type", "")
+                if name:
+                    names.append(str(name))
         return names
 
     # ── Scoring components ──────────────────────────────────────
@@ -190,15 +184,13 @@ class PatternQualityScorer:
         """
         bar_indices: list[int] = []
         for _, pattern_list in patterns.items():
-            if isinstance(pattern_list, list):
-                for p in pattern_list:
-                    if isinstance(p, dict):
-                        idx = p.get("bar_index") or p.get("index") or p.get("candle")
-                        if idx is not None:
-                            try:
-                                bar_indices.append(int(idx))
-                            except (TypeError, ValueError):
-                                pass
+            for p in pattern_list:
+                idx = p.get("bar_index") or p.get("index") or p.get("candle")
+                if idx is not None:
+                    try:
+                        bar_indices.append(int(idx))
+                    except (TypeError, ValueError):
+                        pass
 
         if not bar_indices:
             # No recency data available — neutral score

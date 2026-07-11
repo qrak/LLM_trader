@@ -92,7 +92,7 @@ def _check_crawl4ai() -> bool:
     global _CRAWL4AI_AVAILABLE  # noqa: PLW0603
     if _CRAWL4AI_AVAILABLE is None:
         try:
-            import crawl4ai  # noqa: F401
+            import crawl4ai  # pylint: disable=unused-import
             _CRAWL4AI_AVAILABLE = True
         except ImportError:
             _CRAWL4AI_AVAILABLE = False

@@ -1016,6 +1016,45 @@ class TradingStrategy:
             self.logger.warning("Could not extract confluence factors: %s", e)
         return tuple(factors)
 
+    def _get_last_closed_position_info(self) -> str | None:
+        """Query trade history for the most recent closed position.
+
+        Returns:
+            Formatted string like 'LONG, closed 3.2 hours ago' or None if no history.
+        """
+        try:
+            rows = self.persistence.sqlite_history.query(
+                action=None,
+                limit=20,
+                order="DESC",
+            )
+            for row in rows:
+                action = row.get("action", "")
+                if action in ("CLOSE_LONG", "CLOSE_SHORT"):
+                    direction = "LONG" if action == "CLOSE_LONG" else "SHORT"
+                    ts_str = row.get("timestamp", "")
+                    if not ts_str:
+                        continue
+                    try:
+                        close_time = datetime.fromisoformat(ts_str)
+                        if close_time.tzinfo is None:
+                            close_time = close_time.replace(tzinfo=timezone.utc)
+                    except (ValueError, TypeError):
+                        continue
+                    now = datetime.now(timezone.utc)
+                    delta = now - close_time
+                    total_seconds = delta.total_seconds()
+                    if total_seconds < 3600:
+                        time_ago = f"{total_seconds / 60:.0f} minutes ago"
+                    elif total_seconds < 86400:
+                        time_ago = f"{total_seconds / 3600:.1f} hours ago"
+                    else:
+                        time_ago = f"{total_seconds / 86400:.1f} days ago"
+                    return f"{direction}, closed {time_ago}"
+            return None
+        except Exception:
+            return None
+
     def get_position_context(self, current_price: float | None = None) -> str:
         """Get formatted context about current position for prompts.
 
@@ -1027,15 +1066,24 @@ class TradingStrategy:
         """
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         currency = self.config.QUOTE_CURRENCY
+
+        capital_header = [
+            "## Capital Status",
+            f"- Total Capital: ${capital:,.2f} {currency}",
+        ]
+
         if not self.current_position:
-            return (
-                f"## Capital Status\n"
-                f"- Total Capital: ${capital:,.2f} {currency}\n"
-                f"- Available: ${capital:,.2f} (100%)\n\n"
-                f"CURRENT POSITION: None"
-            )
+            lines = capital_header + [
+                f"- Available: ${capital:,.2f} (100%)",
+                "",
+                "CURRENT POSITION: None",
+            ]
+            last_closed = self._get_last_closed_position_info()
+            if last_closed:
+                lines.append(f"- Last Position: {last_closed}")
+            return "\n".join(lines)
+
         pos = self.current_position
-        # Ensure both datetimes are timezone-aware for subtraction
         now = datetime.now(timezone.utc)
         entry_time = pos.entry_time
         if entry_time.tzinfo is None:
@@ -1045,9 +1093,8 @@ class TradingStrategy:
         allocated = pos.quote_amount
         available = capital - allocated
         allocation_pct = (allocated / capital) * 100 if capital > 0 else 0
-        context_lines = [
-            "## Capital Status",
-            f"- Total Capital: ${capital:,.2f} {currency}",
+
+        lines = capital_header + [
             f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
             f"- Available: ${available:,.2f} ({100 - allocation_pct:.1f}%)",
             "",
@@ -1057,8 +1104,8 @@ class TradingStrategy:
             f"- Entry Price: ${pos.entry_price:,.2f}",
         ]
         if current_price and current_price > 0:
-            context_lines.append(f"- Current Price: ${current_price:,.2f}")
-        context_lines.extend([
+            lines.append(f"- Current Price: ${current_price:,.2f}")
+        lines.extend([
             f"- Stop Loss: ${pos.stop_loss:,.2f}",
             f"- Take Profit: ${pos.take_profit:,.2f}",
             f"- Position Size: {pos.size_pct * 100:.2f}%",
@@ -1070,13 +1117,13 @@ class TradingStrategy:
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
             pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
-            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
+            lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
         sentinel_sl = pos.stop_loss - 1e-8 if pos.direction == "SHORT" else pos.stop_loss + 1e-8
         sl_eval = self._tightening_policy.evaluate_update(
             position=pos,
-            proposed_sl=sentinel_sl,  # sentinel: minimal nudge toward entry forces tightening path
+            proposed_sl=sentinel_sl,
             current_price=current_price or 0.0,
             tf_minutes=self._tf_minutes,
             brain_thresholds=brain_thresholds,
@@ -1085,7 +1132,7 @@ class TradingStrategy:
         progress_pct = sl_eval.price_progress * 100 if current_price and current_price > 0 else None
         if progress_pct is not None:
             eligible = progress_pct >= effective_pct
-            context_lines.extend([
+            lines.extend([
                 "",
                 "## SL Tightening Policy",
                 f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
@@ -1093,10 +1140,10 @@ class TradingStrategy:
                 f"- Tightening eligible: {'YES' if eligible else 'NO — wait until price progress reaches the minimum'}",
             ])
         else:
-            context_lines.extend([
+            lines.extend([
                 "",
                 "## SL Tightening Policy",
                 f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
             ])
 
-        return "\n".join(context_lines)
+        return "\n".join(lines)

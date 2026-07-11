@@ -1041,8 +1041,8 @@ class BrainRouter:
             except Exception:
                 self.logger.error("Failed to load vector details for decision-summary", exc_info=True)
                 try:
-                    memory["experience_count"] = getattr(self.vector_memory, "trade_count", 0) or 0
-                    memory["rule_count"] = getattr(self.vector_memory, "semantic_rule_count", 0) or 0
+                    memory["experience_count"] = self.vector_memory.trade_count
+                    memory["rule_count"] = self.vector_memory.semantic_rule_count
                 except Exception:
                     pass
 
