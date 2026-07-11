@@ -101,13 +101,15 @@ class TestPatternExtraction:
         assert "hammer" in names
 
     def test_string_list_patterns(self, scorer):
-        patterns = {"indicator": ["rsi_oversold", "macd_bullish_cross"]}
+        """All pattern entries are dicts in production — strings never occur."""
+        patterns = {"indicator": [{"type": "rsi_oversold"}, {"type": "macd_bullish_cross"}]}
         names = scorer._extract_pattern_names(patterns)
         assert len(names) == 2
 
     def test_mixed_shapes(self, scorer):
+        """Patterns use different key names — 'name', 'pattern', 'type' — but all are dicts."""
         patterns = {
-            "chart": [{"name": "hammer"}, "doji"],
+            "chart": [{"name": "hammer"}, {"name": "doji"}],
             "indicator": [{"pattern": "golden_cross"}],
         }
         names = scorer._extract_pattern_names(patterns)

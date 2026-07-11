@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-11 — Position gap context + defensive code purge
+
+### Added
+- Prompt now includes time since last closed position and its direction (LONG/SHORT) when no position is open — `TradingStrategy._get_last_closed_position_info()` queries SQLite trade history via existing `persistence.sqlite_history.query()`.
+
+### Changed
+- `get_position_context()`: extracted shared `## Capital Status` header into `capital_header` variable — DRY, no duplicate string literals.
+
+### Removed
+- **19 defensive checks purged** — `getattr`/`isinstance` on guaranteed types:
+  - `post_mortem.py`: 14 `getattr(closed_position, ...)` → direct attribute access (Position/TradeDecision are dataclasses)
+  - `pattern_quality_scorer.py`: 4 `isinstance(pattern_list, list|str)` → patterns dict shape is fixed by our own PatternAnalyzer
+  - `vector_memory.py`: 1 `isinstance(serialized, dict)` → `serialize_for_json` always returns dict for dict input
+  - `brain.py` router: 2 `getattr(self.vector_memory, ...)` → injected service always has those attrs
+  - `template_manager.py`: 3 `isinstance(data, dict)` + `getattr(self.config, ...)` → JSON parse + config attrs are guaranteed
+
+### Fixed
+- `log_stream.py`: removed unused `import time` and `from typing import Any`
+- `admin.py`: removed unused `verify_admin_session` import
+- `crawl4ai_enricher.py`: `# noqa: F401` → `# pylint: disable=unused-import` (pylint ignores flake8 pragmas)
+- `brain.py`: moved `MarketConditions` under `if TYPE_CHECKING` (only used in quoted annotations)
+- `pattern_quality_scorer.py`: `category` → `_category` (unused loop variable)
+
 ## 2026-07-10 — Cost tracking fix + Decision Pathways zoom/layout
 
 ### Fixed

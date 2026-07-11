@@ -7,12 +7,15 @@ from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from .vector_memory import VectorMemoryService
-from .data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
+from .data_models import ExitExecutionContext, Position, TradeDecision
 from .brain_exit_profiles import ExitProfileResolver
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
 from .brain_experience import BrainExperienceRecorder
 from .brain_context import BrainContextProvider
+
+if TYPE_CHECKING:
+    from .data_models import MarketConditions
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 
 if TYPE_CHECKING:

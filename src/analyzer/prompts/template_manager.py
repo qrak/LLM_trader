@@ -147,7 +147,7 @@ class TemplateManager:
                 data = json.loads(block)
             except (json.JSONDecodeError, TypeError, ValueError):
                 continue
-            analysis = data.get("analysis") if isinstance(data, dict) else None
+            analysis = data.get("analysis")
             if isinstance(analysis, dict):
                 return analysis
         if blocks and self.logger:
@@ -156,7 +156,7 @@ class TemplateManager:
 
     def _normalize_model_verbosity(self, value: str | None = None) -> str:
         """Normalize verbosity value with safe fallback."""
-        raw_value = value if value is not None else getattr(self.config, "MODEL_VERBOSITY", "medium")
+        raw_value = value if value is not None else self.config.MODEL_VERBOSITY
         normalized = str(raw_value).strip().lower()
         if normalized in self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY:
             return normalized
