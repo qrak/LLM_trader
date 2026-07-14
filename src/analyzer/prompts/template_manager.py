@@ -701,14 +701,14 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 SIGNALS:
-- BUY/SELL: {conf_threshold}+ conf, min {min_rr:.1f}:1 R/R, clear SL/TP
+- BUY/SELL: {conf_threshold}+ conf, R/R >= {rr_borderline:.1f} (system-enforced minimum), target {min_rr:.1f}+ recommended but {rr_borderline:.1f}+ is the only hard gate, clear SL/TP
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
 RISK/REWARD GUIDELINES:
-- R/R < {rr_borderline:.1f}: Very unfavorable — HOLD
-- R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline — only trade with strong confluence
-- R/R >= {min_rr:.1f}: Acceptable
+- R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (hard gate)
+- R/R {rr_borderline:.1f}-{min_rr:.1f}: Below recommended target — only trade with strong confluence and high conviction
+- R/R >= {min_rr:.1f}: Recommended (matches brain-learned historical winning average)
 - R/R >= {rr_strong:.1f}: Strong setup
 
 R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
