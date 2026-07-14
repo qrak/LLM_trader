@@ -75,8 +75,20 @@ The `PromptBuilder` composes the system prompt from these sections:
 5. **Previous Indicators Comparison** — snapshot delta for trending comparisons
 6. **Long-Term/Macro** — daily SMA sets, weekly 200W SMA methodology, golden/death crosses
 7. **Market Sentiment** — Fear & Greed, market-wide overview
-8. **Trading Brain Context** — injected by BrainAgent (confidence calibration, learned rules)
-9. **RAG Context** — news summaries, fundamentals (if available)
+8. **Trading Brain Context** — injected by BrainAgent. Includes:
+   - Confidence calibration by level (win rate, trade count, avg P&L)
+   - Direction bias check (long vs short count, "LIMITED DATA" warning)
+   - **Blocked-trade feedback** (`get_blocked_trade_feedback()`) — rejected trades from past 168h formatted as `## CRITICAL FEEDBACK: System Rejections` with R:R gap, SL/TP details, and a pre-flight checklist
+   - Vector-retrieved similar past experiences (top-3 semantic similarity search)
+   - CoT Step 6 — Historical Evidence instructions
+   - Learned trading rules matched to current conditions (similarity %, freshness, evidence score)
+   - Trade journal: recent post-mortem lessons from closed trades
+9. **Previous Analysis Context** (`## PREVIOUS ANALYSIS CONTEXT`) — injected when a previous response exists:
+   - Decision snapshot: prior signal, confidence, entry/SL/TP/R:R levels, position size
+   - Raw reasoning text (JSON-stripped, truncated per verbosity setting)
+   - Time check: previous reasoning must be verified against current time/data
+   - If the strategy vetoed the previous BUY/SELL, the saved response was patched before persisting — the LLM sees `signal: "HOLD"` with a `⚠️ REJECTED` note instead of a misleading BUY
+10. **RAG Context** — news summaries, fundamentals (if available)
 
 ### User Prompt Strategy
 - Concise instruction asking for structured JSON output

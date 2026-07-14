@@ -7,6 +7,7 @@ from .statistics import TradingStatisticsService
 from .position_extractor import PositionExtractor
 from .trading_strategy import TradingStrategy
 from .exit_monitor import ExitMonitor
+from .executor_handler import ExecutorHandler
 from .position_status_monitor import PositionStatusMonitor
 from .statistics_calculator import TradingStatistics, StatisticsCalculator
 from .vector_memory import VectorMemoryService

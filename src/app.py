@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, TYPE_CHECKING
 
-import httpx
-
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
 from src.utils.timeframe_validator import TimeframeValidator
@@ -23,6 +21,7 @@ from src.trading import (
     TradingStatisticsService,
     TradingMemoryService
 )
+from src.trading.data_models import TradeDecision
 
 if TYPE_CHECKING:
     from src.managers.model_manager import ModelManager
@@ -34,38 +33,6 @@ SLEEP_CHUNK_SIZE = 1.0  # Check for interruptions every second
 CANDLE_BUFFER_SECONDS = 2  # Seconds to wait after candle start
 ERROR_WAIT_SHORT = 60   # Seconds to wait after minor error
 ERROR_WAIT_LONG = 300   # Seconds to wait after major error
-ACTIONABLE_EXECUTION_SIGNALS = frozenset({"BUY", "SELL", "CLOSE", "UPDATE"})
-EXECUTOR_HTTP_TIMEOUT_SECONDS = 5.0
-
-
-def _build_execution_decision(
-    analysis: dict[str, Any] | None,
-    *,
-    symbol: str | None,
-    timestamp: str | None = None,
-) -> dict[str, Any] | None:
-    """Build a CCXT-ready decision payload or return None if not actionable."""
-    if analysis is None:
-        return None
-    if not symbol:
-        return None
-    signal = analysis.get("signal")
-    if signal not in ACTIONABLE_EXECUTION_SIGNALS:
-        return None
-    return {
-        "timestamp": timestamp or datetime.now(timezone.utc).isoformat(),
-        "symbol": symbol,
-        "signal": signal,
-        "order_type": analysis.get("order_type", "limit"),
-        "quantity": analysis.get("quantity", 0.0),
-        "entry_price": analysis.get("entry_price"),
-        "stop_loss": analysis.get("stop_loss"),
-        "take_profit": analysis.get("take_profit"),
-        "reduce_only": analysis.get("reduce_only", False),
-        "leverage": analysis.get("leverage", 1),
-        "confidence": analysis.get("confidence"),
-        "reasoning": analysis.get("reasoning", ""),
-    }
 
 
 @dataclass
@@ -91,6 +58,7 @@ class BotServices:
     statistics_service: TradingStatisticsService
     memory_service: TradingMemoryService
     exit_monitor: ExitMonitor
+    executor_handler: Any = None  # ExecutorHandler, wired by composition root
     dashboard_state: Any = None
     discord_task: asyncio.Task | None = None
     position_monitor_factory: Callable[[Any], PositionStatusMonitor] | None = None
@@ -138,6 +106,7 @@ class CryptoTradingBot:
         self.statistics_service = services.statistics_service
         self.memory_service = services.memory_service
         self.exit_monitor = services.exit_monitor
+        self.executor_handler = services.executor_handler  # ExecutorHandler
         self.dashboard_state = services.dashboard_state
 
         # Runtime state
@@ -347,16 +316,21 @@ class CryptoTradingBot:
         
         self.persistence.save_last_analysis_time()
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
-        
+
         if decision:
             await self._handle_new_position(decision, current_price)
         else:
             self.logger.info("No trading action taken")
+            
+        if decision is not None and decision.action == "HOLD" and result.get("analysis"):
+            self._patch_rejected_signal_in_response(result, decision)
 
         await self._send_discord_notification(result)
         self._save_analysis_data(result)
-        decision_payload = self._save_execution_decision(result)
-        await self._forward_decision_to_executor(decision_payload)
+
+        analysis = result.get("analysis")
+        if self.executor_handler is not None and analysis:
+            await self.executor_handler.handle(analysis, decision, self.current_symbol)
     
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
@@ -511,71 +485,46 @@ class CryptoTradingBot:
             generated_prompt = result.get("generated_prompt")
             self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
 
-    def _save_execution_decision(self, result: dict[str, Any]) -> dict[str, Any] | None:
-        """Extract CCXT-ready fields and atomically write to latest_decision.json.
+    def _patch_rejected_signal_in_response(
+        self, result: dict[str, Any], decision: TradeDecision
+    ) -> None:
+        """Rewrite ``result["raw_response"]`` when the strategy vetoed a BUY/SELL.
 
-        Returns the payload that was written, or None when the signal is not
-        actionable / analysis is missing. Callers should reuse this payload for
-        HTTP forwarding so file + API stay byte-identical for a given decision.
+        The LLM sees its own previous response as context next cycle.  If it
+        output BUY but the strategy blocked it (R/R guard, cooldown, etc.),
+        the LLM gets confused: "I said BUY, why is there no position?"
+
+        This patches the JSON block — replacing BUY/SELL with HOLD and
+        appending the rejection reason — so the next prompt shows the LLM
+        that its trade was blocked and why.
         """
-        analysis = result.get("analysis")
-        decision = _build_execution_decision(
-            analysis,
-            symbol=self.current_symbol,
+        import re
+
+        raw = result.get("raw_response", "")
+        if not raw:
+            return
+        signal: str = ""
+        try:
+            analysis = result.get("analysis")
+            if isinstance(analysis, dict):
+                signal = str(analysis.get("signal", ""))
+        except Exception:
+            pass
+        if signal not in ("BUY", "SELL"):
+            return
+        reason = decision.reasoning or "Blocked by trading strategy guard"
+        raw = re.sub(
+            rf'"signal"\s*:\s*"{re.escape(signal)}"',
+            '"signal": "HOLD"',
+            raw,
+            count=1,
+            flags=re.IGNORECASE,
         )
-        if not decision:
-            return None
-        try:
-            self.persistence.save_latest_decision(decision)
-        except Exception:
-            self.logger.error(
-                "Failed to persist latest_decision.json for %s %s",
-                decision.get("signal"),
-                decision.get("symbol"),
-                exc_info=True,
-            )
-            # Still return the decision so HTTP forward may succeed even if disk write fails.
-        return decision
-
-    async def _forward_decision_to_executor(self, decision: dict[str, Any] | None) -> None:
-        """POST an actionable decision to llm_trader_executor (optional).
-
-        Uses the already-built decision payload from `_save_execution_decision`
-        so the HTTP body matches the on-disk fallback. Connection/errors are
-        logged with full traceback; file fallback remains independently.
-        """
-        if not decision:
-            return
-        if not self.config.EXECUTOR_API_ENABLED:
-            return
-
-        url = self.config.EXECUTOR_API_URL
-        if not url:
-            self.logger.warning("EXECUTOR_API_ENABLED but EXECUTOR_API_URL is empty; skip forward")
-            return
-
-        signal = decision.get("signal")
-        symbol = decision.get("symbol")
-        try:
-            async with httpx.AsyncClient(timeout=EXECUTOR_HTTP_TIMEOUT_SECONDS) as client:
-                resp = await client.post(url, json=decision)
-            if resp.status_code == 200:
-                self.logger.info("Executor queued decision: %s %s", signal, symbol)
-            else:
-                self.logger.warning(
-                    "Executor returned %s for %s %s: %s",
-                    resp.status_code,
-                    signal,
-                    symbol,
-                    resp.text,
-                )
-        except Exception:
-            self.logger.error(
-                "Executor forward failed for %s %s (file fallback still available)",
-                signal,
-                symbol,
-                exc_info=True,
-            )
+        match = re.search(r'```json\s*\{.*?\}\s*```', raw, re.DOTALL)
+        if match:
+            pos = match.end()
+            raw = raw[:pos] + "\n\n⚠️  REJECTED: " + reason + raw[pos:]
+        result["raw_response"] = raw
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:

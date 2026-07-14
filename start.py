@@ -44,7 +44,7 @@ from src.managers.risk_manager import RiskManager
 from src.trading import (
     TradingStrategy, TradingBrainService,
     TradingStatisticsService, TradingMemoryService, PositionExtractor,
-    ExitMonitor, PositionStatusMonitor
+    ExitMonitor, PositionStatusMonitor, ExecutorHandler
 )
 from src.trading.vector_memory import VectorMemoryService
 from src.dashboard.server import DashboardServer
@@ -297,6 +297,11 @@ class CompositionRoot:
             'statistics_service': trading['statistics_service'],
             'memory_service': trading['memory_service'],
             'exit_monitor': trading['exit_monitor'],
+            'executor_handler': ExecutorHandler(
+                persistence=trading['persistence'],
+                config=self.config,
+                logger=self.logger,
+            ),
         }
 
         # Create shared force_analysis event (used by both bot keyboard handler and admin console)
