@@ -1071,12 +1071,14 @@ class TradingStrategy:
             "## Capital Status",
             f"- Total Capital: ${capital:,.2f} {currency}",
         ]
+        position_header = "## Current Position"
 
         if not self.current_position:
             lines = capital_header + [
                 f"- Available: ${capital:,.2f} (100%)",
                 "",
-                "CURRENT POSITION: None",
+                position_header,
+                "- Status: None",
             ]
             last_closed = self._get_last_closed_position_info()
             if last_closed:
@@ -1098,7 +1100,7 @@ class TradingStrategy:
             f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
             f"- Available: ${available:,.2f} ({100 - allocation_pct:.1f}%)",
             "",
-            "## Current Position",
+            position_header,
             f"- Direction: {pos.direction}",
             f"- Symbol: {pos.symbol}",
             f"- Entry Price: ${pos.entry_price:,.2f}",

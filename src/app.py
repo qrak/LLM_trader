@@ -45,7 +45,7 @@ def _build_execution_decision(
     timestamp: str | None = None,
 ) -> dict[str, Any] | None:
     """Build a CCXT-ready decision payload or return None if not actionable."""
-    if not isinstance(analysis, dict):
+    if analysis is None:
         return None
     if not symbol:
         return None
@@ -518,9 +518,9 @@ class CryptoTradingBot:
         actionable / analysis is missing. Callers should reuse this payload for
         HTTP forwarding so file + API stay byte-identical for a given decision.
         """
-        analysis = result.get("analysis") if isinstance(result, dict) else None
+        analysis = result.get("analysis")
         decision = _build_execution_decision(
-            analysis if isinstance(analysis, dict) else None,
+            analysis,
             symbol=self.current_symbol,
         )
         if not decision:
@@ -546,10 +546,10 @@ class CryptoTradingBot:
         """
         if not decision:
             return
-        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
+        if not self.config.EXECUTOR_API_ENABLED:
             return
 
-        url = getattr(self.config, "EXECUTOR_API_URL", None)
+        url = self.config.EXECUTOR_API_URL
         if not url:
             self.logger.warning("EXECUTOR_API_ENABLED but EXECUTOR_API_URL is empty; skip forward")
             return

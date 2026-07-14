@@ -27,7 +27,10 @@ ADMIN_PASS = os.environ.get("LLM_ADMIN_PASS", "")
 @pytest.fixture(scope="module")
 def browser():
     with sync_playwright() as p:
-        br = p.chromium.launch(headless=True)
+        try:
+            br = p.chromium.launch(headless=True)
+        except Exception as e:
+            pytest.skip(f"Playwright browser unavailable: {e}")
         yield br
         br.close()
 

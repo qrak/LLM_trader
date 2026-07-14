@@ -33,6 +33,6 @@ class GuardPipeline:
         the guard doesn't support caching (e.g., older versions).
         """
         for guard in self._guards:
-            if guard.name == "cooldown_window" and hasattr(guard, "invalidate_cache"):
+            if guard.name == "cooldown_window":
                 guard.invalidate_cache()
                 return

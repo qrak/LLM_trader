@@ -824,7 +824,7 @@ class TestPositionContextSlTightening:
         """get_position_context without position shows capital status."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=None)
         ctx = strategy.get_position_context()
-        assert "CURRENT POSITION: None" in ctx
+        assert "Status: None" in ctx
 
 
 # ═════════════════════════════════════════════════════════════════

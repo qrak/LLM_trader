@@ -9,14 +9,19 @@
 - `get_position_context()`: extracted shared `## Capital Status` header into `capital_header` variable — DRY, no duplicate string literals.
 
 ### Removed
-- **19 defensive checks purged** — `getattr`/`isinstance` on guaranteed types:
+- **23 defensive checks purged total** — `getattr`/`isinstance`/`hasattr` on guaranteed types:
   - `post_mortem.py`: 14 `getattr(closed_position, ...)` → direct attribute access (Position/TradeDecision are dataclasses)
   - `pattern_quality_scorer.py`: 4 `isinstance(pattern_list, list|str)` → patterns dict shape is fixed by our own PatternAnalyzer
   - `vector_memory.py`: 1 `isinstance(serialized, dict)` → `serialize_for_json` always returns dict for dict input
   - `brain.py` router: 2 `getattr(self.vector_memory, ...)` → injected service always has those attrs
   - `template_manager.py`: 3 `isinstance(data, dict)` + `getattr(self.config, ...)` → JSON parse + config attrs are guaranteed
+  - `app.py`: 3 — `isinstance(analysis, dict)` on typed param (only caller already checks), `getattr(self.config, "EXECUTOR_API_ENABLED")` + `getattr(self.config, "EXECUTOR_API_URL")` on Config dataclass
+  - `pipeline.py`: 1 — `hasattr(guard, "invalidate_cache")` on already name-identified CooldownWindowGuard
 
 ### Fixed
+- `test_admin_edge_cases.py`: 5 `TestWritableConfigEdgeCases` tests → `async def` + `await` instead of `asyncio.get_event_loop().run_until_complete()` (dashboard tests killed the loop during teardown)
+- `test_admin_live.py`: `browser` fixture → graceful `pytest.skip()` when Playwright chromium binary unavailable (Ubuntu 26.04 unsupported)
+- `huggingface-hub` upgraded 1.2.3 → 1.23.0 (transformers demanded `>=1.5.0`, blocked `test_blocked_trades_integration.py` + `test_edge_cases_feedback.py`)
 - `log_stream.py`: removed unused `import time` and `from typing import Any`
 - `admin.py`: removed unused `verify_admin_session` import
 - `crawl4ai_enricher.py`: `# noqa: F401` → `# pylint: disable=unused-import` (pylint ignores flake8 pragmas)
