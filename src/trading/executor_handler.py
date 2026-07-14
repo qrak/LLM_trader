@@ -5,14 +5,18 @@ Single responsibility: translate a strategy decision into the executor's
 wire format, persist it as a file fallback, and HTTP-forward it.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from src.logger.logger import Logger
-from src.managers.persistence_manager import PersistenceManager
 from .data_models import TradeDecision
+
+if TYPE_CHECKING:
+    from src.managers.persistence_manager import PersistenceManager
 
 
 ACTIONABLE_SIGNALS = frozenset({"BUY", "SELL", "CLOSE", "UPDATE"})
