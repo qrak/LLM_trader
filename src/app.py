@@ -35,6 +35,9 @@ ERROR_WAIT_SHORT = 60   # Seconds to wait after minor error
 ERROR_WAIT_LONG = 300   # Seconds to wait after major error
 
 
+_MARKET_KNOWLEDGE_FALLBACK_MSG = "continuing with cached/partial market knowledge"
+
+
 @dataclass
 class BotServices:
     """Runtime services required by CryptoTradingBot."""
@@ -362,16 +365,12 @@ class CryptoTradingBot:
     async def _execute_market_knowledge_update(self, force_news_update: bool):
         """Update market knowledge based on analysis type"""
         timeout_seconds = max(1, int(self.config.RAG_UPDATE_TIMEOUT))
-        if force_news_update:
-            self.logger.info(
-                "Updating market knowledge (Regular Analysis, timeout=%ss)...",
-                timeout_seconds,
-            )
-        else:
-            self.logger.info(
-                "Updating market knowledge (Forced Analysis, timeout=%ss)...",
-                timeout_seconds,
-            )
+        analysis_type = "Regular Analysis" if force_news_update else "Forced Analysis"
+        self.logger.info(
+            "Updating market knowledge (%s, timeout=%ss)...",
+            analysis_type,
+            timeout_seconds,
+        )
 
         update_start = time.perf_counter()
         try:
@@ -386,17 +385,17 @@ class CryptoTradingBot:
             )
         except asyncio.TimeoutError:
             self.logger.warning(
-                "Market knowledge update timed out after %.1fs (limit=%ss); "
-                "continuing with cached/partial market knowledge",
+                "Market knowledge update timed out after %.1fs (limit=%ss); %s",
                 time.perf_counter() - update_start,
                 timeout_seconds,
+                _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
         except Exception as e:
             self.logger.error(
-                "Market knowledge update failed after %.1fs: %s; continuing with "
-                "cached/partial market knowledge",
+                "Market knowledge update failed after %.1fs: %s; %s",
                 time.perf_counter() - update_start,
                 e,
+                _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
     
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
@@ -538,19 +537,32 @@ class CryptoTradingBot:
                 await self.dashboard_state.update_price(price)
         return ticker
 
+    def _calculate_next_check(self, source_time_ms: int) -> tuple[float, datetime]:
+        """Calculate delay and next-check time for a timeframe candle.
+
+        Shared by ``_wait_for_next_timeframe`` and
+        ``_wait_until_next_timeframe_after`` to eliminate duplicated
+        timeframe-arithmetic logic.
+
+        Returns:
+            (delay_seconds, next_check_time_utc)
+        """
+        if self.current_timeframe is None:
+            raise ValueError("current timeframe is not set")
+        timeframe = self.current_timeframe
+        current_time_ms = int(time.time() * 1000)
+        next_candle_ms = TimeframeValidator.calculate_next_candle_time(source_time_ms, timeframe)
+        delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
+        delay_seconds = max(0, delay_ms / 1000)
+        next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
+        return delay_seconds, next_check_time
+
     async def _wait_for_next_timeframe(self):
         """Wait until the next timeframe candle starts."""
         try:
-            if self.current_timeframe is None:
-                raise ValueError("current timeframe is not set")
-            timeframe = self.current_timeframe
             current_time_ms = int(time.time() * 1000)
+            delay_seconds, next_check_time = self._calculate_next_check(current_time_ms)
 
-            next_candle_ms = TimeframeValidator.calculate_next_candle_time(current_time_ms, timeframe)
-            delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
-            delay_seconds = max(0, delay_ms / 1000)
-
-            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
             self.logger.info(
                 "Next check at %s (in %.0fs)",
                 self._format_utc_and_local(next_check_time),
@@ -572,17 +584,15 @@ class CryptoTradingBot:
             last_time: Timestamp of last analysis
         """
         try:
-            if self.current_timeframe is None:
-                raise ValueError("current timeframe is not set")
-            timeframe = self.current_timeframe
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
 
             current_time_ms = int(time.time() * 1000)
             last_time_ms = int(last_time.timestamp() * 1000)
 
-            next_candle_ms = TimeframeValidator.calculate_next_candle_time(last_time_ms, timeframe)
+            delay_seconds, next_check_time = self._calculate_next_check(last_time_ms)
 
+            next_candle_ms = int(next_check_time.timestamp() * 1000) - (CANDLE_BUFFER_SECONDS * 1000)
             if current_time_ms >= next_candle_ms:
                 self.logger.info(
                     "Resuming from last check at %s. Next candle already passed - proceeding immediately",
@@ -590,11 +600,7 @@ class CryptoTradingBot:
                 )
                 return
 
-            delay_ms = next_candle_ms - current_time_ms + (CANDLE_BUFFER_SECONDS * 1000)
-            delay_seconds = max(0, delay_ms / 1000)
-            next_check_time = datetime.fromtimestamp(next_candle_ms / 1000, timezone.utc)
-
-            is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, timeframe)
+            is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)
 
             context_msg = "Still in same candle" if is_same else "Resuming wait"
             self.logger.info(

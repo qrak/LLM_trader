@@ -11,6 +11,7 @@ from .executor_handler import ExecutorHandler
 from .position_status_monitor import PositionStatusMonitor
 from .statistics_calculator import TradingStatistics, StatisticsCalculator
 from .vector_memory import VectorMemoryService
+from .market_conditions_extractor import MarketConditionsExtractor
 
 __all__ = [
     'Position',
@@ -26,4 +27,5 @@ __all__ = [
     'ExitMonitor',
     'PositionStatusMonitor',
     'VectorMemoryService',
+    'MarketConditionsExtractor',
 ]

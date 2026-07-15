@@ -2,20 +2,12 @@
 
 import asyncio
 import dataclasses
-import re
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
     build_exit_execution_context_from_config,
-    classify_bb_position,
-    classify_macd_signal,
-    classify_market_sentiment,
-    classify_order_book_bias,
-    classify_rsi_label,
-    classify_volume_state,
-    classify_volatility_level,
 )
 from .data_models import MarketConditions, Position, TradeDecision
 from .brain import TradingBrainService
@@ -30,6 +22,7 @@ if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
     from src.managers.risk_manager import RiskManager
     from src.managers.persistence_manager import PersistenceManager
+    from .market_conditions_extractor import MarketConditionsExtractor
 
 
 class TradingStrategy:
@@ -45,6 +38,7 @@ class TradingStrategy:
         risk_manager: "RiskManager",
         config: Any = None,
         position_extractor=None,
+        conditions_extractor: "MarketConditionsExtractor | None" = None,
         dashboard_state: "DashboardState | None" = None,
         tightening_policy: StopLossTighteningPolicy | None = None,
         guard_pipeline: GuardPipeline | None = None,
@@ -62,6 +56,7 @@ class TradingStrategy:
             risk_manager: Risk Manager for position sizing and SL/TP
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
+            conditions_extractor: MarketConditionsExtractor (injected from start.py)
             dashboard_state: Optional dashboard state for UI lifecycle notifications
             tightening_policy: Stop-loss tightening policy (injected from start.py)
             guard_pipeline: Pre-execution guard pipeline (injected from start.py)
@@ -76,6 +71,11 @@ class TradingStrategy:
         self.config = config
         self.extractor = position_extractor
         self.dashboard_state = dashboard_state
+
+        self._conditions = conditions_extractor
+        if self._conditions is None:
+            from .market_conditions_extractor import MarketConditionsExtractor
+            self._conditions = MarketConditionsExtractor(logger)
 
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
@@ -150,12 +150,12 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_stop_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
         if self.current_position.is_target_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -167,7 +167,7 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_stop_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
@@ -179,7 +179,7 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_target_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -299,7 +299,7 @@ class TradingStrategy:
         """
         try:
             raw_response = analysis_result.get("raw_response", "")
-            current_price = self._extract_price_from_result(analysis_result)
+            current_price = self._conditions.extract_price(analysis_result)
 
             if not raw_response:
                 self.logger.warning("No response to process")
@@ -318,9 +318,9 @@ class TradingStrategy:
                 self.logger.warning("Invalid signal: %s", signal)
                 return None
 
-            market_conditions = self._extract_market_conditions(analysis_result)
+            market_conditions = self._conditions.extract_market_conditions(analysis_result)
 
-            confluence_factors = self._extract_confluence_factors(analysis_result)
+            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)
 
             if self.current_position:
                 return await self._handle_existing_position(
@@ -809,212 +809,6 @@ class TradingStrategy:
             await self.persistence.async_save_position(self.current_position)
 
         return updated
-
-    def _extract_price_from_result(self, result: dict) -> float:
-        """Extract current price from analysis result.
-
-        Args:
-            result: Analysis result dictionary
-
-        Returns:
-            Current price
-        """
-        # Try different possible locations for price
-        if "current_price" in result:
-            return float(result["current_price"])
-
-        if "context" in result and result["context"] is not None:
-            return float(result["context"].current_price)
-
-        # Default fallback
-        if self.logger:
-            self.logger.warning("Could not extract price from result keys: %s", list(result.keys()))
-        return 0.0
-
-    @staticmethod
-    def _build_conditions_from_position(position: Position) -> MarketConditions:
-        """Reconstruct market conditions from Position's stored entry fields.
-
-        Used when closing via SL/TP hit where no fresh analysis is available.
-        """
-        rsi = position.rsi_at_entry
-        rsi_level = classify_rsi_label(rsi)
-
-        return MarketConditions(
-            trend_direction=position.trend_direction_at_entry,
-            adx=position.adx_at_entry,
-            rsi=rsi,
-            rsi_level=rsi_level,
-            volatility=position.volatility_level,
-            macd_signal=position.macd_signal_at_entry,
-            bb_position=position.bb_position_at_entry,
-            volume_state=position.volume_state_at_entry,
-            market_sentiment=position.market_sentiment_at_entry,
-            order_book_bias=position.order_book_bias_at_entry,
-        )
-
-    def _extract_market_conditions(self, result: dict) -> MarketConditions:
-        """Extract market conditions from analysis result for brain learning.
-
-        Args:
-            result: Analysis result dictionary
-
-        Returns:
-            MarketConditions with trend_direction, adx, volatility, etc.
-        """
-        conditions: dict[str, Any] = {}
-
-        try:
-            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
-            analysis = result.get("analysis", {})
-
-            # Get trend info
-            trend = analysis.get("trend", {})
-            if trend:
-                conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                conditions["trend_strength"] = trend.get("strength_4h", trend.get("strength", 50))
-                conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
-
-            # Get technical data (result has 'technical_data' at top level, not under 'context')
-            tech_data = result.get("technical_data", {})
-            if tech_data:
-                conditions["adx"] = tech_data.get("adx", 0)
-                rsi_raw = tech_data.get("rsi", 50)
-                try:
-                    rsi_value = float(rsi_raw)
-                except (TypeError, ValueError):
-                    rsi_value = 50.0
-                conditions["rsi"] = rsi_value
-                conditions["rsi_level"] = classify_rsi_label(rsi_value)
-                conditions["choppiness"] = tech_data.get("choppiness", None)
-
-                macd = tech_data.get("macd", {})
-                conditions["macd_signal"] = classify_macd_signal(tech_data)
-                if conditions["macd_signal"] == "NEUTRAL" and macd:
-                    conditions["macd_signal"] = macd.get("signal", "NEUTRAL")
-
-                current_price = result.get("current_price")
-                context_obj = result.get("context")
-                if current_price is None and context_obj is not None:
-                    current_price = context_obj.current_price
-                conditions["bb_position"] = classify_bb_position(tech_data, current_price)
-                bb = tech_data.get("bollinger_bands", {})
-                if conditions["bb_position"] == "MIDDLE" and bb:
-                    pct_b = bb.get("percent_b", 0.5)
-                    if pct_b > 0.95:
-                        conditions["bb_position"] = "UPPER"
-                    elif pct_b < 0.05:
-                        conditions["bb_position"] = "LOWER"
-
-                conditions["volume_state"] = classify_volume_state(tech_data)
-                vol_data = tech_data.get("volume", {})
-                if conditions["volume_state"] == "NORMAL" and vol_data:
-                    conditions["volume_state"] = vol_data.get("state", "NORMAL")
-
-                # Extract ATR for dynamic SL/TP calculation
-                conditions["atr"] = tech_data.get("atr", 0)
-                atr_pct_raw = tech_data.get("atr_percent")
-                if atr_pct_raw is None:
-                    atr_pct_raw = tech_data.get("atr_percentage")
-                try:
-                    atr_pct = float(atr_pct_raw) if atr_pct_raw is not None else 2.0
-                except (TypeError, ValueError):
-                    atr_pct = 2.0
-                conditions["atr_percentage"] = atr_pct
-                conditions["volatility"] = classify_volatility_level({"atr_percent": atr_pct})
-
-            context_obj = result.get("context")
-            sentiment_data = result.get("sentiment")
-            microstructure_data = result.get("market_microstructure")
-            if context_obj is not None:
-                if sentiment_data is None:
-                    sentiment_data = context_obj.sentiment
-                if microstructure_data is None:
-                    microstructure_data = context_obj.market_microstructure
-
-            conditions["market_sentiment"] = classify_market_sentiment(sentiment_data)
-            conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
-            conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
-
-            # Fallback: extract trend direction from trading signal context in
-            # the raw response, not from standalone keyword presence.
-            # Prefer signal=BUY/SELL context over scattered keyword matches
-            # since trading analyses routinely discuss both bullish and bearish
-            # scenarios (e.g., "near-term bullish but medium-term bearish").
-            raw_response = result.get("raw_response", "").lower()
-            if not conditions.get("trend_direction"):
-                # Extract the signal to disambiguate which scenario is the
-                # actual trading recommendation, not just analysis context.
-                signal_match = re.search(
-                    r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE)\b', raw_response, re.IGNORECASE
-                )
-                if signal_match:
-                    signal_word = signal_match.group(1).upper()
-                    if signal_word == "BUY":
-                        conditions["trend_direction"] = "BULLISH"
-                    elif signal_word == "SELL":
-                        conditions["trend_direction"] = "BEARISH"
-                    else:
-                        conditions["trend_direction"] = "NEUTRAL"
-                else:
-                    # Last resort: keyword majority check with explicit
-                    # tie-breaker (NEUTRAL when both appear)
-                    bullish_hits = len(re.findall(r'\b(bullish|uptrend)\b', raw_response))
-                    bearish_hits = len(re.findall(r'\b(bearish|downtrend)\b', raw_response))
-                    if bullish_hits > bearish_hits:
-                        conditions["trend_direction"] = "BULLISH"
-                    elif bearish_hits > bullish_hits:
-                        conditions["trend_direction"] = "BEARISH"
-                    else:
-                        conditions["trend_direction"] = "NEUTRAL"
-        except Exception as e:
-            self.logger.warning("Could not extract market conditions: %s", e)
-        return MarketConditions(
-            trend_direction=conditions.get("trend_direction", "NEUTRAL"),
-            adx=float(conditions.get("adx", 0.0)),
-            rsi=float(conditions.get("rsi", 50.0)),
-            rsi_level=conditions.get("rsi_level", "NEUTRAL"),
-            volatility=conditions.get("volatility", "MEDIUM"),
-            atr=float(conditions.get("atr", 0.0)),
-            atr_percentage=float(conditions.get("atr_percentage", 0.0)),
-            macd_signal=conditions.get("macd_signal", "NEUTRAL"),
-            bb_position=conditions.get("bb_position", "MIDDLE"),
-            volume_state=conditions.get("volume_state", "NORMAL"),
-            is_weekend=bool(conditions.get("is_weekend", False)),
-            market_sentiment=conditions.get("market_sentiment", "NEUTRAL"),
-            order_book_bias=conditions.get("order_book_bias", "BALANCED"),
-            fear_greed_index=int(conditions.get("fear_greed_index", 50)),
-            trend_strength=float(conditions.get("trend_strength", 0.0)),
-            timeframe_alignment=conditions.get("timeframe_alignment"),
-            choppiness=conditions.get("choppiness"),
-        )
-
-    def _extract_confluence_factors(self, result: dict) -> tuple:
-        """Extract confluence factors from analysis result for brain learning.
-
-        Args:
-            result: Analysis result dictionary
-
-        Returns: tuple of (factor_name, score) pairs
-        """
-        factors = []
-
-        try:
-            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
-            analysis = result.get("analysis", {})
-            confluence_factors = analysis.get("confluence_factors", {})
-            if confluence_factors:
-                for factor_name, score in confluence_factors.items():
-                    try:
-                        # Ensure score is numeric and in valid range
-                        score_value = float(score)
-                        if 0 <= score_value <= 100:
-                            factors.append((factor_name, score_value))
-                    except (ValueError, TypeError):
-                        pass
-        except Exception as e:
-            self.logger.warning("Could not extract confluence factors: %s", e)
-        return tuple(factors)
 
     def _get_last_closed_position_info(self) -> str | None:
         """Query trade history for the most recent closed position.

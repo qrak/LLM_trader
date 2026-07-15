@@ -6,6 +6,7 @@ import pytest
 
 from src.trading.data_models import Position
 from src.trading.exit_monitor import ExitMonitor
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.position_status_monitor import PositionStatusMonitor
 from src.trading.trading_strategy import TradingStrategy
 
@@ -46,6 +47,8 @@ def _make_strategy(position=None):
     strategy.persistence = MagicMock()
     strategy.persistence.async_save_position = AsyncMock()
     strategy.close_position = AsyncMock()
+    strategy.logger = MagicMock()
+    strategy._conditions = MarketConditionsExtractor(MagicMock())
     return strategy
 
 

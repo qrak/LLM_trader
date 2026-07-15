@@ -231,10 +231,10 @@ class TestBuildResponseTemplate:
         assert "ADX >= 30" in tmpl
         assert "ADX < 18" in tmpl
         assert "R/R >= 1.8" in tmpl  # rr_borderline_min as system-enforced minimum
-        assert "target 2.5+ recommended" in tmpl  # min_rr_recommended as recommendation
+        assert "aspirational target" in tmpl  # min_rr_recommended as aspirational, not a gate
         assert "system-enforced minimum" in tmpl
         assert "REJECTED" in tmpl  # hard gate label in R/R guidelines
-        assert "Below recommended target" in tmpl  # borderline range label
+        assert "Allowed — meets system-enforced minimum" in tmpl  # allowed range label
         assert "3.0%" in tmpl  # avg_sl
         assert "BUY/SELL: 75+ conf" in tmpl
         assert "strong evidence against entry" in tmpl
@@ -252,14 +252,13 @@ class TestBuildResponseTemplate:
         tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
 
         # SIGNALS line: hard gate is rr_borderline
-        assert "R/R >= 1.5 (system-enforced minimum)" in tmpl
-        assert "target 2.0+ recommended but 1.5+ is the only hard gate" in tmpl
+        assert "R/R >= 1.5 (system-enforced minimum — the only hard gate)" in tmpl
 
         # R/R GUIDELINES: first line is the hard rejection boundary
-        assert "R/R < 1.5: REJECTED — system blocks entries below this (hard gate)" in tmpl
-        assert "R/R 1.5-2.0: Below recommended target" in tmpl
-        assert "R/R >= 2.0: Recommended" in tmpl
-        assert "R/R >= 2.5: Strong setup" in tmpl
+        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in tmpl
+        assert "R/R >= 1.5: Allowed — meets system-enforced minimum for entry" in tmpl
+        assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in tmpl
+        assert "R/R >= 2.5: Exceptional setup" in tmpl
 
     def test_response_template_json_example_is_valid(self):
         """The fenced JSON example should be parser-safe, not pseudo-JSON."""

@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.dashboard.dashboard_state import DashboardState
 from src.trading.data_models import MarketConditions, Position
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 
@@ -437,7 +438,7 @@ class TestExtractPriceFromResult:
         """Extract from result['current_price']."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"current_price": 50000.0}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 50000.0
 
     def test_price_from_context_object(self):
@@ -446,21 +447,21 @@ class TestExtractPriceFromResult:
         ctx = MagicMock()
         ctx.current_price = 42500.0
         result = {"context": ctx}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 42500.0
 
     def test_price_fallback_returns_zero(self):
         """When neither key exists, returns 0.0 with warning."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"some_other_key": "value"}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 0.0
 
     def test_price_context_is_none(self):
         """context key present but value is None — falls to default."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"context": None}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 0.0
 
 
@@ -484,7 +485,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert len(factors) == 3
         assert ("trend_alignment", 85.0) in factors
 
@@ -492,14 +493,14 @@ class TestExtractConfluenceFactors:
         """Empty confluence_factors returns empty tuple."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"analysis": {"confluence_factors": {}}}
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == ()
 
     def test_no_analysis_key(self):
         """Missing 'analysis' key returns empty tuple."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"other": "data"}
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == ()
 
     def test_factors_out_of_range_excluded(self):
@@ -514,7 +515,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert len(factors) == 1
         assert factors[0] == ("valid", 50.0)
 
@@ -530,7 +531,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == (("valid", 42.0),)
 
 
@@ -545,7 +546,7 @@ class TestBuildConditionsFromPosition:
     def test_build_conditions_from_position_defaults(self):
         """Default position values map to classified conditions."""
         pos = _make_position()
-        conditions = TradingStrategy._build_conditions_from_position(pos)
+        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
 
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.adx == 35.0
@@ -556,7 +557,7 @@ class TestBuildConditionsFromPosition:
     def test_build_conditions_bullish_position(self):
         """Position with BULLISH trend maps correctly."""
         pos = _make_position(trend_direction_at_entry="BULLISH", adx_at_entry=45.0)
-        conditions = TradingStrategy._build_conditions_from_position(pos)
+        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
         assert conditions.trend_direction == "BULLISH"
         assert conditions.adx == 45.0
 
@@ -590,7 +591,7 @@ class TestExtractMarketConditions:
             "raw_response": "BUY signal, bullish pattern detected",
         }
 
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
         assert conditions.trend_strength == 45
         assert conditions.timeframe_alignment == "ALIGNED"
@@ -604,13 +605,13 @@ class TestExtractMarketConditions:
             "analysis": {"trend": {}},
             "technical_data": {"adx": 30, "rsi": "72.5"},
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.rsi == 72.5
 
     def test_market_conditions_empty_result(self):
         """Empty result returns default conditions (sentiment + fallback trend)."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
-        conditions = strategy._extract_market_conditions({})
+        conditions = strategy._conditions.extract_market_conditions({})
         # Defaults: NEUTRAL trend from raw_response fallback + sentiment defaults
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.fear_greed_index == 50
@@ -624,7 +625,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Strong BULLISH momentum expected",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
 
     def test_market_conditions_bearish_fallback(self):
@@ -635,7 +636,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Downtrend likely to continue, BEARISH outlook",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BEARISH"
 
     def test_market_conditions_signal_buy_disambiguates_mixed_raw_response(self):
@@ -646,7 +647,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Medium-term bearish risk remains, but signal: BUY on bullish reclaim.",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
 
     def test_market_conditions_signal_sell_disambiguates_mixed_raw_response(self):
@@ -657,14 +658,14 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Short-term bullish bounce possible, but signal: SELL after bearish break.",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BEARISH"
 
     def test_market_conditions_exception_handling(self):
         """Exception during extraction returns empty dict."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"analysis": None}  # .get() on None will fail
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions == MarketConditions()
 
 

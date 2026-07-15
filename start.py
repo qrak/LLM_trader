@@ -44,7 +44,8 @@ from src.managers.risk_manager import RiskManager
 from src.trading import (
     TradingStrategy, TradingBrainService,
     TradingStatisticsService, TradingMemoryService, PositionExtractor,
-    ExitMonitor, PositionStatusMonitor, ExecutorHandler
+    ExitMonitor, PositionStatusMonitor, ExecutorHandler,
+    MarketConditionsExtractor,
 )
 from src.trading.vector_memory import VectorMemoryService
 from src.dashboard.server import DashboardServer
@@ -662,6 +663,7 @@ class CompositionRoot:
         strategy = TradingStrategy(
             self.logger, persistence, brain_service, statistics_service, memory_service,
             risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
+            conditions_extractor=MarketConditionsExtractor(self.logger),
             tightening_policy=tightening_policy,
             guard_pipeline=guard_pipeline, audit_trail=audit_trail,
             post_mortem_service=post_mortem_service,

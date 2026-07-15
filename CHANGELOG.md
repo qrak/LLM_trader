@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-15 — DRY fixes + SRP refactor (MarketConditionsExtractor)
+
+### Changed
+- **DRY: `_execute_market_knowledge_update`** — extracted `analysis_type` variable instead of if/else branches with identical log format strings.
+- **DRY: Market knowledge fallback message** — extracted duplicated `"continuing with cached/partial market knowledge"` string into `_MARKET_KNOWLEDGE_FALLBACK_MSG` module constant, used in both TimeoutError and Exception handlers.
+- **DRY: `_wait_for_next_timeframe` / `_wait_until_next_timeframe_after`** — extracted shared timeframe arithmetic into `_calculate_next_check(source_time_ms)` helper. Both methods now call the helper and handle only their unique logging + edge cases.
+- **SRP: `MarketConditionsExtractor`** — extracted 4 methods from `TradingStrategy` (was 1151 lines / 19 methods → now 945 lines / 15 methods):
+  - `extract_price(result)` ← `_extract_price_from_result`
+  - `extract_market_conditions(result)` ← `_extract_market_conditions`
+  - `extract_confluence_factors(result)` ← `_extract_confluence_factors`
+  - `build_conditions_from_position(position)` ← `_build_conditions_from_position` (static)
+  - New class wired through composition root in `start.py`, injected into `TradingStrategy.__init__` via `conditions_extractor=`.
+- **Unused imports cleaned** — removed `re`, `classify_bb_position`, `classify_macd_signal`, `classify_market_sentiment`, `classify_order_book_bias`, `classify_rsi_label`, `classify_volume_state`, `classify_volatility_level` from `trading_strategy.py` (only used by extracted methods).
+
+### Added
+- `src/trading/market_conditions_extractor.py` — new class with constructor DI (`logger`), 3 instance methods + 1 static method.
+- `tests/test_app_timeframe_wait.py` — 9 tests covering `_calculate_next_check`, `_wait_for_next_timeframe`, and `_wait_until_next_timeframe_after`.
+
 ## 2026-07-11 — Position gap context + defensive code purge
 
 ### Added

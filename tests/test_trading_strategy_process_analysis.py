@@ -8,6 +8,7 @@ import pytest
 from src.parsing.unified_parser import UnifiedParser
 from src.trading.position_extractor import PositionExtractor
 from src.trading.trading_strategy import TradingStrategy
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 
 
 def _make_compact_buy_response() -> str:
@@ -96,6 +97,7 @@ def _build_strategy() -> TradingStrategy:
 
     parser = UnifiedParser(logger=MagicMock())
     strategy.extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)
+    strategy._conditions = MarketConditionsExtractor(MagicMock())
     return strategy
 
 
