@@ -301,7 +301,7 @@ class TestBuildResponseTemplate:
         tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
         assert "THRESHOLD ORIGIN" in tmpl
         assert "brain-learned from 50 closed trades" in tmpl
-        assert "min_rr=2.2" in tmpl
+        assert "recommended_rr=2.2" in tmpl
         assert "adx_strong=28" in tmpl
 
     def test_threshold_origin_no_learned_keys(self):

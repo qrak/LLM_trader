@@ -724,7 +724,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         # Add threshold origin annotations if brain data is available
         if trade_count > 0:
             if learned_keys:
-                origin_parts = [f"min_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
+                origin_parts = [f"recommended_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
                                 f"adx_strong={adx_strong}" if "adx_strong_threshold" in learned_keys else None,
                                 f"confidence={conf_threshold}" if "confidence_threshold" in learned_keys else None,
                                 f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None]
