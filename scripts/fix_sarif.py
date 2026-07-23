@@ -15,6 +15,9 @@ for run in sarif.get('runs', []):
         fixed += 1
     elif isinstance(rules, list):
         print(f"  rules is already a list with {len(rules)} items")
+    else:
+        print(f"  Rules is None/absent, creating empty list")
+        driver['rules'] = []
 
     for result in run.get('results', []):
         for loc in result.get('locations', []):
