@@ -58,5 +58,6 @@ jobs:
           sarif_file: results.sarif
 
       - name: Upload results to Codacy
+        continue-on-error: true
         run: |
           /tmp/codacy-cli.sh upload --project-token ${{ secrets.CODACY_PROJECT_TOKEN }} --sarif-path results.sarif --commit-uuid ${{ github.sha }}
