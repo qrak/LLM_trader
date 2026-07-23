@@ -175,26 +175,56 @@ class TestUpdatePositionParameters:
         persistence.async_save_position.assert_called_once()
 
     def test_sl_widening_long(self):
-        """LONG SL moved lower (wider) is allowed."""
+        """LONG SL moved lower (wider) is allowed within 150% cap."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
+        # Original SL distance = |100-95| = 5, max allowed = 7.5
+        # Proposed: SL 95→93, distance = |100-93| = 7 ≤ 7.5 ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=92.0, take_profit=None, current_price=105.0,
+            stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
         assert updated is True
-        assert strategy.current_position.stop_loss == 92.0
+        assert strategy.current_position.stop_loss == 93.0
 
     def test_sl_widening_short(self):
-        """SHORT SL moved higher (wider) is allowed."""
+        """SHORT SL moved higher (wider) is allowed within 150% cap."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
+        # Original SL distance = |100-105| = 5, max allowed = 7.5
+        # Proposed: SL 105→107, distance = |100-107| = 7 ≤ 7.5 ✓
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=107.0, take_profit=None, current_price=100.0,
+        ))
+        assert updated is True
+        assert strategy.current_position.stop_loss == 107.0
+
+    def test_sl_widening_rejected_beyond_cap_long(self):
+        """LONG SL widening beyond 150% of original distance is rejected."""
+        pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+
+        # Original distance = 5, max = 7.5. Proposed: 95→92, distance = 8 > 7.5
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=92.0, take_profit=None, current_price=105.0,
+        ))
+        assert updated is False
+        assert strategy.current_position.stop_loss == 95.0  # unchanged
+        assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
+
+    def test_sl_widening_rejected_beyond_cap_short(self):
+        """SHORT SL widening beyond 150% of original distance is rejected."""
+        pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+
+        # Original distance = 5, max = 7.5. Proposed: 105→108, distance = 8 > 7.5
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=108.0, take_profit=None, current_price=100.0,
         ))
-        assert updated is True
-        assert strategy.current_position.stop_loss == 108.0
+        assert updated is False
+        assert strategy.current_position.stop_loss == 105.0  # unchanged
+        assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
 
     def test_sl_tightening_short_rejected(self):
         """SHORT SL tightening (moving SL lower) blocked by progress guard."""
@@ -771,13 +801,14 @@ class TestHandleExistingPosition:
         assert result is None
 
     def test_update_sl_succeeds(self):
-        """UPDATE with SL change works after interval."""
+        """UPDATE with SL change works after interval (within 150% widening cap)."""
         pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         result = asyncio.run(strategy._handle_existing_position(
             signal="UPDATE", confidence="MEDIUM",
-            stop_loss=92.0, take_profit=115.0,  # must pass TP to avoid format bug @ L434
+            stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
         ))
         assert result is not None
@@ -795,6 +826,52 @@ class TestHandleExistingPosition:
         ))
         assert result is not None
         assert result.action == "UPDATE"
+
+    def test_close_signal_skipped_when_executor_has_no_position(self):
+        """CLOSE signal skipped when executor reports no open position."""
+        pos = _make_position(direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE", confidence="HIGH",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+        ))
+        assert result is None
+
+    def test_update_signal_skipped_when_executor_has_no_position(self):
+        """UPDATE skipped when executor reports no open position."""
+        pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=93.0, take_profit=115.0,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+        ))
+        assert result is None
+
+    def test_executor_has_position_returns_true_when_disabled(self):
+        """When EXECUTOR_API_ENABLED is False, assume position exists."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=_make_position(),
+            EXECUTOR_API_ENABLED=False,
+        )
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is True
+
+    def test_executor_has_position_returns_true_when_no_url(self):
+        """When EXECUTOR_API_URL is empty, assume position exists."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=_make_position(),
+            EXECUTOR_API_ENABLED=True,
+            EXECUTOR_API_URL="",
+        )
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is True
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -837,22 +914,24 @@ class TestSlWideningDirectionalLogs:
     """Verify correct log branches for LONG vs SHORT SL widening."""
 
     def test_short_sl_widening_log(self):
-        """SHORT: SL moved higher (wider) logs SHORT-specific message."""
+        """SHORT: SL moved higher (wider) logs SHORT-specific message within 150% cap."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        # SL 105→107: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=108.0, take_profit=None, current_price=100.0,
+            stop_loss=107.0, take_profit=None, current_price=100.0,
         ))
         assert updated is True
         widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "SHORT" in str(c)]
         assert len(widening_logs) > 0, f"No SHORT widening log in: {[c[0][0] for c in logger.info.call_args_list]}"
 
     def test_long_sl_widening_log(self):
-        """LONG: SL moved lower (wider) logs LONG-specific message."""
+        """LONG: SL moved lower (wider) logs LONG-specific message within 150% cap."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=90.0, take_profit=None, current_price=105.0,
+            stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
         assert updated is True
         widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "LONG" in str(c)]
