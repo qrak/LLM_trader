@@ -7,10 +7,14 @@ with open('results.sarif') as f:
 fixed = 0
 for run in sarif.get('runs', []):
     # Fix rules not being array
-    rules = run.get('tool', {}).get('driver', {}).get('rules')
+    driver = run.get('tool', {}).get('driver', {})
+    rules = driver.get('rules')
     if rules is not None and not isinstance(rules, list):
-        run['tool']['driver']['rules'] = []
+        print(f"  Fixing rules type={type(rules).__name__} value={repr(rules)[:200]}")
+        driver['rules'] = []
         fixed += 1
+    elif isinstance(rules, list):
+        print(f"  rules is already a list with {len(rules)} items")
 
     for result in run.get('results', []):
         for loc in result.get('locations', []):
@@ -22,10 +26,11 @@ for run in sarif.get('runs', []):
                 region['startColumn'] = 1
                 fixed += 1
         if result.get('level') not in (None, 'none', 'note', 'warning', 'error'):
+            print(f"  Fixing level: {result.get('level')}")
             result['level'] = 'warning'
             fixed += 1
 
 with open('results.sarif', 'w') as f:
     json.dump(sarif, f)
 
-print(f'Fixed {fixed} SARIF issues')
+print(f'Total: Fixed {fixed} SARIF issues')
