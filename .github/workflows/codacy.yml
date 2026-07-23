@@ -35,7 +35,11 @@ jobs:
 
       - name: Initialize Codacy configuration
         run: |
-          /tmp/codacy-cli.sh init --install
+          /tmp/codacy-cli.sh init
+
+      - name: Install tools
+        run: |
+          /tmp/codacy-cli.sh install
 
       - name: Codacy Security Scan
         run: |
