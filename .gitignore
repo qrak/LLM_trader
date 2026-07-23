@@ -58,3 +58,4 @@ website/dist/
 
 # AI-generated artifacts (plans, drafts, research — never committed)
 .ai/
+.hermes.md

@@ -2,20 +2,12 @@
 
 import asyncio
 import dataclasses
-import re
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
     build_exit_execution_context_from_config,
-    classify_bb_position,
-    classify_macd_signal,
-    classify_market_sentiment,
-    classify_order_book_bias,
-    classify_rsi_label,
-    classify_volume_state,
-    classify_volatility_level,
 )
 from .data_models import MarketConditions, Position, TradeDecision
 from .brain import TradingBrainService
@@ -30,6 +22,7 @@ if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
     from src.managers.risk_manager import RiskManager
     from src.managers.persistence_manager import PersistenceManager
+    from .market_conditions_extractor import MarketConditionsExtractor
 
 
 class TradingStrategy:
@@ -45,6 +38,7 @@ class TradingStrategy:
         risk_manager: "RiskManager",
         config: Any = None,
         position_extractor=None,
+        conditions_extractor: "MarketConditionsExtractor | None" = None,
         dashboard_state: "DashboardState | None" = None,
         tightening_policy: StopLossTighteningPolicy | None = None,
         guard_pipeline: GuardPipeline | None = None,
@@ -62,6 +56,7 @@ class TradingStrategy:
             risk_manager: Risk Manager for position sizing and SL/TP
             config: Configuration module
             position_extractor: PositionExtractor instance (injected from app.py)
+            conditions_extractor: MarketConditionsExtractor (injected from start.py)
             dashboard_state: Optional dashboard state for UI lifecycle notifications
             tightening_policy: Stop-loss tightening policy (injected from start.py)
             guard_pipeline: Pre-execution guard pipeline (injected from start.py)
@@ -76,6 +71,11 @@ class TradingStrategy:
         self.config = config
         self.extractor = position_extractor
         self.dashboard_state = dashboard_state
+
+        self._conditions = conditions_extractor
+        if self._conditions is None:
+            from .market_conditions_extractor import MarketConditionsExtractor
+            self._conditions = MarketConditionsExtractor(logger)
 
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
@@ -150,12 +150,12 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_stop_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
         if self.current_position.is_target_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -167,7 +167,7 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_stop_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
@@ -179,7 +179,7 @@ class TradingStrategy:
             return None
 
         if self.current_position.is_target_hit(current_price):
-            conditions = self._build_conditions_from_position(self.current_position)
+            conditions = self._conditions.build_conditions_from_position(self.current_position)
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -299,7 +299,7 @@ class TradingStrategy:
         """
         try:
             raw_response = analysis_result.get("raw_response", "")
-            current_price = self._extract_price_from_result(analysis_result)
+            current_price = self._conditions.extract_price(analysis_result)
 
             if not raw_response:
                 self.logger.warning("No response to process")
@@ -318,9 +318,9 @@ class TradingStrategy:
                 self.logger.warning("Invalid signal: %s", signal)
                 return None
 
-            market_conditions = self._extract_market_conditions(analysis_result)
+            market_conditions = self._conditions.extract_market_conditions(analysis_result)
 
-            confluence_factors = self._extract_confluence_factors(analysis_result)
+            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)
 
             if self.current_position:
                 return await self._handle_existing_position(
@@ -328,7 +328,7 @@ class TradingStrategy:
                     current_price, symbol, reasoning, market_conditions
                 )
 
-            if signal in ("BUY", "SELL"):
+            if signal in ("BUY", "SELL", "LONG", "SHORT"):
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,
@@ -372,6 +372,13 @@ class TradingStrategy:
             TradeDecision if action taken
         """
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
+            if not await self._executor_has_position(symbol):
+                self.logger.warning(
+                    "CLOSE signal for %s but executor reports no open position — "
+                    "position may already be closed on exchange. Skipping.",
+                    symbol,
+                )
+                return None
             self.logger.info("Closing position based on analysis signal...")
             await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
@@ -386,6 +393,16 @@ class TradingStrategy:
 
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
+
+        # Verify position exists on executor before sending UPDATE
+        if not await self._executor_has_position(symbol):
+            self.logger.warning(
+                "UPDATE for %s skipped — executor reports no open position. "
+                "The position may have been closed on exchange (manual "
+                "intervention, stop hit, network partition).",
+                symbol,
+            )
+            return None
 
         now = datetime.now(timezone.utc)
         if self._last_position_update_time is not None:
@@ -438,6 +455,35 @@ class TradingStrategy:
 
         return None
 
+    async def _executor_has_position(self, symbol: str) -> bool:
+        """Query executor API to confirm the position is actually open on exchange.
+
+        LLM_trader marks a position as "open" as soon as a decision is made,
+        but limit orders may sit unfilled on the orderbook. Before sending
+        UPDATE/CLOSE, verify the executor has the position tracked (which
+        only happens after fill confirmation).
+        """
+        if not getattr(self.config, 'EXECUTOR_API_ENABLED', False):
+            return True  # No executor configured — assume position is real
+        url: str = getattr(self.config, 'EXECUTOR_API_URL', '')
+        if not url:
+            return True
+        try:
+            import httpx
+            pos_url = url.rstrip('/') + '/position'
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(pos_url, params={"symbol": symbol})
+            if resp.status_code == 200:
+                data = resp.json()
+                return bool(data.get("open", False))
+        except Exception:
+            self.logger.error(
+                "CRITICAL: Failed to query executor position for %s — "
+                "cannot verify position state. Skipping UPDATE/CLOSE for safety.",
+                symbol, exc_info=True,
+            )
+        return False  # Fail closed: don't act on unverified state
+
     def _audit(
         self,
         order_id: str,
@@ -471,7 +517,7 @@ class TradingStrategy:
         market_conditions: MarketConditions | None = None,
     ) -> TradeDecision:
         """Open a new trading position with guard-governed lifecycle."""
-        direction = "LONG" if signal == "BUY" else "SHORT"
+        direction = "LONG" if signal in ("BUY", "LONG") else "SHORT"
         market_conditions = market_conditions or {}
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
@@ -779,21 +825,46 @@ class TradingStrategy:
                     )
                     updated = True
             else:
-                # SL is widening or unchanged — allow unconditionally
-                if direction == "LONG" and stop_loss < old_sl:
-                    self.logger.info(
-                        "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
-                        old_sl, stop_loss
+                # SL is widening or unchanged
+                # Guard: reject widening beyond 150% of original SL distance
+                entry_price = self.current_position.entry_price
+                original_sl_distance = abs(entry_price - old_sl)
+                proposed_sl_distance = abs(entry_price - stop_loss)
+                max_allowed_distance = original_sl_distance * 1.5
+
+                if (
+                    original_sl_distance > 0
+                    and proposed_sl_distance > max_allowed_distance
+                ):
+                    self.logger.warning(
+                        "REJECTED SL widening: proposed distance %.2f%% exceeds "
+                        "150%% of original %.2f%%. Keeping SL at $%.2f "
+                        "(AI requested $%.2f)",
+                        proposed_sl_distance / entry_price * 100,
+                        original_sl_distance / entry_price * 100,
+                        old_sl,
+                        stop_loss,
                     )
-                elif direction == "SHORT" and stop_loss > old_sl:
-                    self.logger.info(
-                        "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f (Risk Increased)",
-                        old_sl, stop_loss
-                    )
+                    # Don't update — keep old SL
                 else:
-                    self.logger.info("Updated Stop Loss: $%s", f"{stop_loss:,.2f}")
-                new_sl = stop_loss
-                updated = True
+                    if direction == "LONG" and stop_loss < old_sl:
+                        self.logger.info(
+                            "AI Widening Stop Loss for LONG: $%.2f -> $%.2f "
+                            "(Risk Increased)",
+                            old_sl, stop_loss,
+                        )
+                    elif direction == "SHORT" and stop_loss > old_sl:
+                        self.logger.info(
+                            "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f "
+                            "(Risk Increased)",
+                            old_sl, stop_loss,
+                        )
+                    else:
+                        self.logger.info(
+                            "Updated Stop Loss: $%s", f"{stop_loss:,.2f}",
+                        )
+                    new_sl = stop_loss
+                    updated = True
 
         if take_profit and take_profit != self.current_position.take_profit:
             new_tp = take_profit
@@ -810,211 +881,44 @@ class TradingStrategy:
 
         return updated
 
-    def _extract_price_from_result(self, result: dict) -> float:
-        """Extract current price from analysis result.
-
-        Args:
-            result: Analysis result dictionary
+    def _get_last_closed_position_info(self) -> str | None:
+        """Query trade history for the most recent closed position.
 
         Returns:
-            Current price
+            Formatted string like 'LONG, closed 3.2 hours ago' or None if no history.
         """
-        # Try different possible locations for price
-        if "current_price" in result:
-            return float(result["current_price"])
-
-        if "context" in result and result["context"] is not None:
-            return float(result["context"].current_price)
-
-        # Default fallback
-        if self.logger:
-            self.logger.warning("Could not extract price from result keys: %s", list(result.keys()))
-        return 0.0
-
-    @staticmethod
-    def _build_conditions_from_position(position: Position) -> MarketConditions:
-        """Reconstruct market conditions from Position's stored entry fields.
-
-        Used when closing via SL/TP hit where no fresh analysis is available.
-        """
-        rsi = position.rsi_at_entry
-        rsi_level = classify_rsi_label(rsi)
-
-        return MarketConditions(
-            trend_direction=position.trend_direction_at_entry,
-            adx=position.adx_at_entry,
-            rsi=rsi,
-            rsi_level=rsi_level,
-            volatility=position.volatility_level,
-            macd_signal=position.macd_signal_at_entry,
-            bb_position=position.bb_position_at_entry,
-            volume_state=position.volume_state_at_entry,
-            market_sentiment=position.market_sentiment_at_entry,
-            order_book_bias=position.order_book_bias_at_entry,
-        )
-
-    def _extract_market_conditions(self, result: dict) -> MarketConditions:
-        """Extract market conditions from analysis result for brain learning.
-
-        Args:
-            result: Analysis result dictionary
-
-        Returns:
-            MarketConditions with trend_direction, adx, volatility, etc.
-        """
-        conditions: dict[str, Any] = {}
-
         try:
-            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
-            analysis = result.get("analysis", {})
-
-            # Get trend info
-            trend = analysis.get("trend", {})
-            if trend:
-                conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                conditions["trend_strength"] = trend.get("strength_4h", trend.get("strength", 50))
-                conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
-
-            # Get technical data (result has 'technical_data' at top level, not under 'context')
-            tech_data = result.get("technical_data", {})
-            if tech_data:
-                conditions["adx"] = tech_data.get("adx", 0)
-                rsi_raw = tech_data.get("rsi", 50)
-                try:
-                    rsi_value = float(rsi_raw)
-                except (TypeError, ValueError):
-                    rsi_value = 50.0
-                conditions["rsi"] = rsi_value
-                conditions["rsi_level"] = classify_rsi_label(rsi_value)
-                conditions["choppiness"] = tech_data.get("choppiness", None)
-
-                macd = tech_data.get("macd", {})
-                conditions["macd_signal"] = classify_macd_signal(tech_data)
-                if conditions["macd_signal"] == "NEUTRAL" and macd:
-                    conditions["macd_signal"] = macd.get("signal", "NEUTRAL")
-
-                current_price = result.get("current_price")
-                context_obj = result.get("context")
-                if current_price is None and context_obj is not None:
-                    current_price = context_obj.current_price
-                conditions["bb_position"] = classify_bb_position(tech_data, current_price)
-                bb = tech_data.get("bollinger_bands", {})
-                if conditions["bb_position"] == "MIDDLE" and bb:
-                    pct_b = bb.get("percent_b", 0.5)
-                    if pct_b > 0.95:
-                        conditions["bb_position"] = "UPPER"
-                    elif pct_b < 0.05:
-                        conditions["bb_position"] = "LOWER"
-
-                conditions["volume_state"] = classify_volume_state(tech_data)
-                vol_data = tech_data.get("volume", {})
-                if conditions["volume_state"] == "NORMAL" and vol_data:
-                    conditions["volume_state"] = vol_data.get("state", "NORMAL")
-
-                # Extract ATR for dynamic SL/TP calculation
-                conditions["atr"] = tech_data.get("atr", 0)
-                atr_pct_raw = tech_data.get("atr_percent")
-                if atr_pct_raw is None:
-                    atr_pct_raw = tech_data.get("atr_percentage")
-                try:
-                    atr_pct = float(atr_pct_raw) if atr_pct_raw is not None else 2.0
-                except (TypeError, ValueError):
-                    atr_pct = 2.0
-                conditions["atr_percentage"] = atr_pct
-                conditions["volatility"] = classify_volatility_level({"atr_percent": atr_pct})
-
-            context_obj = result.get("context")
-            sentiment_data = result.get("sentiment")
-            microstructure_data = result.get("market_microstructure")
-            if context_obj is not None:
-                if sentiment_data is None:
-                    sentiment_data = context_obj.sentiment
-                if microstructure_data is None:
-                    microstructure_data = context_obj.market_microstructure
-
-            conditions["market_sentiment"] = classify_market_sentiment(sentiment_data)
-            conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
-            conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
-
-            # Fallback: extract trend direction from trading signal context in
-            # the raw response, not from standalone keyword presence.
-            # Prefer signal=BUY/SELL context over scattered keyword matches
-            # since trading analyses routinely discuss both bullish and bearish
-            # scenarios (e.g., "near-term bullish but medium-term bearish").
-            raw_response = result.get("raw_response", "").lower()
-            if not conditions.get("trend_direction"):
-                # Extract the signal to disambiguate which scenario is the
-                # actual trading recommendation, not just analysis context.
-                signal_match = re.search(
-                    r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE)\b', raw_response, re.IGNORECASE
-                )
-                if signal_match:
-                    signal_word = signal_match.group(1).upper()
-                    if signal_word == "BUY":
-                        conditions["trend_direction"] = "BULLISH"
-                    elif signal_word == "SELL":
-                        conditions["trend_direction"] = "BEARISH"
-                    else:
-                        conditions["trend_direction"] = "NEUTRAL"
-                else:
-                    # Last resort: keyword majority check with explicit
-                    # tie-breaker (NEUTRAL when both appear)
-                    bullish_hits = len(re.findall(r'\b(bullish|uptrend)\b', raw_response))
-                    bearish_hits = len(re.findall(r'\b(bearish|downtrend)\b', raw_response))
-                    if bullish_hits > bearish_hits:
-                        conditions["trend_direction"] = "BULLISH"
-                    elif bearish_hits > bullish_hits:
-                        conditions["trend_direction"] = "BEARISH"
-                    else:
-                        conditions["trend_direction"] = "NEUTRAL"
-        except Exception as e:
-            self.logger.warning("Could not extract market conditions: %s", e)
-        return MarketConditions(
-            trend_direction=conditions.get("trend_direction", "NEUTRAL"),
-            adx=float(conditions.get("adx", 0.0)),
-            rsi=float(conditions.get("rsi", 50.0)),
-            rsi_level=conditions.get("rsi_level", "NEUTRAL"),
-            volatility=conditions.get("volatility", "MEDIUM"),
-            atr=float(conditions.get("atr", 0.0)),
-            atr_percentage=float(conditions.get("atr_percentage", 0.0)),
-            macd_signal=conditions.get("macd_signal", "NEUTRAL"),
-            bb_position=conditions.get("bb_position", "MIDDLE"),
-            volume_state=conditions.get("volume_state", "NORMAL"),
-            is_weekend=bool(conditions.get("is_weekend", False)),
-            market_sentiment=conditions.get("market_sentiment", "NEUTRAL"),
-            order_book_bias=conditions.get("order_book_bias", "BALANCED"),
-            fear_greed_index=int(conditions.get("fear_greed_index", 50)),
-            trend_strength=float(conditions.get("trend_strength", 0.0)),
-            timeframe_alignment=conditions.get("timeframe_alignment"),
-            choppiness=conditions.get("choppiness"),
-        )
-
-    def _extract_confluence_factors(self, result: dict) -> tuple:
-        """Extract confluence factors from analysis result for brain learning.
-
-        Args:
-            result: Analysis result dictionary
-
-        Returns: tuple of (factor_name, score) pairs
-        """
-        factors = []
-
-        try:
-            # Extract from analysis dict (result has 'analysis' at top level, not under 'parsed_json')
-            analysis = result.get("analysis", {})
-            confluence_factors = analysis.get("confluence_factors", {})
-            if confluence_factors:
-                for factor_name, score in confluence_factors.items():
+            rows = self.persistence.sqlite_history.query(
+                action=None,
+                limit=20,
+                order="DESC",
+            )
+            for row in rows:
+                action = row.get("action", "")
+                if action in ("CLOSE_LONG", "CLOSE_SHORT"):
+                    direction = "LONG" if action == "CLOSE_LONG" else "SHORT"
+                    ts_str = row.get("timestamp", "")
+                    if not ts_str:
+                        continue
                     try:
-                        # Ensure score is numeric and in valid range
-                        score_value = float(score)
-                        if 0 <= score_value <= 100:
-                            factors.append((factor_name, score_value))
+                        close_time = datetime.fromisoformat(ts_str)
+                        if close_time.tzinfo is None:
+                            close_time = close_time.replace(tzinfo=timezone.utc)
                     except (ValueError, TypeError):
-                        pass
-        except Exception as e:
-            self.logger.warning("Could not extract confluence factors: %s", e)
-        return tuple(factors)
+                        continue
+                    now = datetime.now(timezone.utc)
+                    delta = now - close_time
+                    total_seconds = delta.total_seconds()
+                    if total_seconds < 3600:
+                        time_ago = f"{total_seconds / 60:.0f} minutes ago"
+                    elif total_seconds < 86400:
+                        time_ago = f"{total_seconds / 3600:.1f} hours ago"
+                    else:
+                        time_ago = f"{total_seconds / 86400:.1f} days ago"
+                    return f"{direction}, closed {time_ago}"
+            return None
+        except Exception:
+            return None
 
     def get_position_context(self, current_price: float | None = None) -> str:
         """Get formatted context about current position for prompts.
@@ -1027,15 +931,26 @@ class TradingStrategy:
         """
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
         currency = self.config.QUOTE_CURRENCY
+
+        capital_header = [
+            "## Capital Status",
+            f"- Total Capital: ${capital:,.2f} {currency}",
+        ]
+        position_header = "## Current Position"
+
         if not self.current_position:
-            return (
-                f"## Capital Status\n"
-                f"- Total Capital: ${capital:,.2f} {currency}\n"
-                f"- Available: ${capital:,.2f} (100%)\n\n"
-                f"CURRENT POSITION: None"
-            )
+            lines = capital_header + [
+                f"- Available: ${capital:,.2f} (100%)",
+                "",
+                position_header,
+                "- Status: None",
+            ]
+            last_closed = self._get_last_closed_position_info()
+            if last_closed:
+                lines.append(f"- Last Position: {last_closed}")
+            return "\n".join(lines)
+
         pos = self.current_position
-        # Ensure both datetimes are timezone-aware for subtraction
         now = datetime.now(timezone.utc)
         entry_time = pos.entry_time
         if entry_time.tzinfo is None:
@@ -1045,20 +960,19 @@ class TradingStrategy:
         allocated = pos.quote_amount
         available = capital - allocated
         allocation_pct = (allocated / capital) * 100 if capital > 0 else 0
-        context_lines = [
-            "## Capital Status",
-            f"- Total Capital: ${capital:,.2f} {currency}",
+
+        lines = capital_header + [
             f"- Allocated: ${allocated:,.2f} ({allocation_pct:.1f}%)",
             f"- Available: ${available:,.2f} ({100 - allocation_pct:.1f}%)",
             "",
-            "## Current Position",
+            position_header,
             f"- Direction: {pos.direction}",
             f"- Symbol: {pos.symbol}",
             f"- Entry Price: ${pos.entry_price:,.2f}",
         ]
         if current_price and current_price > 0:
-            context_lines.append(f"- Current Price: ${current_price:,.2f}")
-        context_lines.extend([
+            lines.append(f"- Current Price: ${current_price:,.2f}")
+        lines.extend([
             f"- Stop Loss: ${pos.stop_loss:,.2f}",
             f"- Take Profit: ${pos.take_profit:,.2f}",
             f"- Position Size: {pos.size_pct * 100:.2f}%",
@@ -1070,13 +984,13 @@ class TradingStrategy:
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
             pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
-            context_lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
+            lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
         sentinel_sl = pos.stop_loss - 1e-8 if pos.direction == "SHORT" else pos.stop_loss + 1e-8
         sl_eval = self._tightening_policy.evaluate_update(
             position=pos,
-            proposed_sl=sentinel_sl,  # sentinel: minimal nudge toward entry forces tightening path
+            proposed_sl=sentinel_sl,
             current_price=current_price or 0.0,
             tf_minutes=self._tf_minutes,
             brain_thresholds=brain_thresholds,
@@ -1085,7 +999,7 @@ class TradingStrategy:
         progress_pct = sl_eval.price_progress * 100 if current_price and current_price > 0 else None
         if progress_pct is not None:
             eligible = progress_pct >= effective_pct
-            context_lines.extend([
+            lines.extend([
                 "",
                 "## SL Tightening Policy",
                 f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
@@ -1093,10 +1007,10 @@ class TradingStrategy:
                 f"- Tightening eligible: {'YES' if eligible else 'NO — wait until price progress reaches the minimum'}",
             ])
         else:
-            context_lines.extend([
+            lines.extend([
                 "",
                 "## SL Tightening Policy",
                 f"- Effective minimum progress: {effective_pct:.0f}% of entry-to-TP (source: {sl_eval.source})",
             ])
 
-        return "\n".join(context_lines)
+        return "\n".join(lines)

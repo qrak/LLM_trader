@@ -728,7 +728,7 @@ class TestAnalyticsAndThresholds:
 
         assert thresholds["adx_strong_threshold"] == 25
         assert thresholds["adx_weak_threshold"] == 22
-        assert thresholds["min_rr_recommended"] == 1.5
+        assert thresholds["min_rr_recommended"] == 1.0  # clamped: 1.5 >= borderline(1.3) → 1.3-0.3=1.0
         assert thresholds["rr_strong_setup"] == 2.0
         assert thresholds["rr_borderline_min"] == 1.3
 

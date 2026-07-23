@@ -20,7 +20,6 @@ from pydantic import BaseModel, Field
 from ..auth import (
     check_credentials,
     create_session,
-    verify_admin_session,
     COOKIE_NAME,
 )
 from ..log_stream import LogStreamManager

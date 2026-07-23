@@ -7,9 +7,7 @@ to stream logs to the browser in real-time.
 
 import asyncio
 import logging
-import time
 from collections import deque
-from typing import Any
 from uuid import uuid4
 
 

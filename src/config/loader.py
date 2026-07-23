@@ -205,7 +205,8 @@ class Config:
             "top_k": self.get_config('model_config', 'top_k', None),
             "frequency_penalty": self.get_config('model_config', 'frequency_penalty', self.get_config('model_config', 'freq_penalty', None)),
             "presence_penalty": self.get_config('model_config', 'presence_penalty', self.get_config('model_config', 'pres_penalty', None)),
-            "max_tokens": default_max_tokens
+            "max_tokens": default_max_tokens,
+            "openrouter_reasoning_effort": self.get_config('model_config', 'openrouter_reasoning_effort', 'max'),
         }
 
         google_max_tokens = self.get_config('model_config', 'google_max_tokens', None)
@@ -351,6 +352,16 @@ class Config:
     def AI_CHART_CANDLE_LIMIT(self):
         """Configured candle limit to use for AI chart images (must be present in config.ini)."""
         return int(self.get_config('general', 'ai_chart_candle_limit', 200))
+
+    @property
+    def MARKET_TYPE(self) -> str:
+        """spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage."""
+        return self.get_config('general', 'market_type', 'spot').lower().strip()
+
+    @property
+    def ENTRY_ORDER_TYPE(self) -> str:
+        """market = instant execution, limit = conditional (infrastructure kept for future)."""
+        return self.get_config('general', 'entry_order_type', 'market').lower().strip()
 
     @property
     def INCLUDE_COIN_DESCRIPTION(self) -> bool:
@@ -651,6 +662,22 @@ class Config:
     def TAKE_PROFIT_CHECK_INTERVAL_SECONDS(self) -> int:
         """Take-profit monitor interval in seconds."""
         return self.TAKE_PROFIT_CHECK_INTERVAL_MINUTES * 60
+
+    # ── llm_trader_executor integration ─────────────────────────────────────
+    # When enabled, LLM_trader POSTs every trading decision to the separate
+    # llm_trader_executor repo (https://github.com/qrak/llm_trader_executor)
+    # which handles real exchange order execution via CCXT.
+    # The file latest_decision.json is still written as a fallback.
+
+    @property
+    def EXECUTOR_API_ENABLED(self) -> bool:
+        """Forward decisions to llm_trader_executor via HTTP? (default: false)"""
+        return self.get_config('executor_api', 'enabled', False)
+
+    @property
+    def EXECUTOR_API_URL(self) -> str:
+        """URL of the llm_trader_executor REST API."""
+        return self.get_config('executor_api', 'url', 'http://127.0.0.1:9199/decision')
 
     @property
     def QUOTE_CURRENCY(self):

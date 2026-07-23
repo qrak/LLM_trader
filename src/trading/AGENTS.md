@@ -1,6 +1,6 @@
 # 🧠 Brain Agent — TradingBrainService
 
-> **Module path:** `src/trading/brain.py` (facade) + 5 collaborators in `src/trading/`
+> **Module path:** `src/trading/brain.py` (facade) + collaborators in `src/trading/`
 > **Type:** Central LLM Decision Engine & Outcome-Aware Learning Loop
 > **Core Model:** No direct LLM calls; deterministic/vector-memory service whose context is injected into AnalysisEngine prompts routed by ProviderOrchestrator
 
@@ -10,7 +10,7 @@
 
 The Brain Agent is the **central reasoning and learning subsystem** of LLM Trader. It acts as both:
 
-- **Decision Enricher:** Injects historical trade outcomes, confidence calibration, and learned rules into every LLM prompt so the model makes context-aware decisions.
+- **Decision Enricher:** Injects historical trade outcomes, confidence calibration, blocked-trade feedback, and learned rules into every LLM prompt so the model makes context-aware decisions.
 - **Autonomous Learner:** After each closed trade, records the outcome into ChromaDB vector memory, and periodically reflects on trade clusters to synthesize semantic rules (best-practices, anti-patterns, corrective measures, AI-mistake patterns).
 
 The Brain does **not** execute trades or calculate indicators — it operates purely on metadata produced by the AnalysisEngine and TradingStrategy.
@@ -19,11 +19,12 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
 
 | Module | File | Responsibility |
 |--------|------|----------------|
-| `BrainContextProvider` | `brain_context.py` | Assembles the "Trading Brain" context block injected into every LLM decision prompt |
+| `BrainContextProvider` | `brain_context.py` | Assembles the "Trading Brain" context block injected into every LLM decision prompt — includes blocked-trade feedback from ChromaDB |
 | `BrainExperienceRecorder` | `brain_experience.py` | Translates closed-trade data + market conditions into structured vector-memory experiences |
 | `ExitProfileResolver` | `brain_exit_profiles.py` | Single source of truth for SL/TP execution profiles serialization and rule rendering |
 | `TradePatternAnalyzer` | `brain_patterns.py` | Statistical analysis engine — win/loss grouping, failure diagnostics, AI mistake classification |
 | `BrainReflectionEngine` | `brain_reflection.py` | Synthesizes learned semantic rules from trade metadata clusters via periodic reflection loops |
+| `ExecutorHandler` | `executor_handler.py` | Builds executor payload from analysis + strategy decision, persists to `latest_decision.json`, HTTP-forwards to `llm_trader_executor` |
 
 ---
 
@@ -185,6 +186,78 @@ if hours_since_last < self._min_update_interval_hours:
 | **Stats cache staleness** | Auto-invalidated when vector-memory experience count changes |
 | **Unknown profile in vector context** | Replaced with resolved rule defaults in `get_context()` |
 | **"LIMITED DATA" flag detected** | Swaps full CoT instructions for "rely on standard TA" note |
+
+---
+
+## Executor Forward Pipeline
+
+When the LLM outputs a BUY/SELL, the decision flows through two stages before reaching the exchange:
+
+### Stage 1: Strategy Decision (TradingStrategy)
+`process_analysis()` runs the guard pipeline, risk manager, and R:R check. If the trade is blocked (e.g. R:R < 1.50), it stores a **blocked-trade friction** in ChromaDB (`system_constraints_rejections` collection) and returns `TradeDecision(action="HOLD")`.
+
+### Stage 2: Context Patching + Executor Handler
+
+```python
+# In CryptoTradingBot._execute_trading_check():
+
+# 1. If strategy vetoed the BUY/SELL, rewrite the saved previous response
+#    so the LLM sees "HOLD" next cycle (not "BUY" with no position):
+if decision is not None and decision.action == "HOLD" and result.get("analysis"):
+    self._patch_rejected_signal_in_response(result, decision)
+
+# 2. Save analysis data (possibly patched) for next-cycle LLM context
+self._save_analysis_data(result)
+
+# 3. Delegate executor pipeline to ExecutorHandler
+analysis = result.get("analysis")
+if self.executor_handler is not None and analysis:
+    await self.executor_handler.handle(analysis, decision, self.current_symbol)
+```
+
+### ExecutorHandler (`src/trading/executor_handler.py`)
+
+```python
+class ExecutorHandler:
+    # Constructor injection — no isinstance/getattr, known types only
+    def __init__(self, persistence, config, logger): ...
+
+    async def handle(self, analysis, strategy_decision, symbol):
+        payload = self._build(analysis, strategy_decision, symbol)  # None on HOLD veto
+        if payload is None:
+            return
+        self._persist(payload)     # atomic write to latest_decision.json
+        await self._forward(payload)  # HTTP POST to llm_trader_executor
+```
+
+Wired once in `start.py` `build_dependencies()` — not in app.py constructors.
+
+### Blocked-Trade Feedback Loop (ChromaDB → LLM Prompt)
+
+```
+LLM outputs BUY with R:R 0.62
+  → TradingStrategy rejects (R:R < 1.50)
+  → store_blocked_trade(guard_type="rr_minimum", ...) → ChromaDB
+  → Returns TradeDecision(action="HOLD")
+  → _patch_rejected_signal_in_response()  → rewrites raw_response "BUY" → "HOLD"
+  → _save_analysis_data()                 → persists patched response
+  → ExecutorHandler._build() sees action="HOLD" → returns None (no executor forward)
+
+Next analysis cycle:
+  → BrainContextProvider.get_context()
+    → vector_memory.get_blocked_trade_feedback(n=5, max_age_hours=168)
+    → Injects "## CRITICAL FEEDBACK: System Rejections" into prompt
+      "Your R/R: 0.62 | Required: 1.50 (gap: -0.88)"
+  → LLM also sees its own previous response as "HOLD" (patched), not "BUY"
+```
+
+### Response Parameters to `config.ini` (for `[executor_api]`)
+
+```ini
+[executor_api]
+enabled = true
+url = http://127.0.0.1:9199/decision
+```
 
 ### Vector Memory Maintenance
 

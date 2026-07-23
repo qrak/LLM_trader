@@ -370,6 +370,18 @@ class VectorMemoryAnalyticsMixin:
                 if meta.get("outcome") == "WIN" and meta.get("sl_distance_pct", 0) > 0:
                     sl_distances.append(meta["sl_distance_pct"] * 100)
 
+            # Compute rr_borderline_min FIRST so min_rr_recommended can clamp against it
+            if rr_wins and rr_losses:
+                for test_rr in self.RR_THRESHOLDS:
+                    wins = sum(1 for rr in rr_wins if rr < test_rr)
+                    losses = sum(1 for rr in rr_losses if rr < test_rr)
+                    total = wins + losses
+                    if total >= 3:
+                        below_win_rate = wins / total
+                        if below_win_rate < 0.40:
+                            thresholds["rr_borderline_min"] = test_rr
+                            break
+
             if rr_wins:
                 avg_winning_rr = sum(rr_wins) / len(rr_wins)
                 raw_min_rr = round(avg_winning_rr * 0.8, 1)
@@ -382,17 +394,6 @@ class VectorMemoryAnalyticsMixin:
                 p75_idx = int(len(sorted_rr) * 0.75)
                 if p75_idx < len(sorted_rr):
                     thresholds["rr_strong_setup"] = round(sorted_rr[p75_idx], 1)
-
-            if rr_wins and rr_losses:
-                for test_rr in self.RR_THRESHOLDS:
-                    wins = sum(1 for rr in rr_wins if rr < test_rr)
-                    losses = sum(1 for rr in rr_losses if rr < test_rr)
-                    total = wins + losses
-                    if total >= 3:
-                        below_win_rate = wins / total
-                        if below_win_rate < 0.40:
-                            thresholds["rr_borderline_min"] = test_rr
-                            break
 
             if sl_distances:
                 thresholds["avg_sl_pct"] = round(sum(sl_distances) / len(sl_distances), 2)

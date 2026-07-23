@@ -139,40 +139,40 @@ class PostMortemService:
         lines = [
             "Analyze the following closed trade and produce a post-mortem.",
             "",
-            f"## Trade: {getattr(closed_position, 'symbol', '?')} {getattr(closed_position, 'direction', '?')}",
+            f"## Trade: {closed_position.symbol} {closed_position.direction}",
             f"## Close Reason: {reason}",
             f"## P&L: {pnl:+.2f}%",
             "",
             "## Entry Data:",
-            f"- Entry Price: {getattr(closed_position, 'entry_price', '?')}",
-            f"- Stop Loss: {getattr(closed_position, 'stop_loss', '?')}",
-            f"- Take Profit: {getattr(closed_position, 'take_profit', '?')}",
-            f"- Position Size: {getattr(closed_position, 'size_pct', 0):.1%} of capital",
-            f"- Confidence at Entry: {getattr(closed_position, 'confidence', '?')}",
-            f"- ADX at Entry: {getattr(closed_position, 'adx_at_entry', '?')}",
-            f"- RSI at Entry: {getattr(closed_position, 'rsi_at_entry', '?')}",
-            f"- Trend at Entry: {getattr(closed_position, 'trend_direction_at_entry', '?')}",
-            f"- Volatility at Entry: {getattr(closed_position, 'volatility_level', '?')}",
-            f"- R/R Ratio at Entry: {getattr(closed_position, 'rr_ratio_at_entry', '?')}",
-            f"- Max Drawdown During Trade: {getattr(closed_position, 'max_drawdown_pct', 0):.2f}%",
-            f"- Max Profit During Trade: {getattr(closed_position, 'max_profit_pct', 0):.2f}%",
+            f"- Entry Price: {closed_position.entry_price}",
+            f"- Stop Loss: {closed_position.stop_loss}",
+            f"- Take Profit: {closed_position.take_profit}",
+            f"- Position Size: {closed_position.size_pct:.1%} of capital",
+            f"- Confidence at Entry: {closed_position.confidence}",
+            f"- ADX at Entry: {closed_position.adx_at_entry}",
+            f"- RSI at Entry: {closed_position.rsi_at_entry}",
+            f"- Trend at Entry: {closed_position.trend_direction_at_entry}",
+            f"- Volatility at Entry: {closed_position.volatility_level}",
+            f"- R/R Ratio at Entry: {closed_position.rr_ratio_at_entry}",
+            f"- Max Drawdown During Trade: {closed_position.max_drawdown_pct:.2f}%",
+            f"- Max Profit During Trade: {closed_position.max_profit_pct:.2f}%",
         ]
 
         # Entry reasoning (the original AI justification for opening)
-        entry_reasoning = getattr(entry_decision, 'reasoning', '') or '(no reasoning recorded)'
+        entry_reasoning = entry_decision.reasoning or '(no reasoning recorded)'
         lines.extend(["", "## Original Entry Reasoning:", entry_reasoning])
 
         # Exit data
         lines.extend([
             "",
             "## Exit Data:",
-            f"- Exit Price: {getattr(exit_decision, 'price', '?')}",
-            f"- Exit Reasoning: {getattr(exit_decision, 'reasoning', '?')}",
+            f"- Exit Price: {exit_decision.price}",
+            f"- Exit Reasoning: {exit_decision.reasoning}",
         ])
 
         # Hold duration
-        entry_time = getattr(closed_position, 'entry_time', None)
-        exit_timestamp = getattr(exit_decision, 'timestamp', None)
+        entry_time = closed_position.entry_time
+        exit_timestamp = exit_decision.timestamp
         if entry_time is not None and exit_timestamp is not None:
             try:
                 hold_duration = exit_timestamp - entry_time

@@ -234,26 +234,20 @@ class TestWritableConfigEdgeCases:
         """Reading a value from a nonexistent section returns None."""
         assert wc.get_value("nonexistent", "key") is None
 
-    def test_set_unknown_key_raises(self, wc):
+    async def test_set_unknown_key_raises(self, wc):
         """Setting an unknown key raises ValueError."""
         with pytest.raises(ValueError, match="Unknown config key"):
-            asyncio.get_event_loop().run_until_complete(
-                wc.set_value("general", "unknown_key", "value")
-            )
+            await wc.set_value("general", "unknown_key", "value")
 
-    def test_set_unknown_section_raises(self, wc):
+    async def test_set_unknown_section_raises(self, wc):
         """Setting a key in an unknown section raises ValueError."""
         with pytest.raises(ValueError, match="Unknown config key"):
-            asyncio.get_event_loop().run_until_complete(
-                wc.set_value("nonexistent", "key", "value")
-            )
+            await wc.set_value("nonexistent", "key", "value")
 
-    def test_reload_event_set_on_write(self, wc):
+    async def test_reload_event_set_on_write(self, wc):
         """Writing a value sets the reload event."""
         assert not wc.reload_event.is_set()
-        asyncio.get_event_loop().run_until_complete(
-            wc.set_value("general", "timeframe", "1d")
-        )
+        await wc.set_value("general", "timeframe", "1d")
         assert wc.reload_event.is_set()
 
     def test_reload_event_cleared_on_read(self, wc):
@@ -281,24 +275,20 @@ class TestWritableConfigEdgeCases:
                 assert "category" in key_meta
                 assert "description" in key_meta
 
-    def test_batch_update_all_or_nothing(self, wc):
+    async def test_batch_update_all_or_nothing(self, wc):
         """If one value in a batch is invalid, none are written."""
         # First set a known good value
-        asyncio.get_event_loop().run_until_complete(
-            wc.set_value("general", "timeframe", "4h")
-        )
+        await wc.set_value("general", "timeframe", "4h")
         # Try batch with one invalid value
         with pytest.raises(ValueError):
-            asyncio.get_event_loop().run_until_complete(
-                wc.set_values([
-                    ("general", "timeframe", "1d"),  # valid
-                    ("general", "candle_limit", "not_a_number"),  # invalid
-                ])
-            )
+            await wc.set_values([
+                ("general", "timeframe", "1d"),  # valid
+                ("general", "candle_limit", "not_a_number"),  # invalid
+            ])
         # The first value should NOT have been written (atomicity)
         assert wc.get_value("general", "timeframe") == "4h"
 
-    def test_concurrent_writes_sequentialized(self, wc):
+    async def test_concurrent_writes_sequentialized(self, wc):
         """Concurrent writes are serialized by the lock."""
         timeframes = ["1m", "5m", "15m", "30m", "1h"]
 
@@ -309,7 +299,7 @@ class TestWritableConfigEdgeCases:
             tasks = [write_timeframe(tf) for tf in timeframes]
             await asyncio.gather(*tasks)
 
-        asyncio.get_event_loop().run_until_complete(run_concurrent())
+        await run_concurrent()
         # Should have one of the values (not corrupted)
         val = wc.get_value("general", "timeframe")
         assert val in timeframes

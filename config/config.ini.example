@@ -26,12 +26,21 @@ google_studio_model = gemini-3.5-flash
 # === General ===
 [general]
 crypto_pair = BTC/USDC
+# ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
+# signals with high noise, frequent false breakouts, and reduced win rates.
+# The bot was designed and tested for 4h+ swing/positional trading. Smaller
+# timeframes will degrade performance significantly and increase costs due to
+# more frequent LLM calls. You have been warned.
 timeframe = 4h
 candle_limit = 999
 ai_chart_candle_limit = 125
 discord_bot = false
 
 include_coin_description = false
+# spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
+market_type = spot
+# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
+entry_order_type = market
 
 # === Debug ===
 [debug]
@@ -106,6 +115,15 @@ sl_tightening_floor = 0.05           # brain can't push below this
 sl_tightening_ceiling = 0.40         # brain can't push above this
 sl_tightening_min_samples = 10       # min paired samples before brain override
 
+# === Executor API ===
+# Forward trading decisions to the separate llm_trader_executor service
+# (https://github.com/qrak/llm_trader_executor) which executes real exchange
+# orders via CCXT. File-based fallback (latest_decision.json) still works
+# when the executor is offline or disabled.
+[executor_api]
+enabled = true
+url = http://127.0.0.1:9199/decision
+
 # === Cooldowns ===
 [cooldowns]
 file_message_expiry = 168  # hours before tracked messages are cleaned up
@@ -121,6 +139,9 @@ google_max_tokens = 32768
 google_thinking_level = high
 google_code_execution = false
 model_verbosity = high
+# OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
+# xhigh and max both map to DeepSeek's max reasoning level
+openrouter_reasoning_effort = max
 
 # === Dashboard ===
 [dashboard]

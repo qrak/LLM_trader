@@ -147,7 +147,7 @@ class TemplateManager:
                 data = json.loads(block)
             except (json.JSONDecodeError, TypeError, ValueError):
                 continue
-            analysis = data.get("analysis") if isinstance(data, dict) else None
+            analysis = data.get("analysis")
             if isinstance(analysis, dict):
                 return analysis
         if blocks and self.logger:
@@ -156,7 +156,7 @@ class TemplateManager:
 
     def _normalize_model_verbosity(self, value: str | None = None) -> str:
         """Normalize verbosity value with safe fallback."""
-        raw_value = value if value is not None else getattr(self.config, "MODEL_VERBOSITY", "medium")
+        raw_value = value if value is not None else self.config.MODEL_VERBOSITY
         normalized = str(raw_value).strip().lower()
         if normalized in self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY:
             return normalized
@@ -528,6 +528,14 @@ class TemplateManager:
         avg_sl = thresholds.get("avg_sl_pct", 2.5)
         min_rr = thresholds.get("min_rr_recommended", 2.0)
         conf_threshold = thresholds.get("confidence_threshold", 70)
+
+        # Signal names: spot uses BUY/SELL, futures uses LONG/SHORT
+        is_futures = getattr(self.config, 'MARKET_TYPE', 'spot') == 'futures'
+        entry_signal_open = "LONG" if is_futures else "BUY"
+        entry_signal_close = "SHORT" if is_futures else "SELL"
+        allowed_signals = "LONG, SHORT, HOLD, CLOSE, UPDATE" if is_futures else "BUY, SELL, HOLD, CLOSE, UPDATE"
+        order_type = getattr(self.config, 'ENTRY_ORDER_TYPE', 'market').strip().lower()
+        order_type_label = "\"market\"" if order_type == "market" else "\"limit\" or \"market\""
         # Extended thresholds
         adx_weak = thresholds.get("adx_weak_threshold", 20)
         conf_weak = thresholds.get("min_confluences_weak", 4)
@@ -582,7 +590,7 @@ class TemplateManager:
                 f"9) BEAR CASE: breakdown triggers, distribution targets and bearish evidence\n"
                 f"10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid tightening policy status\n"
                 f"11) RISK/REWARD: current R/R ratio, distance to target vs invalidation\n"
-                f"12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL / CLOSE)\n"
+                f"12) DECISION: signal with clear actionable directive (HOLD / {entry_signal_open} / {entry_signal_close} / CLOSE)\n"
                 f"13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) trend/volume confirmation, (4) major level context, (5) bull/bear scenario, (6) invalidation trigger, (7) next watch condition."
@@ -637,20 +645,35 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 32, "strength_daily": 41, "timeframe_alignment": "DIVERGENT"}},
-        "risk_reward_ratio": 2.58
+        "risk_reward_ratio": 2.58,
+        "symbol": "BTC/USDC",
+        "order_type": "{order_type}",
+        "quantity": 0.0,
+        "reduce_only": false,
+        "leverage": 1
     }}
 }}
 ```
 
-Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
+Allowed signals: {allowed_signals}.
 JSON rules by signal:
-| Signal | entry_price | stop_loss | take_profit | position_size | risk_reward_ratio |
-|--------|-------------|-----------|-------------|---------------|-------------------|
-| BUY/SELL | number | number | number | 0.0-1.0 | number |
-| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | number |
-| HOLD (open position) | null | null | null | 0.0 | null |
-| UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | number (from current) |
-| CLOSE | current price | null | null | 0.0 | null |
+| Signal | entry_price | stop_loss | take_profit | position_size | quantity | order_type | reduce_only | risk_reward_ratio |
+|--------|-------------|-----------|-------------|---------------|----------|------------|-------------|-------------------|
+| {entry_signal_open}/{entry_signal_close} | number | number | number | 0.0-1.0 | number > 0 | {order_type_label} | false | number |
+| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | 0.0 | null | false | number |
+| HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |
+| UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | 0.0 | null | false | number (from current) |
+| CLOSE | current price | null | null | 0.0 | 0.0 | "market" | true | null |
+
+EXECUTION FIELDS (for automated trade execution bots):
+- symbol: Trading pair. Must match exactly the symbol from Trading Context.
+- order_type: {order_type_label}. CLOSE must be "market" to guarantee exit.
+  {entry_signal_open}/{entry_signal_close} default to {order_type_label}. CLOSE must be "market" to guarantee exit.
+- quantity: Actual base-currency amount (e.g., 0.015 BTC).
+  {entry_signal_open}/{entry_signal_close}: quantity = (available_capital × position_size) / entry_price, rounded down.
+  HOLD/UPDATE: 0.0. CLOSE: use current open position quantity.
+- reduce_only: false (new positions), true (CLOSE only). Prevents position flipping.
+- leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.
 
 HOLD semantics: HOLD(no position) may describe a conditional setup; HOLD(open position) means no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 
@@ -674,6 +697,11 @@ POSITION SIZING:
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
 - Weak trend (ADX < {adx_weak}): smaller. Min normal: {min_pos_size:.3f}. Don't round up.
 
+QUANTITY CALCULATION (for automated execution):
+- quantity = (available_capital × position_size) / entry_price
+- available_capital is your configured capital (currently in quote currency).
+- Round down to exchange precision. For HOLD: 0.0. For CLOSE: current position quantity.
+
 MACRO CONFLICT:
 If 365D trend conflicts with trade: need 4+ confluences. Both 365D+Weekly conflict: need 5+ or HOLD.
 State "365D MACRO CONFLICT: [direction]" in analysis.
@@ -681,15 +709,15 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 SIGNALS:
-- BUY/SELL: {conf_threshold}+ conf, min {min_rr:.1f}:1 R/R, clear SL/TP
+- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, R/R >= {rr_borderline:.1f} (system-enforced minimum — the only hard gate), clear SL/TP
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
 RISK/REWARD GUIDELINES:
-- R/R < {rr_borderline:.1f}: Very unfavorable — HOLD
-- R/R {rr_borderline:.1f}-{min_rr:.1f}: Borderline — only trade with strong confluence
-- R/R >= {min_rr:.1f}: Acceptable
-- R/R >= {rr_strong:.1f}: Strong setup
+- R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (THE ONLY hard gate)
+- R/R >= {rr_borderline:.1f}: Allowed — meets system-enforced minimum for entry
+- Historical winning average: {min_rr:.1f}+ R/R (aspirational target — not enforced, not a gate)
+- R/R >= {rr_strong:.1f}: Exceptional setup
 
 R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
 {chart_validation_guidance}
@@ -704,7 +732,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         # Add threshold origin annotations if brain data is available
         if trade_count > 0:
             if learned_keys:
-                origin_parts = [f"min_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
+                origin_parts = [f"recommended_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
                                 f"adx_strong={adx_strong}" if "adx_strong_threshold" in learned_keys else None,
                                 f"confidence={conf_threshold}" if "confidence_threshold" in learned_keys else None,
                                 f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None]

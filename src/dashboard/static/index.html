@@ -8,7 +8,7 @@
     <meta name="description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
     <meta property="og:title" content="Semantic Signal LLM">
     <meta property="og:description" content="Semantic Signal LLM Dashboard for Crypto Trading Neural Engine">
-    <link rel="stylesheet" href="css/style.css?v=6.2">
+    <link rel="stylesheet" href="css/style.css?v=7.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -250,17 +250,38 @@
                 </header>
 
                 <div class="stack-layout">
-                    <section id="panel-synapses" class="panel large-panel">
+                    <section id="panel-decision-pathways" class="panel large-panel decision-pathways-panel">
                         <div class="panel-header">
-                            <h3>Synaptic Pathways</h3>
-                            <div class="legend">
-                                <span id="experience-count" class="meta-info">0 learned experiences</span>
-                                <span class="dot buy"></span> BUY
-                                <span class="dot close"></span> CLOSE
-                                <span class="dot update"></span> UPDATE
+                            <h3>Decision Pathways</h3>
+                            <div class="legend decision-meta-row">
+                                <span id="decision-meta" class="meta-info">Loading decision context…</span>
+                                <span id="experience-count" class="meta-info sr-only">0</span>
                             </div>
                         </div>
-                        <div id="synapse-network" class="network-container"></div>
+                        <div id="decision-synopsis" class="decision-synopsis" aria-live="polite">
+                            <span class="spinner spinner-sm"></span> Building synopsis…
+                        </div>
+                        <div id="decision-legend" class="decision-legend" aria-hidden="false">
+                            <span class="dl dl-decision"></span> Decision
+                            <span class="dl dl-position"></span> Position
+                            <span class="dl dl-exp"></span> Experience
+                            <span class="dl dl-rule"></span> Rule
+                            <span class="dl dl-journal"></span> Journal
+                            <span class="dl dl-blocked"></span> Blocked
+                            <span class="decision-zoom-controls">
+                                <button id="zoom-in-btn" class="zoom-btn" title="Zoom in" aria-label="Zoom in">+</button>
+                                <button id="zoom-out-btn" class="zoom-btn" title="Zoom out" aria-label="Zoom out">−</button>
+                                <button id="zoom-fit-btn" class="zoom-btn" title="Fit to view" aria-label="Fit to view">⟲</button>
+                            </span>
+                        </div>
+                        <div class="decision-body">
+                            <div id="decision-graph" class="network-container decision-graph" role="img"
+                                aria-label="Decision pathways graph"></div>
+                            <aside id="decision-detail" class="decision-detail" aria-live="polite">
+                                <h4>Node detail</h4>
+                                <p class="decision-empty">Click a node to inspect source data.</p>
+                            </aside>
+                        </div>
                     </section>
 
                     <section id="panel-visuals" class="panel visual-panel">
@@ -452,7 +473,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js?v=5.2"></script>
+    <script type="module" src="main.js?v=7.3"></script>
 </body>
 
 </html>

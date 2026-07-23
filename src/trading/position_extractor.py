@@ -26,7 +26,7 @@ class PositionExtractor:
 
         # Regex patterns for extracting trading information
         self.signal_pattern: Pattern = re.compile(
-            r'signal["\s:]*\[?(BUY|SELL|HOLD|CLOSE|CLOSE_LONG|CLOSE_SHORT|UPDATE)\]?',
+            r'signal["\s:]*\[?(BUY|SELL|LONG|SHORT|HOLD|CLOSE|CLOSE_LONG|CLOSE_SHORT|UPDATE)\]?',
             re.IGNORECASE
         )
         self.confidence_pattern: Pattern = re.compile(
@@ -190,7 +190,20 @@ class PositionExtractor:
 
         if has_percent:
             return numeric_value / 100
-        return numeric_value / 100 if numeric_value > 1 else numeric_value
+        # Without % suffix, numbers > 1.0 are ambiguous:
+        # "50" could mean "50% of capital" or "50x leverage".
+        # Reject — require explicit % suffix.
+        if numeric_value > 1.0:
+            if self.logger:
+                self.logger.warning(
+                    "Ambiguous position_size without %% suffix: %s — "
+                    "treating as None (rejected). "
+                    "LLM should use %% suffix for percentage values "
+                    "(e.g., '5%%').",
+                    value,
+                )
+            return None
+        return numeric_value
 
     def _extract_from_text(self, text: str) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading info using regex patterns.
@@ -234,5 +247,5 @@ class PositionExtractor:
         Returns:
             True if valid signal
         """
-        valid_signals = {"BUY", "SELL", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
+        valid_signals = {"BUY", "SELL", "LONG", "SHORT", "HOLD", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT", "UPDATE"}
         return signal.upper() in valid_signals

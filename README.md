@@ -12,7 +12,7 @@
 
 ---
 
-> ⚠️ **Research Edition.** Runs in paper-trading mode only. Real exchange order execution is not implemented in this public branch.
+> 💡 **Paper trading by default.** A real exchange execution service ([llm_trader_executor](https://github.com/qrak/llm_trader_executor)) is currently in testing — it consumes this bot's decisions and places live CCXT orders. Coming soon. Stay tuned.
 
 ---
 
@@ -55,7 +55,7 @@ python start.py               # dashboard at http://localhost:8000
 
 ![Dashboard Overview](img/1.png)
 
-![Memory Synapse Graph](img/2.png)
+![Decision Pathways](img/2.png)
 
 ---
 
@@ -171,14 +171,14 @@ Required API keys in `keys.env`:
 
 - **Multiple Trading Agent Personalities** — Conservative, aggressive, contrarian, trend-following strategists *(aspirational)*
 - **Multi-Model Consensus** — "Council of Models" architecture for collective decision-making *(aspirational)*
-- **Live Trading** — Exchange order execution layer *(plan at `.ai/plans/real_trading_implementation_plan.md`)*
+- **Live Trading** — Real exchange order execution via [llm_trader_executor](https://github.com/qrak/llm_trader_executor) — currently in testing, coming soon *(plan at `.ai/plans/real_trading_implementation_plan.md`)*
 - **Admin Dashboard** — Web GUI for bot configuration (replaces manual `config.ini` editing) *(plan at `.ai/plans/admin-dashboard-plan.md`)*
 
 ---
 
 ## Disclaimer
 
-**NOT FINANCIAL ADVICE.** This software is experimental and in BETA. Paper-trading only — real exchange order execution is not implemented. No warranty provided. Use at your own risk.
+**NOT FINANCIAL ADVICE.** This software is experimental and in BETA. A real exchange execution service is in testing — use with caution. No warranty provided. Use at your own risk.
 
 ## License
 

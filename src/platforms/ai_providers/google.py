@@ -4,6 +4,7 @@ Supports both text-only and multimodal (text + image) requests for pattern analy
 """
 import inspect
 import io
+import struct
 from typing import Any, Union
 
 from google import genai
@@ -13,6 +14,12 @@ from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 from src.utils.decorators import retry_api_call
+
+# Gemini charges 258 tokens per 75x75 image tile for flash models.
+# Source: ai.google.dev/gemini-api/docs/tokens and
+# https://ai.google.dev/gemini-api/docs/tokens#image
+_IMAGE_TILE_SIZE = 75
+_IMAGE_TOKENS_PER_TILE = 258
 
 
 class GoogleAIClient(BaseAIClient):
@@ -90,51 +97,123 @@ class GoogleAIClient(BaseAIClient):
             self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
-    def _extract_usage_metadata(self, response) -> UsageModel | None:
-        """Extract token usage metadata from Google AI response."""
+    def _get_image_dimensions(self, img_bytes: bytes) -> tuple[int, int] | None:
+        """Extract image dimensions from PNG/JPEG bytes without full decode.
+
+        Returns (width, height) or None if format is unknown.
+        """
+        if img_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            # PNG: IHDR chunk at offset 16 (4B width, 4B height, big-endian)
+            if len(img_bytes) >= 33:
+                w = struct.unpack('>I', img_bytes[16:20])[0]
+                h = struct.unpack('>I', img_bytes[20:24])[0]
+                return w, h
+        elif img_bytes[:2] in (b'\xff\xd8',):
+            # JPEG: scan for SOF0 (0xff 0xc0/0xc1/0xc2) marker
+            i = 2
+            while i < len(img_bytes) - 1:
+                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):
+                    if i + 9 < len(img_bytes):
+                        h = struct.unpack('>H', img_bytes[i + 5:i + 7])[0]
+                        w = struct.unpack('>H', img_bytes[i + 7:i + 9])[0]
+                        return w, h
+                i += 1
+        return None
+
+    def _estimate_image_tokens(self, img_bytes: bytes | None) -> int:
+        """Estimate the number of tokens Google charges for an image.
+
+        Formula: tiles = ceil(w/75) * ceil(h/75), tokens = tiles * 258.
+        Returns 0 if dimensions cannot be determined.
+        """
+        if not img_bytes:
+            return 0
+        dims = self._get_image_dimensions(img_bytes)
+        if dims is None:
+            return 0
+        w, h = dims
+        tiles_x = (w + _IMAGE_TILE_SIZE - 1) // _IMAGE_TILE_SIZE
+        tiles_y = (h + _IMAGE_TILE_SIZE - 1) // _IMAGE_TILE_SIZE
+        total_tiles = tiles_x * tiles_y
+        image_tokens = total_tiles * _IMAGE_TOKENS_PER_TILE
+        self.logger.debug(
+            "Image %dx%d -> %d tiles (%dx%d) -> %d image tokens",
+            w, h, total_tiles, tiles_x, tiles_y, image_tokens,
+        )
+        return image_tokens
+
+    def _extract_usage_metadata(
+        self, response, image_bytes: bytes | None = None
+    ) -> UsageModel | None:
+        """Extract token usage metadata from Google AI response.
+
+        Uses prompt_tokens_details (modality breakdown) from the SDK when available
+        for transparency in logging. Trusts prompt_token_count as the primary value
+        since the SDK docs confirm it includes image tokens.
+
+        Args:
+            response: Google GenAI SDK response object
+            image_bytes: Raw image bytes for diagnostic logging only
+        """
         try:
             metadata = response.usage_metadata
-            if metadata:
-                try:
-                    prompt = metadata.prompt_token_count
-                except AttributeError:
-                    prompt = 0
-                
-                try:
-                    completion = metadata.candidates_token_count
-                except AttributeError:
-                    completion = 0
-                
-                try:
-                    total = metadata.total_token_count
-                except AttributeError:
-                    total = 0
-                
-                return UsageModel(
-                    prompt_tokens=prompt,
-                    completion_tokens=completion,
-                    total_tokens=total,
+            if not metadata:
+                return None
+
+            prompt = getattr(metadata, 'prompt_token_count', 0) or 0
+            completion = getattr(metadata, 'candidates_token_count', 0) or 0
+            thoughts = getattr(metadata, 'thoughts_token_count', 0) or 0
+
+            # Google bills thinking tokens as output ("Output price including thinking tokens").
+            output_tokens = completion + thoughts
+
+            # Log per-modality breakdown from SDK for transparency
+            text_tokens = None
+            image_tokens_sdk = None
+            prompt_details = getattr(metadata, 'prompt_tokens_details', None)
+            if prompt_details:
+                for detail in prompt_details:
+                    mod = getattr(detail, 'modality', '')
+                    count = getattr(detail, 'token_count', 0) or 0
+                    if mod == 'TEXT':
+                        text_tokens = count
+                    elif mod == 'IMAGE':
+                        image_tokens_sdk = count
+
+            # Diagnostic: log the modality breakdown if available
+            if image_tokens_sdk is not None:
+                self.logger.info(
+                    "Token breakdown: TEXT=%s, IMAGE=%s, prompt=%s, output=%s (incl. thoughts=%s)",
+                    text_tokens, image_tokens_sdk, prompt, output_tokens, thoughts,
                 )
+            elif image_bytes:
+                # SDK didn't return modality details — estimate for diagnostic
+                est = self._estimate_image_tokens(image_bytes)
+                self.logger.info(
+                    "Token breakdown (estimated): text=%s, image(est)=%s, sdk_prompt=%s, output=%s",
+                    text_tokens or prompt, est, prompt, output_tokens,
+                )
+
+            total = getattr(metadata, 'total_token_count', 0) or 0
+            return UsageModel(
+                prompt_tokens=prompt,
+                completion_tokens=output_tokens,
+                total_tokens=total or prompt + output_tokens,
+                thoughts_token_count=thoughts,
+            )
         except AttributeError:
             pass
         except Exception as e:
             self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
-    def _supports_code_execution(self, model_name: str) -> bool:
-        """Return whether a Gemini model is known to support code execution tools."""
-        normalized = model_name.lower().removeprefix("models/")
-        return normalized.startswith(("gemini-3-flash", "gemini-3.5-flash"))
-
     def _create_generation_config(
         self,
         model_config: dict[str, Any],
-        effective_model: str | None = None,
         include_thinking: bool = True,
         include_code_execution: bool = False
     ) -> types.GenerateContentConfig:
         """Create a generation config from model configuration dictionary."""
-        model_name = effective_model or self.model
         thinking_config = None
         if include_thinking:
             thinking_level = model_config.get("thinking_level", "high")
@@ -148,7 +227,7 @@ class GoogleAIClient(BaseAIClient):
                 thinking_config = types.ThinkingConfig(thinking_level=thinking_levels[thinking_level])
 
         tools = []
-        if include_code_execution and self._supports_code_execution(model_name):
+        if include_code_execution:
             tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
 
         config = {
@@ -160,6 +239,14 @@ class GoogleAIClient(BaseAIClient):
 
     def _should_retry_without_thinking(self, exception: Exception) -> bool:
         """Return whether a Google SDK error indicates unsupported thinking config."""
+        return self._is_unsupported_feature_error(exception, "thinking")
+
+    def _should_retry_without_code_execution(self, exception: Exception) -> bool:
+        """Return whether a Google SDK error indicates unsupported code_execution tool."""
+        return self._is_unsupported_feature_error(exception, "code_execution")
+
+    def _is_unsupported_feature_error(self, exception: Exception, feature: str) -> bool:
+        """Return whether a Google SDK error indicates an unsupported feature."""
         code = None
         message = str(exception)
         if isinstance(exception, errors.APIError):
@@ -172,7 +259,7 @@ class GoogleAIClient(BaseAIClient):
             return False
 
         error_text = message.lower()
-        if "thinking" not in error_text:
+        if feature not in error_text:
             return False
         return any(term in error_text for term in ("invalid", "unsupported", "unknown", "field", "400"))
 
@@ -198,7 +285,6 @@ class GoogleAIClient(BaseAIClient):
             try:
                 generation_config = self._create_generation_config(
                     model_config,
-                    effective_model=effective_model,
                     include_thinking=include_thinking
                 )
                 self.logger.debug("Sending request to Google AI with model: %s (thinking=%s)", effective_model, include_thinking)
@@ -208,7 +294,7 @@ class GoogleAIClient(BaseAIClient):
                     config=generation_config
                 )
                 content_text = self._extract_text_from_response(response)
-                usage = self._extract_usage_metadata(response)
+                usage = self._extract_usage_metadata(response, image_bytes=None)
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
             except Exception as e: # pylint: disable=broad-exception-caught
@@ -245,34 +331,49 @@ class GoogleAIClient(BaseAIClient):
         img_data = self.process_chart_image(chart_image)
         image_part = types.Part.from_bytes(data=img_data, mime_type='image/png')
         contents = [prompt, image_part]
-        for include_thinking in (True, False):
-            try:
-                # Check for code execution config, default to True if not specified
-                include_code_execution = model_config.get("google_code_execution", False)
-                code_execution_enabled = include_code_execution and self._supports_code_execution(effective_model)
+        include_code_execution = model_config.get("google_code_execution", False)
 
-                generation_config = self._create_generation_config(
-                    model_config,
-                    effective_model=effective_model,
-                    include_thinking=include_thinking,
-                    include_code_execution=include_code_execution
-                )
-                self.logger.debug("Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)", effective_model, include_thinking, code_execution_enabled, len(img_data))
-                response = await client.aio.models.generate_content(
-                    model=effective_model,
-                    contents=contents,
-                    config=generation_config
-                )
-                content_text = self._extract_text_from_response(response)
-                usage = self._extract_usage_metadata(response)
-                self.logger.debug("Received successful chart analysis response from Google AI")
-                return self.create_response(content_text, usage=usage)
-            except Exception as e: # pylint: disable=broad-exception-caught
-                if include_thinking and self._should_retry_without_thinking(e):
-                    self.logger.warning("Model may not support thinking_config for chart analysis, retrying without it: %s", e)
-                    continue
-                self.logger.error("Error during Google AI chart analysis request: %s", e)
-                return self._handle_exception(e)
+        # Outer: try with thinking, then without
+        # Inner: try with code_execution (if enabled), then without
+        for include_thinking in (True, False):
+            for include_ce in (include_code_execution, False):
+                if not include_ce and not include_code_execution:
+                    break  # code_execution not requested — skip second inner iteration
+
+                try:
+                    generation_config = self._create_generation_config(
+                        model_config,
+                        include_thinking=include_thinking,
+                        include_code_execution=include_ce
+                    )
+                    self.logger.debug(
+                        "Sending chart analysis to Google AI: %s (thinking=%s, code_execution=%s, %s bytes)",
+                        effective_model, include_thinking, include_ce, len(img_data)
+                    )
+                    response = await client.aio.models.generate_content(
+                        model=effective_model,
+                        contents=contents,
+                        config=generation_config
+                    )
+                    content_text = self._extract_text_from_response(response)
+                    # Pass raw image bytes so _extract_usage_metadata can estimate image tokens
+                    # when the SDK omits them (known bug googleapis/python-genai#470)
+                    usage = self._extract_usage_metadata(response, image_bytes=img_data)
+                    self.logger.debug("Received successful chart analysis response from Google AI")
+                    return self.create_response(content_text, usage=usage)
+                except Exception as e: # pylint: disable=broad-exception-caught
+                    if include_ce and self._should_retry_without_code_execution(e):
+                        self.logger.warning(
+                            "Model may not support code_execution, retrying without it: %s", e
+                        )
+                        continue
+                    if include_thinking and self._should_retry_without_thinking(e):
+                        self.logger.warning(
+                            "Model may not support thinking_config for chart analysis, retrying without it: %s", e
+                        )
+                        break  # break inner loop, go to next thinking iteration
+                    self.logger.error("Error during Google AI chart analysis request: %s", e)
+                    return self._handle_exception(e)
         return None
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:

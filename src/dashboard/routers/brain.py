@@ -93,6 +93,293 @@ def _format_execution_label(data: dict[str, Any], prefix: str) -> str:
     return f"{execution_type} / {check_interval}"
 
 
+def _excerpt_text(text: str | None, limit: int = 400) -> str:
+    """Return a compact single-line excerpt for dashboard display."""
+    if not text:
+        return ""
+    cleaned = re.sub(r"```json[\s\S]*?```", "", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 1].rstrip() + "…"
+
+
+def _short_label(text: str | None, n: int = 28) -> str:
+    """Truncate a node label for readable graph display."""
+    value = (text or "").strip()
+    if len(value) <= n:
+        return value
+    return value[: n - 1].rstrip() + "…"
+
+
+def _build_decision_synopsis(
+    *,
+    now: dict[str, Any],
+    position: dict[str, Any],
+    memory: dict[str, Any],
+    journal: dict[str, Any],
+    last_decision: dict[str, Any],
+) -> str:
+    """Compose a deterministic multi-sentence situational summary."""
+    parts: list[str] = []
+    if position.get("has_position"):
+        direction = position.get("direction", "?")
+        symbol = position.get("symbol", "?")
+        entry = position.get("entry_price")
+        conf = position.get("confidence")
+        entry_txt = f" from {entry}" if entry is not None else ""
+        conf_txt = f" (entry confidence {conf})" if conf is not None else ""
+        parts.append(f"Open {direction} on {symbol}{entry_txt}{conf_txt}.")
+    else:
+        parts.append("No open position (flat).")
+
+    action = now.get("action") or last_decision.get("signal") or "--"
+    confidence = now.get("confidence")
+    if confidence in (None, "--"):
+        confidence = last_decision.get("confidence")
+    trend = now.get("trend") or "--"
+    conf_txt = f" at {confidence}% confidence" if confidence not in (None, "--") else ""
+    parts.append(f"Latest model signal is {action}{conf_txt} with market trend {trend}.")
+
+    ctx = memory.get("current_context")
+    if ctx:
+        parts.append(f"Memory is searching similar history under: {ctx}.")
+
+    top_rules = memory.get("top_rules") or []
+    if top_rules:
+        rule0 = top_rules[0]
+        rtype = rule0.get("rule_type") or "rule"
+        rtext = (rule0.get("rule_text") or "")[:160]
+        if rtext:
+            parts.append(f"Top active {rtype}: {rtext}")
+
+    items = journal.get("items") or []
+    if items:
+        lesson = (items[0].get("lesson_learned") or "").strip()
+        verdict = items[0].get("verdict") or "lesson"
+        if lesson:
+            parts.append(f"Latest journal ({verdict}): {lesson[:180]}")
+
+    blocked_count = (memory.get("blocked") or {}).get("blocked_count") or 0
+    if blocked_count:
+        parts.append(f"System blocked {blocked_count} trade attempt(s) recently (friction).")
+
+    return " ".join(parts)
+
+
+def _build_decision_graph(
+    *,
+    now: dict[str, Any],
+    last_decision: dict[str, Any],
+    position: dict[str, Any],
+    memory: dict[str, Any],
+    journal: dict[str, Any],
+) -> dict[str, Any]:
+    """Build hierarchical multi-source decision graph nodes and edges."""
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+
+    action = str(now.get("action") or last_decision.get("signal") or "--")
+    conf = now.get("confidence")
+    if conf in (None, "--"):
+        conf = last_decision.get("confidence")
+    conf_s = f"{conf}%" if conf not in (None, "--") else ""
+    nodes.append(
+        {
+            "id": "hub_now",
+            "type": "decision",
+            "label": f"{action} {conf_s}".strip(),
+            "level": 0,
+            "group": "decision",
+            "title": f"Signal {action} | conf {conf_s} | trend {now.get('trend')}",
+            "data": {
+                "action": action,
+                "confidence": conf,
+                "trend": now.get("trend"),
+                "adx": now.get("adx"),
+                "rsi": now.get("rsi"),
+                "reasoning_excerpt": last_decision.get("reasoning_excerpt"),
+                "timestamp": last_decision.get("timestamp") or now.get("timestamp"),
+            },
+        }
+    )
+
+    ctx = memory.get("current_context") or "No context"
+    nodes.append(
+        {
+            "id": "hub_context",
+            "type": "context",
+            "label": _short_label(str(ctx), 32),
+            "level": 1,
+            "group": "context",
+            "title": str(ctx),
+            "data": {"current_context": ctx},
+        }
+    )
+    edges.append({"id": "e_now_ctx", "from": "hub_now", "to": "hub_context"})
+
+    if position.get("has_position"):
+        pos_label = f"{position.get('direction')} {_short_label(str(position.get('symbol') or ''), 10)}"
+        title = (
+            f"Open {position.get('direction')} {position.get('symbol')} "
+            f"entry={position.get('entry_price')}"
+        )
+    else:
+        pos_label = "FLAT"
+        title = "No open position"
+    nodes.append(
+        {
+            "id": "hub_position",
+            "type": "position",
+            "label": pos_label,
+            "level": 1,
+            "group": "position",
+            "title": title,
+            "data": position,
+        }
+    )
+    edges.append({"id": "e_now_pos", "from": "hub_now", "to": "hub_position"})
+
+    experiences = memory.get("top_experiences") or []
+    experience_count = memory.get("experience_count")
+    if experience_count is None:
+        experience_count = len(experiences)
+    nodes.append(
+        {
+            "id": "hub_memory",
+            "type": "hub",
+            "label": f"Memory ({experience_count})",
+            "level": 1,
+            "group": "memory_hub",
+            "title": "Similar vector experiences",
+            "data": {"experience_count": experience_count},
+        }
+    )
+    edges.append({"id": "e_ctx_mem", "from": "hub_context", "to": "hub_memory"})
+    for i, exp in enumerate(experiences):
+        nid = f"exp_{i}"
+        outcome = str(exp.get("outcome") or "?")
+        pnl = exp.get("pnl_pct")
+        pnl_s = f"{pnl:+.1f}%" if isinstance(pnl, (int, float)) else ""
+        direction = exp.get("direction") or ""
+        group = "experience"
+        if outcome.upper() == "WIN":
+            group = "experience_win"
+        elif outcome.upper() == "LOSS":
+            group = "experience_loss"
+        nodes.append(
+            {
+                "id": nid,
+                "type": "experience",
+                "label": _short_label(f"{outcome} {pnl_s} {direction}", 24),
+                "level": 2,
+                "group": group,
+                "title": f"sim={exp.get('similarity')} | {exp.get('document_excerpt') or ''}",
+                "data": exp,
+            }
+        )
+        edges.append({"id": f"e_mem_{i}", "from": "hub_memory", "to": nid})
+
+    rules = memory.get("top_rules") or []
+    rule_count = memory.get("rule_count")
+    if rule_count is None:
+        rule_count = len(rules)
+    nodes.append(
+        {
+            "id": "hub_rules",
+            "type": "hub",
+            "label": f"Rules ({rule_count})",
+            "level": 1,
+            "group": "rules_hub",
+            "title": "Active semantic rules",
+            "data": {},
+        }
+    )
+    edges.append({"id": "e_now_rules", "from": "hub_now", "to": "hub_rules"})
+    for i, rule in enumerate(rules):
+        nid = f"rule_{i}"
+        rtype = rule.get("rule_type") or "rule"
+        nodes.append(
+            {
+                "id": nid,
+                "type": "rule",
+                "label": _short_label(f"{rtype}: {rule.get('rule_text') or ''}", 28),
+                "level": 2,
+                "group": f"rule_{rtype}",
+                "title": rule.get("rule_text") or "",
+                "data": rule,
+            }
+        )
+        edges.append({"id": f"e_rule_{i}", "from": "hub_rules", "to": nid})
+
+    items = journal.get("items") or []
+    journal_count = journal.get("count")
+    if journal_count is None:
+        journal_count = len(items)
+    nodes.append(
+        {
+            "id": "hub_journal",
+            "type": "hub",
+            "label": f"Journal ({journal_count})",
+            "level": 1,
+            "group": "journal_hub",
+            "title": "Recent post-mortem lessons",
+            "data": {},
+        }
+    )
+    edges.append({"id": "e_now_journal", "from": "hub_now", "to": "hub_journal"})
+    for i, pm in enumerate(items):
+        nid = f"pm_{i}"
+        nodes.append(
+            {
+                "id": nid,
+                "type": "journal",
+                "label": _short_label(f"{pm.get('verdict') or 'lesson'} {pm.get('symbol') or ''}", 28),
+                "level": 2,
+                "group": "journal",
+                "title": pm.get("lesson_learned") or "",
+                "data": pm,
+            }
+        )
+        edges.append({"id": f"e_pm_{i}", "from": "hub_journal", "to": nid})
+
+    blocked = memory.get("blocked") or {}
+    b_items = blocked.get("items") or []
+    b_count = blocked.get("blocked_count")
+    if b_count is None:
+        b_count = len(b_items)
+    if b_count:
+        nodes.append(
+            {
+                "id": "hub_blocked",
+                "type": "hub",
+                "label": f"Blocked ({b_count})",
+                "level": 1,
+                "group": "blocked_hub",
+                "title": "System-rejected / friction events",
+                "data": {"blocked_count": b_count},
+            }
+        )
+        edges.append({"id": "e_now_blocked", "from": "hub_now", "to": "hub_blocked"})
+        for i, ev in enumerate(b_items):
+            nid = f"blk_{i}"
+            label_src = ev.get("guard_type") or ev.get("reason") or "blocked"
+            nodes.append(
+                {
+                    "id": nid,
+                    "type": "blocked",
+                    "label": _short_label(str(label_src), 24),
+                    "level": 2,
+                    "group": "blocked",
+                    "title": str(ev),
+                    "data": ev if isinstance(ev, dict) else {"value": ev},
+                }
+            )
+            edges.append({"id": f"e_blk_{i}", "from": "hub_blocked", "to": nid})
+
+    return {"nodes": nodes, "edges": edges}
+
+
 def _build_risk_management(current: dict[str, Any], at_entry: dict[str, Any] | None = None) -> dict[str, Any]:
     entry = at_entry or current
     current_labels = {
@@ -231,7 +518,6 @@ class BrainRouter:
         self.post_mortem_repo = post_mortem_repo
 
         self.router.add_api_route("/status", self.get_brain_status, methods=["GET"])
-        self.router.add_api_route("/memory", self.get_vector_memory, methods=["GET"])
         self.router.add_api_route("/rules", self.get_active_rules, methods=["GET"])
         self.router.add_api_route("/vectors", self.get_vector_details, methods=["GET"])
         self.router.add_api_route("/position", self.get_current_position, methods=["GET"])
@@ -240,6 +526,7 @@ class BrainRouter:
         self.router.add_api_route("/lifecycle", self.get_brain_lifecycle, methods=["GET"])
         self.router.add_api_route("/refresh", self.refresh_brain_state, methods=["POST"])
         self.router.add_api_route("/post-mortems", self.get_post_mortems, methods=["GET"])
+        self.router.add_api_route("/decision-summary", self.get_decision_summary, methods=["GET"])
 
     def _resolve_rule_exit_profile(self, metadata: dict[str, Any]) -> str:
         """Resolve semantic-rule exit profile using stored metadata plus config fallback."""
@@ -328,39 +615,6 @@ class BrainRouter:
             "refreshed_at": datetime.now(timezone.utc).isoformat(),
             "lifecycle": self.dashboard_state.get_brain_lifecycle(),
         }
-
-    async def get_vector_memory(self, limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
-        """Get recent vector memories (synapses)."""
-        cached = self.dashboard_state.get_cached(f"memory_{limit}", ttl_seconds=30.0)
-        if cached:
-            return cached
-        result = {
-            "experience_count": 0,
-            "trades": [],
-            "stats": {}
-        }
-        if self.vector_memory:
-            result["experience_count"] = self.vector_memory.experience_count
-            result["stats"] = self.vector_memory.compute_confidence_stats()
-        try:
-            if self.persistence:
-                trades = await asyncio.to_thread(self.persistence.load_trade_history)
-                result["trades"] = [
-                    {
-                        "id": f"trade_{i}",
-                        "timestamp": t.get("timestamp"),
-                        "action": t.get("action"),
-                        "price": t.get("price"),
-                        "confidence": t.get("confidence"),
-                        "reasoning": t.get("reasoning", "")[:100]
-                    }
-                    for i, t in enumerate(trades[-limit:])
-                ]
-        except Exception:
-            self.logger.error("Failed to load trade history for memory", exc_info=True)
-
-        self.dashboard_state.set_cached(f"memory_{limit}", result)
-        return result
 
     async def get_active_rules(self) -> list[dict[str, Any]]:
         """Get currently active semantic rules."""
@@ -654,3 +908,222 @@ class BrainRouter:
         except Exception as e:
             self.logger.error("Error fetching post-mortems: %s", e)
             return {"count": 0, "post_mortems": [], "error": str(e)}
+
+    async def get_decision_summary(
+        self,
+        experience_limit: int = Query(default=5, ge=1, le=20),
+        rule_limit: int = Query(default=5, ge=1, le=20),
+        journal_limit: int = Query(default=5, ge=1, le=20),
+        blocked_limit: int = Query(default=3, ge=1, le=20),
+    ) -> dict[str, Any]:
+        """Aggregate position, memory, journal, and last response into a decision graph."""
+        # Coerce FastAPI Query defaults when invoked directly in unit tests.
+        def _as_int(value: Any, default: int) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return default
+
+        experience_limit = max(1, min(20, _as_int(experience_limit, 5)))
+        rule_limit = max(1, min(20, _as_int(rule_limit, 5)))
+        journal_limit = max(1, min(20, _as_int(journal_limit, 5)))
+        blocked_limit = max(1, min(20, _as_int(blocked_limit, 3)))
+
+        cached = self.dashboard_state.get_cached("decision_summary", ttl_seconds=15.0)
+        if cached:
+            return cached
+
+        now: dict[str, Any] = {
+            "trend": "--",
+            "action": "--",
+            "confidence": "--",
+            "adx": None,
+            "rsi": None,
+            "exit_management": {},
+            "brain_lifecycle": self.dashboard_state.get_brain_lifecycle(),
+            "timestamp": None,
+        }
+        last_decision: dict[str, Any] = {
+            "source": None,
+            "timestamp": None,
+            "signal": "--",
+            "confidence": None,
+            "reasoning_excerpt": "",
+            "text_available": False,
+        }
+
+        try:
+            timeframe = self.config.TIMEFRAME
+        except AttributeError:
+            timeframe = "unknown"
+        try:
+            now["exit_management"] = build_exit_execution_context_from_config(
+                self.config, timeframe
+            ).to_dict()
+        except Exception:
+            self.logger.error("Failed to build exit management for decision-summary", exc_info=True)
+
+        try:
+            data_dir = self.config.DATA_DIR
+        except AttributeError:
+            data_dir = "data"
+        prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
+        try:
+            if prev_response_file.exists():
+                prev_data = await asyncio.to_thread(_read_json_file, prev_response_file)
+                if isinstance(prev_data, dict):
+                    extracted = _extract_market_status(prev_data, self.unified_parser)
+                    now.update(extracted)
+                    now["timestamp"] = prev_data.get("timestamp")
+                    response = prev_data.get("response", {}) if isinstance(prev_data.get("response"), dict) else {}
+                    text_analysis = response.get("text_analysis") if isinstance(response, dict) else None
+                    last_decision = {
+                        "source": "disk",
+                        "timestamp": prev_data.get("timestamp"),
+                        "signal": now.get("action") or "--",
+                        "confidence": now.get("confidence") if now.get("confidence") != "--" else None,
+                        "reasoning_excerpt": _excerpt_text(text_analysis),
+                        "text_available": bool(text_analysis),
+                    }
+        except Exception:
+            self.logger.error("Failed to load previous response for decision-summary", exc_info=True)
+
+        now["brain_lifecycle"] = self.dashboard_state.get_brain_lifecycle()
+
+        try:
+            position = await self.get_current_position()
+        except Exception:
+            self.logger.error("Failed to load position for decision-summary", exc_info=True)
+            position = {"has_position": False}
+
+        memory: dict[str, Any] = {
+            "current_context": None,
+            "experience_count": 0,
+            "rule_count": 0,
+            "top_experiences": [],
+            "top_rules": [],
+            "blocked": {"blocked_count": 0, "items": []},
+            "confidence_stats": {},
+        }
+
+        if self.vector_memory:
+            try:
+                vector_details = await asyncio.to_thread(
+                    self._build_vector_details_result,
+                    None,
+                    experience_limit,
+                    "similarity",
+                    "desc",
+                )
+                experiences_raw = vector_details.get("experiences") or []
+                top_experiences: list[dict[str, Any]] = []
+                for exp in experiences_raw[:experience_limit]:
+                    meta = exp.get("metadata") or {}
+                    document = exp.get("document") or ""
+                    top_experiences.append(
+                        {
+                            "id": exp.get("id"),
+                            "similarity": exp.get("similarity"),
+                            "outcome": meta.get("outcome"),
+                            "direction": meta.get("direction"),
+                            "pnl_pct": meta.get("pnl_pct"),
+                            "confidence": meta.get("confidence"),
+                            "document_excerpt": _excerpt_text(document, 180),
+                            "timestamp": meta.get("timestamp"),
+                            "symbol": meta.get("symbol"),
+                        }
+                    )
+                memory["current_context"] = vector_details.get("current_context")
+                memory["experience_count"] = vector_details.get("experience_count") or 0
+                memory["rule_count"] = vector_details.get("rule_count") or 0
+                memory["top_experiences"] = top_experiences
+                memory["confidence_stats"] = vector_details.get("confidence_stats") or {}
+            except Exception:
+                self.logger.error("Failed to load vector details for decision-summary", exc_info=True)
+                try:
+                    memory["experience_count"] = self.vector_memory.trade_count
+                    memory["rule_count"] = self.vector_memory.semantic_rule_count
+                except Exception:
+                    pass
+
+            try:
+                rules = await self.get_active_rules()
+                top_rules: list[dict[str, Any]] = []
+                for i, rule in enumerate(rules[:rule_limit]):
+                    top_rules.append(
+                        {
+                            "id": rule.get("rule_id") or f"rule_{i}",
+                            "rule_text": rule.get("rule_text") or rule.get("text") or "",
+                            "rule_type": rule.get("rule_type") or "best_practice",
+                            "win_rate": rule.get("win_rate"),
+                            "final_score": rule.get("final_score"),
+                            "recommended_adjustment": rule.get("recommended_adjustment"),
+                        }
+                    )
+                memory["top_rules"] = top_rules
+                if not memory.get("rule_count"):
+                    memory["rule_count"] = len(rules)
+            except Exception:
+                self.logger.error("Failed to load rules for decision-summary", exc_info=True)
+
+            try:
+                blocked_payload = await self.get_blocked_trades(limit=blocked_limit)
+                items = blocked_payload.get("blocked_trades") or []
+                memory["blocked"] = {
+                    "blocked_count": blocked_payload.get("blocked_count") or len(items),
+                    "items": items[:blocked_limit],
+                }
+            except Exception:
+                self.logger.error("Failed to load blocked trades for decision-summary", exc_info=True)
+
+        journal: dict[str, Any] = {"count": 0, "items": []}
+        try:
+            pm_payload = await self.get_post_mortems(limit=journal_limit)
+            items = pm_payload.get("post_mortems") or []
+            normalized: list[dict[str, Any]] = []
+            for i, pm in enumerate(items[:journal_limit]):
+                if not isinstance(pm, dict):
+                    continue
+                entry = dict(pm)
+                entry.setdefault("id", pm.get("id") or f"pm_{i}")
+                normalized.append(entry)
+            journal = {
+                "count": pm_payload.get("count") or len(normalized),
+                "items": normalized,
+            }
+        except Exception:
+            self.logger.error("Failed to load post-mortems for decision-summary", exc_info=True)
+
+        synopsis = _build_decision_synopsis(
+            now=now,
+            position=position if isinstance(position, dict) else {"has_position": False},
+            memory=memory,
+            journal=journal,
+            last_decision=last_decision,
+        )
+        graph = _build_decision_graph(
+            now=now,
+            last_decision=last_decision,
+            position=position if isinstance(position, dict) else {"has_position": False},
+            memory=memory,
+            journal=journal,
+        )
+
+        result = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "synopsis": synopsis,
+            "now": now,
+            "last_decision": last_decision,
+            "position": position if isinstance(position, dict) else {"has_position": False},
+            "memory": memory,
+            "journal": journal,
+            "counts": {
+                "experiences": memory.get("experience_count") or 0,
+                "rules": memory.get("rule_count") or 0,
+                "journal": journal.get("count") or 0,
+                "blocked": (memory.get("blocked") or {}).get("blocked_count") or 0,
+            },
+            "graph": graph,
+        }
+        self.dashboard_state.set_cached("decision_summary", result)
+        return result

@@ -162,8 +162,8 @@ class ChartGenerator:
         technical_history: dict[str, np.ndarray] | None = None,
         pair_symbol: str = "",
         timeframe: str = "1h",
-        height: int = 2160,  # Updated to 2160p height
-        width: int = 3840,   # Updated to 3840p width
+        height: int = 1080,  # Reduced from 2160p to 1080p to lower image tokens
+        width: int = 1920,   # Reduced from 3840p to 1080p to lower image tokens
         save_to_disk: bool = False,
         output_path: str | None = None,
         simple_mode: bool = True,  # Default to simple mode for AI analysis

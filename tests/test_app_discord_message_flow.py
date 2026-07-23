@@ -11,6 +11,8 @@ def _make_bot_for_trading_check(**overrides):
     config = SimpleNamespace(
         MAIN_CHANNEL_ID=123,
         RAG_UPDATE_TIMEOUT=1,
+        EXECUTOR_API_ENABLED=False,
+        EXECUTOR_API_URL="http://127.0.0.1:9199/decision",
     )
 
     discord_notifier = MagicMock()

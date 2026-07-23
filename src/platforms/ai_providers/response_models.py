@@ -16,6 +16,7 @@ class UsageModel(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    thoughts_token_count: int = 0
 
 
 class ChoiceModel(BaseModel):
@@ -123,6 +124,12 @@ class TradingAnalysisModel(BaseModel):
     key_levels: KeyLevelsModel | None = None
     trend: TrendModel | None = None
     risk_reward_ratio: float | None = Field(default=None, ge=0)
+    # CCXT execution fields (for external bot consumption)
+    symbol: str | None = None
+    order_type: str | None = None
+    quantity: float | None = Field(default=None, ge=0)
+    reduce_only: bool = False
+    leverage: float = Field(default=1.0, ge=1.0)
 
     @model_validator(mode="after")
     def validate_signal_execution_fields(self) -> "TradingAnalysisModel":

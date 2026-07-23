@@ -219,6 +219,7 @@ class TestBuildResponseTemplate:
             "adx_strong_threshold": 30,
             "adx_weak_threshold": 18,
             "min_rr_recommended": 2.5,
+            "rr_borderline_min": 1.8,
             "avg_sl_pct": 3.0,
             "confidence_threshold": 75,
             "min_confluences_weak": 5,
@@ -229,10 +230,35 @@ class TestBuildResponseTemplate:
         tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
         assert "ADX >= 30" in tmpl
         assert "ADX < 18" in tmpl
-        assert "2.5:1" in tmpl  # min_rr
+        assert "R/R >= 1.8" in tmpl  # rr_borderline_min as system-enforced minimum
+        assert "aspirational target" in tmpl  # min_rr_recommended as aspirational, not a gate
+        assert "system-enforced minimum" in tmpl
+        assert "REJECTED" in tmpl  # hard gate label in R/R guidelines
+        assert "Allowed — meets system-enforced minimum" in tmpl  # allowed range label
         assert "3.0%" in tmpl  # avg_sl
         assert "BUY/SELL: 75+ conf" in tmpl
         assert "strong evidence against entry" in tmpl
+
+    def test_signal_line_uses_borderline_not_recommended_as_gate(self):
+        """BUY/SELL signal line must use rr_borderline_min as hard minimum, and
+        min_rr_recommended must appear as a recommendation NOT as a hard gate."""
+        thresholds = {
+            "rr_borderline_min": 1.5,
+            "min_rr_recommended": 2.0,
+            "rr_strong_setup": 2.5,
+            "trade_count": 0,
+            "learned_keys": [],
+        }
+        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
+
+        # SIGNALS line: hard gate is rr_borderline
+        assert "R/R >= 1.5 (system-enforced minimum — the only hard gate)" in tmpl
+
+        # R/R GUIDELINES: first line is the hard rejection boundary
+        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in tmpl
+        assert "R/R >= 1.5: Allowed — meets system-enforced minimum for entry" in tmpl
+        assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in tmpl
+        assert "R/R >= 2.5: Exceptional setup" in tmpl
 
     def test_response_template_json_example_is_valid(self):
         """The fenced JSON example should be parser-safe, not pseudo-JSON."""
@@ -274,7 +300,7 @@ class TestBuildResponseTemplate:
         tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
         assert "THRESHOLD ORIGIN" in tmpl
         assert "brain-learned from 50 closed trades" in tmpl
-        assert "min_rr=2.2" in tmpl
+        assert "recommended_rr=2.2" in tmpl
         assert "adx_strong=28" in tmpl
 
     def test_threshold_origin_no_learned_keys(self):

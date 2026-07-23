@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.dashboard.dashboard_state import DashboardState
 from src.trading.data_models import MarketConditions, Position
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 
@@ -174,26 +175,56 @@ class TestUpdatePositionParameters:
         persistence.async_save_position.assert_called_once()
 
     def test_sl_widening_long(self):
-        """LONG SL moved lower (wider) is allowed."""
+        """LONG SL moved lower (wider) is allowed within 150% cap."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
+        # Original SL distance = |100-95| = 5, max allowed = 7.5
+        # Proposed: SL 95→93, distance = |100-93| = 7 ≤ 7.5 ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=92.0, take_profit=None, current_price=105.0,
+            stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
         assert updated is True
-        assert strategy.current_position.stop_loss == 92.0
+        assert strategy.current_position.stop_loss == 93.0
 
     def test_sl_widening_short(self):
-        """SHORT SL moved higher (wider) is allowed."""
+        """SHORT SL moved higher (wider) is allowed within 150% cap."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
+        # Original SL distance = |100-105| = 5, max allowed = 7.5
+        # Proposed: SL 105→107, distance = |100-107| = 7 ≤ 7.5 ✓
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=107.0, take_profit=None, current_price=100.0,
+        ))
+        assert updated is True
+        assert strategy.current_position.stop_loss == 107.0
+
+    def test_sl_widening_rejected_beyond_cap_long(self):
+        """LONG SL widening beyond 150% of original distance is rejected."""
+        pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+
+        # Original distance = 5, max = 7.5. Proposed: 95→92, distance = 8 > 7.5
+        updated = asyncio.run(strategy._update_position_parameters(
+            stop_loss=92.0, take_profit=None, current_price=105.0,
+        ))
+        assert updated is False
+        assert strategy.current_position.stop_loss == 95.0  # unchanged
+        assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
+
+    def test_sl_widening_rejected_beyond_cap_short(self):
+        """SHORT SL widening beyond 150% of original distance is rejected."""
+        pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+
+        # Original distance = 5, max = 7.5. Proposed: 105→108, distance = 8 > 7.5
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=108.0, take_profit=None, current_price=100.0,
         ))
-        assert updated is True
-        assert strategy.current_position.stop_loss == 108.0
+        assert updated is False
+        assert strategy.current_position.stop_loss == 105.0  # unchanged
+        assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
 
     def test_sl_tightening_short_rejected(self):
         """SHORT SL tightening (moving SL lower) blocked by progress guard."""
@@ -437,7 +468,7 @@ class TestExtractPriceFromResult:
         """Extract from result['current_price']."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"current_price": 50000.0}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 50000.0
 
     def test_price_from_context_object(self):
@@ -446,21 +477,21 @@ class TestExtractPriceFromResult:
         ctx = MagicMock()
         ctx.current_price = 42500.0
         result = {"context": ctx}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 42500.0
 
     def test_price_fallback_returns_zero(self):
         """When neither key exists, returns 0.0 with warning."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"some_other_key": "value"}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 0.0
 
     def test_price_context_is_none(self):
         """context key present but value is None — falls to default."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"context": None}
-        price = strategy._extract_price_from_result(result)
+        price = strategy._conditions.extract_price(result)
         assert price == 0.0
 
 
@@ -484,7 +515,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert len(factors) == 3
         assert ("trend_alignment", 85.0) in factors
 
@@ -492,14 +523,14 @@ class TestExtractConfluenceFactors:
         """Empty confluence_factors returns empty tuple."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"analysis": {"confluence_factors": {}}}
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == ()
 
     def test_no_analysis_key(self):
         """Missing 'analysis' key returns empty tuple."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"other": "data"}
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == ()
 
     def test_factors_out_of_range_excluded(self):
@@ -514,7 +545,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert len(factors) == 1
         assert factors[0] == ("valid", 50.0)
 
@@ -530,7 +561,7 @@ class TestExtractConfluenceFactors:
                 }
             }
         }
-        factors = strategy._extract_confluence_factors(result)
+        factors = strategy._conditions.extract_confluence_factors(result)
         assert factors == (("valid", 42.0),)
 
 
@@ -545,7 +576,7 @@ class TestBuildConditionsFromPosition:
     def test_build_conditions_from_position_defaults(self):
         """Default position values map to classified conditions."""
         pos = _make_position()
-        conditions = TradingStrategy._build_conditions_from_position(pos)
+        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
 
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.adx == 35.0
@@ -556,7 +587,7 @@ class TestBuildConditionsFromPosition:
     def test_build_conditions_bullish_position(self):
         """Position with BULLISH trend maps correctly."""
         pos = _make_position(trend_direction_at_entry="BULLISH", adx_at_entry=45.0)
-        conditions = TradingStrategy._build_conditions_from_position(pos)
+        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
         assert conditions.trend_direction == "BULLISH"
         assert conditions.adx == 45.0
 
@@ -590,7 +621,7 @@ class TestExtractMarketConditions:
             "raw_response": "BUY signal, bullish pattern detected",
         }
 
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
         assert conditions.trend_strength == 45
         assert conditions.timeframe_alignment == "ALIGNED"
@@ -604,13 +635,13 @@ class TestExtractMarketConditions:
             "analysis": {"trend": {}},
             "technical_data": {"adx": 30, "rsi": "72.5"},
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.rsi == 72.5
 
     def test_market_conditions_empty_result(self):
         """Empty result returns default conditions (sentiment + fallback trend)."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
-        conditions = strategy._extract_market_conditions({})
+        conditions = strategy._conditions.extract_market_conditions({})
         # Defaults: NEUTRAL trend from raw_response fallback + sentiment defaults
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.fear_greed_index == 50
@@ -624,7 +655,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Strong BULLISH momentum expected",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
 
     def test_market_conditions_bearish_fallback(self):
@@ -635,7 +666,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Downtrend likely to continue, BEARISH outlook",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BEARISH"
 
     def test_market_conditions_signal_buy_disambiguates_mixed_raw_response(self):
@@ -646,7 +677,7 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Medium-term bearish risk remains, but signal: BUY on bullish reclaim.",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BULLISH"
 
     def test_market_conditions_signal_sell_disambiguates_mixed_raw_response(self):
@@ -657,14 +688,14 @@ class TestExtractMarketConditions:
             "technical_data": {},
             "raw_response": "Short-term bullish bounce possible, but signal: SELL after bearish break.",
         }
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions.trend_direction == "BEARISH"
 
     def test_market_conditions_exception_handling(self):
         """Exception during extraction returns empty dict."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         result = {"analysis": None}  # .get() on None will fail
-        conditions = strategy._extract_market_conditions(result)
+        conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions == MarketConditions()
 
 
@@ -770,13 +801,14 @@ class TestHandleExistingPosition:
         assert result is None
 
     def test_update_sl_succeeds(self):
-        """UPDATE with SL change works after interval."""
+        """UPDATE with SL change works after interval (within 150% widening cap)."""
         pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         result = asyncio.run(strategy._handle_existing_position(
             signal="UPDATE", confidence="MEDIUM",
-            stop_loss=92.0, take_profit=115.0,  # must pass TP to avoid format bug @ L434
+            stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
         ))
         assert result is not None
@@ -794,6 +826,52 @@ class TestHandleExistingPosition:
         ))
         assert result is not None
         assert result.action == "UPDATE"
+
+    def test_close_signal_skipped_when_executor_has_no_position(self):
+        """CLOSE signal skipped when executor reports no open position."""
+        pos = _make_position(direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE", confidence="HIGH",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+        ))
+        assert result is None
+
+    def test_update_signal_skipped_when_executor_has_no_position(self):
+        """UPDATE skipped when executor reports no open position."""
+        pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
+        strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=93.0, take_profit=115.0,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+        ))
+        assert result is None
+
+    def test_executor_has_position_returns_true_when_disabled(self):
+        """When EXECUTOR_API_ENABLED is False, assume position exists."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=_make_position(),
+            EXECUTOR_API_ENABLED=False,
+        )
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is True
+
+    def test_executor_has_position_returns_true_when_no_url(self):
+        """When EXECUTOR_API_URL is empty, assume position exists."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=_make_position(),
+            EXECUTOR_API_ENABLED=True,
+            EXECUTOR_API_URL="",
+        )
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is True
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -824,7 +902,7 @@ class TestPositionContextSlTightening:
         """get_position_context without position shows capital status."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=None)
         ctx = strategy.get_position_context()
-        assert "CURRENT POSITION: None" in ctx
+        assert "Status: None" in ctx
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -836,22 +914,24 @@ class TestSlWideningDirectionalLogs:
     """Verify correct log branches for LONG vs SHORT SL widening."""
 
     def test_short_sl_widening_log(self):
-        """SHORT: SL moved higher (wider) logs SHORT-specific message."""
+        """SHORT: SL moved higher (wider) logs SHORT-specific message within 150% cap."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        # SL 105→107: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=108.0, take_profit=None, current_price=100.0,
+            stop_loss=107.0, take_profit=None, current_price=100.0,
         ))
         assert updated is True
         widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "SHORT" in str(c)]
         assert len(widening_logs) > 0, f"No SHORT widening log in: {[c[0][0] for c in logger.info.call_args_list]}"
 
     def test_long_sl_widening_log(self):
-        """LONG: SL moved lower (wider) logs LONG-specific message."""
+        """LONG: SL moved lower (wider) logs LONG-specific message within 150% cap."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
+        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
-            stop_loss=90.0, take_profit=None, current_price=105.0,
+            stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
         assert updated is True
         widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "LONG" in str(c)]

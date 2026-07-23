@@ -27,11 +27,8 @@ class TestGenerationConfig:
             {
                 "max_tokens": 123,
                 "thinking_level": "medium",
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "top_k": 40,
             },
-            effective_model="gemini-3.5-flash",
+            include_thinking=True,
         )
         dumped = config.model_dump(exclude_none=False)
         assert dumped["max_output_tokens"] == 123
@@ -42,8 +39,8 @@ class TestGenerationConfig:
     def test_config_omits_sampling_for_gemini_2_models(self) -> None:
         client = _make_client()
         config = client._create_generation_config(
-            {"max_tokens": 123, "temperature": 0.8, "top_p": 0.9, "top_k": 32},
-            effective_model="gemini-2.5-flash",
+            {"max_tokens": 123},
+            include_thinking=False,
         )
         dumped = config.model_dump(exclude_none=False)
 
@@ -54,8 +51,8 @@ class TestGenerationConfig:
     def test_config_omits_sampling_for_unknown_models(self) -> None:
         client = _make_client()
         config = client._create_generation_config(
-            {"max_tokens": 123, "temperature": 0.8, "top_p": 0.9, "top_k": 32},
-            effective_model="vendor-model",
+            {"max_tokens": 123},
+            include_thinking=False,
         )
         dumped = config.model_dump(exclude_none=False)
 
@@ -67,7 +64,7 @@ class TestGenerationConfig:
         client = _make_client()
         config = client._create_generation_config(
             {"max_tokens": 123, "thinking_level": "high"},
-            effective_model="gemini-3-flash-preview",
+            include_thinking=True,
             include_code_execution=True,
         )
         assert config.tools is not None
@@ -77,8 +74,7 @@ class TestGenerationConfig:
         client = _make_client()
         config = client._create_generation_config(
             {"max_tokens": 123, "thinking_level": "high"},
-            effective_model="gemini-2.5-flash",
-            include_code_execution=True,
+            include_code_execution=False,
         )
 
         assert config.tools is None
@@ -166,3 +162,59 @@ class TestClientLifecycle:
 
         aclose.assert_awaited_once()
         assert client.client is None
+
+
+class TestImageTokenEstimation:
+    def test_png_dimensions(self):
+        """PNG IHDR header yields correct width/height."""
+        client = _make_client()
+        # Minimal PNG: 1x1 white pixel
+        png = (
+            b'\x89PNG\r\n\x1a\n'           # signature
+            b'\x00\x00\x00\rIHDR'         # IHDR chunk length (13)
+            b'\x00\x00\x00\x10'           # width: 16
+            b'\x00\x00\x00\x08'           # height: 8
+            b'\x08\x02\x00\x00\x00'       # depth=8, color=2(RGB), rest
+            b'\xaa\xbb\xcc\xdd'           # CRC placeholder
+        )
+        dims = client._get_image_dimensions(png)
+        assert dims == (16, 8)
+
+    def test_jpeg_dimensions(self):
+        """JPEG SOF0 marker yields correct width/height."""
+        client = _make_client()
+        jpeg = (
+            b'\xff\xd8'                   # SOI
+            b'\xff\xe0\x00\x10JFIF\x00'   # APP0
+            b'\xff\xc0\x00\x0b\x08'       # SOF0, length=11, precision=8
+            b'\x00\x20'                   # height: 32
+            b'\x00\x30'                   # width: 48
+            b'\x03\x01\x22\x00\x02\x11'   # components
+        )
+        dims = client._get_image_dimensions(jpeg)
+        assert dims == (48, 32)
+
+    def test_unknown_format_returns_none(self):
+        """Non-PNG/JPEG bytes return None."""
+        client = _make_client()
+        assert client._get_image_dimensions(b'GIF89a......') is None
+
+    def test_too_short_png_returns_none(self):
+        """Truncated PNG returns None."""
+        client = _make_client()
+        assert client._get_image_dimensions(b'\x89PNG\r\n\x1a\nshort') is None
+
+    def test_null_image_tokens(self):
+        """None image bytes return 0 tokens."""
+        client = _make_client()
+        assert client._estimate_image_tokens(None) == 0
+
+    def test_estimate_tokens_1080p(self):
+        """1080p (1920x1080) image with 75px tiles and 258 tokens/tile."""
+        client = _make_client()
+        # Mock _get_image_dimensions
+        client._get_image_dimensions = MagicMock(return_value=(1920, 1080))
+        tokens = client._estimate_image_tokens(b'fake')
+        # Tiles: ceil(1920/75)=26, ceil(1080/75)=15 → 26*15=390 tiles
+        # 390 * 258 = 100620 tokens
+        assert tokens == 100620

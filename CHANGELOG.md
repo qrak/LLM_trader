@@ -1,15 +1,165 @@
 # Changelog
 
+## 2026-07-23 — Dependabot security fixes + Futures LONG/SHORT signals + Executor safety hardening
+
+### Security (Dependabot — 19 alerts resolved)
+- **Pillow** 12.2.0 → 12.3.0 — 12 CVEs: heap OOB write (CVE-2026-59199, CVE-2026-59205, CVE-2026-59197), decompression bomb (CVE-2026-59200, CVE-2026-54058/59/60, CVE-2026-55379/80), TGA heap leak (CVE-2026-59198), JPEG2000 DoS (CVE-2026-59204), EPS infinite loop (CVE-2026-59203), Windows command injection (CVE-2026-55798)
+- **astro** ^6.4.6 → ^7.1.0 — 3 CVEs: XSS via unescaped spread attribute names (CVE-2026-59729), XSS via transition:* directives (CVE-2026-59727), reflected XSS via View Transition properties
+- **js-yaml** → 4.3.0 override — YAML merge-key chains force quadratic CPU (CVE-2026-59869)
+- **sharp** → 0.35.3 (transitive) — libvips CVEs (CVE-2026-33327/28, CVE-2026-35590)
+- **svgo** → 4.0.2 (transitive) — removeScripts plugin bypass
+- **openrouter** 0.9.1 → >=0.11.0 — SDK compatibility (presence_penalty removed)
+
+### Added
+- **Futures LONG/SHORT signals**: `template_manager.py` emits LONG/SHORT in prompts when `market_type=futures`; `position_extractor.py` regex + valid_signals accept LONG/SHORT; `executor_handler.py` ACTIONABLE_SIGNALS includes LONG/SHORT (signals now unified: BUY=LONG, SELL=SHORT)
+- **MARKET_TYPE config**: `config.ini.example` + `Config` properties (`MARKET_TYPE`, `ENTRY_ORDER_TYPE`) — spot vs futures, market vs limit
+- **OpenRouter reasoning effort**: `config.ini.example` documents `openrouter_reasoning_effort` (none→max); `openrouter.py` pops it from model_config and passes as `reasoning={"effort": ...}` extra kwarg
+- **Executor dead-letter queue**: `data/trading/failed_forwards.jsonl` — when executor forward fails after all retries, payload is persisted for replay instead of being silently lost
+- **Retry on executor forward**: `executor_handler._forward()` decorated with `@retry_async(3, backoff×2, max 30s)`
+- **Google image token estimation**: `google.py` — `_get_image_dimensions()` parses PNG/JPEG headers without full decode; `_estimate_image_tokens()` calculates Gemini tile-based token cost (258 tokens per 75×75 tile)
+
+### Changed
+- **Executor forward prioritized**: `app.py` sends to executor BEFORE Discord notification + file persist — trade execution is the priority
+- **Executor payload hardened**: `_build()` refuses to build when `strategy_decision is None` (analysis never validated), uses `strategy_decision` fields (quantity, price, stop_loss, take_profit, confidence, reasoning) instead of raw analysis dict
+- **order_type from config**: executor payload uses `self._config.ENTRY_ORDER_TYPE` instead of `analysis.get("order_type")` — no more LLM-controlled order type
+- **Timestamp precision**: executor payload timestamp format changed to `%Y-%m-%dT%H:%M:%S.%f` (microseconds)
+- **Chart resolution reduced**: 4K (3840×2160) → 1080p (1920×1080) — cuts Google image token cost by ~75%
+
+### Safety (position guards)
+- **CLOSE guard**: `trading_strategy.py` — queries executor API before sending CLOSE; if no position tracked on exchange, skips with warning (prevents double-close or close on unfilled limit order)
+- **UPDATE guard**: verifies executor has position before sending SL/TP update; fails closed on network error
+- **SL widening cap**: rejects stop-loss widening beyond 150% of original SL distance from entry — AI can only tighten or keep stops, not blow out risk
+- **Ambiguous position_size rejected**: `position_extractor.py` — numbers > 1.0 without `%` suffix now trigger warning + None (was blindly dividing by 100, risking 50→0.5 misinterpretation)
+
+### Fixed
+- **OpenRouter presence_penalty**: filtered out from `_known_unsupported_params` (removed in SDK 0.11+)
+- **Test assertion**: `test_openrouter_provider.py` updated to expect `presence_penalty` absent from sent kwargs
+
+### Removed
+- `scripts/start_script_develop.ps1` — dead develop-mode startup script
+
+## 2026-07-15 — DRY fixes + SRP refactor (MarketConditionsExtractor)
+
+### Changed
+- **DRY: `_execute_market_knowledge_update`** — extracted `analysis_type` variable instead of if/else branches with identical log format strings.
+- **DRY: Market knowledge fallback message** — extracted duplicated `"continuing with cached/partial market knowledge"` string into `_MARKET_KNOWLEDGE_FALLBACK_MSG` module constant, used in both TimeoutError and Exception handlers.
+- **DRY: `_wait_for_next_timeframe` / `_wait_until_next_timeframe_after`** — extracted shared timeframe arithmetic into `_calculate_next_check(source_time_ms)` helper. Both methods now call the helper and handle only their unique logging + edge cases.
+- **SRP: `MarketConditionsExtractor`** — extracted 4 methods from `TradingStrategy` (was 1151 lines / 19 methods → now 945 lines / 15 methods):
+  - `extract_price(result)` ← `_extract_price_from_result`
+  - `extract_market_conditions(result)` ← `_extract_market_conditions`
+  - `extract_confluence_factors(result)` ← `_extract_confluence_factors`
+  - `build_conditions_from_position(position)` ← `_build_conditions_from_position` (static)
+  - New class wired through composition root in `start.py`, injected into `TradingStrategy.__init__` via `conditions_extractor=`.
+- **Unused imports cleaned** — removed `re`, `classify_bb_position`, `classify_macd_signal`, `classify_market_sentiment`, `classify_order_book_bias`, `classify_rsi_label`, `classify_volume_state`, `classify_volatility_level` from `trading_strategy.py` (only used by extracted methods).
+
+### Added
+- `src/trading/market_conditions_extractor.py` — new class with constructor DI (`logger`), 3 instance methods + 1 static method.
+- `tests/test_app_timeframe_wait.py` — 9 tests covering `_calculate_next_check`, `_wait_for_next_timeframe`, and `_wait_until_next_timeframe_after`.
+
+## 2026-07-11 — Position gap context + defensive code purge
+
+### Added
+- Prompt now includes time since last closed position and its direction (LONG/SHORT) when no position is open — `TradingStrategy._get_last_closed_position_info()` queries SQLite trade history via existing `persistence.sqlite_history.query()`.
+
+### Changed
+- `get_position_context()`: extracted shared `## Capital Status` header into `capital_header` variable — DRY, no duplicate string literals.
+
+### Removed
+- **23 defensive checks purged total** — `getattr`/`isinstance`/`hasattr` on guaranteed types:
+  - `post_mortem.py`: 14 `getattr(closed_position, ...)` → direct attribute access (Position/TradeDecision are dataclasses)
+  - `pattern_quality_scorer.py`: 4 `isinstance(pattern_list, list|str)` → patterns dict shape is fixed by our own PatternAnalyzer
+  - `vector_memory.py`: 1 `isinstance(serialized, dict)` → `serialize_for_json` always returns dict for dict input
+  - `brain.py` router: 2 `getattr(self.vector_memory, ...)` → injected service always has those attrs
+  - `template_manager.py`: 3 `isinstance(data, dict)` + `getattr(self.config, ...)` → JSON parse + config attrs are guaranteed
+  - `app.py`: 3 — `isinstance(analysis, dict)` on typed param (only caller already checks), `getattr(self.config, "EXECUTOR_API_ENABLED")` + `getattr(self.config, "EXECUTOR_API_URL")` on Config dataclass
+  - `pipeline.py`: 1 — `hasattr(guard, "invalidate_cache")` on already name-identified CooldownWindowGuard
+
+### Fixed
+- `test_admin_edge_cases.py`: 5 `TestWritableConfigEdgeCases` tests → `async def` + `await` instead of `asyncio.get_event_loop().run_until_complete()` (dashboard tests killed the loop during teardown)
+- `test_admin_live.py`: `browser` fixture → graceful `pytest.skip()` when Playwright chromium binary unavailable (Ubuntu 26.04 unsupported)
+- `huggingface-hub` upgraded 1.2.3 → 1.23.0 (transformers demanded `>=1.5.0`, blocked `test_blocked_trades_integration.py` + `test_edge_cases_feedback.py`)
+- `log_stream.py`: removed unused `import time` and `from typing import Any`
+- `admin.py`: removed unused `verify_admin_session` import
+- `crawl4ai_enricher.py`: `# noqa: F401` → `# pylint: disable=unused-import` (pylint ignores flake8 pragmas)
+- `brain.py`: moved `MarketConditions` under `if TYPE_CHECKING` (only used in quoted annotations)
+- `pattern_quality_scorer.py`: `category` → `_category` (unused loop variable)
+
+## 2026-07-10 — Cost tracking fix + Decision Pathways zoom/layout
+
+### Fixed
+- `_extract_usage_metadata` captures `thoughts_token_count` and sums it into `completion_tokens` — Google bills thinking tokens as output ("Output price including thinking tokens"). Previously only `candidates_token_count` was counted, causing ~3.5x cost underreporting vs actual Google Cloud charges.
+
+### Changed
+- Decision Pathways panel: zoom controls (+/−/fit), label truncation with hover title, horizontal node spreading, keyboard zoom, deferred vis-network init, tab-switch delay 300ms.
+- Cache-bust version bumps: style.css?v=7.2, main.js?v=7.3, modules/*.js bumped.
+- config.ini.example: timeframe warning note.
+- Relaxed test assertion from hardcoded version to `?v=` pattern.
+
+### Removed
+- Defensive `try/except` guard around `thoughts_token_count` — the outer `except AttributeError` catches missing fields. No backward-compat dead code.
+
+## 2026-07-09 — Decision Pathways + executor bridge production cleanup
+
+Develop production batch: readable multi-source Brain Activity graph, dead synaptic/API path removal, and hardened llm_trader_executor integration.
+
+### Added
+- `GET /api/brain/decision-summary` aggregates active position, vector experiences, semantic rules, blocked trades, trade-journal post-mortems, and last response into a synopsis + hierarchical multi-source graph payload.
+- Brain Activity **Decision Pathways** panel: labeled hierarchical graph (Position / Memory / Rules / Journal / Decision), synopsis strip, type legend, click-to-detail card.
+- Shared `_build_execution_decision()` CCXT-ready payload used by both file write and HTTP forward.
+- `tests/test_decision_summary_api.py`, `tests/test_execution_decision_bridge.py`.
+
+### Changed
+- `_save_execution_decision` returns the written payload; `_forward_decision_to_executor` reuses it so disk + HTTP stay identical.
+- Executor network/HTTP failures log full traceback (`exc_info=True`); silent `except: pass` removed.
+- `PersistenceManager.save_latest_decision` logs with traceback and re-raises after atomic write failures.
+- `httpx>=0.27,<1` declared in `requirements.txt`.
+- Panel DOM id renamed `panel-synapses` → `panel-decision-pathways`; README screenshot caption retitled **Decision Pathways**.
+
+### Removed
+- `synapse_viewer.js` trade-history BUY/SELL/CLOSE graph consumer (vis-network retained for Decision Pathways only).
+- `GET /api/brain/memory` + `BrainRouter.get_vector_memory` + dashboard cache prefix `memory_*` (no back-compat).
+- Dead legend CSS `.dot.buy/.close/.update`.
+
+### Tests / validation
+- Decision summary + static bindings + brain router + server cache.
+- Executor bridge unit tests (payload, SKIP HOLD, HTTP forward, error logging, atomic latest_decision write).
+- Discord trading-check path remains green with executor API disabled in fixtures.
+
+### Ops notes
+- Hard-refresh dashboard clients for Decision Pathways JS/CSS cache bust (`main.js?v=6.0`, `style.css?v=6.3`, `decision_pathways_panel.js?v=1.1`).
+- Production was briefly stuck loading synopsis because Cloudflare caches `main.js?v=*` as immutable and origin still had old `synapse_viewer` major path under `main.js?v=5.2` while HTML already pointed at Decision Pathways markup.
+- Restart trading bot process to pick up brain router + executor bridge changes.
+- Executor HTTP remains optional via `[executor_api]`; `latest_decision.json` stays as file fallback.
+
+
+## 2026-07-08 — Executor Audit & Short Model Fix
+
+### Changed
+
+- **Executor audit**: 10-point security review of `llm_trader_executor` (separate repo) completed and pushed to `main`.
+- **SPOT_SHORT_ALLOWED** (new `.env` flag in executor, default `true`): SELL signals on spot are now capped to actual held base-asset balance instead of hard-blocked. When `false`, any insufficiently-backed SELL is rejected outright.
+- **UPDATE quantity fix**: `place_sl_tp_oco()` now overrides quantity from the tracked position's real size instead of accepting `quantity=0.0` from the LLM decision (which would cancel SL/TP without replacing them).
+- **set_leverage()** now called before entry on non-spot markets (previously leverage from the LLM prompt was validated but never applied).
+- **PositionTracker** refactored from single-global to `dict[symbol, Position]` — multi-pair ready.
+- **OCO fallback**: `create_order('oco')` attempted directly with try/except instead of relying on `exchange.has['createOrder']['oco']` (which crashes on most exchanges because `has` values are booleans, not dicts).
+- **UTF-8 stdout** forced on Windows to prevent `UnicodeEncodeError` crashes from emoji log prints.
+- **Notional check** in safety guard uses live ticker price as fallback for market orders (previously `entry_price=None` would bypass the check entirely).
+
+### Integration Notes
+
+- Executor payload format from `_save_execution_decision()` is fully compatible — no changes needed on this side.
+- The executor now clamps SELL quantity to <99% of available base balance. For example, a SELL 6 BTC signal with 1 BTC held executes as 0.99 BTC sell instead of failing.
+- Restart executor (`scripts/start.ps1` in `llm_trader_executor`) to pick up changes.
+
+
 ## 2026-07-03 — v1.0.2 — BlockRun AI (optional) + Post-Mortem llm_analysis + Dashboard Resilience
 
 ### Added
-
 - **BlockRun.AI provider** (fully optional) — x402 micropayment-based AI provider via `blockrun-llm` SDK. Gated behind `BLOCKRUN_WALLET_KEY` env var; no-op when unset.
 - **`llm_analysis` field in post-mortem API response** — `get_recent_post_mortems()` now returns the full LLM analysis text that was already stored but missing from the query result.
 - **96 new tests**: BlockRun provider unit/integration tests, post-mortem API endpoint tests, trading strategy check_position/exit handling tests.
 
 ### Fixed
-
 - **Dashboard resilience** — each panel initializer now has its own try/catch. A single panel failure no longer cascades and kills the entire dashboard.
 - **SL/TP logging crash** — `trading_strategy.py` no longer crashes when formatting a position update with `None` stop_loss or take_profit.
 
