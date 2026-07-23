@@ -45,6 +45,9 @@ jobs:
         run: |
           /tmp/codacy-cli.sh analyze --format sarif -o results.sarif
 
+      - name: Fix SARIF for GitHub Code Scanning
+        run: python3 scripts/fix_sarif.py
+
       - name: Upload SARIF results file
         uses: github/codeql-action/upload-sarif@v3
         with:
