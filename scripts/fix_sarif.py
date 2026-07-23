@@ -5,19 +5,26 @@ with open('results.sarif') as f:
     sarif = json.load(f)
 
 fixed = 0
-for run in sarif.get('runs', []):
+for i, run in enumerate(sarif.get('runs', [])):
+    # Ensure runs have a results array
+    if 'results' not in run or run['results'] is None:
+        run['results'] = []
+        fixed += 1
+        print(f"  Run[{i}]: added missing results array")
+
     # Fix rules not being array
     driver = run.get('tool', {}).get('driver', {})
     rules = driver.get('rules')
     if rules is not None and not isinstance(rules, list):
-        print(f"  Fixing rules type={type(rules).__name__} value={repr(rules)[:200]}")
+        print(f"  Run[{i}]: Fixing rules type={type(rules).__name__}")
         driver['rules'] = []
         fixed += 1
-    elif isinstance(rules, list):
-        print(f"  rules is already a list with {len(rules)} items")
-    else:
-        print(f"  Rules is None/absent, creating empty list")
-        driver['rules'] = []
+    elif 'rules' not in driver or rules is None:
+        if run.get('results'):
+            driver['rules'] = []
+            fixed += 1
+        else:
+            pass  # no results, no rules needed
 
     for result in run.get('results', []):
         for loc in result.get('locations', []):
@@ -34,6 +41,6 @@ for run in sarif.get('runs', []):
             fixed += 1
 
 with open('results.sarif', 'w') as f:
-    json.dump(sarif, f)
+    json.dump(sarif, f, indent=None, separators=(',', ':'))
 
 print(f'Total: Fixed {fixed} SARIF issues')

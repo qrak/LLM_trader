@@ -51,7 +51,12 @@ jobs:
       - name: Fix SARIF for GitHub Code Scanning
         run: python3 scripts/fix_sarif.py
 
-      - name: Upload SARIF results file
+      - name: Upload SARIF results to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
         with:
           sarif_file: results.sarif
+
+      - name: Upload results to Codacy
+        run: |
+          /tmp/codacy-cli.sh upload --project-token ${{ secrets.CODACY_PROJECT_TOKEN }} --sarif-path results.sarif --commit-uuid ${{ github.sha }}
