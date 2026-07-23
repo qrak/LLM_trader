@@ -13,6 +13,9 @@ permissions:
 
 jobs:
   codacy-security-scan:
+    permissions:
+      contents: read
+      security-events: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
