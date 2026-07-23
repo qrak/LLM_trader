@@ -3,6 +3,7 @@ DefiLlama API Client
 Handles fetching macro market data (Stablecoins, TVL) from DefiLlama.
 """
 import asyncio
+import logging
 import os
 import json
 from datetime import datetime, timedelta, timezone
@@ -127,7 +128,7 @@ class DefiLlamaClient:
             try:
                 os.remove(self.cache_file_path)
             except Exception:
-                pass
+                logging.warning("Failed to remove cache file")
         os.rename(temp_path, self.cache_file_path)
 
     async def _get_session(self) -> aiohttp.ClientSession:

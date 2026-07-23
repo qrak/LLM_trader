@@ -268,7 +268,7 @@ class CoinGeckoAPI:
                         try:
                             defi_dict[key] = round(float(defi_dict[key]), 2)
                         except (ValueError, TypeError):
-                            pass
+                            pass  # skip malformed data
             processed_data["defi"] = defi_dict
         elif isinstance(defi_data, Exception):
             self.logger.warning("Error fetching DeFi data: %s", defi_data)

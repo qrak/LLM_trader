@@ -232,7 +232,7 @@ class TestDeadLetter:
             try:
                 Path(block_path).unlink(missing_ok=True)
             except Exception:
-                pass
+                pass  # test cleanup, intentional
 
 
 class TestForward:

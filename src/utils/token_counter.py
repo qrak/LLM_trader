@@ -259,7 +259,7 @@ class CostStorage:
                         self._providers[provider] = ProviderCostStats()
                 return
             except (json.JSONDecodeError, IOError):
-                pass
+                pass  # file not found or corrupt, use defaults
         self._init_defaults()
 
     def _init_defaults(self) -> None:
@@ -298,7 +298,7 @@ class CostStorage:
                     try:
                         os.remove(temp_path)
                     except OSError:
-                        pass
+                        pass  # best-effort cleanup
 
     def record_usage(
         self,

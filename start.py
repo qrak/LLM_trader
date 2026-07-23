@@ -8,6 +8,7 @@ import atexit
 import os
 import sys
 import time
+import logging
 import warnings
 from pathlib import Path
 import hashlib
@@ -168,7 +169,7 @@ class SingleInstanceLock:
                 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
                 kernel32.CloseHandle(self._mutex_handle)
             except Exception:
-                pass
+                logging.exception("Failed to release Windows mutex handle")
             self._mutex_handle = None
 
     def acquire(self) -> bool:
@@ -213,19 +214,18 @@ class SingleInstanceLock:
                     fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
                 os.close(self._lock_handle)
             except Exception:
-                pass
+                logging.warning("Failed to release lock")
             self._lock_handle = None
 
             try:
                 self.lock_file_path.unlink(missing_ok=True)
             except Exception:
-                pass
+                logging.warning("Failed to unlink lock file")
 
         self._release_windows_mutex()
 
 
 def _show_error_dialog(title: str, message: str) -> bool:
-    """Show a best-effort GUI error dialog and return True if displayed."""
     if not TKINTER_AVAILABLE:
         return False
 
@@ -243,7 +243,7 @@ def _show_error_dialog(title: str, message: str) -> bool:
             try:
                 root.destroy()
             except Exception:
-                pass
+                pass  # best-effort cleanup
 
 
 class CompositionRoot:
