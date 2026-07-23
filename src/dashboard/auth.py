@@ -150,13 +150,21 @@ def verify_admin_session(request: Request) -> Optional[str]:
     return None
 
 
+_DUMMY_HASH = "00000000000000000000000000000000:0000000000000000000000000000000000000000000000000000000000000000"
+
+
 def check_credentials(username: str, password: str) -> bool:
-    """Validate login credentials against stored hash."""
+    """Validate login credentials against stored hash.
+
+    Executes PBKDF2 verification even when username is invalid to prevent
+    username enumeration via timing side-channels.
+    """
     if not _initialized:
         return False
-    if not hmac.compare_digest(username, _ADMIN_USERNAME):
-        return False
-    return _verify_password(password, _ADMIN_PASSWORD_HASH)
+    user_ok = hmac.compare_digest(username, _ADMIN_USERNAME)
+    target_hash = _ADMIN_PASSWORD_HASH if (user_ok and _ADMIN_PASSWORD_HASH) else _DUMMY_HASH
+    pass_ok = _verify_password(password, target_hash)
+    return user_ok and pass_ok
 
 
 def _is_lan_ip(ip: str) -> bool:
