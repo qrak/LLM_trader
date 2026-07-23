@@ -24,6 +24,8 @@ class OpenRouterClient(BaseAIClient):
         self.api_key = api_key
         self.base_url = base_url
         self._client: OpenRouter | None = None
+        # OpenRouter SDK 0.11+ removed presence_penalty; filter it out
+        self._known_unsupported_params.add("presence_penalty")
 
     async def _initialize_client(self) -> None:
         """Initialize the OpenRouter SDK client."""
@@ -83,12 +85,19 @@ class OpenRouterClient(BaseAIClient):
         try:
             self.logger.debug("Sending request to OpenRouter SDK with model: %s", model)
 
+            # Extract reasoning effort from config (pop so it isn't unpacked as flat param)
+            reasoning_effort = model_config.pop("openrouter_reasoning_effort", None)
+            extra_kwargs = {}
+            if reasoning_effort:
+                extra_kwargs["reasoning"] = {"effort": reasoning_effort}
+
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.send_async,
                 model_config,
                 model=model,
-                messages=messages
+                messages=messages,
+                **extra_kwargs
             )
             return self.convert_pydantic_response(response)
         except Exception as e:
@@ -128,12 +137,19 @@ class OpenRouterClient(BaseAIClient):
             )
             self.logger.debug("Sending chart analysis request to OpenRouter SDK (%s bytes)", len(img_data))
 
+            # Extract reasoning effort from config (pop so it isn't unpacked as flat param)
+            reasoning_effort = model_config.pop("openrouter_reasoning_effort", None)
+            extra_kwargs = {}
+            if reasoning_effort:
+                extra_kwargs["reasoning"] = {"effort": reasoning_effort}
+
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.send_async,
                 model_config,
                 model=model,
-                messages=multimodal_messages
+                messages=multimodal_messages,
+                **extra_kwargs
             )
             if response:
                 self.logger.debug("Received successful chart analysis response from OpenRouter SDK")

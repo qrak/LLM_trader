@@ -328,7 +328,7 @@ class TradingStrategy:
                     current_price, symbol, reasoning, market_conditions
                 )
 
-            if signal in ("BUY", "SELL"):
+            if signal in ("BUY", "SELL", "LONG", "SHORT"):
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,
@@ -372,6 +372,13 @@ class TradingStrategy:
             TradeDecision if action taken
         """
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
+            if not await self._executor_has_position(symbol):
+                self.logger.warning(
+                    "CLOSE signal for %s but executor reports no open position — "
+                    "position may already be closed on exchange. Skipping.",
+                    symbol,
+                )
+                return None
             self.logger.info("Closing position based on analysis signal...")
             await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
@@ -386,6 +393,16 @@ class TradingStrategy:
 
         old_sl = self.current_position.stop_loss
         old_tp = self.current_position.take_profit
+
+        # Verify position exists on executor before sending UPDATE
+        if not await self._executor_has_position(symbol):
+            self.logger.warning(
+                "UPDATE for %s skipped — executor reports no open position. "
+                "The position may have been closed on exchange (manual "
+                "intervention, stop hit, network partition).",
+                symbol,
+            )
+            return None
 
         now = datetime.now(timezone.utc)
         if self._last_position_update_time is not None:
@@ -438,6 +455,35 @@ class TradingStrategy:
 
         return None
 
+    async def _executor_has_position(self, symbol: str) -> bool:
+        """Query executor API to confirm the position is actually open on exchange.
+
+        LLM_trader marks a position as "open" as soon as a decision is made,
+        but limit orders may sit unfilled on the orderbook. Before sending
+        UPDATE/CLOSE, verify the executor has the position tracked (which
+        only happens after fill confirmation).
+        """
+        if not getattr(self.config, 'EXECUTOR_API_ENABLED', False):
+            return True  # No executor configured — assume position is real
+        url: str = getattr(self.config, 'EXECUTOR_API_URL', '')
+        if not url:
+            return True
+        try:
+            import httpx
+            pos_url = url.rstrip('/') + '/position'
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(pos_url, params={"symbol": symbol})
+            if resp.status_code == 200:
+                data = resp.json()
+                return bool(data.get("open", False))
+        except Exception:
+            self.logger.error(
+                "CRITICAL: Failed to query executor position for %s — "
+                "cannot verify position state. Skipping UPDATE/CLOSE for safety.",
+                symbol, exc_info=True,
+            )
+        return False  # Fail closed: don't act on unverified state
+
     def _audit(
         self,
         order_id: str,
@@ -471,7 +517,7 @@ class TradingStrategy:
         market_conditions: MarketConditions | None = None,
     ) -> TradeDecision:
         """Open a new trading position with guard-governed lifecycle."""
-        direction = "LONG" if signal == "BUY" else "SHORT"
+        direction = "LONG" if signal in ("BUY", "LONG") else "SHORT"
         market_conditions = market_conditions or {}
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
@@ -779,21 +825,46 @@ class TradingStrategy:
                     )
                     updated = True
             else:
-                # SL is widening or unchanged — allow unconditionally
-                if direction == "LONG" and stop_loss < old_sl:
-                    self.logger.info(
-                        "AI Widening Stop Loss for LONG: $%.2f -> $%.2f (Risk Increased)",
-                        old_sl, stop_loss
+                # SL is widening or unchanged
+                # Guard: reject widening beyond 150% of original SL distance
+                entry_price = self.current_position.entry_price
+                original_sl_distance = abs(entry_price - old_sl)
+                proposed_sl_distance = abs(entry_price - stop_loss)
+                max_allowed_distance = original_sl_distance * 1.5
+
+                if (
+                    original_sl_distance > 0
+                    and proposed_sl_distance > max_allowed_distance
+                ):
+                    self.logger.warning(
+                        "REJECTED SL widening: proposed distance %.2f%% exceeds "
+                        "150%% of original %.2f%%. Keeping SL at $%.2f "
+                        "(AI requested $%.2f)",
+                        proposed_sl_distance / entry_price * 100,
+                        original_sl_distance / entry_price * 100,
+                        old_sl,
+                        stop_loss,
                     )
-                elif direction == "SHORT" and stop_loss > old_sl:
-                    self.logger.info(
-                        "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f (Risk Increased)",
-                        old_sl, stop_loss
-                    )
+                    # Don't update — keep old SL
                 else:
-                    self.logger.info("Updated Stop Loss: $%s", f"{stop_loss:,.2f}")
-                new_sl = stop_loss
-                updated = True
+                    if direction == "LONG" and stop_loss < old_sl:
+                        self.logger.info(
+                            "AI Widening Stop Loss for LONG: $%.2f -> $%.2f "
+                            "(Risk Increased)",
+                            old_sl, stop_loss,
+                        )
+                    elif direction == "SHORT" and stop_loss > old_sl:
+                        self.logger.info(
+                            "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f "
+                            "(Risk Increased)",
+                            old_sl, stop_loss,
+                        )
+                    else:
+                        self.logger.info(
+                            "Updated Stop Loss: $%s", f"{stop_loss:,.2f}",
+                        )
+                    new_sl = stop_loss
+                    updated = True
 
         if take_profit and take_profit != self.current_position.take_profit:
             new_tp = take_profit

@@ -85,7 +85,8 @@ class TestRequestWiring:
         assert response is not None
         sent_kwargs = send_async.await_args.kwargs
         assert sent_kwargs["frequency_penalty"] == 0.1
-        assert sent_kwargs["presence_penalty"] == 0.2
+        # presence_penalty was removed in OpenRouter SDK 0.11+; expect it filtered out
+        assert "presence_penalty" not in sent_kwargs
         assert "top_k" not in sent_kwargs
 
     @pytest.mark.asyncio
@@ -200,6 +201,8 @@ class _ConfigStub:
     OPENROUTER_BASE_MODEL = "primary/model"
     OPENROUTER_FALLBACK_MODEL = "fallback/model"
     LM_STUDIO_MODEL = "local/model"
+    BLOCKRUN_MODEL = "blockrun/model"
+    BLOCKRUN_BASE_URL = "https://blockrun.ai/api"
 
     def get_model_config(self, _model: str) -> dict[str, int]:
         return {"max_tokens": 16}

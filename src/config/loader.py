@@ -205,7 +205,8 @@ class Config:
             "top_k": self.get_config('model_config', 'top_k', None),
             "frequency_penalty": self.get_config('model_config', 'frequency_penalty', self.get_config('model_config', 'freq_penalty', None)),
             "presence_penalty": self.get_config('model_config', 'presence_penalty', self.get_config('model_config', 'pres_penalty', None)),
-            "max_tokens": default_max_tokens
+            "max_tokens": default_max_tokens,
+            "openrouter_reasoning_effort": self.get_config('model_config', 'openrouter_reasoning_effort', 'max'),
         }
 
         google_max_tokens = self.get_config('model_config', 'google_max_tokens', None)
@@ -351,6 +352,16 @@ class Config:
     def AI_CHART_CANDLE_LIMIT(self):
         """Configured candle limit to use for AI chart images (must be present in config.ini)."""
         return int(self.get_config('general', 'ai_chart_candle_limit', 200))
+
+    @property
+    def MARKET_TYPE(self) -> str:
+        """spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage."""
+        return self.get_config('general', 'market_type', 'spot').lower().strip()
+
+    @property
+    def ENTRY_ORDER_TYPE(self) -> str:
+        """market = instant execution, limit = conditional (infrastructure kept for future)."""
+        return self.get_config('general', 'entry_order_type', 'market').lower().strip()
 
     @property
     def INCLUDE_COIN_DESCRIPTION(self) -> bool:

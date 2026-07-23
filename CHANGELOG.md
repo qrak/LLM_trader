@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-07-23 — Dependabot security fixes + Futures LONG/SHORT signals + Executor safety hardening
+
+### Security (Dependabot — 19 alerts resolved)
+- **Pillow** 12.2.0 → 12.3.0 — 12 CVEs: heap OOB write (CVE-2026-59199, CVE-2026-59205, CVE-2026-59197), decompression bomb (CVE-2026-59200, CVE-2026-54058/59/60, CVE-2026-55379/80), TGA heap leak (CVE-2026-59198), JPEG2000 DoS (CVE-2026-59204), EPS infinite loop (CVE-2026-59203), Windows command injection (CVE-2026-55798)
+- **astro** ^6.4.6 → ^7.1.0 — 3 CVEs: XSS via unescaped spread attribute names (CVE-2026-59729), XSS via transition:* directives (CVE-2026-59727), reflected XSS via View Transition properties
+- **js-yaml** → 4.3.0 override — YAML merge-key chains force quadratic CPU (CVE-2026-59869)
+- **sharp** → 0.35.3 (transitive) — libvips CVEs (CVE-2026-33327/28, CVE-2026-35590)
+- **svgo** → 4.0.2 (transitive) — removeScripts plugin bypass
+- **openrouter** 0.9.1 → >=0.11.0 — SDK compatibility (presence_penalty removed)
+
+### Added
+- **Futures LONG/SHORT signals**: `template_manager.py` emits LONG/SHORT in prompts when `market_type=futures`; `position_extractor.py` regex + valid_signals accept LONG/SHORT; `executor_handler.py` ACTIONABLE_SIGNALS includes LONG/SHORT (signals now unified: BUY=LONG, SELL=SHORT)
+- **MARKET_TYPE config**: `config.ini.example` + `Config` properties (`MARKET_TYPE`, `ENTRY_ORDER_TYPE`) — spot vs futures, market vs limit
+- **OpenRouter reasoning effort**: `config.ini.example` documents `openrouter_reasoning_effort` (none→max); `openrouter.py` pops it from model_config and passes as `reasoning={"effort": ...}` extra kwarg
+- **Executor dead-letter queue**: `data/trading/failed_forwards.jsonl` — when executor forward fails after all retries, payload is persisted for replay instead of being silently lost
+- **Retry on executor forward**: `executor_handler._forward()` decorated with `@retry_async(3, backoff×2, max 30s)`
+- **Google image token estimation**: `google.py` — `_get_image_dimensions()` parses PNG/JPEG headers without full decode; `_estimate_image_tokens()` calculates Gemini tile-based token cost (258 tokens per 75×75 tile)
+
+### Changed
+- **Executor forward prioritized**: `app.py` sends to executor BEFORE Discord notification + file persist — trade execution is the priority
+- **Executor payload hardened**: `_build_payload()` refuses to build when `strategy_decision is None` (analysis never validated), uses `strategy_decision` fields (quantity, price, stop_loss, take_profit, confidence, reasoning) instead of raw analysis dict
+- **order_type from config**: executor payload uses `self._config.ENTRY_ORDER_TYPE` instead of `analysis.get("order_type")` — no more LLM-controlled order type
+- **Timestamp precision**: executor payload timestamp format changed to `%Y-%m-%dT%H:%M:%S.%f` (microseconds)
+- **Chart resolution reduced**: 4K (3840×2160) → 1080p (1920×1080) — cuts Google image token cost by ~75%
+
+### Safety (position guards)
+- **CLOSE guard**: `trading_strategy.py` — queries executor API before sending CLOSE; if no position tracked on exchange, skips with warning (prevents double-close or close on unfilled limit order)
+- **UPDATE guard**: verifies executor has position before sending SL/TP update; fails closed on network error
+- **SL widening cap**: rejects stop-loss widening beyond 150% of original SL distance from entry — AI can only tighten or keep stops, not blow out risk
+- **Ambiguous position_size rejected**: `position_extractor.py` — numbers > 1.0 without `%` suffix now trigger warning + None (was blindly dividing by 100, risking 50→0.5 misinterpretation)
+
+### Fixed
+- **OpenRouter presence_penalty**: filtered out from `_known_unsupported_params` (removed in SDK 0.11+)
+- **Test assertion**: `test_openrouter_provider.py` updated to expect `presence_penalty` absent from sent kwargs
+
+### Removed
+- `scripts/start_script_develop.ps1` — dead develop-mode startup script
+
 ## 2026-07-15 — DRY fixes + SRP refactor (MarketConditionsExtractor)
 
 ### Changed

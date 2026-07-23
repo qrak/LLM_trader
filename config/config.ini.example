@@ -37,6 +37,10 @@ ai_chart_candle_limit = 125
 discord_bot = false
 
 include_coin_description = false
+# spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
+market_type = spot
+# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
+entry_order_type = market
 
 # === Debug ===
 [debug]
@@ -135,6 +139,9 @@ google_max_tokens = 32768
 google_thinking_level = high
 google_code_execution = false
 model_verbosity = high
+# OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
+# xhigh and max both map to DeepSeek's max reasoning level
+openrouter_reasoning_effort = max
 
 # === Dashboard ===
 [dashboard]

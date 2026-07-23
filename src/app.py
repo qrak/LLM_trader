@@ -328,12 +328,14 @@ class CryptoTradingBot:
         if decision is not None and decision.action == "HOLD" and result.get("analysis"):
             self._patch_rejected_signal_in_response(result, decision)
 
+        # Forward to executor FIRST — trade execution is the priority
+        analysis = result.get("analysis")
+        if self.executor_handler is not None and analysis and decision is not None:
+            await self.executor_handler.handle(analysis, decision, self.current_symbol)
+
+        # Then notify and persist (best-effort, non-critical)
         await self._send_discord_notification(result)
         self._save_analysis_data(result)
-
-        analysis = result.get("analysis")
-        if self.executor_handler is not None and analysis:
-            await self.executor_handler.handle(analysis, decision, self.current_symbol)
     
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
