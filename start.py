@@ -134,10 +134,11 @@ except ImportError:
 class SingleInstanceLock:
     """Manages a single instance lock file to prevent multiple application instances."""
 
-    def __init__(self, app_name: str = ".llm_trader.lock"):
+    def __init__(self, app_name: str = ".llm_trader.lock", logger: Logger | None = None):
         self.lock_file_path = Path.home() / app_name
         self._lock_handle: Optional[int] = None
         self._mutex_handle = None
+        self.logger = logger or logging.getLogger(__name__)
 
     def _acquire_windows_mutex(self) -> bool:
         """Use a named mutex on Windows to guarantee single process instance."""
@@ -169,7 +170,7 @@ class SingleInstanceLock:
                 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
                 kernel32.CloseHandle(self._mutex_handle)
             except Exception:
-                logging.exception("Failed to release Windows mutex handle")
+                self.logger.exception("Failed to release Windows mutex handle")
             self._mutex_handle = None
 
     def acquire(self) -> bool:
@@ -214,13 +215,13 @@ class SingleInstanceLock:
                     fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
                 os.close(self._lock_handle)
             except Exception:
-                logging.warning("Failed to release lock")
+                self.logger.warning("Failed to release lock")
             self._lock_handle = None
 
             try:
                 self.lock_file_path.unlink(missing_ok=True)
             except Exception:
-                logging.warning("Failed to unlink lock file")
+                self.logger.warning("Failed to unlink lock file")
 
         self._release_windows_mutex()
 
@@ -809,7 +810,7 @@ class CompositionRoot:
     
     def start(self):
         """Main entry point with clean shutdown delegation."""
-        single_instance_lock = SingleInstanceLock()
+        single_instance_lock = SingleInstanceLock(logger=self.logger)
         
         if not single_instance_lock.acquire():
             shown = _show_error_dialog(
