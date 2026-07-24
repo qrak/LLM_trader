@@ -211,5 +211,5 @@ class GracefulShutdownManager:
             if root is not None:
                 try:
                     root.destroy()
-                except Exception:
+                except Exception:  # best-effort cleanup
                     pass

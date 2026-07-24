@@ -8,7 +8,7 @@ This project uses Crawl4AI.
 
 Required attribution sentence from Crawl4AI upstream license:
 
-"This product includes software developed by UncleCode (https://x.com/unclecode) as part of the Crawl4AI project (https://github.com/unclecode/crawl4ai)."
+"This product includes software developed by UncleCode (<https://x.com/unclecode>) as part of the Crawl4AI project (<https://github.com/unclecode/crawl4ai>)."
 
 The sentence above should remain visible in a prominent and easily accessible location when redistributing this project.
 
@@ -16,7 +16,7 @@ The sentence above should remain visible in a prominent and easily accessible lo
 
 The following dependency is licensed under Apache License 2.0:
 
-- Crawl4AI (https://github.com/unclecode/crawl4ai)
+- Crawl4AI (<https://github.com/unclecode/crawl4ai>)
 
 Apache License 2.0 notice text:
 
@@ -24,7 +24,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this software except in compliance with the License.
 You may obtain a copy of the License at:
 
-http://www.apache.org/licenses/LICENSE-2.0
+<http://www.apache.org/licenses/LICENSE-2.0>
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,

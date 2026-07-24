@@ -63,4 +63,4 @@ By contributing, you agree your contributions are licensed under the [MIT Licens
 
 ## Contact
 
-For questions, open an issue or join Discord: https://discord.gg/ZC48aTTqR2
+For questions, open an issue or join Discord: <https://discord.gg/ZC48aTTqR2>

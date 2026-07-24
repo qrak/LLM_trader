@@ -26,31 +26,31 @@ $ActivatePath = Join-Path $VenvPath 'Scripts\Activate.ps1'
 $RequirementsPath = Join-Path $RepoRoot 'requirements.txt'
 $StartPath = Join-Path $RepoRoot 'start.py'
 
-Write-Host "== scripts/start_script_main.ps1 (main) =="
-Write-Host "Graceful stop: use Ctrl+C (app shows confirmation popup)." -ForegroundColor Yellow
-Write-Host "Closing the terminal window/tab with X terminates host process immediately." -ForegroundColor Yellow
-Write-Host "Repository root: $RepoRoot"
+Write-Output "== scripts/start_script_main.ps1 (main) =="
+Write-Output "Graceful stop: use Ctrl+C (app shows confirmation popup)."
+Write-Output "Closing the terminal window/tab with X terminates host process immediately."
+Write-Output "Repository root: $RepoRoot"
 
 if (-not (Test-Path $VenvPath)) {
-    Write-Host "Creating virtual environment at '$VenvPath'..."
+    Write-Output "Creating virtual environment at '$VenvPath'..."
     python -m venv $VenvPath
 }
 else {
-    Write-Host "Virtual environment '$VenvPath' already exists."
+    Write-Output "Virtual environment '$VenvPath' already exists."
 }
 
 if (-not (Test-Path $ActivatePath)) {
-    Write-Host "Activation script not found at $ActivatePath"
-    Write-Host "If the venv was just created, ensure Python created the Scripts/Activate.ps1 file."
+    Write-Output "Activation script not found at $ActivatePath"
+    Write-Output "If the venv was just created, ensure Python created the Scripts/Activate.ps1 file."
     exit 1
 }
 
-Write-Host "Activating virtual environment..."
+Write-Output "Activating virtual environment..."
 . $ActivatePath
 
 if (-not $SkipInstall) {
     if (Test-Path $RequirementsPath) {
-        Write-Host "Checking installed packages against requirements.txt..."
+        Write-Output "Checking installed packages against requirements.txt..."
         $reqs = Get-Content $RequirementsPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($_ -match '^(\s*#)') }
         $installed = & pip freeze
         $missing = @()
@@ -66,21 +66,21 @@ if (-not $SkipInstall) {
             }
         }
         if ($missing.Count -eq 0) {
-            Write-Host "All requirements satisfied; skipping pip install."
+            Write-Output "All requirements satisfied; skipping pip install."
         }
         else {
-            Write-Host "Missing or mismatched requirements detected:`n$missing"
-            Write-Host "Installing/updating dependencies from requirements.txt..."
+            Write-Output "Missing or mismatched requirements detected:`n$missing"
+            Write-Output "Installing/updating dependencies from requirements.txt..."
             pip install --upgrade pip
             pip install -r $RequirementsPath
         }
     }
     else {
-        Write-Host "No requirements.txt found; skipping pip install."
+        Write-Output "No requirements.txt found; skipping pip install."
     }
 }
 else {
-    Write-Host "Skipping dependency installation (-SkipInstall provided)."
+    Write-Output "Skipping dependency installation (-SkipInstall provided)."
 }
 
 Set-Location $RepoRoot
@@ -91,22 +91,22 @@ if (Test-Path $StartPath) {
     if ($Timeframe) { $startArgs += '-t', $Timeframe }
 
     if ($startArgs.Count -gt 0) {
-        Write-Host "Running start.py with arguments: $($startArgs -join ' ')..."
+        Write-Output "Running start.py with arguments: $($startArgs -join ' ')..."
     }
     else {
-        Write-Host "Running start.py with default settings..."
+        Write-Output "Running start.py with default settings..."
     }
 
     & python $StartPath @startArgs
 
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
-        Write-Host "`n=== Process exited with error code: $exitCode ===`n" -ForegroundColor Red
+        Write-Output "`n=== Process exited with error code: $exitCode ===`n"
     }
 }
 else {
-    Write-Host "No start.py found in repository root."
+    Write-Output "No start.py found in repository root."
 }
 
-Write-Host "`n=== Script completed. Press ENTER to close this window... ===`n" -ForegroundColor Cyan
+Write-Output "`n=== Script completed. Press ENTER to close this window... ===`n"
 Read-Host

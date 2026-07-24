@@ -28,7 +28,7 @@ export async function updatePostMortemData(query) {
         const response = await fetch(url);
         const data = await response.json();
         if (!data.post_mortems || data.post_mortems.length === 0) {
-            container.innerHTML = `
+            container.innerHTML = DOMPurify.sanitize(`
                 <div class="empty-state">
                     <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
                     <p class="empty-state-text">${query ? 'No post-mortems match your search' : 'No post-mortems yet'}</p>
@@ -36,18 +36,18 @@ export async function updatePostMortemData(query) {
                         ${query ? 'Try a different search term.' : 'Post-mortems appear after positions are closed.'}
                     </p>
                 </div>
-            `;
+            `);
             return;
         }
-        container.innerHTML = renderPostMortems(data.post_mortems, query);
+        container.innerHTML = DOMPurify.sanitize(renderPostMortems(data.post_mortems, query));
     } catch (e) {
-        container.innerHTML = `
+        container.innerHTML = DOMPurify.sanitize(`
             <div class="empty-state">
                 <div class="empty-state-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                 <p class="empty-state-text">Error loading post-mortems</p>
                 <p style="font-size: 0.85em; margin-top: 8px; color: var(--accent-danger);">${escapeHtml(e.message)}</p>
             </div>
-        `;
+        `);
     }
 }
 
@@ -101,9 +101,20 @@ function renderPostMortems(postMortems, query) {
 }
 
 function highlightText(text, query) {
-    if (!query) return text;
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp(`(${escaped})`, 'gi'), '<mark>$1</mark>');
+    if (!query || typeof text !== 'string') return text || '';
+    const qLower = String(query).toLowerCase();
+    const tLower = text.toLowerCase();
+    let idx = tLower.indexOf(qLower);
+    if (idx === -1) return text;
+    let result = '';
+    let lastIdx = 0;
+    while (idx !== -1) {
+        result += text.substring(lastIdx, idx) + '<mark>' + text.substring(idx, idx + qLower.length) + '</mark>';
+        lastIdx = idx + qLower.length;
+        idx = tLower.indexOf(qLower, lastIdx);
+    }
+    result += text.substring(lastIdx);
+    return result;
 }
 
 function escapeHtml(text) {

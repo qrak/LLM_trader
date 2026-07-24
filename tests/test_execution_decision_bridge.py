@@ -231,8 +231,8 @@ class TestDeadLetter:
             mod.DEAD_LETTER_PATH = orig_path
             try:
                 Path(block_path).unlink(missing_ok=True)
-            except Exception:
-                pass  # test cleanup, intentional
+            except Exception:  # best-effort cleanup
+                pass
 
 
 class TestForward:

@@ -78,7 +78,7 @@ function setupSidebarNavigation() {
                 if (targetId === 'tab-brain') {
                     setTimeout(() => {
                         if (window.updateDecisionPathways) {
-                            window.updateDecisionPathways().catch(function(){});
+                            window.updateDecisionPathways().catch(() => {});
                         }
                     }, 300);
                 }

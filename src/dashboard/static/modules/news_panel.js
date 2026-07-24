@@ -24,7 +24,7 @@ export async function updateNewsData() {
             `;
             return;
         }
-        container.innerHTML = renderNews(data.articles);
+        container.innerHTML = DOMPurify.sanitize(renderNews(data.articles));
     } catch (e) {
         container.innerHTML = `
             <div class="empty-state">

@@ -41,7 +41,7 @@ class OpenRouterClient(BaseAIClient):
             async_exit = getattr(client, "__aexit__", None)
             if callable(async_exit):
                 try:
-                    result = async_exit(None, None, None)
+                    result = async_exit(None, None, None)  # pylint: disable=not-callable
                     if inspect.isawaitable(result):
                         await result
                 except Exception as exc: # pylint: disable=broad-exception-caught
@@ -49,7 +49,7 @@ class OpenRouterClient(BaseAIClient):
             sync_exit = getattr(client, "__exit__", None)
             if callable(sync_exit):
                 try:
-                    sync_exit(None, None, None)
+                    sync_exit(None, None, None)  # pylint: disable=not-callable
                 except Exception as exc: # pylint: disable=broad-exception-caught
                     self.logger.warning("OpenRouter sync client cleanup failed: %s", exc)
         finally:

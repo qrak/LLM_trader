@@ -66,7 +66,7 @@ export async function updateResponseTab() {
                 viewer.textContent = processed.trim();
             }
         } else {
-            viewer.innerHTML = `<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`;
+            viewer.innerHTML = DOMPurify.sanitize(`<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`);
         }
         cachedResponse = content;
     } catch (e) {
@@ -128,7 +128,7 @@ function flashCopyButton(type) {
         }, 50);
 
         setTimeout(() => {
-            btn.innerHTML = originalHTML;
+            btn.innerHTML = DOMPurify.sanitize(originalHTML);
             if (originalAria) {
                 btn.setAttribute('aria-label', originalAria);
             } else {

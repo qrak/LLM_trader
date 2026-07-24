@@ -83,10 +83,10 @@ def cmd_recent(args: argparse.Namespace) -> None:
     conn.row_factory = sqlite3.Row
 
     limit = args.limit or 20
-    order = args.order or "DESC"
+    order = "ASC" if (getattr(args, "order", None) or "").upper() == "ASC" else "DESC"
 
     sql = f"SELECT * FROM trade_history ORDER BY timestamp {order} LIMIT ?"
-    rows = conn.execute(sql, [limit]).fetchall()
+    rows = conn.execute(sql, [limit]).fetchall()  # nosec B608
     conn.close()
 
     if not rows:
@@ -123,18 +123,16 @@ def cmd_search(args: argparse.Namespace) -> None:
         params.append(args.until)
 
     where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-    order = args.order or "DESC"
+    order = "ASC" if (getattr(args, "order", None) or "").upper() == "ASC" else "DESC"
     limit = args.limit or 20
     offset = args.offset or 0
 
     sql = f"SELECT * FROM trade_history {where} ORDER BY timestamp {order} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
-    rows = conn.execute(sql, params).fetchall()
-    total = conn.execute(
-        f"SELECT COUNT(*) FROM trade_history {where}",
-        params[:-2] if conditions else []
-    ).fetchone()[0]
+    rows = conn.execute(sql, params).fetchall()  # nosec B608
+    count_sql = f"SELECT COUNT(*) FROM trade_history {where}"
+    total = conn.execute(count_sql, params[:-2] if conditions else []).fetchone()[0]  # nosec B608
     conn.close()
 
     if not rows:

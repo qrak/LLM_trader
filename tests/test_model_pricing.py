@@ -97,24 +97,12 @@ def test_model_pricing_returns_empty_pricing_when_json_corrupted() -> None:
     assert pricing.get_cost("openrouter", "any-model", input_tokens=1000, output_tokens=1000) is None
 
 
+from src.config.loader import Config
+
+
 def _make_config(config_data: dict[str, dict[str, Any]]) -> Any:
-    config_class = _load_config_class_without_global_instance()
-    config = object.__new__(config_class)
+    config = object.__new__(Config)
     config._env_vars = {}
     config._config_data = config_data
     config._build_model_configs()
     return config
-
-
-def _load_config_class_without_global_instance() -> type:
-    global _CONFIG_CLASS
-    if _CONFIG_CLASS is not None:
-        return _CONFIG_CLASS
-    source_path = Path(__file__).resolve().parents[1] / "src" / "config" / "loader.py"
-    source = source_path.read_text(encoding="utf-8")
-    source = source.replace("\n# Create global config instance\nconfig = Config()\n", "\n")
-    module = ModuleType("config_loader_under_test")
-    module.__file__ = str(source_path)
-    exec(compile(source, str(source_path), "exec"), module.__dict__)
-    _CONFIG_CLASS = module.Config
-    return _CONFIG_CLASS

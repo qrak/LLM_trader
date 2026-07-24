@@ -71,9 +71,9 @@ _MARKET_TICKER_PRICE_CHANGE_PATTERN = re.compile(
     r"\$[\d,.]+\s+[-+]?\d+(?:\.\d+)?%"
 )
 _MARKET_TICKER_TRAILING_NAV_PATTERN = re.compile(
-    r"(?is)^\s*(?:\*\s*){3,}\s*.{0,160}?\s*(?:\*\s*){3,}\s*"
+    r"(?is)^\s*(?:\*\s*){3,}[^\*\n]{0,160}?(?:\*\s*){3,}"
 )
-_MARKET_TICKER_SEPARATOR_PREFIX_PATTERN = re.compile(r"(?is)^\s*(?:\*\s*){3,}\s*")
+_MARKET_TICKER_SEPARATOR_PREFIX_PATTERN = re.compile(r"(?i)^\s*(?:\*\s*){3,}")
 _MARKET_TICKER_MIN_PRICE_CHANGES = 12
 _MARKET_TICKER_SCAN_CHARS = 20_000
 

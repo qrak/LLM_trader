@@ -393,7 +393,7 @@ class Config:
 
     @property
     def DASHBOARD_HOST(self):
-        return self.get_config('dashboard', 'host', '0.0.0.0')
+        return self.get_config('dashboard', 'host', '0.0.0.0')  # nosec B104
 
     @property
     def DASHBOARD_PORT(self):

@@ -78,7 +78,7 @@ function renderVectorPanel(data, rulesData, blockedData) {
 
     const tableHtml = renderExperienceTable(data.experiences || []);
 
-    container.innerHTML = `
+    container.innerHTML = DOMPurify.sanitize(`
         ${freshnessHtml}
         ${contextHtml}
         <div class="vector-stats">${statsHtml}</div>
@@ -91,7 +91,7 @@ function renderVectorPanel(data, rulesData, blockedData) {
             <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Experience History</h3>
             <div class="vector-table">${tableHtml}</div>
         </div>
-    `;
+    `);
 
     container.querySelectorAll('.sortable-header').forEach(header => {
         const field = header.getAttribute('data-sort');
@@ -327,8 +327,6 @@ function renderExperienceTable(experiences) {
         // split on "Label:" patterns.
         const pattern = /\b(Indicators|Structure|Confluences|Reasoning|Result|Post-trade):\s*/g;
         let match;
-        let lastKey = '_header';
-        let lastIndex = 0;
         sections['_header'] = '';
         const hits = [];
         while ((match = pattern.exec(doc)) !== null) {

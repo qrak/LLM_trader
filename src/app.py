@@ -509,8 +509,8 @@ class CryptoTradingBot:
             analysis = result.get("analysis")
             if isinstance(analysis, dict):
                 signal = str(analysis.get("signal", ""))
-        except Exception:
-            pass
+        except (AttributeError, TypeError, KeyError) as exc:
+            self.logger.debug("Failed to extract signal from result analysis: %s", exc)
         if signal not in ("BUY", "SELL"):
             return
         reason = decision.reasoning or "Blocked by trading strategy guard"

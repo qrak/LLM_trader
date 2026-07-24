@@ -2,9 +2,9 @@
 
 *An autonomous AI trading agent that reads charts, remembers outcomes, and sharpens its strategy in real time.*
 
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)]()
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)]()
-[![GitHub Stars](https://img.shields.io/github/stars/qrak/LLM_trader?style=flat&logo=github)]()
+[![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)](https://www.python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
+[![GitHub Stars](https://img.shields.io/github/stars/qrak/LLM_trader?style=flat&logo=github)](https://github.com/qrak/LLM_trader)
 
 📊 **[Live Dashboard](https://semanticsignal.qrak.org)** — Watch the neural trading brain in action  
 📖 **[Read the Full Story (Medium)](https://medium.com/@donqrakko/i-built-a-trading-bot-that-doesnt-just-calculate-it-reasons-remembers-and-learns-from-its-749064869d73)**  

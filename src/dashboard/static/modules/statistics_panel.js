@@ -38,7 +38,7 @@ export async function updateStatisticsData() {
             `;
             return;
         }
-        container.innerHTML = renderStatistics(stats);
+        container.innerHTML = DOMPurify.sanitize(renderStatistics(stats));
     } catch (e) {
         container.innerHTML = `
             <div class="empty-state">

@@ -99,7 +99,7 @@ if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
 
 > **Files:** `src/managers/persistence_manager.py`, `src/managers/sqlite_trade_history.py`
 
-### Agent Persona & Role
+### Persistence Manager Persona & Role
 
 Persistence Manager is the **single persistence facade for trading runtime state.** It owns positions, statistics, monitor state, previous/last analysis snapshots, and trade-history access. Trade history is SQLite-only and must not fall back to legacy JSON files.
 
@@ -195,7 +195,7 @@ Note: `local` is skipped in the orchestrator's chart fallback chain because prov
 | `OpenRouterClient` | Official `openrouter` SDK (`OpenRouter`) | Base64 data URI | `@retry_api_call` + param retry |
 | `LMStudioClient` | Official LM Studio Python SDK (`lmstudio.AsyncClient`) | Available in client, but disabled by orchestrator metadata and skipped by the chart fallback chain | `@retry_api_call` |
 
-### Edge Cases
+### Provider Orchestrator Edge Cases
 
 | Scenario | Handling |
 |----------|----------|

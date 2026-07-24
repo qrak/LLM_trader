@@ -1,5 +1,4 @@
 export async function updateVisuals() {
-    const container = document.getElementById('visual-container');
     const img = document.getElementById('analysis-chart');
     const noChartMsg = document.getElementById('no-chart-msg');
     

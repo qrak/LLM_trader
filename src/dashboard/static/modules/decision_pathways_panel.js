@@ -6,7 +6,6 @@
 let network = null;
 let nodesDS = null;
 let edgesDS = null;
-let lastPayload = null;
 const nodePayloads = new Map();
 
 const COLOR = {
@@ -292,10 +291,10 @@ function renderDetail(id, payload) {
         body = Object.entries(data).slice(0, 12).map(([k, v]) => kv(k, typeof v === 'object' ? JSON.stringify(v) : v)).join('');
     }
 
-    detail.innerHTML = `
+    detail.innerHTML = DOMPurify.sanitize(`
         <h4>${escapeHtml(type)} · ${escapeHtml(id)}</h4>
         ${body || '<p class="decision-empty">No detail payload.</p>'}
-    `;
+    `);
 }
 
 function updateGraph(graph) {
@@ -358,14 +357,14 @@ function renderChrome(data) {
 
     const synopsis = document.getElementById('decision-synopsis');
     if (synopsis) {
-        synopsis.innerHTML = `<p class="decision-synopsis-text">${escapeHtml(data.synopsis || 'No synopsis available.')}</p>`;
+        synopsis.innerHTML = DOMPurify.sanitize(`<p class="decision-synopsis-text">${escapeHtml(data.synopsis || 'No synopsis available.')}</p>`);
     }
 }
 
 function renderError(err) {
     const synopsis = document.getElementById('decision-synopsis');
     if (synopsis) {
-        synopsis.innerHTML = `<p class="decision-empty">Failed to load decision pathways: ${escapeHtml(err.message || err)}</p>`;
+        synopsis.innerHTML = DOMPurify.sanitize(`<p class="decision-empty">Failed to load decision pathways: ${escapeHtml(err.message || err)}</p>`);
     }
 }
 
