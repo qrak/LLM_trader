@@ -239,13 +239,15 @@ class Crawl4AIEnricher:
 
         enriched = 0
 
+        worker_count = max(1, min(self.concurrency, 6))
+
         browser_cfg = BrowserConfig(headless=True, verbose=False)
         run_cfg = CrawlerRunConfig(
             page_timeout=int(self.timeout * 1000),
             word_count_threshold=5,
             remove_overlay_elements=True,
             remove_consent_popups=True,
-            semaphore_count=max(1, min(self.concurrency, 2)),
+            semaphore_count=worker_count,
             stream=False,
             verbose=False,
             magic=True,
@@ -277,7 +279,6 @@ class Crawl4AIEnricher:
 
         try:
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
-                worker_count = max(1, min(self.concurrency, 2))
                 wave_count = max(1, math.ceil(len(urls) / worker_count))
                 batch_timeout = max(self.timeout * wave_count + 15.0, self.timeout)
                 logger.debug(

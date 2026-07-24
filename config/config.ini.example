@@ -82,7 +82,7 @@ density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
 cooccurrence_multiplier = 1.5
 news_crawl4ai_enabled = true
-news_crawl_timeout = 120
+news_crawl_timeout = 20
 
 # === Exchanges ===
 [exchanges]

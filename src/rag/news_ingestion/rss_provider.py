@@ -161,25 +161,31 @@ class RSSCrawl4AINewsProvider:
         session: aiohttp.ClientSession,
     ) -> list[dict[str, Any]]:
         """Enrich bodies, deduplicate, sort, and map to canonical article schema."""
-        if self.config.RAG_NEWS_PAGE_ENRICHMENT:
+        deduped = dedupe_by_url(merged)
+        sorted_items = sort_by_date(deduped)
+
+        if self.config.RAG_NEWS_PAGE_ENRICHMENT and sorted_items:
             enrich_timeout = max(1, int(self.config.RAG_NEWS_ENRICH_TIMEOUT))
+            max_candidates = max(15, int(getattr(self.config, "RAG_NEWS_LIMIT", 5)) * 3)
+            enrichment_candidates = sorted_items[:max_candidates]
+
             self.logger.info(
                 "Enriching %d news article bodies for better analysis "
                 "(stage timeout=%ss, crawl per-page timeout=%ss).",
-                len(merged),
+                len(enrichment_candidates),
                 enrich_timeout,
                 self.config.RAG_NEWS_CRAWL_TIMEOUT,
             )
             enrich_start = perf_counter()
             try:
                 enriched_count = await asyncio.wait_for(
-                    self._enricher.enrich_items(merged, session),
+                    self._enricher.enrich_items(enrichment_candidates, session),
                     timeout=float(enrich_timeout),
                 )
                 self.logger.debug(
                     "Body enrichment: %d/%d items enriched in %.1fs",
                     enriched_count,
-                    len(merged),
+                    len(enrichment_candidates),
                     perf_counter() - enrich_start,
                 )
             except asyncio.TimeoutError:
@@ -196,8 +202,6 @@ class RSSCrawl4AINewsProvider:
                     exc,
                 )
 
-        deduped = dedupe_by_url(merged)
-        sorted_items = sort_by_date(deduped)
         return [to_article_schema(item) for item in sorted_items]
 
     def filter_by_age(

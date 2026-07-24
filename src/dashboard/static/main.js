@@ -1,5 +1,5 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.5';
-import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.4';
+import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.5';
 import { updateLogs } from './modules/log_viewer.js?v=4.6';
 import { updateVisuals } from './modules/visuals.js?v=4.5';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.7';

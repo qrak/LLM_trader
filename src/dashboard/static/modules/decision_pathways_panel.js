@@ -386,7 +386,6 @@ export async function updateDecisionPathways() {
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        lastPayload = data;
         renderChrome(data);
         updateGraph(data.graph || { nodes: [], edges: [] });
     } catch (e) {
