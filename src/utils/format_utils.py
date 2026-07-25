@@ -29,7 +29,7 @@ DIME_VALUE_THRESHOLD = 0.1
 FULL_PRECISION_THRESHOLD = 10.0
 
 # Characters to remove when cleaning number strings
-CLEAN_NUMBER_CHARS = ('$', '€', '£', '%', ',')
+CLEAN_NUMBER_CHARS = ("$", "€", "£", "%", ",")
 
 
 def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
@@ -42,7 +42,7 @@ def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
 
     Returns: list of datetime objects
     """
-    return pd.to_datetime(timestamps_ms, unit='ms', utc=True).to_pydatetime().tolist()
+    return pd.to_datetime(timestamps_ms, unit="ms", utc=True).to_pydatetime().tolist()
 
 
 class FormatUtils:
@@ -90,7 +90,7 @@ class FormatUtils:
 
         # Remove common currency/percentage symbols and separators
         for char in CLEAN_NUMBER_CHARS:
-            clean = clean.replace(char, '')
+            clean = clean.replace(char, "")
 
         try:
             return float(clean)
@@ -136,7 +136,7 @@ class FormatUtils:
             return f"{val:.2f}"  # 2 decimal places for larger values
         return "N/A"
 
-    def fmt_ta(self, td: dict, key: str, precision: int | None = None, default: str = 'N/A') -> str:
+    def fmt_ta(self, td: dict, key: str, precision: int | None = None, default: str = "N/A") -> str:
         """Format technical-analysis indicator values.
 
         Handles Union[float, str] return from get_indicator_value() which uses
@@ -205,8 +205,8 @@ class FormatUtils:
             Unix timestamp in seconds, or 0.0 if conversion fails
         """
         try:
-            if iso_str.endswith('Z'):
-                iso_str = iso_str[:-1] + '+00:00'
+            if iso_str.endswith("Z"):
+                iso_str = iso_str[:-1] + "+00:00"
             return datetime.fromisoformat(iso_str).timestamp()
         except (ValueError, TypeError, AttributeError):
             return 0.0
@@ -247,14 +247,14 @@ class FormatUtils:
     def get_supertrend_direction_string(self, direction) -> str:
         """Get supertrend direction as string."""
         if direction > 0:
-            return 'Bullish'
+            return "Bullish"
         if direction < 0:
-            return 'Bearish'
-        return 'Neutral'
+            return "Bearish"
+        return "Neutral"
 
     def format_bollinger_interpretation(self, td: dict) -> str:
         """Format Bollinger Bands interpretation."""
-        bb_position = get_indicator_value(td, 'bb_position')
+        bb_position = get_indicator_value(td, "bb_position")
         if isinstance(bb_position, (int, float)):
             if bb_position > 0.8:
                 return " [Near upper band - possible overbought]"
@@ -265,7 +265,7 @@ class FormatUtils:
 
     def format_cmf_interpretation(self, td: dict) -> str:
         """Format Chaikin Money Flow interpretation."""
-        cmf_val = get_indicator_value(td, 'cmf')
+        cmf_val = get_indicator_value(td, "cmf")
         if isinstance(cmf_val, (int, float)):
             if cmf_val > 0.1:
                 return " [Accumulation phase]"

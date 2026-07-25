@@ -89,10 +89,9 @@ class IndicatorPatternEngine:
 
         if periods_ago == 0:
             return "now" + timestamp_str
-        elif periods_ago == 1:
+        if periods_ago == 1:
             return "1 period ago" + timestamp_str
-        else:
-            return f"{periods_ago} periods ago" + timestamp_str
+        return f"{periods_ago} periods ago" + timestamp_str
 
     def detect_patterns(
         self,
@@ -124,13 +123,13 @@ class IndicatorPatternEngine:
             }
         """
         patterns = {
-            'rsi': [],
-            'macd': [],
-            'divergence': [],
-            'volatility': [],
-            'stochastic': [],
-            'ma_crossover': [],
-            'volume': []
+            "rsi": [],
+            "macd": [],
+            "divergence": [],
+            "volatility": [],
+            "stochastic": [],
+            "ma_crossover": [],
+            "volume": []
         }
 
         # Validate array alignment before pattern detection
@@ -149,23 +148,23 @@ class IndicatorPatternEngine:
             volume = ohlcv_data[:, 5]  # Volume (column 5)
 
         # RSI Patterns
-        if 'rsi' in technical_history:
+        if "rsi" in technical_history:
             rsi_patterns = self._detect_rsi_patterns(
-                technical_history['rsi'],
+                technical_history["rsi"],
                 prices,
                 timestamps
             )
-            patterns['rsi'].extend(rsi_patterns)
+            patterns["rsi"].extend(rsi_patterns)
 
         # MACD Patterns
-        if 'macd_line' in technical_history and 'macd_signal' in technical_history:
+        if "macd_line" in technical_history and "macd_signal" in technical_history:
             macd_patterns = self._detect_macd_patterns(
-                technical_history['macd_line'],
-                technical_history['macd_signal'],
-                technical_history.get('macd_hist'),
+                technical_history["macd_line"],
+                technical_history["macd_signal"],
+                technical_history.get("macd_hist"),
                 timestamps
             )
-            patterns['macd'].extend(macd_patterns)
+            patterns["macd"].extend(macd_patterns)
 
         # Divergence Patterns
         if prices is not None:
@@ -174,32 +173,32 @@ class IndicatorPatternEngine:
                 technical_history,
                 timestamps
             )
-            patterns['divergence'].extend(divergence_patterns)
+            patterns["divergence"].extend(divergence_patterns)
 
         # Volatility Patterns
         volatility_patterns = self._detect_volatility_patterns(
             technical_history,
             timestamps
         )
-        patterns['volatility'].extend(volatility_patterns)
+        patterns["volatility"].extend(volatility_patterns)
 
         # Stochastic Patterns
-        if 'stoch_k' in technical_history and 'stoch_d' in technical_history:
+        if "stoch_k" in technical_history and "stoch_d" in technical_history:
             stoch_patterns = self._detect_stochastic_patterns(
-                technical_history['stoch_k'],
-                technical_history['stoch_d'],
+                technical_history["stoch_k"],
+                technical_history["stoch_d"],
                 timestamps
             )
-            patterns['stochastic'].extend(stoch_patterns)
+            patterns["stochastic"].extend(stoch_patterns)
 
         # MA Crossover Patterns (uses SMA arrays from technical_history if available)
-        if long_term_sma_values is not None or any(k in technical_history for k in ['sma_20', 'sma_50', 'sma_200']):
+        if long_term_sma_values is not None or any(k in technical_history for k in ["sma_20", "sma_50", "sma_200"]):
             ma_patterns = self._detect_ma_crossover_patterns(
                 long_term_sma_values if long_term_sma_values is not None else {},
                 technical_history,
                 timestamps
             )
-            patterns['ma_crossover'].extend(ma_patterns)
+            patterns["ma_crossover"].extend(ma_patterns)
 
         # Volume Patterns
         if volume is not None and prices is not None:
@@ -208,7 +207,7 @@ class IndicatorPatternEngine:
                 prices,
                 timestamps
             )
-            patterns['volume'].extend(volume_patterns)
+            patterns["volume"].extend(volume_patterns)
 
         return patterns
 
@@ -232,14 +231,14 @@ class IndicatorPatternEngine:
             confidence = min(100, int(50 + (30 - rsi_value) * 2.5))
 
             patterns.append({
-                'type': 'rsi_oversold',
-                'description': f'RSI oversold at {rsi_value:.2f} {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'rsi_value': float(rsi_value),
-                    'threshold': 30.0,
-                    'periods_ago': int(periods_ago)
+                "type": "rsi_oversold",
+                "description": f"RSI oversold at {rsi_value:.2f} {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "rsi_value": float(rsi_value),
+                    "threshold": 30.0,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -254,14 +253,14 @@ class IndicatorPatternEngine:
             confidence = min(100, int(50 + (rsi_value - 70) * 2.5))
 
             patterns.append({
-                'type': 'rsi_overbought',
-                'description': f'RSI overbought at {rsi_value:.2f} {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'rsi_value': float(rsi_value),
-                    'threshold': 70.0,
-                    'periods_ago': int(periods_ago)
+                "type": "rsi_overbought",
+                "description": f"RSI overbought at {rsi_value:.2f} {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "rsi_value": float(rsi_value),
+                    "threshold": 70.0,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -272,14 +271,14 @@ class IndicatorPatternEngine:
             )
             if found:
                 patterns.append({
-                    'type': 'rsi_w_bottom',
-                    'description': 'RSI W-Bottom detected (bullish reversal confirmation)',
-                    'index': len(rsi) - 1,
-                    'details': {
-                        'first_rsi': float(first_rsi),
-                        'second_rsi': float(second_rsi),
-                        'first_idx': int(first_idx),
-                        'second_idx': int(second_idx)
+                    "type": "rsi_w_bottom",
+                    "description": "RSI W-Bottom detected (bullish reversal confirmation)",
+                    "index": len(rsi) - 1,
+                    "details": {
+                        "first_rsi": float(first_rsi),
+                        "second_rsi": float(second_rsi),
+                        "first_idx": int(first_idx),
+                        "second_idx": int(second_idx)
                     }
                 })
 
@@ -290,14 +289,14 @@ class IndicatorPatternEngine:
             )
             if found:
                 patterns.append({
-                    'type': 'rsi_m_top',
-                    'description': 'RSI M-Top detected (bearish reversal confirmation)',
-                    'index': len(rsi) - 1,
-                    'details': {
-                        'first_rsi': float(first_rsi),
-                        'second_rsi': float(second_rsi),
-                        'first_idx': int(first_idx),
-                        'second_idx': int(second_idx)
+                    "type": "rsi_m_top",
+                    "description": "RSI M-Top detected (bearish reversal confirmation)",
+                    "index": len(rsi) - 1,
+                    "details": {
+                        "first_rsi": float(first_rsi),
+                        "second_rsi": float(second_rsi),
+                        "first_idx": int(first_idx),
+                        "second_idx": int(second_idx)
                     }
                 })
 
@@ -318,7 +317,7 @@ class IndicatorPatternEngine:
             macd_line, signal_line
         )
         if found:
-            crossover_type = 'bullish' if is_bullish else 'bearish'
+            crossover_type = "bullish" if is_bullish else "bearish"
             pattern_index = len(macd_line) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
 
@@ -328,32 +327,32 @@ class IndicatorPatternEngine:
             confidence = min(100, int(50 + (macd_diff / macd_magnitude) * 50))
 
             patterns.append({
-                'type': f'macd_{crossover_type}_crossover',
-                'description': f'MACD {crossover_type} crossover {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'is_bullish': is_bullish,
-                    'macd_value': float(macd_val),
-                    'signal_value': float(signal_val),
-                    'periods_ago': int(periods_ago)
+                "type": f"macd_{crossover_type}_crossover",
+                "description": f"MACD {crossover_type} crossover {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "is_bullish": is_bullish,
+                    "macd_value": float(macd_val),
+                    "signal_value": float(signal_val),
+                    "periods_ago": int(periods_ago)
                 }
             })
 
         # Zero-line cross
         found, is_bullish, periods_ago, macd_val = detect_macd_zero_cross_numba(macd_line)
         if found:
-            cross_type = 'bullish' if is_bullish else 'bearish'
+            cross_type = "bullish" if is_bullish else "bearish"
             pattern_index = len(macd_line) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
             patterns.append({
-                'type': f'macd_{cross_type}_zero_cross',
-                'description': f'MACD {cross_type} zero-line cross {timestamp_str}',
-                'index': pattern_index,
-                'details': {
-                    'is_bullish': is_bullish,
-                    'macd_value': float(macd_val),
-                    'periods_ago': int(periods_ago)
+                "type": f"macd_{cross_type}_zero_cross",
+                "description": f"MACD {cross_type} zero-line cross {timestamp_str}",
+                "index": pattern_index,
+                "details": {
+                    "is_bullish": is_bullish,
+                    "macd_value": float(macd_val),
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -361,17 +360,17 @@ class IndicatorPatternEngine:
         if macd_hist is not None:
             hist_trend = get_macd_histogram_trend_numba(macd_hist)
             if hist_trend != 0:
-                trend_name = 'increasing' if hist_trend > 0 else 'decreasing'
+                trend_name = "increasing" if hist_trend > 0 else "decreasing"
                 pattern_index = len(macd_hist) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 patterns.append({
-                    'type': f'macd_histogram_{trend_name}',
-                    'description': f'MACD histogram {trend_name} (momentum shift) {timestamp_str}',
-                    'index': pattern_index,
-                    'details': {
-                        'trend': int(hist_trend),
-                        'current_hist': float(macd_hist[-1]),
-                        'periods_ago': 0
+                    "type": f"macd_histogram_{trend_name}",
+                    "description": f"MACD histogram {trend_name} (momentum shift) {timestamp_str}",
+                    "index": pattern_index,
+                    "details": {
+                        "trend": int(hist_trend),
+                        "current_hist": float(macd_hist[-1]),
+                        "periods_ago": 0
                     }
                 })
 
@@ -419,34 +418,33 @@ class IndicatorPatternEngine:
 
         timestamp_str = self._format_pattern_time(periods_ago, second_idx, timestamps)
         if is_bullish:
-            if indicator_name == 'rsi':
-                description = f'RSI Bullish Divergence: Price lower low (${second_p:.2f}), RSI higher low ({second_i:.2f}) {timestamp_str}'
+            if indicator_name == "rsi":
+                description = f"RSI Bullish Divergence: Price lower low (${second_p:.2f}), RSI higher low ({second_i:.2f}) {timestamp_str}"
             else:
-                description = f'MACD Bullish Divergence: Price lower low, MACD higher low {timestamp_str}'
+                description = f"MACD Bullish Divergence: Price lower low, MACD higher low {timestamp_str}"
+        elif indicator_name == "rsi":
+            description = f"RSI Bearish Divergence: Price higher high (${second_p:.2f}), RSI lower high ({second_i:.2f}) {timestamp_str}"
         else:
-            if indicator_name == 'rsi':
-                description = f'RSI Bearish Divergence: Price higher high (${second_p:.2f}), RSI lower high ({second_i:.2f}) {timestamp_str}'
-            else:
-                description = f'MACD Bearish Divergence: Price higher high, MACD lower high {timestamp_str}'
+            description = f"MACD Bearish Divergence: Price higher high, MACD lower high {timestamp_str}"
         # Calculate confidence based on price difference magnitude
         # Larger price divergences with opposing indicator moves = higher confidence
         price_diff_pct = abs((second_p - first_p) / first_p * 100) if first_p != 0 else 0
         # Base confidence 50%, +5% per 1% price difference, capped at 100%
         confidence = min(100, int(50 + price_diff_pct * 5))
         return {
-            'type': pattern_type,
-            'description': description,
-            'index': second_idx,
-            'confidence': confidence,
-            'details': {
-                'indicator': indicator_name,
-                'first_price': float(first_p),
-                'second_price': float(second_p),
-                'first_indicator': float(first_i),
-                'second_indicator': float(second_i),
-                'first_idx': int(first_idx),
-                'second_idx': int(second_idx),
-                'periods_ago': periods_ago
+            "type": pattern_type,
+            "description": description,
+            "index": second_idx,
+            "confidence": confidence,
+            "details": {
+                "indicator": indicator_name,
+                "first_price": float(first_p),
+                "second_price": float(second_p),
+                "first_indicator": float(first_i),
+                "second_indicator": float(second_i),
+                "first_idx": int(first_idx),
+                "second_idx": int(second_idx),
+                "periods_ago": periods_ago
             }
         }
 
@@ -461,15 +459,15 @@ class IndicatorPatternEngine:
         data_length = len(prices)
 
         # RSI Divergences
-        if 'rsi' in technical_history:
-            rsi = technical_history['rsi']
+        if "rsi" in technical_history:
+            rsi = technical_history["rsi"]
 
             # Bullish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bullish_divergence_numba(prices, rsi)
             if found:
                 patterns.append(self._create_divergence_pattern(
-                    'rsi_bullish_divergence', 'rsi', True,
+                    "rsi_bullish_divergence", "rsi", True,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
 
@@ -478,20 +476,20 @@ class IndicatorPatternEngine:
                 detect_bearish_divergence_numba(prices, rsi)
             if found:
                 patterns.append(self._create_divergence_pattern(
-                    'rsi_bearish_divergence', 'rsi', False,
+                    "rsi_bearish_divergence", "rsi", False,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
 
         # MACD Divergences
-        if 'macd_line' in technical_history:
-            macd = technical_history['macd_line']
+        if "macd_line" in technical_history:
+            macd = technical_history["macd_line"]
 
             # Bullish divergence
             found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
                 detect_bullish_divergence_numba(prices, macd)
             if found:
                 patterns.append(self._create_divergence_pattern(
-                    'macd_bullish_divergence', 'macd', True,
+                    "macd_bullish_divergence", "macd", True,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
 
@@ -500,7 +498,7 @@ class IndicatorPatternEngine:
                 detect_bearish_divergence_numba(prices, macd)
             if found:
                 patterns.append(self._create_divergence_pattern(
-                    'macd_bearish_divergence', 'macd', False,
+                    "macd_bearish_divergence", "macd", False,
                     first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
                 ))
 
@@ -515,8 +513,8 @@ class IndicatorPatternEngine:
         patterns = []
 
         # ATR Spike
-        if 'atr' in technical_history:
-            atr = technical_history['atr']
+        if "atr" in technical_history:
+            atr = technical_history["atr"]
             found, _, current_atr, avg_atr = detect_atr_spike_numba(atr)
             if found:
                 pattern_index = len(atr) - 1
@@ -525,42 +523,42 @@ class IndicatorPatternEngine:
                 # Confidence based on spike ratio: 1.5x -> 50%, 2x -> 75%, 2.5x+ -> 100%
                 confidence = min(100, int(25 + spike_ratio * 25))
                 patterns.append({
-                    'type': 'atr_spike',
-                    'description': f'ATR spike detected: {current_atr:.4f} vs avg {avg_atr:.4f} {timestamp_str}',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'current_atr': float(current_atr),
-                        'average_atr': float(avg_atr),
-                        'spike_ratio': float(spike_ratio),
-                        'periods_ago': 0
+                    "type": "atr_spike",
+                    "description": f"ATR spike detected: {current_atr:.4f} vs avg {avg_atr:.4f} {timestamp_str}",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "current_atr": float(current_atr),
+                        "average_atr": float(avg_atr),
+                        "spike_ratio": float(spike_ratio),
+                        "periods_ago": 0
                     }
                 })
 
             # Volatility trend
             vol_trend = detect_volatility_trend_numba(atr)
             if vol_trend != 0:
-                trend_name = 'increasing' if vol_trend > 0 else 'decreasing'
+                trend_name = "increasing" if vol_trend > 0 else "decreasing"
                 pattern_index = len(atr) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 # Volatility trend is moderately reliable - base confidence 65%
                 confidence = 65
                 patterns.append({
-                    'type': f'volatility_{trend_name}',
-                    'description': f'Volatility {trend_name} {timestamp_str}',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'trend': int(vol_trend),
-                        'current_atr': float(atr[-1]),
-                        'periods_ago': 0
+                    "type": f"volatility_{trend_name}",
+                    "description": f"Volatility {trend_name} {timestamp_str}",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "trend": int(vol_trend),
+                        "current_atr": float(atr[-1]),
+                        "periods_ago": 0
                     }
                 })
 
         # Bollinger Band Squeeze
-        if 'bb_upper' in technical_history and 'bb_lower' in technical_history:
-            bb_upper = technical_history['bb_upper']
-            bb_lower = technical_history['bb_lower']
+        if "bb_upper" in technical_history and "bb_lower" in technical_history:
+            bb_upper = technical_history["bb_upper"]
+            bb_lower = technical_history["bb_lower"]
             found, current_width, percentile_width = detect_bb_squeeze_numba(
                 bb_upper, bb_lower
             )
@@ -571,38 +569,38 @@ class IndicatorPatternEngine:
                 # percentile_width of 0.1 -> 90%, 0.2 -> 80%, etc.
                 confidence = min(100, int(100 - percentile_width * 100))
                 patterns.append({
-                    'type': 'bb_squeeze',
-                    'description': f'Bollinger Band squeeze detected (low volatility, breakout imminent) {timestamp_str}',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'current_width': float(current_width),
-                        'percentile_width': float(percentile_width),
-                        'periods_ago': 0
+                    "type": "bb_squeeze",
+                    "description": f"Bollinger Band squeeze detected (low volatility, breakout imminent) {timestamp_str}",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "current_width": float(current_width),
+                        "percentile_width": float(percentile_width),
+                        "periods_ago": 0
                     }
                 })
 
         # TTM Squeeze (Bollinger Bands inside Keltner Channels)
-        if all(k in technical_history for k in ['bb_upper', 'bb_lower', 'kc_upper', 'kc_lower']):
+        if all(k in technical_history for k in ["bb_upper", "bb_lower", "kc_upper", "kc_lower"]):
             found = detect_keltner_squeeze_numba(
-                technical_history['kc_upper'],
-                technical_history['kc_lower'],
-                technical_history['bb_upper'],
-                technical_history['bb_lower']
+                technical_history["kc_upper"],
+                technical_history["kc_lower"],
+                technical_history["bb_upper"],
+                technical_history["bb_lower"]
             )
             if found:
-                pattern_index = len(technical_history['bb_upper']) - 1
+                pattern_index = len(technical_history["bb_upper"]) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 # TTM squeeze is a high-confidence volatility signal
                 confidence = 85
                 patterns.append({
-                    'type': 'ttm_squeeze',
-                    'description': f'TTM Squeeze detected (extreme low volatility) {timestamp_str}',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'squeeze_type': 'ttm',
-                        'periods_ago': 0
+                    "type": "ttm_squeeze",
+                    "description": f"TTM Squeeze detected (extreme low volatility) {timestamp_str}",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "squeeze_type": "ttm",
+                        "periods_ago": 0
                     }
                 })
 
@@ -626,14 +624,14 @@ class IndicatorPatternEngine:
             # Stoch 20 -> 50%, Stoch 10 -> 75%, Stoch 0 -> 100%
             confidence = min(100, int(50 + (20 - stoch_value) * 2.5))
             patterns.append({
-                'type': 'stoch_oversold',
-                'description': f'Stochastic oversold at {stoch_value:.2f} {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'stoch_k_value': float(stoch_value),
-                    'threshold': 20.0,
-                    'periods_ago': int(periods_ago)
+                "type": "stoch_oversold",
+                "description": f"Stochastic oversold at {stoch_value:.2f} {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "stoch_k_value": float(stoch_value),
+                    "threshold": 20.0,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -646,14 +644,14 @@ class IndicatorPatternEngine:
             # Stoch 80 -> 50%, Stoch 90 -> 75%, Stoch 100 -> 100%
             confidence = min(100, int(50 + (stoch_value - 80) * 2.5))
             patterns.append({
-                'type': 'stoch_overbought',
-                'description': f'Stochastic overbought at {stoch_value:.2f} {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'stoch_k_value': float(stoch_value),
-                    'threshold': 80.0,
-                    'periods_ago': int(periods_ago)
+                "type": "stoch_overbought",
+                "description": f"Stochastic overbought at {stoch_value:.2f} {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "stoch_k_value": float(stoch_value),
+                    "threshold": 80.0,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -662,21 +660,21 @@ class IndicatorPatternEngine:
         if found:
             pattern_index = len(stoch_k) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-            desc = f'Stochastic bullish crossover {timestamp_str}'
+            desc = f"Stochastic bullish crossover {timestamp_str}"
             if in_oversold:
-                desc += ' in oversold territory (strong signal)'
+                desc += " in oversold territory (strong signal)"
             # Confidence: base 60%, bonus +20% if in oversold zone
             confidence = 80 if in_oversold else 60
             patterns.append({
-                'type': 'stoch_bullish_crossover',
-                'description': desc,
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'stoch_k': float(k_val),
-                    'stoch_d': float(d_val),
-                    'in_oversold': in_oversold,
-                    'periods_ago': int(periods_ago)
+                "type": "stoch_bullish_crossover",
+                "description": desc,
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "stoch_k": float(k_val),
+                    "stoch_d": float(d_val),
+                    "in_oversold": in_oversold,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -685,21 +683,21 @@ class IndicatorPatternEngine:
         if found:
             pattern_index = len(stoch_k) - 1 - periods_ago
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
-            desc = f'Stochastic bearish crossover {timestamp_str}'
+            desc = f"Stochastic bearish crossover {timestamp_str}"
             if in_overbought:
-                desc += ' in overbought territory (strong signal)'
+                desc += " in overbought territory (strong signal)"
             # Confidence: base 60%, bonus +20% if in overbought zone
             confidence = 80 if in_overbought else 60
             patterns.append({
-                'type': 'stoch_bearish_crossover',
-                'description': desc,
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'stoch_k': float(k_val),
-                    'stoch_d': float(d_val),
-                    'in_overbought': in_overbought,
-                    'periods_ago': int(periods_ago)
+                "type": "stoch_bearish_crossover",
+                "description": desc,
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "stoch_k": float(k_val),
+                    "stoch_d": float(d_val),
+                    "in_overbought": in_overbought,
+                    "periods_ago": int(periods_ago)
                 }
             })
 
@@ -715,9 +713,9 @@ class IndicatorPatternEngine:
         patterns = []
 
         # Try to use SMA arrays from technical_history first (preferred for crossover detection)
-        sma_20_array = technical_history.get('sma_20')
-        sma_50_array = technical_history.get('sma_50')
-        sma_200_array = technical_history.get('sma_200')
+        sma_20_array = technical_history.get("sma_20")
+        sma_50_array = technical_history.get("sma_50")
+        sma_200_array = technical_history.get("sma_200")
 
         # If sma_values not provided but we have arrays, populate from current array values
         if (sma_values is None or len(sma_values) == 0) and (sma_50_array is not None or sma_200_array is not None):
@@ -742,14 +740,14 @@ class IndicatorPatternEngine:
                 confidence = min(100, int(50 + pct_separation * 10))
 
                 patterns.append({
-                    'type': 'golden_cross',
-                    'description': f'Golden Cross: 50 SMA crossed above 200 SMA {timestamp_str} (bullish long-term signal)',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'sma_50': float(sma_50_val),
-                        'sma_200': float(sma_200_val),
-                        'periods_ago': int(periods_ago)
+                    "type": "golden_cross",
+                    "description": f"Golden Cross: 50 SMA crossed above 200 SMA {timestamp_str} (bullish long-term signal)",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "sma_50": float(sma_50_val),
+                        "sma_200": float(sma_200_val),
+                        "periods_ago": int(periods_ago)
                     }
                 })
 
@@ -764,14 +762,14 @@ class IndicatorPatternEngine:
                 confidence = min(100, int(50 + pct_separation * 10))
 
                 patterns.append({
-                    'type': 'death_cross',
-                    'description': f'Death Cross: 50 SMA crossed below 200 SMA {timestamp_str} (bearish long-term signal)',
-                    'index': pattern_index,
-                    'confidence': confidence,
-                    'details': {
-                        'sma_50': float(sma_50_val),
-                        'sma_200': float(sma_200_val),
-                        'periods_ago': int(periods_ago)
+                    "type": "death_cross",
+                    "description": f"Death Cross: 50 SMA crossed below 200 SMA {timestamp_str} (bearish long-term signal)",
+                    "index": pattern_index,
+                    "confidence": confidence,
+                    "details": {
+                        "sma_50": float(sma_50_val),
+                        "sma_200": float(sma_200_val),
+                        "periods_ago": int(periods_ago)
                     }
                 })
 
@@ -780,18 +778,18 @@ class IndicatorPatternEngine:
         if sma_20_array is not None and sma_50_array is not None:
             found, is_bullish, periods_ago, sma_20_val, sma_50_val = detect_short_term_crossover_numba(sma_20_array, sma_50_array)
             if found:
-                cross_type = 'bull' if is_bullish else 'bear'
+                cross_type = "bull" if is_bullish else "bear"
                 pattern_index = len(sma_20_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
                 patterns.append({
-                    'type': f'ma_short_term_{cross_type}_crossover',
-                    'description': f'20 SMA crossed {"above" if is_bullish else "below"} 50 SMA {timestamp_str} ({cross_type} short-term signal)',
-                    'index': pattern_index,
-                    'details': {
-                        'is_bullish': is_bullish,
-                        'sma_20': float(sma_20_val),
-                        'sma_50': float(sma_50_val),
-                        'periods_ago': int(periods_ago)
+                    "type": f"ma_short_term_{cross_type}_crossover",
+                    "description": f'20 SMA crossed {"above" if is_bullish else "below"} 50 SMA {timestamp_str} ({cross_type} short-term signal)',
+                    "index": pattern_index,
+                    "details": {
+                        "is_bullish": is_bullish,
+                        "sma_20": float(sma_20_val),
+                        "sma_50": float(sma_50_val),
+                        "periods_ago": int(periods_ago)
                     }
                 })
 
@@ -802,30 +800,30 @@ class IndicatorPatternEngine:
             sma_200 = sma_values[200]
 
             # Bullish alignment: 20 > 50 > 200
-            if sma_20 > sma_50 and sma_50 > sma_200:
+            if sma_20 > sma_50 > sma_200:
                 patterns.append({
-                    'type': 'ma_bullish_alignment',
-                    'description': 'Bullish MA alignment (20>50>200 SMA) - current configuration',
-                    'index': 0,
-                    'details': {
-                        'sma_20': float(sma_20),
-                        'sma_50': float(sma_50),
-                        'sma_200': float(sma_200),
-                        'periods_ago': 0
+                    "type": "ma_bullish_alignment",
+                    "description": "Bullish MA alignment (20>50>200 SMA) - current configuration",
+                    "index": 0,
+                    "details": {
+                        "sma_20": float(sma_20),
+                        "sma_50": float(sma_50),
+                        "sma_200": float(sma_200),
+                        "periods_ago": 0
                     }
                 })
 
             # Bearish alignment: 20 < 50 < 200
-            elif sma_20 < sma_50 and sma_50 < sma_200:
+            elif sma_20 < sma_50 < sma_200:
                 patterns.append({
-                    'type': 'ma_bearish_alignment',
-                    'description': 'Bearish MA alignment (20<50<200 SMA) - current configuration',
-                    'index': 0,
-                    'details': {
-                        'sma_20': float(sma_20),
-                        'sma_50': float(sma_50),
-                        'sma_200': float(sma_200),
-                        'periods_ago': 0
+                    "type": "ma_bearish_alignment",
+                    "description": "Bearish MA alignment (20<50<200 SMA) - current configuration",
+                    "index": 0,
+                    "details": {
+                        "sma_20": float(sma_20),
+                        "sma_50": float(sma_50),
+                        "sma_200": float(sma_200),
+                        "periods_ago": 0
                     }
                 })
 
@@ -841,26 +839,26 @@ class IndicatorPatternEngine:
             if pct_distance < 2.0:
                 if sma_50 > sma_200:
                     patterns.append({
-                        'type': 'golden_cross_active',
-                        'description': 'Golden Cross active: 50 SMA above 200 SMA (bullish) - current configuration',
-                        'index': 0,
-                        'details': {
-                            'sma_50': float(sma_50),
-                            'sma_200': float(sma_200),
-                            'pct_distance': float(pct_distance),
-                            'periods_ago': 0
+                        "type": "golden_cross_active",
+                        "description": "Golden Cross active: 50 SMA above 200 SMA (bullish) - current configuration",
+                        "index": 0,
+                        "details": {
+                            "sma_50": float(sma_50),
+                            "sma_200": float(sma_200),
+                            "pct_distance": float(pct_distance),
+                            "periods_ago": 0
                         }
                     })
                 else:
                     patterns.append({
-                        'type': 'death_cross_active',
-                        'description': 'Death Cross active: 50 SMA below 200 SMA (bearish) - current configuration',
-                        'index': 0,
-                        'details': {
-                            'sma_50': float(sma_50),
-                            'sma_200': float(sma_200),
-                            'pct_distance': float(pct_distance),
-                            'periods_ago': 0
+                        "type": "death_cross_active",
+                        "description": "Death Cross active: 50 SMA below 200 SMA (bearish) - current configuration",
+                        "index": 0,
+                        "details": {
+                            "sma_50": float(sma_50),
+                            "sma_200": float(sma_200),
+                            "pct_distance": float(pct_distance),
+                            "periods_ago": 0
                         }
                     })
 
@@ -883,15 +881,15 @@ class IndicatorPatternEngine:
             # Confidence based on spike ratio: 1.5x -> 50%, 2.5x -> 75%, 3.5x+ -> 100%
             confidence = min(100, int(50 + (spike_ratio - 1.5) * 25))
             patterns.append({
-                'type': 'volume_spike',
-                'description': f'Volume spike: {spike_ratio:.2f}x average ({current_vol:.0f} vs {avg_vol:.0f}) {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'current_volume': float(current_vol),
-                    'average_volume': float(avg_vol),
-                    'spike_ratio': float(spike_ratio),
-                    'periods_ago': 0
+                "type": "volume_spike",
+                "description": f"Volume spike: {spike_ratio:.2f}x average ({current_vol:.0f} vs {avg_vol:.0f}) {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "current_volume": float(current_vol),
+                    "average_volume": float(avg_vol),
+                    "spike_ratio": float(spike_ratio),
+                    "periods_ago": 0
                 }
             })
 
@@ -903,15 +901,15 @@ class IndicatorPatternEngine:
             # Confidence based on dryup severity: 0.5x -> 50%, 0.3x -> 70%, 0.1x -> 90%
             confidence = min(100, int(50 + (0.5 - dryup_ratio) * 100))
             patterns.append({
-                'type': 'volume_dryup',
-                'description': f'Volume dry-up: {dryup_ratio:.2f}x average (potential breakout setup) {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'current_volume': float(current_vol),
-                    'average_volume': float(avg_vol),
-                    'dryup_ratio': float(dryup_ratio),
-                    'periods_ago': 0
+                "type": "volume_dryup",
+                "description": f"Volume dry-up: {dryup_ratio:.2f}x average (potential breakout setup) {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "current_volume": float(current_vol),
+                    "average_volume": float(avg_vol),
+                    "dryup_ratio": float(dryup_ratio),
+                    "periods_ago": 0
                 }
             })
 
@@ -923,67 +921,67 @@ class IndicatorPatternEngine:
             # Climax volume is extreme - confidence based on ratio: 3x -> 60%, 4x -> 80%, 5x+ -> 100%
             confidence = min(100, int(40 + climax_ratio * 12))
             patterns.append({
-                'type': 'climax_volume',
-                'description': f'Climax volume: {climax_ratio:.2f}x average (potential exhaustion) {timestamp_str}',
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'current_volume': float(current_vol),
-                    'average_volume': float(avg_vol),
-                    'climax_ratio': float(climax_ratio),
-                    'periods_ago': 0
+                "type": "climax_volume",
+                "description": f"Climax volume: {climax_ratio:.2f}x average (potential exhaustion) {timestamp_str}",
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "current_volume": float(current_vol),
+                    "average_volume": float(avg_vol),
+                    "climax_ratio": float(climax_ratio),
+                    "periods_ago": 0
                 }
             })
 
         # Volume-price divergence
         found, is_bearish, price_chg, vol_chg = detect_volume_price_divergence_numba(volume, prices)
         if found:
-            div_type = 'bearish' if is_bearish else 'bullish'
+            div_type = "bearish" if is_bearish else "bullish"
             pattern_index = len(volume) - 1
             timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-            desc = f'{div_type.capitalize()} volume-price divergence'
+            desc = f"{div_type.capitalize()} volume-price divergence"
             if is_bearish:
-                desc += f' (price rising, volume falling - weak rally) {timestamp_str}'
+                desc += f" (price rising, volume falling - weak rally) {timestamp_str}"
             else:
-                desc += f' (price falling, volume falling - weak selloff) {timestamp_str}'
+                desc += f" (price falling, volume falling - weak selloff) {timestamp_str}"
 
             # Confidence based on divergence magnitude
             vol_divergence = abs(vol_chg)
             confidence = min(100, int(50 + vol_divergence * 2))
             patterns.append({
-                'type': f'volume_price_divergence_{div_type}',
-                'description': desc,
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'is_bearish': is_bearish,
-                    'price_change_pct': float(price_chg),
-                    'volume_change_pct': float(vol_chg),
-                    'periods_ago': 0
+                "type": f"volume_price_divergence_{div_type}",
+                "description": desc,
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "is_bearish": is_bearish,
+                    "price_change_pct": float(price_chg),
+                    "volume_change_pct": float(vol_chg),
+                    "periods_ago": 0
                 }
             })
 
         # Accumulation/Distribution
         found, is_accumulation, strength, up_vol_ratio = detect_accumulation_distribution_numba(volume, prices)
         if found:
-            phase = 'Accumulation' if is_accumulation else 'Distribution'
+            phase = "Accumulation" if is_accumulation else "Distribution"
             pattern_index = len(volume) - 1
             timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-            desc = f'{phase} detected (strength: {strength:.2f}) over last 10 periods {timestamp_str}'
+            desc = f"{phase} detected (strength: {strength:.2f}) over last 10 periods {timestamp_str}"
 
             # Confidence based on strength metric (typically 0-1 scale)
             confidence = min(100, int(50 + strength * 50))
             patterns.append({
-                'type': f'volume_{phase.lower()}',
-                'description': desc,
-                'index': pattern_index,
-                'confidence': confidence,
-                'details': {
-                    'is_accumulation': is_accumulation,
-                    'strength': float(strength),
-                    'up_volume_ratio': float(up_vol_ratio),
-                    'lookback_periods': 10,
-                    'periods_ago': 0
+                "type": f"volume_{phase.lower()}",
+                "description": desc,
+                "index": pattern_index,
+                "confidence": confidence,
+                "details": {
+                    "is_accumulation": is_accumulation,
+                    "strength": float(strength),
+                    "up_volume_ratio": float(up_vol_ratio),
+                    "lookback_periods": 10,
+                    "periods_ago": 0
                 }
             })
 

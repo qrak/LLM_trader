@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
 
 # Define constant action sets for efficient membership testing
-ENTRY_ACTIONS = {'BUY', 'SELL'}
-EXIT_ACTIONS = {'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'}
+ENTRY_ACTIONS = {"BUY", "SELL"}
+EXIT_ACTIONS = {"CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
 
 
 class BaseNotifier(ABC):
@@ -114,24 +114,24 @@ class BaseNotifier(ABC):
         Returns: tuple of (color_key, emoji)
         """
         color_map = {
-            'BUY': 'green',
-            'SELL': 'red',
-            'HOLD': 'grey',
-            'CLOSE': 'orange',
-            'CLOSE_LONG': 'orange',
-            'CLOSE_SHORT': 'orange',
-            'UPDATE': 'blue',
+            "BUY": "green",
+            "SELL": "red",
+            "HOLD": "grey",
+            "CLOSE": "orange",
+            "CLOSE_LONG": "orange",
+            "CLOSE_SHORT": "orange",
+            "UPDATE": "blue",
         }
         emoji_map = {
-            'BUY': '🟢',
-            'SELL': '🔴',
-            'HOLD': '⚪',
-            'CLOSE': '🟠',
-            'CLOSE_LONG': '🟠',
-            'CLOSE_SHORT': '🟠',
-            'UPDATE': '🔵',
+            "BUY": "🟢",
+            "SELL": "🔴",
+            "HOLD": "⚪",
+            "CLOSE": "🟠",
+            "CLOSE_LONG": "🟠",
+            "CLOSE_SHORT": "🟠",
+            "UPDATE": "🔵",
         }
-        return color_map.get(action, 'grey'), emoji_map.get(action, '📊')
+        return color_map.get(action, "grey"), emoji_map.get(action, "📊")
 
     @staticmethod
     def get_pnl_styling(pnl_pct: float) -> tuple[str, str]:
@@ -143,10 +143,10 @@ class BaseNotifier(ABC):
         Returns: tuple of (color_key, emoji)
         """
         if pnl_pct > 0:
-            return 'green', '📈'
-        elif pnl_pct < 0:
-            return 'red', '📉'
-        return 'grey', '➡️'
+            return "green", "📈"
+        if pnl_pct < 0:
+            return "red", "📉"
+        return "grey", "➡️"
 
 
     def calculate_position_pnl(
@@ -163,7 +163,7 @@ class BaseNotifier(ABC):
         Returns: tuple of (pnl_percent, pnl_quote)
         """
         pnl_pct = position.calculate_pnl(current_price)
-        if position.direction == 'LONG':
+        if position.direction == "LONG":
             pnl_quote = (current_price - position.entry_price) * position.size
         else:
             pnl_quote = (position.entry_price - current_price) * position.size
@@ -184,7 +184,7 @@ class BaseNotifier(ABC):
         """
         if current_price is None or current_price <= 0:
             return 0.0, 0.0
-        if position.direction == 'LONG':
+        if position.direction == "LONG":
             stop_distance_pct = ((position.stop_loss - current_price) / current_price) * 100
             target_distance_pct = ((position.take_profit - current_price) / current_price) * 100
         else:
@@ -212,14 +212,14 @@ class BaseNotifier(ABC):
     @staticmethod
     def _extract_close_reason(decision_dict: dict[str, Any]) -> str | None:
         """Extract close reason from decision metadata or reasoning text."""
-        close_reason = decision_dict.get('close_reason')
+        close_reason = decision_dict.get("close_reason")
         if close_reason:
             return str(close_reason)
 
-        reasoning = str(decision_dict.get('reasoning', ''))
+        reasoning = str(decision_dict.get("reasoning", ""))
         prefix = "Position closed: "
         if reasoning.startswith(prefix):
-            parsed_reason = reasoning[len(prefix):].split('.', 1)[0].strip()
+            parsed_reason = reasoning[len(prefix):].split(".", 1)[0].strip()
             return parsed_reason or None
 
         return None
@@ -229,7 +229,7 @@ class BaseNotifier(ABC):
         """Normalize close reason for user-facing notifications."""
         if not close_reason:
             return None
-        return close_reason.replace('_', ' ').strip().lower()
+        return close_reason.replace("_", " ").strip().lower()
 
     def calculate_performance_stats(
             self,
@@ -254,25 +254,25 @@ class BaseNotifier(ABC):
         last_closed_trade = None
 
         for decision_dict in trade_history:
-            action = decision_dict.get('action', '')
-            price = decision_dict.get('price', 0)
+            action = decision_dict.get("action", "")
+            price = decision_dict.get("price", 0)
 
             if action in ENTRY_ACTIONS:
                 open_position = decision_dict
             elif action in EXIT_ACTIONS and open_position:
-                open_action = open_position.get('action', '')
-                open_price = open_position.get('price', 0)
-                open_quantity = open_position.get('quantity', 0.0)
+                open_action = open_position.get("action", "")
+                open_price = open_position.get("price", 0)
+                open_quantity = open_position.get("quantity", 0.0)
 
-                if open_action == 'BUY':
+                if open_action == "BUY":
                     pnl_pct = ((price - open_price) / open_price) * 100
                     pnl_quote = (price - open_price) * open_quantity
                 else:
                     pnl_pct = ((open_price - price) / open_price) * 100
                     pnl_quote = (open_price - price) * open_quantity
 
-                entry_fee = open_position.get('fee', 0.0)
-                exit_fee = decision_dict.get('fee', 0.0)
+                entry_fee = open_position.get("fee", 0.0)
+                exit_fee = decision_dict.get("fee", 0.0)
 
                 total_fees += entry_fee + exit_fee
                 total_pnl_quote += pnl_quote
@@ -283,10 +283,10 @@ class BaseNotifier(ABC):
                     winning_trades += 1
 
                 last_closed_trade = {
-                    'outcome': 'WIN' if pnl_pct > 0 else 'LOSS' if pnl_pct < 0 else 'BREAKEVEN',
-                    'close_reason': self._format_close_reason(self._extract_close_reason(decision_dict)),
-                    'pnl_pct': pnl_pct,
-                    'pnl_quote': pnl_quote,
+                    "outcome": "WIN" if pnl_pct > 0 else "LOSS" if pnl_pct < 0 else "BREAKEVEN",
+                    "close_reason": self._format_close_reason(self._extract_close_reason(decision_dict)),
+                    "pnl_pct": pnl_pct,
+                    "pnl_quote": pnl_quote,
                 }
                 open_position = None
 
@@ -300,15 +300,15 @@ class BaseNotifier(ABC):
         )
 
         return {
-            'total_pnl_quote': total_pnl_quote,
-            'total_pnl_pct': total_pnl_pct,
-            'total_fees': total_fees,
-            'closed_trades': closed_trades,
-            'winning_trades': winning_trades,
-            'avg_pnl_pct': sum_trade_pnl_pct / closed_trades,
-            'win_rate': (winning_trades / closed_trades) * 100,
-            'net_pnl': total_pnl_quote - total_fees,
-            'last_closed_trade': last_closed_trade,
+            "total_pnl_quote": total_pnl_quote,
+            "total_pnl_pct": total_pnl_pct,
+            "total_fees": total_fees,
+            "closed_trades": closed_trades,
+            "winning_trades": winning_trades,
+            "avg_pnl_pct": sum_trade_pnl_pct / closed_trades,
+            "win_rate": (winning_trades / closed_trades) * 100,
+            "net_pnl": total_pnl_quote - total_fees,
+            "last_closed_trade": last_closed_trade,
         }
 
     @staticmethod
@@ -321,13 +321,13 @@ class BaseNotifier(ABC):
         Returns: dict with extracted fields
         """
         return {
-            'signal': analysis.get('signal', 'UNKNOWN'),
-            'confidence': analysis.get('confidence', 0),
-            'reasoning': analysis.get('reasoning', 'No reasoning provided'),
-            'entry_price': analysis.get('entry_price'),
-            'stop_loss': analysis.get('stop_loss'),
-            'take_profit': analysis.get('take_profit'),
-            'risk_reward_ratio': analysis.get('risk_reward_ratio'),
-            'trend': analysis.get('trend', {}),
-            'key_levels': analysis.get('key_levels', {}),
+            "signal": analysis.get("signal", "UNKNOWN"),
+            "confidence": analysis.get("confidence", 0),
+            "reasoning": analysis.get("reasoning", "No reasoning provided"),
+            "entry_price": analysis.get("entry_price"),
+            "stop_loss": analysis.get("stop_loss"),
+            "take_profit": analysis.get("take_profit"),
+            "risk_reward_ratio": analysis.get("risk_reward_ratio"),
+            "trend": analysis.get("trend", {}),
+            "key_levels": analysis.get("key_levels", {}),
         }

@@ -1,6 +1,6 @@
 """ModelManager - Public API for AI model interactions."""
 import io
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from src.logger.logger import Logger
 from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
 from src.managers.provider_types import ProviderClients, InvocationResult
@@ -135,7 +135,7 @@ class ModelManager:
             try:
                 effective_model = model if model else self.config.LM_STUDIO_MODEL
                 async def print_stream_callback(chunk):
-                    print(chunk, end='', flush=True)
+                    print(chunk, end="", flush=True)
                 response_json = await self._clients.lmstudio.stream_chat_completion(
                     effective_model, messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback
                 )
@@ -155,7 +155,7 @@ class ModelManager:
     async def send_prompt_with_chart_analysis(
         self,
         prompt: str,
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         system_message: str = None,
         provider: str | None = None,
         model: str | None = None

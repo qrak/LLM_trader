@@ -30,7 +30,7 @@ class ProviderMetadata:
 class InvocationResult:
     """Result of a provider invocation attempt."""
     success: bool
-    response: "ChatResponseModel" | None
+    response: ChatResponseModel | None
     provider: str
     model: str
     used_paid_tier: bool = False
@@ -46,8 +46,8 @@ class InvocationResult:
 @dataclass
 class ProviderClients:
     """Container for all AI provider clients (runtime objects, not serializable)."""
-    google: "GoogleAIClient" | None = None
-    google_paid: "GoogleAIClient" | None = None
-    openrouter: "OpenRouterClient" | None = None
-    lmstudio: "LMStudioClient" | None = None
-    blockrun: "BlockRunClient" | None = None
+    google: GoogleAIClient | None = None
+    google_paid: GoogleAIClient | None = None
+    openrouter: OpenRouterClient | None = None
+    lmstudio: LMStudioClient | None = None
+    blockrun: BlockRunClient | None = None

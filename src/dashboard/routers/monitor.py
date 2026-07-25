@@ -37,7 +37,7 @@ class MonitorRouter:
         path = Path(data_dir) / "trading" / "previous_response.json"
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as file:
+                with open(path, encoding="utf-8") as file:
                     return json.load(file)
             except Exception:
                 self.logger.error("Error loading previous response", exc_info=True)
@@ -122,7 +122,7 @@ class MonitorRouter:
 
     def _read_news_file_sync(self, file_path: Path) -> list:
         """Synchronously read and parse a news JSON file."""
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("articles", data)
 

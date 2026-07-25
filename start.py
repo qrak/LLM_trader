@@ -405,10 +405,8 @@ class CompositionRoot:
         news_client = RSSCrawl4AINewsProvider(
             self.logger, self.config,
             enricher=Crawl4AIEnricher(
-                concurrency=self.config.RAG_NEWS_CRAWL_CONCURRENCY,
-                timeout=float(self.config.RAG_NEWS_CRAWL_TIMEOUT),
-                min_chars=self.config.RAG_NEWS_ENRICH_MIN_CHARS,
-                use_crawl4ai=self.config.RAG_NEWS_CRAWL4AI_ENABLED,
+                logger=self.logger,
+                config=self.config,
             ),
         )
 

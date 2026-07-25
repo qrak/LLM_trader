@@ -93,7 +93,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Invested:      ${decision.quote_amount:,.2f}")
         if decision.quantity:
             print(f"Quantity:      {self.formatter.fmt(decision.quantity)}")
-        if decision.action in ['BUY', 'SELL', 'CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and decision.fee:
+        if decision.action in ["BUY", "SELL", "CLOSE", "CLOSE_LONG", "CLOSE_SHORT"] and decision.fee:
             print(f"Fee:       ${decision.fee:.4f}")
 
         print(f"\nReasoning: {decision.reasoning}")
@@ -212,10 +212,10 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Total Fees:       ${stats['total_fees']:.4f}")
             print(f"Net P&L (USDT):   ${stats['net_pnl']:+,.2f}")
 
-            last_closed_trade = stats.get('last_closed_trade')
+            last_closed_trade = stats.get("last_closed_trade")
             if last_closed_trade:
-                outcome = last_closed_trade.get('outcome', 'UNKNOWN')
-                close_reason = last_closed_trade.get('close_reason')
+                outcome = last_closed_trade.get("outcome", "UNKNOWN")
+                close_reason = last_closed_trade.get("close_reason")
                 print("-" * 40)
                 print(f"Last Outcome:     {outcome}")
                 if close_reason:
@@ -238,25 +238,25 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Signal:          {fields['signal']}")
             print(f"Confidence:      {fields['confidence']}%")
 
-            if fields['entry_price']:
+            if fields["entry_price"]:
                 print(f"Entry:           ${fields['entry_price']:,.2f}")
-            if fields['stop_loss']:
+            if fields["stop_loss"]:
                 print(f"Stop Loss:       ${fields['stop_loss']:,.2f}")
-            if fields['take_profit']:
+            if fields["take_profit"]:
                 print(f"Take Profit:     ${fields['take_profit']:,.2f}")
-            if fields['risk_reward_ratio']:
+            if fields["risk_reward_ratio"]:
                 print(f"R:R Ratio:       {fields['risk_reward_ratio']:.2f}")
 
-            trend = fields['trend']
+            trend = fields["trend"]
             if trend:
-                direction = trend.get('direction', 'N/A')
-                strength = trend.get('strength', 0)
+                direction = trend.get("direction", "N/A")
+                strength = trend.get("strength", 0)
                 print(f"Trend:           {direction} ({strength}%)")
 
-            key_levels = fields['key_levels']
+            key_levels = fields["key_levels"]
             if key_levels:
-                supports = key_levels.get('support', [])
-                resistances = key_levels.get('resistance', [])
+                supports = key_levels.get("support", [])
+                resistances = key_levels.get("resistance", [])
                 if supports:
                     support_str = ", ".join([f"${s:,.2f}" for s in supports[:3]])
                     print(f"Support:         {support_str}")

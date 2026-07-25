@@ -21,20 +21,20 @@ from .news_ingestion import RSSCrawl4AINewsProvider
 
 __all__ = [
     # Core RAG orchestration
-    'RagEngine', 'ContextBuilder',
+    "RagEngine", "ContextBuilder",
 
     # Data operations
-    'MarketDataManager', 'NewsManager', 'NewsRepository', 'RagFileHandler',
+    "MarketDataManager", "NewsManager", "NewsRepository", "RagFileHandler",
 
     # Search operations
-    'IndexManager', 'ArticleScoringPolicy',
+    "IndexManager", "ArticleScoringPolicy",
 
     # Content processing
-    'ArticleProcessor',
+    "ArticleProcessor",
 
     # Management operations
-    'TickerManager', 'CategoryProcessor',
+    "TickerManager", "CategoryProcessor",
 
     # New ingestion providers
-    'LocalTaxonomyProvider', 'RSSCrawl4AINewsProvider',
+    "LocalTaxonomyProvider", "RSSCrawl4AINewsProvider",
 ]

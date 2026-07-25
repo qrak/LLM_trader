@@ -3,7 +3,7 @@ News Management Module for RAG Engine
 
 Fetches, deduplicates, and caches cryptocurrency news articles.
 """
-from typing import Any, Set
+from typing import Any
 
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
@@ -45,7 +45,7 @@ class NewsManager:
             self.logger.exception("Error loading cached news: %s", e)
             self.news_database = []
 
-    async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> list[dict[str, Any]]:
+    async def fetch_fresh_news(self, known_crypto_tickers: set[str]) -> list[dict[str, Any]]:
         """Fetch fresh articles from the news provider; fall back to cache on failure."""
         if self.news_client is None:
             self.logger.error("News client not initialized")

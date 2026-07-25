@@ -1,7 +1,7 @@
 """
 Ticker management and validation operations.
 """
-from typing import Set, Any
+from typing import Any
 from src.logger.logger import Logger
 
 
@@ -12,7 +12,7 @@ class TickerManager:
         self.logger = logger
         self.file_handler = file_handler
         self.exchange_manager = exchange_manager
-        self.known_tickers: Set[str] = set()
+        self.known_tickers: set[str] = set()
 
     async def load_known_tickers(self) -> None:
         """Load known cryptocurrency tickers from disk."""
@@ -56,7 +56,7 @@ class TickerManager:
         detected_coins = set()
 
         for article in news_database:
-            coins_mentioned = article.get('detected_coins', [])
+            coins_mentioned = article.get("detected_coins", [])
             for coin in coins_mentioned:
                 if len(coin) >= 2:
                     detected_coins.add(coin.upper())
@@ -68,9 +68,9 @@ class TickerManager:
         category_coins = set()
 
         for article in news_database:
-            categories = article.get('categories', '')
+            categories = article.get("categories", "")
             # Look for ticker-like categories
-            category_parts = categories.split(',')
+            category_parts = categories.split(",")
             for category in category_parts:
                 category = category.strip()
                 if self._is_valid_ticker_category(category):
@@ -88,8 +88,8 @@ class TickerManager:
 
         # Skip obviously non-ticker categories
         skip_categories = {
-            'bitcoin', 'ethereum', 'blockchain', 'cryptocurrency', 'trading',
-            'market', 'price', 'analysis', 'news', 'defi', 'nft'
+            "bitcoin", "ethereum", "blockchain", "cryptocurrency", "trading",
+            "market", "price", "analysis", "news", "defi", "nft"
         }
 
         category_lower = category.lower()
@@ -101,7 +101,7 @@ class TickerManager:
         category_upper = category.upper()
 
         # Remove common prefixes/suffixes
-        for remove in ['-USD', '-USDT', '-BTC', '-ETH']:
+        for remove in ["-USD", "-USDT", "-BTC", "-ETH"]:
             if category_upper.endswith(remove):
                 category_upper = category_upper[:-len(remove)]
 
@@ -117,7 +117,7 @@ class TickerManager:
             return False
 
         # Skip obvious non-tickers
-        skip_terms = {'USD', 'EUR', 'GBP', 'JPY', 'NEWS', 'MARKET', 'PRICE'}
+        skip_terms = {"USD", "EUR", "GBP", "JPY", "NEWS", "MARKET", "PRICE"}
         return coin.upper() not in skip_terms
 
     async def _validate_and_add_coins(self, filtered_coins: set) -> None:
@@ -166,6 +166,6 @@ class TickerManager:
         except Exception as e:
             self.logger.exception("Error saving tickers: %s", e)
 
-    def get_known_tickers(self) -> Set[str]:
+    def get_known_tickers(self) -> set[str]:
         """Get the set of known cryptocurrency tickers."""
         return self.known_tickers.copy()

@@ -5,7 +5,7 @@ Handles the processing and formatting of analysis results from the AI models.
 from __future__ import annotations
 import io
 import re
-from typing import Any, Union, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.analyzer.trend_validator import TrendValidator
@@ -21,7 +21,7 @@ class AnalysisResultProcessor:
 
     def __init__(
         self,
-        model_manager: "ModelManager",
+        model_manager: ModelManager,
         logger: Logger,
         unified_parser,
         trend_validator: TrendValidator,
@@ -31,12 +31,12 @@ class AnalysisResultProcessor:
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
-        self.context: "AnalysisContext" | None = None
+        self.context: AnalysisContext | None = None
         self._trend_validator = trend_validator
         self._quality_scorer = quality_scorer
 
     async def process_analysis(self, system_prompt: str, prompt: str,
-                              chart_image: Union[io.BytesIO, bytes, str] | None = None,
+                              chart_image: io.BytesIO | bytes | str | None = None,
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         """
@@ -162,7 +162,7 @@ class AnalysisResultProcessor:
     @staticmethod
     def _clean_response(text: str) -> str:
         """Remove thinking sections and extra whitespace from AI responses"""
-        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
     def _validate_llm_claims(self, parsed_response: dict[str, Any]) -> None:
         """Validate LLM-reported ADX strengths and pattern quality against computed data.

@@ -45,8 +45,8 @@ class PatternAnalyzer:
 
         # Extract SMA values for MA crossover detection
         sma_values = None
-        if long_term_data is not None and 'sma_values' in long_term_data:
-            sma_values = long_term_data['sma_values']
+        if long_term_data is not None and "sma_values" in long_term_data:
+            sma_values = long_term_data["sma_values"]
 
         # Detect indicator patterns
         patterns = {}
@@ -105,20 +105,20 @@ class PatternAnalyzer:
         kc_lower = close_series - 0.8
 
         return {
-            'rsi': rsi.astype(np.float64),
-            'macd_line': macd_line.astype(np.float64),
-            'macd_signal': macd_signal.astype(np.float64),
-            'macd_hist': macd_hist.astype(np.float64),
-            'stoch_k': stoch_k.astype(np.float64),
-            'stoch_d': stoch_d.astype(np.float64),
-            'atr': atr.astype(np.float64),
-            'bb_upper': bb_upper.astype(np.float64),
-            'bb_lower': bb_lower.astype(np.float64),
-            'kc_upper': kc_upper.astype(np.float64),
-            'kc_lower': kc_lower.astype(np.float64),
-            'sma_20': close_series.astype(np.float64),
-            'sma_50': close_series.astype(np.float64),
-            'sma_200': close_series.astype(np.float64)
+            "rsi": rsi.astype(np.float64),
+            "macd_line": macd_line.astype(np.float64),
+            "macd_signal": macd_signal.astype(np.float64),
+            "macd_hist": macd_hist.astype(np.float64),
+            "stoch_k": stoch_k.astype(np.float64),
+            "stoch_d": stoch_d.astype(np.float64),
+            "atr": atr.astype(np.float64),
+            "bb_upper": bb_upper.astype(np.float64),
+            "bb_lower": bb_lower.astype(np.float64),
+            "kc_upper": kc_upper.astype(np.float64),
+            "kc_lower": kc_lower.astype(np.float64),
+            "sma_20": close_series.astype(np.float64),
+            "sma_50": close_series.astype(np.float64),
+            "sma_200": close_series.astype(np.float64)
         }
 
 

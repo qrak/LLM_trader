@@ -10,7 +10,7 @@ from src.indicators.statistical import stdev_numba
 
 
 @njit(cache=True)
-def atr_numba(high, low, close, length=14, mamode='rma', percent=False):
+def atr_numba(high, low, close, length=14, mamode="rma", percent=False):
     """Calculate Average True Range with configurable smoothing mode."""
     n = len(high)
     atr = np.full(n, np.nan)
@@ -20,13 +20,13 @@ def atr_numba(high, low, close, length=14, mamode='rma', percent=False):
     for i in range(1, n):
         tr[i] = max(high[i] - low[i], abs(high[i] - close[i - 1]), abs(low[i] - close[i - 1]))
 
-    if mamode == 'ema':
+    if mamode == "ema":
         atr[length - 1] = np.mean(tr[0:length])
         alpha = 2 / (length + 1)
         for i in range(length, n):
             atr[i] = (1 - alpha) * atr[i - 1] + alpha * tr[i]
 
-    elif mamode == 'sma':
+    elif mamode == "sma":
         if n >= length:
             sum_tr = 0.0
             for i in range(length):
@@ -36,7 +36,7 @@ def atr_numba(high, low, close, length=14, mamode='rma', percent=False):
                 sum_tr += tr[i] - tr[i - length]
                 atr[i] = sum_tr / length
 
-    elif mamode == 'wma':
+    elif mamode == "wma":
         weight_sum = length * (length + 1) / 2
         if n >= length:
             current_sum = 0.0
@@ -80,7 +80,7 @@ def bollinger_bands_numba(close, length, num_std_dev):
 
 
 @njit(cache=True)
-def chandelier_exit_numba(high, low, close, length, multiplier, mamode='rma'):
+def chandelier_exit_numba(high, low, close, length, multiplier, mamode="rma"):
     n = len(close)
     atr_values = atr_numba(high, low, close, length, mamode)
 
@@ -89,7 +89,7 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode='rma'):
 
     chandelier_exit_long[:] = np.nan
     chandelier_exit_short[:] = np.nan
-    
+
     # Needs valid ATR to calculate
     for i in range(length, n):
         if not math.isnan(atr_values[i]):
@@ -273,11 +273,11 @@ def donchian_channels_numba(high, low, length=20):
 
 
 @njit(cache=True)
-def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode='ema'):
+def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="ema"):
     """Calculate Keltner Channels using ATR for band width."""
     n = len(close)
 
-    if mamode == 'sma':
+    if mamode == "sma":
         middle = sma_numba(close, length)
     else:
         middle = ema_numba(close, length)

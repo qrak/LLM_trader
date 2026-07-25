@@ -12,7 +12,6 @@ import hashlib
 import hmac
 import os
 import time
-from typing import Optional
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -80,7 +79,7 @@ def _sign_token(username: str, timestamp: float) -> str:
     return f"{payload}:{sig}"
 
 
-def _verify_token(token: str) -> Optional[str]:
+def _verify_token(token: str) -> str | None:
     """Verify an HMAC-signed session token. Returns username or None."""
     try:
         parts = token.split(":")
@@ -119,7 +118,7 @@ def create_session(username: str, response: Response, secure: bool = True) -> No
     )
 
 
-def verify_admin_session(request: Request) -> Optional[str]:
+def verify_admin_session(request: Request) -> str | None:
     """Check the request for a valid admin session.
 
     Checks cookie first, then Authorization header (Bearer token).

@@ -141,7 +141,7 @@ class TemplateManager:
 
         Returns the unwrapped analysis dict, or None if parsing fails or analysis key is absent.
         """
-        blocks = re.findall(r'```json\s*(.*?)\s*```', previous_response, re.DOTALL | re.IGNORECASE)
+        blocks = re.findall(r"```json\s*(.*?)\s*```", previous_response, re.DOTALL | re.IGNORECASE)
         for block in reversed(blocks):
             try:
                 data = json.loads(block)
@@ -170,7 +170,7 @@ class TemplateManager:
     def _sanitize_previous_reasoning(self, previous_response: str, verbosity: str | None = None) -> str:
         """Keep only prior decision reasoning, removing echoed prompt/schema instructions."""
         text_without_json = re.sub(
-            r'```json\s*.*?\s*```',
+            r"```json\s*.*?\s*```",
             "",
             previous_response,
             flags=re.DOTALL | re.IGNORECASE,
@@ -530,12 +530,12 @@ class TemplateManager:
         conf_threshold = thresholds.get("confidence_threshold", 70)
 
         # Signal names: spot uses BUY/SELL, futures uses LONG/SHORT
-        is_futures = getattr(self.config, 'MARKET_TYPE', 'spot') == 'futures'
+        is_futures = getattr(self.config, "MARKET_TYPE", "spot") == "futures"
         entry_signal_open = "LONG" if is_futures else "BUY"
         entry_signal_close = "SHORT" if is_futures else "SELL"
         allowed_signals = "LONG, SHORT, HOLD, CLOSE, UPDATE" if is_futures else "BUY, SELL, HOLD, CLOSE, UPDATE"
-        order_type = getattr(self.config, 'ENTRY_ORDER_TYPE', 'market').strip().lower()
-        order_type_label = "\"market\"" if order_type == "market" else "\"limit\" or \"market\""
+        order_type = getattr(self.config, "ENTRY_ORDER_TYPE", "market").strip().lower()
+        order_type_label = '"market"' if order_type == "market" else '"limit" or "market"'
         # Extended thresholds
         adx_weak = thresholds.get("adx_weak_threshold", 20)
         conf_weak = thresholds.get("min_confluences_weak", 4)
@@ -617,7 +617,7 @@ class TemplateManager:
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
 
-        response_template = f'''## Response Format
+        response_template = f"""## Response Format
 
 {_output_header}
 
@@ -727,7 +727,7 @@ STOP LOSS & TAKE PROFIT:{safe_mae_line}
 - SHORT: SL above swing high + 1x ATR (max {avg_sl:.1f}% from entry). TP at support/Fib levels.
 
 
-Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.'''
+Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit."""
 
         # Add threshold origin annotations if brain data is available
         if trade_count > 0:
@@ -774,7 +774,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
             str: Formatted analysis steps
         """
         # Get the base asset for market comparisons
-        analyzed_base = symbol.split('/')[0] if '/' in symbol else symbol
+        analyzed_base = symbol.split("/")[0] if "/" in symbol else symbol
 
         # Build dynamic timeframe description based on available periods
         if available_periods:

@@ -57,10 +57,9 @@ def _find_local_extrema_numba(
                 if data[i] <= data[j]:
                     is_extrema = False
                     break
-            else:  # Find minima
-                if data[i] >= data[j]:
-                    is_extrema = False
-                    break
+            elif data[i] >= data[j]:
+                is_extrema = False
+                break
 
         if is_extrema:
             indices_temp[count] = i

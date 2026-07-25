@@ -54,12 +54,11 @@ def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
             ep[i] = ep[i - 1]
             af[i] = af[i - 1]
         return 1
-    else:
-        # Trend reversal to bearish
-        sar[i] = ep[i - 1]
-        ep[i] = low[i]
-        af[i] = step
-        return -1
+    # Trend reversal to bearish
+    sar[i] = ep[i - 1]
+    ep[i] = low[i]
+    af[i] = step
+    return -1
 
 
 @njit(cache=True)
@@ -87,9 +86,8 @@ def update_bearish_sar(i: int, high: np.ndarray, low: np.ndarray,
             ep[i] = ep[i - 1]
             af[i] = af[i - 1]
         return -1
-    else:
-        # Trend reversal to bullish
-        sar[i] = ep[i - 1]
-        ep[i] = high[i]
-        af[i] = step
-        return 1
+    # Trend reversal to bullish
+    sar[i] = ep[i - 1]
+    ep[i] = high[i]
+    af[i] = step
+    return 1

@@ -147,7 +147,6 @@ def get_macd_histogram_trend_numba(
 
     if increasing > decreasing:
         return 1
-    elif decreasing > increasing:
+    if decreasing > increasing:
         return -1
-    else:
-        return 0
+    return 0

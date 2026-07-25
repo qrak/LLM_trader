@@ -4,7 +4,7 @@ Provides functionality for utils.keyboard_handler.py.
 """
 import asyncio
 import sys
-from typing import Callable, Awaitable
+from collections.abc import Callable, Awaitable
 
 from src.logger.logger import Logger
 
@@ -98,9 +98,8 @@ class KeyboardHandler:
         """Check if keyboard input is available."""
         if sys.platform == "win32":
             return msvcrt.kbhit()
-        else:
-            # Linux/Unix implementation using select
-            return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+        # Linux/Unix implementation using select
+        return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
     def _read_key(self) -> str | None:
         """Read a single character from keyboard input.
@@ -111,14 +110,13 @@ class KeyboardHandler:
             if sys.platform == "win32":
                 char = msvcrt.getch()
                 # Decode and return as-is (preserves uppercase/lowercase)
-                decoded = char.decode('utf-8', errors='ignore')
+                decoded = char.decode("utf-8", errors="ignore")
                 return decoded if decoded else None
-            else:
-                # Linux/Unix implementation
-                # We are already in cbreak mode, so just read
-                if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
-                    return sys.stdin.read(1)
-                return None
+            # Linux/Unix implementation
+            # We are already in cbreak mode, so just read
+            if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                return sys.stdin.read(1)
+            return None
         except Exception:
             return None
 

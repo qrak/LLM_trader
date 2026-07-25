@@ -32,7 +32,7 @@ class DashboardServer:
                  unified_parser=None,
                  persistence=None,
                  exchange_manager=None,
-                 host="0.0.0.0",  # nosec B104
+                 host="0.0.0.0",  # noqa: S104 # nosec B104
                  port=8000,
                  force_analysis_event=None,
                  config_path=None,
@@ -106,9 +106,9 @@ class DashboardServer:
 
             # GZip/streaming responses may not expose `body` at middleware stage.
             # Use short time-bucketed weak ETags aligned to cache windows.
-            if path.startswith('/api/'):
+            if path.startswith("/api/"):
                 bucket_seconds = 15
-            elif path.endswith('.html') or path == '/':
+            elif path.endswith(".html") or path == "/":
                 bucket_seconds = 30
             else:
                 return None
@@ -227,14 +227,14 @@ class DashboardServer:
                         "public, max-age=3600",
                         "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
                     )
-            elif path.startswith('/api/'):
+            elif path.startswith("/api/"):
                 browser_policy, edge_policy = _api_cache_policies(path, request.query_params)
                 _set_cache_headers(
                     response,
                     browser_policy,
                     edge_policy,
                 )
-            elif path.endswith('.html') or path == '/':
+            elif path.endswith(".html") or path == "/":
                 _set_cache_headers(
                     response,
                     "public, max-age=30, must-revalidate",
@@ -248,7 +248,7 @@ class DashboardServer:
                 and response.status_code == 200
                 and not _is_static_asset(path)
                 and not _is_no_store_response(response)
-                and (path.startswith('/api/') or path.endswith('.html') or path == '/')
+                and (path.startswith("/api/") or path.endswith(".html") or path == "/")
             ):
                 etag = response.headers.get("ETag") or _build_etag(request, response, path)
                 if etag:
@@ -364,7 +364,7 @@ class DashboardServer:
             rag_engine = self.brain_service.rag_engine if self.brain_service else None
         except AttributeError:
             rag_engine = None
-            
+
         monitor_router = monitor.MonitorRouter(
             config=self.config,
             logger=self.logger,

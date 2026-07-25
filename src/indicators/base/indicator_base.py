@@ -4,7 +4,8 @@ Provides functionality for indicators.base.indicator_base.py.
 """
 import timeit
 from dataclasses import dataclass
-from typing import Union, Callable, Any
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
@@ -24,7 +25,7 @@ class IndicatorBase:
         self.close: np.ndarray = np.array([], dtype=np.float64)
         self.volume: np.ndarray = np.array([], dtype=np.float64)
 
-    def get_data(self, new_data: Union[pd.DataFrame, np.ndarray, list[list[Union[int, float]]]]) -> None:
+    def get_data(self, new_data: pd.DataFrame | np.ndarray | list[list[int | float]]) -> None:
         if isinstance(new_data, pd.DataFrame):
             self._handle_dataframe(new_data)
         elif isinstance(new_data, np.ndarray):
@@ -54,17 +55,17 @@ class IndicatorBase:
 
         return result
 
-    def _save_indicator_result_to_csv(self, indicator_name: str, indicator_result: Union[np.ndarray, tuple]) -> None:
+    def _save_indicator_result_to_csv(self, indicator_name: str, indicator_result: np.ndarray | tuple) -> None:
         data: dict[str, np.ndarray] = {}
         n = len(self.close)
 
         if self.timestamp is not None:
-            data['timestamp'] = self.timestamp
-        data['open'] = self.open.ravel()  # Ensure 1D array
-        data['high'] = self.high.ravel()
-        data['low'] = self.low.ravel()
-        data['close'] = self.close.ravel()
-        data['volume'] = self.volume.ravel()
+            data["timestamp"] = self.timestamp
+        data["open"] = self.open.ravel()  # Ensure 1D array
+        data["high"] = self.high.ravel()
+        data["low"] = self.low.ravel()
+        data["close"] = self.close.ravel()
+        data["volume"] = self.volume.ravel()
 
         def add_indicator_to_data(key: str, array: np.ndarray) -> None:
             array = np.asarray(array)
@@ -98,7 +99,7 @@ class IndicatorBase:
         csv_filename = f"{indicator_name}_results.csv"
         df.to_csv(csv_filename, index=False)
 
-    def _handle_list(self, data: list[list[Union[int, float]]]) -> None:
+    def _handle_list(self, data: list[list[int | float]]) -> None:
         if not data or not isinstance(data[0], list):
             raise ValueError("Input must be a non-empty list of lists")
 
@@ -125,15 +126,15 @@ class IndicatorBase:
 
     def _handle_dataframe(self, dataframe: pd.DataFrame) -> None:
         col_mapping = {col.lower(): col for col in dataframe.columns}
-        expected_cols = {'open', 'high', 'low', 'close', 'volume'}
-        timestamp_cols = {'timestamp', 'date', 'datetime', 'time'}
+        expected_cols = {"open", "high", "low", "close", "volume"}
+        timestamp_cols = {"timestamp", "date", "datetime", "time"}
 
         if missing_cols := expected_cols - set(col_mapping.keys()):
             raise ValueError(f"Missing columns in DataFrame: {missing_cols}")
 
         arrays = np.column_stack([
             dataframe[col_mapping[col]].to_numpy(dtype=np.float64).reshape(-1)
-            for col in ['open', 'high', 'low', 'close', 'volume']
+            for col in ["open", "high", "low", "close", "volume"]
         ])
 
         self.open, self.high, self.low, self.close, self.volume = arrays.T

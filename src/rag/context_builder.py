@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from collections import namedtuple
-from typing import TYPE_CHECKING, Any, Set
+from typing import TYPE_CHECKING, Any
 from src.logger.logger import Logger
 from src.rag.article_processor import ArticleProcessor
 from src.rag.news_ingestion.schema_mapper import normalize_article_whitespace
@@ -18,7 +18,7 @@ from src.utils.token_counter import TokenCounter
 if TYPE_CHECKING:
     from src.config.loader import Config
 
-ArticleContent = namedtuple('ArticleContent', ['title', 'body', 'categories', 'tags', 'detected_coins'])
+ArticleContent = namedtuple("ArticleContent", ["title", "body", "categories", "tags", "detected_coins"])
 
 class ContextBuilder:
     """Builds analysis context from various data sources."""
@@ -27,7 +27,7 @@ class ContextBuilder:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config: "Config",
+        config: Config,
         scoring_policy: ArticleScoringPolicy,
         article_processor=None,
         symbol_name_map: dict[str, str] | None = None,
@@ -48,7 +48,7 @@ class ContextBuilder:
     async def keyword_search(self, query: str, news_database: list[dict[str, Any]],
                            symbol: str | None = None, coin_index: dict[str, list[int]] | None = None,
                            category_word_map: dict[str, str] | None = None,
-                           important_categories: Set[str] | None = None) -> list[tuple[int, float]]:
+                           important_categories: set[str] | None = None) -> list[tuple[int, float]]:
         """Search for articles matching keywords with relevance scores."""
         # Provide default empty containers to avoid mutable defaults
         coin_index = coin_index or {}
@@ -56,7 +56,7 @@ class ContextBuilder:
         important_categories = important_categories or set()
 
         query = query.lower()
-        keywords = set(re.findall(r'\b\w{3,15}\b', query))
+        keywords = set(re.findall(r"\b\w{3,15}\b", query))
 
         coin = None
         coin_patterns: dict[str, Any] | None = None
@@ -64,13 +64,13 @@ class ContextBuilder:
             coin = self.article_processor.extract_base_coin(symbol).upper()
             coin_lower = coin.lower()
             coin_patterns = {
-                'coin_pattern': re.compile(rf'\b{re.escape(coin_lower)}\b'),
-                'title_start_pattern': re.compile(rf'^\s*{re.escape(coin_lower)}\b'),
-                'price_pattern': re.compile(rf'\b{re.escape(coin_lower)}\s+price\b')
+                "coin_pattern": re.compile(rf"\b{re.escape(coin_lower)}\b"),
+                "title_start_pattern": re.compile(rf"^\s*{re.escape(coin_lower)}\b"),
+                "price_pattern": re.compile(rf"\b{re.escape(coin_lower)}\s+price\b")
             }
             coin_full_name = self.symbol_name_map.get(coin)
-            coin_patterns['coin_name_pattern'] = (
-                re.compile(r'\b' + r'[-\s]+'.join(re.escape(p) for p in coin_full_name.split()) + r'\b') if coin_full_name else None
+            coin_patterns["coin_name_pattern"] = (
+                re.compile(r"\b" + r"[-\s]+".join(re.escape(p) for p in coin_full_name.split()) + r"\b") if coin_full_name else None
             )
 
         # Pre-calculate relevant categories based on query
@@ -94,10 +94,10 @@ class ContextBuilder:
         scores.sort(key=lambda x: x[1], reverse=True)
         return scores
 
-    def _calculate_article_relevance(self, article: dict[str, Any], keywords: Set[str],
+    def _calculate_article_relevance(self, article: dict[str, Any], keywords: set[str],
                                    coin: str | None,
                                    current_time: float, relevant_categories: list[str],
-                                   important_categories: Set[str],
+                                   important_categories: set[str],
                                    coin_patterns: dict[str, Any] | None = None) -> float:
         """Calculate article relevance score based on various factors."""
         content = self._extract_article_content(article)
@@ -121,11 +121,11 @@ class ContextBuilder:
         """Extract and normalize article content for scoring."""
         # Use pre-computed lowercase fields if available (from NewsManager), otherwise compute on the fly
         return ArticleContent(
-            title=article.get('title_lower') or article.get('title', '').lower(),
-            body=article.get('body_lower') or article.get('body', '').lower(),
-            categories=article.get('categories_lower') or article.get('categories', '').lower(),
-            tags=article.get('tags_lower') or article.get('tags', '').lower(),
-            detected_coins=article.get('detected_coins_str_lower') or article.get('detected_coins_str', '').lower()
+            title=article.get("title_lower") or article.get("title", "").lower(),
+            body=article.get("body_lower") or article.get("body", "").lower(),
+            categories=article.get("categories_lower") or article.get("categories", "").lower(),
+            tags=article.get("tags_lower") or article.get("tags", "").lower(),
+            detected_coins=article.get("detected_coins_str_lower") or article.get("detected_coins_str", "").lower()
         )
 
     @profile_performance
@@ -174,9 +174,9 @@ class ContextBuilder:
                 current_tokens += token_count
 
                 # Track article URL if available
-                if 'url' in item:
-                    title = item.get('title', 'Untitled')
-                    self.latest_article_urls[title] = item['url']
+                if "url" in item:
+                    title = item.get("title", "Untitled")
+                    self.latest_article_urls[title] = item["url"]
 
         return "\n\n".join(context_parts)
 
@@ -191,23 +191,23 @@ class ContextBuilder:
         Returns:
             Formatted string: "Title\nSource (Date)\nArticle body..."
         """
-        title = item.get('title', 'No Title')
-        title = str(title).strip() if title is not None else 'No Title'
-        source = item.get('source_info', {'name': 'Unknown Source'}).get('name', 'Unknown Source')
-        published_on = item.get('published_on', 0)
-        published = datetime.fromtimestamp(published_on).strftime('%Y-%m-%d %H:%M UTC')
+        title = item.get("title", "No Title")
+        title = str(title).strip() if title is not None else "No Title"
+        source = item.get("source_info", {"name": "Unknown Source"}).get("name", "Unknown Source")
+        published_on = item.get("published_on", 0)
+        published = datetime.fromtimestamp(published_on).strftime("%Y-%m-%d %H:%M UTC")
 
-        body = item.get('body', '').strip()
+        body = item.get("body", "").strip()
         if not body:
             return ""
 
         body = normalize_article_whitespace(body)
-        paragraphs = [paragraph.strip() for paragraph in body.split('\n\n') if paragraph.strip()]
+        paragraphs = [paragraph.strip() for paragraph in body.split("\n\n") if paragraph.strip()]
 
         if not paragraphs:
             return ""
 
-        article_body = "\n\n".join(paragraph.replace('\n', ' ') for paragraph in paragraphs)
+        article_body = "\n\n".join(paragraph.replace("\n", " ") for paragraph in paragraphs)
 
         header = f"📰 {title}\nSrc: {source} ({published})"
 
@@ -224,8 +224,8 @@ class ContextBuilder:
         truncated = article_body[:max_chars].rstrip()
 
         # Backtrack to a paragraph or sentence boundary when possible.
-        last_paragraph = truncated.rfind('\n\n')
-        last_period = truncated.rfind('.')
+        last_paragraph = truncated.rfind("\n\n")
+        last_period = truncated.rfind(".")
         if last_period > len(truncated) * 0.5:
             truncated = truncated[:last_period + 1]
         elif last_paragraph > len(truncated) * 0.5:
@@ -272,7 +272,7 @@ class ContextBuilder:
         min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body = [
             idx for idx in candidate_sorted
-            if idx < len(news_database) and len(str(news_database[idx].get('body', ''))) >= min_body_chars
+            if idx < len(news_database) and len(str(news_database[idx].get("body", ""))) >= min_body_chars
         ]
         short_body = [idx for idx in candidate_sorted if idx not in full_body]
         sorted_indices = (full_body + short_body)[:k]

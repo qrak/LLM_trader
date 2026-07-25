@@ -4,7 +4,7 @@ Provides functionality for platforms.exchange_manager.py.
 """
 import asyncio
 from datetime import datetime
-from typing import Set, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import ccxt.async_support as ccxt
 import aiohttp
@@ -32,13 +32,13 @@ class ExchangeManager:
         self.logger = logger
         self.config = config
         self.exchanges: dict[str, ccxt.Exchange] = {}
-        self.symbols_by_exchange: dict[str, Set[str]] = {}
+        self.symbols_by_exchange: dict[str, set[str]] = {}
         self.exchange_last_loaded: dict[str, datetime] = {}
         self._update_task: asyncio.Task | None = None
         self._shutdown_in_progress = False
         self.exchange_config: dict[str, Any] = {
-            'enableRateLimit': True,
-            'options': {'defaultType': 'spot'}
+            "enableRateLimit": True,
+            "options": {"defaultType": "spot"}
         }
         self.exchange_names = self.config.SUPPORTED_EXCHANGES
         self.session: aiohttp.ClientSession | None = None
@@ -47,7 +47,7 @@ class ExchangeManager:
         """Initialize the session for exchanges - no longer loads all exchanges upfront"""
         self.logger.debug("Initializing ExchangeManager with lazy loading")
         self.session = aiohttp.ClientSession()
-        self.exchange_config['session'] = self.session
+        self.exchange_config["session"] = self.session
 
         self._update_task = asyncio.create_task(self._periodic_update())
         self._update_task.add_done_callback(self._handle_update_task_done)
@@ -107,7 +107,7 @@ class ExchangeManager:
             exchange_config = self.exchange_config.copy()
 
             if self.session:
-                exchange_config['session'] = self.session
+                exchange_config["session"] = self.session
 
             exchange = exchange_class(exchange_config)
 
@@ -132,12 +132,10 @@ class ExchangeManager:
 
             if last_loaded and (now - last_loaded).total_seconds() < self.config.MARKET_REFRESH_HOURS * 3600:
                 return self.exchanges[exchange_id]
-            else:
-                self.logger.info("Refreshing %s markets (last loaded: %s)", exchange_id, last_loaded)
-                await self._refresh_exchange_markets(exchange_id)
-                return self.exchanges.get(exchange_id)
-        else:
-            return await self._load_exchange(exchange_id)
+            self.logger.info("Refreshing %s markets (last loaded: %s)", exchange_id, last_loaded)
+            await self._refresh_exchange_markets(exchange_id)
+            return self.exchanges.get(exchange_id)
+        return await self._load_exchange(exchange_id)
 
     async def _refresh_exchange_markets(self, exchange_id: str) -> None:
         """Refresh markets for a single exchange"""
@@ -215,7 +213,7 @@ class ExchangeManager:
         self.logger.warning("Symbol %s not found on any supported exchange", symbol)
         return None, None
 
-    def get_all_symbols(self) -> Set[str]:
+    def get_all_symbols(self) -> set[str]:
         """Get all unique symbols across all loaded exchanges"""
         all_symbols = set()
         for symbols in self.symbols_by_exchange.values():

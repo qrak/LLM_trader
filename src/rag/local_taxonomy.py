@@ -91,7 +91,7 @@ class LocalTaxonomyProvider:
             )
             return []
         try:
-            with open(self._categories_file, "r", encoding="utf-8") as fh:
+            with open(self._categories_file, encoding="utf-8") as fh:
                 data = json.load(fh)
             # data may be {"timestamp": ..., "categories": [...]} or a plain list
             if isinstance(data, list):

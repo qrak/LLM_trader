@@ -29,8 +29,8 @@ class MarketDataCache:
         if self.current_market_overview is None:
             return True
 
-        timestamp_field = self.current_market_overview.get('published_on',
-                                                           self.current_market_overview.get('timestamp', 0))
+        timestamp_field = self.current_market_overview.get("published_on",
+                                                           self.current_market_overview.get("timestamp", 0))
 
         if normalize_timestamp_func:
             timestamp = normalize_timestamp_func(timestamp_field)

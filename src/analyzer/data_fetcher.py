@@ -31,7 +31,7 @@ class DataFetcher:
         try:
             exchange_timeframes = self.exchange.timeframes
             if exchange_timeframes and timeframe not in exchange_timeframes:
-                self.logger.error("Timeframe %s not supported by %s. Supported: %s", timeframe, self.exchange.id, ', '.join(exchange_timeframes.keys()))
+                self.logger.error("Timeframe %s not supported by %s. Supported: %s", timeframe, self.exchange.id, ", ".join(exchange_timeframes.keys()))
                 return None
         except AttributeError:
             if not TimeframeValidator.is_ccxt_compatible(timeframe):
@@ -71,8 +71,8 @@ class DataFetcher:
                 timeframe,
                 coverage_days
             )
-            self.logger.debug("First candle timestamp: %s", closed_candles[0][0] if len(closed_candles) > 0 else 'N/A')
-            self.logger.debug("Last closed candle timestamp: %s", closed_candles[-1][0] if len(closed_candles) > 0 else 'N/A')
+            self.logger.debug("First candle timestamp: %s", closed_candles[0][0] if len(closed_candles) > 0 else "N/A")
+            self.logger.debug("Last closed candle timestamp: %s", closed_candles[-1][0] if len(closed_candles) > 0 else "N/A")
 
         return closed_candles, actual_current_price
 
@@ -119,10 +119,10 @@ class DataFetcher:
             if result is None:
                 self.logger.warning("No daily historical data available for %s", pair)
                 return {
-                    'data': None,
-                    'available_days': 0,
-                    'is_complete': False,
-                    'error': "No data returned from exchange"
+                    "data": None,
+                    "available_days": 0,
+                    "is_complete": False,
+                    "error": "No data returned from exchange"
                 }
 
             ohlcv_data, _ = result
@@ -133,19 +133,19 @@ class DataFetcher:
                 self.logger.info("Limited historical data for %s: requested %s days, got %s days", pair, days, available_days)
 
             return {
-                'data': ohlcv_data,
-                'available_days': available_days,
-                'is_complete': is_complete,
-                'error': None
+                "data": ohlcv_data,
+                "available_days": available_days,
+                "is_complete": is_complete,
+                "error": None
             }
 
         except Exception as e:
             self.logger.error("Error fetching daily historical data for %s: %s", pair, str(e))
             return {
-                'data': None,
-                'available_days': 0,
-                'is_complete': False,
-                'error': str(e)
+                "data": None,
+                "available_days": 0,
+                "is_complete": False,
+                "error": str(e)
             }
 
     @retry_async()
@@ -167,21 +167,21 @@ class DataFetcher:
 
             if result is None:
                 return {
-                    'data': None,
-                    'error': "No data returned"
+                    "data": None,
+                    "error": "No data returned"
                 }
 
             ohlcv_data, _ = result
 
             return {
-                'data': ohlcv_data,
-                'error': None
+                "data": ohlcv_data,
+                "error": None
             }
         except Exception as e:
             self.logger.error("Error fetching weekly data: %s", e)
             return {
-                'data': None,
-                'error': str(e)
+                "data": None,
+                "error": str(e)
             }
 
     @retry_async()
@@ -214,7 +214,7 @@ class DataFetcher:
 
     def _validate_exchange_support(self) -> bool:
         """Validate that the exchange supports the required operations."""
-        if not self.exchange.has.get('fetchTickers', False):
+        if not self.exchange.has.get("fetchTickers", False):
             self.logger.warning("Exchange %s does not support fetchTickers", self.exchange.id)
             return False
         return True
@@ -237,14 +237,14 @@ class DataFetcher:
 
     def _extract_currencies(self, symbol: str) -> tuple[str | None, str | None]:
         """Extract base and quote currencies from symbol."""
-        if '/' not in symbol:
+        if "/" not in symbol:
             return None, None
-        parts = symbol.split('/', 1)
+        parts = symbol.split("/", 1)
         return parts[0], parts[1]
 
     def _has_required_ticker_data(self, ticker: dict[str, Any]) -> bool:
         """Check if ticker has required data fields."""
-        return 'last' in ticker and ticker['last'] is not None
+        return "last" in ticker and ticker["last"] is not None
 
     def _add_ticker_to_result(self, result: dict[str, Any], base_currency: str,
                             quote_currency: str, ticker: dict[str, Any]) -> None:
@@ -264,36 +264,36 @@ class DataFetcher:
         """Create raw ticker data structure with comprehensive 24h statistics."""
         return {
             # Core price data
-            "PRICE": ticker.get('last', 0),
-            "OPEN24HOUR": ticker.get('open', 0),
-            "HIGH24HOUR": ticker.get('high', 0),
-            "LOW24HOUR": ticker.get('low', 0),
-            "PREVCLOSE": ticker.get('previousClose', 0),
+            "PRICE": ticker.get("last", 0),
+            "OPEN24HOUR": ticker.get("open", 0),
+            "HIGH24HOUR": ticker.get("high", 0),
+            "LOW24HOUR": ticker.get("low", 0),
+            "PREVCLOSE": ticker.get("previousClose", 0),
 
             # Price changes
-            "CHANGE24HOUR": ticker.get('change', 0),
-            "CHANGEPCT24HOUR": ticker.get('percentage', 0),
+            "CHANGE24HOUR": ticker.get("change", 0),
+            "CHANGEPCT24HOUR": ticker.get("percentage", 0),
 
             # Volume data
-            "VOLUME24HOUR": ticker.get('baseVolume', 0),  # Volume in base currency (e.g., BTC)
-            "QUOTEVOLUME24HOUR": ticker.get('quoteVolume', 0),  # Volume in quote currency (e.g., USDT)
+            "VOLUME24HOUR": ticker.get("baseVolume", 0),  # Volume in base currency (e.g., BTC)
+            "QUOTEVOLUME24HOUR": ticker.get("quoteVolume", 0),  # Volume in quote currency (e.g., USDT)
 
             # Price metrics
-            "VWAP": ticker.get('vwap', 0),  # Volume-weighted average price
-            "AVERAGE": ticker.get('average', 0),  # Simple average price
+            "VWAP": ticker.get("vwap", 0),  # Volume-weighted average price
+            "AVERAGE": ticker.get("average", 0),  # Simple average price
 
             # Order book top-of-book
-            "BID": ticker.get('bid', 0),  # Best bid price
-            "ASK": ticker.get('ask', 0),  # Best ask price
-            "BIDVOLUME": ticker.get('bidVolume', 0),  # Size at best bid
-            "ASKVOLUME": ticker.get('askVolume', 0),  # Size at best ask
+            "BID": ticker.get("bid", 0),  # Best bid price
+            "ASK": ticker.get("ask", 0),  # Best ask price
+            "BIDVOLUME": ticker.get("bidVolume", 0),  # Size at best bid
+            "ASKVOLUME": ticker.get("askVolume", 0),  # Size at best ask
 
             # Metadata
-            "LASTUPDATE": ticker.get('timestamp', 0),
+            "LASTUPDATE": ticker.get("timestamp", 0),
             "MKTCAP": None,  # Market cap not typically available in CCXT ticker
 
             # Additional useful fields from CCXT
-            "INFO": ticker.get('info', {}),  # Raw exchange data (for advanced analysis)
+            "INFO": ticker.get("info", {}),  # Raw exchange data (for advanced analysis)
         }
 
     def _create_display_ticker_data(self, ticker: dict[str, Any], quote_currency: str) -> dict[str, Any]:
@@ -306,14 +306,14 @@ class DataFetcher:
             return f"{value:,.8f}"
 
         return {
-            "PRICE": format_price(ticker.get('last', 0)),
+            "PRICE": format_price(ticker.get("last", 0)),
             "CHANGEPCT24HOUR": f"{ticker.get('percentage', 0):,.2f}",
             "VOLUME24HOUR": f"{ticker.get('baseVolume', 0):,.2f}",
-            "HIGH24HOUR": format_price(ticker.get('high', 0)),
-            "LOW24HOUR": format_price(ticker.get('low', 0)),
-            "VWAP": format_price(ticker.get('vwap', 0)),
-            "BID": format_price(ticker.get('bid', 0)),
-            "ASK": format_price(ticker.get('ask', 0)),
+            "HIGH24HOUR": format_price(ticker.get("high", 0)),
+            "LOW24HOUR": format_price(ticker.get("low", 0)),
+            "VWAP": format_price(ticker.get("vwap", 0)),
+            "BID": format_price(ticker.get("bid", 0)),
+            "ASK": format_price(ticker.get("ask", 0)),
         }
 
     def _calculate_depth_imbalance(self, bid_depth: float, ask_depth: float) -> float:
@@ -331,12 +331,12 @@ class DataFetcher:
         ask_notional = float(np.sum(ask_subset[:, 0] * ask_subset[:, 1])) if len(ask_subset) else 0.0
 
         return {
-            'levels_used': int(min(len(bid_subset), len(ask_subset))),
-            'bid_depth': bid_depth,
-            'ask_depth': ask_depth,
-            'bid_notional': bid_notional,
-            'ask_notional': ask_notional,
-            'imbalance': self._calculate_depth_imbalance(bid_depth, ask_depth)
+            "levels_used": int(min(len(bid_subset), len(ask_subset))),
+            "bid_depth": bid_depth,
+            "ask_depth": ask_depth,
+            "bid_notional": bid_notional,
+            "ask_notional": ask_notional,
+            "imbalance": self._calculate_depth_imbalance(bid_depth, ask_depth)
         }
 
     def _calculate_near_mid_liquidity(
@@ -349,10 +349,10 @@ class DataFetcher:
         """Summarize liquidity close to the mid price within a basis-point band."""
         if mid_price <= 0:
             return {
-                'basis_points': basis_points,
-                'bid_depth': 0.0,
-                'ask_depth': 0.0,
-                'imbalance': 0.0
+                "basis_points": basis_points,
+                "bid_depth": 0.0,
+                "ask_depth": 0.0,
+                "imbalance": 0.0
             }
 
         bid_threshold = mid_price * (1 - basis_points / 10000)
@@ -363,20 +363,20 @@ class DataFetcher:
         ask_depth = float(np.sum(ask_subset[:, 1])) if len(ask_subset) else 0.0
 
         return {
-            'basis_points': basis_points,
-            'bid_depth': bid_depth,
-            'ask_depth': ask_depth,
-            'imbalance': self._calculate_depth_imbalance(bid_depth, ask_depth)
+            "basis_points": basis_points,
+            "bid_depth": bid_depth,
+            "ask_depth": ask_depth,
+            "imbalance": self._calculate_depth_imbalance(bid_depth, ask_depth)
         }
 
     def _calculate_largest_wall(self, levels: NDArray, mid_price: float) -> dict[str, float]:
         """Find the largest visible resting order on one side of the book."""
         if len(levels) == 0:
             return {
-                'price': 0.0,
-                'amount': 0.0,
-                'notional': 0.0,
-                'distance_bps': 0.0
+                "price": 0.0,
+                "amount": 0.0,
+                "notional": 0.0,
+                "distance_bps": 0.0
             }
 
         wall_index = int(np.argmax(levels[:, 1]))
@@ -385,10 +385,10 @@ class DataFetcher:
         distance_bps = abs(wall_price - mid_price) / mid_price * 10000 if mid_price > 0 else 0.0
 
         return {
-            'price': wall_price,
-            'amount': wall_amount,
-            'notional': wall_price * wall_amount,
-            'distance_bps': distance_bps
+            "price": wall_price,
+            "amount": wall_amount,
+            "notional": wall_price * wall_amount,
+            "distance_bps": distance_bps
         }
 
     @retry_async()
@@ -420,18 +420,18 @@ class DataFetcher:
             Returns None if fetch fails or exchange doesn't support order books
         """
         try:
-            if not self.exchange.has.get('fetchOrderBook', False):
+            if not self.exchange.has.get("fetchOrderBook", False):
                 self.logger.debug("Exchange %s does not support fetchOrderBook", self.exchange.id)
                 return None
 
             order_book = await self.exchange.fetch_order_book(pair, limit=limit)
 
-            if not order_book or not order_book.get('bids') or not order_book.get('asks'):
+            if not order_book or not order_book.get("bids") or not order_book.get("asks"):
                 self.logger.warning("Empty order book returned for %s", pair)
                 return None
 
-            bids = np.array(order_book['bids'], dtype=np.float64)
-            asks = np.array(order_book['asks'], dtype=np.float64)
+            bids = np.array(order_book["bids"], dtype=np.float64)
+            asks = np.array(order_book["asks"], dtype=np.float64)
 
             if len(bids) == 0 or len(asks) == 0:
                 self.logger.warning("Order book has empty bids or asks for %s", pair)
@@ -454,32 +454,32 @@ class DataFetcher:
                 for level in (5, 10, 20)
             }
             liquidity_near_mid = {
-                '10bps': self._calculate_near_mid_liquidity(bids, asks, mid_price, 10),
-                '25bps': self._calculate_near_mid_liquidity(bids, asks, mid_price, 25)
+                "10bps": self._calculate_near_mid_liquidity(bids, asks, mid_price, 10),
+                "25bps": self._calculate_near_mid_liquidity(bids, asks, mid_price, 25)
             }
 
             result = {
-                'bids': order_book['bids'],
-                'asks': order_book['asks'],
-                'timestamp': order_book.get('timestamp'),
-                'levels_requested': limit,
-                'levels_analyzed': int(min(len(bids), len(asks))),
-                'spread': spread,
-                'spread_percent': spread_percent,
-                'bid_depth': bid_depth,
-                'ask_depth': ask_depth,
-                'imbalance': imbalance,
-                'mid_price': mid_price,
-                'best_bid': best_bid,
-                'best_ask': best_ask,
-                'best_bid_size': best_bid_size,
-                'best_ask_size': best_ask_size,
-                'bid_notional': float(np.sum(bids[:, 0] * bids[:, 1])),
-                'ask_notional': float(np.sum(asks[:, 0] * asks[:, 1])),
-                'depth_by_level': depth_by_level,
-                'liquidity_near_mid': liquidity_near_mid,
-                'largest_bid_wall': self._calculate_largest_wall(bids, mid_price),
-                'largest_ask_wall': self._calculate_largest_wall(asks, mid_price)
+                "bids": order_book["bids"],
+                "asks": order_book["asks"],
+                "timestamp": order_book.get("timestamp"),
+                "levels_requested": limit,
+                "levels_analyzed": int(min(len(bids), len(asks))),
+                "spread": spread,
+                "spread_percent": spread_percent,
+                "bid_depth": bid_depth,
+                "ask_depth": ask_depth,
+                "imbalance": imbalance,
+                "mid_price": mid_price,
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "best_bid_size": best_bid_size,
+                "best_ask_size": best_ask_size,
+                "bid_notional": float(np.sum(bids[:, 0] * bids[:, 1])),
+                "ask_notional": float(np.sum(asks[:, 0] * asks[:, 1])),
+                "depth_by_level": depth_by_level,
+                "liquidity_near_mid": liquidity_near_mid,
+                "largest_bid_wall": self._calculate_largest_wall(bids, mid_price),
+                "largest_ask_wall": self._calculate_largest_wall(asks, mid_price)
             }
 
 
@@ -518,7 +518,7 @@ class DataFetcher:
             Returns None if fetch fails or exchange doesn't support trades
         """
         try:
-            if not self.exchange.has.get('fetchTrades', False):
+            if not self.exchange.has.get("fetchTrades", False):
                 self.logger.debug("Exchange %s does not support fetchTrades", self.exchange.id)
                 return None
 
@@ -528,27 +528,27 @@ class DataFetcher:
                 self.logger.warning("No trades returned for %s", pair)
                 return None
 
-            buy_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'buy')
-            sell_volume = sum(float(t['amount']) for t in trades if t.get('side') == 'sell')
+            buy_volume = sum(float(t["amount"]) for t in trades if t.get("side") == "buy")
+            sell_volume = sum(float(t["amount"]) for t in trades if t.get("side") == "sell")
             total_volume = buy_volume + sell_volume
 
-            time_span_ms = trades[-1]['timestamp'] - trades[0]['timestamp']
+            time_span_ms = trades[-1]["timestamp"] - trades[0]["timestamp"]
             time_span_minutes = time_span_ms / (1000 * 60) if time_span_ms > 0 else 1
             trade_velocity = len(trades) / time_span_minutes if time_span_minutes > 0 else 0
 
-            buy_sell_ratio = buy_volume / sell_volume if sell_volume > 0 else float('inf')
+            buy_sell_ratio = buy_volume / sell_volume if sell_volume > 0 else float("inf")
             buy_pressure_percent = (buy_volume / total_volume * 100) if total_volume > 0 else 50
 
             result = {
-                'trades': trades,
-                'buy_volume': buy_volume,
-                'sell_volume': sell_volume,
-                'buy_sell_ratio': buy_sell_ratio,
-                'buy_pressure_percent': buy_pressure_percent,
-                'avg_trade_size': total_volume / len(trades) if len(trades) > 0 else 0,
-                'trade_velocity': trade_velocity,
-                'total_trades': len(trades),
-                'time_span_minutes': time_span_minutes
+                "trades": trades,
+                "buy_volume": buy_volume,
+                "sell_volume": sell_volume,
+                "buy_sell_ratio": buy_sell_ratio,
+                "buy_pressure_percent": buy_pressure_percent,
+                "avg_trade_size": total_volume / len(trades) if len(trades) > 0 else 0,
+                "trade_velocity": trade_velocity,
+                "total_trades": len(trades),
+                "time_span_minutes": time_span_minutes
             }
 
 
@@ -588,38 +588,38 @@ class DataFetcher:
         """
         try:
             # Check exchange support
-            if not self.exchange.has.get('fetchFundingRate', False):
+            if not self.exchange.has.get("fetchFundingRate", False):
                 self.logger.debug("Exchange %s does not support fetchFundingRate", self.exchange.id)
                 return None
 
             funding = await self.exchange.fetch_funding_rate(pair)
 
-            if not funding or 'fundingRate' not in funding:
+            if not funding or "fundingRate" not in funding:
                 self.logger.debug("No funding rate available for %s", pair)
                 return None
 
-            rate = float(funding.get('fundingRate', 0))
+            rate = float(funding.get("fundingRate", 0))
             # Funding typically happens every 8 hours (3x daily), annualize it
             annualized_rate = rate * 3 * 365 * 100
 
             # Interpret sentiment based on rate
             if rate > 0.01:  # > 1% per funding
-                sentiment = 'Strong Bullish'
+                sentiment = "Strong Bullish"
             elif rate > 0.0001:  # > 0.01% per funding
-                sentiment = 'Bullish'
+                sentiment = "Bullish"
             elif rate < -0.01:
-                sentiment = 'Strong Bearish'
+                sentiment = "Strong Bearish"
             elif rate < -0.0001:
-                sentiment = 'Bearish'
+                sentiment = "Bearish"
             else:
-                sentiment = 'Neutral'
+                sentiment = "Neutral"
 
             result = {
-                'funding_rate': rate,
-                'funding_rate_percent': rate * 100,
-                'funding_timestamp': funding.get('fundingTime'),
-                'annualized_rate': annualized_rate,
-                'sentiment': sentiment
+                "funding_rate": rate,
+                "funding_rate_percent": rate * 100,
+                "funding_timestamp": funding.get("fundingTime"),
+                "annualized_rate": annualized_rate,
+                "sentiment": sentiment
             }
 
 
@@ -656,54 +656,54 @@ class DataFetcher:
             - Failures in individual fetches are logged but don't fail the entire call
         """
         result = {
-            'ticker': None,
-            'order_book': None,
-            'recent_trades': None,
-            'funding_rate': None,
-            'snapshot_context': {
-                'is_live_snapshot': True,
-                'comparison_basis': 'previous_analysis_cycle_snapshot',
-                'comparison_available': False
+            "ticker": None,
+            "order_book": None,
+            "recent_trades": None,
+            "funding_rate": None,
+            "snapshot_context": {
+                "is_live_snapshot": True,
+                "comparison_basis": "previous_analysis_cycle_snapshot",
+                "comparison_available": False
             },
-            'available_data': [],
-            'timestamp': int(time.time() * 1000)
+            "available_data": [],
+            "timestamp": int(time.time() * 1000)
         }
 
         try:
             if cached_ticker:
-                result['ticker'] = cached_ticker
-                result['available_data'].append('ticker')
+                result["ticker"] = cached_ticker
+                result["available_data"].append("ticker")
             else:
                 ticker_data = await self.fetch_multiple_tickers([pair])
-                if ticker_data and 'RAW' in ticker_data:
+                if ticker_data and "RAW" in ticker_data:
                     base, quote = self._extract_currencies(pair)
-                    if base and quote and base in ticker_data['RAW'] and quote in ticker_data['RAW'][base]:
-                        result['ticker'] = ticker_data['RAW'][base][quote]
-                        result['available_data'].append('ticker')
+                    if base and quote and base in ticker_data["RAW"] and quote in ticker_data["RAW"][base]:
+                        result["ticker"] = ticker_data["RAW"][base][quote]
+                        result["available_data"].append("ticker")
         except Exception as e:
             self.logger.warning("Could not fetch ticker for %s: %s", pair, e)
 
         try:
             order_book = await self.fetch_order_book_depth(pair, limit=50)
             if order_book:
-                result['order_book'] = order_book
-                result['available_data'].append('order_book')
+                result["order_book"] = order_book
+                result["available_data"].append("order_book")
         except Exception as e:
             self.logger.warning("Could not fetch order book for %s: %s", pair, e)
 
         try:
             trades = await self.fetch_recent_trades(pair, limit=500)
             if trades:
-                result['recent_trades'] = trades
-                result['available_data'].append('recent_trades')
+                result["recent_trades"] = trades
+                result["available_data"].append("recent_trades")
         except Exception as e:
             self.logger.warning("Could not fetch recent trades for %s: %s", pair, e)
 
         try:
             funding = await self.fetch_funding_rate(pair)
             if funding:
-                result['funding_rate'] = funding
-                result['available_data'].append('funding_rate')
+                result["funding_rate"] = funding
+                result["available_data"].append("funding_rate")
         except Exception as e:
             self.logger.debug("Funding rate not available for %s: %s", pair, e)
 

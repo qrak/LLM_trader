@@ -29,7 +29,7 @@ class VisualsRouter:
                 "error": "Chart buffer exists but is empty",
                 "debug": {"buffer_exists": True, "bytes_length": 0}
             }
-            
+
         try:
             has_buffer_attr = True
             _ = self.analysis_engine.last_chart_buffer

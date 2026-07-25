@@ -56,10 +56,10 @@ class Position(SerializableMixin):
 
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""
-        if self.direction == 'LONG':
+        if self.direction == "LONG":
             return ((current_price - self.entry_price) / self.entry_price) * 100
-        else:  # SHORT
-            return ((self.entry_price - current_price) / self.entry_price) * 100
+        # SHORT
+        return ((self.entry_price - current_price) / self.entry_price) * 100
 
     def update_metrics(self, current_price: float) -> None:
         """Update live performance metrics (MAE/MFE)."""
@@ -85,17 +85,15 @@ class Position(SerializableMixin):
 
     def is_stop_hit(self, current_price: float) -> bool:
         """Check if stop loss is hit."""
-        if self.direction == 'LONG':
+        if self.direction == "LONG":
             return current_price <= self.stop_loss
-        else:
-            return current_price >= self.stop_loss
+        return current_price >= self.stop_loss
 
     def is_target_hit(self, current_price: float) -> bool:
         """Check if take profit is hit."""
-        if self.direction == 'LONG':
+        if self.direction == "LONG":
             return current_price >= self.take_profit
-        else:
-            return current_price <= self.take_profit
+        return current_price <= self.take_profit
 
 
 @dataclass(slots=True)
@@ -176,7 +174,7 @@ class TradingMemory(SerializableMixin):
 
     def get_context_summary(
         self,
-        full_history: list['TradeDecision'] | None = None,
+        full_history: list["TradeDecision"] | None = None,
         initial_capital: float | None = None,
     ) -> str:
         """Generate a concise summary for prompt injection.
@@ -221,11 +219,11 @@ class TradingMemory(SerializableMixin):
         # Track open positions to calculate P&L across entire history
         open_position = None
         for decision in history_to_analyze:
-            if decision.action in ['BUY', 'SELL']:
+            if decision.action in ["BUY", "SELL"]:
                 open_position = decision
-            elif decision.action in ['CLOSE', 'CLOSE_LONG', 'CLOSE_SHORT'] and open_position:
+            elif decision.action in ["CLOSE", "CLOSE_LONG", "CLOSE_SHORT"] and open_position:
                 # Calculate P&L for closed trade
-                if open_position.action == 'BUY':
+                if open_position.action == "BUY":
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
                     pnl_quote = (decision.price - open_position.price) * open_position.quantity
                 else:  # SELL
@@ -240,7 +238,7 @@ class TradingMemory(SerializableMixin):
                     winning_trades += 1
                 close_pnl_by_key[self._decision_key(decision)] = pnl_pct
                 open_position = None
-        
+
         # Format each recent decision for context
         for decision in recent:
             time_str = decision.timestamp.strftime("%Y-%m-%d %H:%M")

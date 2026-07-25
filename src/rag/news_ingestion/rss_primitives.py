@@ -267,8 +267,8 @@ def parse_rss_items(
     """
     results: list[dict[str, Any]] = []
     try:
-        root = ET.fromstring(payload_text)
-    except ET.ParseError:
+        root = ET.fromstring(payload_text)  # noqa: S314 # nosec B314
+    except (ET.ParseError, Exception):  # noqa: BLE001
         return results
 
     now_iso = datetime.now(timezone.utc).isoformat()

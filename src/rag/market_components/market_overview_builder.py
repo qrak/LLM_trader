@@ -26,36 +26,36 @@ class MarketOverviewBuilder:
             # 1. Add CoinGecko global data if available (flattened for formatter compatibility)
             if coingecko_data:
                 # Handle both direct global data and wrapped data
-                if 'data' in coingecko_data:
-                    overview.update(coingecko_data['data'])
-                elif any(key in coingecko_data for key in ['market_cap', 'volume', 'dominance', 'stats']):
+                if "data" in coingecko_data:
+                    overview.update(coingecko_data["data"])
+                elif any(key in coingecko_data for key in ["market_cap", "volume", "dominance", "stats"]):
                     # Direct global data format
                     overview.update(coingecko_data)
                 else:
                     self.logger.warning("Unexpected CoinGecko data format: %s", list(coingecko_data.keys()))
 
             # 2. Add price data if available (Process BEFORE top_coins to use it for enrichment)
-            overview['coin_data'] = {}
+            overview["coin_data"] = {}
             if price_data:
                 for symbol, values in price_data.items():
                     processed_coin = self.processor.process_coin_data(values)
                     if processed_coin:
-                        overview['coin_data'][symbol] = processed_coin
+                        overview["coin_data"][symbol] = processed_coin
 
             # 3. Add top coins list if available
             # Strategy: Prefer existing rich data from CoinGecko, update with fresh prices if available.
             # If no CoinGecko data, build from scratch using the symbols list.
 
-            existing_top_coins = overview.get('top_coins', [])
+            existing_top_coins = overview.get("top_coins", [])
 
             if existing_top_coins:
                 # We have rich CoinGecko data. Update it with fresh stats if available.
                 for coin in existing_top_coins:
-                    symbol = coin.get('symbol', '').upper()
+                    symbol = coin.get("symbol", "").upper()
 
                     # Find matching fresh data
                     fresh_data = None
-                    for key, data in overview.get('coin_data', {}).items():
+                    for key, data in overview.get("coin_data", {}).items():
                         if key.upper().startswith(symbol + "/") or key.upper() == symbol:
                             fresh_data = data
                             break
@@ -63,14 +63,14 @@ class MarketOverviewBuilder:
                     if fresh_data:
                         # Only update if we have valid non-zero data, or if we really trust the fresh source
                         # Here we prioritize the fresh source if it has a price
-                        fresh_price = fresh_data.get('price', 0)
+                        fresh_price = fresh_data.get("price", 0)
                         if fresh_price > 0:
-                            coin['current_price'] = fresh_price
-                            coin['price_change_percentage_24h'] = fresh_data.get('change_24h', coin.get('price_change_percentage_24h', 0))
-                            coin['total_volume'] = fresh_data.get('volume', coin.get('total_volume', 0))
+                            coin["current_price"] = fresh_price
+                            coin["price_change_percentage_24h"] = fresh_data.get("change_24h", coin.get("price_change_percentage_24h", 0))
+                            coin["total_volume"] = fresh_data.get("volume", coin.get("total_volume", 0))
 
                 # Update the overview with the potentially updated list
-                overview['top_coins'] = existing_top_coins
+                overview["top_coins"] = existing_top_coins
 
             elif top_coins:
                  # Fallback: We only have a list of symbols or pre-built dicts
@@ -87,7 +87,7 @@ class MarketOverviewBuilder:
                     symbol = item
                     # Try to find corresponding data in coin_data
                     coin_info = None
-                    for key, data in overview.get('coin_data', {}).items():
+                    for key, data in overview.get("coin_data", {}).items():
                         if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
                             coin_info = data
                             break
@@ -96,13 +96,13 @@ class MarketOverviewBuilder:
                         "symbol": symbol,
                         "name": symbol,
                         "market_cap_rank": i + 1,
-                        "current_price": coin_info.get('price', 0) if coin_info else 0,
-                        "price_change_percentage_24h": coin_info.get('change_24h', 0) if coin_info else 0,
-                        "total_volume": coin_info.get('volume', 0) if coin_info else 0
+                        "current_price": coin_info.get("price", 0) if coin_info else 0,
+                        "price_change_percentage_24h": coin_info.get("change_24h", 0) if coin_info else 0,
+                        "total_volume": coin_info.get("volume", 0) if coin_info else 0
                     }
                     rich_top_coins.append(rich_coin)
 
-                overview['top_coins'] = rich_top_coins
+                overview["top_coins"] = rich_top_coins
 
             return self._finalize_overview(overview)
 
@@ -127,19 +127,19 @@ class MarketOverviewBuilder:
         """Finalize and validate the overview structure."""
         try:
             # Add metadata
-            overview['published_on'] = datetime.now().timestamp()
-            overview['data_sources'] = []
+            overview["published_on"] = datetime.now().timestamp()
+            overview["data_sources"] = []
 
             # Track data sources
-            if 'global_data' in overview:
-                overview['data_sources'].append('coingecko_global')
-            if 'coin_data' in overview:
-                overview['data_sources'].append('price_data')
+            if "global_data" in overview:
+                overview["data_sources"].append("coingecko_global")
+            if "coin_data" in overview:
+                overview["data_sources"].append("price_data")
 
             # Add summary statistics
-            if 'coin_data' in overview:
-                coin_count = len(overview['coin_data'])
-                overview['summary'] += f" - {coin_count} coins tracked"
+            if "coin_data" in overview:
+                coin_count = len(overview["coin_data"])
+                overview["summary"] += f" - {coin_count} coins tracked"
 
             return overview
 

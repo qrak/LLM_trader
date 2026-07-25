@@ -3,5 +3,7 @@ from .overlap_indicators import (
 )
 
 __all__ = [
-    'ema_numba', 'sma_numba', 'ewma_numba'
+    "ema_numba",
+    "ewma_numba",
+    "sma_numba"
 ]

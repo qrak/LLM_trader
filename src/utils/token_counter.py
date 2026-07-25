@@ -24,7 +24,7 @@ class ModelPricing:
         pricing_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_pricing.json")
         pricing_path = os.path.normpath(pricing_path)
         try:
-            with open(pricing_path, "r", encoding="utf-8") as f:
+            with open(pricing_path, encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return {"google": {}, "openrouter": {}}
@@ -147,14 +147,13 @@ class TokenCounter:
         """Format cost in human-readable format."""
         if cost == 0 or cost is None:
             return "Free"
-        elif cost < 0.0001:
+        if cost < 0.0001:
             return f"${cost:.8f} ({cost * 100:.6f}¢)"
-        elif cost < 0.01:
+        if cost < 0.01:
             return f"${cost:.6f} ({cost * 100:.4f}¢)"
-        elif cost < 1:
+        if cost < 1:
             return f"${cost:.4f}"
-        else:
-            return f"${cost:.2f}"
+        return f"${cost:.2f}"
 
     def process_response_usage(
         self,
@@ -244,7 +243,7 @@ class CostStorage:
         """Load existing costs or create default structure."""
         if os.path.exists(self.file_path):
             try:
-                with open(self.file_path, 'r', encoding='utf-8') as f:
+                with open(self.file_path, encoding="utf-8") as f:
                     data = json.load(f)
                 self._last_reset = data.get("last_reset")
                 for provider in self.PROVIDERS:
@@ -258,7 +257,7 @@ class CostStorage:
                     else:
                         self._providers[provider] = ProviderCostStats()
                 return
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass  # file not found or corrupt, use defaults
         self._init_defaults()
 
@@ -282,7 +281,7 @@ class CostStorage:
             temp_path = None
             try:
                 directory = os.path.dirname(self.file_path)
-                with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', dir=directory) as f:
+                with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", dir=directory) as f:
                     temp_path = f.name
                     json.dump(data, f, indent=2)
                     f.flush()

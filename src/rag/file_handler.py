@@ -50,11 +50,10 @@ class RagFileHandler:
         self.logger.debug("Initialized RAG file directories")
 
     def _resolve_base_dir(self) -> str:
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             return os.path.dirname(sys.executable)
-        else:
-            # __file__ is inside src/rag/; go up three levels to reach project root
-            return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # __file__ is inside src/rag/; go up three levels to reach project root
+        return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     def load_json_file(self, file_path: str) -> dict | None:
         try:
@@ -66,7 +65,7 @@ class RagFileHandler:
                 return None
 
             if os.path.exists(abs_path):
-                with open(abs_path, 'r', encoding='utf-8') as f:
+                with open(abs_path, encoding="utf-8") as f:
                     return json.load(f)
             return None
         except Exception as e:
@@ -84,7 +83,7 @@ class RagFileHandler:
 
             # Atomic write: write to temporary file first, then rename
             temp_path = f"{abs_path}.tmp"
-            with open(temp_path, 'w', encoding='utf-8') as f:
+            with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
             # Atomic operation: rename temp file to target
@@ -106,7 +105,7 @@ class RagFileHandler:
 
         filtered_articles = []
         for art in articles:
-            article_timestamp = self.unified_parser.format_utils.parse_timestamp(art.get('published_on', 0))
+            article_timestamp = self.unified_parser.format_utils.parse_timestamp(art.get("published_on", 0))
             if article_timestamp > cutoff_time:
                 filtered_articles.append(art)
 
@@ -131,12 +130,12 @@ class RagFileHandler:
             return
 
         try:
-            recent_articles.sort(key=lambda x: self.unified_parser.format_utils.parse_timestamp(x.get('published_on', 0)), reverse=True)
+            recent_articles.sort(key=lambda x: self.unified_parser.format_utils.parse_timestamp(x.get("published_on", 0)), reverse=True)
 
             news_data = {
-                'last_updated': datetime.now().isoformat(),
-                'count': len(recent_articles),
-                'articles': recent_articles
+                "last_updated": datetime.now().isoformat(),
+                "count": len(recent_articles),
+                "articles": recent_articles
             }
 
             self.save_json_file(self.news_file_path, news_data)
@@ -149,11 +148,11 @@ class RagFileHandler:
         try:
             data = self.load_json_file(self.news_file_path)
 
-            if not data or 'articles' not in data:
+            if not data or "articles" not in data:
                 self.logger.debug("No news articles found in file or empty file")
                 return []
 
-            articles = data.get('articles', [])
+            articles = data.get("articles", [])
             recent_articles = self.filter_articles_by_age(articles, max_age_seconds=86400)
 
             if len(recent_articles) < len(articles):
@@ -170,10 +169,10 @@ class RagFileHandler:
         try:
             data = self.load_json_file(self.news_file_path)
 
-            if not data or 'articles' not in data:
+            if not data or "articles" not in data:
                 return []
 
-            articles = data.get('articles', [])
+            articles = data.get("articles", [])
             fallback_articles = self.filter_articles_by_age(
                 articles, max_age_seconds=max_age_hours * 3600
             )
@@ -251,8 +250,7 @@ class RagFileHandler:
             if data:
                 self.logger.debug("Loaded RAG priorities configuration")
                 return data
-            else:
-                self.logger.warning("load_json_file returned None for %s", self.rag_priorities_file)
+            self.logger.warning("load_json_file returned None for %s", self.rag_priorities_file)
             return None
         except Exception as e:
             self.logger.error("Error loading RAG priorities: %s", e, exc_info=True)

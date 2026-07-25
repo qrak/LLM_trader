@@ -6,7 +6,7 @@ Handles building and maintaining search indices for news articles.
 
 import re
 from collections import defaultdict
-from typing import Any, Set
+from typing import Any
 from src.logger.logger import Logger
 
 
@@ -25,7 +25,7 @@ class IndexManager:
         self.keyword_index: dict[str, list[int]] = defaultdict(list)
 
     def build_indices(self, news_database: list[dict[str, Any]],
-                     known_crypto_tickers: Set[str],
+                     known_crypto_tickers: set[str],
                      category_word_map: dict[str, str]) -> None:
         """Build search indices from news database."""
         self._clear_indices()
@@ -43,9 +43,9 @@ class IndexManager:
         self.coin_index.clear()
         self.keyword_index.clear()
 
-    def _index_article_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
+    def _index_article_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
         """Index article categories."""
-        categories = article.get('categories', '').split('|')
+        categories = article.get("categories", "").split("|")
         for category in categories:
             if not category:
                 continue
@@ -59,31 +59,31 @@ class IndexManager:
 
     def _index_article_tags(self, article: dict[str, Any], index: int) -> None:
         """Index article tags."""
-        tags = article.get('tags', '').split('|')
+        tags = article.get("tags", "").split("|")
         for tag in tags:
             if tag:
                 self.tag_index[tag.lower()].append(index)
 
-    def _index_article_coins(self, article: dict[str, Any], index: int, known_crypto_tickers: Set[str]) -> None:
+    def _index_article_coins(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
         """Detect and index coins mentioned in the article."""
         # Check if coins are already detected and stored as list
-        if 'detected_coins' in article:
-            coins_mentioned = set(article['detected_coins'])
+        if "detected_coins" in article:
+            coins_mentioned = set(article["detected_coins"])
         else:
             # Fall back to detection
             coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
             if coins_mentioned:
                 # Store as list internally
-                article['detected_coins'] = list(coins_mentioned)
-                article['detected_coins_str'] = '|'.join(coins_mentioned)
+                article["detected_coins"] = list(coins_mentioned)
+                article["detected_coins_str"] = "|".join(coins_mentioned)
 
         for coin in coins_mentioned:
             self.coin_index[coin.lower()].append(index)
 
     def _index_article_keywords(self, article: dict[str, Any], index: int, category_word_map: dict[str, str]) -> None:
         """Index keywords from article title and body with consistent case normalization."""
-        title = article.get('title', '').lower()
-        body = article.get('body', '').lower()
+        title = article.get("title", "").lower()
+        body = article.get("body", "").lower()
 
         # Index category-associated words
         self._index_category_words(title, body, index, category_word_map)
@@ -96,7 +96,7 @@ class IndexManager:
         for word, _ in category_word_map.items():
             # Ensure word is already lowercase (should be from the mapping)
             word_lower = word.lower()
-            word_pattern = rf'\b{re.escape(word_lower)}\b'
+            word_pattern = rf"\b{re.escape(word_lower)}\b"
             if re.search(word_pattern, title) or re.search(word_pattern, body):
                 # Prevent duplicates
                 if index not in self.keyword_index[word_lower]:
@@ -104,8 +104,8 @@ class IndexManager:
 
     def _index_title_words(self, title: str, index: int) -> None:
         """Index important words from article title with consistent lowercase normalization."""
-        title_words = set(re.findall(r'\b[a-z0-9]{3,15}\b', title))
-        stop_words = {'the', 'and', 'for', 'with'}
+        title_words = set(re.findall(r"\b[a-z0-9]{3,15}\b", title))
+        stop_words = {"the", "and", "for", "with"}
 
         for word in title_words:
             if len(word) > 2 and word not in stop_words:

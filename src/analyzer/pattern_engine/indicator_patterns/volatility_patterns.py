@@ -145,10 +145,9 @@ def detect_volatility_trend_numba(
 
     if float(increasing) >= threshold:
         return 1
-    elif float(decreasing) >= threshold:
+    if float(decreasing) >= threshold:
         return -1
-    else:
-        return 0
+    return 0
 
 
 @njit(cache=True)

@@ -5,7 +5,7 @@ Supports both text-only and multimodal (text + image) requests for pattern analy
 import inspect
 import io
 import struct
-from typing import Any, Union
+from typing import Any
 
 from google import genai
 from google.genai import errors, types
@@ -102,20 +102,20 @@ class GoogleAIClient(BaseAIClient):
 
         Returns (width, height) or None if format is unknown.
         """
-        if img_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+        if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
             # PNG: IHDR chunk at offset 16 (4B width, 4B height, big-endian)
             if len(img_bytes) >= 33:
-                w = struct.unpack('>I', img_bytes[16:20])[0]
-                h = struct.unpack('>I', img_bytes[20:24])[0]
+                w = struct.unpack(">I", img_bytes[16:20])[0]
+                h = struct.unpack(">I", img_bytes[20:24])[0]
                 return w, h
-        elif img_bytes[:2] in (b'\xff\xd8',):
+        elif img_bytes[:2] in (b"\xff\xd8",):
             # JPEG: scan for SOF0 (0xff 0xc0/0xc1/0xc2) marker
             i = 2
             while i < len(img_bytes) - 1:
                 if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):
                     if i + 9 < len(img_bytes):
-                        h = struct.unpack('>H', img_bytes[i + 5:i + 7])[0]
-                        w = struct.unpack('>H', img_bytes[i + 7:i + 9])[0]
+                        h = struct.unpack(">H", img_bytes[i + 5:i + 7])[0]
+                        w = struct.unpack(">H", img_bytes[i + 7:i + 9])[0]
                         return w, h
                 i += 1
         return None
@@ -160,9 +160,9 @@ class GoogleAIClient(BaseAIClient):
             if not metadata:
                 return None
 
-            prompt = getattr(metadata, 'prompt_token_count', 0) or 0
-            completion = getattr(metadata, 'candidates_token_count', 0) or 0
-            thoughts = getattr(metadata, 'thoughts_token_count', 0) or 0
+            prompt = getattr(metadata, "prompt_token_count", 0) or 0
+            completion = getattr(metadata, "candidates_token_count", 0) or 0
+            thoughts = getattr(metadata, "thoughts_token_count", 0) or 0
 
             # Google bills thinking tokens as output ("Output price including thinking tokens").
             output_tokens = completion + thoughts
@@ -170,14 +170,14 @@ class GoogleAIClient(BaseAIClient):
             # Log per-modality breakdown from SDK for transparency
             text_tokens = None
             image_tokens_sdk = None
-            prompt_details = getattr(metadata, 'prompt_tokens_details', None)
+            prompt_details = getattr(metadata, "prompt_tokens_details", None)
             if prompt_details:
                 for detail in prompt_details:
-                    mod = getattr(detail, 'modality', '')
-                    count = getattr(detail, 'token_count', 0) or 0
-                    if mod == 'TEXT':
+                    mod = getattr(detail, "modality", "")
+                    count = getattr(detail, "token_count", 0) or 0
+                    if mod == "TEXT":
                         text_tokens = count
-                    elif mod == 'IMAGE':
+                    elif mod == "IMAGE":
                         image_tokens_sdk = count
 
             # Diagnostic: log the modality breakdown if available
@@ -194,7 +194,7 @@ class GoogleAIClient(BaseAIClient):
                     text_tokens or prompt, est, prompt, output_tokens,
                 )
 
-            total = getattr(metadata, 'total_token_count', 0) or 0
+            total = getattr(metadata, "total_token_count", 0) or 0
             return UsageModel(
                 prompt_tokens=prompt,
                 completion_tokens=output_tokens,
@@ -310,7 +310,7 @@ class GoogleAIClient(BaseAIClient):
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -329,7 +329,7 @@ class GoogleAIClient(BaseAIClient):
         prompt = self._extract_text_from_messages(messages)
         effective_model = model if model else self.model
         img_data = self.process_chart_image(chart_image)
-        image_part = types.Part.from_bytes(data=img_data, mime_type='image/png')
+        image_part = types.Part.from_bytes(data=img_data, mime_type="image/png")
         contents = [prompt, image_part]
         include_code_execution = model_config.get("google_code_execution", False)
 

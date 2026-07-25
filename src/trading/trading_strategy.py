@@ -463,14 +463,14 @@ class TradingStrategy:
         UPDATE/CLOSE, verify the executor has the position tracked (which
         only happens after fill confirmation).
         """
-        if not getattr(self.config, 'EXECUTOR_API_ENABLED', False):
+        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
             return True  # No executor configured — assume position is real
-        url: str = getattr(self.config, 'EXECUTOR_API_URL', '')
+        url: str = getattr(self.config, "EXECUTOR_API_URL", "")
         if not url:
             return True
         try:
             import httpx
-            pos_url = url.rstrip('/') + '/position'
+            pos_url = url.rstrip("/") + "/position"
             async with httpx.AsyncClient(timeout=3.0) as client:
                 resp = await client.get(pos_url, params={"symbol": symbol})
             if resp.status_code == 200:
@@ -983,7 +983,7 @@ class TradingStrategy:
         ])
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
-            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
+            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == "LONG" else (pos.entry_price - current_price) * pos.size
             lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()

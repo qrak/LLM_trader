@@ -72,8 +72,8 @@ class MarketFormatter:
 
     def format_microstructure_snapshot_notice(self, symbol: str, timeframe: str, microstructure: dict[str, Any]) -> str:
         """Explain that microstructure data is a live snapshot and not timeframe aggregation."""
-        snapshot_context = microstructure.get('snapshot_context', {})
-        if not snapshot_context.get('is_live_snapshot'):
+        snapshot_context = microstructure.get("snapshot_context", {})
+        if not snapshot_context.get("is_live_snapshot"):
             return ""
 
         lines = [f"## {symbol} Live Microstructure Snapshot Notice:"]
@@ -133,14 +133,14 @@ class MarketFormatter:
             str: Truncated description ending with complete sentences
         """
         # Split by sentences (simple approach)
-        sentences = description.split('. ')
+        sentences = description.split(". ")
         truncated = ""
 
         for i, sentence in enumerate(sentences):
             # Add sentence with proper punctuation
-            test_text = truncated + (sentence if sentence.endswith('.') else sentence + '.')
+            test_text = truncated + (sentence if sentence.endswith(".") else sentence + ".")
             if i < len(sentences) - 1:
-                test_text += ' '
+                test_text += " "
 
             # Check if adding this sentence would exceed token limit
             if self.token_counter.count_tokens(test_text) > max_tokens:
@@ -148,15 +148,14 @@ class MarketFormatter:
                 if not truncated:
                     words = sentence.split()
                     for j, _ in enumerate(words):
-                        test_word_text = ' '.join(words[:j+1]) + '...'
+                        test_word_text = " ".join(words[:j+1]) + "..."
                         if self.token_counter.count_tokens(test_word_text) > max_tokens:
                             if j == 0:  # Even first word is too long
-                                return sentence[:50] + '...'
-                            return ' '.join(words[:j]) + '...'
-                    return sentence + '...'
-                else:
-                    # Add ellipsis to indicate truncation
-                    return truncated.rstrip() + '...'
+                                return sentence[:50] + "..."
+                            return " ".join(words[:j]) + "..."
+                    return sentence + "..."
+                # Add ellipsis to indicate truncation
+                return truncated.rstrip() + "..."
 
             truncated = test_text
 
@@ -237,15 +236,15 @@ class MarketFormatter:
         for period, period_data in market_metrics.items():
             if not period_data:
                 continue
-            metrics = period_data.get('metrics', {})
+            metrics = period_data.get("metrics", {})
             if not metrics:
                 continue
 
             parts = []
-            avg_price = metrics.get('avg_price')
-            lowest_price = metrics.get('lowest_price')
-            highest_price = metrics.get('highest_price')
-            price_change_percent = metrics.get('price_change_percent')
+            avg_price = metrics.get("avg_price")
+            lowest_price = metrics.get("lowest_price")
+            highest_price = metrics.get("highest_price")
+            price_change_percent = metrics.get("price_change_percent")
 
             if avg_price:
                 parts.append(f"Avg${self.format_utils.fmt(avg_price)}")
@@ -255,17 +254,17 @@ class MarketFormatter:
                 direction = "\u2191" if price_change_percent >= 0 else "\u2193"
                 parts.append(f"\u0394{direction}{self.format_utils.fmt(abs(price_change_percent))}%")
 
-            total_volume = metrics.get('total_volume')
+            total_volume = metrics.get("total_volume")
             if total_volume:
                 parts.append(f"Vol:{self.format_utils.fmt(total_volume)}")
 
-            if 'indicator_changes' in period_data:
-                ind_parts = self._format_indicator_changes_compressed(period_data['indicator_changes'])
+            if "indicator_changes" in period_data:
+                ind_parts = self._format_indicator_changes_compressed(period_data["indicator_changes"])
                 if ind_parts:
                     parts.append(ind_parts)
 
             if parts:
-                period_label = str(metrics.get('period') or period).upper()
+                period_label = str(metrics.get("period") or period).upper()
                 sections.append(f"\n{period_label}: {' | '.join(parts)}")
 
         return "".join(sections)
@@ -276,22 +275,22 @@ class MarketFormatter:
             return ""
 
         parts = []
-        rsi_change = indicator_changes.get('rsi_change')
+        rsi_change = indicator_changes.get("rsi_change")
         if rsi_change is not None and abs(rsi_change) > 0.1:
             direction = "\u2191 " if rsi_change >= 0 else "\u2193 "
             parts.append(f"RSI {direction}{self.format_utils.fmt(abs(rsi_change))}")
 
-        macd_change = indicator_changes.get('macd_line_change')
+        macd_change = indicator_changes.get("macd_line_change")
         if macd_change is not None and abs(macd_change) > 1:
             direction = "\u2191 " if macd_change >= 0 else "\u2193 "
             parts.append(f"MACD {direction}{self.format_utils.fmt(abs(macd_change))}")
 
-        adx_change = indicator_changes.get('adx_change')
+        adx_change = indicator_changes.get("adx_change")
         if adx_change is not None and abs(adx_change) > 0.5:
             direction = "\u2191 " if adx_change >= 0 else "\u2193 "
             parts.append(f"ADX {direction}{self.format_utils.fmt(abs(adx_change))}")
 
-        stoch_change = indicator_changes.get('stoch_k_change')
+        stoch_change = indicator_changes.get("stoch_k_change")
         if stoch_change is not None and abs(stoch_change) > 1:
             direction = "\u2191 " if stoch_change >= 0 else "\u2193 "
             parts.append(f"Stoch {direction}{self.format_utils.fmt(abs(stoch_change))}")
@@ -314,12 +313,12 @@ class MarketFormatter:
         if not order_book or "error" in order_book:
             return ""
 
-        base_currency = symbol.split('/')[0] if '/' in symbol else ""
-        quote_currency = symbol.split('/')[1] if '/' in symbol else ""
+        base_currency = symbol.split("/")[0] if "/" in symbol else ""
+        quote_currency = symbol.split("/")[1] if "/" in symbol else ""
 
         lines = [f"## {symbol} Live Order Book Snapshot:"]
         lines.append(f"  • Snapshot Timestamp: {self._format_snapshot_timestamp(order_book.get('timestamp'))}")
-        levels_analyzed = order_book.get('levels_analyzed')
+        levels_analyzed = order_book.get("levels_analyzed")
         if levels_analyzed:
             lines.append(f"  • Visible Levels Analyzed: {levels_analyzed} per side (live snapshot, not {timeframe} aggregation)")
 
@@ -435,7 +434,7 @@ class MarketFormatter:
         if not trades or "error" in trades:
             return ""
 
-        base_currency = symbol.split('/')[0] if '/' in symbol else ""
+        base_currency = symbol.split("/")[0] if "/" in symbol else ""
 
         lines = [f"## {symbol} Recent Trade Flow:"]
 

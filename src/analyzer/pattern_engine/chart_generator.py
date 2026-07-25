@@ -6,7 +6,8 @@ import io
 import os
 import threading
 from datetime import datetime
-from typing import Any, Union, Callable
+from typing import Any
+from collections.abc import Callable
 
 import math
 import numpy as np
@@ -38,21 +39,21 @@ class ChartGenerator:
 
         # AI-optimized colors for better pattern recognition
         self.ai_colors = {
-            'background': '#000000',  # Pure black for maximum contrast
-            'grid': '#555555',        # Visible grid for AI readability
-            'text': '#ffffff',        # Pure white text
-            'candle_up': '#00ff00',   # Bright green for bullish candles
-            'candle_down': '#ff0000', # Bright red for bearish candles
-            'volume': '#0080ff',      # Bright blue for volume
-            'volume_up': '#00aa00',   # Green for bullish volume bars
-            'volume_down': '#aa0000', # Red for bearish volume bars
-            'rsi': '#ffff00',         # Bright yellow for RSI
-            'sma_50': '#ff8c00',      # Orange for SMA 50 (short-term)
-            'sma_200': '#9932cc',     # Purple for SMA 200 (long-term)
-            'cmf': '#00ffff',         # Cyan for CMF
-            'obv': '#ff00ff',         # Magenta for OBV
-            'rsi_oversold': '#00ff00',  # Green for oversold line (30)
-            'rsi_overbought': '#ff0000' # Red for overbought line (70)
+            "background": "#000000",  # Pure black for maximum contrast
+            "grid": "#555555",        # Visible grid for AI readability
+            "text": "#ffffff",        # Pure white text
+            "candle_up": "#00ff00",   # Bright green for bullish candles
+            "candle_down": "#ff0000", # Bright red for bearish candles
+            "volume": "#0080ff",      # Bright blue for volume
+            "volume_up": "#00aa00",   # Green for bullish volume bars
+            "volume_down": "#aa0000", # Red for bearish volume bars
+            "rsi": "#ffff00",         # Bright yellow for RSI
+            "sma_50": "#ff8c00",      # Orange for SMA 50 (short-term)
+            "sma_200": "#9932cc",     # Purple for SMA 200 (long-term)
+            "cmf": "#00ffff",         # Cyan for CMF
+            "obv": "#ff00ff",         # Magenta for OBV
+            "rsi_oversold": "#00ff00",  # Green for oversold line (30)
+            "rsi_overbought": "#ff0000" # Red for overbought line (70)
         }
         # AI chart candle limit from config
         self.ai_candle_limit = config.AI_CHART_CANDLE_LIMIT if config is not None else 200
@@ -62,12 +63,11 @@ class ChartGenerator:
         if isinstance(val, (int, float)) and not math.isnan(val):
             if abs(val) < 0.00001:
                 return f"{val:.8f}"
-            elif abs(val) < 0.01:
+            if abs(val) < 0.01:
                 return f"{val:.6f}"
-            elif abs(val) < 10:
+            if abs(val) < 10:
                 return f"{val:.4f}"
-            else:
-                return f"{val:.2f}"
+            return f"{val:.2f}"
         return "N/A"
 
     def _image_export_with_timeout(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, timeout: int = 30) -> bytes:
@@ -88,13 +88,13 @@ class ChartGenerator:
             TimeoutError: If export takes longer than timeout
             Exception: If export fails for other reasons
         """
-        result = {'img_bytes': None, 'exception': None}
+        result = {"img_bytes": None, "exception": None}
 
         def export_worker():
             try:
-                result['img_bytes'] = fig.to_image(format=img_format, width=width, height=height, scale=scale)
+                result["img_bytes"] = fig.to_image(format=img_format, width=width, height=height, scale=scale)
             except Exception as e:
-                result['exception'] = e
+                result["exception"] = e
 
         thread = threading.Thread(target=export_worker, daemon=True)
         thread.start()
@@ -103,11 +103,11 @@ class ChartGenerator:
         if thread.is_alive():
             raise TimeoutError(f"Image export timed out after {timeout} seconds (kaleido may be hanging)")
 
-        exc = result['exception']
+        exc = result["exception"]
         if exc is not None:
             raise exc
 
-        return result['img_bytes']
+        return result["img_bytes"]
 
     async def _retry_image_export(self, fig: go.Figure, img_format: str, width: int, height: int, scale: int, max_retries: int = 3, timeout: int = 30) -> bytes:
         """Retry image export with exponential backoff to handle kaleido/choreographer issues.
@@ -168,7 +168,7 @@ class ChartGenerator:
         output_path: str | None = None,
         simple_mode: bool = True,  # Default to simple mode for AI analysis
         timestamps: list | None = None
-    ) -> Union[io.BytesIO, str]:
+    ) -> io.BytesIO | str:
         """Create a PNG chart image optimized for AI pattern analysis.
 
         Args:
@@ -215,7 +215,7 @@ class ChartGenerator:
 
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-                with open(output_path, 'wb') as f:
+                with open(output_path, "wb") as f:
                     f.write(img_bytes)
 
                 if self.logger:
@@ -228,21 +228,20 @@ class ChartGenerator:
                             first_time_dt = datetime.fromtimestamp(ohlcv[0][0] / 1000)
                             last_time_dt = datetime.fromtimestamp(ohlcv[-1][0] / 1000)
 
-                        first_time = first_time_dt.strftime('%Y-%m-%d %H:%M') if first_time_dt else 'N/A'
-                        last_time = last_time_dt.strftime('%Y-%m-%d %H:%M') if last_time_dt else 'N/A'
+                        first_time = first_time_dt.strftime("%Y-%m-%d %H:%M") if first_time_dt else "N/A"
+                        last_time = last_time_dt.strftime("%Y-%m-%d %H:%M") if last_time_dt else "N/A"
                         current_price = ohlcv[-1][4]  # Close price of last candle
                         self.logger.info("📈 Data range: %s to %s | Current price: %s", first_time, last_time, current_price)
 
                 return output_path
-            else:
-                # Return BytesIO for memory efficiency
-                img_buffer = io.BytesIO(img_bytes)
-                img_buffer.seek(0)
+            # Return BytesIO for memory efficiency
+            img_buffer = io.BytesIO(img_bytes)
+            img_buffer.seek(0)
 
-                if self.logger:
-                    self.logger.debug("Generated chart image for %s (%s bytes)", pair_symbol, len(img_bytes))
+            if self.logger:
+                self.logger.debug("Generated chart image for %s (%s bytes)", pair_symbol, len(img_bytes))
 
-                return img_buffer
+            return img_buffer
 
         except Exception as e:
             if self.logger:
@@ -283,7 +282,7 @@ class ChartGenerator:
         if timestamps is not None:
             timestamps_py = timestamps
         else:
-            timestamps = pd.to_datetime(ohlcv[:, 0], unit='ms')
+            timestamps = pd.to_datetime(ohlcv[:, 0], unit="ms")
             timestamps_py = timestamps.to_pydatetime().tolist()
 
         opens = ohlcv[:, 1].astype(float)
@@ -300,11 +299,11 @@ class ChartGenerator:
                 return arr[-len(ohlcv):]
             return arr
 
-        rsi_data = slice_indicator(technical_history.get('rsi')) if technical_history else None
-        sma_50_data = slice_indicator(technical_history.get('sma_50')) if technical_history else None
-        sma_200_data = slice_indicator(technical_history.get('sma_200')) if technical_history else None
-        cmf_data = slice_indicator(technical_history.get('cmf')) if technical_history else None
-        obv_data = slice_indicator(technical_history.get('obv')) if technical_history else None
+        rsi_data = slice_indicator(technical_history.get("rsi")) if technical_history else None
+        sma_50_data = slice_indicator(technical_history.get("sma_50")) if technical_history else None
+        sma_200_data = slice_indicator(technical_history.get("sma_200")) if technical_history else None
+        cmf_data = slice_indicator(technical_history.get("cmf")) if technical_history else None
+        obv_data = slice_indicator(technical_history.get("obv")) if technical_history else None
 
         # Create 4-row subplot: Price (55%), RSI (15%), Volume (15%), CMF+OBV (15%)
         fig = make_subplots(
@@ -328,8 +327,8 @@ class ChartGenerator:
             low=lows,
             close=closes,
             name="Price",
-            increasing_line_color=self.ai_colors['candle_up'],
-            decreasing_line_color=self.ai_colors['candle_down'],
+            increasing_line_color=self.ai_colors["candle_up"],
+            decreasing_line_color=self.ai_colors["candle_down"],
             increasing_line_width=1.2,
             decreasing_line_width=1.2,
             line=dict(width=0.8)
@@ -341,10 +340,10 @@ class ChartGenerator:
             fig.add_trace(go.Scatter(
                 x=timestamps_py,
                 y=sma_50_data,
-                mode='lines',
-                name='SMA 50',
-                line=dict(color=self.ai_colors['sma_50'], width=1.5),
-                hoverinfo='name+y'
+                mode="lines",
+                name="SMA 50",
+                line=dict(color=self.ai_colors["sma_50"], width=1.5),
+                hoverinfo="name+y"
             ), row=1, col=1)
 
         # Add SMA 200 overlay (purple) - Long-term trend
@@ -352,10 +351,10 @@ class ChartGenerator:
             fig.add_trace(go.Scatter(
                 x=timestamps_py,
                 y=sma_200_data,
-                mode='lines',
-                name='SMA 200',
-                line=dict(color=self.ai_colors['sma_200'], width=1.5),
-                hoverinfo='name+y'
+                mode="lines",
+                name="SMA 200",
+                line=dict(color=self.ai_colors["sma_200"], width=1.5),
+                hoverinfo="name+y"
             ), row=1, col=1)
 
         # ROW 2: RSI indicator
@@ -363,24 +362,24 @@ class ChartGenerator:
             fig.add_trace(go.Scatter(
                 x=timestamps_py,
                 y=rsi_data,
-                mode='lines',
-                name='RSI (14)',
-                line=dict(color=self.ai_colors['rsi'], width=1.5),
-                hoverinfo='name+y'
+                mode="lines",
+                name="RSI (14)",
+                line=dict(color=self.ai_colors["rsi"], width=1.5),
+                hoverinfo="name+y"
             ), row=2, col=1)
             # Overbought line (70)
-            fig.add_hline(y=70, row=2, col=1, line=dict(color=self.ai_colors['rsi_overbought'], width=1, dash='dash'))
+            fig.add_hline(y=70, row=2, col=1, line=dict(color=self.ai_colors["rsi_overbought"], width=1, dash="dash"))
             # Oversold line (30)
-            fig.add_hline(y=30, row=2, col=1, line=dict(color=self.ai_colors['rsi_oversold'], width=1, dash='dash'))
+            fig.add_hline(y=30, row=2, col=1, line=dict(color=self.ai_colors["rsi_oversold"], width=1, dash="dash"))
             # Neutral line (50)
-            fig.add_hline(y=50, row=2, col=1, line=dict(color='#666666', width=0.5, dash='dot'))
+            fig.add_hline(y=50, row=2, col=1, line=dict(color="#666666", width=0.5, dash="dot"))
 
         # ROW 3: Volume bars (colored by candle direction)
-        volume_colors = [self.ai_colors['volume_up'] if closes[i] >= opens[i] else self.ai_colors['volume_down'] for i in range(len(closes))]
+        volume_colors = [self.ai_colors["volume_up"] if closes[i] >= opens[i] else self.ai_colors["volume_down"] for i in range(len(closes))]
         fig.add_trace(go.Bar(
             x=timestamps_py,
             y=volumes,
-            name='Volume',
+            name="Volume",
             marker_color=volume_colors,
             opacity=0.7
         ), row=3, col=1)
@@ -390,24 +389,24 @@ class ChartGenerator:
             fig.add_trace(go.Scatter(
                 x=timestamps_py,
                 y=cmf_data,
-                mode='lines',
-                name='CMF (20)',
-                fill='tozeroy',
-                line=dict(color=self.ai_colors['cmf'], width=1),
-                fillcolor='rgba(0, 255, 255, 0.3)',
-                hoverinfo='name+y'
+                mode="lines",
+                name="CMF (20)",
+                fill="tozeroy",
+                line=dict(color=self.ai_colors["cmf"], width=1),
+                fillcolor="rgba(0, 255, 255, 0.3)",
+                hoverinfo="name+y"
             ), row=4, col=1, secondary_y=False)
             # CMF zero line
-            fig.add_hline(y=0, row=4, col=1, line=dict(color='#888888', width=1, dash='dash'))
+            fig.add_hline(y=0, row=4, col=1, line=dict(color="#888888", width=1, dash="dash"))
 
         if obv_data is not None and len(obv_data) == len(timestamps_py):
             fig.add_trace(go.Scatter(
                 x=timestamps_py,
                 y=obv_data,
-                mode='lines',
-                name='OBV',
-                line=dict(color=self.ai_colors['obv'], width=1.5),
-                hoverinfo='name+y'
+                mode="lines",
+                name="OBV",
+                line=dict(color=self.ai_colors["obv"], width=1.5),
+                hoverinfo="name+y"
             ), row=4, col=1, secondary_y=True)
 
         # Layout configuration
@@ -445,9 +444,9 @@ class ChartGenerator:
             template="plotly_dark",
             height=height,
             width=width,
-            font=dict(family="Arial, sans-serif", size=22, color=self.ai_colors['text']),
-            paper_bgcolor=self.ai_colors['background'],
-            plot_bgcolor=self.ai_colors['background'],
+            font=dict(family="Arial, sans-serif", size=22, color=self.ai_colors["text"]),
+            paper_bgcolor=self.ai_colors["background"],
+            plot_bgcolor=self.ai_colors["background"],
             margin=dict(l=80, r=120, t=80, b=80),
             showlegend=True,
             legend=dict(
@@ -457,7 +456,7 @@ class ChartGenerator:
                 xanchor="right",
                 x=1,
                 font=dict(size=18),
-                bgcolor='rgba(0,0,0,0.7)'
+                bgcolor="rgba(0,0,0,0.7)"
             ),
             xaxis_rangeslider_visible=False
         )
@@ -473,17 +472,17 @@ class ChartGenerator:
         common_xaxis = dict(
             showgrid=True,
             gridwidth=1.0,
-            gridcolor=self.ai_colors['grid'],
+            gridcolor=self.ai_colors["grid"],
             zeroline=False,
-            tickformat='%m/%d %H:%M',
+            tickformat="%m/%d %H:%M",
             tickangle=-45,
             dtick=12*60*60*1000,  # 12 hour intervals (in milliseconds)
-            type='date',
+            type="date",
             range=x_range,
             tickfont=dict(size=18),
             showline=True,
             linewidth=1,
-            linecolor=self.ai_colors['grid']
+            linecolor=self.ai_colors["grid"]
         )
         # Price chart - no x-axis labels (too cluttered)
         fig.update_xaxes(**common_xaxis, showticklabels=False, row=1, col=1)
@@ -496,7 +495,7 @@ class ChartGenerator:
         common_yaxis = dict(
             showgrid=True,
             gridwidth=1.0,
-            gridcolor=self.ai_colors['grid'],
+            gridcolor=self.ai_colors["grid"],
             zeroline=False,
             side="right",
             tickfont=dict(size=20)
@@ -509,14 +508,14 @@ class ChartGenerator:
         fig.update_yaxes(**common_yaxis, title_text="Vol", nticks=4, row=3, col=1)
         # Row 4: CMF (primary y-axis, left), OBV (secondary y-axis, right)
         fig.update_yaxes(
-            showgrid=True, gridwidth=1.0, gridcolor=self.ai_colors['grid'],
+            showgrid=True, gridwidth=1.0, gridcolor=self.ai_colors["grid"],
             zeroline=False, tickfont=dict(size=20),
             title_text="CMF", nticks=4, side="left", row=4, col=1, secondary_y=False
         )
         fig.update_yaxes(**common_yaxis, title_text="OBV", nticks=4, row=4, col=1, secondary_y=True)
 
         # Add current price horizontal line on price chart
-        fig.add_hline(y=float(closes[-1]), row=1, col=1, line=dict(color='#666666', width=1, dash='dot'))
+        fig.add_hline(y=float(closes[-1]), row=1, col=1, line=dict(color="#666666", width=1, dash="dot"))
 
         # Day separators (vertical lines across all rows)
         if len(timestamps_py) > 1:
@@ -537,7 +536,7 @@ class ChartGenerator:
                         text=self.formatter(highs[i]),
                         showarrow=True, arrowhead=2, arrowsize=0.6, arrowwidth=1,
                         ax=0, ay=-30,
-                        font=dict(size=16, color='#aaaaaa'),
+                        font=dict(size=16, color="#aaaaaa"),
                         row=1, col=1
                     )
                 if lows[i] == min(lows[i-window:i+window+1]):
@@ -546,7 +545,7 @@ class ChartGenerator:
                         text=self.formatter(lows[i]),
                         showarrow=True, arrowhead=2, arrowsize=0.6, arrowwidth=1,
                         ax=0, ay=30,
-                        font=dict(size=16, color='#aaaaaa'),
+                        font=dict(size=16, color="#aaaaaa"),
                         row=1, col=1
                     )
 
@@ -558,8 +557,8 @@ class ChartGenerator:
             text=f"MAX: {self.formatter(float(highs[idx_high]))}",
             showarrow=True, arrowhead=2, arrowsize=0.8, arrowwidth=1.0,
             ax=0, ay=-50,
-            font=dict(size=20, color=self.ai_colors['text'], weight='bold'),
-            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['candle_up'], borderwidth=1,
+            font=dict(size=20, color=self.ai_colors["text"], weight="bold"),
+            bgcolor="rgba(0,0,0,0.5)", bordercolor=self.ai_colors["candle_up"], borderwidth=1,
             row=1, col=1
         )
         fig.add_annotation(
@@ -567,8 +566,8 @@ class ChartGenerator:
             text=f"MIN: {self.formatter(float(lows[idx_low]))}",
             showarrow=True, arrowhead=2, arrowsize=0.8, arrowwidth=1.0,
             ax=0, ay=50,
-            font=dict(size=20, color=self.ai_colors['text'], weight='bold'),
-            bgcolor='rgba(0,0,0,0.5)', bordercolor=self.ai_colors['candle_down'], borderwidth=1,
+            font=dict(size=20, color=self.ai_colors["text"], weight="bold"),
+            bgcolor="rgba(0,0,0,0.5)", bordercolor=self.ai_colors["candle_down"], borderwidth=1,
             row=1, col=1
         )
 
@@ -592,10 +591,10 @@ class ChartGenerator:
             if price_min <= level <= price_max:
                 fig.add_hline(
                     y=level, row=1, col=1,
-                    line=dict(color='rgba(100, 100, 100, 0.6)', width=1, dash='dash'),
+                    line=dict(color="rgba(100, 100, 100, 0.6)", width=1, dash="dash"),
                     annotation_text=f"${level:,}",
                     annotation_position="left",
-                    annotation_font=dict(size=14, color='#888888')
+                    annotation_font=dict(size=14, color="#888888")
                 )
 
         # ENHANCEMENT 2: OHLC annotations at fixed intervals (every 12 candles to avoid clutter)
@@ -612,10 +611,10 @@ class ChartGenerator:
                 text=ohlc_text,
                 showarrow=True, arrowhead=1, arrowsize=0.5, arrowwidth=1,
                 ax=0, ay=ay_offset,
-                font=dict(size=12, color='#cccccc'),
-                bgcolor='rgba(0,0,0,0.8)',
-                bordercolor='#555555', borderwidth=1,
-                align='left',
+                font=dict(size=12, color="#cccccc"),
+                bgcolor="rgba(0,0,0,0.8)",
+                bordercolor="#555555", borderwidth=1,
+                align="left",
                 row=1, col=1
             )
 
@@ -636,7 +635,7 @@ class ChartGenerator:
                     x=timestamps_py[i], y=volumes[i],
                     text=vol_str,
                     showarrow=False,
-                    font=dict(size=11, color='#ffffff'),
+                    font=dict(size=11, color="#ffffff"),
                     yshift=12,
                     row=3, col=1
                 )
@@ -654,27 +653,27 @@ class ChartGenerator:
                 sma_legend.append("<b>Golden Cross:</b> SMA50 crosses above SMA200 = Bullish")
                 sma_legend.append("<b>Death Cross:</b> SMA50 crosses below SMA200 = Bearish")
             fig.add_annotation(
-                xref='paper', yref='paper', x=0.01, y=0.99,
-                xanchor='left', yanchor='top',
+                xref="paper", yref="paper", x=0.01, y=0.99,
+                xanchor="left", yanchor="top",
                 text="<br>".join(sma_legend),
                 showarrow=False,
-                font=dict(size=18, family='Arial', color='#cccccc'),
-                bgcolor='rgba(0,0,0,0.8)',
-                bordercolor='#444444',
+                font=dict(size=18, family="Arial", color="#cccccc"),
+                bgcolor="rgba(0,0,0,0.8)",
+                bordercolor="#444444",
                 borderwidth=1,
-                align='left'
+                align="left"
             )
 
         # RSI interpretation annotation
         if rsi_data is not None:
             current_rsi = rsi_data[-1] if not math.isnan(rsi_data[-1]) else 0
             fig.add_annotation(
-                xref='x2 domain', yref='y2 domain', x=0.01, y=0.95,
-                xanchor='left', yanchor='top',
+                xref="x2 domain", yref="y2 domain", x=0.01, y=0.95,
+                xanchor="left", yanchor="top",
                 text=f"RSI: {current_rsi:.1f} | <span style='color:{self.ai_colors['rsi_overbought']}'>70=Overbought</span> | <span style='color:{self.ai_colors['rsi_oversold']}'>30=Oversold</span>",
                 showarrow=False,
-                font=dict(size=16, color='#cccccc'),
-                bgcolor='rgba(0,0,0,0.7)'
+                font=dict(size=16, color="#cccccc"),
+                bgcolor="rgba(0,0,0,0.7)"
             )
 
         # CMF/OBV interpretation annotation
@@ -687,12 +686,12 @@ class ChartGenerator:
             cmf_obv_legend.append(f"<span style='color:{self.ai_colors['obv']}'>OBV</span>: Trend Confirmation (rising=accumulation, falling=distribution)")
         if cmf_obv_legend:
             fig.add_annotation(
-                xref='x4 domain', yref='y4 domain', x=0.01, y=0.95,
-                xanchor='left', yanchor='top',
+                xref="x4 domain", yref="y4 domain", x=0.01, y=0.95,
+                xanchor="left", yanchor="top",
                 text=" | ".join(cmf_obv_legend),
                 showarrow=False,
-                font=dict(size=16, color='#cccccc'),
-                bgcolor='rgba(0,0,0,0.7)'
+                font=dict(size=16, color="#cccccc"),
+                bgcolor="rgba(0,0,0,0.7)"
             )
 
         return fig

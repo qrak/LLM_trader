@@ -1,7 +1,7 @@
 """
 Category processing and normalization operations.
 """
-from typing import Any, Set
+from typing import Any
 from src.logger.logger import Logger
 from src.rag.collision_resolver import CategoryCollisionResolver
 
@@ -15,14 +15,14 @@ class CategoryProcessor:
 
         # Category data storage
         self.category_word_map: dict[str, str] = {}
-        self.general_categories: Set[str] = set()
-        self.ticker_categories: Set[str] = set()
+        self.general_categories: set[str] = set()
+        self.ticker_categories: set[str] = set()
 
         # Load RAG priorities config once
         rag_config = self._load_rag_config()
 
         # Load configurations from cached config
-        self.important_categories: Set[str] = self._load_important_categories(rag_config)
+        self.important_categories: set[str] = self._load_important_categories(rag_config)
         self.generic_priorities: dict[str, int] = self._load_generic_priorities(rag_config)
 
         # Injected collision resolver
@@ -39,26 +39,24 @@ class CategoryProcessor:
         return {}
 
 
-    def _load_important_categories(self, config_data: dict) -> Set[str]:
+    def _load_important_categories(self, config_data: dict) -> set[str]:
         """Load important categories from pre-loaded config."""
-        if config_data and 'important_categories' in config_data:
-            categories = set(config_data['important_categories'])
+        if config_data and "important_categories" in config_data:
+            categories = set(config_data["important_categories"])
             if categories:
                 return categories
-            else:
-                self.logger.warning("Config file has empty important_categories list")
+            self.logger.warning("Config file has empty important_categories list")
         else:
             self.logger.warning("No important_categories in config data")
         return set()
 
     def _load_generic_priorities(self, config_data: dict) -> dict[str, int]:
         """Load generic category priorities from pre-loaded config."""
-        if config_data and 'generic_priorities' in config_data:
-            priorities = config_data['generic_priorities']
+        if config_data and "generic_priorities" in config_data:
+            priorities = config_data["generic_priorities"]
             if priorities:
                 return priorities
-            else:
-                self.logger.warning("Config file has empty generic_priorities dict")
+            self.logger.warning("Config file has empty generic_priorities dict")
         else:
             self.logger.warning("No generic_priorities in config data")
         return {}
@@ -77,7 +75,7 @@ class CategoryProcessor:
         # Process category words for mapping
         for category in api_categories:
             # Handle both camelCase and PascalCase field names
-            category_name = category.get('categoryName') or category.get('CategoryName', '')
+            category_name = category.get("categoryName") or category.get("CategoryName", "")
             category_name = category_name.lower()
             if category_name:
                 self._process_category_words(category_name)
@@ -87,13 +85,13 @@ class CategoryProcessor:
         self._update_collision_resolver()
 
 
-    def _categorize_api_data(self, api_categories: list[dict[str, Any]]) -> tuple[Set[str], Set[str]]:
+    def _categorize_api_data(self, api_categories: list[dict[str, Any]]) -> tuple[set[str], set[str]]:
         """Categorize API data into general and ticker categories."""
         general_categories = set()
         ticker_categories = set()
 
         for category in api_categories:
-            category_name = (category.get('categoryName') or category.get('CategoryName', '')).lower()
+            category_name = (category.get("categoryName") or category.get("CategoryName", "")).lower()
 
             if category_name:
                 if self._is_ticker_category(category_name):
@@ -105,19 +103,19 @@ class CategoryProcessor:
 
     def _is_ticker_category(self, category_name: str) -> bool:
         """Determine if a category represents individual tickers."""
-        ticker_indicators = ['symbol', 'coin', 'token', 'currency', '-usd', '-btc', '-eth']
+        ticker_indicators = ["symbol", "coin", "token", "currency", "-usd", "-btc", "-eth"]
         return any(indicator in category_name for indicator in ticker_indicators)
 
     def _process_category_words(self, category_name: str) -> None:
         """Process category words and create mappings with priority-based collision resolution."""
         # Extract words from category for search mapping
-        words = category_name.replace('-', ' ').split()
+        words = category_name.replace("-", " ").split()
         for word in words:
             word_stripped = word.strip()
             if len(word_stripped) < 2:
                 # Skip single-character tokens
                 continue
-            elif len(word_stripped) == 2:
+            if len(word_stripped) == 2:
                 # Allow 2-character tokens if they are uppercase (likely tickers) or contain digits
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
                     continue
@@ -135,7 +133,7 @@ class CategoryProcessor:
                 self.category_word_map[word_lower] = category_name
 
 
-    def _update_category_sets(self, general_categories: Set[str], ticker_categories: Set[str]) -> None:
+    def _update_category_sets(self, general_categories: set[str], ticker_categories: set[str]) -> None:
         """Update internal category sets."""
         self.general_categories = general_categories
         self.ticker_categories = ticker_categories
@@ -155,22 +153,21 @@ class CategoryProcessor:
             return ""
 
         # Handle different formats
-        if '/' in symbol:
-            return symbol.split('/')[0].upper()
-        elif '-' in symbol:
-            return symbol.split('-')[0].upper()
-        else:
-            # Try to extract base from common pairs
-            # NOTE: Order matters! Longer quotes must come before shorter ones (e.g., BUSD before USD)
-            common_quotes = ['USDT', 'USDC', 'BUSD', 'USD', 'BTC', 'ETH', 'BNB']
-            symbol_upper = symbol.upper()
+        if "/" in symbol:
+            return symbol.split("/")[0].upper()
+        if "-" in symbol:
+            return symbol.split("-")[0].upper()
+        # Try to extract base from common pairs
+        # NOTE: Order matters! Longer quotes must come before shorter ones (e.g., BUSD before USD)
+        common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "BNB"]
+        symbol_upper = symbol.upper()
 
-            for quote in common_quotes:
-                if symbol_upper.endswith(quote):
-                    base = symbol_upper[:-len(quote)]
-                    # Special handling for BNB/BUSD ambiguity: BNBUSD -> BN (via BUSD) is wrong, should be BNB (via USD)
-                    if quote == 'BUSD' and base == 'BN':
-                        continue
-                    return base
+        for quote in common_quotes:
+            if symbol_upper.endswith(quote):
+                base = symbol_upper[:-len(quote)]
+                # Special handling for BNB/BUSD ambiguity: BNBUSD -> BN (via BUSD) is wrong, should be BNB (via USD)
+                if quote == "BUSD" and base == "BN":
+                    continue
+                return base
 
-            return symbol_upper
+        return symbol_upper

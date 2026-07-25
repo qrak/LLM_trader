@@ -4,7 +4,7 @@ Supports text-only and multimodal (text + image) requests for local inference.
 """
 import io
 import re
-from typing import Any, Union
+from typing import Any
 
 import lmstudio as lms
 
@@ -92,7 +92,7 @@ class LMStudioClient(BaseAIClient):
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """

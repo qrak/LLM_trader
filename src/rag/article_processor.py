@@ -2,7 +2,7 @@
 Shared article processing utilities for RAG components.
 Eliminates code duplication between news_manager and context_builder.
 """
-from typing import Any, Set
+from typing import Any
 import logging
 import re
 
@@ -33,19 +33,19 @@ class ArticleProcessor:
         normalized = re.sub(r"[-_]+", " ", name.lower())
         return re.sub(r"\s+", " ", normalized).strip()
 
-    def detect_coins_in_article(self, article: dict[str, Any], known_crypto_tickers: Set[str]) -> Set[str]:
+    def detect_coins_in_article(self, article: dict[str, Any], known_crypto_tickers: set[str]) -> set[str]:
         """Detect cryptocurrency mentions in article content."""
         # Check categories first
         coins_mentioned = set()
-        categories = article.get('categories', '').split('|')
+        categories = article.get("categories", "").split("|")
         for category in categories:
             cat_upper = category.upper()
             if cat_upper in known_crypto_tickers:
                 coins_mentioned.add(cat_upper)
 
         # Check title and body for coin mentions
-        title = article.get('title', '')
-        body = article.get('body', '')
+        title = article.get("title", "")
+        body = article.get("body", "")
 
         title_coins = self.parser.detect_coins_in_text(title, known_crypto_tickers)
         body_coins = self.parser.detect_coins_in_text(body, known_crypto_tickers)
@@ -61,7 +61,7 @@ class ArticleProcessor:
                 normalized_name = self._normalize_coin_name(raw_name)
                 if not normalized_name:
                     continue
-                name_pattern = r'\b' + r'[-\s]+'.join(re.escape(p) for p in normalized_name.split()) + r'\b'
+                name_pattern = r"\b" + r"[-\s]+".join(re.escape(p) for p in normalized_name.split()) + r"\b"
                 if re.search(name_pattern, combined_text):
                     if symbol in known_crypto_tickers:
                         coins_mentioned.add(symbol)
@@ -70,7 +70,7 @@ class ArticleProcessor:
 
     def get_article_timestamp(self, article: dict[str, Any]) -> float:
         """Extract timestamp from article in a consistent format."""
-        published_on = article.get('published_on', 0)
+        published_on = article.get("published_on", 0)
         return self.format_utils.parse_timestamp(published_on)
 
     def extract_base_coin(self, symbol: str) -> str:

@@ -31,7 +31,7 @@ class CooldownWindowGuard:
 
     name = "cooldown_window"
 
-    def __init__(self, persistence: "PersistenceManager" | None = None) -> None:
+    def __init__(self, persistence: PersistenceManager | None = None) -> None:
         self.persistence = persistence
         self._cached_timestamp: datetime | None = None
         self._cache_populated: bool = False

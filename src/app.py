@@ -8,7 +8,8 @@ import io
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
+from collections.abc import Callable
 
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
@@ -171,9 +172,9 @@ class CryptoTradingBot:
                         pass
 
         # Register keyboard commands
-        self.keyboard_handler.register_command('a', self._force_analysis_now, "Force immediate analysis")
-        self.keyboard_handler.register_command('h', self._show_help, "Show available keyboard commands")
-        self.keyboard_handler.register_command('q', self._request_shutdown, "Quit the application")
+        self.keyboard_handler.register_command("a", self._force_analysis_now, "Force immediate analysis")
+        self.keyboard_handler.register_command("h", self._show_help, "Show available keyboard commands")
+        self.keyboard_handler.register_command("q", self._request_shutdown, "Quit the application")
 
         # Start keyboard handler task
         keyboard_task = asyncio.create_task(
@@ -304,19 +305,19 @@ class CryptoTradingBot:
     async def _execute_trading_check(self, check_count: int, force_news_update: bool = True, is_candle_close: bool = True):
         """Execute a single trading check iteration."""
         self._log_check_header(check_count)
-        
+
         current_ticker, current_price = await self._fetch_ticker_data()
         await self._check_position_status(current_price, is_candle_close=is_candle_close)
         await self._execute_market_knowledge_update(force_news_update)
-        
+
         self.logger.info("Running market analysis...")
         context_data = await self._build_analysis_context(current_price, current_ticker)
         result = await self.market_analyzer.analyze_market(**context_data)
-        
+
         if "error" in result:
-            self.logger.error("Analysis failed: %s", result['error'])
+            self.logger.error("Analysis failed: %s", result["error"])
             return
-        
+
         self.persistence.save_last_analysis_time()
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
 
@@ -324,7 +325,7 @@ class CryptoTradingBot:
             await self._handle_new_position(decision, current_price)
         else:
             self.logger.info("No trading action taken")
-            
+
         if decision is not None and decision.action == "HOLD" and result.get("analysis"):
             self._patch_rejected_signal_in_response(result, decision)
 
@@ -336,25 +337,25 @@ class CryptoTradingBot:
         # Then notify and persist (best-effort, non-critical)
         await self._send_discord_notification(result)
         self._save_analysis_data(result)
-    
+
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
         current_time = datetime.now()
         self.logger.info("=" * 60)
-        self.logger.info("Trading Check #%s at %s", check_count, current_time.strftime('%Y-%m-%d %H:%M:%S'))
+        self.logger.info("Trading Check #%s at %s", check_count, current_time.strftime("%Y-%m-%d %H:%M:%S"))
         self.logger.info("=" * 60)
-    
+
     async def _fetch_ticker_data(self):
         """Fetch current ticker and price"""
         try:
             current_ticker = await self._fetch_current_ticker()
             if current_ticker:
-                current_price = float(current_ticker.get('last', current_ticker.get('close', 0)))
+                current_price = float(current_ticker.get("last", current_ticker.get("close", 0)))
                 return current_ticker, current_price
         except Exception as e:
             self.logger.warning("Could not fetch current ticker: %s", e)
         return None, None
-    
+
     async def _check_position_status(self, current_price: float | None, *, is_candle_close: bool = True):
         """Check if existing position hit stop/target.
 
@@ -363,7 +364,7 @@ class CryptoTradingBot:
         but the AI can still consciously signal CLOSE.
         """
         await self._require_position_monitor().check_soft_exit_status(current_price, is_candle_close=is_candle_close)
-    
+
     async def _execute_market_knowledge_update(self, force_news_update: bool):
         """Update market knowledge based on analysis type"""
         timeout_seconds = max(1, int(self.config.RAG_UPDATE_TIMEOUT))
@@ -399,23 +400,23 @@ class CryptoTradingBot:
                 e,
                 _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
-    
+
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
         """Build context data for market analysis"""
         position_context = self.trading_strategy.get_position_context(current_price)
         memory_context = self.memory_service.get_context_summary()
         statistics_context = self.statistics_service.get_context()
-        
+
         if statistics_context:
             position_context = f"{position_context}\n\n{statistics_context}"
-        
+
         previous_data = await self.persistence.async_load_previous_response()
         previous_response = previous_data.get("response") if previous_data else None
         previous_indicators = previous_data.get("technical_indicators") if previous_data else None
-        
+
         last_analysis_time_str = self._get_formatted_last_analysis_time()
         dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
-        
+
         return {
             "previous_response": previous_response,
             "previous_indicators": previous_indicators,
@@ -426,7 +427,7 @@ class CryptoTradingBot:
             "current_ticker": current_ticker,
             "dynamic_thresholds": dynamic_thresholds
         }
-    
+
     def _get_formatted_last_analysis_time(self) -> str | None:
         """Get last analysis time formatted as UTC string"""
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
@@ -438,11 +439,11 @@ class CryptoTradingBot:
         else:
             last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
 
-        return last_analysis_time_obj.strftime('%Y-%m-%d %H:%M:%S')
-    
+        return last_analysis_time_obj.strftime("%Y-%m-%d %H:%M:%S")
+
     async def _handle_new_position(self, decision, current_price: float | None):
         """Handle new position creation and status updates"""
-        if decision.action not in ('BUY', 'SELL'):
+        if decision.action not in ("BUY", "SELL"):
             self.logger.debug(
                 "_handle_new_position skipped for non-entry action: %s", decision.action
             )
@@ -456,7 +457,7 @@ class CryptoTradingBot:
             return
 
         await self._require_position_monitor().handle_new_position(current_price)
-    
+
     async def _send_discord_notification(self, result: dict[str, Any]):
         """Send Discord notification with analysis results"""
         if self.discord_notifier:
@@ -477,7 +478,7 @@ class CryptoTradingBot:
                 channel_id=self.config.MAIN_CHANNEL_ID,
                 chart_image=chart_image
             )
-    
+
     def _save_analysis_data(self, result: dict[str, Any]):
         """Save analysis response and technical data"""
         raw_response = result.get("raw_response", "")
@@ -521,7 +522,7 @@ class CryptoTradingBot:
             count=1,
             flags=re.IGNORECASE,
         )
-        match = re.search(r'```json\s*\{.*?\}\s*```', raw, re.DOTALL)
+        match = re.search(r"```json\s*\{.*?\}\s*```", raw, re.DOTALL)
         if match:
             pos = match.end()
             raw = raw[:pos] + "\n\n⚠️  REJECTED: " + reason + raw[pos:]
@@ -534,7 +535,7 @@ class CryptoTradingBot:
             return None
         ticker = await self.current_exchange.fetch_ticker(self.current_symbol)
         if ticker and self.dashboard_state:
-            price = float(ticker.get('last', ticker.get('close', 0)))
+            price = float(ticker.get("last", ticker.get("close", 0)))
             if price > 0:
                 await self.dashboard_state.update_price(price)
         return ticker

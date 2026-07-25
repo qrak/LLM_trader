@@ -168,32 +168,32 @@ class MarketDataCollector:
                 days=days
             )
 
-            if result['error'] is not None:
-                self.logger.error("Error fetching long-term data: %s", result['error'])
+            if result["error"] is not None:
+                self.logger.error("Error fetching long-term data: %s", result["error"])
                 return False
 
-            if result['data'] is None or len(result['data']) == 0:
+            if result["data"] is None or len(result["data"]) == 0:
                 self.logger.warning("No long-term historical data available for %s", self.symbol)
                 context.long_term_data = {
-                    'is_new_token': True,
-                    'available_days': 0,
-                    'sma_values': {},
-                    'volume_sma_values': {},
-                    'price_change': None,
-                    'volume_change': None,
-                    'volatility': None
+                    "is_new_token": True,
+                    "available_days": 0,
+                    "sma_values": {},
+                    "volume_sma_values": {},
+                    "price_change": None,
+                    "volume_change": None,
+                    "volatility": None
                 }
                 return True
 
-            ohlcv_data = result['data']
-            available_days = result['available_days']
-            is_complete = result['is_complete']
+            ohlcv_data = result["data"]
+            available_days = result["available_days"]
+            is_complete = result["is_complete"]
 
             context.long_term_data = {
-                'data': ohlcv_data,
-                'is_new_token': not is_complete and available_days < 100,
-                'available_days': available_days,
-                'is_complete': is_complete
+                "data": ohlcv_data,
+                "is_new_token": not is_complete and available_days < 100,
+                "available_days": available_days,
+                "is_complete": is_complete
             }
 
             if not is_complete:
@@ -219,15 +219,15 @@ class MarketDataCollector:
 
             result = await self.data_fetcher.fetch_weekly_historical_data(self.symbol, target_weeks)
 
-            if result['data'] is None:
-                self.logger.warning("Weekly data unavailable: %s", result.get('error', 'Unknown'))
+            if result["data"] is None:
+                self.logger.warning("Weekly data unavailable: %s", result.get("error", "Unknown"))
                 context.weekly_ohlcv = None
                 return False
 
-            context.weekly_ohlcv = result['data']
-            available_weeks = len(result['data'])
+            context.weekly_ohlcv = result["data"]
+            available_weeks = len(result["data"])
 
-            self.logger.info("Weekly data: %s weeks, 200W SMA: %s", available_weeks, 'Available' if available_weeks >= 200 else 'Insufficient')
+            self.logger.info("Weekly data: %s weeks, 200W SMA: %s", available_weeks, "Available" if available_weeks >= 200 else "Insufficient")
             return True
         except Exception as e:
             self.logger.error("Error fetching weekly macro data: %s", e)
@@ -249,16 +249,16 @@ class MarketDataCollector:
             historical = []
             for fg in fear_greed_data:
                 historical.append({
-                    'timestamp': datetime.fromtimestamp(int(fg["timestamp"])),
-                    'value': int(fg["value"]),
-                    'value_classification': fg["value_classification"]
+                    "timestamp": datetime.fromtimestamp(int(fg["timestamp"])),
+                    "value": int(fg["value"]),
+                    "value_classification": fg["value_classification"]
                 })
 
             context.sentiment = {
-                'timestamp': datetime.fromtimestamp(int(latest_fg["timestamp"])),
-                'fear_greed_index': int(latest_fg["value"]),
-                'value_classification': latest_fg["value_classification"],
-                'historical': historical
+                "timestamp": datetime.fromtimestamp(int(latest_fg["timestamp"])),
+                "fear_greed_index": int(latest_fg["value"]),
+                "value_classification": latest_fg["value_classification"],
+                "historical": historical
             }
 
             return True

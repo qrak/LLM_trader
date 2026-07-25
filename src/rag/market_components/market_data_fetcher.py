@@ -47,7 +47,7 @@ class MarketDataFetcher:
             self.logger.error("Error fetching macro data from DefiLlama: %s", e)
             return None
 
-    async def fetch_defi_fundamentals(self) -> 'DeFiFundamentalsData' | None:
+    async def fetch_defi_fundamentals(self) -> DeFiFundamentalsData | None:
         """Fetch aggregated DeFi fundamentals from DefiLlama and cache results."""
         if not self.defillama_client:
             return None
@@ -99,13 +99,13 @@ class MarketDataFetcher:
     def _select_exchange(self):
         """Select the best available exchange for market data."""
         # Prefer Binance if available
-        if 'binance' in self.exchange_manager.exchanges:
+        if "binance" in self.exchange_manager.exchanges:
             self.logger.debug("Using Binance exchange for market data")
-            return self.exchange_manager.exchanges['binance']
+            return self.exchange_manager.exchanges["binance"]
 
         # Use first available exchange that supports fetch_tickers
         for exchange_id, exch in self.exchange_manager.exchanges.items():
-            if exch.has.get('fetchTickers', False):
+            if exch.has.get("fetchTickers", False):
                 self.logger.debug("Using %s exchange for market data", exchange_id)
                 return exch
 

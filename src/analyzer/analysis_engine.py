@@ -125,7 +125,7 @@ class AnalysisEngine:
         """
         self.symbol = symbol
         self.exchange = exchange
-        self.base_symbol = symbol.split('/')[0] if '/' in symbol else symbol
+        self.base_symbol = symbol.split("/")[0] if "/" in symbol else symbol
 
         effective_timeframe = timeframe if timeframe else self.timeframe
 
@@ -217,7 +217,7 @@ class AnalysisEngine:
 
             async def run_rag_analysis():
                 query = self.rag_engine.build_context_query(self.symbol)
-                
+
                 market_context = await self.rag_engine.retrieve_context(
                     query,
                     self.symbol,
@@ -276,7 +276,7 @@ class AnalysisEngine:
         """Collect market data using data collector"""
         data_result = await self.data_collector.collect_data(self.context)
         if not data_result["success"]:
-            self.logger.error("Failed to collect market data: %s", data_result['errors'])
+            self.logger.error("Failed to collect market data: %s", data_result["errors"])
             return False
 
         # Store article URLs (initial empty set, will be updated by parallel RAG task)
@@ -338,29 +338,29 @@ class AnalysisEngine:
     def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
         """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
         return {
-            'bid_depth': float(bucket.get('bid_depth', 0.0)),
-            'ask_depth': float(bucket.get('ask_depth', 0.0)),
-            'imbalance': float(bucket.get('imbalance', 0.0))
+            "bid_depth": float(bucket.get("bid_depth", 0.0)),
+            "ask_depth": float(bucket.get("ask_depth", 0.0)),
+            "imbalance": float(bucket.get("imbalance", 0.0))
         }
 
     def _build_order_book_comparison_state(self, order_book: dict[str, Any]) -> dict[str, Any]:
         """Persist only compact order book metrics needed for the next-cycle delta."""
         return {
-            'timestamp': order_book.get('timestamp'),
-            'spread': float(order_book.get('spread', 0.0)),
-            'spread_percent': float(order_book.get('spread_percent', 0.0)),
-            'bid_depth': float(order_book.get('bid_depth', 0.0)),
-            'ask_depth': float(order_book.get('ask_depth', 0.0)),
-            'imbalance': float(order_book.get('imbalance', 0.0)),
-            'best_bid_size': float(order_book.get('best_bid_size', 0.0)),
-            'best_ask_size': float(order_book.get('best_ask_size', 0.0)),
-            'depth_by_level': {
+            "timestamp": order_book.get("timestamp"),
+            "spread": float(order_book.get("spread", 0.0)),
+            "spread_percent": float(order_book.get("spread_percent", 0.0)),
+            "bid_depth": float(order_book.get("bid_depth", 0.0)),
+            "ask_depth": float(order_book.get("ask_depth", 0.0)),
+            "imbalance": float(order_book.get("imbalance", 0.0)),
+            "best_bid_size": float(order_book.get("best_bid_size", 0.0)),
+            "best_ask_size": float(order_book.get("best_ask_size", 0.0)),
+            "depth_by_level": {
                 key: self._copy_comparison_bucket(bucket)
-                for key, bucket in order_book.get('depth_by_level', {}).items()
+                for key, bucket in order_book.get("depth_by_level", {}).items()
             },
-            'liquidity_near_mid': {
+            "liquidity_near_mid": {
                 key: self._copy_comparison_bucket(bucket)
-                for key, bucket in order_book.get('liquidity_near_mid', {}).items()
+                for key, bucket in order_book.get("liquidity_near_mid", {}).items()
             }
         }
 
@@ -373,64 +373,64 @@ class AnalysisEngine:
         if not previous_order_book:
             return {}
 
-        current_timestamp = current_order_book.get('timestamp')
-        previous_timestamp = previous_order_book.get('timestamp')
+        current_timestamp = current_order_book.get("timestamp")
+        previous_timestamp = previous_order_book.get("timestamp")
         snapshot_interval_seconds = None
         if current_timestamp and previous_timestamp:
             snapshot_interval_seconds = max(0.0, (current_timestamp - previous_timestamp) / 1000)
 
-        top_10_current = current_order_book.get('depth_by_level', {}).get('10', {})
-        top_10_previous = previous_order_book.get('depth_by_level', {}).get('10', {})
-        near_mid_current = current_order_book.get('liquidity_near_mid', {}).get('10bps', {})
-        near_mid_previous = previous_order_book.get('liquidity_near_mid', {}).get('10bps', {})
+        top_10_current = current_order_book.get("depth_by_level", {}).get("10", {})
+        top_10_previous = previous_order_book.get("depth_by_level", {}).get("10", {})
+        near_mid_current = current_order_book.get("liquidity_near_mid", {}).get("10bps", {})
+        near_mid_previous = previous_order_book.get("liquidity_near_mid", {}).get("10bps", {})
 
         return {
-            'snapshot_interval_seconds': snapshot_interval_seconds,
-            'spread': float(current_order_book.get('spread', 0.0)) - float(previous_order_book.get('spread', 0.0)),
-            'spread_percent': float(current_order_book.get('spread_percent', 0.0)) - float(previous_order_book.get('spread_percent', 0.0)),
-            'bid_depth': float(current_order_book.get('bid_depth', 0.0)) - float(previous_order_book.get('bid_depth', 0.0)),
-            'ask_depth': float(current_order_book.get('ask_depth', 0.0)) - float(previous_order_book.get('ask_depth', 0.0)),
-            'imbalance': float(current_order_book.get('imbalance', 0.0)) - float(previous_order_book.get('imbalance', 0.0)),
-            'best_bid_size': float(current_order_book.get('best_bid_size', 0.0)) - float(previous_order_book.get('best_bid_size', 0.0)),
-            'best_ask_size': float(current_order_book.get('best_ask_size', 0.0)) - float(previous_order_book.get('best_ask_size', 0.0)),
-            'top_10': {
-                'bid_depth': float(top_10_current.get('bid_depth', 0.0)) - float(top_10_previous.get('bid_depth', 0.0)),
-                'ask_depth': float(top_10_current.get('ask_depth', 0.0)) - float(top_10_previous.get('ask_depth', 0.0)),
-                'imbalance': float(top_10_current.get('imbalance', 0.0)) - float(top_10_previous.get('imbalance', 0.0)),
+            "snapshot_interval_seconds": snapshot_interval_seconds,
+            "spread": float(current_order_book.get("spread", 0.0)) - float(previous_order_book.get("spread", 0.0)),
+            "spread_percent": float(current_order_book.get("spread_percent", 0.0)) - float(previous_order_book.get("spread_percent", 0.0)),
+            "bid_depth": float(current_order_book.get("bid_depth", 0.0)) - float(previous_order_book.get("bid_depth", 0.0)),
+            "ask_depth": float(current_order_book.get("ask_depth", 0.0)) - float(previous_order_book.get("ask_depth", 0.0)),
+            "imbalance": float(current_order_book.get("imbalance", 0.0)) - float(previous_order_book.get("imbalance", 0.0)),
+            "best_bid_size": float(current_order_book.get("best_bid_size", 0.0)) - float(previous_order_book.get("best_bid_size", 0.0)),
+            "best_ask_size": float(current_order_book.get("best_ask_size", 0.0)) - float(previous_order_book.get("best_ask_size", 0.0)),
+            "top_10": {
+                "bid_depth": float(top_10_current.get("bid_depth", 0.0)) - float(top_10_previous.get("bid_depth", 0.0)),
+                "ask_depth": float(top_10_current.get("ask_depth", 0.0)) - float(top_10_previous.get("ask_depth", 0.0)),
+                "imbalance": float(top_10_current.get("imbalance", 0.0)) - float(top_10_previous.get("imbalance", 0.0)),
             },
-            'near_mid_10bps': {
-                'bid_depth': float(near_mid_current.get('bid_depth', 0.0)) - float(near_mid_previous.get('bid_depth', 0.0)),
-                'ask_depth': float(near_mid_current.get('ask_depth', 0.0)) - float(near_mid_previous.get('ask_depth', 0.0)),
-                'imbalance': float(near_mid_current.get('imbalance', 0.0)) - float(near_mid_previous.get('imbalance', 0.0)),
+            "near_mid_10bps": {
+                "bid_depth": float(near_mid_current.get("bid_depth", 0.0)) - float(near_mid_previous.get("bid_depth", 0.0)),
+                "ask_depth": float(near_mid_current.get("ask_depth", 0.0)) - float(near_mid_previous.get("ask_depth", 0.0)),
+                "imbalance": float(near_mid_current.get("imbalance", 0.0)) - float(near_mid_previous.get("imbalance", 0.0)),
             }
         }
 
     def _apply_microstructure_snapshot_context(self, microstructure: dict[str, Any]) -> dict[str, Any]:
         """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
         snapshot_context = {
-            'is_live_snapshot': True,
-            'configured_timeframe': self.context.timeframe if self.context else self.timeframe,
-            'comparison_basis': 'previous_analysis_cycle_snapshot',
-            'comparison_available': False
+            "is_live_snapshot": True,
+            "configured_timeframe": self.context.timeframe if self.context else self.timeframe,
+            "comparison_basis": "previous_analysis_cycle_snapshot",
+            "comparison_available": False
         }
 
-        order_book = microstructure.get('order_book')
+        order_book = microstructure.get("order_book")
         if not order_book:
-            microstructure['snapshot_context'] = snapshot_context
+            microstructure["snapshot_context"] = snapshot_context
             return microstructure
 
         previous_snapshot = self.previous_microstructure_snapshots.get(self.symbol, {})
-        previous_order_book = previous_snapshot.get('order_book')
+        previous_order_book = previous_snapshot.get("order_book")
         order_book_delta = self._build_order_book_deltas(order_book, previous_order_book)
         if order_book_delta:
-            order_book['delta_from_previous_snapshot'] = order_book_delta
-            snapshot_context['comparison_available'] = True
+            order_book["delta_from_previous_snapshot"] = order_book_delta
+            snapshot_context["comparison_available"] = True
 
-        microstructure['order_book'] = order_book
-        microstructure['snapshot_context'] = snapshot_context
+        microstructure["order_book"] = order_book
+        microstructure["snapshot_context"] = snapshot_context
         self.previous_microstructure_snapshots[self.symbol] = {
-            'timestamp': microstructure.get('timestamp'),
-            'order_book': self._build_order_book_comparison_state(order_book)
+            "timestamp": microstructure.get("timestamp"),
+            "order_book": self._build_order_book_comparison_state(order_book)
         }
         return microstructure
 
@@ -600,7 +600,7 @@ class AnalysisEngine:
             )
 
             if isinstance(chart_image, str):
-                with open(chart_image, 'rb') as f:
+                with open(chart_image, "rb") as f:
                     img_buffer = io.BytesIO(f.read())
                     img_buffer.seek(0)
                     return img_buffer
@@ -657,14 +657,14 @@ class AnalysisEngine:
             self.logger.debug("No long-term data available to process")
             return
 
-        if 'data' not in self.context.long_term_data or self.context.long_term_data['data'] is None:
+        if "data" not in self.context.long_term_data or self.context.long_term_data["data"] is None:
             self.logger.debug("Long-term data contains no OHLCV data")
             return
 
         try:
             long_term_indicators = await asyncio.to_thread(
                 self.technical_calculator.get_long_term_indicators,
-                self.context.long_term_data['data']
+                self.context.long_term_data["data"]
             )
 
             self.context.long_term_data.update(long_term_indicators)
@@ -680,11 +680,11 @@ class AnalysisEngine:
                 )
                 self.context.weekly_macro_indicators = weekly_macro
 
-                if 'weekly_macro_trend' in weekly_macro:
-                    trend = weekly_macro['weekly_macro_trend']
-                    self.logger.info("Weekly Macro: %s (%s%%)", trend.get('trend_direction'), trend.get('confidence_score'))
-                    if trend.get('cycle_phase'):
-                        self.logger.info("Cycle Phase: %s", trend['cycle_phase'])
+                if "weekly_macro_trend" in weekly_macro:
+                    trend = weekly_macro["weekly_macro_trend"]
+                    self.logger.info("Weekly Macro: %s (%s%%)", trend.get("trend_direction"), trend.get("confidence_score"))
+                    if trend.get("cycle_phase"):
+                        self.logger.info("Cycle Phase: %s", trend["cycle_phase"])
             except Exception as e:  # pylint: disable=broad-exception-caught
                 self.logger.error("Error calculating weekly macro indicators: %s", str(e))
                 self.context.weekly_macro_indicators = None

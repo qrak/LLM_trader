@@ -129,8 +129,8 @@ class MarketConditionsExtractor:
                     else:
                         conditions["trend_direction"] = "NEUTRAL"
                 else:
-                    bullish_hits = len(re.findall(r'\b(bullish|uptrend)\b', raw_response))
-                    bearish_hits = len(re.findall(r'\b(bearish|downtrend)\b', raw_response))
+                    bullish_hits = len(re.findall(r"\b(bullish|uptrend)\b", raw_response))
+                    bearish_hits = len(re.findall(r"\b(bearish|downtrend)\b", raw_response))
                     if bullish_hits > bearish_hits:
                         conditions["trend_direction"] = "BULLISH"
                     elif bearish_hits > bullish_hits:

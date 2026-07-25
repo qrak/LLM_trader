@@ -7,4 +7,4 @@ from .notifier import DiscordNotifier
 from .filehandler import DiscordFileHandler
 from .console_notifier import ConsoleNotifier
 
-__all__ = ['BaseNotifier', 'DiscordNotifier', 'DiscordFileHandler', 'ConsoleNotifier']
+__all__ = ["BaseNotifier", "ConsoleNotifier", "DiscordFileHandler", "DiscordNotifier"]

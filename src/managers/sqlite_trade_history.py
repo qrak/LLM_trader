@@ -43,7 +43,7 @@ _INSERT_COLS = [
     "stop_loss", "take_profit", "position_size", "quote_amount",
     "quantity", "fee", "reasoning",
 ]
-_INSERT_SQL = f"INSERT INTO trade_history ({', '.join(_INSERT_COLS)}) VALUES ({', '.join(['?'] * len(_INSERT_COLS))})"  # nosec B608
+_INSERT_SQL = f"INSERT INTO trade_history ({', '.join(_INSERT_COLS)}) VALUES ({', '.join(['?'] * len(_INSERT_COLS))})"  # noqa: S608 # nosec B608
 
 
 class SQLiteTradeHistory:
@@ -170,7 +170,7 @@ class SQLiteTradeHistory:
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         order_clause = f"ORDER BY timestamp {safe_order}"
-        sql = f"SELECT * FROM trade_history {where_clause} {order_clause} LIMIT ? OFFSET ?"
+        sql = f"SELECT * FROM trade_history {where_clause} {order_clause} LIMIT ? OFFSET ?"  # noqa: S608 # nosec B608
         params.extend([safe_limit, safe_offset])
 
         with self._lock:
@@ -198,9 +198,9 @@ class SQLiteTradeHistory:
 
         placeholders = ", ".join(["?"] * len(actions))
         sql = (
-            f"SELECT timestamp FROM trade_history "
+            f"SELECT timestamp FROM trade_history "  # noqa: S608 # nosec B608
             f"WHERE action IN ({placeholders}) "
-            "ORDER BY timestamp DESC LIMIT 1"
+            "ORDER BY timestamp DESC LIMIT 1"  # noqa: S608 # nosec B608
         )
 
         with self._lock:
@@ -228,7 +228,7 @@ class SQLiteTradeHistory:
             params.append(action)
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT COUNT(*) FROM trade_history {where_clause}"
+        sql = f"SELECT COUNT(*) FROM trade_history {where_clause}"  # noqa: S608 # nosec B608
 
         with self._lock:
             conn = self._get_conn()

@@ -119,7 +119,7 @@ class PromptBuilder:
             coin_data = context.market_overview.get("coin_data", {})
             if coin_data and context.symbol:
                 # Extract base symbol (e.g., "BTC" from "BTC/USDT")
-                base_symbol = context.symbol.split('/')[0]
+                base_symbol = context.symbol.split("/")[0]
                 ticker_info = coin_data.get(base_symbol)
                 if ticker_info:
                     ticker_section = self.market_formatter.format_ticker_data(ticker_info, context.symbol)
@@ -139,7 +139,7 @@ class PromptBuilder:
                 sections.append(snapshot_notice)
 
             # Add order book depth
-            if "order_book" in microstructure and microstructure["order_book"]:
+            if microstructure.get("order_book"):
                 ob_section = self.market_formatter.format_order_book_depth(
                     microstructure["order_book"],
                     context.symbol,
@@ -149,13 +149,13 @@ class PromptBuilder:
                     sections.append(ob_section)
 
             # Add trade flow
-            if "recent_trades" in microstructure and microstructure["recent_trades"]:
+            if microstructure.get("recent_trades"):
                 trades_section = self.market_formatter.format_trade_flow(microstructure["recent_trades"], context.symbol)
                 if trades_section:
                     sections.append(trades_section)
 
             # Add funding rate (if futures contract)
-            if "funding_rate" in microstructure and microstructure["funding_rate"]:
+            if microstructure.get("funding_rate"):
                 funding_section = self.market_formatter.format_funding_rate(microstructure["funding_rate"], context.symbol)
                 if funding_section:
                     sections.append(funding_section)
@@ -196,9 +196,9 @@ class PromptBuilder:
                 long_term_sections.append(daily_section)
 
         # Weekly macro analysis (200W SMA)
-        if context.weekly_macro_indicators and 'weekly_macro_trend' in context.weekly_macro_indicators:
+        if context.weekly_macro_indicators and "weekly_macro_trend" in context.weekly_macro_indicators:
             weekly_section = self.long_term_formatter._format_weekly_macro_section(
-                context.weekly_macro_indicators['weekly_macro_trend']
+                context.weekly_macro_indicators["weekly_macro_trend"]
             )
             if weekly_section:
                 long_term_sections.append(weekly_section)
@@ -639,8 +639,8 @@ class PromptBuilder:
         td = self.context.technical_data
 
         # Get advanced indicators with defaults
-        adv_support = td.get('advanced_support', np.nan)
-        adv_resistance = td.get('advanced_resistance', np.nan)
+        adv_support = td.get("advanced_support", np.nan)
+        adv_resistance = td.get("advanced_resistance", np.nan)
 
         # Handle array indicators - take the last value
         try:

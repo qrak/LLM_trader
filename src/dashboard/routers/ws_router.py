@@ -1,6 +1,6 @@
 """WebSocket router for real-time dashboard updates."""
 
-from typing import Set, Any
+from typing import Any
 from collections import defaultdict
 from urllib.parse import urlparse
 
@@ -11,7 +11,7 @@ class ConnectionManager:
     """Manages WebSocket connections with rate limiting."""
 
     def __init__(self, max_connections: int = 1000, max_per_ip: int = 10):
-        self.active_connections: Set[WebSocket] = set()
+        self.active_connections: set[WebSocket] = set()
         self.ip_counts: dict[str, int] = defaultdict(int)
         self.max_connections = max_connections
         self.max_per_ip = max_per_ip

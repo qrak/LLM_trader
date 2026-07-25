@@ -2,7 +2,8 @@
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any
+from collections.abc import Awaitable, Callable
 
 from .exit_monitor import ExitMonitor
 
@@ -67,7 +68,7 @@ class PositionStatusMonitor:
             if current_price is None:
                 ticker = await self.fetch_current_ticker()
                 if ticker:
-                    current_price = float(ticker.get('last', ticker.get('close', 0)))
+                    current_price = float(ticker.get("last", ticker.get("close", 0)))
                 else:
                     self.logger.warning("No ticker available for initial position status, skipping")
                     return
@@ -187,7 +188,7 @@ class PositionStatusMonitor:
                     now = datetime.now(timezone.utc)
                     state = await self.load_state()
                     ticker = await self.fetch_current_ticker()
-                    current_price = float(ticker.get('last', ticker.get('close', 0))) if ticker else None
+                    current_price = float(ticker.get("last", ticker.get("close", 0))) if ticker else None
 
                     close_reason = await self.run_hard_exit_checks(current_price, now, state)
                     if close_reason:

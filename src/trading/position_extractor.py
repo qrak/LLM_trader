@@ -67,17 +67,17 @@ class PositionExtractor:
             return None
 
         # Try unwrapping 'analysis' key first
-        result = self.unified_parser.extract_json_block(text, unwrap_key='analysis')
+        result = self.unified_parser.extract_json_block(text, unwrap_key="analysis")
         if result:
             return result
 
         # Try 'trading_decision' key
-        result = self.unified_parser.extract_json_block(text, unwrap_key='trading_decision')
+        result = self.unified_parser.extract_json_block(text, unwrap_key="trading_decision")
         if result:
             return result
 
         # Try 'decision' key
-        result = self.unified_parser.extract_json_block(text, unwrap_key='decision')
+        result = self.unified_parser.extract_json_block(text, unwrap_key="decision")
         if result:
             return result
 
@@ -151,10 +151,9 @@ class PositionExtractor:
             return "MEDIUM"
         if confidence >= 70:
             return "HIGH"
-        elif confidence >= 50:
+        if confidence >= 50:
             return "MEDIUM"
-        else:
-            return "LOW"
+        return "LOW"
 
     def _parse_finite_float(self, value: Any) -> float | None:
         """Parse a trade numeric field and reject NaN/Infinity payloads."""

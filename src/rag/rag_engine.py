@@ -23,8 +23,8 @@ class RagEngine:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config: "Config",
-        coingecko_api: "CoinGeckoAPI" | None = None,
+        config: Config,
+        coingecko_api: CoinGeckoAPI | None = None,
         file_handler=None,
         news_manager=None,
         market_data_manager=None,
@@ -206,7 +206,7 @@ class RagEngine:
     @staticmethod
     def _extract_query_keywords(query: str) -> set[str]:
         """Extract query keywords used by context selection heuristics."""
-        return set(re.findall(r'\b\w{3,15}\b', query.lower()))
+        return set(re.findall(r"\b\w{3,15}\b", query.lower()))
 
     def _expand_candidate_indices_for_symbol(
         self,
@@ -233,7 +233,7 @@ class RagEngine:
         min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body_indices = [
             idx for idx in relevant_indices
-            if len(str(self.news_manager.news_database[idx].get('body', ''))) >= min_body_chars
+            if len(str(self.news_manager.news_database[idx].get("body", ""))) >= min_body_chars
         ]
         short_body_indices = [idx for idx in relevant_indices if idx not in full_body_indices]
         return full_body_indices + short_body_indices
@@ -243,8 +243,8 @@ class RagEngine:
         base_coin = symbol
         if self.category_processor:
             base_coin = self.category_processor.extract_base_coin(symbol).upper()
-        elif '/' in symbol:
-            base_coin = symbol.split('/')[0].upper()
+        elif "/" in symbol:
+            base_coin = symbol.split("/")[0].upper()
         else:
             base_coin = symbol.upper()
 

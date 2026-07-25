@@ -8,8 +8,8 @@ from .long_term_formatter import LongTermFormatter
 from .technical_formatter import TechnicalFormatter
 
 __all__ = [
+    "LongTermFormatter",
     "MarketFormatter",
     "MarketOverviewFormatter",
-    "LongTermFormatter",
     "TechnicalFormatter",
 ]

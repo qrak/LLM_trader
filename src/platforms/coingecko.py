@@ -24,10 +24,10 @@ class CoinGeckoAPI:
         self,
         logger: Logger,
         cache_backend: SQLiteBackend | None = None,
-        cache_dir: str = 'data/market_data',
+        cache_dir: str = "data/market_data",
         api_key: str | None = None,
         update_interval_hours: int = 24,
-        global_api_url: str = 'https://api.coingecko.com/api/v3/global'
+        global_api_url: str = "https://api.coingecko.com/api/v3/global"
     ) -> None:
         self.cache_backend = cache_backend
         self.session: CachedSession | None = None
@@ -90,7 +90,7 @@ class CoinGeckoAPI:
 
     def _read_json_sync(self) -> dict[str, Any]:
         """Synchronous file read for executor"""
-        with open(self.coingecko_cache_file, 'r', encoding='utf-8') as f:
+        with open(self.coingecko_cache_file, encoding="utf-8") as f:
             return json.load(f)
 
     async def _write_cache_file(self, data: dict[str, Any]) -> None:
@@ -104,7 +104,7 @@ class CoinGeckoAPI:
 
     def _write_json_sync(self, data: dict[str, Any]) -> None:
         """Synchronous file write for executor"""
-        with open(self.coingecko_cache_file, 'w', encoding='utf-8') as f:
+        with open(self.coingecko_cache_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
@@ -183,9 +183,8 @@ class CoinGeckoAPI:
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    self.logger.error("Failed to fetch coins/markets. Status: %s", response.status)
-                    return []
+                self.logger.error("Failed to fetch coins/markets. Status: %s", response.status)
+                return []
         except Exception as e:
             self.logger.error("Error fetching coins/markets: %s", e)
             return []
@@ -204,9 +203,8 @@ class CoinGeckoAPI:
             async with self.session.get(self.GLOBAL_DEFI_URL) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
-                    return {}
+                self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
+                return {}
         except Exception as e:
             self.logger.error("Error fetching DeFi data: %s", e)
             return {}
@@ -293,9 +291,8 @@ class CoinGeckoAPI:
             async with self.session.get(self.global_api_url) as response:
                 if response.status == 200:
                     return await response.json()
-                else:
-                    self.logger.error("Failed to fetch /global. Status: %s", response.status)
-                    return {}
+                self.logger.error("Failed to fetch /global. Status: %s", response.status)
+                return {}
         except Exception as e:
             self.logger.error("Error fetching /global: %s", e)
             return {}
@@ -342,19 +339,18 @@ class CoinGeckoAPI:
         async with self.session.get(self.COINS_LIST_URL) as response:
             if response.status == 200:
                 return await response.json()
-            else:
-                self.logger.error("Failed to fetch coin list. Status: %s", response.status)
-                return []
+            self.logger.error("Failed to fetch coin list. Status: %s", response.status)
+            return []
 
     def _update_symbol_map(self, coins: list[dict[str, str]]) -> None:
         for coin in coins:
-            symbol = coin['symbol'].upper()
+            symbol = coin["symbol"].upper()
             if symbol not in self.symbol_to_id_map:
                 self.symbol_to_id_map[symbol] = []
             self.symbol_to_id_map[symbol].append({
-                'id': coin['id'],
-                'name': coin['name'],
-                'image': ''
+                "id": coin["id"],
+                "name": coin["name"],
+                "image": ""
             })
 
     def _log_cache_info(self) -> None:

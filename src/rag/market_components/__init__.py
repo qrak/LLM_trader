@@ -9,8 +9,8 @@ from .market_data_cache import MarketDataCache
 from .market_overview_builder import MarketOverviewBuilder
 
 __all__ = [
-    'MarketDataProcessor',
-    'MarketDataFetcher',
-    'MarketDataCache',
-    'MarketOverviewBuilder'
+    "MarketDataCache",
+    "MarketDataFetcher",
+    "MarketDataProcessor",
+    "MarketOverviewBuilder"
 ]

@@ -60,7 +60,7 @@ def _read_json_file(file_path: Path) -> Any:
     """Helper to read JSON file synchronously for offloading to a thread."""
     if not file_path.exists():
         return None
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -436,11 +436,11 @@ def _extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[st
             except (TypeError, ValueError):
                 pass
     else:
-        signal_match = re.search(r'\bSIGNAL\s*:\s*([A-Z_]+)\b', text, re.IGNORECASE)
+        signal_match = re.search(r"\bSIGNAL\s*:\s*([A-Z_]+)\b", text, re.IGNORECASE)
         if signal_match:
             status["action"] = signal_match.group(1).upper()
 
-        confidence_match = re.search(r'\bConfidence\s*:\s*(\d+(?:\.\d+)?)\s*%', text, re.IGNORECASE)
+        confidence_match = re.search(r"\bConfidence\s*:\s*(\d+(?:\.\d+)?)\s*%", text, re.IGNORECASE)
         if confidence_match:
             confidence_value = float(confidence_match.group(1))
             status["confidence"] = int(confidence_value) if confidence_value.is_integer() else confidence_value
@@ -850,7 +850,7 @@ class BrainRouter:
             ticker = await exchange.fetch_ticker(symbol)
             if not ticker:
                 return {"success": False, "error": "Failed to fetch ticker"}
-            price = float(ticker.get('last', ticker.get('close', 0)))
+            price = float(ticker.get("last", ticker.get("close", 0)))
             if price > 0 and self.dashboard_state:
                 await self.dashboard_state.update_price(price)
             return {"success": True, "current_price": price, "symbol": symbol}

@@ -5,7 +5,8 @@ Provides functionality for utils.profiler.py.
 import time
 import functools
 import asyncio
-from typing import Callable, Any
+from typing import Any
+from collections.abc import Callable
 
 
 def _logger_debug_enabled() -> bool:
@@ -76,5 +77,4 @@ def profile_performance(func: Callable) -> Callable:
     # Return appropriate wrapper based on whether the original function is async
     if asyncio.iscoroutinefunction(func):
         return wrapper
-    else:
-        return sync_wrapper
+    return sync_wrapper

@@ -6,7 +6,7 @@ import asyncio
 import io
 import base64
 import inspect
-from typing import Any, Union
+from typing import Any
 
 from openrouter import OpenRouter
 
@@ -108,7 +108,7 @@ class OpenRouterClient(BaseAIClient):
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -126,7 +126,7 @@ class OpenRouterClient(BaseAIClient):
         client = self._ensure_client()
         try:
             img_data = self.process_chart_image(chart_image)
-            base64_image = base64.b64encode(img_data).decode('utf-8')
+            base64_image = base64.b64encode(img_data).decode("utf-8")
             user_text = self._extract_user_text_from_messages(messages)
             multimodal_content = [
                 {"type": "text", "text": user_text},
@@ -182,7 +182,7 @@ class OpenRouterClient(BaseAIClient):
                 try:
                     model = data.model
                 except AttributeError:
-                    model = 'unknown'
+                    model = "unknown"
                 try:
                     total_cost = data.total_cost
                 except AttributeError:
@@ -203,7 +203,7 @@ class OpenRouterClient(BaseAIClient):
                     native_completion_tokens = data.native_tokens_completion
                 except AttributeError:
                     native_completion_tokens = 0
-                    
+
                 return {
                     "model": model,
                     "total_cost": total_cost,

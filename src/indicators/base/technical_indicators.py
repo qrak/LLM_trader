@@ -211,13 +211,13 @@ class TechnicalIndicators(IndicatorBase):
 
     def uo(self, fast=7, medium=14, slow=28, fast_w=4.0, medium_w=2.0, slow_w=1.0, drift=1) -> np.ndarray:
         config = {
-            'fast': fast,
-            'medium': medium,
-            'slow': slow,
-            'fast_w': fast_w,
-            'medium_w': medium_w,
-            'slow_w': slow_w,
-            'drift': drift
+            "fast": fast,
+            "medium": medium,
+            "slow": slow,
+            "fast_w": fast_w,
+            "medium_w": medium_w,
+            "slow_w": slow_w,
+            "drift": drift
         }
         return self.calculate_indicator(
             uo_numba,
@@ -640,7 +640,7 @@ class TechnicalIndicators(IndicatorBase):
 
     # ==================== VOLATILITY INDICATORS ====================
 
-    def atr(self, length: int = 14, mamode: str = 'rma', percent: bool = False) -> np.ndarray:
+    def atr(self, length: int = 14, mamode: str = "rma", percent: bool = False) -> np.ndarray:
         return self.calculate_indicator(
             atr_numba,
             self.high,
@@ -661,7 +661,7 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = 'rma') -> tuple[
+    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = "rma") -> tuple[
         np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             chandelier_exit_numba,
@@ -690,7 +690,7 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = 'ema') -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = "ema") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             keltner_channels_numba,
             self.high,

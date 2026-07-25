@@ -208,8 +208,9 @@ class AdminRouter:
                         "type": "feed_toggle",
                         "enabled": self._dashboard_feed_enabled,
                     })
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001
+                    if self.logger:
+                        self.logger.warning("Failed to broadcast feed toggle state: %s", exc)
             return {"status": "ok", "feed_enabled": self._dashboard_feed_enabled}
 
         @self.router.get("/system/status")
@@ -287,8 +288,9 @@ class AdminRouter:
                         await websocket.send_json({"type": "ping"})
             except WebSocketDisconnect:
                 pass
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                if self.logger:
+                    self.logger.warning("Admin logs WebSocket stream error: %s", exc)
             finally:
                 self.log_stream_manager.handler.unsubscribe(sid)
 
@@ -362,8 +364,9 @@ class AdminRouter:
 
             except WebSocketDisconnect:
                 pass
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                if self.logger:
+                    self.logger.warning("Admin console WebSocket error: %s", exc)
 
     @property
     def dashboard_feed_enabled(self) -> bool:

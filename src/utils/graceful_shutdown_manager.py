@@ -5,7 +5,7 @@ Provides functionality for utils.graceful_shutdown_manager.py.
 import asyncio
 import signal
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 try:
     import tkinter as tk
@@ -33,7 +33,7 @@ class GracefulShutdownManager:
         return self._shutting_down
 
     def setup_signal_handlers(self):
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             # On Windows, let Ctrl+C propagate as KeyboardInterrupt so start.py can
             # await shutdown synchronously before the event loop is closed.
             return
@@ -79,11 +79,10 @@ class GracefulShutdownManager:
             else:
                 print("User confirmed shutdown, initiating...")
             self._request_shutdown()
+        elif self.logger:
+            self.logger.info("User cancelled shutdown. Continuing operation...")
         else:
-            if self.logger:
-                self.logger.info("User cancelled shutdown. Continuing operation...")
-            else:
-                print("User cancelled shutdown. Continuing operation...")
+            print("User cancelled shutdown. Continuing operation...")
 
     async def shutdown_gracefully(self):
         """Execute all registered shutdown callbacks and cancel pending tasks."""
@@ -152,7 +151,7 @@ class GracefulShutdownManager:
                 self.logger.error(err_msg)
             else:
                 print(err_msg)
-        
+
         # Final pause to allow background threads (e.g., Discord keep-alive handler) to fully terminate
         # before the event loop is closed. This prevents RuntimeError: Event loop is closed
         await asyncio.sleep(0.5)
@@ -161,7 +160,7 @@ class GracefulShutdownManager:
     def _prompt_exit_confirmation() -> bool:
         try:
             response = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
-            return response in ['y', 'yes']
+            return response in ["y", "yes"]
         except (EOFError, KeyboardInterrupt):
             return True
 
@@ -215,5 +214,5 @@ class GracefulShutdownManager:
             if root is not None:
                 try:
                     root.destroy()
-                except Exception:  # best-effort cleanup
+                except Exception:  # noqa: BLE001, S110 # best-effort cleanup
                     pass

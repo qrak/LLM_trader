@@ -1,6 +1,7 @@
 """Prompt context and threshold retrieval for the trading brain."""
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from src.utils.indicator_classifier import (
     build_context_string_from_classified_values,
@@ -21,11 +22,13 @@ class BrainContextProvider:
         vector_memory: VectorMemoryService,
         exit_profiles: ExitProfileResolver,
         post_mortem_repo: Any | None = None,
+        logger: Any | None = None,
     ):
         """Initialize context provider dependencies and cache state."""
         self.vector_memory = vector_memory
         self.exit_profiles = exit_profiles
         self.post_mortem_repo = post_mortem_repo
+        self.logger = logger
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
 
@@ -86,8 +89,9 @@ class BrainContextProvider:
             )
             if blocked_feedback:
                 lines.extend(["", blocked_feedback])
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            if self.logger:
+                self.logger.warning("Failed to fetch blocked trade feedback: %s", exc)
         vector_context = self.get_vector_context(
             trend_direction=trend_direction,
             adx=adx,
@@ -112,7 +116,7 @@ class BrainContextProvider:
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and state it. Weight both wins AND losses, not just the favorable cases.",
-                "- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\", compare the current setup to the failed assumption, and downgrade confidence unless the missing confirmation is now present. State the adjustment you apply (stricter confluences, higher R/R, or reduced size).",
+                '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state "⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade confidence unless the missing confirmation is now present. State the adjustment you apply (stricter confluences, higher R/R, or reduced size).',
                 "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime (ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; do not use it as a confidence prior without explaining the mismatch.",
                 "",
             ])
@@ -189,7 +193,7 @@ class BrainContextProvider:
                 return ""
             lines = []
             for pm in recent:
-                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get('pnl_pct') is not None else ""
+                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get("pnl_pct") is not None else ""
                 lines.append(
                     f"— {pm['verdict']} ({pm['created_at'][:10]}, {pm['symbol']}): {pm['lesson_learned']}{pnl_str}"
                 )

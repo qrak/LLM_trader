@@ -171,7 +171,7 @@ class DiscordFileHandler:
         if not os.path.exists(self.tracking_file):
             return {}
         try:
-            with open(self.tracking_file, "r", encoding="utf-8") as file:
+            with open(self.tracking_file, encoding="utf-8") as file:
                 return json.load(file)
         except json.JSONDecodeError:
             self.logger.warning("Corrupted tracking file. Creating new.")

@@ -18,7 +18,7 @@ class CCXTMarketAPI:
     def __init__(
         self,
         logger: Logger,
-        exchange_manager: "ExchangeManager",
+        exchange_manager: ExchangeManager,
     ) -> None:
         self.logger = logger
         self.exchange_manager = exchange_manager

@@ -4,7 +4,7 @@ Supports text-only and multimodal (text + image) chat with x402 micropayments.
 """
 import io
 import base64
-from typing import Any, Union
+from typing import Any
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -90,7 +90,7 @@ class BlockRunClient(BaseAIClient):
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any],
     ) -> ChatResponseModel | None:
         """

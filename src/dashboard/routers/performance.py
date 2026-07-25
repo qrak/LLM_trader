@@ -23,7 +23,7 @@ class PerformanceRouter:
 
     def _load_json_file(self, file_path: Path) -> dict[str, Any]:
         """Load JSON from a file synchronously."""
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             return json.load(f)
 
     def _default_statistics(self) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 """Utilities for data manipulation, serialization, and type conversion."""
 import dataclasses
 from datetime import datetime
-from typing import Any, Type, TypeVar, Union, get_args, get_origin
+from typing import Any, TypeVar, Union, get_args, get_origin
 
 import math
 import numpy as np
@@ -117,9 +117,9 @@ def get_indicator_value(td: dict, key: str) -> float | str:
             return float(value[0])
         if isinstance(value, (list, tuple)) and len(value) > 1:
             return float(value[-1])
-        return 'N/A'
+        return "N/A"
     except (KeyError, TypeError, ValueError, IndexError):
-        return 'N/A'
+        return "N/A"
 
 
 def serialize_for_json(obj: Any) -> Any:
@@ -176,7 +176,7 @@ class SerializableMixin:
         return dataclasses.asdict(self, dict_factory=_dict_factory)
 
     @classmethod
-    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
+    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
         """Create dataclass instance from dictionary, handling types."""
         if not dataclasses.is_dataclass(cls):
             raise TypeError(f"{cls.__name__} must be a dataclass to use SerializableMixin")
@@ -194,7 +194,7 @@ class SerializableMixin:
         return cls(**init_args)
 
     @staticmethod
-    def _convert_value(value: Any, target_type: Type) -> Any:
+    def _convert_value(value: Any, target_type: type) -> Any:
         """Recursively convert values to match target types."""
         if value is None:
             # For non-Optional primitives, return a safe zero-value instead of

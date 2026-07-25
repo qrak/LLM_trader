@@ -4,7 +4,8 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
 import io
-from typing import TYPE_CHECKING, Any, Callable, Awaitable
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Awaitable
 
 import discord
 from aiohttp import ClientSession
@@ -13,7 +14,7 @@ from src.utils.decorators import retry_async
 from .base_notifier import BaseNotifier
 from .filehandler import DiscordFileHandler
 
-ENTRY_ACTIONS = {'BUY', 'SELL'}
+ENTRY_ACTIONS = {"BUY", "SELL"}
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -238,7 +239,7 @@ class DiscordNotifier(BaseNotifier):
                     expire_after=expire_after
                 )
 
-            self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else 'None')
+            self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else "None")
             return sent_message
         except discord.HTTPException as e:
             self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)
@@ -249,11 +250,11 @@ class DiscordNotifier(BaseNotifier):
     def _get_discord_color(self, color_key: str) -> discord.Color:
         """Convert color key to discord.Color."""
         color_map = {
-            'green': discord.Color.green(),
-            'red': discord.Color.red(),
-            'grey': discord.Color.light_grey(),
-            'orange': discord.Color.orange(),
-            'blue': discord.Color.blue(),
+            "green": discord.Color.green(),
+            "red": discord.Color.red(),
+            "grey": discord.Color.light_grey(),
+            "orange": discord.Color.orange(),
+            "blue": discord.Color.blue(),
         }
         return color_map.get(color_key, discord.Color.light_grey())
 
@@ -420,7 +421,7 @@ class DiscordNotifier(BaseNotifier):
                 self.logger.warning("Chart image buffer is empty; skipping Discord chart upload")
                 return None
 
-            safe_symbol = symbol.replace('/', '_')
+            safe_symbol = symbol.replace("/", "_")
             filename = f"{safe_symbol}_{timeframe}_analysis_chart.png"
 
             sent_message = await self._send_with_transient_retry(
@@ -516,21 +517,21 @@ class DiscordNotifier(BaseNotifier):
             embed = discord.Embed(
                 title="📈 Trading Performance Summary",
                 description=f"Overall performance after {stats['closed_trades']} closed trades",
-                color=discord.Color.blue() if stats['net_pnl'] > 0 else discord.Color.red()
+                color=discord.Color.blue() if stats["net_pnl"] > 0 else discord.Color.red()
             )
 
             embed.add_field(name=f"Total P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['total_pnl_quote']:+,.2f}", inline=True)
             embed.add_field(name="Total P&L (%)", value=f"{stats['total_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Avg P&L/Trade", value=f"{stats['avg_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Win Rate", value=f"{stats['win_rate']:.1f}% ({stats['winning_trades']}/{stats['closed_trades']})", inline=True)
-            embed.add_field(name="Total Trades", value=str(stats['closed_trades']), inline=True)
+            embed.add_field(name="Total Trades", value=str(stats["closed_trades"]), inline=True)
             embed.add_field(name="Total Fees", value=f"${stats['total_fees']:.4f}", inline=True)
             embed.add_field(name=f"Net P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['net_pnl']:+,.2f}", inline=True)
 
-            last_closed_trade = stats.get('last_closed_trade')
+            last_closed_trade = stats.get("last_closed_trade")
             if last_closed_trade:
-                outcome = last_closed_trade.get('outcome', 'UNKNOWN')
-                close_reason = last_closed_trade.get('close_reason')
+                outcome = last_closed_trade.get("outcome", "UNKNOWN")
+                close_reason = last_closed_trade.get("close_reason")
                 outcome_value = f"{outcome}\n{close_reason}" if close_reason else outcome
                 embed.add_field(name="Last Outcome", value=outcome_value, inline=True)
                 embed.add_field(
@@ -548,39 +549,39 @@ class DiscordNotifier(BaseNotifier):
         """Create Discord embed from analysis JSON."""
         try:
             fields = self.extract_analysis_fields(analysis)
-            color_key, _ = self.get_action_styling(fields['signal'])
+            color_key, _ = self.get_action_styling(fields["signal"])
             color = self._get_discord_color(color_key)
 
             embed = discord.Embed(
                 title=f"📊 {symbol} - {fields['signal']}",
-                description=fields['reasoning'][:4096],
+                description=fields["reasoning"][:4096],
                 color=color
             )
 
-            if fields['entry_price']:
+            if fields["entry_price"]:
                 embed.add_field(name="Entry", value=f"${fields['entry_price']:,.2f}", inline=True)
-            if fields['stop_loss']:
+            if fields["stop_loss"]:
                 embed.add_field(name="Stop Loss", value=f"${fields['stop_loss']:,.2f}", inline=True)
-            if fields['take_profit']:
+            if fields["take_profit"]:
                 embed.add_field(name="Take Profit", value=f"${fields['take_profit']:,.2f}", inline=True)
 
             embed.add_field(name="Confidence", value=f"{fields['confidence']}%", inline=True)
 
-            if fields['risk_reward_ratio']:
+            if fields["risk_reward_ratio"]:
                 embed.add_field(name="R:R", value=f"{fields['risk_reward_ratio']:.2f}", inline=True)
 
-            trend = fields['trend']
+            trend = fields["trend"]
             if trend:
-                direction = trend.get('direction', 'N/A')
-                strength = trend.get('strength')
+                direction = trend.get("direction", "N/A")
+                strength = trend.get("strength")
                 if strength is None:
-                    strength = trend.get('strength_daily', trend.get('strength_4h', 0))
+                    strength = trend.get("strength_daily", trend.get("strength_4h", 0))
                 embed.add_field(name="Trend", value=f"{direction} ({strength}%)", inline=True)
 
-            key_levels = fields['key_levels']
+            key_levels = fields["key_levels"]
             if key_levels:
-                supports = key_levels.get('support', [])
-                resistances = key_levels.get('resistance', [])
+                supports = key_levels.get("support", [])
+                resistances = key_levels.get("resistance", [])
                 if supports:
                     support_str = ", ".join([f"${s:,.2f}" for s in supports[:3]])
                     embed.add_field(name="Support", value=support_str, inline=False)

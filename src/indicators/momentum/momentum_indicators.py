@@ -634,7 +634,7 @@ def uo_numba(
     """
     return _uo_numba(
         high, low, close,
-        config['fast'], config['medium'], config['slow'],
-        config['fast_w'], config['medium_w'], config['slow_w'],
-        config['drift']
+        config["fast"], config["medium"], config["slow"],
+        config["fast_w"], config["medium_w"], config["slow_w"],
+        config["drift"]
     )

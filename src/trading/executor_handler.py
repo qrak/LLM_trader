@@ -173,7 +173,7 @@ class ExecutorHandler:
             return
         try:
             entries: list[dict[str, Any]] = []
-            with open(DEAD_LETTER_PATH, "r", encoding="utf-8") as f:
+            with open(DEAD_LETTER_PATH, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line:

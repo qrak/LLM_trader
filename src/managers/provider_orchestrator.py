@@ -1,6 +1,6 @@
 """Provider orchestration for AI model invocation with fallback logic."""
 import io
-from typing import Any, Union, cast, TYPE_CHECKING
+from typing import Any, cast, TYPE_CHECKING
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.response_models import ChatResponseModel
@@ -44,31 +44,31 @@ class ProviderOrchestrator:
     def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
         """Build provider metadata registry from clients and config."""
         return {
-            'googleai': ProviderMetadata(
-                name='Google AI Studio',
+            "googleai": ProviderMetadata(
+                name="Google AI Studio",
                 client=self.clients.google,
                 paid_client=self.clients.google_paid,
                 default_model=self.config.GOOGLE_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.GOOGLE_STUDIO_MODEL),
                 supports_chart=True,
             ),
-            'openrouter': ProviderMetadata(
-                name='OpenRouter',
+            "openrouter": ProviderMetadata(
+                name="OpenRouter",
                 client=self.clients.openrouter,
                 default_model=self.config.OPENROUTER_BASE_MODEL,
                 config=self.config.get_model_config(self.config.OPENROUTER_BASE_MODEL),
                 supports_chart=True,
                 fallback_model=self.config.OPENROUTER_FALLBACK_MODEL,
             ),
-            'local': ProviderMetadata(
-                name='LM Studio',
+            "local": ProviderMetadata(
+                name="LM Studio",
                 client=self.clients.lmstudio,
                 default_model=self.config.LM_STUDIO_MODEL,
                 config=self.config.get_model_config(self.config.LM_STUDIO_MODEL),
                 supports_chart=False,
             ),
-            'blockrun': ProviderMetadata(
-                name='BlockRun.AI',
+            "blockrun": ProviderMetadata(
+                name="BlockRun.AI",
                 client=self.clients.blockrun,
                 default_model=self.config.BLOCKRUN_MODEL,
                 config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
@@ -105,7 +105,7 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         *,
         chart: bool = False,
-        chart_image: Union[io.BytesIO, bytes, str] | None = None,
+        chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
         """
@@ -159,7 +159,7 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         *,
         chart: bool = False,
-        chart_image: Union[io.BytesIO, bytes, str] | None = None,
+        chart_image: io.BytesIO | bytes | str | None = None,
         model: str | None = None
     ) -> InvocationResult:
         """
@@ -231,7 +231,7 @@ class ProviderOrchestrator:
         self,
         effective_provider: str,
         messages: list[dict[str, str]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model: str | None = None
     ) -> InvocationResult:
         """
@@ -275,7 +275,7 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Union[io.BytesIO, bytes, str] | None
+        chart_image: io.BytesIO | bytes | str | None
     ) -> InvocationResult:
         """Invoke Google AI with free/paid tier fallback logic."""
         is_free_tier_model = "flash" in effective_model.lower()
@@ -359,7 +359,7 @@ class ProviderOrchestrator:
         except Exception as e:
             return InvocationResult(
                 success=False,
-                response=ChatResponseModel.from_error(f"LM Studio connection failed: {str(e)}"),
+                response=ChatResponseModel.from_error(f"LM Studio connection failed: {e!s}"),
                 provider="lmstudio",
                 model=effective_model
             )
@@ -370,7 +370,7 @@ class ProviderOrchestrator:
         messages: list[dict[str, str]],
         effective_model: str,
         chart: bool,
-        chart_image: Union[io.BytesIO, bytes, str] | None,
+        chart_image: io.BytesIO | bytes | str | None,
         allow_model_fallback: bool
     ) -> InvocationResult:
         """Invoke OpenRouter provider."""
@@ -424,9 +424,9 @@ class ProviderOrchestrator:
         first_choice = response.choices[0]
         if first_choice.error:
             error_detail = first_choice.error
-            error_code = error_detail.get('code', 'unknown')
-            error_msg = error_detail.get('message', 'unknown')
-            provider = error_detail.get('metadata', {}).get('provider_name', 'unknown')
+            error_code = error_detail.get("code", "unknown")
+            error_msg = error_detail.get("message", "unknown")
+            provider = error_detail.get("metadata", {}).get("provider_name", "unknown")
             self.logger.error("Error in API response choice from %s: [%s] %s", provider, error_code, error_msg)
             self.logger.debug("Full error details: %s", error_detail)
             return False

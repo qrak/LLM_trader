@@ -54,9 +54,9 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
         if basefilename_norm != current_filename_norm:
             # Close previous stream if it exists before opening a new one
             try:
-                if hasattr(self, 'stream') and self.stream:
+                if hasattr(self, "stream") and self.stream:
                     self.stream.close()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 # best-effort stream cleanup during daily log file rollover
                 pass
 
@@ -69,9 +69,9 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
 
 
 class Logger(logging.Logger):
-    def __init__(self, logger_name: str = '', log_filename_prefix: str = '', log_dir: str = None,
+    def __init__(self, logger_name: str = "", log_filename_prefix: str = "", log_dir: str = None,
                  logger_debug: bool = False) -> None:
-        sanitized_name = logger_name.replace('/', '_').replace('\\', '_')
+        sanitized_name = logger_name.replace("/", "_").replace("\\", "_")
 
         level = logging.DEBUG if logger_debug else logging.INFO
         super().__init__(sanitized_name, level)
@@ -95,7 +95,7 @@ class Logger(logging.Logger):
         os.makedirs(log_dir, exist_ok=True)
         return log_dir
 
-    def _get_log_filename(self, log_dir: str, suffix: str = '') -> str:
+    def _get_log_filename(self, log_dir: str, suffix: str = "") -> str:
         # Ensure we have a valid filename even if prefix or name are empty
         prefix = self.log_filename_prefix if self.log_filename_prefix else ""
         name = self.name if self.name else "default"
@@ -130,10 +130,10 @@ class Logger(logging.Logger):
             self.log_filename_prefix,
             self.name,
             is_error_handler=False,
-            when='midnight',
+            when="midnight",
             interval=1,
             backupCount=30,
-            encoding='utf-8'
+            encoding="utf-8"
         )
         file_handler.setLevel(self.level)
         file_handler.setFormatter(self._plain_formatter())
@@ -150,10 +150,10 @@ class Logger(logging.Logger):
             self.log_filename_prefix,
             self.name,
             is_error_handler=True,
-            when='midnight',
+            when="midnight",
             interval=1,
             backupCount=30,
-            encoding='utf-8'
+            encoding="utf-8"
         )
         error_file_handler.setLevel(logging.ERROR)
         error_file_handler.setFormatter(self._plain_formatter())
@@ -166,7 +166,7 @@ class Logger(logging.Logger):
         # _get_log_dir no longer accepts is_error, it returns the main directory
         new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
-        open(new_file, 'a', encoding='utf-8').close()
+        open(new_file, "a", encoding="utf-8").close()
 
     def close(self) -> None:
         """Close all handlers and release resources."""
@@ -174,7 +174,8 @@ class Logger(logging.Logger):
             try:
                 handler.close()
                 self.removeHandler(handler)
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
+                # best-effort handler close cleanup
                 pass
 
     def install_crash_handler(self) -> None:
@@ -200,7 +201,7 @@ class Logger(logging.Logger):
             # This occurs when the keep-alive thread tries to access a closed event loop
             # It's harmless and expected behavior during graceful shutdown
             if (
-                args.exc_type is RuntimeError 
+                args.exc_type is RuntimeError
                 and "Event loop is closed" in str(args.exc_value)
                 and "keep-alive-handler" in (args.thread.name if args.thread else "")
             ):
@@ -222,10 +223,10 @@ class Logger(logging.Logger):
             self.log_filename_prefix,
             self.name,
             is_error_handler=True,
-            when='midnight',
+            when="midnight",
             interval=1,
             backupCount=30,
-            encoding='utf-8'
+            encoding="utf-8"
         )
         root_error_handler.setLevel(logging.ERROR)
         root_error_handler.setFormatter(self._plain_formatter())
