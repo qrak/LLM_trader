@@ -1,3 +1,7 @@
+"""Ccxt Market Api module.
+
+Provides functionality for platforms.ccxt_market_api.py.
+"""
 from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING

@@ -260,7 +260,7 @@ Active config at `config/config.ini`. Key settings:
 
 | Setting | Value |
 |---------|-------|
-| **Pair** | BTC/USDC |
+| **Pair** | BTC/USDC (USD Coin) |
 | **Timeframe** | 4h |
 | **Candles** | 999 (125 for AI chart) |
 | **Capital** | $10,000 simulated |

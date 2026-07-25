@@ -1,3 +1,4 @@
+/* global DOMPurify, marked */
 /**
  * Log viewer module - Handles prompt and response display.
  */
@@ -66,7 +67,11 @@ export async function updateResponseTab() {
                 viewer.textContent = processed.trim();
             }
         } else {
-            viewer.innerHTML = DOMPurify.sanitize(`<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`);
+            if (window.DOMPurify) {
+                viewer.innerHTML = DOMPurify.sanitize(`<pre style="white-space: pre-wrap; margin: 0;">${escapeHtml(content)}</pre>`);
+            } else {
+                viewer.textContent = content;
+            }
         }
         cachedResponse = content;
     } catch (e) {

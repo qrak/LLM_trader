@@ -1,3 +1,7 @@
+"""Statistical Indicators module.
+
+Provides functionality for indicators.statistical.statistical_indicators.py.
+"""
 import numpy as np
 from numba import njit
 from .utils import (

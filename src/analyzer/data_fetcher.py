@@ -1,3 +1,7 @@
+"""Data Fetcher module.
+
+Provides functionality for analyzer.data_fetcher.py.
+"""
 from typing import Any
 import time
 

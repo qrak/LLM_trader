@@ -1,3 +1,7 @@
+"""Test Discord Notifier Rate Limit unit tests.
+
+Tests for test_discord_notifier_rate_limit.py.
+"""
 import asyncio
 import io
 from types import SimpleNamespace

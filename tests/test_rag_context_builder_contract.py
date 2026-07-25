@@ -1,3 +1,7 @@
+"""Test Rag Context Builder Contract unit tests.
+
+Tests for test_rag_context_builder_contract.py.
+"""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 

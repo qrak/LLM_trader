@@ -1,3 +1,7 @@
+"""Test Dashboard Performance Router unit tests.
+
+Tests for test_dashboard_performance_router.py.
+"""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 

@@ -1,3 +1,7 @@
+"""Price Transform Indicators module.
+
+Provides functionality for indicators.price.price_transform_indicators.py.
+"""
 import numpy as np
 from numba import njit
 

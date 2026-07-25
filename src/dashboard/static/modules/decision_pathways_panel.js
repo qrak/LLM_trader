@@ -1,3 +1,4 @@
+/* global vis, DOMPurify */
 /**
  * Decision Pathways panel — multi-source hierarchical graph + synopsis + detail.
  * Hierarchical multi-source decision graph for Brain Activity.
@@ -54,8 +55,8 @@ function colorFor(type, group, data) {
         if (String(data.direction || '').toUpperCase() === 'SHORT') return COLOR.position_short;
         return COLOR.position;
     }
-    if (group && COLOR[group]) return COLOR[group];
-    if (type && COLOR[type]) return COLOR[type];
+    if (typeof group === 'string' && Object.prototype.hasOwnProperty.call(COLOR, group)) return COLOR[group];
+    if (typeof type === 'string' && Object.prototype.hasOwnProperty.call(COLOR, type)) return COLOR[type];
     return COLOR.hub;
 }
 
@@ -318,10 +319,10 @@ function updateGraph(graph) {
     edgesDS.add(visEdges);
     // Spread same-level nodes horizontally — vis-network doesn't reposition
     // dynamically-added nodes with hierarchical layout + physics off.
-    const levelNodes = {};
+    const levelNodes = Object.create(null);
     visNodes.forEach(function (vn) {
         const lv = vn.level || 0;
-        if (!levelNodes[lv]) levelNodes[lv] = [];
+        if (!Object.prototype.hasOwnProperty.call(levelNodes, lv)) levelNodes[lv] = [];
         levelNodes[lv].push(vn);
     });
     Object.keys(levelNodes).forEach(function (lv) {

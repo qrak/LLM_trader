@@ -1,3 +1,7 @@
+"""Rag Engine module.
+
+Provides functionality for rag.rag_engine.py.
+"""
 from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone

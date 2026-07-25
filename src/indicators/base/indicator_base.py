@@ -1,3 +1,7 @@
+"""Indicator Base module.
+
+Provides functionality for indicators.base.indicator_base.py.
+"""
 import timeit
 from dataclasses import dataclass
 from typing import Union, Callable, Any

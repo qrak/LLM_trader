@@ -1,3 +1,7 @@
+"""Filehandler module.
+
+Provides functionality for notifiers.filehandler.py.
+"""
 import asyncio
 import json
 import os

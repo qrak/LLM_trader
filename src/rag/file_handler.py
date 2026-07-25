@@ -1,3 +1,7 @@
+"""File Handler module.
+
+Provides functionality for rag.file_handler.py.
+"""
 import json
 import os
 import sys

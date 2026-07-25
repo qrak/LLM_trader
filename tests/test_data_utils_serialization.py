@@ -1,3 +1,7 @@
+"""Test Data Utils Serialization unit tests.
+
+Tests for test_data_utils_serialization.py.
+"""
 from dataclasses import dataclass
 
 from src.utils.data_utils import SerializableMixin

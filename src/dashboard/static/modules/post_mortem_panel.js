@@ -1,3 +1,4 @@
+/* global DOMPurify, marked */
 /**
  * Trade Journal panel module — Displays post-mortem analyses with FTS5 search.
  */

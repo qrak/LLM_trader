@@ -1,3 +1,7 @@
+"""Graceful Shutdown Manager module.
+
+Provides functionality for utils.graceful_shutdown_manager.py.
+"""
 import asyncio
 import signal
 import sys

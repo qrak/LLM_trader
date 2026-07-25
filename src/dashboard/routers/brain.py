@@ -1043,8 +1043,8 @@ class BrainRouter:
                 try:
                     memory["experience_count"] = self.vector_memory.trade_count
                     memory["rule_count"] = self.vector_memory.semantic_rule_count
-                except Exception:
-                    pass
+                except Exception as exc:
+                    self.logger.warning("Failed to read fallback vector_memory counters: %s", exc)
 
             try:
                 rules = await self.get_active_rules()

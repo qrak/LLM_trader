@@ -1,3 +1,7 @@
+"""Market Data Collector module.
+
+Provides functionality for analyzer.market_data_collector.py.
+"""
 from datetime import datetime
 from typing import Any, TYPE_CHECKING
 

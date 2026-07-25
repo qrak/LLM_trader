@@ -1,3 +1,7 @@
+"""Profiler module.
+
+Provides functionality for utils.profiler.py.
+"""
 import time
 import functools
 import asyncio

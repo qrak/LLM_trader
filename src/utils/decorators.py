@@ -1,3 +1,7 @@
+"""Decorators module.
+
+Provides functionality for utils.decorators.py.
+"""
 import asyncio
 import functools
 import random

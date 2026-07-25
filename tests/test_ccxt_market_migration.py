@@ -1,3 +1,7 @@
+"""Test Ccxt Market Migration unit tests.
+
+Tests for test_ccxt_market_migration.py.
+"""
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

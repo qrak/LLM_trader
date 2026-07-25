@@ -1,3 +1,7 @@
+"""Test Rag Scoring Policy Contract unit tests.
+
+Tests for test_rag_scoring_policy_contract.py.
+"""
 from collections import namedtuple
 import re
 from types import SimpleNamespace

@@ -1,3 +1,7 @@
+"""Pattern Analyzer module.
+
+Provides functionality for analyzer.pattern_analyzer.py.
+"""
 from typing import Any
 import numpy as np
 

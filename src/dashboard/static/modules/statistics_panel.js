@@ -1,5 +1,6 @@
+/* global DOMPurify */
 /**
- * Statistics panel module - Displays trading statistics with annotations.
+ * Statistics panel module - Displays performance stats and win/loss analytics.
  */
 
 const STAT_ANNOTATIONS = {
@@ -38,7 +39,8 @@ export async function updateStatisticsData() {
             `;
             return;
         }
-        container.innerHTML = DOMPurify.sanitize(renderStatistics(stats));
+        const statsHtml = renderStatistics(stats);
+        container.innerHTML = window.DOMPurify ? DOMPurify.sanitize(statsHtml) : statsHtml;
     } catch (e) {
         container.innerHTML = `
             <div class="empty-state">

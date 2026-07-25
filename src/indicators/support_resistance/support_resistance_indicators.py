@@ -1,3 +1,7 @@
+"""Support Resistance Indicators module.
+
+Provides functionality for indicators.support_resistance.support_resistance_indicators.py.
+"""
 import math
 import numpy as np
 from numba import njit

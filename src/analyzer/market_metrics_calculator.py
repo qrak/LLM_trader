@@ -1,3 +1,7 @@
+"""Market Metrics Calculator module.
+
+Provides functionality for analyzer.market_metrics_calculator.py.
+"""
 import math
 import numpy as np
 from src.utils.timeframe_validator import TimeframeValidator

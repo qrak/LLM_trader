@@ -1,3 +1,7 @@
+"""Alternative Me module.
+
+Provides functionality for platforms.alternative_me.py.
+"""
 import asyncio
 import json
 import os

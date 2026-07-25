@@ -1,3 +1,7 @@
+"""Exchange Manager module.
+
+Provides functionality for platforms.exchange_manager.py.
+"""
 import asyncio
 from datetime import datetime
 from typing import Set, Any, TYPE_CHECKING

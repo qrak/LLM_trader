@@ -1,3 +1,7 @@
+"""Momentum Indicators module.
+
+Provides functionality for indicators.momentum.momentum_indicators.py.
+"""
 from typing import Any
 
 import math

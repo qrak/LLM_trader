@@ -1,3 +1,7 @@
+"""Test Sqlite Trade History unit tests.
+
+Tests for test_sqlite_trade_history.py.
+"""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock

@@ -1,3 +1,7 @@
+"""Test Dashboard Static Bindings unit tests.
+
+Tests for test_dashboard_static_bindings.py.
+"""
 from pathlib import Path
 
 

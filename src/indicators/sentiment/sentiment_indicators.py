@@ -1,3 +1,7 @@
+"""Sentiment Indicators module.
+
+Provides functionality for indicators.sentiment.sentiment_indicators.py.
+"""
 from dataclasses import dataclass
 
 import math

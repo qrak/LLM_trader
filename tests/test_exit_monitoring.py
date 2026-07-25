@@ -1,3 +1,7 @@
+"""Test Exit Monitoring unit tests.
+
+Tests for test_exit_monitoring.py.
+"""
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock

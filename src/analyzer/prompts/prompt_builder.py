@@ -1,3 +1,7 @@
+"""Prompt Builder module.
+
+Provides functionality for analyzer.prompts.prompt_builder.py.
+"""
 from datetime import datetime, timezone, timedelta
 from typing import Any, TYPE_CHECKING
 

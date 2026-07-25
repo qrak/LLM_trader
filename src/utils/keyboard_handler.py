@@ -1,3 +1,7 @@
+"""Keyboard Handler module.
+
+Provides functionality for utils.keyboard_handler.py.
+"""
 import asyncio
 import sys
 from typing import Callable, Awaitable

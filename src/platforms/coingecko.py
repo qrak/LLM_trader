@@ -1,3 +1,7 @@
+"""Coingecko module.
+
+Provides functionality for platforms.coingecko.py.
+"""
 import asyncio
 import json
 import os

@@ -1,3 +1,7 @@
+"""Logger module.
+
+Provides functionality for logger.logger.py.
+"""
 import logging
 import os
 import sys
@@ -50,10 +54,10 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
         if basefilename_norm != current_filename_norm:
             # Close previous stream if it exists before opening a new one
             try:
-                self.stream.close()
-            except AttributeError:
-                pass
+                if hasattr(self, 'stream') and self.stream:
+                    self.stream.close()
             except Exception:
+                # best-effort stream cleanup during daily log file rollover
                 pass
 
             self.baseFilename = current_filename_norm

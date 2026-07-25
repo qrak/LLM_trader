@@ -1,3 +1,7 @@
+"""Overlap Indicators module.
+
+Provides functionality for indicators.overlap.overlap_indicators.py.
+"""
 import math
 import numpy as np
 from numba import njit

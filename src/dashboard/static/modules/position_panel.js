@@ -1,5 +1,6 @@
+/* global DOMPurify */
 /**
- * Position panel module - Displays current open position with live P&L.
+ * Position panel module - Displays active position details, entry/exit prices, and SL/TP distances.
  */
 
 let lastPosition = null;
@@ -118,7 +119,7 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
         const shortIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>`;
         const timeIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-inline"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
-        container.innerHTML = DOMPurify.sanitize(`
+        const posHtml = `
             <div class="position-grid">
                 <div class="position-badge ${directionClass}">
                     ${data.direction === 'LONG' ? longIcon : shortIcon} <span>${escapeHtml(data.direction)}</span>
@@ -177,11 +178,10 @@ export async function updatePositionData(currentPrice = null, fetchFresh = false
                     <div class="gauge-labels">
                         <span title="Stop Loss: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.stop_loss)}">SL</span>
                         <span title="Entry: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.entry_price)}">Entry</span>
-                        <span title="Take Profit: ${new Intl.NumberFormat(navigator.language, { style: 'currency', currency: 'USD' }).format(data.take_profit)}">TP</span>
-                    </div>
                 </div>
             </div>
-        `);
+        `;
+        container.innerHTML = window.DOMPurify ? DOMPurify.sanitize(posHtml) : posHtml;
     } catch (error) {
         container.innerHTML = '<div class="error">Error loading position data</div>';
     }
