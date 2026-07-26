@@ -20,7 +20,7 @@ from src.utils.indicator_classifier import (
 )
 
 
-RULE_METADATA_FIELDS = (
+RULE_METADATA_FIELDS = frozenset((
     "rule_type",
     "win_rate",
     "loss_rate",
@@ -53,7 +53,7 @@ RULE_METADATA_FIELDS = (
     "contradiction_count",
     "source_timeframe_minutes",
     "source_timeframe_bucket",
-)
+))
 
 
 def _read_json_file(file_path: Path) -> Any:
@@ -165,6 +165,55 @@ def _build_decision_synopsis(
         parts.append(f"System blocked {blocked_count} trade attempt(s) recently (friction).")
 
     return " ".join(parts)
+
+
+def _build_decision_synopsis_data(
+    *,
+    now: dict[str, Any],
+    last_decision: dict[str, Any],
+    position: dict[str, Any],
+    memory: dict[str, Any],
+    journal: dict[str, Any],
+) -> dict[str, Any]:
+    """Extract structured synopsis fields for rich dashboard rendering."""
+    action = now.get("action") or last_decision.get("signal") or "--"
+    confidence = now.get("confidence")
+    if confidence in (None, "--"):
+        confidence = last_decision.get("confidence")
+    trend = now.get("trend") or "--"
+
+    top_rule = None
+    top_rules = memory.get("top_rules") or []
+    if top_rules:
+        r0 = top_rules[0]
+        top_rule = {
+            "type": r0.get("rule_type") or "rule",
+            "text": (r0.get("rule_text") or "")[:160],
+        }
+
+    latest_journal = None
+    items = journal.get("items") or []
+    if items:
+        lesson = (items[0].get("lesson_learned") or "").strip()
+        if lesson:
+            latest_journal = {
+                "verdict": items[0].get("verdict") or "lesson",
+                "lesson": lesson[:180],
+            }
+
+    return {
+        "has_position": bool(position.get("has_position")),
+        "direction": position.get("direction"),
+        "symbol": position.get("symbol"),
+        "entry_price": position.get("entry_price"),
+        "confidence": confidence,
+        "action": action,
+        "trend": trend,
+        "current_context": memory.get("current_context"),
+        "top_rule": top_rule,
+        "latest_journal": latest_journal,
+        "blocked_count": (memory.get("blocked") or {}).get("blocked_count") or 0,
+    }
 
 
 def _build_decision_graph(
@@ -1094,17 +1143,25 @@ class BrainRouter:
         except Exception:
             self.logger.error("Failed to load post-mortems for decision-summary", exc_info=True)
 
+        pos_dict = position if isinstance(position, dict) else {"has_position": False}
         synopsis = _build_decision_synopsis(
             now=now,
-            position=position if isinstance(position, dict) else {"has_position": False},
+            position=pos_dict,
             memory=memory,
             journal=journal,
             last_decision=last_decision,
         )
+        synopsis_data = _build_decision_synopsis_data(
+            now=now,
+            last_decision=last_decision,
+            position=pos_dict,
+            memory=memory,
+            journal=journal,
+        )
         graph = _build_decision_graph(
             now=now,
             last_decision=last_decision,
-            position=position if isinstance(position, dict) else {"has_position": False},
+            position=pos_dict,
             memory=memory,
             journal=journal,
         )
@@ -1112,9 +1169,10 @@ class BrainRouter:
         result = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "synopsis": synopsis,
+            "synopsis_data": synopsis_data,
             "now": now,
             "last_decision": last_decision,
-            "position": position if isinstance(position, dict) else {"has_position": False},
+            "position": pos_dict,
             "memory": memory,
             "journal": journal,
             "counts": {

@@ -479,9 +479,9 @@ class TradingStrategy:
         UPDATE/CLOSE, verify the executor has the position tracked (which
         only happens after fill confirmation).
         """
-        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
+        if not self.config.EXECUTOR_API_ENABLED:
             return True  # No executor configured — assume position is real
-        url: str = getattr(self.config, "EXECUTOR_API_URL", "")
+        url: str = self.config.EXECUTOR_API_URL
         if not url:
             return True
         try:

@@ -141,7 +141,7 @@ def get_indicator_value(td: dict, key: str) -> float | str:
         return "N/A"
 
 
-_PRIMITIVE_TYPES = (str, int, bool, type(None))
+_PRIMITIVE_TYPES = {str, int, bool, type(None)}
 _PRIMITIVE_DEFAULTS = {float: 0.0, int: 0, str: "", bool: False}
 
 

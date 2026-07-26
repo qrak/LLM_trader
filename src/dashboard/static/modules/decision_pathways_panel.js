@@ -358,8 +358,68 @@ function renderChrome(data) {
 
     const synopsis = document.getElementById('decision-synopsis');
     if (synopsis) {
-        synopsis.innerHTML = DOMPurify.sanitize(`<p class="decision-synopsis-text">${escapeHtml(data.synopsis || 'No synopsis available.')}</p>`);
+        if (data.synopsis_data) {
+            synopsis.innerHTML = DOMPurify.sanitize(renderStructuredSynopsis(data.synopsis_data));
+        } else {
+            synopsis.innerHTML = DOMPurify.sanitize(`<p class="decision-synopsis-text">${escapeHtml(data.synopsis || 'No synopsis available.')}</p>`);
+        }
     }
+}
+
+function renderStructuredSynopsis(sd) {
+    const posBadge = sd.has_position
+        ? `<span class="synopsis-pill pill-position pill-pos-${(sd.direction || '').toLowerCase()}">${escapeHtml(sd.direction || '')} ${escapeHtml(sd.symbol || '')}${sd.entry_price ? ` @ ${escapeHtml(String(sd.entry_price))}` : ''}</span>`
+        : `<span class="synopsis-pill pill-position pill-flat">FLAT (NO POSITION)</span>`;
+
+    const actClass = (sd.action || '').toLowerCase();
+    const actionBadge = `<span class="synopsis-pill pill-action pill-action-${actClass}">${escapeHtml(sd.action || '--')}${sd.confidence ? ` (${sd.confidence}%)` : ''}</span>`;
+    const trendBadge = `<span class="synopsis-pill pill-trend">${escapeHtml(sd.trend || '--')}</span>`;
+
+    let html = `
+    <div class="synopsis-card">
+        <div class="synopsis-header-row">
+            <div class="synopsis-pills">
+                ${posBadge}
+                ${actionBadge}
+                ${trendBadge}
+            </div>
+        </div>
+    `;
+
+    if (sd.current_context) {
+        const tags = String(sd.current_context).split(' + ').map(t => `<span class="context-chip">${escapeHtml(t.trim())}</span>`).join('');
+        html += `
+        <div class="synopsis-section synopsis-context-section">
+            <span class="synopsis-label">Memory Context:</span>
+            <div class="context-chips">${tags}</div>
+        </div>`;
+    }
+
+    if (sd.top_rule && sd.top_rule.text) {
+        html += `
+        <div class="synopsis-section synopsis-rule-block">
+            <span class="synopsis-label label-rule">Top Active Rule (${escapeHtml(sd.top_rule.type)}):</span>
+            <div class="synopsis-val">${escapeHtml(sd.top_rule.text)}</div>
+        </div>`;
+    }
+
+    if (sd.latest_journal && sd.latest_journal.lesson) {
+        html += `
+        <div class="synopsis-section synopsis-journal-block">
+            <span class="synopsis-label label-journal">Latest Journal (${escapeHtml(sd.latest_journal.verdict)}):</span>
+            <div class="synopsis-val">${escapeHtml(sd.latest_journal.lesson)}</div>
+        </div>`;
+    }
+
+    if (sd.blocked_count > 0) {
+        html += `
+        <div class="synopsis-friction-warning">
+            <span aria-hidden="true">⚠️</span> System blocked <strong>${sd.blocked_count}</strong> trade attempt(s) recently (friction).
+        </div>`;
+    }
+
+    html += `</div>`;
+    return html;
 }
 
 function renderError(err) {

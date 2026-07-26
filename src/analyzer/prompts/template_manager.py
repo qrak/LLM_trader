@@ -530,11 +530,11 @@ class TemplateManager:
         conf_threshold = thresholds.get("confidence_threshold", 70)
 
         # Signal names: spot uses BUY/SELL, futures uses LONG/SHORT
-        is_futures = getattr(self.config, "MARKET_TYPE", "spot") == "futures"
+        is_futures = self.config.MARKET_TYPE == "futures"
         entry_signal_open = "LONG" if is_futures else "BUY"
         entry_signal_close = "SHORT" if is_futures else "SELL"
         allowed_signals = "LONG, SHORT, HOLD, CLOSE, UPDATE" if is_futures else "BUY, SELL, HOLD, CLOSE, UPDATE"
-        order_type = getattr(self.config, "ENTRY_ORDER_TYPE", "market").strip().lower()
+        order_type = self.config.ENTRY_ORDER_TYPE.strip().lower()
         order_type_label = '"market"' if order_type == "market" else '"limit" or "market"'
         # Extended thresholds
         adx_weak = thresholds.get("adx_weak_threshold", 20)
