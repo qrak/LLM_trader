@@ -80,6 +80,7 @@ class TradingStrategy:
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
         self.post_mortem_service = post_mortem_service
+        self._http_client = None  # Bolt: persistent httpx client for position queries
 
         self.current_position: Position | None = self.persistence.load_position()
 
@@ -455,6 +456,21 @@ class TradingStrategy:
 
         return None
 
+    def _get_http_client(self):
+        """Bolt: reuse persistent httpx.AsyncClient to keep TCP connection pools alive
+        and avoid per-request setup overhead.
+        """
+        if self._http_client is None or self._http_client.is_closed:
+            import httpx
+            self._http_client = httpx.AsyncClient(timeout=3.0)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close persistent HTTP client resources."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
+
     async def _executor_has_position(self, symbol: str) -> bool:
         """Query executor API to confirm the position is actually open on exchange.
 
@@ -469,10 +485,9 @@ class TradingStrategy:
         if not url:
             return True
         try:
-            import httpx
             pos_url = url.rstrip("/") + "/position"
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get(pos_url, params={"symbol": symbol})
+            client = self._get_http_client()
+            resp = await client.get(pos_url, params={"symbol": symbol})
             if resp.status_code == 200:
                 data = resp.json()
                 return bool(data.get("open", False))

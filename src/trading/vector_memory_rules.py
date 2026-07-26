@@ -2,24 +2,31 @@
 
 import math
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+
+# Bolt: pre-computed constants avoid re-calculating math.log on every rule score evaluation
+_LOG2: float = math.log(2)
+_LOG1P_FULL_SAMPLE: float = math.log1p(20)
 
 
 class VectorMemoryRulesMixin:
     """Semantic rule storage and retrieval behavior."""
 
-    if TYPE_CHECKING:
-        logger: Any
-        _semantic_rules_collection: Any
-        _decay_half_life_days: int
-        _max_age_days: int
-        _timeframe_minutes: int
+    logger: Any
+    _semantic_rules_collection: Any
+    _decay_half_life_days: int
+    _max_age_days: int
+    _timeframe_minutes: int
 
-        def _ensure_initialized(self) -> bool: ...
+    def _ensure_initialized(self) -> bool:
+        raise NotImplementedError
 
-        def _encode_embedding(self, text: str) -> list[float]: ...
+    def _encode_embedding(self, text: str) -> list[float]:
+        raise NotImplementedError
 
-        def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]: ...
+    def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError
 
     RULE_SIMILARITY_WEIGHT = 0.55
     RULE_EVIDENCE_WEIGHT = 0.25
@@ -89,7 +96,7 @@ class VectorMemoryRulesMixin:
         return "legacy"
 
     def _rule_freshness_score(self, age_days: float) -> float:
-        decay_rate = math.log(2) / max(1, self._decay_half_life_days)
+        decay_rate = _LOG2 / max(1, self._decay_half_life_days)
         return self._clamp_score(math.exp(-decay_rate * age_days))
 
     def _rule_support_count(self, metadata: dict[str, Any]) -> int:
@@ -107,14 +114,15 @@ class VectorMemoryRulesMixin:
     def _rule_evidence_score(self, metadata: dict[str, Any]) -> float:
         support_count = self._rule_support_count(metadata)
         sample_score = self._clamp_score(
-            math.log1p(max(0, support_count)) / math.log1p(self.RULE_EVIDENCE_FULL_SAMPLE_SIZE)
+            math.log1p(max(0, support_count)) / _LOG1P_FULL_SAMPLE
         )
 
-        rule_type = str(metadata.get("rule_type", "best_practice"))
-        if rule_type in {"anti_pattern", "ai_mistake"}:
-            quality = self._as_float(metadata.get("loss_rate"), 50.0) / 100.0
-        else:
-            quality = self._as_float(metadata.get("win_rate"), 50.0) / 100.0
+        # Refactor: Python 3.10 pattern matching dispatches rule quality calculation
+        match str(metadata.get("rule_type", "best_practice")):
+            case "anti_pattern" | "ai_mistake":
+                quality = self._as_float(metadata.get("loss_rate"), 50.0) / 100.0
+            case _:
+                quality = self._as_float(metadata.get("win_rate"), 50.0) / 100.0
 
         expectancy = self._as_float(metadata.get("expectancy_pct"), 0.0)
         expectancy_score = self._clamp_score((expectancy + 5.0) / 10.0)
@@ -166,10 +174,10 @@ class VectorMemoryRulesMixin:
         enriched.setdefault("support_count", self._rule_support_count(enriched))
         enriched.setdefault("validation_hit_count", 0)
         enriched.setdefault("contradiction_count", 0)
-        enriched.setdefault("source_timeframe_minutes", getattr(self, "_timeframe_minutes", 240))
+        tf_mins = enriched.setdefault("source_timeframe_minutes", getattr(self, "_timeframe_minutes", 240))
         enriched.setdefault(
             "source_timeframe_bucket",
-            self._timeframe_bucket(self._as_int(enriched.get("source_timeframe_minutes"), 240)),
+            self._timeframe_bucket(self._as_int(tf_mins, 240)),
         )
         return enriched
 
@@ -203,19 +211,9 @@ class VectorMemoryRulesMixin:
             return False
 
         try:
-            now = datetime.now(timezone.utc)
+            now_iso = datetime.now(timezone.utc).isoformat()
             embedding = self._encode_embedding(rule_text)
-            rule_meta = {
-                "timestamp": now.isoformat(),
-                "created_at": now.isoformat(),
-                "active": True,
-                "validation_hit_count": 0,
-                "contradiction_count": 0,
-                "source_timeframe_minutes": getattr(self, "_timeframe_minutes", 240),
-                "source_timeframe_bucket": self._timeframe_bucket(
-                    self._as_int(getattr(self, "_timeframe_minutes", 240), 240)
-                ),
-            }
+            rule_meta = {"active": True, "timestamp": now_iso, "created_at": now_iso}
             if metadata:
                 rule_meta.update(metadata)
             rule_meta = self._metadata_with_rule_defaults(rule_meta)

@@ -21,6 +21,10 @@ EXIT_EXECUTION_KEYS = (
 )
 EXIT_EXECUTION_TYPES = {"soft", "hard", EXIT_EXECUTION_UNKNOWN}
 
+# Bolt: module-level frozenset constants enable O(1) membership check without allocation
+_NEUTRAL_SENTIMENTS = frozenset({"NEUTRAL", ""})
+_BALANCED_BIASES = frozenset({"BALANCED", ""})
+
 
 def _normalize_exit_execution_value(value: Any, default: str = EXIT_EXECUTION_UNKNOWN) -> str:
     if value is None:
@@ -186,17 +190,20 @@ def classify_bb_position(
 
 def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
     """Classify Fear & Greed index into sentiment zones."""
-    if sentiment_data:
-        fear_greed = sentiment_data.get("fear_greed_index", 50)
-        if fear_greed <= 25:
+    if not sentiment_data:
+        return "NEUTRAL"
+    # Refactor: Python 3.10 pattern matching dispatches sentiment thresholds
+    match sentiment_data.get("fear_greed_index", 50):
+        case fg if fg <= 25:
             return "EXTREME_FEAR"
-        if fear_greed <= 45:
+        case fg if fg <= 45:
             return "FEAR"
-        if fear_greed >= 75:
+        case fg if fg >= 75:
             return "EXTREME_GREED"
-        if fear_greed >= 55:
+        case fg if fg >= 55:
             return "GREED"
-    return "NEUTRAL"
+        case _:
+            return "NEUTRAL"
 
 
 def classify_order_book_bias(microstructure_data: dict[str, Any] | None) -> str:
@@ -289,9 +296,10 @@ def build_context_string_from_classified_values(
         context_parts.append(f"Price at BB {bb_position}")
     if is_weekend:
         context_parts.append("Weekend Low Volume")
-    if market_sentiment not in ("NEUTRAL", ""):
+    # Bolt: O(1) frozenset lookup avoids set/tuple allocation on every context string build
+    if market_sentiment not in _NEUTRAL_SENTIMENTS:
         context_parts.append(f"Sentiment {market_sentiment}")
-    if order_book_bias not in ("BALANCED", ""):
+    if order_book_bias not in _BALANCED_BIASES:
         context_parts.append(f"OrderBook {order_book_bias}")
     exit_execution_text = format_exit_execution_context(exit_execution_context)
     if exit_execution_text:

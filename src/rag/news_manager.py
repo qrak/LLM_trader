@@ -93,11 +93,19 @@ class NewsManager:
         # URL-first dedup with body-length-aware update.
         # If an existing article was cached with a short body (enrichment may have
         # failed previously) and the fresh fetch produced a longer body, replace it.
-        _MIN_BODY = 400  # mirror news_min_body_chars default
-        url_to_existing = {a["url"]: a for a in self.news_database if a.get("url")}
-        existing_ids = {a.get("id") for a in self.news_database if a.get("id")}
+        min_body = 400  # mirror news_min_body_chars default
+        url_to_existing: dict[str, dict[str, Any]] = {}
+        existing_ids: set[str] = set()
+        for article_item in self.news_database:
+            url_val = article_item.get("url")
+            if url_val:
+                url_to_existing[url_val] = article_item
+            aid = article_item.get("id")
+            if aid:
+                existing_ids.add(aid)
+
         unique: list = []
-        body_updates: list = []
+        body_updated = False
         for a in recent:
             url = a.get("url")
             if url:
@@ -107,24 +115,16 @@ class NewsManager:
                     existing = url_to_existing[url]
                     new_len = len(a.get("body", ""))
                     old_len = len(existing.get("body", ""))
-                    if old_len < _MIN_BODY and new_len > old_len:
-                        body_updates.append(a)
+                    if old_len < min_body and new_len > old_len:
+                        existing.update(a)
+                        self._normalize(existing)
+                        body_updated = True
             elif a.get("id") and a["id"] not in existing_ids:
                 unique.append(a)
 
-        if not unique and not body_updates:
+        if not unique and not body_updated:
             self.logger.debug("No new articles to add or only duplicates found")
             return False
-
-        # Apply in-place body updates first
-        if body_updates:
-            url_to_update = {a["url"]: a for a in body_updates}
-            for i, existing in enumerate(self.news_database):
-                url = existing.get("url")
-                if url and url in url_to_update:
-                    self.news_database[i] = url_to_update[url]
-                    self._normalize(self.news_database[i])
-            self.logger.debug("Re-enriched %d articles with longer bodies", len(body_updates))
 
         for article in unique:
             self._normalize(article)

@@ -82,15 +82,27 @@ class VectorMemoryService(
         self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
             timeframe_minutes
         )
+        self._embedding_cache: dict[str, list[float]] = {}
+        self._max_embedding_cache_size: int = 256
 
     def _encode_embedding(self, text: str) -> list[float]:
         """Encode text with serialized access to the shared embedding model."""
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+
         with self._embedding_lock:
             encoded = self._embedding_model.encode(text)
         try:
-            return encoded.tolist()
+            result = encoded.tolist()
         except AttributeError:
-            return list(encoded)
+            result = list(encoded)
+
+        if len(self._embedding_cache) >= self._max_embedding_cache_size:
+            first_key = next(iter(self._embedding_cache))
+            del self._embedding_cache[first_key]
+
+        self._embedding_cache[text] = result
+        return result
 
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).
@@ -139,24 +151,19 @@ class VectorMemoryService(
         serialized = serialize_for_json(metadata)
 
         for key, value in serialized.items():
-            if value is None:
-                continue
-            if isinstance(value, bool):
-                sanitized[key] = value
-                continue
-            if isinstance(value, int):
-                sanitized[key] = value
-                continue
-            if isinstance(value, float):
-                if math.isfinite(value):
+            # Refactor: Python 3.10 pattern matching replaces sequential isinstance chain
+            match value:
+                case None:
+                    continue
+                case bool() | int() | str():
                     sanitized[key] = value
-                else:
-                    self.logger.debug("Dropping non-finite metadata value: %s=%s", key, value)
-                continue
-            if isinstance(value, str):
-                sanitized[key] = value
-                continue
-            self.logger.debug("Dropping unsupported metadata value: %s=%r", key, value)
+                case float():
+                    if math.isfinite(value):
+                        sanitized[key] = value
+                    else:
+                        self.logger.debug("Dropping non-finite metadata value: %s=%s", key, value)
+                case _:
+                    self.logger.debug("Dropping unsupported metadata value: %s=%r", key, value)
         return sanitized
 
     def store_experience(
@@ -462,8 +469,6 @@ class VectorMemoryService(
         Returns:
             Formatted feedback string, or empty string if no recent blocks.
         """
-        import math
-
         blocked = self.get_recent_blocked_trades(n=n, max_age_hours=max_age_hours)
         if not blocked:
             return ""
