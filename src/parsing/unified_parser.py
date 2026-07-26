@@ -125,15 +125,21 @@ class UnifiedParser:
         Returns:
             Parsed JSON dict or None if extraction fails
         """
+        if not text:
+            return None
         try:
-            json_match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
-            if json_match:
-                json_str = json_match.group(1)
-                data = json.loads(json_str)
-
-                if unwrap_key and unwrap_key in data and isinstance(data[unwrap_key], dict):
-                    return data[unwrap_key]
-                return data
+            # Bolt: fast C-string find instead of regex engine traversal for ```json ... ``` blocks
+            text_lower = text.lower()
+            start = text_lower.find("```json")
+            if start != -1:
+                json_start = start + 7
+                end = text_lower.find("```", json_start)
+                if end != -1:
+                    json_str = text[json_start:end].strip()
+                    data = json.loads(json_str)
+                    if unwrap_key and isinstance(data, dict) and isinstance(data.get(unwrap_key), dict):
+                        return data[unwrap_key]
+                    return data
         except (json.JSONDecodeError, Exception) as e:
             self.logger.debug("JSON block extraction failed: %s", e)
         return None
@@ -149,10 +155,12 @@ class UnifiedParser:
         Returns:
             Text before the JSON block, or full text if no JSON found
         """
-        json_match = re.search(r"```json", text, re.IGNORECASE)
-        if json_match:
-            reasoning = text[:json_match.start()].strip()
-            return reasoning
+        if not text:
+            return ""
+        # Bolt: fast C-string find instead of regex for ```json boundary
+        start = text.lower().find("```json")
+        if start != -1:
+            return text[:start].strip()
         return text.strip()
 
 

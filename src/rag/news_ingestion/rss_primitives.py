@@ -74,25 +74,42 @@ def normalize_url(raw_url: str) -> str:
     """Strip tracking query-params and trailing slashes from *raw_url*."""
     if not raw_url:
         return ""
-    parsed = urlparse(raw_url.strip())
-    filtered_qs = [
-        (k, v)
-        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
-        if k.lower() not in _TRACKING_PARAMS
-    ]
-    new_query = urlencode(filtered_qs, doseq=True)
+    url_str = raw_url.strip()
+    parsed = urlparse(url_str)
     normalized_path = parsed.path.rstrip("/") if parsed.path != "/" else "/"
+
+    if not parsed.query and not parsed.fragment and normalized_path == parsed.path:
+        return url_str
+
+    if parsed.query:
+        filtered_qs = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+            if k.lower() not in _TRACKING_PARAMS
+        ]
+        new_query = urlencode(filtered_qs, doseq=True)
+    else:
+        new_query = ""
+
     cleaned = parsed._replace(query=new_query, fragment="", path=normalized_path)
     return urlunparse(cleaned)
 
 
 # HTML text extraction
 
+_RE_HTML_TAGS = re.compile(r"<[^>]+>")
+_RE_WHITESPACE = re.compile(r"\s+")
+
+
 def strip_html(text: str) -> str:
     """Remove HTML tags, unescape HTML entities, and collapse whitespace."""
-    no_tags = re.sub(r"<[^>]+>", " ", text)
+    if not text:
+        return ""
+    if "<" not in text and "&" not in text:
+        return _RE_WHITESPACE.sub(" ", text).strip()
+    no_tags = _RE_HTML_TAGS.sub(" ", text)
     unescaped = html_module.unescape(no_tags)
-    return re.sub(r"\s+", " ", unescaped).strip()
+    return _RE_WHITESPACE.sub(" ", unescaped).strip()
 
 
 def extract_html_body_text(html_text: str) -> str:

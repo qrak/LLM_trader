@@ -90,8 +90,8 @@ class TechnicalFormatter:
             close_delta = float(closes[-1] - closes[0])
             close_delta_pct = (close_delta / closes[0] * 100) if closes[0] != 0 else 0
 
-            # Count green/red candles
-            green_candles = sum(1 for i in range(len(closes)) if closes[i] >= opens[i])
+            # Count green/red candles vectorially
+            green_candles = int(np.count_nonzero(closes >= opens))
             red_candles = len(closes) - green_candles
 
             # Determine close trend text
@@ -504,29 +504,18 @@ class TechnicalFormatter:
         Calculates signal on-demand from raw span data.
         """
         try:
-            # Get ichimoku spans
             span_a = td.get("ichimoku_span_a")
             span_b = td.get("ichimoku_span_b")
+            close_data = td.get("close")
 
-            if span_a is None or span_b is None:
+            if span_a is None or span_b is None or close_data is None:
                 return ""
 
-            # Extract last values
             span_a_val = get_last_valid_value(span_a)
             span_b_val = get_last_valid_value(span_b)
+            current_price = safe_array_to_scalar(close_data, -1)
 
-            if span_a_val is None or span_b_val is None:
-                return ""
-
-            # Get current price - try multiple sources
-            current_price = None
-
-            # Method 1: Try from close prices in technical data
-            close_data = td.get("close")
-            if close_data is not None:
-                current_price = safe_array_to_scalar(close_data, -1)
-
-            if current_price is None:
+            if span_a_val is None or span_b_val is None or current_price is None:
                 return ""
 
             # Calculate cloud boundaries

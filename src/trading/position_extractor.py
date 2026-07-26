@@ -66,23 +66,17 @@ class PositionExtractor:
                 self.logger.warning("No UnifiedParser provided, cannot extract JSON")
             return None
 
-        # Try unwrapping 'analysis' key first
-        result = self.unified_parser.extract_json_block(text, unwrap_key="analysis")
-        if result:
-            return result
+        # Bolt: extract JSON block once and unwrap key candidates in memory instead of parsing string 4 times
+        data = self.unified_parser.extract_json_block(text)
+        if not data or not isinstance(data, dict):
+            return data
 
-        # Try 'trading_decision' key
-        result = self.unified_parser.extract_json_block(text, unwrap_key="trading_decision")
-        if result:
-            return result
+        for key in ("analysis", "trading_decision", "decision"):
+            val = data.get(key)
+            if isinstance(val, dict):
+                return val
 
-        # Try 'decision' key
-        result = self.unified_parser.extract_json_block(text, unwrap_key="decision")
-        if result:
-            return result
-
-        # Try raw extraction without unwrapping
-        return self.unified_parser.extract_json_block(text)
+        return data
 
     def extract_trading_info(self, text: str) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading information from AI response.

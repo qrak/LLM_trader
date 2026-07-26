@@ -256,6 +256,31 @@ class TestForward:
         mock_client.post.assert_awaited()
         handler.logger.info.assert_called()
 
+    @pytest.mark.asyncio
+    async def test_forward_reuses_client_and_closes_cleanly(self):
+        handler = _make_handler()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.aclose = AsyncMock()
+
+        payload = {"timestamp": "t", "symbol": "BTC/USDC", "signal": "BUY"}
+
+        with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=mock_client) as mock_cls:
+            await handler._forward(payload)
+            await handler._forward(payload)
+
+            # AsyncClient should only be constructed ONCE across multiple forwards
+            assert mock_cls.call_count == 1
+            assert mock_client.post.call_count == 2
+
+            await handler.close()
+            mock_client.aclose.assert_awaited_once()
+            assert handler._http_client is None
+
 
 class TestAtomicPersistence:
     def test_save_latest_decision_atomic_write(self, tmp_path):

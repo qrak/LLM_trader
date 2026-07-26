@@ -39,6 +39,19 @@ class ExecutorHandler:
         self._persistence = persistence
         self._config = config
         self.logger = logger  # named 'logger' for @retry_async convention
+        self._http_client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Bolt: reuse persistent httpx.AsyncClient to keep TCP connection pools alive and avoid per-request setup overhead."""
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=EXECUTOR_HTTP_TIMEOUT)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close persistent HTTP client resources."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
 
     # ── public API ────────────────────────────────────────────────────────
 
@@ -142,8 +155,8 @@ class ExecutorHandler:
         signal = payload.get("signal")
         symbol = payload.get("symbol")
 
-        async with httpx.AsyncClient(timeout=EXECUTOR_HTTP_TIMEOUT) as client:
-            resp = await client.post(url, json=payload)
+        client = self._get_client()
+        resp = await client.post(url, json=payload)
 
         if resp.status_code == 200:
             self.logger.info("Executor queued: %s %s", signal, symbol)
@@ -183,14 +196,12 @@ class ExecutorHandler:
                 return
 
             self.logger.info("Replaying %d dead-letter entries...", len(entries))
+            client = self._get_client()
             for entry in entries:
                 sig = entry.get("signal")
                 sym = entry.get("symbol")
                 try:
-                    async with httpx.AsyncClient(
-                        timeout=EXECUTOR_HTTP_TIMEOUT
-                    ) as client:
-                        r = await client.post(url, json=entry)
+                    r = await client.post(url, json=entry)
                     if r.status_code == 200:
                         self.logger.info(
                             "Dead-letter replayed: %s %s", sig, sym,

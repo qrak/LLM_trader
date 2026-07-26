@@ -151,10 +151,25 @@ class FormatUtils:
         Returns:
             Formatted numeric string or default value
         """
-        effective_precision = precision if precision is not None else self.default_precision
         val = get_indicator_value(td, key)
-        if isinstance(val, (int, float)) and not math.isnan(val):  # Polymorphic check - legitimate
-            return self.fmt(val, effective_precision)
+        if isinstance(val, (int, float)) and not math.isnan(val):
+            abs_val = abs(val)
+            eff_prec = precision if precision is not None else self.default_precision
+            if 0 < abs_val < SCIENTIFIC_NOTATION_THRESHOLD:
+                return f"{val:.{eff_prec}e}"
+            if abs_val < CRYPTO_DUST_THRESHOLD:
+                return f"{val:.8f}"
+            if abs_val < MICRO_VALUE_THRESHOLD:
+                return f"{val:.7f}"
+            if abs_val < MILLI_VALUE_THRESHOLD:
+                return f"{val:.6f}"
+            if abs_val < CENT_VALUE_THRESHOLD:
+                return f"{val:.5f}"
+            if abs_val < DIME_VALUE_THRESHOLD:
+                return f"{val:.4f}"
+            if abs_val < FULL_PRECISION_THRESHOLD:
+                return f"{val:.{eff_prec}f}"
+            return f"{val:.2f}"
         return default
 
     def format_current_time(self, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:

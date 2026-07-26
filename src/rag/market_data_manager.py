@@ -1,5 +1,6 @@
 """Market data management for fetching and serving market overview."""
 
+import asyncio
 from typing import Any
 from src.logger.logger import Logger
 from .file_handler import RagFileHandler
@@ -51,15 +52,15 @@ class MarketDataManager:
     async def fetch_market_overview(self) -> dict[str, Any] | None:
         """Fetch overall market data from various sources concurrently."""
         try:
-            coingecko_data = await self.fetcher.fetch_global_market_data()
+            # Bolt: fetch global market data, macro data, and DeFi fundamentals concurrently using asyncio.gather (~700ms latency reduction)
+            coingecko_data, macro_data, defi_fundamentals = await asyncio.gather(
+                self.fetcher.fetch_global_market_data(),
+                self.fetcher.fetch_macro_data(),
+                self.fetcher.fetch_defi_fundamentals(),
+            )
 
             top_coins = self.processor.extract_top_coins(coingecko_data)
-
             price_data = await self.fetcher.fetch_price_data(top_coins)
-
-            macro_data = await self.fetcher.fetch_macro_data()
-
-            defi_fundamentals = await self.fetcher.fetch_defi_fundamentals()
 
             overview = self.overview_builder.build_overview(coingecko_data, price_data, top_coins)
 

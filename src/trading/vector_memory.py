@@ -82,15 +82,27 @@ class VectorMemoryService(
         self._decay_half_life_days, self._max_age_days = self._derive_decay_window(
             timeframe_minutes
         )
+        self._embedding_cache: dict[str, list[float]] = {}
+        self._max_embedding_cache_size: int = 256
 
     def _encode_embedding(self, text: str) -> list[float]:
         """Encode text with serialized access to the shared embedding model."""
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
+
         with self._embedding_lock:
             encoded = self._embedding_model.encode(text)
         try:
-            return encoded.tolist()
+            result = encoded.tolist()
         except AttributeError:
-            return list(encoded)
+            result = list(encoded)
+
+        if len(self._embedding_cache) >= self._max_embedding_cache_size:
+            first_key = next(iter(self._embedding_cache))
+            del self._embedding_cache[first_key]
+
+        self._embedding_cache[text] = result
+        return result
 
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).
@@ -462,8 +474,6 @@ class VectorMemoryService(
         Returns:
             Formatted feedback string, or empty string if no recent blocks.
         """
-        import math
-
         blocked = self.get_recent_blocked_trades(n=n, max_age_hours=max_age_hours)
         if not blocked:
             return ""
