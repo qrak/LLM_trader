@@ -3,11 +3,10 @@
 import math
 from datetime import datetime, timezone
 from typing import Any
-
-
 # Bolt: pre-computed constants avoid re-calculating math.log on every rule score evaluation
 _LOG2: float = math.log(2)
 _LOG1P_FULL_SAMPLE: float = math.log1p(20)
+
 
 
 class VectorMemoryRulesMixin:
