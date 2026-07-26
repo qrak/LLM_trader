@@ -896,7 +896,7 @@ class TestPositionContextSlTightening:
         # Progress = (100 - 95) / (100 - 85) = 5/15 = 33.3%
         assert "price progress" in ctx.lower()
         lines = ctx.split("\n")
-        progress_line = [l for l in lines if "progress" in l.lower()]
+        progress_line = [line_item for line_item in lines if "progress" in line_item.lower()]
         assert progress_line, "No progress line in context"
         assert "0.0%" not in progress_line[0], (
             f"BUG REGRESSION: SHORT price_progress is 0.0%. Context:\n{ctx}"

@@ -365,9 +365,6 @@ class CompositionRoot:
         # Create shared force_analysis event (used by both bot keyboard handler and admin console)
         force_analysis_event = asyncio.Event()
 
-        # Always instantiate DashboardServer so the 'd' keyboard toggle can start/stop it at runtime.
-        # The server socket is NOT opened until start() is called, so this is safe even when disabled.
-        from pathlib import Path
         config_path = str(Path(__file__).parent / "config" / "config.ini")
         admin_credentials = {
             "username": self.config.ADMIN_USERNAME,

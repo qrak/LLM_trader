@@ -5,7 +5,7 @@ SDK v1.4.7+ — tests security features, message handling, and API interactions.
 import base64
 import io
 import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.blockrun import BlockRunClient

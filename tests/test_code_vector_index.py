@@ -1,16 +1,13 @@
 """Tests for the codebase vector semantic search engine."""
 
-import ast
 import textwrap
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from src.rag.code_vector_index import (
     COLLECTION_NAME,
-    CodeChunk,
     CodebaseVectorIndexer,
     SearchResult,
 )

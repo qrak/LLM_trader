@@ -5,8 +5,6 @@ Keeps recent entries in the active journal file and archives older entries to .a
 All archived entries remain indexed in ChromaDB vector memory.
 """
 
-import os
-import re
 from datetime import datetime
 from pathlib import Path
 

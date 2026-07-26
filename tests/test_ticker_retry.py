@@ -6,9 +6,8 @@ Covers the fixes from docs/plans/ticker-retry-fix.md:
   2. calculate_stop_target_distances guards against zero/None price
   3. position_status_monitor skips notification when price is unavailable
 """
-import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import ccxt

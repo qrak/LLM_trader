@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.managers.provider_orchestrator import ProviderOrchestrator
-from src.managers.provider_types import ProviderClients, ProviderMetadata, InvocationResult
+from src.managers.provider_types import ProviderClients
 from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
 

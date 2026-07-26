@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from unittest.mock import MagicMock
 from src.analyzer.formatters.technical_formatter import TechnicalFormatter

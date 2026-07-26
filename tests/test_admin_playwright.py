@@ -52,7 +52,6 @@ def _run_test_server(port: int, ready_event: multiprocessing.Event):
     from src.config.writable_config import WritableConfig
     import tempfile
     import uvicorn
-    import asyncio
 
     # Create temp config
     tmpdir = tempfile.mkdtemp()
