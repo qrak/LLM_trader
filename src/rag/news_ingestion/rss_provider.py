@@ -166,7 +166,7 @@ class RSSCrawl4AINewsProvider:
 
         if self.config.RAG_NEWS_PAGE_ENRICHMENT and sorted_items:
             enrich_timeout = max(1, int(self.config.RAG_NEWS_ENRICH_TIMEOUT))
-            max_candidates = max(15, int(getattr(self.config, "RAG_NEWS_LIMIT", 5)) * 3)
+            max_candidates = max(15, int(self.config.RAG_NEWS_LIMIT) * 3)
             enrichment_candidates = sorted_items[:max_candidates]
 
             self.logger.info(

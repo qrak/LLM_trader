@@ -49,6 +49,10 @@ def _make_config(**overrides):
         "SL_TIGHTENING_FLOOR": 0.05,
         "SL_TIGHTENING_CEILING": 0.40,
         "SL_TIGHTENING_MIN_SAMPLES": 10,
+        "EXECUTOR_API_ENABLED": False,
+        "EXECUTOR_API_URL": "",
+        "ENTRY_ORDER_TYPE": "limit",
+        "MARKET_TYPE": "spot",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

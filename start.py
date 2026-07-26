@@ -49,6 +49,7 @@ from src.trading import (
     MarketConditionsExtractor,
 )
 from src.trading.vector_memory import VectorMemoryService
+from src.rag.code_vector_index import CodebaseVectorIndexer
 from src.dashboard.server import DashboardServer
 from src.notifiers import DiscordNotifier, ConsoleNotifier
 from src.managers.post_mortem_repository import PostMortemRepository
@@ -264,21 +265,76 @@ class CompositionRoot:
     async def build_dependencies(self) -> dict:
         """Build all dependencies for the trading bot via segmented provisions."""
         start_time = time.perf_counter()
-        self.logger.info("Initializing Crypto Trading Bot...")
+        self.logger.info("Initializing Crypto Trading Bot [8 Provisioning Stages]...")
 
         self._init_directories()
+        self.logger.info("[Stage 1/8] Initializing core infrastructure (exchanges, sessions)...")
         infra = await self._provision_infrastructure()
+
+        self.logger.info("[Stage 2/8] Provisioning helper utilities and parsers...")
         utils = self._provision_utilities()
+
+        self.logger.info("[Stage 3/8] Connecting to market data platforms (CoinGecko, DeFiLlama, CCXT)...")
         apis = await self._provision_platforms(infra)
+
+        self.logger.info("[Stage 4/8] Initializing RAG news and taxonomy engine...")
         rag = await self._provision_rag_layer(infra, apis, utils)
+
+        self.logger.info("[Stage 5/8] Setting up AI provider models & orchestrator...")
         models = self._provision_model_layer(utils)
+
+        self.logger.info("[Stage 6/8] Building technical analysis engine & pattern analyzers...")
         analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
+
+        self.logger.info("[Stage 7/8] Provisioning trading brain, memory, risk manager & guards...")
         trading = self._provision_trading_layer(utils, models)
+
+        self.logger.info("[Stage 8/8] Initializing notification channels...")
         notifiers = await self._provision_notifiers(utils)
 
         end_time = time.perf_counter()
         init_duration = end_time - start_time
-        self.logger.info("All dependencies initialized successfully in %.2f seconds", init_duration)
+        self.logger.info("All 8 provisioning stages initialized successfully in %.2f seconds", init_duration)
+
+        # Post-provisioning maintenance: journal rotation & codebase vector index
+        try:
+            from scripts.rotate_journals import rotate_all_journals
+            self.logger.info("[Journal Maintenance] Checking AI agent journal file sizes...")
+            rotated_count = rotate_all_journals()
+            if rotated_count > 0:
+                self.logger.info("[Journal Maintenance] Rotated %d journal file(s) exceeding size limits to .ai/archive/", rotated_count)
+            else:
+                self.logger.info("[Journal Maintenance] All AI agent journal files are within size limits")
+        except Exception as e:
+            self.logger.warning("Journal rotation maintenance skipped: %s", e)
+
+        if self.config.CODEBASE_INDEX_ENABLED:
+            try:
+                self.logger.info("[Codebase Vector Search] Checking semantic codebase index...")
+                index_dir = self.config.CODEBASE_INDEX_DIR
+                os.makedirs(index_dir, exist_ok=True)
+                codebase_client = chromadb.PersistentClient(path=index_dir)
+                codebase_indexer = CodebaseVectorIndexer(
+                    logger=self.logger,
+                    chroma_client=codebase_client,
+                    embedding_model=trading['brain_service'].vector_memory._embedding_model,
+                    project_root=Path(".").resolve(),
+                )
+                result = codebase_indexer.index_codebase()
+                if result["indexed"] > 0:
+                    self.logger.info(
+                        "Codebase vector index updated: %d files indexed, %d total chunks",
+                        result["indexed"], result["total_chunks"],
+                    )
+                else:
+                    self.logger.info(
+                        "Codebase vector index up-to-date: %d files verified, %d chunks ready",
+                        result["skipped"], result["total_chunks"],
+                    )
+            except Exception as e:
+                self.logger.warning("Codebase vector indexing skipped: %s", e)
+        else:
+            self.logger.info("[Codebase Vector Search] Codebase vector index disabled in config.ini")
 
         # Combine everything for the bot and dashboard
         deps = {

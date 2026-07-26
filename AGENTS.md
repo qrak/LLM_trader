@@ -387,6 +387,17 @@ This file documents agent architecture and execution policy only.
 - **Simulated capital:** $10,000 with 0.075% fee model
 - **Fail-closed behavior** if governance/risk validation cannot decide safely
 
+### Codebase Vector Search (All Agents)
+
+- Before performing architectural edits, cross-module refactoring, or searching for implementations across the codebase, query the codebase vector index:
+  ```
+  .venv\Scripts\python.exe scripts/query_codebase.py "<natural language query>"
+  ```
+- Use the returned semantic snippets (file paths + line ranges + relevance scores) to navigate directly to the right code.
+- Prefer this over blind grep for architectural and "where does X happen?" questions.
+- The index auto-updates on bot startup after all provisioning stages succeed. For manual refresh: `--reindex` flag.
+- See the `codebase-vector-search` skill for full CLI reference.
+
 ---
 
 ## 9. Documentation Governance

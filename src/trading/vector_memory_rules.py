@@ -173,7 +173,7 @@ class VectorMemoryRulesMixin:
         enriched.setdefault("support_count", self._rule_support_count(enriched))
         enriched.setdefault("validation_hit_count", 0)
         enriched.setdefault("contradiction_count", 0)
-        tf_mins = enriched.setdefault("source_timeframe_minutes", getattr(self, "_timeframe_minutes", 240))
+        tf_mins = enriched.setdefault("source_timeframe_minutes", self._timeframe_minutes)
         enriched.setdefault(
             "source_timeframe_bucket",
             self._timeframe_bucket(self._as_int(tf_mins, 240)),

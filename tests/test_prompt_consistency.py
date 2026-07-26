@@ -18,6 +18,8 @@ def _make_manager() -> TemplateManager:
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
         MODEL_VERBOSITY="high",
+        MARKET_TYPE="spot",
+        ENTRY_ORDER_TYPE="market",
     )
     return TemplateManager(
         config=config,
@@ -36,6 +38,8 @@ def _make_manager_with_verbosity(level: str) -> TemplateManager:
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
         MODEL_VERBOSITY=level,
+        MARKET_TYPE="spot",
+        ENTRY_ORDER_TYPE="market",
     )
     return TemplateManager(
         config=config,
@@ -288,6 +292,8 @@ class TestVerbosityParserContract:
             MAX_POSITION_SIZE=0.10,
             AI_CHART_CANDLE_LIMIT=120,
             MODEL_VERBOSITY=level,
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="market",
         )
         return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
 

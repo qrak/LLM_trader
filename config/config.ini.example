@@ -53,6 +53,12 @@ logger_debug = true
 log_dir = logs
 data_dir = data
 
+# === Codebase Vector Index (AI Agents) ===
+[codebase_index]
+# Enable local vector semantic search across the codebase for AI agents
+enabled = true
+index_dir = data/codebase_index
+
 # === RAG / News ===
 [rag]
 update_interval_hours = 4               # hours between RAG rebuilds

@@ -679,6 +679,17 @@ class Config:
         """URL of the llm_trader_executor REST API."""
         return self.get_config("executor_api", "url", "http://127.0.0.1:9199/decision")
 
+    # ── Codebase Vector Index ────────────────────────────────────────────────
+    @property
+    def CODEBASE_INDEX_ENABLED(self) -> bool:
+        """Enable local codebase vector indexing for AI agent search? (default: true)"""
+        return self.get_config("codebase_index", "enabled", True)
+
+    @property
+    def CODEBASE_INDEX_DIR(self) -> str:
+        """Directory path for the codebase vector index (default: data/codebase_index)."""
+        return self.get_config("codebase_index", "index_dir", "data/codebase_index")
+
     @property
     def QUOTE_CURRENCY(self):
         """Extract quote currency from CRYPTO_PAIR (e.g., 'USDC' from 'BTC/USDC')."""

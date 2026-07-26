@@ -17,6 +17,8 @@ def _make_manager(**overrides):
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
         MODEL_VERBOSITY="high",
+        MARKET_TYPE="spot",
+        ENTRY_ORDER_TYPE="limit",
     )
     defaults = dict(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
     defaults.update(overrides)
@@ -533,6 +535,8 @@ class TestBuildResponseTemplateVerbosity:
             MAX_POSITION_SIZE=0.10,
             AI_CHART_CANDLE_LIMIT=120,
             MODEL_VERBOSITY=level,
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="limit",
         )
         return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
 
