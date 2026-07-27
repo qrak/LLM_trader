@@ -264,7 +264,8 @@ Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
             performance_context="Recent trade performance available.",
         )
         response_template = self.manager.build_response_template()
-        combined = f"{system_prompt}\n{response_template}"
+        decision_rules = self.manager.build_decision_rules()
+        combined = f"{system_prompt}\n{decision_rules}\n{response_template}"
 
         assert ">40%" not in combined
         assert "50%+ of the entry-to-TP distance" not in combined

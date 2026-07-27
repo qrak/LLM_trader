@@ -226,8 +226,20 @@ def check_login_rate_limit(ip: str, max_attempts: int = 5, window_seconds: float
     Returns (allowed, retry_after_seconds).
     """
     now = time.time()
+    # Periodic housekeeping: evict IP records with no active window attempts
+    stale_ips = [
+        client_ip for client_ip, timestamps in _LOGIN_ATTEMPTS.items()
+        if not any(now - t < window_seconds for t in timestamps)
+    ]
+    for client_ip in stale_ips:
+        _LOGIN_ATTEMPTS.pop(client_ip, None)
+
     attempts = [t for t in _LOGIN_ATTEMPTS.get(ip, []) if now - t < window_seconds]
-    _LOGIN_ATTEMPTS[ip] = attempts
+    if attempts:
+        _LOGIN_ATTEMPTS[ip] = attempts
+    else:
+        _LOGIN_ATTEMPTS.pop(ip, None)
+
     if len(attempts) >= max_attempts:
         oldest = attempts[0]
         retry_after = int(window_seconds - (now - oldest)) + 1
@@ -243,7 +255,7 @@ def record_login_attempt(ip: str) -> None:
 
 
 def reset_login_rate_limit(ip: str) -> None:
-    """Reset rate limit history on successful login."""
+    """Reset login attempt count on successful authentication."""
     _LOGIN_ATTEMPTS.pop(ip, None)
 
 

@@ -185,7 +185,6 @@ class CryptoTradingBot:
         keyboard_task.add_done_callback(self._active_tasks.discard)
         self.tasks.append(keyboard_task)
 
-        self.logger.info("Crypto Trading Bot ready")
     async def shutdown(self):
         """Callback for graceful shutdown."""
         self.logger.info("Signaling trading loops to stop...")
@@ -279,7 +278,8 @@ class CryptoTradingBot:
                 self._format_utc_and_local(last_analysis_time)
             )
             await self._wait_until_next_timeframe_after(last_analysis_time)
-        self.logger.info("Ready for next analysis after wait")
+        else:
+            self.logger.info("Crypto Trading Bot ready")
 
         is_regular_run = True
 
@@ -540,6 +540,10 @@ class CryptoTradingBot:
                 await self.dashboard_state.update_price(price)
         return ticker
 
+    async def fetch_current_ticker(self) -> dict[str, Any] | None:
+        """Fetch current ticker from exchange (public API)."""
+        return await self._fetch_current_ticker()
+
     def _calculate_next_check(self, source_time_ms: int) -> tuple[float, datetime]:
         """Calculate delay and next-check time for a timeframe candle.
 
@@ -601,6 +605,7 @@ class CryptoTradingBot:
                     "Resuming from last check at %s. Next candle already passed - proceeding immediately",
                     self._format_utc_and_local(last_time)
                 )
+                self.logger.info("Crypto Trading Bot ready")
                 return
 
             is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)
@@ -613,6 +618,7 @@ class CryptoTradingBot:
                 self._format_utc_and_local(next_check_time),
                 delay_seconds
             )
+            self.logger.info("Crypto Trading Bot ready")
 
             if self.dashboard_state:
                 await self.dashboard_state.update_next_check(next_check_time)
@@ -621,6 +627,10 @@ class CryptoTradingBot:
         except Exception as e:
             self.logger.error("Error calculating wait time: %s", e)
             await self._interruptible_sleep(ERROR_WAIT_SHORT)
+
+    async def interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True) -> bool:
+        """Interruptible sleep (public API)."""
+        return await self._interruptible_sleep(seconds, respect_force_analysis=respect_force_analysis)
 
     async def _interruptible_sleep(self, seconds: float, respect_force_analysis: bool = True):
         """Sleep in small chunks to allow responsive shutdown and force analysis.

@@ -19,9 +19,9 @@ Your mission is to identify and implement **ONE small refactoring** that reduces
 When launched without a specific target file (e.g. `"start Refactor and find worst code smells"`):
 1. **Run Vector Search Queries:**
    ```bash
-   .venv/Scripts/python.exe scripts/query_codebase.py "isinstance getattr hasattr type introspection known class"
-   .venv/Scripts/python.exe scripts/query_codebase.py "dependency injection __init__ constructor instantiation app.py"
-   .venv/Scripts/python.exe scripts/query_codebase.py "except Exception wide catch swallowed error pass"
+   python scripts/query_codebase.py "isinstance getattr hasattr type introspection known class"
+   python scripts/query_codebase.py "dependency injection __init__ constructor instantiation app.py"
+   python scripts/query_codebase.py "except Exception wide catch swallowed error pass"
    ```
 2. **Target Discovery:** Select the worst code smell returned by vector search (e.g. isinstance chain on known dataclass, constructor DI violation, wide exception catch).
 3. **Execute & Verify:** Implement the clean code refactoring, run `ruff check src/` and `pytest tests/ -x -q`, and append entry to `.ai/refactor-journal.md`.
@@ -194,9 +194,9 @@ These hide real bugs. Each `except Exception` should be justified with a comment
 ## Commands
 
 ```bash
-# Lint (ruff + pylint in .venv; if pylint is not installed, run: pip install pylint)
+# Lint (ruff + pylint; if pylint is not installed, run: pip install pylint)
 ruff check src/
-.venv/Scripts/pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913  # skip test files
+pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913  # skip test files
 
 # Tests
 rm -f position_state.json position_state.json.tmp && pytest tests/ -x -q

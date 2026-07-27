@@ -17,6 +17,11 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
+    # Maximum characters for the full brain context block injected into the system prompt.
+    # Prevents token bloat as trade count grows; sections are truncated tail-first
+    # (journal → rules → experiences) while preserving headers and calibration stats.
+    BRAIN_CONTEXT_MAX_CHARS = 5000
+
     def __init__(
         self,
         vector_memory: VectorMemoryService,
@@ -69,7 +74,8 @@ class BrainContextProvider:
                 if stats.get("total_trades", 0) > 0:
                     lines.append(
                         f"- {level} Confidence: Win Rate {stats['win_rate']:.0f}% "
-                        f"({stats['winning_trades']}/{stats['total_trades']} trades) | Avg P&L: {stats['avg_pnl_pct']:+.2f}%"
+                        f"({stats['winning_trades']}/{stats['total_trades']} trades) | "
+                        f"Avg P&L: {stats['avg_pnl_pct']:+.2f}%"
                     )
             recommendation = self.vector_memory.get_confidence_recommendation()
             if recommendation:
@@ -82,7 +88,10 @@ class BrainContextProvider:
                     f"- Historical trades: {direction_bias['long_count']} LONG, {direction_bias['short_count']} SHORT",
                 ])
                 if direction_bias["short_count"] == 0:
-                    lines.append("- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; lack of data means you may be missing valid setups.")
+                    lines.append(
+                        "- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; "
+                        "lack of data means you may be missing valid setups."
+                    )
         try:
             blocked_feedback = self.vector_memory.get_blocked_trade_feedback(
                 n=5, max_age_hours=168
@@ -115,9 +124,21 @@ class BrainContextProvider:
             lines.extend([
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
-                "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and state it. Weight both wins AND losses, not just the favorable cases.",
-                '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state "⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade confidence unless the missing confirmation is now present. State the adjustment you apply (stricter confluences, higher R/R, or reduced size).',
-                "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime (ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; do not use it as a confidence prior without explaining the mismatch.",
+                (
+                    "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and "
+                    "state it. Weight both wins AND losses, not just the favorable cases."
+                ),
+                (
+                    '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state '
+                    '"⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade '
+                    "confidence unless the missing confirmation is now present. State the adjustment you apply "
+                    "(stricter confluences, higher R/R, or reduced size)."
+                ),
+                (
+                    "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime "
+                    "(ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; "
+                    "do not use it as a confidence prior without explaining the mismatch."
+                ),
                 "",
             ])
         elif lines and has_limited_data:
@@ -177,7 +198,16 @@ class BrainContextProvider:
                 "",
             ])
 
-        return "\n".join(lines)
+        result = "\n".join(lines)
+        if len(result) > self.BRAIN_CONTEXT_MAX_CHARS:
+            # Truncate at a newline boundary and annotate so the model knows context is capped
+            truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n", 1)[0]
+            result = (
+                truncated + "\n[Brain context truncated: token budget reached. "
+                "Rely on standard analysis for remaining decisions.]"
+            )
+        return result
+
 
     def _build_trade_journal_context(self) -> str:
         """Build a formatted string of recent post-mortem lessons for prompt injection.
@@ -198,7 +228,9 @@ class BrainContextProvider:
                     f"— {pm['verdict']} ({pm['created_at'][:10]}, {pm['symbol']}): {pm['lesson_learned']}{pnl_str}"
                 )
             return "\n".join(lines)
-        except Exception:
+        except Exception as e:
+            if self.logger:
+                self.logger.warning("Failed to retrieve post-mortem lessons for brain context: %s", e)
             return ""
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:

@@ -70,7 +70,7 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
 
 class Logger(logging.Logger):
     def __init__(self, logger_name: str = "", log_filename_prefix: str = "", log_dir: str = None,
-                 logger_debug: bool = False) -> None:
+                 logger_debug: bool = False, console: Console | None = None) -> None:
         sanitized_name = logger_name.replace("/", "_").replace("\\", "_")
 
         level = logging.DEBUG if logger_debug else logging.INFO
@@ -86,7 +86,7 @@ class Logger(logging.Logger):
 
         self.date_format = "%d.%m.%Y %H:%M:%S"
 
-        self._setup_logger()
+        self._setup_logger(console=console)
         self.debug("Logger %s initialized with log directory: %s", sanitized_name, self.log_dir)
 
     def _get_log_dir(self, current_date: str) -> str:
@@ -105,20 +105,20 @@ class Logger(logging.Logger):
         format_string = "[{asctime}] {filename}.{funcName} - {message}" if self.level == logging.DEBUG else "[{asctime}] - {message}"
         return logging.Formatter(format_string, datefmt=self.date_format, style="{")
 
-    def _setup_logger(self) -> None:
+    def _setup_logger(self, console: Console | None = None) -> None:
         current_date = datetime.now().strftime("%Y_%m_%d")
         log_dir = self._get_log_dir(current_date)
         # Error log now lives in the same directory, so we reuse log_dir
         error_log_dir = log_dir
 
         if not self.handlers:
-            self._add_console_handler()
+            self._add_console_handler(console=console)
             self._add_file_handler(log_dir)
             self._add_error_file_handler(error_log_dir)
 
-    def _add_console_handler(self):
-        console = Console(color_system="auto", width=180)
-        rich_handler = RichHandler(console=console, rich_tracebacks=False)
+    def _add_console_handler(self, console: Console | None = None):
+        target_console = console or Console(color_system="auto", width=180)
+        rich_handler = RichHandler(console=target_console, rich_tracebacks=False)
         rich_handler.setLevel(self.level)
         self.addHandler(rich_handler)
 

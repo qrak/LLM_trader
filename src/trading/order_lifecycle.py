@@ -65,4 +65,6 @@ class OrderIntent(BaseModel):
         if not can_transition(self.state, target):
             return False
         self.state = target
+        if reason:
+            self.reasoning = reason
         return True

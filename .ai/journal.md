@@ -55,5 +55,7 @@
 **Learning:** `SerializableMixin.from_dict()` is called continuously when loading positions, trade decisions, statistics, and analysis models. Previously, `from_dict()` called `dataclasses.fields(cls)` to construct a new `{f.name: f.type}` dictionary from scratch on every single call, and `_convert_value()` invoked typing module's `get_origin()` and `get_args()` on every field annotation (including `Optional[T]`). Furthermore, `to_dict()` allocated a new local function closure object `_dict_factory` per call.
 **Action:** Created `@lru_cache(maxsize=128)` pre-analyzed `_DataclassFieldMeta` cached lookups in `src/utils/data_utils.py` to extract target type, unwrapped inner type, primitive status, and optionality once per class. Added exact primitive type matching fast-path in `_convert_value_fast()`, and extracted `_dict_factory` to module level. Delivered a **2.41x speedup** on `from_dict()` (5.64 µs -> 2.34 µs/call) and **1.08x speedup** on `to_dict()`.
 
-
+## 2026-07-27 - Dataclass and Datetime Fast-Path Handling in serialize_for_json
+**Learning:** `serialize_for_json()` in `src/utils/data_utils.py` fell back to generic `str(obj)` conversion for nested dataclasses and `datetime` objects, causing string representation overhead on trade decisions and position models.
+**Action:** Added exact type checks for `datetime` (`isoformat()`) and `dataclass` instances (`to_dict()` or `asdict()`) right before generic scalar fallback processing.
 

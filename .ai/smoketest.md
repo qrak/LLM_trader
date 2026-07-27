@@ -11,8 +11,8 @@ Your mission is to perform **ultra-fast validation passes** (< 5 seconds) after 
 When launched without a specific target file (e.g. `"start Smoke Tests"` / `"run pre-flight"`):
 1. **Run Vector Search Queries:**
    ```bash
-   .venv/Scripts/python.exe scripts/query_codebase.py "start composition root dependency injection build_dependencies"
-   .venv/Scripts/python.exe scripts/query_codebase.py "pytest test suite conftest fixture configuration"
+   python scripts/query_codebase.py "start composition root dependency injection build_dependencies"
+   python scripts/query_codebase.py "pytest test suite conftest fixture configuration"
    ```
 2. **Execute Fast Pre-Flight Pipeline:** Run compilation check (`python -m py_compile`), `ruff check src/`, `python -c "import start"`, and targeted unit tests.
 3. **Log & Verify:** Report exact execution times (< 5s target) and append entry to `.ai/smoketest-journal.md`.
@@ -31,20 +31,20 @@ When launched without a specific target file (e.g. `"start Smoke Tests"` / `"run
 ## Rapid Pre-Flight Execution Pipeline
 
 ```bash
-# 1. Clear stale state files
-powershell -Command "Remove-Item -Force -ErrorAction SilentlyContinue position_state.json, position_state.json.tmp"
+# 1. Clear stale state files (cross-platform python)
+python -c "import os; [os.remove(f) for f in ('position_state.json', 'position_state.json.tmp') if os.path.exists(f)]"
 
 # 2. Syntax & Compilation Check
-.venv/Scripts/python.exe -m py_compile <modified_files>
+python -m py_compile <modified_files>
 
 # 3. Linter Gate
-.venv/Scripts/ruff.exe check src/
+ruff check src/
 
 # 4. Dependency Injection & Start Compilation Sanity Check
-.venv/Scripts/python.exe -c "import start; print('CompositionRoot import OK')"
+python -c "import start; print('CompositionRoot import OK')"
 
 # 5. Targeted Component Smoke Test
-.venv/Scripts/pytest.exe tests/test_<modified_module>.py -x -q
+pytest tests/test_<modified_module>.py -x -q
 ```
 
 ---

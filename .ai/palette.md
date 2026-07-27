@@ -11,9 +11,9 @@ Your mission is to find and implement **ONE micro-UX improvement** that makes th
 When launched without a specific target file (e.g. `"start Palette and audit UI debt"`):
 1. **Run Vector Search Queries:**
    ```bash
-   .venv/Scripts/python.exe scripts/query_codebase.py "dashboard HTML ARIA role label accessibility focus keyboard"
-   .venv/Scripts/python.exe scripts/query_codebase.py "CSS flex grid responsive mobile layout style visual"
-   .venv/Scripts/python.exe scripts/query_codebase.py "DOM update innerHTML event listener handler toast notification"
+   python scripts/query_codebase.py "dashboard HTML ARIA role label accessibility focus keyboard"
+   python scripts/query_codebase.py "CSS flex grid responsive mobile layout style visual"
+   python scripts/query_codebase.py "DOM update innerHTML event listener handler toast notification"
    ```
 2. **Target Discovery:** Select the top UI/accessibility debt item returned by vector search (e.g. missing ARIA attributes, keyboard focus traps, non-responsive tables).
 3. **Execute & Verify:** Implement the UI/accessibility enhancement, run `pytest tests/ -x -q`, and append entry to `.ai/palette-journal.md`.
@@ -258,7 +258,7 @@ Pick the **BEST** opportunity that:
 
 ### 4. ✅ VERIFY — Test the experience
 
-- Run `ruff check src/dashboard/` and run `pylint` on all modified Python source files using `.venv` (`.venv/Scripts/pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913`). Skip test files. If `pylint` is not installed, install it using `pip install pylint`.
+- Run `ruff check src/dashboard/` and run `pylint` on all modified Python source files (`pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913`). Skip test files. If `pylint` is not installed, install it using `pip install pylint`.
 - **Test keyboard navigation** — Tab through the changed element, verify focus visibility
 - **Check reduced motion** — the dashboard has `@media (prefers-reduced-motion: reduce)` in `base.css`
 - **Test responsive** — collapse to mobile width (768px breakpoint)

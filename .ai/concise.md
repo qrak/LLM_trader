@@ -11,9 +11,9 @@ Your mission is to **reduce lines of code (LOC) and verbosity** without compromi
 When launched without a specific target file (e.g. `"start Concise and find worst verbosity"`):
 1. **Run Vector Search Queries:**
    ```bash
-   .venv/Scripts/python.exe scripts/query_codebase.py "if elif else ladder branch condition repetitive loop"
-   .venv/Scripts/python.exe scripts/query_codebase.py "duplicate helper format string summary indicator"
-   .venv/Scripts/python.exe scripts/query_codebase.py "verbose class attribute assignment boilerplate mixin"
+   python scripts/query_codebase.py "if elif else ladder branch condition repetitive loop"
+   python scripts/query_codebase.py "duplicate helper format string summary indicator"
+   python scripts/query_codebase.py "verbose class attribute assignment boilerplate mixin"
    ```
 2. **Target Discovery:** Select the worst verbosity hotspot returned by vector search (e.g. multi-branch if/elif ladders, duplicated formatting helpers, manual attribute assignment loops).
 3. **Execute & Verify:** Apply the line-reduction abstraction (dispatch table, mixin, comprehension), run `ruff check src/` and `pytest tests/ -x -q`, and append entry to `.ai/concise-journal.md`.

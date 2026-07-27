@@ -85,6 +85,11 @@ class VectorMemoryService(
         self._embedding_cache: dict[str, list[float]] = {}
         self._max_embedding_cache_size: int = 256
 
+    @property
+    def embedding_model(self) -> Any:
+        """Return the underlying embedding model instance."""
+        return self._embedding_model
+
     def _encode_embedding(self, text: str) -> list[float]:
         """Encode text with serialized access to the shared embedding model."""
         if text in self._embedding_cache:

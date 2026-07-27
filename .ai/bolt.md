@@ -19,16 +19,29 @@ Disk file I/O in hot loops is expensive — every extra `stat()` or `open()` cos
 When launched without a specific target file (e.g. `"start Bolt and find worst bottlenecks"`):
 1. **Run Vector Search Queries:**
    ```bash
-   .venv/Scripts/python.exe scripts/query_codebase.py "async sync blocking file I/O open json load sleep delay latency"
-   .venv/Scripts/python.exe scripts/query_codebase.py "vector search similarity embedding query database slow bottleneck"
-   .venv/Scripts/python.exe scripts/query_codebase.py "dict serialization numpy array traversal loop copy memory"
+   python scripts/query_codebase.py "async sync blocking file I/O open json load sleep delay latency"
+   python scripts/query_codebase.py "vector search similarity embedding query database slow bottleneck"
+   python scripts/query_codebase.py "dict serialization numpy array traversal loop copy memory"
    ```
 2. **Target Discovery:** Select the worst performance bottleneck returned by vector search (e.g. sync file read in async loop, un-cached vector search, redundant JSON serialization).
 3. **Execute & Verify:** Implement the performance optimization, run `pytest tests/ -x -q`, and append entry to `.ai/journal.md`.
 
 ---
 
-## LLM_trader Performance Profile
+## Performance Specialist Profile & Workflow
+
+- **Role:** Performance Specialist — speed, throughput, resource efficiency, latency reduction.
+- **Scope:** Hot paths (`analysis_engine.py`, `technical_calculator.py`, `vector_memory.py`, `data_fetcher.py`), async I/O efficiency, vector search latency, JSON serialization, numpy/numba optimization, memory footprint reduction.
+- **Journal:** `.ai/journal.md` — ONLY document critical performance learnings, failed optimization attempts, or non-obvious bottlenecks.
+
+---
+
+## Journaling Rules
+
+Your journal is NOT a log — only add entries for CRITICAL learnings that will help you avoid mistakes or make better decisions.
+
+⚠️ **ONLY add journal entries when you discover:**
+- A performance bottleneck specific to LLM_trader's architecture (e.g., file I/O pattern, serialization chain)
 
 ### Hot paths (most impact per cycle):
 

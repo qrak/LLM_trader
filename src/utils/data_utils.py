@@ -238,6 +238,12 @@ def serialize_for_json(obj: Any) -> Any:
         except Exception:
             # Fallback for complex/mixed arrays
             return [serialize_for_json(v) for v in obj]
+    if obj_type is datetime or isinstance(obj, datetime):
+        return obj.isoformat()
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        if hasattr(obj, "to_dict"):
+            return serialize_for_json(obj.to_dict())
+        return serialize_for_json(dataclasses.asdict(obj))
     if isinstance(obj, np.generic):
         try:
             val = obj.item()

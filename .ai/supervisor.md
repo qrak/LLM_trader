@@ -115,7 +115,7 @@ Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
 
 ### Multi-Agent Pipeline Execution Rules
 
-1. **Phase 0 Vector Scan First:** Always run `.venv\Scripts\python.exe scripts/query_codebase.py "<query>"` before starting to locate affected symbols and optimal update locations.
+1. **Phase 0 Vector Scan First:** Always run `python scripts/query_codebase.py "<query>"` before starting to locate affected symbols and optimal update locations.
 2. **Sequential Execution:** Run agents in stage order (1 $\rightarrow$ 7). Each agent operates within its scope and appends an entry to its mandatory `.ai/<agent>-journal.md`.
 3. **Refactor After Implementations:** Always run **Refactor** ✨ after Bolt, Palette, and Sentinel have implemented their features/optimizations to clean up type guards and enforce DI patterns.
 4. **Concise for LOC Reduction:** Run **Concise** ✂️ after Refactor if line count can be shrunk using mixins or dispatch tables without altering logic.

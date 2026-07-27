@@ -20,6 +20,19 @@ from aiohttp_client_cache import SQLiteBackend
 import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
 import chromadb
 from sentence_transformers import SentenceTransformer
+from rich.console import Console
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+from rich.table import Table
 
 # --- Local ---
 from scripts.rotate_journals import rotate_all_journals
@@ -102,7 +115,17 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="google.ge
 
 
 def _configure_hf_hub_auth() -> None:
-    """Expose optional Hugging Face token to libraries that read process env vars."""
+    """Expose optional Hugging Face token and suppress raw tqdm progress bar leaks."""
+    os.environ["TQDM_DISABLE"] = "1"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
+    try:
+        logging.getLogger("transformers").setLevel(logging.ERROR)
+        logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+    except Exception:
+        pass
+
     hf_token = config.get_env("HF_TOKEN")
     if not hf_token:
         return
@@ -249,6 +272,62 @@ def _show_error_dialog(title: str, message: str) -> bool:
                 pass  # best-effort cleanup
 
 
+def build_startup_banner(project_root: Path) -> Panel:
+    """Styled 'LLM TRADER' banner using rich panel + unicode block drawing."""
+    text = Text()
+
+    logo_lines = [
+        "   ██         ██         ██      ██   ",
+        "   ██         ██         ████  ████   ",
+        "   ██         ██         ██ ████ ██   ",
+        "   ██         ██         ██  ██  ██   ",
+        "   ██         ██         ██      ██   ",
+        "   ████████   ████████   ██      ██   ",
+    ]
+    for line in logo_lines:
+        text.append("║", style="bright_blue")
+        text.append(line, style="bright_cyan")
+        text.append("║\n", style="bright_blue")
+
+    text.append("\n")
+    text.append("        AI-Powered Crypto Trading Bot\n", style="bold yellow")
+    text.append("        ────────────────────────────\n", style="dim white")
+    text.append(
+        f"        {project_root.resolve()}\n",
+        style="dim cyan",
+    )
+
+    return Panel(
+        Align.center(text),
+        title="[bold blue]🚀  LLM TRADER  🚀[/]",
+        border_style="bright_blue",
+        padding=(1, 2),
+    )
+
+
+def print_summary_table(console: Console, elapsed: float, stats: dict[str, str]) -> None:
+    """Show a compact summary table after all provisioning stages complete."""
+    table = Table(
+        title=f"[bold green]✅  Initialization Complete  ({elapsed:.1f}s)[/]",
+        title_justify="center",
+        border_style="green",
+        box=None,
+        padding=(0, 2),
+        show_header=False,
+    )
+    table.add_column("Metric", style="dim cyan", no_wrap=True)
+    table.add_column("Value", style="bold white", justify="right")
+
+    for metric, value in stats.items():
+        table.add_row(metric, value)
+
+    table.add_row("", "", style="dim")
+    table.add_row("Init time", f"{elapsed:.2f}s", style="green")
+
+    console.print()
+    console.print(Panel(table, border_style="green"))
+
+
 class CompositionRoot:
     """Composition Root for the trading bot application.
 
@@ -258,83 +337,83 @@ class CompositionRoot:
 
     def __init__(self):
         self.config = config
-        self.logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG)
+        self.console = Console()
+        self.logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG, console=self.console)
         self.logger.install_crash_handler()
         self.loop = None
         self.shutdown_manager = None
 
+    # pylint: disable=too-many-statements
     async def build_dependencies(self) -> dict:
         """Build all dependencies for the trading bot via segmented provisions."""
         start_time = time.perf_counter()
-        self.logger.info("Initializing Crypto Trading Bot [8 Provisioning Stages]...")
 
-        self._init_directories()
-        self.logger.info("[Stage 1/8] Initializing core infrastructure (exchanges, sessions)...")
-        infra = await self._provision_infrastructure()
+        # Render startup banner
+        self.console.clear()
+        project_root = Path(__file__).parent.resolve()
+        self.console.print(build_startup_banner(project_root))
+        self.console.print()
+        self.console.rule("[dim]Initializing...[/]")
+        self.console.print()
 
-        self.logger.info("[Stage 2/8] Provisioning helper utilities and parsers...")
-        utils = self._provision_utilities()
+        progress = Progress(
+            SpinnerColumn(spinner_name="dots12", style="cyan"),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=None, style="blue", complete_style="green"),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(elapsed_when_finished=True),
+            console=self.console,
+            expand=True,
+        )
 
-        self.logger.info("[Stage 3/8] Connecting to market data platforms (CoinGecko, DeFiLlama, CCXT)...")
-        apis = await self._provision_platforms(infra)
+        with progress:
+            task = progress.add_task(
+                "[cyan]Stage 1/9 — Core infrastructure (exchanges, sessions)...", total=9
+            )
 
-        self.logger.info("[Stage 4/8] Initializing RAG news and taxonomy engine...")
-        rag = await self._provision_rag_layer(infra, apis, utils)
+            self._init_directories()
+            infra = await self._provision_infrastructure()
+            progress.update(task, completed=1)
 
-        self.logger.info("[Stage 5/8] Setting up AI provider models & orchestrator...")
-        models = self._provision_model_layer(utils)
+            progress.update(task, description="[cyan]Stage 2/9 — Helper utilities & parsers...")
+            utils = self._provision_utilities()
+            progress.update(task, completed=2)
 
-        self.logger.info("[Stage 6/8] Building technical analysis engine & pattern analyzers...")
-        analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
+            progress.update(task, description="[cyan]Stage 3/9 — Market data platforms (CoinGecko, DeFiLlama, CCXT)...")
+            apis = await self._provision_platforms(infra)
+            progress.update(task, completed=3)
 
-        self.logger.info("[Stage 7/8] Provisioning trading brain, memory, risk manager & guards...")
-        trading = self._provision_trading_layer(utils, models)
+            progress.update(task, description="[cyan]Stage 4/9 — RAG news engine & taxonomy...")
+            rag = await self._provision_rag_layer(infra, apis, utils)
+            progress.update(task, completed=4)
 
-        self.logger.info("[Stage 8/8] Initializing notification channels...")
-        notifiers = await self._provision_notifiers(utils)
+            progress.update(task, description="[cyan]Stage 5/9 — AI provider models & orchestrator...")
+            models = self._provision_model_layer(utils)
+            progress.update(task, completed=5)
+
+            progress.update(task, description="[cyan]Stage 6/9 — Technical analysis engine & patterns...")
+            analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
+            progress.update(task, completed=6)
+
+            progress.update(task, description="[cyan]Stage 7/9 — Trading brain, memory, risk manager & guards...")
+            trading = self._provision_trading_layer(utils, models)
+            progress.update(task, completed=7)
+
+            progress.update(task, description="[cyan]Stage 8/9 — Notification channels (Discord) & maintenance...")
+            notifiers = await self._provision_notifiers(utils)
+            await self._run_maintenance_tasks(trading['brain_service'])
+            progress.update(task, completed=8)
+
+            progress.update(task, description="[green]Stage 9/9 — Dashboard server & web admin...")
+            dashboard = self._provision_dashboard_layer(infra, utils, analyzer, trading)
+            progress.update(task, completed=9)
 
         end_time = time.perf_counter()
         init_duration = end_time - start_time
-        self.logger.info("All 8 provisioning stages initialized successfully in %.2f seconds", init_duration)
+        self.logger.info("All 9 provisioning stages initialized successfully in %.2f seconds", init_duration)
 
-        # Post-provisioning maintenance: journal rotation & codebase vector index
-        try:
-            self.logger.info("[Journal Maintenance] Checking AI agent journal file sizes...")
-            rotated_count = rotate_all_journals()
-            if rotated_count > 0:
-                self.logger.info("[Journal Maintenance] Rotated %d journal file(s) exceeding size limits to .ai/archive/", rotated_count)
-            else:
-                self.logger.info("[Journal Maintenance] All AI agent journal files are within size limits")
-        except Exception as e:
-            self.logger.warning("Journal rotation maintenance skipped: %s", e)
-
-        if self.config.CODEBASE_INDEX_ENABLED:
-            try:
-                self.logger.info("[Codebase Vector Search] Checking semantic codebase index...")
-                index_dir = self.config.CODEBASE_INDEX_DIR
-                os.makedirs(index_dir, exist_ok=True)
-                codebase_client = chromadb.PersistentClient(path=index_dir)
-                codebase_indexer = CodebaseVectorIndexer(
-                    logger=self.logger,
-                    chroma_client=codebase_client,
-                    embedding_model=trading['brain_service'].vector_memory._embedding_model,
-                    project_root=Path(".").resolve(),
-                )
-                result = codebase_indexer.index_codebase()
-                if result["indexed"] > 0:
-                    self.logger.info(
-                        "Codebase vector index updated: %d files indexed, %d total chunks",
-                        result["indexed"], result["total_chunks"],
-                    )
-                else:
-                    self.logger.info(
-                        "Codebase vector index up-to-date: %d files verified, %d chunks ready",
-                        result["skipped"], result["total_chunks"],
-                    )
-            except Exception as e:
-                self.logger.warning("Codebase vector indexing skipped: %s", e)
-        else:
-            self.logger.info("[Codebase Vector Search] Codebase vector index disabled in config.ini")
+        self._display_startup_summary(apis, rag, trading, init_duration)
 
         # Combine everything for the bot and dashboard
         deps = {
@@ -360,38 +439,10 @@ class CompositionRoot:
                 config=self.config,
                 logger=self.logger,
             ),
+            'dashboard_server': dashboard['dashboard_server'],
+            'dashboard_state': dashboard['dashboard_state'],
+            'force_analysis_event': dashboard['force_analysis_event'],
         }
-
-        # Create shared force_analysis event (used by both bot keyboard handler and admin console)
-        force_analysis_event = asyncio.Event()
-
-        config_path = str(Path(__file__).parent / "config" / "config.ini")
-        admin_credentials = {
-            "username": self.config.ADMIN_USERNAME,
-            "password_hash": self.config.ADMIN_PASSWORD_HASH,
-            "signing_key": self.config.ADMIN_SIGNING_KEY,
-        }
-        dashboard_server = DashboardServer(
-            brain_service=trading['brain_service'],
-            vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
-            analysis_engine=analyzer['engine'],
-            config=self.config,
-            logger=self.logger,
-            unified_parser=utils['parser'],
-            persistence=trading['persistence'],
-            exchange_manager=infra['exchange_manager'],
-            host=self.config.DASHBOARD_HOST,
-            port=self.config.DASHBOARD_PORT,
-            force_analysis_event=force_analysis_event,
-            config_path=config_path,
-            admin_credentials=admin_credentials,
-            post_mortem_repo=trading.get('post_mortem_repo'),
-        )
-
-        deps['dashboard_server'] = dashboard_server
-        deps['dashboard_state'] = dashboard_server.dashboard_state
-        deps['force_analysis_event'] = force_analysis_event
-        trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
 
         return deps
 
@@ -406,6 +457,44 @@ class CompositionRoot:
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_dir = os.path.join(data_dir, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
         os.makedirs(brain_dir, exist_ok=True)
+
+    async def _run_maintenance_tasks(self, brain_service: TradingBrainService) -> None:
+        """Run post-provisioning maintenance: journal rotation & codebase vector index."""
+        try:
+            rotated_count = rotate_all_journals()
+            if rotated_count > 0:
+                self.logger.info("  -> Journal maintenance: rotated %d journal file(s) to .ai/archive/", rotated_count)
+            else:
+                self.logger.info("  -> Journal maintenance: all journal files within size limits")
+        except Exception as e:
+            self.logger.warning("Journal rotation maintenance skipped: %s", e)
+
+        if self.config.CODEBASE_INDEX_ENABLED:
+            try:
+                index_dir = self.config.CODEBASE_INDEX_DIR
+                os.makedirs(index_dir, exist_ok=True)
+                codebase_client = chromadb.PersistentClient(path=index_dir)
+                codebase_indexer = CodebaseVectorIndexer(
+                    logger=self.logger,
+                    chroma_client=codebase_client,
+                    embedding_model=brain_service.vector_memory.embedding_model,
+                    project_root=Path(".").resolve(),
+                )
+                result = codebase_indexer.index_codebase()
+                if result["indexed"] > 0:
+                    self.logger.info(
+                        "  -> Codebase vector index updated: %d files indexed, %d total chunks",
+                        result["indexed"], result["total_chunks"],
+                    )
+                else:
+                    self.logger.info(
+                        "  -> Codebase vector index up-to-date: %d files verified, %d chunks ready",
+                        result["skipped"], result["total_chunks"],
+                    )
+            except Exception as e:
+                self.logger.warning("Codebase vector indexing skipped: %s", e)
+        else:
+            self.logger.info("  -> Codebase vector index disabled in config.ini")
 
     async def _provision_infrastructure(self) -> dict:
         """Provision base infrastructure components."""
@@ -653,13 +742,18 @@ class CompositionRoot:
         _configure_hf_hub_auth()
 
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
-        brain_path = os.path.join(self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
+        brain_path = os.path.join(
+            self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}"
+        )
 
         self.logger.info("  -> Connecting to ChromaDB vector memory at %s...", brain_path)
         chroma_client = chromadb.PersistentClient(path=brain_path)
 
         embed_device = _get_best_device()
-        self.logger.info("  -> Loading SentenceTransformer embedding model ('BAAI/bge-small-en-v1.5') on %s...", embed_device)
+        self.logger.info(
+            "  -> Loading SentenceTransformer embedding model ('BAAI/bge-small-en-v1.5') on %s...",
+            embed_device,
+        )
         embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
         self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
         timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
@@ -781,7 +875,82 @@ class CompositionRoot:
             notifier = ConsoleNotifier(self.logger, self.config, utils['parser'], utils['format_utils'])
             
         return {'notifier': notifier, 'task': task}
-    
+
+    def _display_startup_summary(
+        self, apis: dict, rag: RagEngine, trading: dict, init_duration: float
+    ) -> None:
+        """Display the initialization summary panel and control footer."""
+        symbols_count = (
+            len(apis['coingecko'].symbol_to_id_map)
+            if apis.get('coingecko') and hasattr(apis['coingecko'], 'symbol_to_id_map')
+            else 0
+        )
+        news_count = (
+            rag.news_manager.get_database_size()
+            if rag and hasattr(rag, 'news_manager')
+            else 0
+        )
+        guards_count = (
+            len(trading['strategy'].guard_pipeline.guard_names)
+            if trading.get('strategy') and hasattr(trading['strategy'], 'guard_pipeline')
+            else 0
+        )
+
+        summary_stats = {
+            "Symbols mapped": f"{symbols_count:,}",
+            "News articles indexed": f"{news_count:,}",
+            "Primary AI provider": str(getattr(self.config, 'AI_PROVIDER', 'googleai')),
+            "Vector memory active": "ChromaDB (bge-small-en-v1.5)",
+            "Order guard rules": f"{guards_count}",
+            "Trading pair / TF": f"{self.config.CRYPTO_PAIR} ({self.config.TIMEFRAME})",
+        }
+        print_summary_table(self.console, init_duration, summary_stats)
+
+        dashboard_url = f"http://localhost:{self.config.DASHBOARD_PORT}"
+        self.console.print()
+        self.console.print(
+            "  [dim]Keyboard commands:[/] [bold]'a'[/] force analysis  "
+            "[bold]'d'[/] toggle dashboard  [bold]'h'[/] help  [bold]'q'[/] quit",
+        )
+        self.console.print(
+            f"  [bold green]Dashboard →[/] [link={dashboard_url}]{dashboard_url}[/]"
+        )
+        self.console.print()
+
+    def _provision_dashboard_layer(self, infra: dict, utils: dict, analyzer: dict, trading: dict) -> dict:
+        """Provision dashboard server and admin interface."""
+        force_analysis_event = asyncio.Event()
+
+        config_path = str(Path(__file__).parent / "config" / "config.ini")
+        admin_credentials = {
+            "username": self.config.ADMIN_USERNAME,
+            "password_hash": self.config.ADMIN_PASSWORD_HASH,
+            "signing_key": self.config.ADMIN_SIGNING_KEY,
+        }
+        dashboard_server = DashboardServer(
+            brain_service=trading['brain_service'],
+            vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
+            analysis_engine=analyzer['engine'],
+            config=self.config,
+            logger=self.logger,
+            unified_parser=utils['parser'],
+            persistence=trading['persistence'],
+            exchange_manager=infra['exchange_manager'],
+            host=self.config.DASHBOARD_HOST,
+            port=self.config.DASHBOARD_PORT,
+            force_analysis_event=force_analysis_event,
+            config_path=config_path,
+            admin_credentials=admin_credentials,
+            post_mortem_repo=trading.get('post_mortem_repo'),
+        )
+        trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
+
+        return {
+            'dashboard_server': dashboard_server,
+            'dashboard_state': dashboard_server.dashboard_state,
+            'force_analysis_event': force_analysis_event,
+        }
+
     async def run_async(self):
         """Async entry point for the application."""
         def _asyncio_exception_handler(_loop, context):
@@ -815,8 +984,8 @@ class CompositionRoot:
                 notifier=dependencies['discord_notifier'],
                 active_tasks=bot.active_tasks,
                 is_running=lambda: bot.running,
-                fetch_current_ticker=bot._fetch_current_ticker,
-                interruptible_sleep=bot._interruptible_sleep,
+                fetch_current_ticker=bot.fetch_current_ticker,
+                interruptible_sleep=bot.interruptible_sleep,
                 get_symbol=lambda: bot.current_symbol,
             )
 
@@ -853,8 +1022,6 @@ class CompositionRoot:
 
             bot.keyboard_handler.register_command('d', _toggle_dashboard, "Toggle dashboard on/off")
 
-            self.logger.info("Keyboard commands: 'a' = force analysis, 'd' = toggle dashboard, 'h' = help, 'q' = quit")
-
             if dashboard_server and self.config.DASHBOARD_ENABLED:
                 await dashboard_server.start()
                 dashboard_running = True
@@ -883,6 +1050,11 @@ class CompositionRoot:
             sys.exit(1)
         
         if sys.platform == 'win32':
+            try:
+                sys.stdout.reconfigure(encoding="utf-8")
+                sys.stderr.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
         
         self.loop = asyncio.new_event_loop()

@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 
 class PromptBuilder:
+    """Builder for constructing institutional-grade trading analysis system and user prompts."""
+
     def __init__(
         self,
         timeframe: str = "1h",
@@ -150,13 +152,17 @@ class PromptBuilder:
 
             # Add trade flow
             if microstructure.get("recent_trades"):
-                trades_section = self.market_formatter.format_trade_flow(microstructure["recent_trades"], context.symbol)
+                trades_section = self.market_formatter.format_trade_flow(
+                    microstructure["recent_trades"], context.symbol
+                )
                 if trades_section:
                     sections.append(trades_section)
 
             # Add funding rate (if futures contract)
             if microstructure.get("funding_rate"):
-                funding_section = self.market_formatter.format_funding_rate(microstructure["funding_rate"], context.symbol)
+                funding_section = self.market_formatter.format_funding_rate(
+                    microstructure["funding_rate"], context.symbol
+                )
                 if funding_section:
                     sections.append(funding_section)
 
@@ -197,7 +203,7 @@ class PromptBuilder:
 
         # Weekly macro analysis (200W SMA)
         if context.weekly_macro_indicators and "weekly_macro_trend" in context.weekly_macro_indicators:
-            weekly_section = self.long_term_formatter._format_weekly_macro_section(
+            weekly_section = self.long_term_formatter._format_weekly_macro_section(  # pylint: disable=protected-access
                 context.weekly_macro_indicators["weekly_macro_trend"]
             )
             if weekly_section:
@@ -257,17 +263,17 @@ class PromptBuilder:
 
         milestones = self._get_market_milestones(current_time)
 
-        return f"""
-        ## Trading Context
-        - Symbol: {context.symbol}
-        - Current Day: {day_of_week} (UTC)
-        - Current Price: {context.current_price}
-        - Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}
-        - Primary Timeframe: {self.timeframe} ({timeframe_minutes} min/candle)
-        - Analysis Includes: {analysis_timeframes}
-
-        ### Market Milestones (UTC)
-{milestones}"""
+        return (
+            f"## Trading Context\n"
+            f"- Symbol: {context.symbol}\n"
+            f"- Current Day: {day_of_week} (UTC)\n"
+            f"- Current Price: {context.current_price}\n"
+            f"- Analysis Time: {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC{candle_status}{weekend_note}\n"
+            f"- Primary Timeframe: {self.timeframe} ({timeframe_minutes} min/candle)\n"
+            f"- Analysis Includes: {analysis_timeframes}\n"
+            f"\n### Market Milestones (UTC)\n"
+            f"{milestones}"
+        )
 
     @staticmethod
     def _get_market_milestones(current_time: datetime) -> str:
@@ -280,16 +286,16 @@ class PromptBuilder:
             return f"{hours}h {minutes}m"
 
         next_daily = (current_time + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        milestones.append(f"        - Daily Close: in {format_delta(next_daily - current_time)} (00:00 UTC)")
+        milestones.append(f"- Daily Close: in {format_delta(next_daily - current_time)} (00:00 UTC)")
 
         if current_time.weekday() == 6:
             cme_open = current_time.replace(hour=22, minute=0, second=0, microsecond=0)
             if current_time < cme_open:
                 milestones.append(
-                    f"        - CME/Service Open: in {format_delta(cme_open - current_time)} (Today 22:00 UTC)"
+                    f"- CME/Service Open: in {format_delta(cme_open - current_time)} (Today 22:00 UTC)"
                 )
             else:
-                milestones.append("        - CME/Service Open: Currently Active (since 22:00 UTC)")
+                milestones.append("- CME/Service Open: Currently Active (since 22:00 UTC)")
 
         if current_time.weekday() >= 5:
             days_until_monday = (7 - current_time.weekday()) % 7 or 7
@@ -297,10 +303,10 @@ class PromptBuilder:
                 hour=0, minute=0, second=0, microsecond=0
             )
             milestones.append(
-                f"        - Weekly Open: in {format_delta(next_weekly - current_time)} (Mon 00:00 UTC)"
+                f"- Weekly Open: in {format_delta(next_weekly - current_time)} (Mon 00:00 UTC)"
             )
 
-        return "\n".join(milestones) if milestones else "        - No major milestones within 24h"
+        return "\n".join(milestones) if milestones else "- No major milestones within 24h"
 
     def build_sentiment_section(self, sentiment_data: dict[str, Any] | None) -> str:
         if not sentiment_data:
@@ -385,6 +391,7 @@ class PromptBuilder:
 
     @staticmethod
     def _resolve_indicator_value(raw_val: Any) -> float | None:
+        """Resolve scalar float value from raw indicator input (handling arrays/lists)."""
         if raw_val is None:
             return None
         if isinstance(raw_val, (list, tuple, np.ndarray)):
@@ -396,7 +403,10 @@ class PromptBuilder:
         except (ValueError, TypeError):
             return None
 
-    def build_previous_indicators_section(self, previous_indicators: dict[str, Any], current_indicators: dict[str, Any]) -> str:
+    def build_previous_indicators_section(
+        self, previous_indicators: dict[str, Any], current_indicators: dict[str, Any]
+    ) -> str:
+        """Format changes between previous and current indicators section."""
         if not previous_indicators or not current_indicators:
             return ""
 
@@ -456,7 +466,9 @@ class PromptBuilder:
             lines.append("(Note: Indicators with < 1.0% change or specific zero-cross logic are filtered)")
 
         lines.append("")
-        lines.append("INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion).")
+        lines.append(
+            "INTERPRETATION: Look for trend continuation (momentum building) vs reversal (divergence, exhaustion)."
+        )
         return "\n".join(lines)
 
     def _format_indicator_change(
@@ -565,6 +577,7 @@ class PromptBuilder:
         last_analysis_time: str | None = None,
         has_chart_analysis: bool = False,
         dynamic_thresholds: dict[str, Any] | None = None,
+        model_verbosity: str | None = None,
     ) -> str:
         """Build system prompt using template manager.
 
@@ -577,12 +590,15 @@ class PromptBuilder:
             last_analysis_time: Formatted timestamp of last analysis
             has_chart_analysis: Whether chart image analysis is available
             dynamic_thresholds: Brain-learned thresholds for response template
+            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
 
         Returns:
             str: Formatted system prompt with instructions
         """
         # Set context so _has_advanced_support_resistance can access it
         self.context = context
+
+        eff_verbosity = model_verbosity or self.config.MODEL_VERBOSITY
 
         # Build base system prompt
         base_prompt = self.template_manager.build_system_prompt(
@@ -594,6 +610,7 @@ class PromptBuilder:
             last_analysis_time,
             indicator_delta_alert="",
             dynamic_thresholds=dynamic_thresholds,
+            model_verbosity=eff_verbosity,
         )
 
         # Check if we have advanced support/resistance detected
@@ -610,14 +627,21 @@ class PromptBuilder:
             available_periods
         )
 
-        # Add response template (instructions go in system prompt)
-        response_template = self.template_manager.build_response_template(
+        # Build decision rules section (placed between base prompt and analysis steps)
+        decision_rules = self.template_manager.build_decision_rules(
             has_chart_analysis,
-            model_verbosity=self.config.MODEL_VERBOSITY,
+            model_verbosity=eff_verbosity,
             dynamic_thresholds=dynamic_thresholds
         )
 
-        return f"{base_prompt}\n\n{analysis_steps}\n\n{response_template}"
+        # Add response format template (output structure only)
+        response_template = self.template_manager.build_response_template(
+            has_chart_analysis,
+            model_verbosity=eff_verbosity,
+            dynamic_thresholds=dynamic_thresholds
+        )
+
+        return f"{base_prompt}\n\n{decision_rules}\n\n{analysis_steps}\n\n{response_template}"
 
     def add_custom_instruction(self, instruction: str) -> None:
         """Add custom instruction to the prompt.

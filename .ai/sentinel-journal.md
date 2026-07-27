@@ -32,3 +32,13 @@
 
 **Verdict:** 🛡️ **APPROVED** — Security posture hardened with rate limiting, SSRF checks, and input bounds.
 
+## 2026-07-27 - Rate Limiting In-Memory Key Eviction Hardening
+**Audit Scope:** Admin authentication rate limiting (`src/dashboard/auth.py`).
+
+**Security Safeguard Hardened:**
+1. **Sliding-Window In-Memory Key Eviction (`check_login_rate_limit`)**:
+   - Added automated key eviction for IP entries with no active window attempts.
+   - Prevents memory growth and dictionary bloat from stale client IP tracking entries over long-running daemon lifecycles.
+
+**Verdict:** 🛡️ **APPROVED** — Rate limiter memory safety verified.
+

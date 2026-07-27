@@ -43,11 +43,11 @@ class TestBuildSystemPrompt:
     def test_prompt_metadata_is_backend_only(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT")
         metadata = self.mgr.build_prompt_metadata()
-        assert metadata["prompt_version"] == "trading-analysis-prompt-v1.2"
+        assert metadata["prompt_version"] == "trading-analysis-prompt-v1.3"
         assert metadata["response_contract_version"] == "trading-analysis-response-v1"
         assert metadata["prompt_variant"] == "decision-gated"
         assert "Prompt Metadata" not in prompt
-        assert "trading-analysis-prompt-v1.2" not in prompt
+        assert "trading-analysis-prompt-v1.3" not in prompt
 
     def test_soft_exits_mentioned(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT")
@@ -161,7 +161,7 @@ class TestBuildSystemPrompt:
     def test_system_prompt_uses_response_template_confidence_threshold(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT")
         assert ">70 required" not in prompt
-        assert "Response Format thresholds" in prompt
+        assert "Decision Rules thresholds" in prompt
         assert "Confidence must match signal strength" in prompt
 
     def test_system_prompt_marks_external_context_untrusted(self):
@@ -212,9 +212,9 @@ class TestBuildResponseTemplate:
         self.mgr = _make_manager()
 
     def test_default_thresholds(self):
-        tmpl = self.mgr.build_response_template()
-        assert "ADX < 20" in tmpl  # adx_weak default
-        assert "ADX >= 25" in tmpl or "ADX >= 25" in tmpl  # adx_strong default
+        rules = self.mgr.build_decision_rules()
+        assert "ADX < 20" in rules  # adx_weak default
+        assert "ADX >= 25" in rules  # adx_strong default
 
     def test_custom_thresholds_injected(self):
         thresholds = {
@@ -229,17 +229,17 @@ class TestBuildResponseTemplate:
             "trade_count": 0,
             "learned_keys": [],
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
-        assert "ADX >= 30" in tmpl
-        assert "ADX < 18" in tmpl
-        assert "R/R >= 1.8" in tmpl  # rr_borderline_min as system-enforced minimum
-        assert "aspirational target" in tmpl  # min_rr_recommended as aspirational, not a gate
-        assert "system-enforced minimum" in tmpl
-        assert "REJECTED" in tmpl  # hard gate label in R/R guidelines
-        assert "Allowed — meets system-enforced minimum" in tmpl  # allowed range label
-        assert "3.0%" in tmpl  # avg_sl
-        assert "BUY/SELL: 75+ conf" in tmpl
-        assert "strong evidence against entry" in tmpl
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "ADX >= 30" in rules
+        assert "ADX < 18" in rules
+        assert "R/R >= 1.8" in rules  # rr_borderline_min as system-enforced minimum
+        assert "aspirational target" in rules  # min_rr_recommended as aspirational, not a gate
+        assert "system-enforced minimum" in rules
+        assert "REJECTED" in rules  # hard gate label in R/R guidelines
+        assert "Allowed — meets system-enforced minimum" in rules  # allowed range label
+        assert "3.0%" in rules  # avg_sl
+        assert "BUY/SELL: 75+ conf" in rules
+        assert "strong evidence against entry" in rules
 
     def test_signal_line_uses_borderline_not_recommended_as_gate(self):
         """BUY/SELL signal line must use rr_borderline_min as hard minimum, and
@@ -251,16 +251,16 @@ class TestBuildResponseTemplate:
             "trade_count": 0,
             "learned_keys": [],
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
 
         # SIGNALS line: hard gate is rr_borderline
-        assert "R/R >= 1.5 (system-enforced minimum — the only hard gate)" in tmpl
+        assert "R/R >= 1.5 (system-enforced minimum — the only hard gate)" in rules
 
         # R/R GUIDELINES: first line is the hard rejection boundary
-        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in tmpl
-        assert "R/R >= 1.5: Allowed — meets system-enforced minimum for entry" in tmpl
-        assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in tmpl
-        assert "R/R >= 2.5: Exceptional setup" in tmpl
+        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
+        assert "R/R >= 1.5: Allowed — meets system-enforced minimum for entry" in rules
+        assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in rules
+        assert "R/R >= 2.5: Exceptional setup" in rules
 
     def test_response_template_json_example_is_valid(self):
         """The fenced JSON example should be parser-safe, not pseudo-JSON."""
@@ -279,8 +279,8 @@ class TestBuildResponseTemplate:
         assert isinstance(parsed["analysis"]["confidence"], int)
 
     def test_response_template_uses_chart_flag(self):
-        with_chart = self.mgr.build_response_template(has_chart_analysis=True)
-        without_chart = self.mgr.build_response_template(has_chart_analysis=False)
+        with_chart = self.mgr.build_decision_rules(has_chart_analysis=True)
+        without_chart = self.mgr.build_decision_rules(has_chart_analysis=False)
         assert "CHART VALIDATION" in with_chart
         assert "P1-price" in with_chart
         assert "CHART VALIDATION" not in without_chart
@@ -299,11 +299,11 @@ class TestBuildResponseTemplate:
             "adx_strong_threshold": 28,
             "min_rr_recommended": 2.2,
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
-        assert "THRESHOLD ORIGIN" in tmpl
-        assert "brain-learned from 50 closed trades" in tmpl
-        assert "recommended_rr=2.2" in tmpl
-        assert "adx_strong=28" in tmpl
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "THRESHOLD ORIGIN" in rules
+        assert "brain-learned from 50 closed trades" in rules
+        assert "recommended_rr=2.2" in rules
+        assert "adx_strong=28" in rules
 
     def test_threshold_origin_no_learned_keys(self):
         """When trade_count > 0 but no learned_keys match the listed subset, origin note still appears."""
@@ -311,9 +311,9 @@ class TestBuildResponseTemplate:
             "trade_count": 5,
             "learned_keys": ["some_unrelated_key"],
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
-        assert "THRESHOLD ORIGIN" in tmpl
-        assert "industry-standard defaults" in tmpl
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "THRESHOLD ORIGIN" in rules
+        assert "industry-standard defaults" in rules
 
     def test_safe_mae_line_with_data(self):
         thresholds = {
@@ -321,9 +321,9 @@ class TestBuildResponseTemplate:
             "trade_count": 20,
             "learned_keys": [],
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
-        assert "Safe Drawdown" in tmpl
-        assert "2.00%" in tmpl
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "Safe Drawdown" in rules
+        assert "2.00%" in rules
 
     def test_safe_mae_line_insufficient(self):
         thresholds = {
@@ -331,15 +331,15 @@ class TestBuildResponseTemplate:
             "trade_count": 5,
             "learned_keys": [],
         }
-        tmpl = self.mgr.build_response_template(dynamic_thresholds=thresholds)
-        assert "Insufficient trade data" in tmpl
+        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "Insufficient trade data" in rules
 
     def test_position_sizing_formula(self):
-        tmpl = self.mgr.build_response_template()
-        assert "POSITION SIZING" in tmpl
-        assert "Base = confidence/100" in tmpl
-        assert "Min normal: 0.020" in tmpl
-        assert "Don't round up" in tmpl
+        rules = self.mgr.build_decision_rules()
+        assert "POSITION SIZING" in rules
+        assert "Base = confidence/100" in rules
+        assert "Min normal: 0.020" in rules
+        assert "Don't round up" in rules
 
     def test_confluence_scoring(self):
         tmpl = self.mgr.build_response_template()
@@ -347,18 +347,18 @@ class TestBuildResponseTemplate:
         assert "trend_alignment" in tmpl
 
     def test_macro_timeframe_conflict(self):
-        tmpl = self.mgr.build_response_template()
-        assert "MACRO CONFLICT" in tmpl
-        assert "365D" in tmpl
+        rules = self.mgr.build_decision_rules()
+        assert "MACRO CONFLICT" in rules
+        assert "365D" in rules
 
     def test_rr_calculation_mandatory(self):
-        tmpl = self.mgr.build_response_template()
-        assert "R/R:" in tmpl
+        rules = self.mgr.build_decision_rules()
+        assert "R/R:" in rules
 
     def test_hold_confidence_is_not_capped_below_trade_threshold(self):
-        tmpl = self.mgr.build_response_template()
-        assert "HOLD (any confidence <" not in tmpl
-        assert "strong evidence against entry" in tmpl
+        rules = self.mgr.build_decision_rules()
+        assert "HOLD (any confidence <" not in rules
+        assert "strong evidence against entry" in rules
 
     def test_response_template_reasoning_continuity_guidance(self):
         """Response template reasoning field should guide for vector DB continuity data."""
@@ -588,19 +588,20 @@ class TestBuildResponseTemplateVerbosity:
             assert label in tmpl, f"Missing label in high verbosity: {label}"
 
     def test_chart_validation_line_present_in_high_with_chart(self) -> None:
-        tmpl = self._make_mgr_with_verbosity("high").build_response_template(has_chart_analysis=True)
-        assert "CHART VALIDATION" in tmpl
-        assert "P1-price" in tmpl
+        rules = self._make_mgr_with_verbosity("high").build_decision_rules(has_chart_analysis=True)
+        assert "CHART VALIDATION" in rules
+        assert "P1-price" in rules
 
     def test_chart_validation_line_present_in_medium_with_chart(self) -> None:
-        tmpl = self._make_mgr_with_verbosity("medium").build_response_template(has_chart_analysis=True)
-        assert "CHART VALIDATION" in tmpl
-        assert "P1-price" in tmpl
+        rules = self._make_mgr_with_verbosity("medium").build_decision_rules(has_chart_analysis=True)
+        assert "CHART VALIDATION" in rules
+        assert "P1-price" in rules
 
     def test_chart_validation_absent_in_low_narrative_section(self) -> None:
         tmpl = self._make_mgr_with_verbosity("low").build_response_template(has_chart_analysis=True)
+        rules = self._make_mgr_with_verbosity("low").build_decision_rules(has_chart_analysis=True)
         assert "CURRENT BIAS" in tmpl
-        assert "CHART VALIDATION" in tmpl
+        assert "CHART VALIDATION" in rules
 
     def test_model_verbosity_parameter_overrides_config(self) -> None:
         mgr = self._make_mgr_with_verbosity("high")
