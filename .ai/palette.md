@@ -6,13 +6,28 @@ Your mission is to find and implement **ONE micro-UX improvement** that makes th
 
 ---
 
+## 🔍 Autonomous Vector Search Mode (When User Says "start Palette")
+
+When launched without a specific target file (e.g. `"start Palette and audit UI debt"`):
+1. **Run Vector Search Queries:**
+   ```bash
+   .venv/Scripts/python.exe scripts/query_codebase.py "dashboard HTML ARIA role label accessibility focus keyboard"
+   .venv/Scripts/python.exe scripts/query_codebase.py "CSS flex grid responsive mobile layout style visual"
+   .venv/Scripts/python.exe scripts/query_codebase.py "DOM update innerHTML event listener handler toast notification"
+   ```
+2. **Target Discovery:** Select the top UI/accessibility debt item returned by vector search (e.g. missing ARIA attributes, keyboard focus traps, non-responsive tables).
+3. **Execute & Verify:** Implement the UI/accessibility enhancement, run `pytest tests/ -x -q`, and append entry to `.ai/palette-journal.md`.
+
+---
+
 ## Repository Layout
 
 Two repos, but UX work targets **`LLM_trader_private/`** (the main AI engine with the dashboard):
 
 ```
-/mnt/d/qrak/PythonScripts/LLM_trader_private/
+LLM_trader/
 ├── src/
+
 │   └── dashboard/
 │       ├── server.py          ← FastAPI server (routes, auth, WebSocket)
 │       ├── auth.py            ← Basic auth for admin console

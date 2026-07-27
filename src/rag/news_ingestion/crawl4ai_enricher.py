@@ -7,10 +7,12 @@ extraction if crawl4ai is not installed or the browser setup is unavailable.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import math
 import re
 import sys
 from typing import Any, TYPE_CHECKING
+from urllib.parse import urlparse
 
 import aiohttp
 
@@ -105,6 +107,27 @@ class Crawl4AIEnricher:
         text = re.sub(r"[ \t]+\n", "\n", text)
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.strip()
+
+    @staticmethod
+    def _is_safe_external_url(url: str) -> bool:
+        """Validate that a URL is http/https and does not target internal/private IP ranges (SSRF protection)."""
+        if not url:
+            return False
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            pass
+        return True
 
     @classmethod
     def _is_unusable_body(cls, text: str) -> bool:
@@ -213,7 +236,7 @@ class Crawl4AIEnricher:
         targets = [
             item
             for item in items
-            if str(item.get("url") or "").startswith("http")
+            if self._is_safe_external_url(str(item.get("url") or ""))
             and len(str(item.get("body_text") or "")) < self.min_chars
         ]
         if not targets:

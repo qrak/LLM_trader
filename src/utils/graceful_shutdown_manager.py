@@ -169,7 +169,7 @@ class GracefulShutdownManager:
         """Detect headless environments: no display server + no interactive terminal.
 
         Returns True when there is no user to interact with — the process is
-        running under systemd, Wired, Docker, or an unattended WSL terminal
+        running under systemd, Wired, Docker, or an unattended terminal
         where a blocking prompt would stall the shutdown indefinitely.
         """
         import os as _os

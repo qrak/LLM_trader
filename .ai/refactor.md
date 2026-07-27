@@ -8,12 +8,23 @@ Your mission is to identify and implement **ONE small refactoring** that reduces
 
 ## Repository Layout
 
-Two repos under `/mnt/d/qrak/PythonScripts/`:
+- **`LLM_trader`** — Python asyncio — AI decision engine
+- **`llm_trader_executor`** — Optional Python sync service — trade execution
 
-| Repo | Path | Language |
-|---|---|---|
-| **LLM_trader_private** | `LLM_trader_private/` (branch `develop`) | Python asyncio — AI decision engine |
-| **llm_trader_executor** | `llm_trader_executor/` (branch `feature/futures-long-short`) | Python sync — trade execution |
+
+---
+
+## 🔍 Autonomous Vector Search Mode (When User Says "start Refactor")
+
+When launched without a specific target file (e.g. `"start Refactor and find worst code smells"`):
+1. **Run Vector Search Queries:**
+   ```bash
+   .venv/Scripts/python.exe scripts/query_codebase.py "isinstance getattr hasattr type introspection known class"
+   .venv/Scripts/python.exe scripts/query_codebase.py "dependency injection __init__ constructor instantiation app.py"
+   .venv/Scripts/python.exe scripts/query_codebase.py "except Exception wide catch swallowed error pass"
+   ```
+2. **Target Discovery:** Select the worst code smell returned by vector search (e.g. isinstance chain on known dataclass, constructor DI violation, wide exception catch).
+3. **Execute & Verify:** Implement the clean code refactoring, run `ruff check src/` and `pytest tests/ -x -q`, and append entry to `.ai/refactor-journal.md`.
 
 ---
 
@@ -82,6 +93,22 @@ Use `@retry_async` (from `src/utils/decorators.py`) for network/exchange calls a
 pytest tests/ -x -q
 ```
 Delete `position_state.json` and `position_state.json.tmp` before running to avoid stale state pollution.
+
+### 7. No In-Function Lazy Imports (Pylint C0415) & DI Architectural Invariants
+
+- **Top-Level Imports Only:** All module imports must be placed at the top level of `.py` files (`Pylint C0415: import-outside-toplevel`). Never use in-function lazy imports (`import x` inside a method or function) to defer loading or suppress linter errors.
+- **Group Package Imports:** Keep imports from package `src` grouped together cleanly (`Pylint C0412: ungrouped-imports`).
+- **No Protected Member Access:** Always access public attributes (e.g., `self.logger`) and avoid accessing protected members on injected dependencies (`Pylint W0212: protected-access`).
+- **Circular Imports & Injection Architecture:** If lazy imports are introduced to bypass a circular import error (`ImportError: cannot import name ...`), the underlying Dependency Injection architecture is flawed. Resolve circular dependencies by decoupling interfaces or restructuring constructor parameter wiring in `start.py` (CompositionRoot) rather than using in-function imports.
+
+### 8. Senior Line-Count Reduction & Code Conciseness (DRY, Mixins, Inheritance, Dispatch Tables)
+
+- **Net LOC Reduction Goal:** When refactoring, actively aim to reduce net line count. Avoid inflating line count with redundant defensive guards, verbose loops, or duplicated helper functions.
+- **Inheritance & Reusable Mixins (DRY):** Extract duplicated properties, shared initialization, or repeated state methods into abstract base classes or Mixins (`VectorMemoryContextMixin`, `VectorMemoryRulesMixin`, etc.).
+- **Polymorphic Dispatch Tables over Deep `if-elif` Ladders:** Replace 20-30 line `if-elif-else` or `isinstance` branches with O(1) dictionary lookup maps (`_DISPATCH_TABLE`). This shrinks code size, lowers cyclomatic complexity, and improves performance.
+- **Functional Expressions over Multiline Loops:** Replace multiline loop accumulators with list/dict comprehensions, `next((x for x in items if cond), default)`, `any()`, `all()`, or `itertools`/`operator` built-ins.
+- **Helper Consolidation:** Unify duplicate formatting or calculation helpers across submodules into centralized utilities in `src/utils/`.
+- **Zero Functional Regressions:** Every line reduction refactoring must keep behavior 100% identical and pass `pytest tests/ -x -q` with 0 failures.
 
 ---
 
@@ -172,7 +199,7 @@ ruff check src/
 .venv/Scripts/pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913  # skip test files
 
 # Tests
-cd /mnt/d/qrak/PythonScripts/LLM_trader_private && rm -f position_state.json position_state.json.tmp && pytest tests/ -x -q
+rm -f position_state.json position_state.json.tmp && pytest tests/ -x -q
 
 # Count isinstance/hasattr/getattr across the codebase (baseline to track progress)
 grep -rn 'isinstance(' src/ --include='*.py' | wc -l

@@ -313,7 +313,8 @@ class ProviderOrchestrator:
                 response=response,
                 provider="google",
                 model=effective_model,
-                used_paid_tier=True
+                used_paid_tier=True,
+                error_message=f"Paid Google AI API failed: {paid_error}"
             )
         if self._is_valid_response(response):
             tier_success = "free tier" if is_free_tier_model else "paid tier"
@@ -325,11 +326,21 @@ class ProviderOrchestrator:
                 model=effective_model,
                 used_paid_tier=not is_free_tier_model
             )
+        err_msg = (
+            response.error
+            if response and response.error
+            else (
+                "No response received from Google AI"
+                if response is None
+                else "Empty or invalid response content from Google AI"
+            )
+        )
         return InvocationResult(
             success=False,
             response=response,
             provider="google",
-            model=effective_model
+            model=effective_model,
+            error_message=err_msg
         )
 
     async def _invoke_local(
@@ -406,13 +417,15 @@ class ProviderOrchestrator:
                 success=success,
                 response=response,
                 provider="openrouter",
-                model=fallback_model
+                model=fallback_model,
+                error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from OpenRouter")
             )
         return InvocationResult(
             success=success,
             response=response,
             provider="openrouter",
-            model=effective_model
+            model=effective_model,
+            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from OpenRouter")
         )
 
     def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
@@ -495,4 +508,5 @@ class ProviderOrchestrator:
             response=response,
             provider="blockrun",
             model=effective_model,
+            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from BlockRun")
         )

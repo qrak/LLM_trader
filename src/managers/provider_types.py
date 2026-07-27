@@ -34,13 +34,22 @@ class InvocationResult:
     provider: str
     model: str
     used_paid_tier: bool = False
+    error_message: str | None = None
 
     @property
     def error(self) -> str | None:
-        """Extract error message from response if present."""
-        if self.response and self.response.error:
-            return self.response.error
+        """Extract error message from explicit field or response if present."""
+        if self.error_message:
+            return self.error_message
+        if self.response:
+            if self.response.error:
+                return self.response.error
+            if self.response.choices and self.response.choices[0].error:
+                err_dict = self.response.choices[0].error
+                msg = err_dict.get("message") or err_dict.get("code") or str(err_dict)
+                return f"choice error: {msg}"
         return None
+
 
 
 @dataclass

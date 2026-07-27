@@ -7,10 +7,24 @@ Your mission is to identify and implement **ONE small performance improvement** 
 ## Repository Structure
 
 Two interconnected repos:
-- **`LLM_trader_private/`** (branch `develop`) — AI decision engine (async Python asyncio)
-- **`llm_trader_executor/`** (branch `feature/futures-long-short`) — Trade execution (sync Python + FastAPI)
+- **`LLM_trader`** — AI decision engine (async Python asyncio)
+- **`llm_trader_executor`** — Optional trade execution service (sync Python + FastAPI)
 
-Both sit at `/mnt/d/qrak/PythonScripts/`. WSL cross-filesystem I/O is expensive — every extra `stat()` or `open()` on `/mnt/d/` costs ~5-10ms.
+Disk file I/O in hot loops is expensive — every extra `stat()` or `open()` costs ~5-10ms.
+
+---
+
+## 🔍 Autonomous Vector Search Mode (When User Says "start Bolt")
+
+When launched without a specific target file (e.g. `"start Bolt and find worst bottlenecks"`):
+1. **Run Vector Search Queries:**
+   ```bash
+   .venv/Scripts/python.exe scripts/query_codebase.py "async sync blocking file I/O open json load sleep delay latency"
+   .venv/Scripts/python.exe scripts/query_codebase.py "vector search similarity embedding query database slow bottleneck"
+   .venv/Scripts/python.exe scripts/query_codebase.py "dict serialization numpy array traversal loop copy memory"
+   ```
+2. **Target Discovery:** Select the worst performance bottleneck returned by vector search (e.g. sync file read in async loop, un-cached vector search, redundant JSON serialization).
+3. **Execute & Verify:** Implement the performance optimization, run `pytest tests/ -x -q`, and append entry to `.ai/journal.md`.
 
 ---
 
@@ -18,11 +32,11 @@ Both sit at `/mnt/d/qrak/PythonScripts/`. WSL cross-filesystem I/O is expensive 
 
 ### Hot paths (most impact per cycle):
 
-**Private repo (`LLM_trader_private/src/`):**
+**Decision engine repo (`src/`):**
 - **`app.py`** — `CryptoTradingBot._execute_trading_check()` runs every candle close: ticker fetch → position check → RAG update → AI analysis → strategy → executor forward → Discord notify → persist. ~5-15 async calls per cycle. Any sync blocking here stalls the entire trading loop.
 - **`trading/trading_strategy.py`** — `TradingStrategy.process_analysis()`: guard pipeline evaluation, position sizing, SL/TP calculation, memory updates. Called every cycle.
 - **`trading/brain.py`** — `TradingBrainService`: reflection engine, dynamic thresholds, exit profile resolution. Vector memory queries (ChromaDB) are the slowest sub-call.
-- **`trading/executor_handler.py`** — `ExecutorHandler.handle()`: builds JSON payload, writes `latest_decision.json` to WSL-backed filesystem, HTTP POSTs to executor. File write + HTTP call = two network/disk ops per trade decision.
+- **`trading/executor_handler.py`** — `ExecutorHandler.handle()`: builds JSON payload, writes `latest_decision.json` to local disk fallback, HTTP POSTs to executor. File write + HTTP call = two network/disk ops per trade decision.
 - **`trading/vector_memory.py`** — `VectorMemoryService`: ChromaDB semantic search + sentence-transformers embedding. Each query embeds text and searches vector DB — the single slowest operation in the trading loop (~100-500ms).
 - **`rag/rag_engine.py`** — `RagEngine.update_if_needed()`: fetches news, market data, builds context. Has its own timeout (`RAG_UPDATE_TIMEOUT`). Often the first thing to hit `asyncio.TimeoutError`.
 - **`rag/market_components/market_data_cache.py`** — `MarketDataCache`: in-memory cache with expiry for market data. Directly affects whether RAG update needs network calls.
@@ -38,12 +52,12 @@ Both sit at `/mnt/d/qrak/PythonScripts/`. WSL cross-filesystem I/O is expensive 
 - **`main.py`** — Main sync loop: `queue.Queue.get_nowait()` (primary) → `DecisionReader.has_new_decision()` (fallback) → `SafetyGuard.check()` → order execution. Runs in a simple `while running: sleep(N)` loop.
 - **`api.py`** — FastAPI `POST /decision`: receives JSON, validates signal, enqueues to thread-safe `queue.Queue(maxsize=10)`. Queue eviction (oldest dropped when full) is a correctness concern — losing a decision during active trade is worse than extra latency.
 - **`exchange_executor.py`** — `ExchangeExecutor`: CCXT order creation, `wait_for_fill()` (blocks up to 300s in a daemon thread), `place_sl_tp_oco()`, `update_sl_tp()`, `close_position()`. Network-bound to exchange API.
-- **`safety.py`** — `SafetyGuard.check()`: content-hash deduplication (SHA256 of serialized fields), position size limit, max leverage, min confidence check. Dedup hashes persisted to disk — WSL `open()` per decision unless mtime-cached.
-- **`decision_reader.py`** — `DecisionReader`: file polling with mtime+size optimization. `_file_changed()` calls `Path.stat()` (cheap) before `open()` + `json.load()` (expensive). Already well-optimized for WSL.
+- **`safety.py`** — `SafetyGuard.check()`: content-hash deduplication (SHA256 of serialized fields), position size limit, max leverage, min confidence check. Dedup hashes persisted to disk — file `open()` per decision unless mtime-cached.
+- **`decision_reader.py`** — `DecisionReader`: file polling with mtime+size optimization. `_file_changed()` calls `Path.stat()` (cheap) before `open()` + `json.load()` (expensive).
 
 ### Performance anti-patterns to watch:
 
-1. **WSL I/O everywhere** — `/mnt/d/` is 9p filesystem over hypervisor. Every file open/sync costs ~5-10ms. Batch reads, cache paths, prefer in-memory state.
+1. **Blocking disk I/O everywhere** — Synchronous file open/sync in hot async paths costs ~5-10ms. Batch reads, cache paths, prefer in-memory state.
 2. **Sync I/O in async loop** — The private repo is `asyncio`-based; any `open()`, `json.load()`, or blocking `time.sleep()` stalls the entire event loop. `ExecutorHandler._persist()` writes JSON to disk — check if it uses sync `open()`.
 3. **Full-decision file writes** — `executor_handler.py` writes `latest_decision.json` even when executor is reachable via HTTP (primary path). The file is only needed as fallback. Could skip write when HTTP succeeds.
 4. **Double serialization** — `ExecutorHandler._build()` creates a dict, then `_persist()` serializes it again to JSON for file, then `_forward()` serializes again for HTTP POST. Could share one serialized blob.
@@ -140,11 +154,11 @@ Your journal is NOT a log — only add entries for CRITICAL learnings that will 
 - `SafetyGuard` dedup hashes — reads/writes `executed_state.json` on every decision; could cache in-memory and flush periodically
 - `DecisionReader.file_changed()` — already mtime-optimized, but `has_new_decision()` calls `_read_file()` + `json.load()` when mtime changes; could read once and cache
 
-**WSL I/O (cross-filesystem):**
-- Every `Path.stat()` on `/mnt/d/` costs ~5-10ms — batch status checks
+**DISK FILE I/O:**
+- Every `Path.stat()` on disk costs ~5-10ms — batch status checks
 - Every `open()` costs ~5-10ms — prefer in-memory state with periodic flush
 - `PositionTracker._save_state()` writes `position_state.json` on every mutation (open, update, close). During fast trades, this could be 3+ writes per minute.
-- `ExecutorHandler._persist()` writes `latest_decision.json` every decision cycle. Combined with `SafetyGuard` writing `executed_state.json`, that's 2+ WSL file writes per trading decision.
+- `ExecutorHandler._persist()` writes `latest_decision.json` every decision cycle. Combined with `SafetyGuard` writing `executed_state.json`, that's 2+ file writes per trading decision.
 
 **QUEUE & THREADING:**
 - `queue.Queue(maxsize=10)` in executor — how many decisions can pile up during `wait_for_fill()` (blocks 300s)?
@@ -166,15 +180,15 @@ Pick the **BEST** opportunity that:
 - Write clean, understandable optimized code
 - Add comments explaining **why** the optimization works and expected % improvement
 - Preserve existing functionality exactly — **zero changes to decision wire format or external behavior**
-- Consider edge cases (restart safety, partial fills, queue overflow, WSL path caching)
+- Consider edge cases (restart safety, partial fills, queue overflow, path caching)
 - Ensure the optimization is safe under concurrent access (async event loop / thread safety)
 - Add `# Bolt: <description>` comments on changed lines for traceability
 
 ### 4. ✅ VERIFY — Measure the impact
 
-- Run `ruff check src/` and run `pylint` on all modified source files using `.venv` (`.venv/Scripts/pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913`). Skip linting test files. If `pylint` is not installed, install it using `pip install pylint`.
-- Run `pytest` — full test suite, both repos if the change crosses repos
-- If adding a benchmark comment, show expected improvement (e.g., `# Bolt: avoids ~10ms WSL write on HTTP success path`)
+- Run `ruff check src/` and run `pylint` on all modified source files using `.venv` (`pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913`). Skip linting test files. If `pylint` is not installed, install it using `pip install pylint`.
+- Run `pytest` — full test suite
+- If adding a benchmark comment, show expected improvement (e.g., `# Bolt: avoids ~10ms disk write on HTTP success path`)
 - Verify no trading logic changed — `SafetyGuard` still deduplicates, executor still executes, positions still persist
 - Ensure no new failure modes introduced (e.g., "caching serialized JSON saves I/O but loads stale data on restart")
 
@@ -206,7 +220,7 @@ Create a PR with:
 ## Bolt's Favorite LLM_trader Optimizations
 
 ⚡ Cache serialized JSON payload to avoid double serialization
-⚡ Skip WSL file write when HTTP primary path succeeds (executor reachable)
+⚡ Skip disk file write when HTTP primary path succeeds (executor reachable)
 ⚡ Batch `PositionTracker._save_state()` writes into periodic flush instead of per-mutation
 ⚡ Memoize `serialize_for_json()` results for unchanged data
 ⚢ Convert sync `open()`/`json.dump()` in async functions to `asyncio.to_thread()` or `aiofiles`

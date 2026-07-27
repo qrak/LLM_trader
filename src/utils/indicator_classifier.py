@@ -100,55 +100,34 @@ def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     """Classify trend direction from +DI/-DI crossover."""
     di_plus = technical_data.get("plus_di", 0.0)
     di_minus = technical_data.get("minus_di", 0.0)
-    if di_plus > di_minus + 5:
-        return "BULLISH"
-    if di_minus > di_plus + 5:
-        return "BEARISH"
-    return "NEUTRAL"
+    return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
 def classify_volatility_level(technical_data: dict[str, Any]) -> str:
     """Classify volatility from ATR as percentage of price."""
     atr_pct = technical_data.get("atr_percent", 2.0)
-    if atr_pct > 3.0:
-        return "HIGH"
-    if atr_pct < 1.5:
-        return "LOW"
-    return "MEDIUM"
+    return "HIGH" if atr_pct > 3.0 else ("LOW" if atr_pct < 1.5 else "MEDIUM")
 
 
 def classify_adx_label(adx: float) -> str:
-    """Classify ADX value into trend strength label.
-
-    Single source of truth for ADX labeling used across brain, dashboard, and vector memory.
-    """
-    if adx >= 25:
-        return "High ADX"
-    if adx < 20:
-        return "Low ADX"
-    return "Medium ADX"
+    """Classify ADX value into trend strength label."""
+    return "High ADX" if adx >= 25 else ("Low ADX" if adx < 20 else "Medium ADX")
 
 
 def classify_rsi_label(rsi: float) -> str:
-    """Classify RSI value into momentum zone label.
-
-    Single source of truth for RSI labeling used across brain, dashboard, and vector memory.
-    """
+    """Classify RSI value into momentum zone label."""
     if rsi >= 70:
         return "OVERBOUGHT"
     if rsi >= 60:
         return "STRONG"
     if rsi <= 30:
         return "OVERSOLD"
-    if rsi <= 40:
-        return "WEAK"
-    return "NEUTRAL"
+    return "WEAK" if rsi <= 40 else "NEUTRAL"
 
 
 def classify_rsi_level(technical_data: dict[str, Any]) -> str:
     """Classify RSI into momentum zones from technical data dict."""
-    rsi = technical_data.get("rsi", 50.0)
-    return classify_rsi_label(rsi)
+    return classify_rsi_label(technical_data.get("rsi", 50.0))
 
 
 def classify_macd_signal(technical_data: dict[str, Any]) -> str:
@@ -166,11 +145,7 @@ def classify_macd_signal(technical_data: dict[str, Any]) -> str:
 def classify_volume_state(technical_data: dict[str, Any]) -> str:
     """Classify volume trend from On-Balance Volume slope."""
     obv_slope = technical_data.get("obv_slope", 0.0)
-    if obv_slope > 0.5:
-        return "ACCUMULATION"
-    if obv_slope < -0.5:
-        return "DISTRIBUTION"
-    return "NORMAL"
+    return "ACCUMULATION" if obv_slope > 0.5 else ("DISTRIBUTION" if obv_slope < -0.5 else "NORMAL")
 
 
 def classify_bb_position(

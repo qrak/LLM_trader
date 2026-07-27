@@ -15,12 +15,17 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..auth import (
     check_credentials,
     create_session,
     COOKIE_NAME,
+    _get_real_client_ip,
+    check_login_rate_limit,
+    record_login_attempt,
+    reset_login_rate_limit,
+    _sign_token,
 )
 from ..log_stream import LogStreamManager
 from ...config.writable_config import WritableConfig
@@ -35,6 +40,13 @@ class LoginRequest(BaseModel):
 
 class ConfigUpdateRequest(BaseModel):
     value: Any
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, v: Any) -> Any:
+        if isinstance(v, str) and len(v) > 4000:
+            raise ValueError("Config value text cannot exceed 4000 characters.")
+        return v
 
 
 class BatchConfigUpdateRequest(BaseModel):
@@ -95,18 +107,28 @@ class AdminRouter:
 
         @self.router.post("/login")
         async def login(body: LoginRequest, response: Response, request: Request):
+            client_ip = _get_real_client_ip(request)
+            allowed, retry_after = check_login_rate_limit(client_ip)
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": f"Too many login attempts. Please retry in {retry_after} seconds."},
+                    headers={"Retry-After": str(retry_after)},
+                )
+
             if check_credentials(body.username, body.password):
+                reset_login_rate_limit(client_ip)
                 # Detect HTTPS (direct or via Cloudflare proxy)
                 is_https = (
                     request.url.scheme == "https"
                     or request.headers.get("x-forwarded-proto") == "https"
                 )
                 create_session(body.username, response, secure=is_https)
-                # Generate a WS token for the frontend
-                from ..auth import _sign_token
-                import time as _time
-                ws_token = _sign_token(body.username, _time.time())
+                # Generate a WS token for the frontend using top-level imports
+                ws_token = _sign_token(body.username, time.time())
                 return {"status": "ok", "username": body.username, "token": ws_token}
+
+            record_login_attempt(client_ip)
             return JSONResponse(
                 status_code=401,
                 content={"error": "Invalid credentials"},

@@ -43,8 +43,12 @@
 **Learning:** `RULE_METADATA_FIELDS` in `src/dashboard/routers/brain.py` was defined as a 32-element `tuple`. Checking `field in RULE_METADATA_FIELDS` incurred an $O(N)$ linear tuple scan per rule attribute evaluation.
 **Action:** Converted `RULE_METADATA_FIELDS` to a `frozenset`. Evaluates membership in $O(1)$ constant time per field lookup.
 
-## 2026-07-26 - O(1) Set Lookup for Primitive Serialization Types
-**Learning:** `_PRIMITIVE_TYPES` in `src/utils/data_utils.py` was defined as a `tuple`. Checking `obj_type in _PRIMITIVE_TYPES` incurred tuple scans per leaf node in recursive `serialize_for_json()` calls.
-**Action:** Converted `_PRIMITIVE_TYPES` to a `set` (`{str, int, bool, type(None)}`). Primitive type routing now resolves in $O(1)$ constant time.
+## 2026-07-27 - Direct Pydantic Native JSON Serialization in FastAPI Server
+**Learning:** Recent FastAPI releases emit a `FastAPIDeprecationWarning` when using `ORJSONResponse` as custom response class because FastAPI natively serializes models directly to JSON bytes via Pydantic Rust core.
+**Action:** Reverted explicit `default_response_class=ORJSONResponse` in `src/dashboard/server.py` to leverage native Pydantic direct byte serialization without deprecation warnings.
+
+## 2026-07-27 - Skip redundant disk file write on HTTP success in ExecutorHandler
+**Learning:** `ExecutorHandler.handle()` wrote `latest_decision.json` to the local filesystem unconditionally on every trading cycle, even when the HTTP primary forward path succeeded. This redundant file I/O added ~5-10ms of blocking latency to the async loop during the critical trading path.
+**Action:** Changed `_forward()` to return a boolean success flag, and updated `handle()` to only trigger the `_persist()` file write if the HTTP forward fails. Eliminates a redundant disk write on the primary happy path.
 
 

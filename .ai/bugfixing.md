@@ -6,14 +6,25 @@ Your mission is to find and fix **ONE bug** or verify that **one change from ano
 
 ---
 
+## 🔍 Autonomous Vector Search Mode (When User Says "start Bugfixer")
+
+When launched without a specific target file (e.g. `"start Bugfixer and audit regressions"`):
+1. **Run Vector Search Queries:**
+   ```bash
+   .venv/Scripts/python.exe scripts/query_codebase.py "queue full eviction silent trade drop position state json"
+   .venv/Scripts/python.exe scripts/query_codebase.py "NaN Inf float parsing finite math sanitize dictionary"
+   ```
+2. **Target Discovery:** Select the highest-risk regression path returned by vector search or recent journal entries.
+3. **Execute & Verify:** Run full test suite (`pytest tests/ -x -q`), trace modified data paths, confirm 0 regressions, and append entry to `.ai/bugfixing-journal.md`.
+
+---
+
 ## Repository Layout
 
-Two repos under `/mnt/d/qrak/PythonScripts/`:
+## Repository Layout
 
-| Repo | Path | Branch | Role |
-|---|---|---|---|
-| **LLM_trader_private** | `LLM_trader_private/` | `develop` | AI decision engine (asyncio) |
-| **llm_trader_executor** | `llm_trader_executor/` | `feature/futures-long-short` | Trade execution (sync) |
+- **`LLM_trader`** — Autonomous AI decision engine (Python asyncio)
+- **`llm_trader_executor`** — Optional trade execution service (Python sync)
 
 Secrets in `keys.env` / `.env` (loaded via `python-dotenv`).
 
@@ -53,15 +64,15 @@ pytest tests/ -x -q
 ## Commands
 
 ```bash
-# Full test suite (both repos)
-cd /mnt/d/qrak/PythonScripts/LLM_trader_private && rm -f position_state.json position_state.json.tmp && pytest tests/ -x -v 2>&1 | tail -30
-cd /mnt/d/qrak/PythonScripts/llm_trader_executor && pytest tests/ -x -v 2>&1 | tail -30
+# Full test suite
+rm -f position_state.json position_state.json.tmp && pytest tests/ -x -v 2>&1 | tail -30
 
 # Quick single-test (for focused regression check)
-cd /mnt/d/qrak/PythonScripts/LLM_trader_private && pytest tests/test_<name>.py -x -v
+pytest tests/test_<name>.py -x -v
 
 # Lint
 ruff check src/
+
 
 # Check for Python syntax errors in changed files
 python3 -m py_compile path/to/changed/file.py
@@ -172,11 +183,11 @@ Keep a journal at `.ai/bugfixing-journal.md` (create if missing).
 
 **Start by reading all journals** — they document what was changed and why:
 ```bash
-cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/journal.md          # Bolt's performance changes
-cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/palette-journal.md   # Palette's UX changes
-cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/sentinel-journal.md  # Sentinel's security fixes
-cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/refactor-journal.md  # Refactor's cleanups
-cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/bugfixing-journal.md # Previous bugfixes
+cat .ai/journal.md          # Bolt's performance changes
+cat .ai/palette-journal.md   # Palette's UX changes
+cat .ai/sentinel-journal.md  # Sentinel's security fixes
+cat .ai/refactor-journal.md  # Refactor's cleanups
+cat .ai/bugfixing-journal.md # Previous bugfixes
 ```
 
 **When called to verify another agent's change:**
@@ -184,7 +195,7 @@ cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/bugfixing-journal.md # Prev
 1. Load the agent's prompt from `.ai/<name>.md` — understand their scope
 2. `git diff` or `git log` to see what they changed
 3. Read every changed line and ask: **"What happens if this input is None? Empty? Wrong type? Malformed?"**
-4. Run the test suite for both repos
+4. Run the test suite
 5. Trace the modified code path end-to-end: input → transformation → output → side effect
 
 **When hunting for bugs independently:**
@@ -193,7 +204,7 @@ cat /mnt/d/qrak/PythonScripts/LLM_trader_private/.ai/bugfixing-journal.md # Prev
 - Look for assumptions about field existence/type that aren't enforced at the boundary
 - Check every `asyncio.gather()` for unhandled exceptions
 - Verify queue maxsize vs expected decision throughput
-- Check WSL cross-filesystem edge cases (mtime caching, atomic writes on 9p)
+- Check cross-platform filesystem edge cases (mtime caching, atomic writes via `os.replace()`)
 
 #### Known-bug regression checklist
 
@@ -286,7 +297,7 @@ Create a PR with:
 🐛 Verify `except Exception` catches — is every one justified with a comment?
 🐛 Check queue maxsize vs. expected peak throughput (10 slots enough?)
 🐛 Verify type boundary: LLM dict → dataclass → executor payload (field names match?)
-🐛 Check WSL atomic write patterns — `os.replace()` on 9p filesystem
+🐛 Check atomic write patterns — `os.replace()` cross-platform file replacement
 🐛 Verify `SafetyGuard` dedup hashes survive restart (read/write round-trip)
 🐛 Check position_state.json isolation between test runs
 🐛 Verify executor's `quantity=0.0` UPDATE handling (must use tracker quantity)
@@ -315,7 +326,7 @@ This project has **four other specialized agents** whose changes you verify. Loa
 
 | Agent | File | Scope | Key regression risks to check |
 |---|---|---|---|
-| ⚡ **Bolt** | `.ai/bolt.md` | Performance, caching, I/O | Stale caches, swallowed gather exceptions, removed file fallbacks, WSL-only assumptions |
+| ⚡ **Bolt** | `.ai/bolt.md` | Performance, caching, I/O | Stale caches, swallowed gather exceptions, removed file fallbacks, platform-specific assumptions |
 | 🎨 **Palette** | `.ai/palette.md` | UX, accessibility, frontend | Broken ARIA, keyboard trap, DOMPurify bypass, mobile breakage, CSP clashes with CDN scripts |
 | 🛡️ **Sentinel** | `.ai/sentinel.md` | Security, auth, hardening | Auth that blocks legitimate traffic, CSP breaking dashboard JS, rate limiting locking out admins |
 | ✨ **Refactor** | `.ai/refactor.md` | Clean code, DRY, isinstance reduction | Removed guards on variable-type values, extracted function misses callers, narrowed catches miss edges |

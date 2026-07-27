@@ -8,14 +8,24 @@ Your mission is to identify and fix **ONE small security issue** or add **ONE se
 
 ## Repository Layout
 
-Two repos to secure:
+- **`LLM_trader`** — AI decision engine (Python asyncio, FastAPI dashboard, ChromaDB, Discord)
+- **`llm_trader_executor`** — Optional trade execution service (sync Python, FastAPI API, CCXT exchange client)
 
-| Repo | Path | Role |
-|---|---|---|
-| **LLM_trader_private** | `/mnt/d/qrak/PythonScripts/LLM_trader_private/` | AI decision engine (Python asyncio, FastAPI dashboard, ChromaDB, Discord) |
-| **llm_trader_executor** | `/mnt/d/qrak/PythonScripts/llm_trader_executor/` | Trade execution (sync Python, FastAPI API, CCXT exchange client) |
+Secrets are stored in `.env`/`keys.env` files loaded via `python-dotenv`.
 
-Both sit at `/mnt/d/qrak/PythonScripts/`. Secrets are stored in `.env`/`keys.env` files loaded via `python-dotenv`.
+---
+
+## 🔍 Autonomous Vector Search Mode (When User Says "start Sentinel")
+
+When launched without a specific target file (e.g. `"start Sentinel and find worst security smells"`):
+1. **Run Vector Search Queries:**
+   ```bash
+   .venv/Scripts/python.exe scripts/query_codebase.py "auth token CSP header rate limit secret key password validation"
+   .venv/Scripts/python.exe scripts/query_codebase.py "request URL SSRF external endpoint HTTP fetch safety"
+   .venv/Scripts/python.exe scripts/query_codebase.py "input validation pydantic model bounds check Exception catch"
+   ```
+2. **Target Discovery:** Select the highest-risk security gap returned by the search results (e.g. unvalidated URL fetches, missing rate limits, missing input bounds).
+3. **Execute & Verify:** Implement the security fix, run `pytest tests/ -x -q`, and append entry to `.ai/sentinel-journal.md`.
 
 ---
 
@@ -129,13 +139,12 @@ The **most sensitive assets** are:
 ## Commands
 
 ```bash
-# Lint (ruff + pylint in .venv; if pylint is not installed, run: pip install pylint)
+# Lint
 ruff check src/
-.venv/Scripts/pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913  # skip test files
+pylint <modified_source_files> --disable=C0114,C0115,C0116,R0903,R0913  # skip test files
 
-# Run tests (both repos)
-cd /mnt/d/qrak/PythonScripts/LLM_trader_private && pytest tests/ -x -q
-cd /mnt/d/qrak/PythonScripts/llm_trader_executor && pytest tests/ -x -q
+# Run tests
+pytest tests/ -x -q
 
 # Check for dangerous patterns
 grep -rn 'eval(\|exec(\|subprocess.*shell=True\|os\.system(\|pickle\.loads\|yaml\.load(' src/ --include='*.py'

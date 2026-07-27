@@ -180,7 +180,7 @@ class ModelManager:
         effective_provider = provider if provider else self.provider
         result = await self._orchestrator.get_chart_response(effective_provider, messages, chart_image, model)
         if not result.success:
-            raise ValueError(f"Chart analysis failed: {result.error or 'invalid response'}")
+            raise ValueError(result.error or "invalid response")
         return await self._process_result(result)
 
     def supports_image_analysis(self, provider_override: str | None = None) -> bool:

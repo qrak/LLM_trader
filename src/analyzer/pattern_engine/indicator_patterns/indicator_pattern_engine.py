@@ -67,31 +67,10 @@ class IndicatorPatternEngine:
         self.format_utils = format_utils
 
     def _format_pattern_time(self, periods_ago: int, index: int, timestamps: list | None) -> str:
-        """
-        Format pattern timing with timestamp.
-
-        Args:
-            periods_ago: Number of periods ago
-            index: Index where pattern occurred
-            timestamps: Optional list of datetime objects
-
-        Returns:
-            Formatted string like "4 periods ago at 2025-10-30 12:00:00"
-        """
-        if timestamps and 0 <= index < len(timestamps):
-            timestamp = timestamps[index]
-            if isinstance(timestamp, datetime):
-                timestamp_str = f" at {timestamp.strftime('%Y-%m-%d %H:%M:%S')} UTC"
-            else:
-                timestamp_str = ""
-        else:
-            timestamp_str = ""
-
-        if periods_ago == 0:
-            return "now" + timestamp_str
-        if periods_ago == 1:
-            return "1 period ago" + timestamp_str
-        return f"{periods_ago} periods ago" + timestamp_str
+        """Format pattern timing with timestamp."""
+        ts_str = f" at {timestamps[index].strftime('%Y-%m-%d %H:%M:%S')} UTC" if (timestamps and 0 <= index < len(timestamps) and isinstance(timestamps[index], datetime)) else ""
+        period_str = "now" if periods_ago == 0 else ("1 period ago" if periods_ago == 1 else f"{periods_ago} periods ago")
+        return period_str + ts_str
 
     def detect_patterns(
         self,
@@ -458,49 +437,19 @@ class IndicatorPatternEngine:
         patterns = []
         data_length = len(prices)
 
-        # RSI Divergences
-        if "rsi" in technical_history:
-            rsi = technical_history["rsi"]
-
-            # Bullish divergence
-            found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
-                detect_bullish_divergence_numba(prices, rsi)
-            if found:
-                patterns.append(self._create_divergence_pattern(
-                    "rsi_bullish_divergence", "rsi", True,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
-                ))
-
-            # Bearish divergence
-            found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
-                detect_bearish_divergence_numba(prices, rsi)
-            if found:
-                patterns.append(self._create_divergence_pattern(
-                    "rsi_bearish_divergence", "rsi", False,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
-                ))
-
-        # MACD Divergences
-        if "macd_line" in technical_history:
-            macd = technical_history["macd_line"]
-
-            # Bullish divergence
-            found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
-                detect_bullish_divergence_numba(prices, macd)
-            if found:
-                patterns.append(self._create_divergence_pattern(
-                    "macd_bullish_divergence", "macd", True,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
-                ))
-
-            # Bearish divergence
-            found, first_idx, second_idx, first_p, second_p, first_i, second_i = \
-                detect_bearish_divergence_numba(prices, macd)
-            if found:
-                patterns.append(self._create_divergence_pattern(
-                    "macd_bearish_divergence", "macd", False,
-                    first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
-                ))
+        for key, name in [("rsi", "rsi"), ("macd_line", "macd")]:
+            if key not in technical_history:
+                continue
+            ind = technical_history[key]
+            for is_bullish, detector_fn, ptype in [
+                (True, detect_bullish_divergence_numba, f"{name}_bullish_divergence"),
+                (False, detect_bearish_divergence_numba, f"{name}_bearish_divergence"),
+            ]:
+                found, first_idx, second_idx, first_p, second_p, first_i, second_i = detector_fn(prices, ind)
+                if found:
+                    patterns.append(self._create_divergence_pattern(
+                        ptype, name, is_bullish, first_idx, second_idx, first_p, second_p, first_i, second_i, timestamps, data_length
+                    ))
 
         return patterns
 

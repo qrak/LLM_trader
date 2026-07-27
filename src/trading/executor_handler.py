@@ -8,6 +8,7 @@ wire format, persist it as a file fallback, and HTTP-forward it.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -69,9 +70,10 @@ class ExecutorHandler:
         payload = self._build(analysis, strategy_decision, symbol)
         if payload is None:
             return
-        self._persist(payload)
+
+        forward_success = False
         try:
-            await self._forward(payload)
+            forward_success = await self._forward(payload)
         except Exception:
             # @retry_async exhausted all retries — executor is unreachable.
             # Write to dead-letter so we can replay later.
@@ -83,6 +85,11 @@ class ExecutorHandler:
                 signal, symbol_name,
             )
             self._write_dead_letter(payload)
+            forward_success = False
+
+        # Bolt: skip disk file write when HTTP primary path succeeds (executor reachable)
+        if not forward_success:
+            self._persist(payload)
 
     # ── internal ──────────────────────────────────────────────────────────
 
@@ -104,24 +111,35 @@ class ExecutorHandler:
             return None
         if strategy_decision.action == "HOLD":
             return None
+        raw_qty = strategy_decision.quantity if strategy_decision.quantity is not None else analysis.get("quantity", 0.0)
+        raw_price = strategy_decision.price if strategy_decision.price is not None else analysis.get("entry_price")
+        raw_sl = strategy_decision.stop_loss if strategy_decision.stop_loss is not None else analysis.get("stop_loss")
+        raw_tp = strategy_decision.take_profit if strategy_decision.take_profit is not None else analysis.get("take_profit")
+
+        def _to_float(val: Any, default: float | None = None) -> float | None:
+            if val is None:
+                return default
+            try:
+                f_val = float(val)
+                return f_val if math.isfinite(f_val) else default
+            except (ValueError, TypeError):
+                return default
+
         return {
             "timestamp": datetime.now(timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%f"
             ),
-            "symbol": symbol,
-            "signal": signal,
-            "order_type": self._config.ENTRY_ORDER_TYPE,
-            "quantity": (
-                strategy_decision.quantity
-                or analysis.get("quantity", 0.0)
-            ),
-            "entry_price": strategy_decision.price or analysis.get("entry_price"),
-            "stop_loss": strategy_decision.stop_loss or analysis.get("stop_loss"),
-            "take_profit": strategy_decision.take_profit or analysis.get("take_profit"),
-            "reduce_only": analysis.get("reduce_only", False),
-            "leverage": analysis.get("leverage", 1),
-            "confidence": strategy_decision.confidence,
-            "reasoning": strategy_decision.reasoning or "",
+            "symbol": str(symbol),
+            "signal": str(signal),
+            "order_type": str(self._config.ENTRY_ORDER_TYPE),
+            "quantity": _to_float(raw_qty, 0.0) or 0.0,
+            "entry_price": _to_float(raw_price),
+            "stop_loss": _to_float(raw_sl),
+            "take_profit": _to_float(raw_tp),
+            "reduce_only": bool(analysis.get("reduce_only", False)),
+            "leverage": int(analysis.get("leverage", 1)),
+            "confidence": str(strategy_decision.confidence) if strategy_decision.confidence else "MEDIUM",
+            "reasoning": str(strategy_decision.reasoning or ""),
         }
 
     def _persist(self, payload: dict[str, Any]) -> None:
@@ -137,7 +155,7 @@ class ExecutorHandler:
             )
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def _forward(self, payload: dict[str, Any]) -> None:
+    async def _forward(self, payload: dict[str, Any]) -> bool:
         """POST the payload to the llm_trader_executor HTTP endpoint.
 
         Connection failures, timeouts, and network blips are retried
@@ -145,13 +163,13 @@ class ExecutorHandler:
         (re-sending a rejected payload won't help).
         """
         if not self._config.EXECUTOR_API_ENABLED:
-            return
+            return False
         url: str = self._config.EXECUTOR_API_URL
         if not url:
             self.logger.warning(
                 "EXECUTOR_API_ENABLED but EXECUTOR_API_URL is empty"
             )
-            return
+            return False
         signal = payload.get("signal")
         symbol = payload.get("symbol")
 
@@ -162,11 +180,13 @@ class ExecutorHandler:
             self.logger.info("Executor queued: %s %s", signal, symbol)
             # Executor is reachable — replay any previously failed forwards
             await self._replay_dead_letters()
-        else:
-            self.logger.warning(
-                "Executor returned %s for %s %s: %s",
-                resp.status_code, signal, symbol, resp.text,
-            )
+            return True
+
+        self.logger.warning(
+            "Executor returned %s for %s %s: %s",
+            resp.status_code, signal, symbol, resp.text,
+        )
+        return False
 
     def _write_dead_letter(self, payload: dict[str, Any]) -> None:
         """Append a failed forward to the dead-letter journal."""

@@ -48,11 +48,22 @@ class GoogleAIClient(BaseAIClient):
         if self.client:
             try:
                 aio_client = getattr(self.client, "aio", None)
-                aclose = getattr(aio_client, "aclose", None)
-                if callable(aclose):
-                    close_result = aclose()
-                    if inspect.isawaitable(close_result):
-                        await close_result
+                if aio_client is not None:
+                    aclose = getattr(aio_client, "aclose", None)
+                    if callable(aclose):
+                        try:
+                            close_result = aclose()  # pylint: disable=not-callable
+                            if inspect.isawaitable(close_result):
+                                await close_result
+                        except Exception as exc:  # pylint: disable=broad-exception-caught
+                            self.logger.warning("GoogleAIClient async cleanup failed: %s", exc)
+
+                sync_close = getattr(self.client, "close", None)
+                if callable(sync_close):
+                    try:
+                        sync_close()  # pylint: disable=not-callable
+                    except Exception as exc:  # pylint: disable=broad-exception-caught
+                        self.logger.warning("GoogleAIClient sync cleanup failed: %s", exc)
             finally:
                 self.client = None
                 self.logger.debug("GoogleAIClient closed successfully")
@@ -335,11 +346,9 @@ class GoogleAIClient(BaseAIClient):
 
         # Outer: try with thinking, then without
         # Inner: try with code_execution (if enabled), then without
+        ce_options = (True, False) if include_code_execution else (False,)
         for include_thinking in (True, False):
-            for include_ce in (include_code_execution, False):
-                if not include_ce and not include_code_execution:
-                    break  # code_execution not requested — skip second inner iteration
-
+            for include_ce in ce_options:
                 try:
                     generation_config = self._create_generation_config(
                         model_config,

@@ -118,18 +118,30 @@ class TestBuildPayload:
 
 class TestHandle:
     @pytest.mark.asyncio
-    async def test_persists_and_forwards(self):
+    async def test_forwards_only_on_success(self):
         handler = _make_handler()
         handler._persist = MagicMock()
-        handler._forward = AsyncMock()
+        handler._forward = AsyncMock(return_value=True)
+
+        decision = _make_decision()
+        await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
+
+        handler._persist.assert_not_called()
+        handler._forward.assert_awaited_once()
+        payload = handler._forward.call_args[0][0]
+        assert payload["signal"] == "BUY"
+
+    @pytest.mark.asyncio
+    async def test_persists_on_forward_failure(self):
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=False)
 
         decision = _make_decision()
         await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
 
         handler._persist.assert_called_once()
         handler._forward.assert_awaited_once()
-        payload = handler._forward.call_args[0][0]
-        assert payload["signal"] == "BUY"
 
     @pytest.mark.asyncio
     async def test_skips_none_analysis(self):

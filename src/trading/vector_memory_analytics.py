@@ -121,11 +121,7 @@ class VectorMemoryAnalyticsMixin:
         """Map a factor score to the configured factor bucket."""
         if score <= 0:
             return None
-        if score <= 30:
-            return "LOW"
-        if score <= 69:
-            return "MEDIUM"
-        return "HIGH"
+        return "LOW" if score <= 30 else ("MEDIUM" if score <= 69 else "HIGH")
 
     @staticmethod
     def _normalize_categorical_value(category_name: str, value: Any) -> str | None:
@@ -152,9 +148,7 @@ class VectorMemoryAnalyticsMixin:
         is_win: bool,
     ) -> None:
         """Append a normalized trade snapshot to a keyed aggregation bucket."""
-        if key not in groups:
-            groups[key] = []
-        groups[key].append(VectorMemoryAnalyticsMixin._build_trade_snapshot(pnl, is_win))
+        groups.setdefault(key, []).append(VectorMemoryAnalyticsMixin._build_trade_snapshot(pnl, is_win))
 
     def _build_factor_result(
         self,
@@ -225,14 +219,7 @@ class VectorMemoryAnalyticsMixin:
             adx = meta.get("adx_at_entry", meta.get("adx", 0))
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
-
-            if adx < 20:
-                bucket = "LOW"
-            elif adx < 25:
-                bucket = "MEDIUM"
-            else:
-                bucket = "HIGH"
-
+            bucket = "LOW" if adx < 20 else ("MEDIUM" if adx < 25 else "HIGH")
             buckets[bucket]["trades"].append(self._build_trade_snapshot(pnl, is_win))
 
         result: dict[str, dict[str, Any]] = {}

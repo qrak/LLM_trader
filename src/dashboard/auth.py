@@ -217,6 +217,36 @@ def _get_real_client_ip(request: Request) -> str:
     return direct_ip
 
 
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+
+
+def check_login_rate_limit(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> tuple[bool, int]:
+    """Check if an IP has exceeded maximum login attempts within the sliding window.
+
+    Returns (allowed, retry_after_seconds).
+    """
+    now = time.time()
+    attempts = [t for t in _LOGIN_ATTEMPTS.get(ip, []) if now - t < window_seconds]
+    _LOGIN_ATTEMPTS[ip] = attempts
+    if len(attempts) >= max_attempts:
+        oldest = attempts[0]
+        retry_after = int(window_seconds - (now - oldest)) + 1
+        return False, max(1, retry_after)
+    return True, 0
+
+
+def record_login_attempt(ip: str) -> None:
+    """Record a failed login attempt for rate limiting."""
+    if ip not in _LOGIN_ATTEMPTS:
+        _LOGIN_ATTEMPTS[ip] = []
+    _LOGIN_ATTEMPTS[ip].append(time.time())
+
+
+def reset_login_rate_limit(ip: str) -> None:
+    """Reset rate limit history on successful login."""
+    _LOGIN_ATTEMPTS.pop(ip, None)
+
+
 class AdminAuthMiddleware(BaseHTTPMiddleware):
     """ASGI middleware that protects all /api/admin/* routes.
 

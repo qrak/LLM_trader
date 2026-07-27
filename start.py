@@ -19,11 +19,12 @@ import aiohttp
 from aiohttp_client_cache import SQLiteBackend
 import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
 import chromadb
+from sentence_transformers import SentenceTransformer
 
 # --- Local ---
+from scripts.rotate_journals import rotate_all_journals
 from src.config.loader import config
 from src.app import BotServices, CryptoTradingBot, POSITION_UPDATE_INTERVAL
-from sentence_transformers import SentenceTransformer
 from src.logger.logger import Logger
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.platforms.alternative_me import AlternativeMeAPI
@@ -298,7 +299,6 @@ class CompositionRoot:
 
         # Post-provisioning maintenance: journal rotation & codebase vector index
         try:
-            from scripts.rotate_journals import rotate_all_journals
             self.logger.info("[Journal Maintenance] Checking AI agent journal file sizes...")
             rotated_count = rotate_all_journals()
             if rotated_count > 0:
@@ -439,6 +439,7 @@ class CompositionRoot:
 
     async def _provision_platforms(self, infra: dict) -> dict:
         """Provision external API clients."""
+        self.logger.info("  -> Fetching CoinGecko coin catalog & initializing market APIs...")
         coingecko_cache_ttl_seconds = int(self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS * 3600)
         coingecko_backend = SQLiteBackend(
             cache_name='cache/coingecko_cache.db',
@@ -454,6 +455,7 @@ class CompositionRoot:
             global_api_url=self.config.RAG_COINGECKO_GLOBAL_API_URL
         )
         await coingecko.initialize()
+        self.logger.info("  -> CoinGecko API ready (%d unique symbols mapped)", len(coingecko.symbol_to_id_map))
 
         news_client = RSSCrawl4AINewsProvider(
             self.logger, self.config,
@@ -484,6 +486,7 @@ class CompositionRoot:
 
     async def _provision_rag_layer(self, infra: dict, apis: dict, utils: dict) -> RagEngine:
         """Provision the RAG (Retrieval Augmented Generation) engine."""
+        self.logger.info("  -> Loading news cache, taxonomy & building RAG search index...")
         file_handler = RagFileHandler(logger=self.logger, config=self.config, unified_parser=utils['parser'])
         symbol_name_map = file_handler.load_symbol_name_map()
 
@@ -528,6 +531,7 @@ class CompositionRoot:
             )
         )
         await engine.initialize()
+        self.logger.info("  -> RAG engine ready (%d news articles indexed)", engine.news_manager.get_database_size())
         return engine
 
     def _provision_model_layer(self, utils: dict) -> dict:
@@ -585,6 +589,8 @@ class CompositionRoot:
             token_counter=utils['token_counter'], cost_storage=CostStorage(),
             model_pricing=ModelPricing(), orchestrator=orchestrator, provider_clients=provider_clients
         )
+        primary_provider = getattr(self.config, 'AI_PROVIDER', 'googleai')
+        self.logger.info("  -> AI Provider fallback chain ready (Primary provider: %s)", primary_provider)
 
         return {'manager': manager}
 
@@ -606,7 +612,9 @@ class CompositionRoot:
             logger=self.logger
         )
         try:
+            self.logger.info("  -> Warming up Numba JIT pattern engine (compiling 50+ indicator kernels)...")
             pattern_analyzer.warmup()
+            self.logger.info("  -> Numba JIT pattern engine compiled & warm")
         except Exception as warmup_error:
             self.logger.warning("Pattern analyzer warm-up could not run: %s", warmup_error)
 
@@ -647,11 +655,13 @@ class CompositionRoot:
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_path = os.path.join(self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
 
+        self.logger.info("  -> Connecting to ChromaDB vector memory at %s...", brain_path)
         chroma_client = chromadb.PersistentClient(path=brain_path)
 
         embed_device = _get_best_device()
-        self.logger.info("Embedding device: %s", embed_device)
+        self.logger.info("  -> Loading SentenceTransformer embedding model ('BAAI/bge-small-en-v1.5') on %s...", embed_device)
         embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
+        self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
         timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
         timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
 
