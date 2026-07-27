@@ -474,22 +474,21 @@ class PromptBuilder:
         crossed_zero = prev_val * curr_val < 0
         arrow = "↑" if diff > 0 else "↓"
         sign = "+" if diff > 0 else ""
+        prec = 2 if abs(curr_val) >= 1 else 4
+        val_str = f"{prev_val:.{prec}f} → {curr_val:.{prec}f}"
 
-        if (is_zero_cross_type and crossed_zero) or (abs_prev < 0.1 and is_zero_cross_type):
-            change_desc = f"({arrow} zero-cross)" if crossed_zero else f"({arrow} Δ{diff:+.4f})"
-            if abs(curr_val) >= 1:
-                return f"- {label}: {prev_val:.2f} → {curr_val:.2f} {change_desc}"
-            return f"- {label}: {prev_val:.4f} → {curr_val:.4f} {change_desc}"
+        if is_zero_cross_type and (crossed_zero or abs_prev < 0.1):
+            desc = f"({arrow} zero-cross)" if crossed_zero else f"({arrow} Δ{diff:+.4f})"
+            return f"- {label}: {val_str} {desc}"
 
         if abs_prev > 0.0001:
             change_pct = (diff / abs_prev) * 100
             if abs(change_pct) >= 1.0:
-                if abs(curr_val) >= 1:
-                    return f"- {label}: {prev_val:.2f} → {curr_val:.2f} ({arrow} {sign}{change_pct:.1f}%)"
-                return f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} {sign}{change_pct:.1f}%)"
+                return f"- {label}: {val_str} ({arrow} {sign}{change_pct:.1f}%)"
         else:
             return f"- {label}: {prev_val:.4f} → {curr_val:.4f} ({arrow} Δ{diff:+.4f})"
         return None
+
 
     def get_prompt_metadata(self) -> dict[str, str]:
         """Return prompt metadata for logs, persistence, and dashboard observability."""

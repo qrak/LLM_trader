@@ -101,3 +101,26 @@ class TestResolveIndicatorValue:
 
     def test_list_with_none_last_element(self):
         assert PromptBuilder._resolve_indicator_value([1.0, None]) is None
+
+
+class TestFormatIndicatorChange:
+    """Verify _format_indicator_change indicator change string formatting."""
+
+    def test_negligible_change_returns_none(self):
+        builder = _make_builder()
+        assert builder._format_indicator_change("RSI", 50.0000001, 50.0000002, False) is None
+
+    def test_zero_cross_formatting(self):
+        builder = _make_builder()
+        res = builder._format_indicator_change("MACD", -0.5, 0.5, True)
+        assert res == "- MACD: -0.5000 → 0.5000 (↑ zero-cross)"
+
+    def test_percentage_change_formatting(self):
+        builder = _make_builder()
+        res = builder._format_indicator_change("RSI", 50.0, 55.0, False)
+        assert res == "- RSI: 50.00 → 55.00 (↑ +10.0%)"
+
+    def test_small_baseline_formatting(self):
+        builder = _make_builder()
+        res = builder._format_indicator_change("OBV_Delta", 0.00001, 0.05, False)
+        assert res == "- OBV_Delta: 0.0000 → 0.0500 (↑ Δ+0.0500)"
