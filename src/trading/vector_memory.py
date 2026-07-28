@@ -109,6 +109,41 @@ class VectorMemoryService(
         self._embedding_cache[text] = result
         return result
 
+    def _get_or_create_clean_collection(self, name: str) -> Any:
+        """Get or create collection with automatic dimension mismatch recovery."""
+        collection = self._client.get_or_create_collection(
+            name=name,
+            metadata={"hnsw:space": "cosine"}
+        )
+        try:
+            count = collection.count()
+        except Exception:
+            return collection
+
+        if isinstance(count, int) and count > 0 and self._embedding_model is not None:
+            try:
+                test_vector = self._encode_embedding("dimension_check")
+                collection.query(query_embeddings=[test_vector], n_results=1)
+            except Exception as err:
+                err_msg = str(err).lower()
+                if any(kw in err_msg for kw in ("dimension", "expect", "incompatible", "invalid")):
+                    self.logger.warning(
+                        "Embedding dimension mismatch in collection '%s' (%s). "
+                        "Re-creating collection for new model dimensions...",
+                        name, err
+                    )
+                    try:
+                        self._client.delete_collection(name=name)
+                    except Exception:
+                        pass
+                    collection = self._client.create_collection(
+                        name=name,
+                        metadata={"hnsw:space": "cosine"}
+                    )
+                else:
+                    raise
+        return collection
+
     def _ensure_initialized(self) -> bool:
         """Lazy setup of collections (client is already injected).
 
@@ -121,18 +156,9 @@ class VectorMemoryService(
         try:
             self.logger.info("Setting up VectorMemoryService collections...")
 
-            self._collection = self._client.get_or_create_collection(
-                name=self.COLLECTION_NAME,
-                metadata={"hnsw:space": "cosine"}
-            )
-            self._semantic_rules_collection = self._client.get_or_create_collection(
-                name=self.SEMANTIC_RULES_COLLECTION,
-                metadata={"hnsw:space": "cosine"}
-            )
-            self._blocked_collection = self._client.get_or_create_collection(
-                name=self.BLOCKED_TRADES_COLLECTION,
-                metadata={"hnsw:space": "cosine"}
-            )
+            self._collection = self._get_or_create_clean_collection(self.COLLECTION_NAME)
+            self._semantic_rules_collection = self._get_or_create_clean_collection(self.SEMANTIC_RULES_COLLECTION)
+            self._blocked_collection = self._get_or_create_clean_collection(self.BLOCKED_TRADES_COLLECTION)
 
             self._initialized = True
             collection = self._collection

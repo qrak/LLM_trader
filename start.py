@@ -138,6 +138,23 @@ def _configure_hf_hub_auth() -> None:
     os.environ["HUGGINGFACE_HUB_TOKEN"] = token
 
 
+def _cleanup_legacy_embedding_cache(logger: Logger | None = None) -> None:
+    """Remove legacy bge-small embedding models from HuggingFace cache to free disk space."""
+    try:
+        cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
+        old_model_dir = cache_dir / "models--BAAI--bge-small-en-v1.5"
+        new_model_dir = cache_dir / "models--BAAI--bge-base-en-v1.5"
+
+        if new_model_dir.exists() and old_model_dir.exists():
+            import shutil
+            shutil.rmtree(old_model_dir, ignore_errors=True)
+            if logger:
+                logger.info("  -> Pruned legacy BAAI/bge-small-en-v1.5 embedding model from cache")
+    except Exception as e:
+        if logger:
+            logger.debug("Failed to prune legacy embedding cache: %s", e)
+
+
 def _get_best_device() -> str:
     """Auto-detect best available hardware accelerator for embeddings.
 
@@ -480,7 +497,11 @@ class CompositionRoot:
                     embedding_model=brain_service.vector_memory.embedding_model,
                     project_root=Path(".").resolve(),
                 )
-                result = codebase_indexer.index_codebase()
+                self.logger.info("  -> Verifying codebase vector index embeddings...")
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(codebase_indexer.index_codebase),
+                    timeout=10.0,
+                )
                 if result["indexed"] > 0:
                     self.logger.info(
                         "  -> Codebase vector index updated: %d files indexed, %d total chunks",
@@ -491,6 +512,8 @@ class CompositionRoot:
                         "  -> Codebase vector index up-to-date: %d files verified, %d chunks ready",
                         result["skipped"], result["total_chunks"],
                     )
+            except TimeoutError:
+                self.logger.info("  -> Codebase vector index check deferred (startup prioritized)")
             except Exception as e:
                 self.logger.warning("Codebase vector indexing skipped: %s", e)
         else:
@@ -740,6 +763,7 @@ class CompositionRoot:
         risk_manager = RiskManager(self.logger, self.config)
 
         _configure_hf_hub_auth()
+        _cleanup_legacy_embedding_cache(self.logger)
 
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_path = os.path.join(
@@ -751,10 +775,10 @@ class CompositionRoot:
 
         embed_device = _get_best_device()
         self.logger.info(
-            "  -> Loading SentenceTransformer embedding model ('BAAI/bge-small-en-v1.5') on %s...",
+            "  -> Loading SentenceTransformer embedding model ('BAAI/bge-base-en-v1.5') on %s...",
             embed_device,
         )
-        embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=embed_device)
+        embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5", device=embed_device)
         self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
         timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
         timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
@@ -900,7 +924,7 @@ class CompositionRoot:
             "Symbols mapped": f"{symbols_count:,}",
             "News articles indexed": f"{news_count:,}",
             "Primary AI provider": str(getattr(self.config, 'AI_PROVIDER', 'googleai')),
-            "Vector memory active": "ChromaDB (bge-small-en-v1.5)",
+            "Vector memory active": "ChromaDB (bge-base-en-v1.5)",
             "Order guard rules": f"{guards_count}",
             "Trading pair / TF": f"{self.config.CRYPTO_PAIR} ({self.config.TIMEFRAME})",
         }

@@ -72,7 +72,7 @@ def main() -> None:
     chroma_client = chromadb.PersistentClient(path=index_dir)
 
     device = _get_best_device()
-    embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5", device=device)
+    embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5", device=device)
 
     indexer = CodebaseVectorIndexer(
         logger=logger,

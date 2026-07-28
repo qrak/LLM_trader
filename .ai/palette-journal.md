@@ -1,20 +1,5 @@
-# Palette 🎨 UX & Accessibility Journal
+# Palette Journal 🎨 — LLM_trader UX & Dashboard Verification
 
-## 2026-07-26 - Screen Reader Emoji Hiding in Admin Navigation
-**Learning:** Screen readers announced raw Unicode emojis (`📊`, `🎮`, `⚙️`, `📜`, `🚪`) phonetically on every sidebar navigation focus.
-**Action:** Wrapped decorative emojis in `<span aria-hidden="true">` elements across sidebar navigation links and logout button in `src/dashboard/static/admin/index.html`. Screen readers now cleanly read button labels without emoji distraction.
-
-## 2026-07-26 - Admin Login Error Live Region & Double Click Guard
-**Learning:** Screen readers did not announce authentication failure messages when `#login-error` became visible. In addition, rapid double-clicks on the submit button could dispatch duplicate login requests.
-**Action:** Added `role="alert"` and `aria-live="assertive"` to `showLoginError()` and disabled `#login-form` submit button during network authentication.
-
-## 2026-07-26 - Decision Pathways Structured Synopsis Cards & Pills
-**Learning:** Dense unformatted text paragraphs in the Decision Pathways header reduced readability for multi-source situational summary metrics.
-**Action:** Replaced plain paragraph rendering with a structured card layout: position state badge (`FLAT`/`LONG`/`SHORT`), action/confidence pill (`HOLD 72%`), trend badge (`BEARISH`), monospace context tags, border-accented rule/journal blocks, and friction warning callouts.
-
-## 2026-07-27 - start.py Terminal Startup UX Rework & Progress Stream Synchronization
-**Learning:** Raw `tqdm` progress bars from `SentenceTransformer` and dual `RichHandler` console instances broke Rich panel layout and caused line fragmentation during startup.
-**Action:** Unified `Console` stream across `CompositionRoot` and `Logger`, enabled top-level Windows console UTF-8 stream reconfiguration, set `TQDM_DISABLE=1` during startup model load, integrated maintenance tasks into Stage 8 before summary table rendering, and removed redundant keyboard command log statements. Startup output is now visually clean and unfragmented.
-
-
-
+## 2026-07-28 - Dashboard Vector Memory & Brain Router Audit for BAAI/bge-base-en-v1.5
+**Learning:** Upgrading the underlying embedding model from 384D to 768D (`BAAI/bge-base-en-v1.5`) requires zero dashboard UI changes as long as vector distance / similarity calculations remain normalized in the 0.0–1.0 range and FastAPI state bindings decouple model dimensions from JSON response schemas.
+**Action:** Verified `/api/brain/stats`, `/api/brain/experiences`, `/api/brain/rules`, `/api/brain/positions`, and `/api/brain/post-mortems` endpoints against the new 768D model. 100% test pass on all dashboard router test suites.

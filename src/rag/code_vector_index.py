@@ -93,22 +93,67 @@ class CodebaseVectorIndexer:
         self._collection: Any | None = None
 
     def _ensure_collection(self) -> Any:
-        """Get or create the codebase semantic index collection."""
+        """Get or create the codebase semantic index collection with auto dimension recovery."""
         if self._collection is None:
-            self._collection = self._client.get_or_create_collection(
+            collection = self._client.get_or_create_collection(
                 name=COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
+            try:
+                count = collection.count()
+            except Exception:
+                count = 0
+            if isinstance(count, int) and count > 0 and self._embedding_model is not None:
+                try:
+                    test_vector = self._encode("dimension_check")
+                    collection.query(query_embeddings=[test_vector], n_results=1)
+                except Exception as err:
+                    err_msg = str(err).lower()
+                    if any(kw in err_msg for kw in ("dimension", "expect", "incompatible", "invalid")):
+                        self.logger.warning(
+                            "Codebase vector index dimension mismatch (%s). "
+                            "Re-creating collection '%s'...",
+                            err, COLLECTION_NAME
+                        )
+                        try:
+                            self._client.delete_collection(name=COLLECTION_NAME)
+                        except Exception:
+                            pass
+                        collection = self._client.create_collection(
+                            name=COLLECTION_NAME,
+                            metadata={"hnsw:space": "cosine"},
+                        )
+                    else:
+                        raise
+            self._collection = collection
         return self._collection
 
     def _encode(self, text: str) -> list[float]:
         """Encode text to embedding vector with thread-safe model access."""
+        return self._encode_batch([text])[0]
+
+    def _encode_single(self, text: str) -> list[float]:
+        """Encode a single text string with thread-safe model access."""
         with self._embedding_lock:
             encoded = self._embedding_model.encode(text)
         try:
             return encoded.tolist()
         except AttributeError:
             return list(encoded)
+
+    def _encode_batch(self, texts: list[str]) -> list[list[float]]:
+        """Encode a batch of texts to embedding vectors with thread-safe model access."""
+        if not texts:
+            return []
+        try:
+            with self._embedding_lock:
+                encoded = self._embedding_model.encode(texts, batch_size=32)
+            try:
+                return encoded.tolist()
+            except AttributeError:
+                return [vec.tolist() if hasattr(vec, "tolist") else list(vec) for vec in encoded]
+        except (TypeError, AttributeError):
+            return [self._encode_single(t) for t in texts]
 
     @staticmethod
     def _compute_file_hash(file_path: Path) -> str:
@@ -416,17 +461,14 @@ class CodebaseVectorIndexer:
 
             # Batch insert
             ids = []
-            embeddings = []
             documents = []
             metadatas = []
+            embed_texts = []
 
             for i, chunk in enumerate(chunks):
                 doc_id = f"{rel_path}::{chunk.symbol_name}::{i}"
-                # Truncate content for embedding (max ~500 chars for efficiency)
-                embed_text = chunk.content[:500]
-
+                embed_texts.append(chunk.content[:500])
                 ids.append(doc_id)
-                embeddings.append(self._encode(embed_text))
                 documents.append(chunk.content[:2000])  # Store up to 2000 chars
                 metadatas.append({
                     "file_path": chunk.file_path,
@@ -437,6 +479,8 @@ class CodebaseVectorIndexer:
                     "file_hash": current_hash,
                     "docstring": chunk.docstring[:300] if chunk.docstring else "",
                 })
+
+            embeddings = self._encode_batch(embed_texts)
 
             try:
                 collection.upsert(
