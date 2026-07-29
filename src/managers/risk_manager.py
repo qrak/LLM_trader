@@ -7,7 +7,7 @@ from src.logger.logger import Logger
 
 if TYPE_CHECKING:
     from src.config.loader import Config
-    from src.trading.data_models import RiskAssessment, MarketConditions
+    from src.trading.data_models import MarketConditions, RiskAssessment
 
 class RiskManager:
     """
@@ -50,7 +50,7 @@ class RiskManager:
         if not math.isfinite(max_size) or max_size <= 0:
             raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
 
-        if self._is_valid_position_size(position_size):
+        if position_size is not None and self._is_valid_position_size(position_size):
             requested_size = position_size
             source = "AI"
         else:
@@ -173,6 +173,24 @@ class RiskManager:
                 final_sl = current_price * 0.99
             else:
                 final_sl = current_price * 1.01
+
+        # Clamp TP: max 50% from entry (prevents absurd distances like 250% on high-ATR coins)
+        tp_distance_raw = abs(final_tp - current_price) / current_price
+        if tp_distance_raw > 0.50:
+            self.logger.warning("TP distance %s exceeds 50%% max, clamping", f"{tp_distance_raw:.1%}")
+            self._last_frictions.append({
+                "guard_type": "tp_distance_max",
+                "direction": direction,
+                "suggested_tp_pct": tp_distance_raw,
+                "corrected_tp_pct": 0.50,
+                "current_price": current_price,
+                "volatility_level": volatility_level,
+                "detail": f"TP distance {tp_distance_raw*100:.1f}% clamped to max 50%",
+            })
+            if direction == "LONG":
+                final_tp = current_price * 1.50
+            else:
+                final_tp = current_price * 0.50
 
         # Validate Logical Consistency
         if direction == "LONG":

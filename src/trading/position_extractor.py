@@ -1,9 +1,9 @@
 """Extract trading signals from AI responses."""
 
-import re
 import math
+import re
 from re import Pattern
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 
@@ -14,14 +14,14 @@ if TYPE_CHECKING:
 class PositionExtractor:
     """Extracts trading signals, stop loss, take profit from AI responses."""
 
-    def __init__(self, logger: Logger | None = None, unified_parser: "UnifiedParser" = None):
+    def __init__(self, logger: Logger | None = None, unified_parser: "UnifiedParser" = None):  # type: ignore
         """Initialize the position extractor.
 
         Args:
             logger: Optional logger instance
             unified_parser: UnifiedParser for JSON extraction (DRY)
         """
-        self.logger = logger
+        self.logger = logger  # type: ignore[reportOptionalMemberAccess]
         self.unified_parser = unified_parser
 
         # Regex patterns for extracting trading information
@@ -33,11 +33,11 @@ class PositionExtractor:
             r'confidence["\s:]*\[?(HIGH|MEDIUM|LOW)\]?',
             re.IGNORECASE
         )
-        self.stop_loss_pattern: Pattern = re.compile(
+        self.stop_loss_pattern: Pattern = re.compile(  # type: ignore[reportOptionalMemberAccess]
             r'stop[_\s]?loss["\s:]*\$?([0-9,]+(?:\.[0-9]+)?)',
             re.IGNORECASE
         )
-        self.take_profit_pattern: Pattern = re.compile(
+        self.take_profit_pattern: Pattern = re.compile(  # type: ignore[reportOptionalMemberAccess]
             r'take[_\s]?profit["\s:]*\$?([0-9,]+(?:\.[0-9]+)?)',
             re.IGNORECASE
         )
@@ -62,8 +62,8 @@ class PositionExtractor:
             Extracted JSON trading decision or None
         """
         if not self.unified_parser:
-            if self.logger:
-                self.logger.warning("No UnifiedParser provided, cannot extract JSON")
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("No UnifiedParser provided, cannot extract JSON")  # type: ignore[reportOptionalMemberAccess]
             return None
 
         # Bolt: extract JSON block once and unwrap key candidates in memory instead of parsing string 4 times
@@ -154,12 +154,12 @@ class PositionExtractor:
         try:
             numeric_value = float(str(value).replace(",", "").replace("$", ""))
         except (TypeError, ValueError):
-            if self.logger:
-                self.logger.warning("Invalid numeric value from AI response: %s", value)
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Invalid numeric value from AI response: %s", value)  # type: ignore[reportOptionalMemberAccess]
             return None
         if not math.isfinite(numeric_value):
-            if self.logger:
-                self.logger.warning("Non-finite numeric value from AI response: %s", value)
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Non-finite numeric value from AI response: %s", value)  # type: ignore[reportOptionalMemberAccess]
             return None
         return numeric_value
 
@@ -173,12 +173,12 @@ class PositionExtractor:
         try:
             numeric_value = float(value_text.replace("%", "").replace(",", ""))
         except (TypeError, ValueError):
-            if self.logger:
-                self.logger.warning("Invalid position_size value from AI response: %s", value)
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Invalid position_size value from AI response: %s", value)  # type: ignore[reportOptionalMemberAccess]
             return None
         if not math.isfinite(numeric_value) or numeric_value < 0:
-            if self.logger:
-                self.logger.warning("Invalid position_size value from AI response: %s", value)
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Invalid position_size value from AI response: %s", value)  # type: ignore[reportOptionalMemberAccess]
             return None
 
         if has_percent:
@@ -187,8 +187,8 @@ class PositionExtractor:
         # "50" could mean "50% of capital" or "50x leverage".
         # Reject — require explicit % suffix.
         if numeric_value > 1.0:
-            if self.logger:
-                self.logger.warning(
+            if self.logger:  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                     "Ambiguous position_size without %% suffix: %s — "
                     "treating as None (rejected). "
                     "LLM should use %% suffix for percentage values "
@@ -212,10 +212,10 @@ class PositionExtractor:
         confidence_match = self.confidence_pattern.search(text)
         confidence = confidence_match.group(1).upper() if confidence_match else "MEDIUM"
 
-        stop_loss_match = self.stop_loss_pattern.search(text)
+        stop_loss_match = self.stop_loss_pattern.search(text)  # type: ignore[reportOptionalMemberAccess]
         stop_loss = float(stop_loss_match.group(1).replace(",", "")) if stop_loss_match else None
 
-        take_profit_match = self.take_profit_pattern.search(text)
+        take_profit_match = self.take_profit_pattern.search(text)  # type: ignore[reportOptionalMemberAccess]
         take_profit = float(take_profit_match.group(1).replace(",", "")) if take_profit_match else None
 
         position_size_match = self.position_size_pattern.search(text)
@@ -227,7 +227,7 @@ class PositionExtractor:
             )
 
         reasoning_match = self.reasoning_pattern.search(text)
-        reasoning = reasoning_match.group(1).strip()[:200] if reasoning_match else ""
+        reasoning = reasoning_match.group(1).strip() if reasoning_match else ""
 
         return signal, confidence, stop_loss, take_profit, position_size, reasoning
 

@@ -251,6 +251,12 @@ Semantic-rule policy:
 - `PersistenceManager.save_trade_decision()` fails loudly if SQLite persistence fails; do not add JSON fallback paths.
 - Dashboard, cooldown guards, brain entry-decision lookup, and query scripts must consume trade history through injected persistence or SQLite APIs.
 - Historical `.json.migrated` files are backups only, not runtime inputs.
+- **Zero Backward Compatibility & Startup Clutter Policy**:
+  - Runtime code in `src/` and `start.py` must remain 100% clean, canonical, and clutter-free.
+  - Never introduce inline schema migration `ALTER TABLE` statements, legacy unit conversion methods, rule migration hooks (`refresh_semantic_rules_if_stale`), or `try/except` fallback paths into runtime service initialization.
+  - Never add `sys.path.insert(0, ...)` manipulation hacks into `start.py`.
+  - Never include startup auto-rehydration loops in `start.py`. Any database or vector storage rehydrations/conversions MUST be executed explicitly via standalone CLI scripts (e.g., in `scripts/`), after which the script is executed once and deleted.
+  - **Classes Only in `src/utils/`**: All utility concerns across `src/utils/` and `app.py` must be encapsulated as a Class (e.g., `JournalRotator`, `TokenCounter`). Standalone utility functions are strictly forbidden.
 
 ---
 

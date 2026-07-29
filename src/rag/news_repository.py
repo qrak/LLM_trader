@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.logger.logger import Logger
+
 from .file_handler import RagFileHandler
 
 

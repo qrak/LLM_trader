@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import re
+
 try:
     import defusedxml.ElementTree as ET
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405, B314
+import html as html_module
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -21,10 +23,7 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-import html as html_module
-
 import aiohttp
-
 
 # Source registry – default values; callers may supply a filtered subset.
 
@@ -140,7 +139,7 @@ class _HtmlBodyTextParser(HTMLParser):
         self._skip_depth = 0
         self._parts: list[str] = []
 
-    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:  # type: ignore
         tag_name = tag.lower()
         if tag_name in self._IGNORED_TAGS:
             self._skip_depth += 1
@@ -196,13 +195,13 @@ def _extract_html_body_text_bs4(html_text: str) -> str:
 
     selector_groups: list[tuple[str, int]] = [
         (
-            "[data-module-name='article-body'], [data-testid='article-body'], "
-            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']",
+            ("[data-module-name='article-body'], [data-testid='article-body'], "
+            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']"),
             200,
         ),
         (
-            "article, [class*='article-content'], [class*='articleContent'], "
-            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']",
+            ("article, [class*='article-content'], [class*='articleContent'], "
+            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']"),
             1,
         ),
         ("main", 1),
@@ -265,7 +264,7 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
 
 # RSS XML parsing
 
-def _first_text(parent: ET.Element, path: str) -> str:
+def _first_text(parent: ET.Element, path: str) -> str:  # type: ignore
     node = parent.find(path)
     if node is None or node.text is None:
         return ""
@@ -284,7 +283,7 @@ def parse_rss_items(
     """
     results: list[dict[str, Any]] = []
     try:
-        root = ET.fromstring(payload_text)  # noqa: S314 # nosec B314
+        root = ET.fromstring(payload_text)  # nosec B314
     except (ET.ParseError, Exception):  # noqa: BLE001
         return results
 

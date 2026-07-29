@@ -53,7 +53,7 @@ class AlternativeMeAPI:
                     self.last_update = loaded_time
                     self.current_index = cached_data["data"]
                     self.logger.debug("Loaded Fear & Greed cache from %s", self.last_update.isoformat())
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error loading Fear & Greed cache: %s", e)
 
     def _read_cache_file(self) -> dict[str, Any]:
@@ -175,3 +175,4 @@ class AlternativeMeAPI:
         """Close the API client session."""
         if self.session and not self.session.closed:
             await self.session.close()
+

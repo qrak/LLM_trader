@@ -2,18 +2,18 @@
 
 Provides functionality for utils.profiler.py.
 """
-import time
-import functools
 import asyncio
-from typing import Any
+import functools
+import time
 from collections.abc import Callable
+from typing import Any
 
 
 def _logger_debug_enabled() -> bool:
     try:
         from src.config.loader import config
         return bool(config.LOGGER_DEBUG)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 def profile_performance(func: Callable) -> Callable:
@@ -78,3 +78,4 @@ def profile_performance(func: Callable) -> Callable:
     if asyncio.iscoroutinefunction(func):
         return wrapper
     return sync_wrapper
+

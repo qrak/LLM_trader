@@ -22,7 +22,7 @@ class TemplateManager:
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     PREVIOUS_REASONING_MAX_CHARS = 3000
-    PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY = {
+    PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY = {  # noqa: RUF012
         "low": 1500,
         "medium": 3000,
         "high": 4500,
@@ -103,7 +103,7 @@ class TemplateManager:
                 timeframe_minutes = self.timeframe_validator.to_minutes(timeframe)
             else:
                 timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             if self.logger:
                 self.logger.warning("Failed to derive timeframe context for %s: %s", timeframe, e)
 
@@ -148,9 +148,8 @@ class TemplateManager:
                 data = json.loads(block)
             except (json.JSONDecodeError, TypeError, ValueError):
                 continue
-            analysis = data.get("analysis")
-            if isinstance(analysis, dict):
-                return analysis
+            analysis = data.get("analysis") or {}
+            return analysis if analysis else None
         if blocks and self.logger:
             self.logger.debug("Previous response JSON could not be parsed for snapshot")
         return None
@@ -220,7 +219,7 @@ class TemplateManager:
             return True
         if upper_line.startswith("USE COMPACT PLAIN-TEXT LABELS"):
             return True
-        return line.startswith("| Signal |") or line.startswith("|--------")
+        return line.startswith(("| Signal |", "|--------"))
 
     def _is_previous_reasoning_line(self, line: str) -> bool:
         """Return True for compact narrative lines that belong to a prior model answer."""
@@ -479,7 +478,7 @@ class TemplateManager:
                 if self.timeframe_validator:
                     try:
                         window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
-                    except Exception as e:  # pylint: disable=broad-exception-caught
+                    except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                         if self.logger:
                             self.logger.warning("Failed to calculate relevance window for %s: %s", timeframe, e)
 
@@ -891,3 +890,5 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
 ADVANCED S/R: Volume-weighted pivots with 3+ touches, above-average volume. Only strong levels provided."""
 
         return analysis_steps
+
+

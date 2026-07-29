@@ -17,6 +17,7 @@ import httpx
 
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
+
 from .data_models import TradeDecision
 
 if TYPE_CHECKING:
@@ -74,7 +75,7 @@ class ExecutorHandler:
         forward_success = False
         try:
             forward_success = await self._forward(payload)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # @retry_async exhausted all retries — executor is unreachable.
             # Write to dead-letter so we can replay later.
             signal = payload.get("signal")
@@ -147,7 +148,7 @@ class ExecutorHandler:
         try:
             self._persistence.save_latest_decision(payload)
         except Exception:
-            self.logger.error(
+            self.logger.error(  # noqa: G201
                 "Failed to persist latest_decision.json for %s %s",
                 payload.get("signal"),
                 payload.get("symbol"),
@@ -195,7 +196,7 @@ class ExecutorHandler:
             with open(DEAD_LETTER_PATH, "a", encoding="utf-8") as f:
                 f.write(json.dumps(payload) + "\n")
         except Exception:
-            self.logger.error("Failed to write dead-letter entry", exc_info=True)
+            self.logger.error("Failed to write dead-letter entry", exc_info=True)  # noqa: G201
 
     async def _replay_dead_letters(self) -> None:
         """Replay previously failed forwards now that executor is reachable."""
@@ -206,7 +207,7 @@ class ExecutorHandler:
             return
         try:
             entries: list[dict[str, Any]] = []
-            with open(DEAD_LETTER_PATH, encoding="utf-8") as f:
+            with open(DEAD_LETTER_PATH, encoding="utf-8") as f:  # noqa: ASYNC230
                 for line in f:
                     line = line.strip()
                     if line:
@@ -231,11 +232,12 @@ class ExecutorHandler:
                             "Dead-letter replay failed (%s): %s %s",
                             r.status_code, sig, sym,
                         )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     self.logger.warning(
                         "Dead-letter replay exception: %s %s", sig, sym,
                     )
 
             DEAD_LETTER_PATH.unlink(missing_ok=True)
         except Exception:
-            self.logger.error("Dead-letter replay failed", exc_info=True)
+            self.logger.error("Dead-letter replay failed", exc_info=True)  # noqa: G201
+

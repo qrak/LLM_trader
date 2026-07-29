@@ -2,6 +2,7 @@
 Ticker management and validation operations.
 """
 from typing import Any
+
 from src.logger.logger import Logger
 
 
@@ -22,8 +23,8 @@ class TickerManager:
                 if tickers_data:
                     self.known_tickers = set(tickers_data)
                     self.logger.debug("Loaded %s known tickers", len(self.known_tickers))
-        except Exception as e:
-            self.logger.exception("Error loading known tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error loading known tickers: %s")
             self.known_tickers = set()
 
     async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
@@ -48,8 +49,8 @@ class TickerManager:
             # Save updated tickers
             await self.save_tickers()
 
-        except Exception as e:
-            self.logger.exception("Error updating known tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error updating known tickers: %s")
 
     def _extract_detected_coins(self, news_database: list[dict[str, Any]]) -> set:
         """Extract coins that were detected in news articles."""
@@ -102,8 +103,7 @@ class TickerManager:
 
         # Remove common prefixes/suffixes
         for remove in ["-USD", "-USDT", "-BTC", "-ETH"]:
-            if category_upper.endswith(remove):
-                category_upper = category_upper[:-len(remove)]
+            category_upper = category_upper.removesuffix(remove)
 
         # Basic validation - should be 2-10 characters, mostly letters
         if 2 <= len(category_upper) <= 10 and category_upper.isalnum():
@@ -130,7 +130,7 @@ class TickerManager:
         if self.exchange_manager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not get exchange symbols for validation: %s", e)
 
         new_coins_added = 0
@@ -160,12 +160,13 @@ class TickerManager:
         """Save known tickers to disk."""
         try:
             if self.file_handler:
-                tickers_list = sorted(list(self.known_tickers))
+                tickers_list = sorted(self.known_tickers)
                 self.file_handler.save_known_tickers(tickers_list)
                 self.logger.debug("Saved %s known tickers", len(tickers_list))
-        except Exception as e:
-            self.logger.exception("Error saving tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error saving tickers: %s")
 
     def get_known_tickers(self) -> set[str]:
         """Get the set of known cryptocurrency tickers."""
         return self.known_tickers.copy()
+

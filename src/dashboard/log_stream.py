@@ -46,7 +46,7 @@ class LogStreamHandler(logging.Handler):
                         queue.put_nowait(msg)
                     except asyncio.QueueFull:
                         pass
-        except Exception:
+        except Exception:  # noqa: BLE001
             self.handleError(record)
 
     def subscribe(self) -> tuple[str, asyncio.Queue[str | None]]:
@@ -115,3 +115,4 @@ class LogStreamManager:
     @property
     def subscriber_count(self) -> int:
         return self.handler.subscriber_count
+

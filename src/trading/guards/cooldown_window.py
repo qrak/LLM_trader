@@ -140,7 +140,7 @@ class CooldownWindowGuard:
         try:
             from src.utils.timeframe_validator import TimeframeValidator
             tf_minutes = TimeframeValidator.to_minutes(timeframe)
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fallback: parse common formats
             tf_minutes = _fallback_tf_to_minutes(timeframe)
 
@@ -164,3 +164,4 @@ def _fallback_tf_to_minutes(timeframe: str) -> int:
             except ValueError:
                 pass
     return 240  # default to 4h
+

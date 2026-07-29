@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -68,7 +68,7 @@ class RagFileHandler:
                 with open(abs_path, encoding="utf-8") as f:
                     return json.load(f)
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading JSON file %s: %s", file_path, e)
             return None
 
@@ -88,7 +88,7 @@ class RagFileHandler:
 
             # Atomic operation: rename temp file to target
             os.replace(temp_path, abs_path)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Clean up temp file if it exists
             temp_path = f"{os.path.abspath(file_path)}.tmp"
             if os.path.exists(temp_path):
@@ -100,12 +100,12 @@ class RagFileHandler:
 
     def filter_articles_by_age(self, articles: list[dict], max_age_seconds: int) -> list[dict]:
         """Filter articles by age in seconds."""
-        current_timestamp = datetime.now().timestamp()
+        current_timestamp = datetime.now(timezone.utc).timestamp()
         cutoff_time = current_timestamp - max_age_seconds
 
         filtered_articles = []
         for art in articles:
-            article_timestamp = self.unified_parser.format_utils.parse_timestamp(art.get("published_on", 0))
+            article_timestamp = self.unified_parser.format_utils.parse_timestamp(art.get("published_on", 0))  # type: ignore
             if article_timestamp > cutoff_time:
                 filtered_articles.append(art)
 
@@ -130,10 +130,10 @@ class RagFileHandler:
             return
 
         try:
-            recent_articles.sort(key=lambda x: self.unified_parser.format_utils.parse_timestamp(x.get("published_on", 0)), reverse=True)
+            recent_articles.sort(key=lambda x: self.unified_parser.format_utils.parse_timestamp(x.get("published_on", 0)), reverse=True)  # type: ignore
 
             news_data = {
-                "last_updated": datetime.now().isoformat(),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
                 "count": len(recent_articles),
                 "articles": recent_articles
             }
@@ -141,7 +141,7 @@ class RagFileHandler:
             self.save_json_file(self.news_file_path, news_data)
             self.logger.debug("Saved %s recent news articles", len(recent_articles))
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving news articles: %s", e)
 
     def load_news_articles(self) -> list[dict]:
@@ -160,7 +160,7 @@ class RagFileHandler:
 
             return recent_articles
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading news articles: %s", e)
             return []
 
@@ -182,7 +182,7 @@ class RagFileHandler:
 
             return fallback_articles
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading fallback news articles: %s", e)
             return []
 
@@ -191,8 +191,8 @@ class RagFileHandler:
         try:
             data = self.load_json_file(self.tickers_file) or {}
             mapping = data.get("symbol_name_map", {})
-            return sorted({str(symbol).upper() for symbol in mapping.keys() if symbol})
-        except Exception as e:
+            return sorted({str(symbol).upper() for symbol in mapping if symbol})
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading known tickers: %s", e)
             return None
 
@@ -224,7 +224,7 @@ class RagFileHandler:
             data["symbol_name_map"] = synced_map
             data.pop("tickers", None)
             self.save_json_file(self.tickers_file, data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving known tickers: %s", e)
 
     def load_symbol_name_map(self) -> dict[str, str]:
@@ -237,7 +237,7 @@ class RagFileHandler:
                 for symbol, name in mapping.items()
                 if symbol and name
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading symbol name map: %s", e)
             return {}
 
@@ -253,5 +253,6 @@ class RagFileHandler:
             self.logger.warning("load_json_file returned None for %s", self.rag_priorities_file)
             return None
         except Exception as e:
-            self.logger.error("Error loading RAG priorities: %s", e, exc_info=True)
+            self.logger.error("Error loading RAG priorities: %s", e, exc_info=True)  # noqa: G201
             return None
+

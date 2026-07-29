@@ -3,13 +3,14 @@
 Handles the processing and formatting of analysis results from the AI models.
 """
 from __future__ import annotations
+
 import io
 import re
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from src.logger.logger import Logger
-from src.analyzer.trend_validator import TrendValidator
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+from src.analyzer.trend_validator import TrendValidator
+from src.logger.logger import Logger
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
@@ -57,7 +58,7 @@ class AnalysisResultProcessor:
 
         # Use chart analysis if image is provided and model supports it
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
-        if use_chart_analysis:
+        if chart_image is not None and use_chart_analysis:
             prov_name, model_name = self.model_manager.describe_provider_and_model(provider, model, chart=True)
             prov_label = prov_name.upper() if prov_name else "UNKNOWN"
             self.logger.info(
@@ -73,7 +74,7 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught
+            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
                 complete_response = await self.model_manager.send_prompt_streaming(
                     prompt=prompt,
@@ -225,3 +226,4 @@ class AnalysisResultProcessor:
                 "Pattern quality: computed=%s (%s)",
                 round(quality.overall), quality.label,
             )
+

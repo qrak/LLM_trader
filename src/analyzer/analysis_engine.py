@@ -3,28 +3,29 @@
 This module orchestrates the gathering of market data, technical analysis,
 and AI generation to produce trading signals.
 """
-from typing import Any, TYPE_CHECKING
-import io
 import asyncio
-from datetime import datetime
+import io
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.utils.timeframe_validator import TimeframeValidator
-from src.utils.profiler import profile_performance
+from src.analyzer.data_fetcher import DataFetcher
+from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
-    classify_trend_direction,
-    classify_volatility_level,
-    classify_rsi_level,
-    classify_macd_signal,
-    classify_volume_state,
+    build_exit_execution_context_from_config,
     classify_bb_position,
+    classify_macd_signal,
     classify_market_sentiment,
     classify_order_book_bias,
-    build_exit_execution_context_from_config,
+    classify_rsi_level,
+    classify_trend_direction,
+    classify_volatility_level,
+    classify_volume_state,
 )
-from src.logger.logger import Logger
-from src.analyzer.data_fetcher import DataFetcher
+from src.utils.profiler import profile_performance
+from src.utils.timeframe_validator import TimeframeValidator
+
 from .analysis_context import AnalysisContext
 
 if TYPE_CHECKING:
@@ -87,8 +88,8 @@ class AnalysisEngine:
         except ValueError as e:
             self.logger.error("Invalid configured timeframe: %s", e)
             raise
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.exception("Error loading configuration values: %s.", e)
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.logger.exception("Error loading configuration values: %s.")
             raise
         self.model_manager = model_manager
         self.technical_calculator = technical_calculator
@@ -141,6 +142,7 @@ class AnalysisEngine:
 
         data_fetcher = DataFetcher(exchange, self.logger)
 
+        assert self.data_collector is not None
         self.data_collector.initialize(
             data_fetcher=data_fetcher,
             symbol=symbol,
@@ -149,10 +151,12 @@ class AnalysisEngine:
             limit=self.limit
         )
 
+        assert self.prompt_builder is not None
         self.prompt_builder.timeframe = effective_timeframe
 
         self.article_urls = {}
 
+        assert self.token_counter is not None
         self.token_counter.reset_session_stats()
 
     async def close(self) -> None:
@@ -166,7 +170,7 @@ class AnalysisEngine:
 
             if self.rag_engine is not None:
                 await self.rag_engine.close()
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             self.logger.error("Error during MarketAnalyzer cleanup: %s", e)
 
     @profile_performance
@@ -216,6 +220,7 @@ class AnalysisEngine:
                 return None, False
 
             async def run_rag_analysis():
+                assert self.symbol is not None
                 query = self.rag_engine.build_context_query(self.symbol)
 
                 market_context = await self.rag_engine.retrieve_context(
@@ -227,7 +232,7 @@ class AnalysisEngine:
                 rag_urls = {}
                 try:
                     rag_urls = self.rag_engine.get_latest_article_urls_snapshot()
-                except Exception as e:  # pylint: disable=broad-exception-caught
+                except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                     self.logger.warning("Could not retrieve article URLs from RAG engine: %s", e)
 
                 return market_context, rag_urls
@@ -244,15 +249,16 @@ class AnalysisEngine:
             self.article_urls.update(rag_urls)
 
             if market_context:
+                assert self.prompt_builder is not None
                 self.prompt_builder.add_custom_instruction(market_context)
             else:
                 self.logger.warning("No market context available for %s", self.symbol)
 
             # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
             brain_context = None
-            if brain_service and self.context.technical_data:
+            if brain_service and self.context.technical_data:  # type: ignore[reportOptionalMemberAccess]
                 brain_context = await self._generate_brain_context_from_current_indicators(
-                    brain_service, self.context.technical_data
+                    brain_service, self.context.technical_data  # type: ignore[reportOptionalMemberAccess]
                 )
 
             # Step 4: Generate AI analysis
@@ -264,16 +270,18 @@ class AnalysisEngine:
             )
 
             # Reset custom instructions for next run
+            assert self.prompt_builder is not None
             self.prompt_builder.custom_instructions = []
 
             return analysis_result
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.exception("Analysis failed: %s", e)
+            self.logger.exception("Analysis failed: %s")
             return {"error": str(e), "recommendation": "HOLD"}
 
     async def _collect_market_data(self) -> bool:
         """Collect market data using data collector"""
+        assert self.data_collector is not None
         data_result = await self.data_collector.collect_data(self.context)
         if not data_result["success"]:
             self.logger.error("Failed to collect market data: %s", data_result["errors"])
@@ -296,19 +304,20 @@ class AnalysisEngine:
             try:
                 overview = await self.rag_engine.get_market_overview()
                 return overview
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch market overview: %s", e)
                 return {}
 
         async def _fetch_microstructure():
             try:
+                assert self.data_collector is not None
                 ms = await self.data_collector.data_fetcher.fetch_market_microstructure(
                     self.symbol,
                     cached_ticker=current_ticker
                 )
                 ms = self._apply_microstructure_snapshot_context(ms)
                 return ms
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch market microstructure: %s", e)
                 return {}
 
@@ -320,7 +329,7 @@ class AnalysisEngine:
                 if not details:
                     self.logger.warning("No coin details found for %s", self.base_symbol)
                 return details
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch coin details for %s: %s", self.base_symbol, e)
                 return {}
 
@@ -331,9 +340,10 @@ class AnalysisEngine:
             return_exceptions=False
         )
 
-        self.context.market_overview = market_overview
-        self.context.market_microstructure = microstructure
-        self.context.coin_details = coin_details
+        assert self.context is not None
+        self.context.market_overview = market_overview  # type: ignore[assignment]
+        self.context.market_microstructure = microstructure  # type: ignore[assignment]
+        self.context.coin_details = coin_details  # type: ignore[assignment]
 
     def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
         """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
@@ -409,7 +419,7 @@ class AnalysisEngine:
         """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
         snapshot_context = {
             "is_live_snapshot": True,
-            "configured_timeframe": self.context.timeframe if self.context else self.timeframe,
+            "configured_timeframe": self.context.timeframe if self.context else self.timeframe,  # type: ignore[union-attr]
             "comparison_basis": "previous_analysis_cycle_snapshot",
             "comparison_available": False
         }
@@ -419,6 +429,7 @@ class AnalysisEngine:
             microstructure["snapshot_context"] = snapshot_context
             return microstructure
 
+        assert self.symbol is not None
         previous_snapshot = self.previous_microstructure_snapshots.get(self.symbol, {})
         previous_order_book = previous_snapshot.get("order_book")
         order_book_delta = self._build_order_book_deltas(order_book, previous_order_book)
@@ -428,6 +439,7 @@ class AnalysisEngine:
 
         microstructure["order_book"] = order_book
         microstructure["snapshot_context"] = snapshot_context
+        assert self.symbol is not None
         self.previous_microstructure_snapshots[self.symbol] = {
             "timestamp": microstructure.get("timestamp"),
             "order_book": self._build_order_book_comparison_state(order_book)
@@ -440,20 +452,23 @@ class AnalysisEngine:
 
         await self._process_long_term_data()
 
+        assert self.metrics_calculator is not None
+        assert self.pattern_analyzer is not None
+        assert self.context is not None
         await asyncio.to_thread(self.metrics_calculator.update_period_metrics, self.context)
 
         technical_patterns = await asyncio.to_thread(
             self.pattern_analyzer.detect_patterns,
             self.context.ohlcv_candles,
             self.context.technical_history,
-            self.context.long_term_data,
+            self.context.long_term_data,  # type: ignore[reportOptionalMemberAccess]
             self.context.timestamps
         )
 
         if any(technical_patterns.values()):
             self.context.technical_patterns = technical_patterns
 
-    async def _generate_ai_analysis(
+    async def _generate_ai_analysis(  # type: ignore[reportOptionalMemberAccess]
         self,
         provider: str | None,
         model: str | None,
@@ -481,6 +496,7 @@ class AnalysisEngine:
                     has_chart_analysis = False
                     self.logger.warning("Chart generation failed, proceeding without chart analysis")
 
+        assert self.prompt_builder is not None
         system_prompt = self.prompt_builder.build_system_prompt(
             self.symbol,
             self.context,
@@ -491,13 +507,17 @@ class AnalysisEngine:
             has_chart_analysis,
             dynamic_thresholds,
         )
+        assert self.prompt_builder is not None
         prompt = self.prompt_builder.build_prompt(
             context=self.context,
             additional_context=additional_context,
             previous_indicators=previous_indicators,
             position_context=position_context
         )
+        assert self.prompt_builder is not None
         prompt_metadata = self.prompt_builder.get_prompt_metadata()
+        assert self.prompt_builder is not None
+        assert self.token_counter is not None
         prompt_lint = self.prompt_builder.validate_and_warn(system_prompt, prompt, self.token_counter)
         self.last_prompt_metadata = prompt_metadata
         self.last_prompt_lint = prompt_lint
@@ -508,6 +528,7 @@ class AnalysisEngine:
         )
 
         analysis_result["article_urls"] = self.article_urls
+        assert self.context is not None
         analysis_result["timeframe"] = self.context.timeframe
         actual_provider, actual_model = self.model_manager.describe_provider_and_model(
             provider, model, chart=has_chart_analysis
@@ -518,14 +539,15 @@ class AnalysisEngine:
         analysis_result["prompt_metadata"] = prompt_metadata
         analysis_result["prompt_lint"] = prompt_lint
 
-        if self.context.technical_data:
-            analysis_result["technical_data"] = self.context.technical_data
+        assert self.context is not None
+        if self.context.technical_data:  # type: ignore[reportOptionalMemberAccess]
+            analysis_result["technical_data"] = self.context.technical_data  # type: ignore[reportOptionalMemberAccess]
 
-        if self.context.sentiment:
-            analysis_result["sentiment"] = self.context.sentiment
+        if self.context.sentiment:  # type: ignore[reportOptionalMemberAccess]
+            analysis_result["sentiment"] = self.context.sentiment  # type: ignore[reportOptionalMemberAccess]
 
-        if self.context.market_microstructure:
-            analysis_result["market_microstructure"] = self.context.market_microstructure
+        if self.context.market_microstructure:  # type: ignore[reportOptionalMemberAccess]
+            analysis_result["market_microstructure"] = self.context.market_microstructure  # type: ignore[reportOptionalMemberAccess]
 
         if self.last_generated_prompt:
             analysis_result["generated_prompt"] = self.last_generated_prompt
@@ -556,22 +578,24 @@ class AnalysisEngine:
             self.logger.info("Using admin-specified provider: %s, model: %s", provider, model)
 
         # Give result processor access to context for current_price
-        self.result_processor.context = self.context
+        assert self.result_processor is not None
+        self.result_processor.context = self.context  # type: ignore[assignment]
 
         # Pass chart image to result processor (it will use chart analysis if image provided)
 
         # Dashboard: Store both prompts for monitoring
         self.last_generated_prompt = prompt
-        self.last_prompt_timestamp = datetime.now().isoformat()
+        self.last_prompt_timestamp = datetime.now(timezone.utc).isoformat()
         self.last_system_prompt = system_prompt
         if chart_image:
             self.last_chart_buffer = io.BytesIO(chart_image.getvalue())
 
+        assert self.result_processor is not None
         result = await self.result_processor.process_analysis(
             system_prompt, prompt, chart_image=chart_image, provider=provider, model=model
         )
         self.last_llm_response = result.get("raw_response")
-        self.last_response_timestamp = datetime.now().isoformat()
+        self.last_response_timestamp = datetime.now(timezone.utc).isoformat()
         self.last_response_validation = result.get("response_validation")
         return result
 
@@ -582,6 +606,7 @@ class AnalysisEngine:
             BytesIO containing PNG chart image, or None if generation fails
         """
         try:
+            assert self.context is not None
             if self.context.ohlcv_candles is None or len(self.context.ohlcv_candles) == 0:
                 self.logger.warning("No OHLCV data available for chart generation")
                 return None
@@ -590,6 +615,8 @@ class AnalysisEngine:
 
             technical_history = self.context.technical_history
 
+            assert self.chart_generator is not None
+            assert self.symbol is not None
             chart_image = await self.chart_generator.create_chart_image(
                 ohlcv=self.context.ohlcv_candles,
                 technical_history=technical_history,
@@ -600,20 +627,22 @@ class AnalysisEngine:
             )
 
             if isinstance(chart_image, str):
-                with open(chart_image, "rb") as f:
+                with open(chart_image, "rb") as f:  # noqa: ASYNC230
                     img_buffer = io.BytesIO(f.read())
                     img_buffer.seek(0)
                     return img_buffer
             else:
                 return chart_image
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             self.logger.error("Failed to generate chart image: %s", e)
             return None
 
     async def _calculate_technical_indicators(self) -> None:
         """Calculate technical indicators using the technical calculator"""
         # Offload CPU-bound technical analysis to a separate thread to avoid blocking the event loop
+        assert self.technical_calculator is not None
+        assert self.context is not None
         indicators = await asyncio.to_thread(
             self.technical_calculator.get_indicators,
             self.context.ohlcv_candles
@@ -634,62 +663,64 @@ class AnalysisEngine:
                     technical_data[key] = [float(values[i, -1]) for i in range(values.shape[0])]
 
                 elif isinstance(values, tuple) and all(isinstance(item, np.ndarray) for item in values):
-                    technical_data[key] = [float(array[-1]) for array in values]
+                    technical_data[key] = [float(array[-1]) for array in values]  # type: ignore[arg-type]
 
                 elif isinstance(values, list):
                     if all(isinstance(item, np.ndarray) for item in values):
-                        technical_data[key] = [float(array[-1]) for array in values]
+                        technical_data[key] = [float(array[-1]) for array in values]  # type: ignore[arg-type]
                     else:
                         technical_data[key] = values
 
                 else:
-                    technical_data[key] = float(values)
+                    technical_data[key] = float(values)  # type: ignore
 
             except (IndexError, TypeError, ValueError) as e:
                 self.logger.warning("Could not process indicator '%s': %s", key, e)
                 continue
 
-        self.context.technical_data = technical_data
+        self.context.technical_data = technical_data  # type: ignore[reportOptionalMemberAccess]
 
     async def _process_long_term_data(self) -> None:
         """Process long-term historical data and calculate metrics"""
-        if self.context.long_term_data is None:
+        if self.context.long_term_data is None:  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("No long-term data available to process")
             return
 
-        if "data" not in self.context.long_term_data or self.context.long_term_data["data"] is None:
+        if "data" not in self.context.long_term_data or self.context.long_term_data["data"] is None:  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("Long-term data contains no OHLCV data")
             return
 
         try:
+            assert self.technical_calculator is not None
             long_term_indicators = await asyncio.to_thread(
                 self.technical_calculator.get_long_term_indicators,
-                self.context.long_term_data["data"]
+                self.context.long_term_data["data"]  # type: ignore[reportOptionalMemberAccess]
             )
 
-            self.context.long_term_data.update(long_term_indicators)
+            self.context.long_term_data.update(long_term_indicators)  # type: ignore[reportOptionalMemberAccess]
 
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
             self.logger.error("Error processing long-term data: %s", str(e))
 
-        if self.context.weekly_ohlcv is not None:
+        if self.context.weekly_ohlcv is not None:  # type: ignore[reportOptionalMemberAccess]
             try:
+                assert self.technical_calculator is not None
                 weekly_macro = await asyncio.to_thread(
                     self.technical_calculator.get_weekly_macro_indicators,
-                    self.context.weekly_ohlcv
+                    self.context.weekly_ohlcv  # type: ignore[reportOptionalMemberAccess]
                 )
-                self.context.weekly_macro_indicators = weekly_macro
+                self.context.weekly_macro_indicators = weekly_macro  # type: ignore[reportOptionalMemberAccess]
 
                 if "weekly_macro_trend" in weekly_macro:
                     trend = weekly_macro["weekly_macro_trend"]
                     self.logger.info("Weekly Macro: %s (%s%%)", trend.get("trend_direction"), trend.get("confidence_score"))
                     if trend.get("cycle_phase"):
                         self.logger.info("Cycle Phase: %s", trend["cycle_phase"])
-            except Exception as e:  # pylint: disable=broad-exception-caught
+            except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 self.logger.error("Error calculating weekly macro indicators: %s", str(e))
-                self.context.weekly_macro_indicators = None
+                self.context.weekly_macro_indicators = None  # type: ignore[reportOptionalMemberAccess]
         else:
-            self.context.weekly_macro_indicators = None
+            self.context.weekly_macro_indicators = None  # type: ignore[reportOptionalMemberAccess]
 
     async def _generate_brain_context_from_current_indicators(self, brain_service, technical_data: dict[str, Any]) -> str:
         """Generate brain context using CURRENT technical indicators.
@@ -717,13 +748,14 @@ class AnalysisEngine:
 
         volume_state = classify_volume_state(technical_data)
 
-        bb_position = classify_bb_position(technical_data, self.context.current_price)
+        assert self.context is not None
+        bb_position = classify_bb_position(technical_data, self.context.current_price)  # type: ignore[reportOptionalMemberAccess]
 
-        is_weekend = datetime.now().weekday() >= 5
+        is_weekend = datetime.now(timezone.utc).weekday() >= 5
 
-        market_sentiment = classify_market_sentiment(self.context.sentiment)
+        market_sentiment = classify_market_sentiment(self.context.sentiment)  # type: ignore[reportOptionalMemberAccess]
 
-        order_book_bias = classify_order_book_bias(self.context.market_microstructure)
+        order_book_bias = classify_order_book_bias(self.context.market_microstructure)  # type: ignore[reportOptionalMemberAccess]
 
         rsi_value = technical_data.get("rsi", 50.0)
         exit_execution_context = build_exit_execution_context_from_config(
@@ -746,4 +778,6 @@ class AnalysisEngine:
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
         )
+
+
 

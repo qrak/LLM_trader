@@ -2,9 +2,9 @@
 
 Provides functionality for indicators.sentiment.sentiment_indicators.py.
 """
+import math
 from dataclasses import dataclass
 
-import math
 import numpy as np
 from numba import njit
 

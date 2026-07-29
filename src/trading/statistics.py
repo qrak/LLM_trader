@@ -4,7 +4,9 @@ Manages statistics state, recalculation, and context formatting.
 """
 
 from typing import TYPE_CHECKING
+
 from src.logger.logger import Logger
+
 from .statistics_calculator import StatisticsCalculator
 
 if TYPE_CHECKING:

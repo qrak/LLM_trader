@@ -3,20 +3,21 @@
 Handles brain state management, learning from closed trades, and providing AI context.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
-from .vector_memory import VectorMemoryService
-from .data_models import ExitExecutionContext, Position, TradeDecision
+
+from .brain_context import BrainContextProvider
 from .brain_exit_profiles import ExitProfileResolver
+from .brain_experience import BrainExperienceRecorder
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
-from .brain_experience import BrainExperienceRecorder
-from .brain_context import BrainContextProvider
+from .data_models import ExitExecutionContext, Position, TradeDecision
+from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
+from .vector_memory import VectorMemoryService
 
 if TYPE_CHECKING:
     from .data_models import MarketConditions
-from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -200,7 +201,7 @@ class TradingBrainService:
         """
         thresholds = self.context_provider.get_dynamic_thresholds()
         base_threshold = self._tightening_policy.get_base_threshold(self._timeframe_minutes)
-        effective_threshold, source = self._tightening_policy._resolve_effective_threshold(
+        effective_threshold, source = self._tightening_policy.resolve_effective_threshold(
             base_threshold, thresholds
         )
         thresholds["sl_tightening_pct"] = round(effective_threshold * 100)
@@ -299,11 +300,7 @@ class TradingBrainService:
             k=k,
         )
 
-    def refresh_semantic_rules_if_stale(self) -> None:
-        """Refresh semantic rules once when active rules still use unknown exit profiles."""
-        self.reflection_engine.refresh_semantic_rules_if_stale()
-
-    def _trigger_reflection(self) -> None:
+    def trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize best-practice semantic rules.
 
         Called automatically every N trades. Identifies profitable patterns from
@@ -311,7 +308,7 @@ class TradingBrainService:
         """
         self.reflection_engine.trigger_reflection()
 
-    def _trigger_loss_reflection(self) -> None:
+    def trigger_loss_reflection(self) -> None:
         """Reflect on losing trades and synthesize anti-pattern and corrective rules.
 
         Called automatically every N trades. Analyzes LOSS and mixed-outcome patterns
@@ -319,9 +316,14 @@ class TradingBrainService:
         """
         self.reflection_engine.trigger_loss_reflection()
 
-    def _trigger_ai_mistake_reflection(self) -> None:
+    def trigger_ai_mistake_reflection(self) -> None:
         """Reflect on cases where the AI's confidence or premise was wrong."""
         self.reflection_engine.trigger_ai_mistake_reflection()
+
+    # Public aliases for backward compatibility with private methods
+    _trigger_reflection = trigger_reflection
+    _trigger_loss_reflection = trigger_loss_reflection
+    _trigger_ai_mistake_reflection = trigger_ai_mistake_reflection
 
     def track_position_update(
         self,

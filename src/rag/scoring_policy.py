@@ -4,10 +4,10 @@ Scoring policy for RAG article relevance.
 This module isolates ranking heuristics from ContextBuilder orchestration.
 """
 from __future__ import annotations
+
 import math
 import re
 from typing import Any
-
 
 FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
 

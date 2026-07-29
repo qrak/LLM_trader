@@ -98,8 +98,9 @@ class _FakeEmbeddingModel:
 
 
 @pytest.fixture
-def indexer(tmp_path: Path) -> CodebaseVectorIndexer:
+def indexer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CodebaseVectorIndexer:
     """Create a CodebaseVectorIndexer with fakes."""
+    monkeypatch.setattr("src.rag.code_vector_index._SKIP_DIRS", {"__pycache__", ".git", ".venv"})
     logger = MagicMock()
     logger.info = MagicMock()
     logger.warning = MagicMock()

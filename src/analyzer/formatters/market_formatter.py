@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.logger.logger import Logger
-from .market_overview_formatter import MarketOverviewFormatter
+
 from .long_term_formatter import LongTermFormatter
+from .market_overview_formatter import MarketOverviewFormatter
 
 
 class MarketFormatter:
@@ -32,6 +33,9 @@ class MarketFormatter:
             long_term_formatter: LongTermFormatter instance
         """
         self.logger = logger
+        if format_utils is None:
+            from src.utils.format_utils import FormatUtils
+            format_utils = FormatUtils()
         self.format_utils = format_utils
         self.config = config
         self.token_counter = token_counter
@@ -114,7 +118,7 @@ class MarketFormatter:
             description = coin_details.get("description", "")
             if description:
                 # Use token-based truncation instead of character-based
-                description_tokens = self.token_counter.count_tokens(description)
+                description_tokens = self.token_counter.count_tokens(description)  # type: ignore[reportOptionalMemberAccess]
 
                 if description_tokens > max_description_tokens:
                     # Truncate by sentences to maintain readability
@@ -145,13 +149,13 @@ class MarketFormatter:
                 test_text += " "
 
             # Check if adding this sentence would exceed token limit
-            if self.token_counter.count_tokens(test_text) > max_tokens:
+            if self.token_counter.count_tokens(test_text) > max_tokens:  # type: ignore[reportOptionalMemberAccess]
                 # If even the first sentence is too long, truncate it directly
                 if not truncated:
                     words = sentence.split()
                     for j, _ in enumerate(words):
                         test_word_text = " ".join(words[:j+1]) + "..."
-                        if self.token_counter.count_tokens(test_word_text) > max_tokens:
+                        if self.token_counter.count_tokens(test_word_text) > max_tokens:  # type: ignore[reportOptionalMemberAccess]
                             if j == 0:  # Even first word is too long
                                 return sentence[:50] + "..."
                             return " ".join(words[:j]) + "..."

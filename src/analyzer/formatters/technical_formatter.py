@@ -2,12 +2,17 @@
 Consolidated Technical Analysis Formatter.
 Handles all technical analysis formatting in a single comprehensive class.
 """
-from typing import TYPE_CHECKING
 import re
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from src.logger.logger import Logger
-from src.utils.data_utils import get_last_valid_value, get_last_n_valid, safe_array_to_scalar
+from src.utils.data_utils import (
+    get_last_n_valid,
+    get_last_valid_value,
+    safe_array_to_scalar,
+)
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
@@ -28,7 +33,7 @@ _STALENESS_TARGET_HOURS: dict[str, int] = {
 class TechnicalFormatter:
     """Consolidated formatter for all technical analysis sections."""
 
-    def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the technical analysis formatter.
 
         Args:
@@ -148,7 +153,7 @@ class TechnicalFormatter:
 
             return price_action
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error formatting price action with OHLCV: %s", e)
             # Fallback to simple format
@@ -331,7 +336,7 @@ class TechnicalFormatter:
                     if self.logger:
                         self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self.logger:
                     self.logger.debug("Error using stored technical_patterns: %s", e)
 
@@ -353,7 +358,7 @@ class TechnicalFormatter:
 
                 if pattern_summaries:
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Could not use fallback pattern detection: %s", e)
 
@@ -493,7 +498,7 @@ class TechnicalFormatter:
                     cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
 
             return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error formatting SMA structure: %s", e)
             return ""
@@ -529,7 +534,7 @@ class TechnicalFormatter:
             if current_price < cloud_bottom:
                 return " | Ichi:☁️↓"
             return " | Ichi:☁️="
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error calculating ichimoku signal: %s", e)
             return ""
@@ -593,3 +598,4 @@ class TechnicalFormatter:
         else:
             state = "Transition"
         return f"- Choppiness:{chop_val:.1f} ({state})"
+

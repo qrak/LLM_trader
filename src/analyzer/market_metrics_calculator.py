@@ -3,10 +3,11 @@
 Provides functionality for analyzer.market_metrics_calculator.py.
 """
 import math
+
 import numpy as np
-from src.utils.timeframe_validator import TimeframeValidator
 
 from src.logger.logger import Logger
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 class MarketMetricsCalculator:
@@ -58,7 +59,7 @@ class MarketMetricsCalculator:
                 "7D": TimeframeValidator.calculate_period_candles(timeframe, "7d"),
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to calculate dynamic periods for timeframe %s: %s", timeframe, e)
             periods = {
                 "1D": 24,
@@ -86,7 +87,7 @@ class MarketMetricsCalculator:
 
             context.market_metrics = period_metrics
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error updating period metrics: %s", e)
             if not period_metrics and n > 0:
                 self.logger.warning("Setting fallback period metrics due to error")
@@ -226,3 +227,4 @@ class MarketMetricsCalculator:
                 self.logger.debug("%s is scalar, skipping", ind_name)
 
         return indicator_changes
+

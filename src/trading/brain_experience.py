@@ -1,6 +1,6 @@
 """Experience recording behavior for the trading brain."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from src.logger.logger import Logger
@@ -130,6 +130,7 @@ class BrainExperienceRecorder:
                 "adx_at_entry": position.adx_at_entry,
                 "rsi_at_entry": position.rsi_at_entry,
                 "atr_at_entry": position.atr_at_entry,
+                "atr_percentage_at_entry": conditions.atr_percentage,
                 "volatility_level": position.volatility_level,
                 "sl_distance_pct": position.sl_distance_pct,
                 "tp_distance_pct": position.tp_distance_pct,
@@ -139,6 +140,7 @@ class BrainExperienceRecorder:
                 "max_profit_pct": position.max_profit_pct,
                 "fear_greed_index": conditions.fear_greed_index,
                 "market_regime": conditions.trend_direction,
+                "trend_strength": conditions.trend_strength,
                 "is_weekend": conditions.is_weekend,
                 "position_size_pct": position.size_pct,
                 "confluence_count": self.pattern_analyzer.count_strong_confluences(position.confluence_factors),
@@ -147,6 +149,16 @@ class BrainExperienceRecorder:
                 "order_book_bias": conditions.order_book_bias,
                 "macd_signal": conditions.macd_signal,
                 "bb_pos": conditions.bb_position,
+                "choppiness_at_entry": conditions.choppiness,
+                "rsi_level": conditions.rsi_level,
+                "volume_state": conditions.volume_state,
+                "vwap_at_entry": conditions.vwap,
+                "mfi_at_entry": conditions.mfi,
+                "cmf_at_entry": conditions.cmf,
+                "bb_percent_b": conditions.bb_percent_b,
+                "chandelier_long": conditions.chandelier_long,
+                "pfe_at_entry": conditions.pfe,
+                "supertrend_signal": conditions.supertrend_direction,
                 "position_entry_timestamp": position.entry_time.isoformat(),
                 "position_entry_trade_id": trade_id,
                 "position_id": position_id,
@@ -205,7 +217,7 @@ class BrainExperienceRecorder:
             order_book_bias=conditions.order_book_bias,
             exit_execution_context=exit_execution_context,
         )
-        update_id = f"update_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
+        update_id = f"update_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
         reasoning_str = f"Moved {action_type}: SL {old_sl:.2f}→{new_sl:.2f}, TP {old_tp:.2f}→{new_tp:.2f}"
         position_entry_timestamp = position.entry_time.isoformat()
         position_entry_trade_id = f"trade_{position_entry_timestamp}"
@@ -257,3 +269,4 @@ class BrainExperienceRecorder:
             }
         )
         self.logger.debug("Tracked position update: %s at %s%% PnL", action_type, f"{current_pnl_pct:+.1f}")
+

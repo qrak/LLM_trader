@@ -3,12 +3,13 @@
 Provides functionality for analyzer.pattern_analyzer.py.
 """
 from typing import Any
+
 import numpy as np
 
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.logger.logger import Logger
-from src.utils.profiler import profile_performance
 from src.utils.format_utils import timestamps_from_ms_array
+from src.utils.profiler import profile_performance
 
 
 class PatternAnalyzer:
@@ -39,7 +40,7 @@ class PatternAnalyzer:
         if timestamps is None and ohlcv_data is not None and len(ohlcv_data) > 0:
             try:
                 timestamps = timestamps_from_ms_array(ohlcv_data[:, 0])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self.logger:
                     self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
 
@@ -54,7 +55,7 @@ class PatternAnalyzer:
             patterns = self.indicator_pattern_engine.detect_patterns(
                 technical_history, ohlcv_data, sma_values, timestamps
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.warning("Error detecting indicator patterns: %s", e)
 
@@ -73,7 +74,7 @@ class PatternAnalyzer:
             self._warmed_up = True
             if self.logger:
                 self.logger.debug("PatternAnalyzer warm-up completed (Numba cache primed)")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             if self.logger:
                 self.logger.warning("PatternAnalyzer warm-up skipped: %s", exc)
 
@@ -120,5 +121,6 @@ class PatternAnalyzer:
             "sma_50": close_series.astype(np.float64),
             "sma_200": close_series.astype(np.float64)
         }
+
 
 

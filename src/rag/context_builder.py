@@ -4,10 +4,12 @@ Context Building Module for RAG Engine
 Handles building analysis context from news articles and search results.
 """
 from __future__ import annotations
+
 import re
-from datetime import datetime
 from collections import namedtuple
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
 from src.logger.logger import Logger
 from src.rag.article_processor import ArticleProcessor
 from src.rag.news_ingestion.schema_mapper import normalize_article_whitespace
@@ -81,7 +83,7 @@ class ContextBuilder:
                     relevant_categories.append(category.lower())
 
         scores: list[tuple[int, float]] = []
-        current_time = datetime.now().timestamp()
+        current_time = datetime.now(timezone.utc).timestamp()
 
         for i, article in enumerate(news_database):
             score = self._calculate_article_relevance(
@@ -195,7 +197,7 @@ class ContextBuilder:
         title = str(title).strip() if title is not None else "No Title"
         source = item.get("source_info", {"name": "Unknown Source"}).get("name", "Unknown Source")
         published_on = item.get("published_on", 0)
-        published = datetime.fromtimestamp(published_on).strftime("%Y-%m-%d %H:%M UTC")
+        published = datetime.fromtimestamp(published_on).strftime("%Y-%m-%d %H:%M UTC")  # noqa: DTZ006
 
         body = item.get("body", "").strip()
         if not body:
@@ -288,3 +290,4 @@ class ContextBuilder:
     def get_latest_article_urls(self) -> dict[str, str]:
         """Get the latest article URLs from the last context build."""
         return self.latest_article_urls.copy()
+

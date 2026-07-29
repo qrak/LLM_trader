@@ -198,13 +198,14 @@ class PostMortemService:
             data = self.unified_parser.extract_json_block(response_text)
             if data:
                 return PostMortemResult(**data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Post-mortem markdown parse error: %s", e)
 
         # Fallback: try raw JSON (LLM may return plain JSON without ``` fences)
         try:
             data = json.loads(response_text.strip())
             return PostMortemResult(**data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Post-mortem raw JSON parse error: %s", e)
             return None
+

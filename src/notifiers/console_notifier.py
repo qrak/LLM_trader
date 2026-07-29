@@ -3,7 +3,7 @@ Console Notifier - Fallback notification service when Discord is disabled.
 Prints AI trading analysis to console with colored and formatted output.
 """
 import io
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .base_notifier import BaseNotifier
 
@@ -131,7 +131,7 @@ class ConsoleNotifier(BaseNotifier):
                 print(f"\n{reasoning}")
 
             self._print_analysis_data(analysis, timeframe)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error printing analysis notification: %s", e)
 
     async def send_position_status(
@@ -178,7 +178,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Time Held:       {hours_held:.1f}h")
             print(f"Entry Time:      {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             print("=" * 60)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error printing position status: %s", e)
 
     async def send_performance_stats(
@@ -226,7 +226,7 @@ class ConsoleNotifier(BaseNotifier):
                 )
 
             print("=" * 60)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error printing performance stats: %s", e)
 
     def _print_analysis_data(self, analysis: dict, timeframe: str) -> None:
@@ -266,5 +266,6 @@ class ConsoleNotifier(BaseNotifier):
 
             print(f"Timeframe:       {timeframe}")
             print("=" * 60)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error formatting analysis data: %s", e)
+

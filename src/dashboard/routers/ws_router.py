@@ -1,7 +1,7 @@
 """WebSocket router for real-time dashboard updates."""
 
-from typing import Any
 from collections import defaultdict
+from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -38,7 +38,7 @@ class ConnectionManager:
         try:
             await websocket.accept()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Rollback if accept fails
             self.disconnect(websocket)
             return False
@@ -57,7 +57,7 @@ class ConnectionManager:
         for connection in list(self.active_connections):
             try:
                 await connection.send_json(data)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.disconnect(connection)
 
 
@@ -96,7 +96,7 @@ class WebSocketRouter:
                 try:
                     parsed = urlparse(origin)
                     origin_host = parsed.netloc
-                except Exception:
+                except Exception:  # noqa: BLE001
                     origin_host = None
 
                 if origin_host == host:
@@ -118,7 +118,7 @@ class WebSocketRouter:
                     await websocket.receive_text()
             except WebSocketDisconnect:
                 self.manager.disconnect(websocket)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.manager.disconnect(websocket)
 
     async def get_countdown(self) -> dict[str, Any]:
@@ -126,3 +126,4 @@ class WebSocketRouter:
         if self.dashboard_state:
             return self.dashboard_state.get_countdown_data()
         return {"next_check_utc": None, "seconds_remaining": None}
+

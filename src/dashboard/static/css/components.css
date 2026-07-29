@@ -173,7 +173,7 @@
 .stack-layout {
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 20px;
 }
 
 /* Components */
@@ -883,7 +883,7 @@ button:hover {
         min-height: 0;
     }
     .decision-graph {
-        min-height: 320px;
+        min-height: 280px;
         height: 320px;
     }
     .decision-detail {

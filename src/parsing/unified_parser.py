@@ -71,7 +71,7 @@ class UnifiedParser:
             self.logger.warning("Unable to parse AI response, using fallback. Preview: %s", raw_text[:200])
             return self._create_fallback_response(raw_text)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to parse AI response: %s", e)
             return self._create_error_response(str(e), raw_text)
 
@@ -140,7 +140,7 @@ class UnifiedParser:
                     if unwrap_key and isinstance(data, dict) and isinstance(data.get(unwrap_key), dict):
                         return data[unwrap_key]
                     return data
-        except (json.JSONDecodeError, Exception) as e:
+        except (json.JSONDecodeError, Exception) as e:  # noqa: BLE001
             self.logger.debug("JSON block extraction failed: %s", e)
         return None
 
@@ -370,3 +370,4 @@ class UnifiedParser:
             },
             "response_validation": self._create_validation_error_metadata(error_message, "parser_error")
         }
+

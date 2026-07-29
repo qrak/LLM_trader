@@ -3,9 +3,11 @@
 Provides functionality for indicators.volatility.volatility_indicators.py.
 """
 import math
+
 import numpy as np
 from numba import njit
-from src.indicators.overlap import sma_numba, ema_numba
+
+from src.indicators.overlap import ema_numba, sma_numba
 from src.indicators.statistical import stdev_numba
 
 
@@ -164,10 +166,8 @@ def vhf_numba(close, length=28, drift=1):
 
         for j in range(start_idx + drift, end_idx, drift):
             val = close[j]
-            if val > hcp:
-                hcp = val
-            if val < lcp:
-                lcp = val
+            hcp = max(hcp, val)
+            lcp = min(lcp, val)
 
             sum_diff += abs(val - prev_val)
             prev_val = val
@@ -335,10 +335,8 @@ def choppiness_index_numba(high, low, close, length=14):
         period_high = high[i - length + 1]
         period_low = low[i - length + 1]
         for j in range(i - length + 2, i + 1):
-            if high[j] > period_high:
-                period_high = high[j]
-            if low[j] < period_low:
-                period_low = low[j]
+            period_high = max(period_high, high[j])
+            period_low = min(period_low, low[j])
 
         range_hl = period_high - period_low
 

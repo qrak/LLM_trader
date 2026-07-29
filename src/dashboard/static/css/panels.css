@@ -177,7 +177,7 @@
 }
 
 .large-panel {
-    height: 500px;
+    min-height: 400px;
 }
 
 .medium-panel {
@@ -185,7 +185,7 @@
 }
 
 .visual-panel {
-    height: 450px;
+    min-height: 350px;
 }
 
 .visual-panel.minimized {
@@ -864,4 +864,195 @@
     color: var(--accent-primary);
     border-radius: 2px;
     padding: 0 2px;
+}
+
+/* ─── Live Console Panel ──────────────────────────────────────────── */
+
+.console-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 0 2px;
+}
+
+.console-page-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.console-page-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-dark-2);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.console-page-btn:hover {
+    background: var(--bg-dark-3);
+    color: var(--text-main);
+}
+
+.console-page-btn.active {
+    background: var(--bg-dark-3);
+    color: var(--accent-primary);
+    border-color: var(--border-glow);
+}
+
+.console-controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.console-controls .select {
+    background: var(--bg-dark-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: var(--text-main);
+    font-size: 12px;
+}
+
+.console-controls .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+/* Shared console container — used by Live Console, Last Prompt, Last Response */
+.console-container {
+    background: #0a0c10;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 12px;
+    height: calc(100vh - 220px);
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Prompt/response content: slightly larger for readability */
+.console-content {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c9d1d9;
+}
+
+.console-line {
+    padding: 1px 0;
+    border-left: 2px solid transparent;
+    padding-left: 8px;
+    transition: border-color 0.15s ease;
+}
+
+.console-line:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.console-line.lvl-error {
+    border-left-color: var(--accent-danger);
+}
+
+.console-line.lvl-warning {
+    border-left-color: var(--accent-warning);
+}
+
+.console-line.lvl-info {
+    border-left-color: transparent;
+}
+
+.console-line.lvl-debug {
+    border-left-color: transparent;
+}
+
+.console-line.lvl-other {
+    border-left-color: transparent;
+}
+
+/* ─── Console content markdown (prompt / response) ────────────────── */
+
+.console-content h1,
+.console-content h2,
+.console-content h3 {
+    color: var(--accent-primary);
+    margin-top: 18px;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.console-content strong {
+    color: var(--accent-warning);
+}
+
+.console-content code {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--accent-primary);
+}
+
+.console-content pre {
+    background: #000;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+}
+
+.console-content ul, .console-content ol {
+    padding-left: 20px;
+    margin: 6px 0;
+}
+
+.console-content li {
+    margin-bottom: 4px;
+}
+
+.console-content .warning-banner {
+    background: rgba(255, 215, 0, 0.08);
+    border-left: 3px solid var(--accent-warning);
+    padding: 8px 12px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+}
+
+/* ─── Mobile ──────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+    .console-container {
+        height: calc(100vh - 200px);
+        font-size: 11px;
+        padding: 8px;
+        border-radius: 6px;
+    }
+    .console-content {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .console-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .console-page-nav {
+        flex-wrap: wrap;
+    }
 }

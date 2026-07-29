@@ -80,13 +80,13 @@ class PerformanceRouter:
             try:
                 stats = await asyncio.to_thread(self._load_json_file, stats_file)
             except Exception:
-                self.logger.error("Failed to load stats file", exc_info=True)
+                self.logger.error("Failed to load stats file", exc_info=True)  # noqa: G201
         if self.persistence:
             try:
                 trades = await asyncio.to_thread(self.persistence.load_trade_history)
                 equity_curve = await asyncio.to_thread(self._process_trade_history, trades, stats)
             except Exception:
-                self.logger.error("Failed to process trade history", exc_info=True)
+                self.logger.error("Failed to process trade history", exc_info=True)  # noqa: G201
                 return {"error": "Failed to load trade history"}
         result = {
             "history": equity_curve,
@@ -108,8 +108,9 @@ class PerformanceRouter:
                 self.dashboard_state.set_cached("statistics", result)
                 return result
             except Exception:
-                self.logger.error("Failed to load statistics", exc_info=True)
+                self.logger.error("Failed to load statistics", exc_info=True)  # noqa: G201
                 return {"error": "Failed to load stats"}
         result = self._default_statistics()
         self.dashboard_state.set_cached("statistics", result)
         return result
+

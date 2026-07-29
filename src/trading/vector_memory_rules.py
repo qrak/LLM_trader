@@ -3,6 +3,7 @@
 import math
 from datetime import datetime, timezone
 from typing import Any
+
 # Bolt: pre-computed constants avoid re-calculating math.log on every rule score evaluation
 _LOG2: float = math.log(2)
 _LOG1P_FULL_SAMPLE: float = math.log1p(20)
@@ -228,7 +229,7 @@ class VectorMemoryRulesMixin:
             self.logger.info("Stored semantic rule: %s", rule_id)
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to store semantic rule: %s", e)
             return False
 
@@ -263,7 +264,7 @@ class VectorMemoryRulesMixin:
             rules.sort(key=lambda rule: rule["final_score"], reverse=True)
             return rules[:n_results]
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to get active rules: %s", e)
             return []
 
@@ -298,7 +299,7 @@ class VectorMemoryRulesMixin:
             )
             return len(existing_ids)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to deactivate semantic rules: %s", e)
             return 0
 
@@ -346,7 +347,7 @@ class VectorMemoryRulesMixin:
             rules.sort(key=lambda rule: rule["final_score"], reverse=True)
             return rules[:n_results]
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to get relevant rules: %s", e)
             return []
 
@@ -427,6 +428,7 @@ class VectorMemoryRulesMixin:
                 metadatas=updated_metadatas,
             )
             return len(updated_ids)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to update rule validation feedback: %s", e)
             return 0
+

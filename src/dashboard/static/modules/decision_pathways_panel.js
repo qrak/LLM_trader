@@ -341,7 +341,7 @@ function updateGraph(graph) {
         nodesDS.update(group);
     });
     setTimeout(function () {
-        network.fit({ animation: { duration: 200 } });
+        network.fit({ animation: false });
     }, 150);
 }
 

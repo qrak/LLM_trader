@@ -3,6 +3,7 @@ Trend calculation utilities for trend indicators.
 Extracted to reduce complexity in trend_indicators.py
 """
 import math
+
 import numpy as np
 from numba import njit
 

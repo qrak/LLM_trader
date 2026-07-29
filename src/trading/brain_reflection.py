@@ -26,42 +26,10 @@ class BrainReflectionEngine:
         self.analyzer = analyzer
         self.exit_profiles = exit_profiles
 
-    def deactivate_legacy_unknown_exit_rule(self, rule_id_prefix: str, pattern_key: str) -> None:
-        """Deactivate the stale unknown-profile rule once a resolved replacement exists."""
-        legacy_pattern_key = self.exit_profiles.legacy_unknown_exit_pattern_key(pattern_key)
-        if legacy_pattern_key == pattern_key:
-            return
-        legacy_rule_id = f"{rule_id_prefix}_{self.exit_profiles.sanitize_rule_key(legacy_pattern_key)}"
-        self.vector_memory.deactivate_semantic_rules([legacy_rule_id])
-
-    def refresh_semantic_rules_if_stale(self) -> None:
-        """Refresh semantic rules once when active rules still use unknown exit profiles."""
-        default_profile = self.exit_profiles.format_exit_profile_from_context(
-            self.exit_profiles.default_exit_execution_context
-        )
-        if default_profile == self.exit_profiles.UNKNOWN_EXIT_PROFILE:
-            return
-        try:
-            n_results = max(50, self.vector_memory.semantic_rule_count)
-            active_rules = self.vector_memory.get_active_rules(n_results=n_results)
-            has_stale_rule = any(
-                self.exit_profiles.UNKNOWN_EXIT_PROFILE in str(rule.get("text", ""))
-                or "sl_unknown_unknown_tp_unknown_unknown" in str(rule.get("rule_id", ""))
-                for rule in active_rules
-            )
-            if not has_stale_rule:
-                return
-            self.logger.info("Refreshing semantic rules with missing exit execution profiles")
-            self.trigger_reflection()
-            self.trigger_loss_reflection()
-            self.trigger_ai_mistake_reflection()
-        except Exception as e:
-            self.logger.warning("Semantic rule refresh failed: %s", e)
-
     def trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize best-practice semantic rules."""
         try:
-            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             win_metas = [meta for meta in all_metas if meta.get("outcome") == "WIN"]
             if len(win_metas) < 5:
                 self.logger.debug("Not enough winning trades for reflection (need 5+)")
@@ -91,7 +59,11 @@ class BrainReflectionEngine:
             metrics = self.analyzer.compute_group_metrics(group_metas)
             # Average surprise ratio for the group — high values indicate
             # outcomes driven by luck rather than thesis accuracy.
-            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in group_metas if m.get("surprise_ratio") is not None]
+            surprise_values = [
+                float(m.get("surprise_ratio", 1.0))
+                for m in group_metas
+                if m.get("surprise_ratio") is not None
+            ]
             avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             if metrics["win_rate"] < 0.6:
                 self.logger.debug(
@@ -115,7 +87,7 @@ class BrainReflectionEngine:
                 rule_text += f", avg surprise: {avg_surprise:.2f}{flag}"
             rule_text += ")"
             rule_id = f"rule_best_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
-            stored = self.vector_memory.store_semantic_rule(
+            self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self.analyzer.build_rule_metadata(
@@ -125,16 +97,14 @@ class BrainReflectionEngine:
                     total_analyzed=len(win_metas),
                 ),
             )
-            if stored:
-                self.deactivate_legacy_unknown_exit_rule("rule_best", pattern_key)
             self.logger.info("Reflection complete: stored best-practice rule '%s'", rule_text)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Reflection failed: %s", e)
 
     def trigger_loss_reflection(self) -> None:
         """Reflect on losing trades and synthesize anti-pattern and corrective rules."""
         try:
-            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             loss_metas = [meta for meta in all_metas if meta.get("outcome") == "LOSS"]
             if len(loss_metas) < 3:
                 self.logger.debug("Not enough losing trades for anti-pattern reflection (need 3+)")
@@ -162,7 +132,11 @@ class BrainReflectionEngine:
                 return
             group_metas = [meta for meta in all_metas if build_loss_key(meta) == pattern_key]
             metrics = self.analyzer.compute_group_metrics(group_metas)
-            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in group_metas if m.get("surprise_ratio") is not None]
+            surprise_values = [
+                float(m.get("surprise_ratio", 1.0))
+                for m in group_metas
+                if m.get("surprise_ratio") is not None
+            ]
             avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             failure_reason = self.analyzer.derive_failure_reason(metrics)
             recommended_adjustment = self.analyzer.derive_recommended_adjustment(metrics)
@@ -182,7 +156,7 @@ class BrainReflectionEngine:
                 rule_text += f", avg surprise: {avg_surprise:.2f}"
             rule_text += ")"
             rule_id = f"rule_{rule_type}_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
-            stored = self.vector_memory.store_semantic_rule(
+            self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self.analyzer.build_rule_metadata(
@@ -194,19 +168,16 @@ class BrainReflectionEngine:
                     recommended_adjustment=recommended_adjustment,
                 ),
             )
-            if stored:
-                self.deactivate_legacy_unknown_exit_rule("rule_anti_pattern", pattern_key)
-                self.deactivate_legacy_unknown_exit_rule("rule_corrective", pattern_key)
             self.logger.info(
-                "Loss reflection complete: stored %s rule '%s'", rule_type, rule_text
+                "Loss reflection complete: stored %s rule '%s'", rule_type, rule_id
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Loss reflection failed: %s", e)
 
     def trigger_ai_mistake_reflection(self) -> None:
         """Reflect on cases where the AI's confidence or premise was wrong."""
         try:
-            all_metas = self.vector_memory._get_trade_metadatas(exclude_updates=True)
+            all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             mistake_metas = [meta for meta in all_metas if self.analyzer.classify_ai_mistake(meta)]
             if len(mistake_metas) < 2:
                 self.logger.debug("Not enough AI mistake samples for reflection (need 2+)")
@@ -253,7 +224,12 @@ class BrainReflectionEngine:
             base_key = "|".join(base_parts[1:])
             comparison_group = [meta for meta in all_metas if build_base_key(meta) == base_key]
             metrics = self.analyzer.compute_group_metrics(comparison_group or matched_mistakes)
-            surprise_values = [float(m.get("surprise_ratio", 1.0)) for m in (comparison_group or matched_mistakes) if m.get("surprise_ratio") is not None]
+            group_metas_eval = comparison_group or matched_mistakes
+            surprise_values = [
+                float(m.get("surprise_ratio", 1.0))
+                for m in group_metas_eval
+                if m.get("surprise_ratio") is not None
+            ]
             avg_surprise = sum(surprise_values) / len(surprise_values) if surprise_values else 0.0
             failed_assumption = self.analyzer.derive_ai_assumption(matched_mistakes)
             failure_reason = self.analyzer.derive_ai_mistake_reason(
@@ -270,7 +246,7 @@ class BrainReflectionEngine:
                 rule_text += f", avg surprise: {avg_surprise:.2f}"
             rule_text += ")"
             rule_id = f"rule_ai_mistake_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
-            stored = self.vector_memory.store_semantic_rule(
+            self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
                 rule_text=rule_text,
                 metadata=self.analyzer.build_rule_metadata(
@@ -285,8 +261,7 @@ class BrainReflectionEngine:
                     recommended_adjustment=recommended_adjustment,
                 ),
             )
-            if stored:
-                self.deactivate_legacy_unknown_exit_rule("rule_ai_mistake", pattern_key)
-            self.logger.info("AI mistake reflection complete: stored rule '%s'", rule_text)
-        except Exception as e:
+            self.logger.info("AI mistake reflection complete: stored rule '%s'", rule_id)
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("AI mistake reflection failed: %s", e)
+

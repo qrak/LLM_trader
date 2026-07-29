@@ -1,29 +1,33 @@
 """Utilities for data manipulation, serialization, and type conversion."""
 import dataclasses
+import math
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, TypeVar, Union, get_args, get_origin
 
-import math
 import numpy as np
 from numpy.typing import NDArray
+from typing_extensions import Self
 
 T = TypeVar("T")
 
 
 def get_last_valid_value(
-    arr: NDArray,
+    arr: NDArray | Any | None,
     default: float | None = None
 ) -> float | None:
     """Extract the last non-NaN value from a numpy array.
 
     Args:
-        arr: Numpy array (float or object dtype).
+        arr: Numpy array (float or object dtype) or scalar.
         default: Value to return if no valid value found.
 
     Returns:
         Last valid (non-NaN) float value, or default if none found.
     """
+    if arr is None:
+        return default
+
     # Handle scalar values directly
     if isinstance(arr, (int, float)):
         return float(arr) if not math.isnan(arr) else default
@@ -40,16 +44,16 @@ def get_last_valid_value(
 
     # Bolt: search backward from the end to find the last non-NaN value without allocating
     # full index arrays (~6x faster)
-    n = len(arr)
+    n = len(arr)  # type: ignore
     for idx in range(n - 1, -1, -1):
-        val = arr[idx]
+        val = arr[idx]  # type: ignore
         if not math.isnan(val):
             return float(val)
 
     return default
 
 
-def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
+def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
     """Extract last N valid (non-NaN) values from array.
 
     Args:
@@ -59,9 +63,8 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
     Returns:
         Array containing up to n valid values from the end.
     """
-    # Bolt: reverse scan to collect up to n valid non-NaN items without allocating full-array masks (~1.5x faster)
-    if len(arr) == 0 or n <= 0:
-        return np.array([], dtype=arr.dtype if len(arr) > 0 else float)
+    if arr is None or len(arr) == 0 or n <= 0:  # type: ignore[arg-type]
+        return np.array([], dtype=float)
 
     # Handle object array
     if arr.dtype == object:
@@ -72,8 +75,8 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
 
     # Collect matching values working backwards
     valid_vals = []
-    for idx in range(len(arr) - 1, -1, -1):
-        val = arr[idx]
+    for idx in range(len(arr) - 1, -1, -1):  # type: ignore
+        val = arr[idx]  # type: ignore
         if not math.isnan(val):
             valid_vals.append(val)
             if len(valid_vals) == n:
@@ -84,7 +87,7 @@ def get_last_n_valid(arr: NDArray, n: int) -> NDArray:
 
     # Reverse back to maintain original order
     valid_vals.reverse()
-    return np.array(valid_vals, dtype=arr.dtype)
+    return np.array(valid_vals, dtype=arr.dtype)  # type: ignore
 
 
 def safe_array_to_scalar(val: Any, default: float = 0.0) -> float:
@@ -235,14 +238,14 @@ def serialize_for_json(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
         try:
             return obj.tolist()
-        except Exception:
+        except Exception:  # noqa: BLE001
             # Fallback for complex/mixed arrays
             return [serialize_for_json(v) for v in obj]
     if obj_type is datetime or isinstance(obj, datetime):
         return obj.isoformat()
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         if hasattr(obj, "to_dict"):
-            return serialize_for_json(obj.to_dict())
+            return serialize_for_json(obj.to_dict())  # type: ignore[reportAttributeAccessIssue]
         return serialize_for_json(dataclasses.asdict(obj))
     if isinstance(obj, np.generic):
         try:
@@ -250,12 +253,12 @@ def serialize_for_json(obj: Any) -> Any:
             if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
                 return None
             return val
-        except Exception:
+        except Exception:  # noqa: BLE001
             return str(obj)
     # Last resort fallback
     try:
         return str(obj)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -270,10 +273,10 @@ class SerializableMixin:
     def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary with ISO format dates."""
         # Bolt: module-level _dataclass_dict_factory avoids closure allocation per to_dict call (~1.1x faster)
-        return dataclasses.asdict(self, dict_factory=_dataclass_dict_factory)
+        return dataclasses.asdict(self, dict_factory=_dataclass_dict_factory)  # type: ignore
 
     @classmethod
-    def from_dict(cls: type[T], data: dict[str, Any]) -> T:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """Create dataclass instance from dictionary, handling types."""
         # Bolt: pre-analyzed field metadata cached via _get_dataclass_field_meta speeds up from_dict by ~2.5x
         fields_meta = _get_dataclass_field_meta(cls)
@@ -282,12 +285,12 @@ class SerializableMixin:
         for key, value in data.items():
             meta = fields_meta.get(key)
             if meta is not None:
-                init_args[key] = cls._convert_value_fast(value, meta)
+                init_args[key] = cls._convert_value_fast(value, meta)  # type: ignore[reportAttributeAccessIssue]
 
         return cls(**init_args)
 
     @classmethod
-    def _convert_value_fast(cls, value: Any, meta: _DataclassFieldMeta) -> Any:
+    def _convert_value_fast(cls, value: Any, meta: _DataclassFieldMeta) -> Any:  # type: ignore[reportAttributeAccessIssue]
         if value is None:
             if not meta.is_optional and meta.unwrapped_type in _PRIMITIVE_DEFAULTS:
                 return _PRIMITIVE_DEFAULTS[meta.unwrapped_type]
@@ -357,3 +360,4 @@ class SerializableMixin:
             return target_type.from_dict(value) if issubclass(target_type, SerializableMixin) else target_type(**value)
 
         return value
+

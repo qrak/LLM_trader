@@ -1,9 +1,10 @@
 """Router for fetching dashboard visualizations and charts."""
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter
+
 
 class VisualsRouter:
     """Handles endpoints related to charts and visuals."""
@@ -23,7 +24,7 @@ class VisualsRouter:
                 chart_base64 = base64.b64encode(chart_bytes).decode("utf-8")
                 return {
                     "chart_base64": chart_base64,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             return {
                 "error": "Chart buffer exists but is empty",
@@ -44,3 +45,4 @@ class VisualsRouter:
                 "buffer_value": str(type(last_chart_buffer)) if last_chart_buffer else "None"
             }
         }
+

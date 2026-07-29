@@ -5,10 +5,11 @@ Implements common patterns: context managers, image processing, error handling.
 import io
 import re
 from abc import ABC, abstractmethod
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from src.logger.logger import Logger
+
 from .response_models import ChatResponseModel, ChoiceModel, MessageModel, UsageModel
 
 

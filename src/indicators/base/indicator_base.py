@@ -3,9 +3,9 @@
 Provides functionality for indicators.base.indicator_base.py.
 """
 import timeit
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 import numpy as np
 import pandas as pd

@@ -101,7 +101,7 @@ class CodebaseVectorIndexer:
             )
             try:
                 count = collection.count()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 count = 0
             if isinstance(count, int) and count > 0 and self._embedding_model is not None:
                 try:
@@ -117,7 +117,7 @@ class CodebaseVectorIndexer:
                         )
                         try:
                             self._client.delete_collection(name=COLLECTION_NAME)
-                        except Exception:
+                        except Exception:  # noqa: BLE001, S110
                             pass
                         collection = self._client.create_collection(
                             name=COLLECTION_NAME,
@@ -380,14 +380,14 @@ class CodebaseVectorIndexer:
         collection = self._ensure_collection()
         try:
             count = collection.count()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return {}
         if count == 0:
             return {}
 
         try:
             results = collection.get(include=["metadatas"])
-        except Exception:
+        except Exception:  # noqa: BLE001
             return {}
 
         hashes: dict[str, str] = {}
@@ -410,7 +410,7 @@ class CodebaseVectorIndexer:
             ids = results.get("ids", [])
             if ids:
                 collection.delete(ids=ids)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.debug("Failed to delete chunks for %s: %s", rel_path, exc)
 
     def index_codebase(self, force: bool = False) -> dict[str, int]:
@@ -491,7 +491,7 @@ class CodebaseVectorIndexer:
                 )
                 indexed_count += 1
                 total_chunks += len(chunks)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 self.logger.warning("Failed to index %s: %s", rel_path, exc)
 
         self.logger.info(
@@ -528,7 +528,7 @@ class CodebaseVectorIndexer:
         collection = self._ensure_collection()
         try:
             count = collection.count()
-        except Exception:
+        except Exception:  # noqa: BLE001
             count = 0
 
         if count == 0:
@@ -545,7 +545,7 @@ class CodebaseVectorIndexer:
                 where=where_filter,
                 include=["documents", "metadatas", "distances"],
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.warning("Codebase search failed: %s", exc)
             return []
 
@@ -581,7 +581,7 @@ class CodebaseVectorIndexer:
         collection = self._ensure_collection()
         try:
             count = collection.count()
-        except Exception:
+        except Exception:  # noqa: BLE001
             count = 0
 
         return {
@@ -589,3 +589,4 @@ class CodebaseVectorIndexer:
             "total_chunks": count,
             "project_root": str(self._project_root),
         }
+

@@ -22,11 +22,11 @@ export async function updatePromptTab() {
         const timestamp = data.timestamp ? new Intl.DateTimeFormat(navigator.language, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(data.timestamp)) : 'N/A';
         const source = data.source === 'disk' ? '💾 From disk' : '🧠 From memory';
         if (meta) meta.textContent = `${source} | ${timestamp}`;
-        // Render prompt with markdown and discord-content styling (same as response)
+        // Render prompt with console-content styling
         if (content && window.marked && window.DOMPurify) {
             viewer.innerHTML = DOMPurify.sanitize(marked.parse(content));
             viewer.classList.remove('prompt-content', 'code-block');
-            viewer.classList.add('discord-content');
+            viewer.classList.add('console-content');
         } else {
             viewer.textContent = content;
         }

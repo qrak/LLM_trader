@@ -28,6 +28,23 @@ When launched without a specific target file (e.g. `"start Refactor and find wor
 
 ---
 
+## 🛡️ Static Analysis & Multi-Tool Audit Mode (Ruff, Pyright, Pylint)
+
+When asked to clean up code based on static analysis reports or type errors:
+1. **Run Code Audit Script:**
+   ```powershell
+   .venv\Scripts\python.exe scripts/run_code_audit.py
+   ```
+   *Report is saved to `data/static_analysis_report.txt`.*
+2. **Inspect Audit Output:**
+   Read `data/static_analysis_report.txt` using `view_file` to review categorized findings across **Ruff**, **Pyright** (type annotations & attributes), and **Pylint** (code quality & structural issues).
+3. **Systematic Cleanup:**
+   Prioritize Pyright type errors $\rightarrow$ Pylint logic warnings $\rightarrow$ Ruff formatting/import rules.
+4. **Verification & Journal:**
+   Re-run `.venv\Scripts\python.exe scripts/run_code_audit.py`, verify with `pytest tests/ -x -q`, and append entry to `.ai/refactor-journal.md`.
+
+---
+
 ## Core Conventions (from `llm-trader-development` skill + AGENTS.md)
 
 These are **binding** — every PR must respect them:
@@ -89,12 +106,17 @@ Use `@retry_async` (from `src/utils/decorators.py`) for network/exchange calls a
 
 ### 6. Full Test Suite Before Commit
 
-```bash
-pytest tests/ -x -q
-```
-Delete `position_state.json` and `position_state.json.tmp` before running to avoid stale state pollution.
+Every change must pass `pytest tests/ -x -q` with 0 failures before creating a PR or committing.
 
-### 7. No In-Function Lazy Imports (Pylint C0415) & DI Architectural Invariants
+### 7. Zero Backward Compatibility & Startup Clutter
+
+- Runtime code in `src/` and `start.py` must remain 100% clean, canonical, and clutter-free.
+- Never introduce inline schema migration `ALTER TABLE` statements, legacy unit conversion methods, rule migration hooks (`refresh_semantic_rules_if_stale`), or `try/except` fallback paths into runtime service initialization.
+- Never add `sys.path.insert(0, ...)` manipulation hacks into `start.py`.
+- Never include startup auto-rehydration loops in `start.py`. Any database or vector storage rehydrations/conversions MUST be executed explicitly via standalone CLI scripts (e.g., in `scripts/`), after which the script is executed once and deleted.
+- **Classes Only in `src/utils/`**: All utility concerns across `src/utils/` and `app.py` must be encapsulated as a Class (e.g., `JournalRotator`, `TokenCounter`). Standalone utility functions are strictly forbidden.
+
+### 8. No In-Function Lazy Imports (Pylint C0415) & DI Architectural Invariants
 
 - **Top-Level Imports Only:** All module imports must be placed at the top level of `.py` files (`Pylint C0415: import-outside-toplevel`). Never use in-function lazy imports (`import x` inside a method or function) to defer loading or suppress linter errors.
 - **Group Package Imports:** Keep imports from package `src` grouped together cleanly (`Pylint C0412: ungrouped-imports`).

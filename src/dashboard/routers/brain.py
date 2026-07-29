@@ -9,16 +9,15 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 
 from src.utils.indicator_classifier import (
+    build_context_string_from_technical_data,
     build_exit_execution_context,
     build_exit_execution_context_from_config,
     build_exit_execution_context_from_position,
-    build_context_string_from_technical_data,
     build_query_document_from_technical_data,
     classify_adx_label,
     classify_trend_direction,
     format_exit_execution_context,
 )
-
 
 RULE_METADATA_FIELDS = frozenset((
     "rule_type",
@@ -470,7 +469,7 @@ def _extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[st
     if unified_parser:
         try:
             parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
-        except Exception:
+        except Exception:  # noqa: BLE001
             parsed_analysis = None
 
     if parsed_analysis:
@@ -534,7 +533,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
         response = data.get("response", {})
         current_price = response.get("current_price")
         sentiment_data: dict[str, Any] | None = data.get("sentiment")
-        is_weekend = datetime.now().weekday() >= 5
+        is_weekend = datetime.now(timezone.utc).weekday() >= 5
         shared_kwargs: dict[str, Any] = {
             "technical_data": technical_data,
             "current_price": current_price,
@@ -546,7 +545,7 @@ def _build_current_market_context(config, logger, unified_parser=None) -> tuple[
         query_document = build_query_document_from_technical_data(**shared_kwargs)
         return display_context, query_document
     except Exception:  # pylint: disable=broad-exception-caught
-        logger.error("Failed to build market context", exc_info=True)
+        logger.error("Failed to build market context", exc_info=True)  # noqa: G201
         return "", ""
 
 
@@ -636,7 +635,7 @@ class BrainRouter:
                 extracted = _extract_market_status(prev_data, self.unified_parser)
                 status.update(extracted)
         except Exception:
-            self.logger.error("Failed to load brain status", exc_info=True)
+            self.logger.error("Failed to load brain status", exc_info=True)  # noqa: G201
 
         try:
             if stats_file.exists():
@@ -647,7 +646,7 @@ class BrainRouter:
                     "current_capital": stats.get("current_capital", 0)
                 })
         except Exception:
-            self.logger.error("Failed to load statistics", exc_info=True)
+            self.logger.error("Failed to load statistics", exc_info=True)  # noqa: G201
         self.dashboard_state.set_cached("brain_status", status)
         return status
 
@@ -695,7 +694,7 @@ class BrainRouter:
             self.dashboard_state.set_cached("rules", rules)
             return rules
         except Exception:
-            self.logger.error("Failed to retrieve active rules", exc_info=True)
+            self.logger.error("Failed to retrieve active rules", exc_info=True)  # noqa: G201
             return []
 
     @staticmethod
@@ -807,7 +806,7 @@ class BrainRouter:
             if not query:
                 self.dashboard_state.set_cached(cache_key, result)
         except Exception:
-            self.logger.error("Failed to retrieve vector details", exc_info=True)
+            self.logger.error("Failed to retrieve vector details", exc_info=True)  # noqa: G201
             result["error"] = "Internal error retrieving vector details"
         return result
 
@@ -828,7 +827,7 @@ class BrainRouter:
                     if match:
                         current_price = float(match.group(1).replace(",", ""))
             except Exception:
-                self.logger.error("Failed to parse current price from prompt", exc_info=True)
+                self.logger.error("Failed to parse current price from prompt", exc_info=True)  # noqa: G201
 
         if not self.persistence:
             return {"has_position": False, "error": "Persistence not available"}
@@ -904,7 +903,7 @@ class BrainRouter:
                 await self.dashboard_state.update_price(price)
             return {"success": True, "current_price": price, "symbol": symbol}
         except Exception:
-            self.logger.error("Internal error during price refresh", exc_info=True)
+            self.logger.error("Internal error during price refresh", exc_info=True)  # noqa: G201
             return {"success": False, "error": "Internal error during price refresh"}
 
     async def get_blocked_trades(
@@ -930,7 +929,7 @@ class BrainRouter:
                 "blocked_trades": blocked,
             }
         except Exception:
-            self.logger.error("Failed to retrieve blocked trades for dashboard", exc_info=True)
+            self.logger.error("Failed to retrieve blocked trades for dashboard", exc_info=True)  # noqa: G201
             return {"blocked_count": 0, "blocked_trades": [], "error": "Internal error"}
 
     async def get_post_mortems(self, q: str | None = None, limit: int = 20) -> dict[str, Any]:
@@ -954,7 +953,7 @@ class BrainRouter:
             else:
                 results = self.post_mortem_repo.get_recent_post_mortems(limit=limit)
             return {"count": len(results), "post_mortems": results}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching post-mortems: %s", e)
             return {"count": 0, "post_mortems": [], "error": str(e)}
 
@@ -1010,7 +1009,7 @@ class BrainRouter:
                 self.config, timeframe
             ).to_dict()
         except Exception:
-            self.logger.error("Failed to build exit management for decision-summary", exc_info=True)
+            self.logger.error("Failed to build exit management for decision-summary", exc_info=True)  # noqa: G201
 
         try:
             data_dir = self.config.DATA_DIR
@@ -1035,14 +1034,14 @@ class BrainRouter:
                         "text_available": bool(text_analysis),
                     }
         except Exception:
-            self.logger.error("Failed to load previous response for decision-summary", exc_info=True)
+            self.logger.error("Failed to load previous response for decision-summary", exc_info=True)  # noqa: G201
 
         now["brain_lifecycle"] = self.dashboard_state.get_brain_lifecycle()
 
         try:
             position = await self.get_current_position()
         except Exception:
-            self.logger.error("Failed to load position for decision-summary", exc_info=True)
+            self.logger.error("Failed to load position for decision-summary", exc_info=True)  # noqa: G201
             position = {"has_position": False}
 
         memory: dict[str, Any] = {
@@ -1088,11 +1087,11 @@ class BrainRouter:
                 memory["top_experiences"] = top_experiences
                 memory["confidence_stats"] = vector_details.get("confidence_stats") or {}
             except Exception:
-                self.logger.error("Failed to load vector details for decision-summary", exc_info=True)
+                self.logger.error("Failed to load vector details for decision-summary", exc_info=True)  # noqa: G201
                 try:
                     memory["experience_count"] = self.vector_memory.trade_count
                     memory["rule_count"] = self.vector_memory.semantic_rule_count
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001
                     self.logger.warning("Failed to read fallback vector_memory counters: %s", exc)
 
             try:
@@ -1113,7 +1112,7 @@ class BrainRouter:
                 if not memory.get("rule_count"):
                     memory["rule_count"] = len(rules)
             except Exception:
-                self.logger.error("Failed to load rules for decision-summary", exc_info=True)
+                self.logger.error("Failed to load rules for decision-summary", exc_info=True)  # noqa: G201
 
             try:
                 blocked_payload = await self.get_blocked_trades(limit=blocked_limit)
@@ -1123,7 +1122,7 @@ class BrainRouter:
                     "items": items[:blocked_limit],
                 }
             except Exception:
-                self.logger.error("Failed to load blocked trades for decision-summary", exc_info=True)
+                self.logger.error("Failed to load blocked trades for decision-summary", exc_info=True)  # noqa: G201
 
         journal: dict[str, Any] = {"count": 0, "items": []}
         try:
@@ -1141,7 +1140,7 @@ class BrainRouter:
                 "items": normalized,
             }
         except Exception:
-            self.logger.error("Failed to load post-mortems for decision-summary", exc_info=True)
+            self.logger.error("Failed to load post-mortems for decision-summary", exc_info=True)  # noqa: G201
 
         pos_dict = position if isinstance(position, dict) else {"has_position": False}
         synopsis = _build_decision_synopsis(
@@ -1185,3 +1184,4 @@ class BrainRouter:
         }
         self.dashboard_state.set_cached("decision_summary", result)
         return result
+

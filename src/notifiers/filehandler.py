@@ -5,8 +5,8 @@ Provides functionality for notifiers.filehandler.py.
 import asyncio
 import json
 import os
-from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -70,15 +70,15 @@ class DiscordFileHandler:
                 return False
 
         if expire_after is None:
-            expire_after = self.config.FILE_MESSAGE_EXPIRY
-        now = datetime.now()
+            expire_after = getattr(self.config, "FILE_MESSAGE_EXPIRY", 0) or 0
+        now = datetime.now(timezone.utc)
         message_data = {
             "channel_id": channel_id,
             "user_id": user_id,
             "message_type": message_type,
             "tracked_at": now.isoformat(),
             "expire_after": expire_after,
-            "expires_at": now.timestamp() + expire_after,
+            "expires_at": now.timestamp() + expire_after,  # type: ignore
         }
 
         async with self._tracking_lock:
@@ -89,7 +89,7 @@ class DiscordFileHandler:
                 if success:
                     self.logger.debug("Tracking message %s for deletion", message_id)
                 return success
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error tracking message %s: %s", message_id, e)
                 return False
 
@@ -106,7 +106,7 @@ class DiscordFileHandler:
                 self.logger.info("Successfully deleted %s expired messages during cleanup", deleted_count)
 
             return deleted_count
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error in check_and_delete_expired_messages: %s", e)
             return 0
 
@@ -128,7 +128,7 @@ class DiscordFileHandler:
             if success:
                 await self._remove_message_tracking(message_id)
                 return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error processing deletion for message %s: %s", message_id, e)
 
         return False
@@ -144,19 +144,19 @@ class DiscordFileHandler:
                 except asyncio.CancelledError:
                     self.logger.info("Message cleanup task cancelled")
                     break
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.error("Error in scheduled message cleanup: %s", e)
                 await asyncio.sleep(self.cleanup_interval)
         except asyncio.CancelledError:
             self.logger.info("Periodic message cleanup task cancelled")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Unexpected error in periodic message cleanup task: %s", e)
 
     async def _get_expired_messages(self) -> list[tuple[int, int]]:
         async with self._tracking_lock:
             tracking_data = await self._load_tracking_data()
 
-        current_time = datetime.now().timestamp()
+        current_time = datetime.now(timezone.utc).timestamp()
         expired_messages = []
         for message_id_str, data in tracking_data.items():
             try:
@@ -171,21 +171,21 @@ class DiscordFileHandler:
         if not os.path.exists(self.tracking_file):
             return {}
         try:
-            with open(self.tracking_file, encoding="utf-8") as file:
+            with open(self.tracking_file, encoding="utf-8") as file:  # noqa: ASYNC230
                 return json.load(file)
         except json.JSONDecodeError:
             self.logger.warning("Corrupted tracking file. Creating new.")
             return {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading tracking data: %s", e)
             return {}
 
     async def _save_tracking_data(self, data: dict[str, Any]) -> bool:
         try:
-            with open(self.tracking_file, "w", encoding="utf-8") as file:
+            with open(self.tracking_file, "w", encoding="utf-8") as file:  # noqa: ASYNC230
                 json.dump(data, file)
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving tracking data: %s", e)
             return False
 
@@ -204,7 +204,7 @@ class DiscordFileHandler:
         except discord.NotFound:
             self.logger.debug("Message %s already deleted (NotFound)", message_id)
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error deleting message %s: %s", message_id, e)
             return False
 
@@ -240,5 +240,6 @@ class DiscordFileHandler:
                 self.cleanup_task.cancel()
             self.cleanup_task = None
             self.logger.info("DiscordFileHandler shutdown complete")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during DiscordFileHandler shutdown: %s", e)
+

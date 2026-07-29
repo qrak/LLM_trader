@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
 from src.logger.logger import Logger
+
 from .crawl4ai_enricher import Crawl4AIEnricher
 from .rss_primitives import (
     FetchResult,

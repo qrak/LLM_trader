@@ -5,14 +5,13 @@ Provides functionality for utils.decorators.py.
 import asyncio
 import functools
 import random
-import traceback
 import socket
+import traceback
 from typing import Any
 
-import ccxt
-import aiohttp
 import aiodns
-
+import aiohttp
+import ccxt
 
 _RATE_LIMIT_PHRASES = {
     "too many requests", "rate limit", "429", "ratelimit",
@@ -88,7 +87,7 @@ class _RetryContext:
     @staticmethod
     def _add_jitter(delay: float) -> float:
         """Add ±25% random jitter to prevent thundering herd on concurrent retries."""
-        return delay * (0.75 + random.random() * 0.5)  # noqa: S311 # nosec B311
+        return delay * (0.75 + random.random() * 0.5)  # nosec B311
 
     def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
         self.logger = instance.logger
@@ -117,7 +116,7 @@ class _RetryContext:
              f"{prefix}Function {self.class_name}.{self.func_name} failed after {self.max_retries} retries. "
              f"Last error: {error_type} - {error}")
 
-    async def _handle_retryable_error(self, template: str, error: Exception, error_type: str = None) -> bool:
+    async def _handle_retryable_error(self, template: str, error: Exception, error_type: str | None = None) -> bool:  # type: ignore[arg-type]
         """Common logic for handling retryable errors."""
         if not self._should_continue_retrying():
             self._log_failure(error_type or type(error).__name__, error)
@@ -196,7 +195,7 @@ class _ApiRetryContext:
         self.backoff_factor = backoff_factor
         self.max_delay = max_delay
 
-    async def execute_with_retry(self) -> dict[str, Any] | None:
+    async def execute_with_retry(self) -> dict[str, Any] | None:  # type: ignore[arg-type]
         """Execute the function with retry logic."""
         attempt = 0
         last_response: dict[str, Any] | None = None

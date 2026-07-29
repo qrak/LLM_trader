@@ -2,7 +2,7 @@
 Market Overview Builder
 Handles building and structuring market overview data.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from src.logger.logger import Logger
@@ -17,8 +17,8 @@ class MarketOverviewBuilder:
 
     def build_overview_structure(self, price_data: dict | None, coingecko_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
         """Build the complete market overview structure."""
-        overview = {
-            "timestamp": datetime.now().isoformat(),
+        overview: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "summary": "CRYPTO MARKET OVERVIEW"
         }
 
@@ -115,19 +115,19 @@ class MarketOverviewBuilder:
         """Build market overview from fetched data - main entry point."""
         try:
             return self.build_overview_structure(price_data, coingecko_data, top_coins)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error building market overview: %s", e)
             return {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "summary": "CRYPTO MARKET OVERVIEW - Error occurred",
-                "published_on": datetime.now().timestamp()
+                "published_on": datetime.now(timezone.utc).timestamp()
             }
 
     def _finalize_overview(self, overview: dict) -> dict[str, Any]:
         """Finalize and validate the overview structure."""
         try:
             # Add metadata
-            overview["published_on"] = datetime.now().timestamp()
+            overview["published_on"] = datetime.now(timezone.utc).timestamp()
             overview["data_sources"] = []
 
             # Track data sources
@@ -143,6 +143,7 @@ class MarketOverviewBuilder:
 
             return overview
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error finalizing overview: %s", e)
             return overview
+

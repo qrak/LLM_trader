@@ -6,7 +6,7 @@ Extracted from TradingStrategy to reduce SRP violation (was 1151 lines / 19 meth
 from __future__ import annotations
 
 import re
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.utils.indicator_classifier import (
     classify_bb_position,
@@ -14,13 +14,32 @@ from src.utils.indicator_classifier import (
     classify_market_sentiment,
     classify_order_book_bias,
     classify_rsi_label,
-    classify_volume_state,
     classify_volatility_level,
+    classify_volume_state,
 )
+
 from .data_models import MarketConditions, Position
 
 if TYPE_CHECKING:
     from src.logger.logger import Logger
+
+
+def _resolve_scalar(value: Any, default: float = 0.0) -> float:
+    """Extract scalar float from potentially array-like value (numpy, list)."""
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)  # numpy scalar
+    except (TypeError, ValueError):
+        pass
+    try:
+        if len(value) > 0:
+            return float(value[-1])
+        return default
+    except (TypeError, ValueError):
+        return default
 
 
 class MarketConditionsExtractor:
@@ -101,6 +120,18 @@ class MarketConditionsExtractor:
                 conditions["atr_percentage"] = atr_pct
                 conditions["volatility"] = classify_volatility_level({"atr_percent": atr_pct})
 
+                # --- NEW: enriched indicators for vector DB learning (July 2026) ---
+                conditions["vwap"] = _resolve_scalar(tech_data.get("vwap"), 0.0)
+                conditions["mfi"] = _resolve_scalar(tech_data.get("mfi"), 50.0)
+                conditions["cmf"] = _resolve_scalar(tech_data.get("cmf"), 0.0)
+                conditions["bb_percent_b"] = _resolve_scalar(tech_data.get("bb_percent_b"), 0.5)
+                conditions["chandelier_long"] = _resolve_scalar(tech_data.get("chandelier_long"), 0.0)
+                conditions["pfe"] = _resolve_scalar(tech_data.get("pfe"), 0.0)
+                st_dir = _resolve_scalar(tech_data.get("supertrend_direction"), 0.0)
+                conditions["supertrend_direction"] = (
+                    "Bullish" if st_dir > 0 else "Bearish" if st_dir < 0 else "NEUTRAL"
+                )
+
             context_obj = result.get("context")
             sentiment_data = result.get("sentiment")
             microstructure_data = result.get("market_microstructure")
@@ -137,7 +168,7 @@ class MarketConditionsExtractor:
                         conditions["trend_direction"] = "BEARISH"
                     else:
                         conditions["trend_direction"] = "NEUTRAL"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not extract market conditions: %s", e)
 
         return MarketConditions(
@@ -158,6 +189,13 @@ class MarketConditionsExtractor:
             trend_strength=float(conditions.get("trend_strength", 0.0)),
             timeframe_alignment=conditions.get("timeframe_alignment"),
             choppiness=conditions.get("choppiness"),
+            vwap=float(conditions.get("vwap", 0.0)),
+            mfi=float(conditions.get("mfi", 50.0)),
+            cmf=float(conditions.get("cmf", 0.0)),
+            bb_percent_b=float(conditions.get("bb_percent_b", 0.5)),
+            chandelier_long=float(conditions.get("chandelier_long", 0.0)),
+            pfe=float(conditions.get("pfe", 0.0)),
+            supertrend_direction=str(conditions.get("supertrend_direction", "NEUTRAL")),
         )
 
     def extract_confluence_factors(self, result: dict) -> tuple:
@@ -177,7 +215,7 @@ class MarketConditionsExtractor:
                             factors.append((factor_name, score_value))
                     except (ValueError, TypeError):
                         pass
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not extract confluence factors: %s", e)
         return tuple(factors)
 
@@ -202,3 +240,4 @@ class MarketConditionsExtractor:
             market_sentiment=position.market_sentiment_at_entry,
             order_book_bias=position.order_book_bias_at_entry,
         )
+

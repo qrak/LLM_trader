@@ -13,44 +13,44 @@ import numpy as np
 from src.logger.logger import Logger
 from src.utils.format_utils import FormatUtils
 
-from .rsi_patterns import (
-    detect_rsi_oversold_numba,
-    detect_rsi_overbought_numba,
-    detect_rsi_w_bottom_numba,
-    detect_rsi_m_top_numba
+from .divergence_patterns import (
+    detect_bearish_divergence_numba,
+    detect_bullish_divergence_numba,
+)
+from .ma_crossover_patterns import (
+    detect_death_cross_numba,
+    detect_golden_cross_numba,
+    detect_short_term_crossover_numba,
 )
 from .macd_patterns import (
     detect_macd_crossover_numba,
     detect_macd_zero_cross_numba,
-    get_macd_histogram_trend_numba
+    get_macd_histogram_trend_numba,
 )
-from .divergence_patterns import (
-    detect_bullish_divergence_numba,
-    detect_bearish_divergence_numba
+from .rsi_patterns import (
+    detect_rsi_m_top_numba,
+    detect_rsi_overbought_numba,
+    detect_rsi_oversold_numba,
+    detect_rsi_w_bottom_numba,
+)
+from .stochastic_patterns import (
+    detect_stoch_bearish_crossover_numba,
+    detect_stoch_bullish_crossover_numba,
+    detect_stoch_overbought_numba,
+    detect_stoch_oversold_numba,
 )
 from .volatility_patterns import (
     detect_atr_spike_numba,
     detect_bb_squeeze_numba,
+    detect_keltner_squeeze_numba,
     detect_volatility_trend_numba,
-    detect_keltner_squeeze_numba
-)
-from .ma_crossover_patterns import (
-    detect_golden_cross_numba,
-    detect_death_cross_numba,
-    detect_short_term_crossover_numba
-)
-from .stochastic_patterns import (
-    detect_stoch_oversold_numba,
-    detect_stoch_overbought_numba,
-    detect_stoch_bullish_crossover_numba,
-    detect_stoch_bearish_crossover_numba
 )
 from .volume_patterns import (
-    detect_volume_spike_numba,
+    detect_accumulation_distribution_numba,
+    detect_climax_volume_numba,
     detect_volume_dryup_numba,
     detect_volume_price_divergence_numba,
-    detect_accumulation_distribution_numba,
-    detect_climax_volume_numba
+    detect_volume_spike_numba,
 )
 
 
@@ -115,7 +115,7 @@ class IndicatorPatternEngine:
         if ohlcv_data is not None:
             expected_length = len(ohlcv_data)
             for key, arr in technical_history.items():
-                if isinstance(arr, np.ndarray) and len(arr) != expected_length:
+                if isinstance(arr, np.ndarray) and len(arr) != expected_length:  # noqa: SIM102
                     if self.logger:
                         self.logger.warning("Array length mismatch: %s has %s elements, expected %s. May affect pattern indices.", key, len(arr), expected_length)
 
@@ -935,3 +935,4 @@ class IndicatorPatternEngine:
             })
 
         return patterns
+

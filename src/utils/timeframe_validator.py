@@ -12,7 +12,7 @@ import re
 
 class TimeframeValidator:
     """Validates and manages timeframe configurations"""
-    SUPPORTED_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]
+    SUPPORTED_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
     # Time constants
     MINUTES_IN_HOUR = 60
     MINUTES_IN_DAY = 1440
@@ -27,7 +27,7 @@ class TimeframeValidator:
     # Monday (1970-01-05) is +4 days from Epoch.
     MONDAY_ALIGNMENT_OFFSET_DAYS = 4
 
-    TIMEFRAME_MINUTES = {
+    TIMEFRAME_MINUTES = {  # noqa: RUF012
         "5m": 5,
         "15m": 15,
         "30m": 30,
@@ -40,7 +40,7 @@ class TimeframeValidator:
         "1d": MINUTES_IN_DAY,
         "1w": MINUTES_IN_WEEK
     }
-    CCXT_STANDARD_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]
+    CCXT_STANDARD_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
 
     @classmethod
     def validate(cls, timeframe: str) -> bool:
@@ -141,7 +141,7 @@ class TimeframeValidator:
             to check its .timeframes property directly.
         """
         # Basic check for standard timeframes
-        if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:
+        if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:  # noqa: SIM103
             return True
 
         # Could be extended to check specific exchange support
@@ -277,3 +277,4 @@ class TimeframeValidator:
         candle2 = (time2_ms - offset) // interval_ms
 
         return candle1 == candle2
+

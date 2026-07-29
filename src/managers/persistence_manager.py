@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from src.logger.logger import Logger
-from src.utils.data_utils import serialize_for_json
+from src.managers.sqlite_trade_history import SQLiteTradeHistory
 from src.trading.data_models import Position, TradeDecision
 from src.trading.statistics_calculator import TradingStatistics
-from src.managers.sqlite_trade_history import SQLiteTradeHistory
+from src.utils.data_utils import serialize_for_json
 
 
 class PersistenceManager:
@@ -137,7 +137,7 @@ class PersistenceManager:
             self._position_cache_valid = True
 
             self.logger.debug("Saved position: %s %s", position.direction, position.symbol)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving position: %s", e)
 
     async def async_save_position(self, position: Position | None) -> None:
@@ -198,7 +198,7 @@ class PersistenceManager:
                 self._position_cache_valid = True
 
                 return position
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading position: %s", e)
             return None
 
@@ -266,6 +266,8 @@ class PersistenceManager:
         """Save a trade decision to SQLite history."""
         decision_dict = decision.to_dict()
         sanitized = serialize_for_json(decision_dict)
+        if isinstance(sanitized.get("indicators_json"), (dict, list)):
+            sanitized["indicators_json"] = json.dumps(sanitized["indicators_json"])
 
         try:
             row_id = self._sqlite.insert(sanitized)
@@ -273,7 +275,7 @@ class PersistenceManager:
                 self.logger.debug("Saved trade decision to SQLite (row %d): %s @ $%s",
                                   row_id, decision.action, f"{decision.price:,.2f}")
                 return
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("SQLite save failed: %s", e)
         raise RuntimeError("Failed to save trade decision to SQLite")
 
@@ -373,7 +375,7 @@ class PersistenceManager:
             self.logger.warning("Could not find entry decision for position at %s", entry_time)
             return None
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving entry decision from SQLite: %s", e)
             return None
 
@@ -386,7 +388,7 @@ class PersistenceManager:
                 json.dump(data, f, indent=2)
             os.replace(temp_path, self.statistics_file)
             self.logger.debug("Saved statistics: %s trades", stats.total_trades)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving statistics: %s", e)
 
     def load_statistics(self) -> TradingStatistics:
@@ -397,7 +399,7 @@ class PersistenceManager:
             with open(self.statistics_file, encoding="utf-8") as f:
                 data = json.load(f)
                 return TradingStatistics.from_dict(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading statistics: %s", e)
             return TradingStatistics()
 
@@ -409,7 +411,7 @@ class PersistenceManager:
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             os.replace(temp_path, self.position_monitor_file)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving position monitor state: %s", e)
 
     async def async_save_position_monitor_state(self, state: dict[str, Any]) -> None:
@@ -423,7 +425,7 @@ class PersistenceManager:
         try:
             with open(self.position_monitor_file, encoding="utf-8") as f:
                 return json.load(f)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading position monitor state: %s", e)
             return {}
 
@@ -436,7 +438,7 @@ class PersistenceManager:
         try:
             if self.position_monitor_file.exists():
                 self.position_monitor_file.unlink()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error clearing position monitor state: %s", e)
 
     async def async_clear_position_monitor_state(self) -> None:
@@ -480,7 +482,7 @@ class PersistenceManager:
             os.replace(temp_path, self.previous_response_file)
 
             self.logger.debug("Saved previous response with %s indicators", len(technical_data) if technical_data else 0)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving previous response: %s", e)
 
     def save_latest_decision(self, decision_data: dict[str, Any]) -> None:
@@ -511,7 +513,7 @@ class PersistenceManager:
                 raise
             self.logger.debug("Saved latest decision: signal=%s", decision_data.get("signal"))
         except Exception as e:
-            self.logger.error("Error saving latest decision: %s", e, exc_info=True)
+            self.logger.error("Error saving latest decision: %s", e, exc_info=True)  # noqa: G201
             raise
 
     async def async_load_previous_response(self) -> dict[str, Any] | None:
@@ -541,7 +543,7 @@ class PersistenceManager:
                     "technical_indicators": technical_indicators if technical_indicators else None,
                     "timestamp": data.get("timestamp")
                 }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error loading previous response: %s", e)
             return None
 
@@ -565,7 +567,7 @@ class PersistenceManager:
                 }, f, indent=2)
             os.replace(temp_path, self.last_analysis_file)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving last analysis time: %s", e)
 
     def get_last_analysis_time(self) -> datetime | None:
@@ -585,6 +587,7 @@ class PersistenceManager:
                 self._last_analysis_time_cache = dt
                 self._last_analysis_time_cache_valid = True
                 return dt
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not get last analysis time: %s", e)
             return None
+

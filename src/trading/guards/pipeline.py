@@ -28,7 +28,7 @@ class GuardPipeline:
         for guard in self._guards:
             try:
                 result = guard.check(intent, capital=capital, config=config)
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 results.append(
                     GuardResult(
                         guard_name=getattr(guard, "name", "unknown_guard"),
@@ -55,5 +55,6 @@ class GuardPipeline:
         """
         for guard in self._guards:
             if guard.name == "cooldown_window":
-                guard.invalidate_cache()
+                guard.invalidate_cache()  # type: ignore
                 return
+

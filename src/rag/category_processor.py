@@ -2,6 +2,7 @@
 Category processing and normalization operations.
 """
 from typing import Any
+
 from src.logger.logger import Logger
 from src.rag.collision_resolver import CategoryCollisionResolver
 
@@ -34,7 +35,7 @@ class CategoryProcessor:
         if self.file_handler:
             try:
                 return self.file_handler.load_rag_priorities() or {}
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Failed to load RAG config: %s", e)
         return {}
 
@@ -115,7 +116,7 @@ class CategoryProcessor:
             if len(word_stripped) < 2:
                 # Skip single-character tokens
                 continue
-            if len(word_stripped) == 2:
+            if len(word_stripped) == 2:  # noqa: SIM102
                 # Allow 2-character tokens if they are uppercase (likely tickers) or contain digits
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
                     continue
@@ -171,3 +172,4 @@ class CategoryProcessor:
                 return base
 
         return symbol_upper
+

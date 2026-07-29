@@ -184,7 +184,7 @@ def _is_lan_ip(ip: str) -> bool:
             return True
         if a == 172 and 16 <= b <= 31:  # 172.16.0.0/12
             return True
-        if a == 169 and b == 254:  # Link-local
+        if a == 169 and b == 254:  # Link-local  # noqa: SIM103
             return True
         return False
     except (ValueError, IndexError):
@@ -269,7 +269,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
     """
 
     # API routes that don't require authentication (but still require LAN)
-    _PUBLIC_PATHS: set[str] = {
+    _PUBLIC_PATHS: set[str] = {  # noqa: RUF012
         "/api/admin/login",
         "/api/admin/health",
     }
@@ -280,7 +280,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Only process admin routes (API + static HTML)
-        if not (path.startswith("/api/admin/") or path.startswith("/admin")):
+        if not (path.startswith(("/api/admin/", "/admin"))):
             return await call_next(request)
 
         # LAN-only check: block non-private IPs from ALL admin paths
@@ -311,3 +311,4 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         # Attach username to request state for downstream handlers
         request.state.admin_user = username
         return await call_next(request)
+

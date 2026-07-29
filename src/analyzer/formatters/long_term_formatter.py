@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class LongTermFormatter:
     """Formatter for long-term historical analysis and macro trends."""
 
-    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the long-term formatter.
 
         Args:
@@ -25,7 +25,7 @@ class LongTermFormatter:
             raise ValueError("format_utils is required for LongTermFormatter")
         self.format_utils = format_utils
 
-    def format_long_term_analysis(self, long_term_data: dict, current_price: float = None) -> str:
+    def format_long_term_analysis(self, long_term_data: dict, current_price: float | None = None) -> str:
         """Format comprehensive long-term analysis from historical data."""
         if not long_term_data:
             return ""
@@ -79,7 +79,7 @@ class LongTermFormatter:
     VOLUME_SMA_PERIODS = (20, 50)
 
     def _format_items_for_periods(self, data: dict, periods: tuple, key_template: str,
-                                  format_fn, item_template: str) -> str:
+                                  format_fn, item_template: str) -> list[str]:
         """Generic helper for formatting period-based items."""
         items = []
         for period in periods:

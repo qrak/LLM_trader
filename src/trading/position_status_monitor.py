@@ -1,9 +1,9 @@
 """Background position status and hard-exit monitoring loop."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from typing import Any
-from collections.abc import Awaitable, Callable
 
 from .exit_monitor import ExitMonitor
 
@@ -56,7 +56,7 @@ class PositionStatusMonitor:
             )
             if close_reason:
                 await self.handle_position_closed(close_reason)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error checking position: %s", e)
 
     async def handle_new_position(self, current_price: float | None) -> None:
@@ -86,7 +86,7 @@ class PositionStatusMonitor:
                 last_take_profit_check_at=now,
                 last_status_sent_at=now,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Error sending initial position status: %s", e)
 
         await self.start()
@@ -203,8 +203,9 @@ class PositionStatusMonitor:
                         )
                         await self.save_state(last_status_sent_at=now)
                         self.logger.debug("Sent position status update")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning("Error running position monitor update: %s", e)
         except asyncio.CancelledError:
             self.logger.debug("Position status loop cancelled")
             raise
+

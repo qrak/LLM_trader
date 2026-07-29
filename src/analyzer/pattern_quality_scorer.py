@@ -123,7 +123,7 @@ class PatternQualityScorer:
         if patterns is None:
             return []
         names: list[str] = []
-        for _category, pattern_list in patterns.items():
+        for pattern_list in patterns.values():
             for p in pattern_list:
                 name = p.get("name") or p.get("pattern") or p.get("type", "")
                 if name:
@@ -183,7 +183,7 @@ class PatternQualityScorer:
         Recent patterns (near the end of the data) score higher.
         """
         bar_indices: list[int] = []
-        for _, pattern_list in patterns.items():
+        for pattern_list in patterns.values():
             for p in pattern_list:
                 idx = p.get("bar_index") or p.get("index") or p.get("candle")
                 if idx is not None:

@@ -13,23 +13,22 @@ import asyncio
 import time
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request, Response
+from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from ...config.writable_config import WritableConfig
 from ..auth import (
-    check_credentials,
-    create_session,
     COOKIE_NAME,
     _get_real_client_ip,
+    _sign_token,
+    check_credentials,
     check_login_rate_limit,
+    create_session,
     record_login_attempt,
     reset_login_rate_limit,
-    _sign_token,
 )
 from ..log_stream import LogStreamManager
-from ...config.writable_config import WritableConfig
-
 
 # ─── Pydantic request models ────────────────────────────────────────
 

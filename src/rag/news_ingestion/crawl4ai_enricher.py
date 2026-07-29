@@ -11,7 +11,7 @@ import ipaddress
 import math
 import re
 import sys
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import aiohttp
@@ -271,9 +271,17 @@ class Crawl4AIEnricher:
         that Playwright raises when the event loop tears down mid-close.
         """
         try:
-            from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig  # type: ignore[import]
-            from crawl4ai.content_filter_strategy import PruningContentFilter  # type: ignore[import]
-            from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator  # type: ignore[import]
+            from crawl4ai import (  # type: ignore[import]
+                AsyncWebCrawler,
+                BrowserConfig,
+                CrawlerRunConfig,
+            )
+            from crawl4ai.content_filter_strategy import (
+                PruningContentFilter,  # type: ignore[import]
+            )
+            from crawl4ai.markdown_generation_strategy import (
+                DefaultMarkdownGenerator,  # type: ignore[import]
+            )
         except ImportError:
             self.logger.warning(
                 "crawl4ai import failed at enrichment time; falling back to aiohttp"
@@ -332,7 +340,7 @@ class Crawl4AIEnricher:
                     self.timeout,
                     batch_timeout,
                 )
-                results = list(await asyncio.wait_for(
+                results = list(await asyncio.wait_for(  # type: ignore
                     crawler.arun_many(urls=urls, config=run_cfg),
                     timeout=batch_timeout,
                 ))

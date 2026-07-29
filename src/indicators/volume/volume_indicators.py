@@ -4,6 +4,7 @@ Volume Indicators (Numba Optimized).
 Contains numba-optimized implementations of volume technical indicators.
 """
 import math
+
 import numpy as np
 from numba import njit  # pylint: disable=import-error
 

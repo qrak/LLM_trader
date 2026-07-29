@@ -11,10 +11,10 @@ Formatting Strategy:
     2. Large values (e.g., BTC price) are not cluttered with unnecessary decimals
     3. Scientific notation is used only for microscopic values (< 1e-7)
 """
-from datetime import datetime
+import math
+from datetime import datetime, timezone
 from typing import Any
 
-import math
 import numpy as np
 import pandas as pd
 
@@ -42,7 +42,7 @@ def timestamps_from_ms_array(timestamps_ms: np.ndarray) -> list[datetime]:
 
     Returns: list of datetime objects
     """
-    return pd.to_datetime(timestamps_ms, unit="ms", utc=True).to_pydatetime().tolist()
+    return pd.to_datetime(timestamps_ms, unit="ms", utc=True).to_pydatetime().tolist()  # type: ignore[reportAttributeAccessIssue]
 
 
 class FormatUtils:
@@ -181,7 +181,7 @@ class FormatUtils:
         Returns:
             Formatted current time string
         """
-        return datetime.now().strftime(format_str)
+        return datetime.now(timezone.utc).strftime(format_str)
 
     def format_timestamp_seconds(self, timestamp_sec: float, format_str: str = "%Y-%m-%d") -> str:
         """Format timestamp in seconds (not milliseconds) to human-readable string.
@@ -194,7 +194,7 @@ class FormatUtils:
             Formatted datetime string or 'N/A' if invalid
         """
         try:
-            dt = datetime.fromtimestamp(timestamp_sec)
+            dt = datetime.fromtimestamp(timestamp_sec)  # noqa: DTZ006
             return dt.strftime(format_str)
         except (ValueError, TypeError, OSError):
             return "N/A"
@@ -255,7 +255,7 @@ class FormatUtils:
             datetime object or None if invalid
         """
         try:
-            return datetime.fromtimestamp(timestamp_ms / 1000)
+            return datetime.fromtimestamp(timestamp_ms / 1000)  # noqa: DTZ006
         except (ValueError, TypeError, OSError):
             return None
 
@@ -288,3 +288,4 @@ class FormatUtils:
                 return " [Distribution phase]"
             return " [Neutral]"
         return ""
+

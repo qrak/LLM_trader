@@ -5,13 +5,13 @@ drawdowns, win rate, and other performance metrics from trade history.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
 import numpy as np
 
-from src.utils.data_utils import SerializableMixin
 from src.trading.data_models import ClosedTradeResult
-
+from src.utils.data_utils import SerializableMixin
 
 
 @dataclass(slots=True)
@@ -104,7 +104,7 @@ class StatisticsCalculator:
             sharpe_ratio=sharpe,
             sortino_ratio=sortino,
             profit_factor=profit_factor,
-            last_updated=datetime.now(),
+            last_updated=datetime.now(timezone.utc),
         )
 
     @staticmethod
@@ -216,3 +216,4 @@ class StatisticsCalculator:
             return float("inf") if gross_profit > 0 else 0.0
 
         return round(float(gross_profit / gross_loss), 2)
+

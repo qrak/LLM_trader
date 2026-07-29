@@ -7,8 +7,8 @@ Centralizes priority-based collision resolution logic to avoid code duplication.
 class CategoryCollisionResolver:
     """Handles priority-based collision resolution for category-word mappings."""
 
-    def __init__(self, important_categories: set[str] = None, ticker_categories: set[str] = None,
-                 general_categories: set[str] = None, generic_priorities: dict[str, int] = None):
+    def __init__(self, important_categories: set[str] | None = None, ticker_categories: set[str] | None = None,
+                 general_categories: set[str] | None = None, generic_priorities: dict[str, int] | None = None):
         self.important_categories = important_categories or set()
         self.ticker_categories = ticker_categories or set()
         self.general_categories = general_categories or set()
@@ -44,7 +44,7 @@ class CategoryCollisionResolver:
             return new_category
         return existing_category
 
-    def update_category_sets(self, important_categories: set[str], ticker_categories: set[str], general_categories: set[str], generic_priorities: dict[str, int] = None) -> None:
+    def update_category_sets(self, important_categories: set[str], ticker_categories: set[str], general_categories: set[str], generic_priorities: dict[str, int] | None = None) -> None:
         """Update category sets for priority calculation."""
         self.important_categories = important_categories
         self.ticker_categories = ticker_categories

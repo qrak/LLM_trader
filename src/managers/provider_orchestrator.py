@@ -1,10 +1,14 @@
 """Provider orchestration for AI model invocation with fallback logic."""
 import io
-from typing import Any, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from src.logger.logger import Logger
+from src.managers.provider_types import (
+    InvocationResult,
+    ProviderClients,
+    ProviderMetadata,
+)
 from src.platforms.ai_providers.response_models import ChatResponseModel
-from src.managers.provider_types import ProviderMetadata, InvocationResult, ProviderClients
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -282,11 +286,11 @@ class ProviderOrchestrator:
         tier_info = "free tier" if is_free_tier_model else "paid tier"
         self.logger.info("Attempting with Google AI %s API (model: %s)", tier_info, effective_model)
         if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(
+            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                 effective_model, messages, cast(Any, chart_image), metadata.config
             )
         else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
+            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         error_type = response.error if response else None
         if error_type and ("overloaded" in error_type or "rate_limit" in error_type) and metadata.paid_client:
             error_reason = "rate limited" if error_type == "rate_limit" else "overloaded"
@@ -359,7 +363,7 @@ class ProviderOrchestrator:
                 model=effective_model
             )
         try:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
+            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
             success = self._is_valid_response(response)
             return InvocationResult(
                 success=success,
@@ -367,7 +371,7 @@ class ProviderOrchestrator:
                 provider="lmstudio",
                 model=effective_model
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return InvocationResult(
                 success=False,
                 response=ChatResponseModel.from_error(f"LM Studio connection failed: {e!s}"),
@@ -386,11 +390,11 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """Invoke OpenRouter provider."""
         if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(
+            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                 effective_model, messages, cast(Any, chart_image), metadata.config
             )
         else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
+            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
         fallback_model = metadata.fallback_model
         if not success and allow_model_fallback and fallback_model and fallback_model != effective_model:
@@ -402,11 +406,11 @@ class ProviderOrchestrator:
                 fallback_model
             )
             if chart and chart_image:
-                response = await metadata.client.chat_completion_with_chart_analysis(
+                response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                     fallback_model, messages, cast(Any, chart_image), metadata.config
                 )
             else:
-                response = await metadata.client.chat_completion(fallback_model, messages, metadata.config)
+                response = await metadata.client.chat_completion(fallback_model, messages, metadata.config)  # type: ignore
             success = self._is_valid_response(response) and not self._is_rate_limited(response)
             if success:
                 self.logger.info("OpenRouter fallback model %s succeeded", fallback_model)
@@ -497,11 +501,11 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """Invoke BlockRun provider."""
         if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(
+            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
                 effective_model, messages, chart_image, metadata.config
             )
         else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)
+            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
         success = response is not None and not response.error
         return InvocationResult(
             success=success,
@@ -510,3 +514,4 @@ class ProviderOrchestrator:
             model=effective_model,
             error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from BlockRun")
         )
+

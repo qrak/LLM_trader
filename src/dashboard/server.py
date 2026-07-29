@@ -1,43 +1,50 @@
 """FastAPI server for the Trading Dashboard."""
+
 import asyncio
 import hashlib
 import os
 import time as time_module
-from contextlib import asynccontextmanager
 from collections import defaultdict
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
-from .routers import brain, monitor, visuals, performance, ws_router
-from .routers.admin import AdminRouter
-from .dashboard_state import dashboard_state
-from .auth import AdminAuthMiddleware, init_auth
-from .log_stream import LogStreamManager
 from ..config.writable_config import WritableConfig
+from .auth import AdminAuthMiddleware, init_auth
+from .console_buffer import ConsoleBuffer
+from .dashboard_state import dashboard_state
+from .log_stream import LogStreamManager
+from .routers import brain, monitor, performance, visuals, ws_router
+from .routers.admin import AdminRouter
+from .routers.console import ConsoleRouter
+
 
 class DashboardServer:
     """Main application server combining all API routers."""
+
     # pylint: disable=too-many-instance-attributes,too-many-arguments,too-many-positional-arguments
-    def __init__(self,
-                 brain_service,
-                 vector_memory,
-                 analysis_engine,
-                 config,
-                 logger,
-                 unified_parser=None,
-                 persistence=None,
-                 exchange_manager=None,
-                 host="0.0.0.0",  # noqa: S104 # nosec B104
-                 port=8000,
-                 force_analysis_event=None,
-                 config_path=None,
-                 admin_credentials=None,
-                 post_mortem_repo=None):
+    def __init__(
+        self,
+        brain_service,
+        vector_memory,
+        analysis_engine,
+        config,
+        logger,
+        unified_parser=None,
+        persistence=None,
+        exchange_manager=None,
+        host="0.0.0.0",  # nosec B104
+        port=8000,
+        force_analysis_event=None,
+        config_path=None,
+        admin_credentials=None,
+        post_mortem_repo=None,
+    ):
         self.brain_service = brain_service
         self.vector_memory = vector_memory
         self.analysis_engine = analysis_engine
@@ -55,9 +62,12 @@ class DashboardServer:
 
         # Admin console dependencies
         self._force_analysis_event = force_analysis_event
-        _config_path = config_path or os.path.join(os.path.dirname(__file__), "..", "..", "config", "config.ini")
+        _config_path = config_path or os.path.join(
+            os.path.dirname(__file__), "..", "..", "config", "config.ini"
+        )
         self.writable_config = WritableConfig(_config_path)
         self.log_stream_manager = LogStreamManager()
+        self.console_buffer = ConsoleBuffer(max_days=7, max_lines_per_day=10000)
 
         # Initialize auth if credentials provided
         if admin_credentials:
@@ -77,8 +87,24 @@ class DashboardServer:
         async def lifespan(_app: FastAPI):
             # Startup logic
             print(f"DTO: Dashboard live at http://localhost:{self.port}")
+
+            # Start console buffer consumer (subscribes to log stream)
+            self.log_stream_manager.attach_to_logger(self.logger)
+            _sid, _queue = self.log_stream_manager.handler.subscribe()
+            _consumer_task = asyncio.create_task(
+                self.console_buffer.consume_queue(_queue),
+                name="console_buffer_consumer",
+            )
+
             yield
-            # Shutdown logic
+
+            # Shutdown logic — stop buffer consumer and unsubscribe
+            self.log_stream_manager.handler.unsubscribe(_sid)
+            _consumer_task.cancel()
+            try:
+                await _consumer_task
+            except asyncio.CancelledError:
+                pass
             print("DTO: Dashboard shutting down...")
 
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
@@ -127,10 +153,24 @@ class DashboardServer:
             return etag in candidates
 
         def _is_static_asset(path):
-            return path.endswith((
-                ".css", ".js", ".mjs", ".png", ".jpg", ".jpeg", ".svg",
-                ".webp", ".ico", ".gif", ".woff", ".woff2", ".ttf", ".eot",
-            ))
+            return path.endswith(
+                (
+                    ".css",
+                    ".js",
+                    ".mjs",
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".svg",
+                    ".webp",
+                    ".ico",
+                    ".gif",
+                    ".woff",
+                    ".woff2",
+                    ".ttf",
+                    ".eot",
+                )
+            )
 
         def _api_cache_policies(path, query_params):
             """Return browser/edge cache policy pair for API routes."""
@@ -141,7 +181,7 @@ class DashboardServer:
                     "no-store",
                 )
 
-            if path.endswith("/brain/refresh") or path.endswith("/brain/lifecycle"):
+            if path.endswith(("/brain/refresh", "/brain/lifecycle")):
                 return (
                     "no-store, no-cache, must-revalidate, proxy-revalidate",
                     "no-store",
@@ -177,11 +217,18 @@ class DashboardServer:
             # Conditionally add HSTS if the request originated over HTTPS.
             # Uvicorn's ProxyHeadersMiddleware processes X-Forwarded-Proto,
             # so request.url.scheme will correctly reflect 'https' if Cloudflare sent it.
-            if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
-                response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            if (
+                request.url.scheme == "https"
+                or request.headers.get("x-forwarded-proto") == "https"
+            ):
+                response.headers["Strict-Transport-Security"] = (
+                    "max-age=31536000; includeSubDomains"
+                )
 
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+            response.headers["Permissions-Policy"] = (
+                "geolocation=(), microphone=(), camera=()"
+            )
 
             # Content Security Policy (CSP)
             # - script-src: 'self' (dashboard logic), CDNs
@@ -228,7 +275,9 @@ class DashboardServer:
                         "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
                     )
             elif path.startswith("/api/"):
-                browser_policy, edge_policy = _api_cache_policies(path, request.query_params)
+                browser_policy, edge_policy = _api_cache_policies(
+                    path, request.query_params
+                )
                 _set_cache_headers(
                     response,
                     browser_policy,
@@ -250,7 +299,9 @@ class DashboardServer:
                 and not _is_no_store_response(response)
                 and (path.startswith("/api/") or path.endswith(".html") or path == "/")
             ):
-                etag = response.headers.get("ETag") or _build_etag(request, response, path)
+                etag = response.headers.get("ETag") or _build_etag(
+                    request, response, path
+                )
                 if etag:
                     response.headers["ETag"] = etag
                     if _is_not_modified(request.headers.get("if-none-match"), etag):
@@ -263,7 +314,9 @@ class DashboardServer:
         request_counts = defaultdict(list)
         rate_limit = 300  # requests per minute
         rate_window = 60  # seconds
-        max_unique_ips = 10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
+        max_unique_ips = (
+            10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
+        )
 
         # Security: State for rate limit cleanup
         state = {"last_cleanup_time": 0.0}
@@ -272,7 +325,9 @@ class DashboardServer:
         @app.middleware("http")
         async def rate_limit_middleware(request, call_next):
             # Skip rate limiting for static files
-            if request.url.path.startswith("/static") or not request.url.path.startswith("/api"):
+            if request.url.path.startswith(
+                "/static"
+            ) or not request.url.path.startswith("/api"):
                 return await call_next(request)
 
             current_time = time_module.monotonic()
@@ -283,7 +338,8 @@ class DashboardServer:
                 if current_time - state["last_cleanup_time"] > cleanup_interval:
                     # Remove inactive IPs
                     keys_to_remove = [
-                        ip for ip, timestamps in request_counts.items()
+                        ip
+                        for ip, timestamps in request_counts.items()
                         if not timestamps or current_time - timestamps[-1] > rate_window
                     ]
                     for key in keys_to_remove:
@@ -305,14 +361,15 @@ class DashboardServer:
             # Clean old requests for current IP
             if client_ip in request_counts:
                 request_counts[client_ip] = [
-                    t for t in request_counts[client_ip]
+                    t
+                    for t in request_counts[client_ip]
                     if current_time - t < rate_window
                 ]
 
             if len(request_counts[client_ip]) >= rate_limit:
                 return JSONResponse(
                     status_code=429,
-                    content={"error": "Rate limit exceeded. Try again later."}
+                    content={"error": "Rate limit exceeded. Try again later."},
                 )
             request_counts[client_ip].append(current_time)
             return await call_next(request)
@@ -326,7 +383,9 @@ class DashboardServer:
 
             # If enabled but empty, log a warning and default to strict (empty list)
             if not allowed_origins:
-                print("WARNING: CORS enabled but no origins specified. CORS will effectively be disabled.")
+                print(
+                    "WARNING: CORS enabled but no origins specified. CORS will effectively be disabled."
+                )
 
             app.add_middleware(
                 CORSMiddleware,
@@ -370,7 +429,7 @@ class DashboardServer:
             logger=self.logger,
             dashboard_state=self.dashboard_state,
             analysis_engine=self.analysis_engine,
-            rag_engine=rag_engine
+            rag_engine=rag_engine,
         )
         performance_router = performance.PerformanceRouter(
             config=self.config,
@@ -378,13 +437,11 @@ class DashboardServer:
             dashboard_state=self.dashboard_state,
             persistence=self.persistence,
         )
-        visuals_router = visuals.VisualsRouter(
-            analysis_engine=self.analysis_engine
-        )
+        visuals_router = visuals.VisualsRouter(analysis_engine=self.analysis_engine)
         websocket_router = ws_router.WebSocketRouter(
             manager_instance=ws_router.manager,
             config=self.config,
-            dashboard_state=self.dashboard_state
+            dashboard_state=self.dashboard_state,
         )
 
         app.include_router(brain_router.router)
@@ -408,6 +465,13 @@ class DashboardServer:
         app.include_router(admin_router.router)
         # Expose admin_router on app.state for testing and cross-router access
         app.state.admin_router = admin_router
+
+        # Public read-only Live Console
+        console_router = ConsoleRouter(
+            buffer=self.console_buffer,
+            log_stream_handler=self.log_stream_manager.handler,
+        )
+        app.include_router(console_router.router)
 
         # Admin auth middleware (protects /api/admin/* except login and health)
         app.add_middleware(AdminAuthMiddleware)
@@ -451,7 +515,18 @@ class DashboardServer:
         self._server = uvicorn.Server(config)
 
         # Disable uvicorn's own signal handling since we handle it ourselves
-        self._server.install_signal_handlers = lambda: None
+        self._server.install_signal_handlers = lambda: None  # type: ignore
+
+        # Uvicorn logs shutdown noise (GeneratorExit, RuntimeError from
+        # starlette lifespan) through logging.getLogger("uvicorn.error").
+        # With propagate=False on our custom Logger, this goes to the root
+        # logger → stderr via lastResort. Route it to a NullHandler instead.
+        import logging as _logging
+
+        for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+            _uv_logger = _logging.getLogger(_name)
+            _uv_logger.handlers = [_logging.NullHandler()]
+            _uv_logger.propagate = False
 
         # Store reference to task
         self.server_task = asyncio.create_task(self._run_server())
@@ -460,7 +535,7 @@ class DashboardServer:
     async def _run_server(self):
         """Run uvicorn server with exception handling."""
         try:
-            await self._server.serve()
+            await self._server.serve()  # type: ignore[reportOptionalMemberAccess]
         except asyncio.CancelledError:
             pass
 

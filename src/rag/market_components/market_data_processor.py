@@ -53,7 +53,7 @@ class MarketDataProcessor:
             self.logger.debug("Extracted %s top coins: %s", len(top_coins), top_coins)
             return top_coins
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error extracting top coins: %s", e)
             return []
 
@@ -86,6 +86,7 @@ class MarketDataProcessor:
 
             return processed_coin if processed_coin else None
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error processing coin data: %s", e)
             return None
+

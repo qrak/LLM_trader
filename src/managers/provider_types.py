@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from src.platforms.ai_providers import OpenRouterClient, GoogleAIClient, LMStudioClient, BlockRunClient
+    from src.platforms.ai_providers import (
+        BlockRunClient,
+        GoogleAIClient,
+        LMStudioClient,
+        OpenRouterClient,
+    )
     from src.platforms.ai_providers.response_models import ChatResponseModel
 
 

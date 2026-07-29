@@ -6,6 +6,7 @@ Loads private keys from keys.env and public configuration from config.ini.
 import configparser
 from pathlib import Path
 from typing import Any
+
 from dotenv import dotenv_values
 
 from src.utils.timeframe_validator import TimeframeValidator
@@ -393,7 +394,7 @@ class Config:
 
     @property
     def DASHBOARD_HOST(self):
-        return self.get_config("dashboard", "host", "0.0.0.0")  # noqa: S104 # nosec B104
+        return self.get_config("dashboard", "host", "0.0.0.0")  # nosec B104
 
     @property
     def DASHBOARD_PORT(self):

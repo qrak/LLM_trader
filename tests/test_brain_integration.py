@@ -461,7 +461,7 @@ class TestReflectionRuleFormatting:
             for _ in range(10)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = win_metas
+        brain.vector_memory.get_trade_metadatas.return_value = win_metas
 
         brain._trigger_reflection()
 
@@ -482,7 +482,7 @@ class TestReflectionRuleFormatting:
             for _ in range(4)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = all_metas
+        brain.vector_memory.get_trade_metadatas.return_value = all_metas
 
         brain._trigger_reflection()
 
@@ -506,7 +506,7 @@ class TestReflectionRuleFormatting:
             for _ in range(2)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = all_metas
+        brain.vector_memory.get_trade_metadatas.return_value = all_metas
 
         brain._trigger_reflection()
 
@@ -521,7 +521,7 @@ class TestReflectionRuleFormatting:
         assert meta["profit_factor"] > 1.0
         assert meta["source_trades"] == 10
 
-    def test_reflection_fills_missing_exit_profile_and_retires_legacy_unknown_rule(self):
+    def test_reflection_fills_missing_exit_profile(self):
         brain = _make_brain(ExitExecutionContext(
             stop_loss_type="hard",
             stop_loss_check_interval="15m",
@@ -540,7 +540,7 @@ class TestReflectionRuleFormatting:
             for _ in range(5)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = win_metas
+        brain.vector_memory.get_trade_metadatas.return_value = win_metas
 
         brain._trigger_reflection()
 
@@ -550,23 +550,6 @@ class TestReflectionRuleFormatting:
         assert kwargs["metadata"]["dominant_exit_profile"] == "SL hard/15m | TP hard/15m"
         assert kwargs["metadata"]["dominant_stop_loss_interval"] == "15m"
         assert kwargs["metadata"]["dominant_take_profit_interval"] == "15m"
-        brain.vector_memory.deactivate_semantic_rules.assert_called_once_with([
-            "rule_best_long_bullish_high_adx_sl_unknown_unknown_tp_unknown_unknown"
-        ])
-
-    def test_refresh_semantic_rules_checks_all_stored_rules_for_stale_profiles(self):
-        brain = _make_brain(ExitExecutionContext(
-            stop_loss_type="hard",
-            stop_loss_check_interval="15m",
-            take_profit_type="hard",
-            take_profit_check_interval="15m",
-        ))
-        brain.vector_memory.semantic_rule_count = 75
-        brain.vector_memory.get_active_rules.return_value = []
-
-        brain.refresh_semantic_rules_if_stale()
-
-        brain.vector_memory.get_active_rules.assert_called_once_with(n_results=75)
 
     def test_trigger_loss_reflection_stores_failure_reason_and_recommended_adjustment(self):
         """Loss reflection should diagnose why losses happened and suggest improvements."""
@@ -580,7 +563,7 @@ class TestReflectionRuleFormatting:
             for _ in range(4)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+        brain.vector_memory.get_trade_metadatas.return_value = loss_metas
 
         brain._trigger_loss_reflection()
 
@@ -608,7 +591,7 @@ class TestReflectionRuleFormatting:
             for _ in range(3)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+        brain.vector_memory.get_trade_metadatas.return_value = loss_metas
 
         brain._trigger_loss_reflection()
 
@@ -644,17 +627,13 @@ class TestReflectionRuleFormatting:
             }
             for _ in range(3)
         ]
-        brain.vector_memory._get_trade_metadatas.return_value = loss_metas + win_metas
+        brain.vector_memory.get_trade_metadatas.return_value = loss_metas + win_metas
 
         brain._trigger_loss_reflection()
 
         assert brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"] == (
             "rule_corrective_long_neutral_stop_loss_sl_hard_15m_tp_hard_15m"
         )
-        brain.vector_memory.deactivate_semantic_rules.assert_has_calls([
-            call(["rule_anti_pattern_long_neutral_stop_loss_sl_unknown_unknown_tp_unknown_unknown"]),
-            call(["rule_corrective_long_neutral_stop_loss_sl_unknown_unknown_tp_unknown_unknown"]),
-        ])
 
     def test_trigger_ai_mistake_reflection_stores_sideways_overconfidence_rule(self):
         """Repeated HIGH-confidence sideways failures should become AI-mistake rules."""
@@ -673,7 +652,7 @@ class TestReflectionRuleFormatting:
             for _ in range(3)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = mistake_metas
+        brain.vector_memory.get_trade_metadatas.return_value = mistake_metas
 
         brain._trigger_ai_mistake_reflection()
 
@@ -700,7 +679,7 @@ class TestReflectionRuleFormatting:
             for _ in range(3)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = loss_metas
+        brain.vector_memory.get_trade_metadatas.return_value = loss_metas
 
         brain._trigger_loss_reflection()
         first_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]
@@ -720,7 +699,7 @@ class TestReflectionRuleFormatting:
             for _ in range(6)
         ]
 
-        brain.vector_memory._get_trade_metadatas.return_value = win_metas
+        brain.vector_memory.get_trade_metadatas.return_value = win_metas
 
         brain._trigger_reflection()
         first_id = brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"]

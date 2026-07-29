@@ -2,8 +2,8 @@
 Market Overview Formatter - Formats global market overview data.
 Handles market overview, top coins, and DeFi statistics.
 """
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class MarketOverviewFormatter:
     """Formatter for market overview data including global metrics, top coins, and DeFi."""
 
-    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the market overview formatter.
 
         Args:
@@ -26,7 +26,7 @@ class MarketOverviewFormatter:
             raise ValueError("format_utils is required for MarketOverviewFormatter")
         self.format_utils = format_utils
 
-    def format_market_overview(self, market_overview: dict, analyzed_symbol: str = None) -> str:
+    def format_market_overview(self, market_overview: dict, analyzed_symbol: str | None = None) -> str:
         """
         Format market overview data with top coins and DeFi metrics.
 

@@ -55,14 +55,14 @@ class GoogleAIClient(BaseAIClient):
                             close_result = aclose()  # pylint: disable=not-callable
                             if inspect.isawaitable(close_result):
                                 await close_result
-                        except Exception as exc:  # pylint: disable=broad-exception-caught
+                        except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                             self.logger.warning("GoogleAIClient async cleanup failed: %s", exc)
 
                 sync_close = getattr(self.client, "close", None)
                 if callable(sync_close):
                     try:
                         sync_close()  # pylint: disable=not-callable
-                    except Exception as exc:  # pylint: disable=broad-exception-caught
+                    except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                         self.logger.warning("GoogleAIClient sync cleanup failed: %s", exc)
             finally:
                 self.client = None
@@ -104,7 +104,7 @@ class GoogleAIClient(BaseAIClient):
             if non_text_parts:
                 self.logger.debug("Google AI response contains non-text parts: %s. Extracting text only.", non_text_parts)
             return "\n".join(text_parts)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
@@ -123,7 +123,7 @@ class GoogleAIClient(BaseAIClient):
             # JPEG: scan for SOF0 (0xff 0xc0/0xc1/0xc2) marker
             i = 2
             while i < len(img_bytes) - 1:
-                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):
+                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):  # noqa: SIM102
                     if i + 9 < len(img_bytes):
                         h = struct.unpack(">H", img_bytes[i + 5:i + 7])[0]
                         w = struct.unpack(">H", img_bytes[i + 7:i + 9])[0]
@@ -214,7 +214,7 @@ class GoogleAIClient(BaseAIClient):
             )
         except AttributeError:
             pass
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
@@ -275,7 +275,7 @@ class GoogleAIClient(BaseAIClient):
         return any(term in error_text for term in ("invalid", "unsupported", "unknown", "field", "400"))
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(
+    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -308,7 +308,7 @@ class GoogleAIClient(BaseAIClient):
                 usage = self._extract_usage_metadata(response, image_bytes=None)
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
-            except Exception as e: # pylint: disable=broad-exception-caught
+            except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
                 if include_thinking and self._should_retry_without_thinking(e):
                     self.logger.warning("Model may not support thinking_config, retrying without it: %s", e)
                     continue
@@ -317,7 +317,7 @@ class GoogleAIClient(BaseAIClient):
         return None
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(
+    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
         messages: list[dict[str, Any]],
@@ -370,7 +370,7 @@ class GoogleAIClient(BaseAIClient):
                     usage = self._extract_usage_metadata(response, image_bytes=img_data)
                     self.logger.debug("Received successful chart analysis response from Google AI")
                     return self.create_response(content_text, usage=usage)
-                except Exception as e: # pylint: disable=broad-exception-caught
+                except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
                     if include_ce and self._should_retry_without_code_execution(e):
                         self.logger.warning(
                             "Model may not support code_execution, retrying without it: %s", e
@@ -393,3 +393,5 @@ class GoogleAIClient(BaseAIClient):
         sanitized_error = self._sanitize_error_message(str(exception))
         self.logger.error("Unexpected Google AI error: %s", sanitized_error)
         return None
+
+

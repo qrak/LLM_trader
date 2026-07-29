@@ -2,16 +2,16 @@
 
 Provides functionality for analyzer.data_fetcher.py.
 """
-from typing import Any
 import time
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
-from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.profiler import profile_performance
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 class DataFetcher:
@@ -110,7 +110,7 @@ class DataFetcher:
         """
 
         try:
-            result = await self.fetch_candlestick_data(
+            result = await self.fetch_candlestick_data(  # type: ignore[reportCallIssue]
                 pair=pair,
                 timeframe="1d",
                 limit=days
@@ -139,7 +139,7 @@ class DataFetcher:
                 "error": None
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching daily historical data for %s: %s", pair, str(e))
             return {
                 "data": None,
@@ -163,7 +163,7 @@ class DataFetcher:
         """
         try:
             # REUSE existing method - already supports '1w'
-            result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)
+            result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)  # type: ignore[reportCallIssue]
 
             if result is None:
                 return {
@@ -177,7 +177,7 @@ class DataFetcher:
                 "data": ohlcv_data,
                 "error": None
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching weekly data: %s", e)
             return {
                 "data": None,
@@ -185,7 +185,7 @@ class DataFetcher:
             }
 
     @retry_async()
-    async def fetch_multiple_tickers(self, symbols: list[str] = None) -> dict[str, Any]:
+    async def fetch_multiple_tickers(self, symbols: list[str] | None = None) -> dict[str, Any]:
         """
         Fetch price data for multiple trading pairs at once using CCXT with caching
 
@@ -208,7 +208,7 @@ class DataFetcher:
 
             return self._process_ticker_data(tickers)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching multiple tickers: %s", e)
             return {}
 
@@ -485,7 +485,7 @@ class DataFetcher:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching order book for %s: %s", pair, e)
             return None
 
@@ -554,7 +554,7 @@ class DataFetcher:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching trades for %s: %s", pair, e)
             return None
 
@@ -625,7 +625,7 @@ class DataFetcher:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Funding rate not available for %s: %s", pair, e)
             return None
 
@@ -680,7 +680,7 @@ class DataFetcher:
                     if base and quote and base in ticker_data["RAW"] and quote in ticker_data["RAW"][base]:
                         result["ticker"] = ticker_data["RAW"][base][quote]
                         result["available_data"].append("ticker")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not fetch ticker for %s: %s", pair, e)
 
         try:
@@ -688,7 +688,7 @@ class DataFetcher:
             if order_book:
                 result["order_book"] = order_book
                 result["available_data"].append("order_book")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not fetch order book for %s: %s", pair, e)
 
         try:
@@ -696,7 +696,7 @@ class DataFetcher:
             if trades:
                 result["recent_trades"] = trades
                 result["available_data"].append("recent_trades")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not fetch recent trades for %s: %s", pair, e)
 
         try:
@@ -704,8 +704,9 @@ class DataFetcher:
             if funding:
                 result["funding_rate"] = funding
                 result["available_data"].append("funding_rate")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Funding rate not available for %s: %s", pair, e)
 
 
         return result
+

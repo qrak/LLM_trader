@@ -4,13 +4,14 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
 import io
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
-from collections.abc import Callable, Awaitable
 
 import discord
 from aiohttp import ClientSession
 
 from src.utils.decorators import retry_async
+
 from .base_notifier import BaseNotifier
 from .filehandler import DiscordFileHandler
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
-    _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}
+    _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}  # noqa: RUF012
     _DISCORD_SEND_MAX_ATTEMPTS = 3
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
 
@@ -49,7 +50,7 @@ class DiscordNotifier(BaseNotifier):
         self._shutdown_started = False
 
         self.bot = bot
-        self.bot.discord_notifier = self
+        self.bot.discord_notifier = self  # type: ignore
         self.bot.event(self.on_ready)
         self.file_handler = file_handler
 
@@ -87,7 +88,7 @@ class DiscordNotifier(BaseNotifier):
         for attempt in range(1, self._DISCORD_SEND_MAX_ATTEMPTS + 1):
             try:
                 return await self._send_with_spacing(send_operation)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._is_transient_discord_error(exc) or attempt >= self._DISCORD_SEND_MAX_ATTEMPTS:
                     raise
 
@@ -109,14 +110,14 @@ class DiscordNotifier(BaseNotifier):
     async def on_ready(self):
         """Called when bot is ready."""
         try:
-            self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)
+            self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)  # type: ignore
             self.file_handler.initialize()
             self.logger.debug("FileHandler initialized")
             self.is_initialized = True
             self._ready_event.set()
             self.logger.debug("DiscordNotifier ready")
         except Exception as e:
-            self.logger.error("Error in on_ready: %s", e, exc_info=True)
+            self.logger.error("Error in on_ready: %s", e, exc_info=True)  # noqa: G201
 
     async def __aenter__(self):
         if self.session is None:
@@ -132,13 +133,13 @@ class DiscordNotifier(BaseNotifier):
             try:
                 await self.session.close()
                 self.session = None
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Session close error: %s", e)
 
         if self.file_handler:
             try:
                 await self.file_handler.shutdown()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error during file handler shutdown: %s", e)
 
         if self.bot:
@@ -148,7 +149,7 @@ class DiscordNotifier(BaseNotifier):
                     await self.bot.close()
                     # Allow discord.py's keep-alive thread to observe the closed websocket.
                     await asyncio.sleep(0.25)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error closing Discord bot: %s", e)
 
         self.logger.info("Discord notifier resources released")
@@ -165,9 +166,9 @@ class DiscordNotifier(BaseNotifier):
         try:
             await self.bot.start(token)
         except discord.LoginFailure as e:
-            self.logger.error("Discord Login Failure: %s. Check your BOT_TOKEN_DISCORD.", e, exc_info=True)
+            self.logger.error("Discord Login Failure: %s. Check your BOT_TOKEN_DISCORD.", e, exc_info=True)  # noqa: G201
         except Exception as e:
-            self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)
+            self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)  # noqa: G201
 
     async def wait_until_ready(self) -> None:
         """Wait for the bot to fully initialize."""
@@ -177,11 +178,11 @@ class DiscordNotifier(BaseNotifier):
         """Shutdown the Discord notifier and cleanup resources."""
         try:
             await self.__aexit__(None, None, None)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Error during Discord notifier shutdown: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_message(
+    async def send_message(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             message: str,
             channel_id: int,
@@ -225,16 +226,16 @@ class DiscordNotifier(BaseNotifier):
 
                 delete_after = float(expire_after) if expire_after is not None else None
                 sent_message = await self._send_with_transient_retry(
-                    lambda: channel.send(
-                        content=chunk,
-                        delete_after=delete_after
+                    lambda: channel.send(  # type: ignore[reportAttributeAccessIssue]
+                        content=chunk,  # noqa: B023
+                        delete_after=delete_after  # type: ignore[arg-type]  # noqa: B023
                     ),
                     operation_name="sending message chunk",
                 )
                 await self.file_handler.track_message(
                     message_id=sent_message.id,
                     channel_id=channel_id,
-                    user_id=None,
+                    user_id=None,  # type: ignore
                     message_type="message",
                     expire_after=expire_after
                 )
@@ -242,9 +243,9 @@ class DiscordNotifier(BaseNotifier):
             self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else "None")
             return sent_message
         except discord.HTTPException as e:
-            self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)
+            self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)  # noqa: G201
         except Exception as e:
-            self.logger.error("Unexpected error when sending message: %s", e, exc_info=True)
+            self.logger.error("Unexpected error when sending message: %s", e, exc_info=True)  # noqa: G201
         return None
 
     def _get_discord_color(self, color_key: str) -> discord.Color:
@@ -284,7 +285,7 @@ class DiscordNotifier(BaseNotifier):
 
         try:
             sent_message = await self._send_with_transient_retry(
-                lambda: channel.send(embed=embed, delete_after=expire_after),
+                lambda: channel.send(embed=embed, delete_after=expire_after),  # type: ignore[reportAttributeAccessIssue]
                 operation_name="sending embed",
             )
 
@@ -292,18 +293,18 @@ class DiscordNotifier(BaseNotifier):
             await self.file_handler.track_message(
                 message_id=sent_message.id,
                 channel_id=channel_id,
-                user_id=None,
+                user_id=None,  # type: ignore
                 message_type="embed",
                 expire_after=int(expire_after)
             )
 
             return sent_message
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending embed: %s", e)
             return None
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:
+    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:  # type: ignore[reportIncompatibleMethodOverride]
         """Send a trading decision as Discord embed.
 
         Args:
@@ -346,11 +347,11 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending trading decision: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_analysis_notification(
+    async def send_analysis_notification(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             result: dict,
             symbol: str,
@@ -376,7 +377,7 @@ class DiscordNotifier(BaseNotifier):
             reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
             if reasoning:
-                await self.send_message(
+                await self.send_message(  # type: ignore
                     message=f"**{symbol} Analysis**\n\n{reasoning}",
                     channel_id=channel_id
                 )
@@ -392,7 +393,7 @@ class DiscordNotifier(BaseNotifier):
                     timeframe=timeframe,
                     channel_id=channel_id
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending analysis notification: %s", e)
 
     async def _send_analysis_chart(
@@ -425,7 +426,7 @@ class DiscordNotifier(BaseNotifier):
             filename = f"{safe_symbol}_{timeframe}_analysis_chart.png"
 
             sent_message = await self._send_with_transient_retry(
-                lambda: channel.send(
+                lambda: channel.send(  # type: ignore[reportAttributeAccessIssue]
                     content=f"📈 {symbol} {timeframe} chart snapshot",
                     file=discord.File(io.BytesIO(chart_bytes), filename=filename),
                     delete_after=expire_after,
@@ -436,12 +437,12 @@ class DiscordNotifier(BaseNotifier):
             await self.file_handler.track_message(
                 message_id=sent_message.id,
                 channel_id=channel_id,
-                user_id=None,
+                user_id=None,  # type: ignore
                 message_type="chart",
                 expire_after=int(expire_after)
             )
             return sent_message
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending analysis chart: %s", e)
             return None
 
@@ -492,11 +493,11 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
             embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending position status: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_performance_stats(
+    async def send_performance_stats(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             trade_history: list[dict[str, Any]],
             symbol: str,
@@ -542,7 +543,7 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Symbol: {symbol}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending performance stats: %s", e)
 
     def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> discord.Embed | None:
@@ -591,6 +592,7 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Timeframe: {timeframe}")
             return embed
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error creating embed: %s", e)
             return None
+

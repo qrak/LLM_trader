@@ -3,8 +3,8 @@ DefiLlama API Client
 Handles fetching macro market data (Stablecoins, TVL) from DefiLlama.
 """
 import asyncio
-import os
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -107,7 +107,7 @@ class DefiLlamaClient:
                     data = json.load(f)
                     if "timestamp" in data:
                         self.last_update = datetime.fromisoformat(data["timestamp"])
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Could not read DefiLlama cache metadata: %s", e)
 
     def _read_cache_file_sync(self) -> dict[str, Any]:
@@ -126,7 +126,7 @@ class DefiLlamaClient:
         if os.path.exists(self.cache_file_path):
             try:
                 os.remove(self.cache_file_path)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.logger.warning("Failed to remove cache file")
         os.rename(temp_path, self.cache_file_path)
 
@@ -161,7 +161,7 @@ class DefiLlamaClient:
                     ]
                 self.logger.error("DefiLlama Stablecoins API error: %s", response.status)
                 return []
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching stablecoins: %s", e)
             return []
 
@@ -176,7 +176,7 @@ class DefiLlamaClient:
                     return [ChainTVLData(**item) for item in data]
                 self.logger.error("DefiLlama Chains API error: %s", response.status)
                 return []
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching chain TVL: %s", e)
             return []
 
@@ -205,7 +205,7 @@ class DefiLlamaClient:
                 total_tvl=total_tvl,
                 top_chains=top_chains
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error building macro overview: %s", e)
             return None
 
@@ -246,7 +246,7 @@ class DefiLlamaClient:
                     )
                 self.logger.warning("DefiLlama DEX API error: %s", response.status)
                 return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching DEX volumes: %s", e)
             return None
 
@@ -274,7 +274,7 @@ class DefiLlamaClient:
                     )
                 self.logger.warning("DefiLlama Fees API error: %s", response.status)
                 return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching fees data: %s", e)
             return None
 
@@ -300,7 +300,7 @@ class DefiLlamaClient:
                     )
                 self.logger.warning("DefiLlama Options API error: %s", response.status)
                 return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching options data: %s", e)
             return None
 
@@ -314,7 +314,7 @@ class DefiLlamaClient:
                 if cached_data and "data" in cached_data:
                     self.logger.debug("Using cached DefiLlama data from %s", self.last_update.isoformat())
                     return DeFiFundamentalsData(**cached_data["data"])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to read DefiLlama cache: %s", e)
 
         self.logger.debug("Fetching fresh DefiLlama fundamentals...")
@@ -334,7 +334,7 @@ class DefiLlamaClient:
 
             macro, dex, fees, options = results
 
-            if isinstance(macro, Exception) or not macro:
+            if isinstance(macro, (Exception, BaseException)) or not macro:
                 self.logger.error("Failed to fetch macro data: %s", macro)
                 return None
 
@@ -350,9 +350,9 @@ class DefiLlamaClient:
 
             fundamentals = DeFiFundamentalsData(
                 macro=macro,
-                dex_volumes=dex,
-                fees=fees,
-                options=options
+                dex_volumes=dex,  # type: ignore
+                fees=fees,  # type: ignore
+                options=options  # type: ignore
             )
 
             try:
@@ -365,11 +365,12 @@ class DefiLlamaClient:
 
                 self.last_update = current_time
                 self.logger.debug("Updated DefiLlama cache")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to save DefiLlama cache: %s", e)
 
             return fundamentals
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error building DeFi fundamentals: %s", e)
             return None
+

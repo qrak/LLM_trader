@@ -6,23 +6,23 @@ between various components like the market analyzer, trading strategy, and exter
 import asyncio
 import io
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
-from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
-from src.utils.decorators import retry_async
-from src.utils.timeframe_validator import TimeframeValidator
 from src.managers.persistence_manager import PersistenceManager
 from src.trading import (
     ExitMonitor,
     PositionStatusMonitor,
     TradingBrainService,
+    TradingMemoryService,
     TradingStatisticsService,
-    TradingMemoryService
 )
 from src.trading.data_models import TradeDecision
+from src.utils.decorators import retry_async
+from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
     from src.managers.model_manager import ModelManager
@@ -206,7 +206,7 @@ class CryptoTradingBot:
         if self.discord_notifier:
             try:
                 await self.discord_notifier.shutdown()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error shutting down Discord notifier: %s", e)
 
         # Let the Discord start task exit naturally after bot.close().
@@ -267,8 +267,8 @@ class CryptoTradingBot:
             self.logger.info("No existing position")
 
         try:
-            await self._fetch_current_ticker()
-        except Exception:
+            await self._fetch_current_ticker()  # type: ignore
+        except Exception:  # noqa: BLE001
             self.logger.warning("Initial ticker fetch failed, continuing without price")
 
         last_analysis_time = self.persistence.get_last_analysis_time()
@@ -298,7 +298,7 @@ class CryptoTradingBot:
                 self.logger.info("Trading cancelled")
                 self.running = False
                 break
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error in trading loop: %s", e)
                 await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
@@ -319,7 +319,7 @@ class CryptoTradingBot:
             return
 
         self.persistence.save_last_analysis_time()
-        decision = await self.trading_strategy.process_analysis(result, self.current_symbol)
+        decision = await self.trading_strategy.process_analysis(result, self.current_symbol)  # type: ignore[reportCallIssue]
 
         if decision:
             await self._handle_new_position(decision, current_price)
@@ -340,7 +340,7 @@ class CryptoTradingBot:
 
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         self.logger.info("=" * 60)
         self.logger.info("Trading Check #%s at %s", check_count, current_time.strftime("%Y-%m-%d %H:%M:%S"))
         self.logger.info("=" * 60)
@@ -348,11 +348,11 @@ class CryptoTradingBot:
     async def _fetch_ticker_data(self):
         """Fetch current ticker and price"""
         try:
-            current_ticker = await self._fetch_current_ticker()
+            current_ticker = await self._fetch_current_ticker()  # type: ignore
             if current_ticker:
                 current_price = float(current_ticker.get("last", current_ticker.get("close", 0)))
                 return current_ticker, current_price
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not fetch current ticker: %s", e)
         return None, None
 
@@ -393,7 +393,7 @@ class CryptoTradingBot:
                 timeout_seconds,
                 _MARKET_KNOWLEDGE_FALLBACK_MSG,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error(
                 "Market knowledge update failed after %.1fs: %s; %s",
                 time.perf_counter() - update_start,
@@ -403,7 +403,7 @@ class CryptoTradingBot:
 
     async def _build_analysis_context(self, current_price: float | None, current_ticker) -> dict[str, Any]:
         """Build context data for market analysis"""
-        position_context = self.trading_strategy.get_position_context(current_price)
+        position_context = self.trading_strategy.get_position_context(current_price)  # type: ignore[reportCallIssue]
         memory_context = self.memory_service.get_context_summary()
         statistics_context = self.statistics_service.get_context()
 
@@ -468,7 +468,7 @@ class CryptoTradingBot:
                     last_chart_buffer.seek(0)
                     chart_image = io.BytesIO(last_chart_buffer.getvalue())
                     chart_image.seek(0)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning("Failed to prepare chart image for Discord notification: %s", e)
 
             await self.discord_notifier.send_analysis_notification(
@@ -507,9 +507,8 @@ class CryptoTradingBot:
             return
         signal: str = ""
         try:
-            analysis = result.get("analysis")
-            if isinstance(analysis, dict):
-                signal = str(analysis.get("signal", ""))
+            analysis = result.get("analysis") or {}
+            signal = str(analysis.get("signal", ""))
         except (AttributeError, TypeError, KeyError) as exc:
             self.logger.debug("Failed to extract signal from result analysis: %s", exc)
         if signal not in ("BUY", "SELL"):
@@ -542,7 +541,7 @@ class CryptoTradingBot:
 
     async def fetch_current_ticker(self) -> dict[str, Any] | None:
         """Fetch current ticker from exchange (public API)."""
-        return await self._fetch_current_ticker()
+        return await self._fetch_current_ticker()  # type: ignore
 
     def _calculate_next_check(self, source_time_ms: int) -> tuple[float, datetime]:
         """Calculate delay and next-check time for a timeframe candle.
@@ -579,7 +578,7 @@ class CryptoTradingBot:
                 await self.dashboard_state.update_next_check(next_check_time)
             return await self._interruptible_sleep(delay_seconds)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error calculating next timeframe: %s", e)
             await self._interruptible_sleep(ERROR_WAIT_LONG)
             return False
@@ -608,7 +607,7 @@ class CryptoTradingBot:
                 self.logger.info("Crypto Trading Bot ready")
                 return
 
-            is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)
+            is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)  # type: ignore
 
             context_msg = "Still in same candle" if is_same else "Resuming wait"
             self.logger.info(
@@ -624,7 +623,7 @@ class CryptoTradingBot:
                 await self.dashboard_state.update_next_check(next_check_time)
             await self._interruptible_sleep(delay_seconds)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error calculating wait time: %s", e)
             await self._interruptible_sleep(ERROR_WAIT_SHORT)
 
@@ -689,3 +688,4 @@ class CryptoTradingBot:
             for task in self.tasks:
                 if not task.done():
                     task.cancel()
+

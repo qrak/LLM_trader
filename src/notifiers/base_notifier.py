@@ -5,7 +5,7 @@ Subclasses implement rendering methods for their specific output medium.
 import io
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.loader import Config

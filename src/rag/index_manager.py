@@ -7,6 +7,7 @@ Handles building and maintaining search indices for news articles.
 import re
 from collections import defaultdict
 from typing import Any
+
 from src.logger.logger import Logger
 
 
@@ -71,7 +72,7 @@ class IndexManager:
             coins_mentioned = set(article["detected_coins"])
         else:
             # Fall back to detection
-            coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
+            coins_mentioned = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)  # type: ignore
             if coins_mentioned:
                 # Store as list internally
                 article["detected_coins"] = list(coins_mentioned)
@@ -93,11 +94,11 @@ class IndexManager:
 
     def _index_category_words(self, title: str, body: str, index: int, category_word_map: dict[str, str]) -> None:
         """Index words associated with categories with consistent lowercase normalization."""
-        for word, _ in category_word_map.items():
+        for word in category_word_map:
             # Ensure word is already lowercase (should be from the mapping)
             word_lower = word.lower()
             word_pattern = rf"\b{re.escape(word_lower)}\b"
-            if re.search(word_pattern, title) or re.search(word_pattern, body):
+            if re.search(word_pattern, title) or re.search(word_pattern, body):  # noqa: SIM102
                 # Prevent duplicates
                 if index not in self.keyword_index[word_lower]:
                     self.keyword_index[word_lower].append(index)
@@ -123,3 +124,4 @@ class IndexManager:
     def get_coin_indices(self) -> dict[str, list[int]]:
         """Get the coin index."""
         return dict(self.coin_index)
+

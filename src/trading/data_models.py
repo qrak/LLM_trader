@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-
 from src.utils.data_utils import SerializableMixin
 
 
@@ -111,6 +110,7 @@ class TradeDecision(SerializableMixin):
     quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
     fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
     reasoning: str = ""
+    indicators_json: str | dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -323,6 +323,14 @@ class MarketConditions:
     trend_strength: float = 0.0
     timeframe_alignment: str | None = None
     choppiness: float | None = None
+    # --- NEW: indicators enriched for vector DB learning (July 2026) ---
+    vwap: float = 0.0
+    mfi: float = 50.0
+    cmf: float = 0.0
+    bb_percent_b: float = 0.5
+    chandelier_long: float = 0.0
+    pfe: float = 0.0
+    supertrend_direction: str = "NEUTRAL"
 
 
 @dataclass(slots=True)

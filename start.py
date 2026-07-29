@@ -2,111 +2,134 @@
 Crypto Trading Bot - Entry Point
 Automated trading with AI-powered decisions.
 """
+
 # --- Standard Library ---
 import asyncio
 import atexit
+import hashlib
+import logging
 import os
 import sys
 import time
-import logging
 import warnings
 from pathlib import Path
-import hashlib
-from typing import Optional
 
 # --- Third-party ---
 import aiohttp
-from aiohttp_client_cache import SQLiteBackend
-import torch  # noqa: F401  # needed to initialize PyTorch before sentence-transformers
 import chromadb
-from sentence_transformers import SentenceTransformer
+import torch  # needed to initialize PyTorch before sentence-transformers
+from aiohttp_client_cache import SQLiteBackend
+from rich.align import Align
 from rich.console import Console
 from rich.panel import Panel
-from rich.align import Align
-from rich.text import Text
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
 from rich.table import Table
+from rich.text import Text
+from sentence_transformers import SentenceTransformer
 
-# --- Local ---
-from scripts.rotate_journals import rotate_all_journals
-from src.config.loader import config
-from src.app import BotServices, CryptoTradingBot, POSITION_UPDATE_INTERVAL
-from src.logger.logger import Logger
-from src.utils.graceful_shutdown_manager import GracefulShutdownManager
-from src.platforms.alternative_me import AlternativeMeAPI
-from src.platforms.defillama import DefiLlamaClient
-from src.platforms.coingecko import CoinGeckoAPI
-from src.platforms.ccxt_market_api import CCXTMarketAPI
-from src.rag.local_taxonomy import LocalTaxonomyProvider
-from src.platforms.exchange_manager import ExchangeManager
-from src.analyzer.analysis_engine import AnalysisEngine
-from src.rag import RagEngine
-from src.rag.scoring_policy import ArticleScoringPolicy
-from src.rag.news_ingestion import RSSCrawl4AINewsProvider, Crawl4AIEnricher
-from src.utils.token_counter import TokenCounter, CostStorage, ModelPricing
-from src.utils.format_utils import FormatUtils
-from src.managers.model_manager import ModelManager, ProviderClients, ProviderOrchestrator
-from src.platforms.ai_providers import GoogleAIClient, OpenRouterClient, LMStudioClient, BlockRunClient
-from src.managers.persistence_manager import PersistenceManager
-from src.managers.risk_manager import RiskManager
-from src.trading import (
-    TradingStrategy, TradingBrainService,
-    TradingStatisticsService, TradingMemoryService, PositionExtractor,
-    ExitMonitor, PositionStatusMonitor, ExecutorHandler,
-    MarketConditionsExtractor,
+from src.analyzer import (
+    AnalysisResultProcessor,
+    MarketDataCollector,
+    MarketMetricsCalculator,
+    PatternAnalyzer,
+    TechnicalCalculator,
+    TechnicalFormatter,
 )
-from src.trading.vector_memory import VectorMemoryService
-from src.rag.code_vector_index import CodebaseVectorIndexer
-from src.dashboard.server import DashboardServer
-from src.notifiers import DiscordNotifier, ConsoleNotifier
-from src.managers.post_mortem_repository import PostMortemRepository
-from src.trading.post_mortem import PostMortemService
-from src.utils.keyboard_handler import KeyboardHandler
-from src.parsing.unified_parser import UnifiedParser
-from src.rag.article_processor import ArticleProcessor
-from src.rag.collision_resolver import CategoryCollisionResolver
-from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
+from src.analyzer.analysis_engine import AnalysisEngine
 from src.analyzer.formatters import (
-    MarketOverviewFormatter,
     LongTermFormatter,
     MarketFormatter,
+    MarketOverviewFormatter,
 )
-from src.rag import (
-    RagFileHandler, NewsManager, MarketDataManager,
-    IndexManager, ContextBuilder,
-    CategoryProcessor, TickerManager
-)
-from src.rag.market_components import (
-    MarketDataFetcher,
-    MarketDataProcessor,
-    MarketDataCache,
-    MarketOverviewBuilder
-)
-from src.analyzer import (
-    TechnicalCalculator, PatternAnalyzer, MarketDataCollector,
-    MarketMetricsCalculator, AnalysisResultProcessor,
-    TechnicalFormatter
-)
+from src.analyzer.pattern_engine import ChartGenerator
+from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.prompts import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
-from src.analyzer.pattern_engine import ChartGenerator
 from src.analyzer.trend_validator import TrendValidator
-from src.utils.timeframe_validator import TimeframeValidator
-from src.utils.indicator_classifier import build_exit_execution_context_from_config
-from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
+from src.app import POSITION_UPDATE_INTERVAL, BotServices, CryptoTradingBot
+from src.config.loader import config
+from src.dashboard.server import DashboardServer
+from src.logger.logger import Logger
+from src.managers.model_manager import (
+    ModelManager,
+    ProviderClients,
+    ProviderOrchestrator,
+)
+from src.managers.persistence_manager import PersistenceManager
+from src.managers.post_mortem_repository import PostMortemRepository
+from src.managers.risk_manager import RiskManager
+from src.notifiers import ConsoleNotifier, DiscordNotifier
+from src.parsing.unified_parser import UnifiedParser
+from src.platforms.ai_providers import (
+    BlockRunClient,
+    GoogleAIClient,
+    LMStudioClient,
+    OpenRouterClient,
+)
+from src.platforms.alternative_me import AlternativeMeAPI
+from src.platforms.ccxt_market_api import CCXTMarketAPI
+from src.platforms.coingecko import CoinGeckoAPI
+from src.platforms.defillama import DefiLlamaClient
+from src.platforms.exchange_manager import ExchangeManager
+from src.rag import (
+    CategoryProcessor,
+    ContextBuilder,
+    IndexManager,
+    MarketDataManager,
+    NewsManager,
+    RagEngine,
+    RagFileHandler,
+    TickerManager,
+)
+from src.rag.article_processor import ArticleProcessor
+from src.rag.code_vector_index import CodebaseVectorIndexer
+from src.rag.collision_resolver import CategoryCollisionResolver
+from src.rag.local_taxonomy import LocalTaxonomyProvider
+from src.rag.market_components import (
+    MarketDataCache,
+    MarketDataFetcher,
+    MarketDataProcessor,
+    MarketOverviewBuilder,
+)
+from src.rag.news_ingestion import Crawl4AIEnricher, RSSCrawl4AINewsProvider
+from src.rag.scoring_policy import ArticleScoringPolicy
+from src.trading import (
+    ExecutorHandler,
+    ExitMonitor,
+    MarketConditionsExtractor,
+    PositionExtractor,
+    PositionStatusMonitor,
+    TradingBrainService,
+    TradingMemoryService,
+    TradingStatisticsService,
+    TradingStrategy,
+)
 from src.trading.audit import AuditTrail
+from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
-from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
+from src.trading.post_mortem import PostMortemService
+from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
+from src.trading.vector_memory import VectorMemoryService
+from src.utils.format_utils import FormatUtils
+from src.utils.graceful_shutdown_manager import GracefulShutdownManager
+from src.utils.indicator_classifier import build_exit_execution_context_from_config
+
+# --- Local ---
+# pylint: disable=wrong-import-position
+from src.utils.journal_rotator import JournalRotator
+from src.utils.keyboard_handler import KeyboardHandler
+from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
 # Suppress known deprecation warnings from third-party libraries at runtime
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="docopt")
@@ -123,7 +146,7 @@ def _configure_hf_hub_auth() -> None:
     try:
         logging.getLogger("transformers").setLevel(logging.ERROR)
         logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
-    except Exception:
+    except Exception:  # noqa: S110, BLE001
         pass
 
     hf_token = config.get_env("HF_TOKEN")
@@ -147,10 +170,13 @@ def _cleanup_legacy_embedding_cache(logger: Logger | None = None) -> None:
 
         if new_model_dir.exists() and old_model_dir.exists():
             import shutil
+
             shutil.rmtree(old_model_dir, ignore_errors=True)
             if logger:
-                logger.info("  -> Pruned legacy BAAI/bge-small-en-v1.5 embedding model from cache")
-    except Exception as e:
+                logger.info(
+                    "  -> Pruned legacy BAAI/bge-small-en-v1.5 embedding model from cache"
+                )
+    except Exception as e:  # noqa: BLE001
         if logger:
             logger.debug("Failed to prune legacy embedding cache: %s", e)
 
@@ -166,19 +192,24 @@ def _get_best_device() -> str:
         return "mps"
     return "cpu"
 
+
 try:
     import tkinter as tk
     from tkinter import messagebox
+
     TKINTER_AVAILABLE = True
 except ImportError:
     TKINTER_AVAILABLE = False
 
+
 class SingleInstanceLock:
     """Manages a single instance lock file to prevent multiple application instances."""
 
-    def __init__(self, app_name: str = ".llm_trader.lock", logger: Logger | None = None):
+    def __init__(
+        self, app_name: str = ".llm_trader.lock", logger: Logger | None = None
+    ):
         self.lock_file_path = Path.home() / app_name
-        self._lock_handle: Optional[int] = None
+        self._lock_handle: int | None = None
         self._mutex_handle = None
         self.logger = logger or logging.getLogger(__name__)
 
@@ -187,21 +218,23 @@ class SingleInstanceLock:
         try:
             import ctypes
 
-            lock_key = hashlib.sha1(str(self.lock_file_path).encode("utf-8")).hexdigest()[:16]
+            lock_key = hashlib.sha1(
+                str(self.lock_file_path).encode("utf-8")
+            ).hexdigest()[:16]
             mutex_name = f"Local\\LLMTraderSingleInstance_{lock_key}"
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[reportAttributeAccessIssue]
             handle = kernel32.CreateMutexW(None, False, mutex_name)
             if not handle:
                 return True  # Fall back to file lock path below.
 
             self._mutex_handle = handle
             ERROR_ALREADY_EXISTS = 183
-            if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:
+            if ctypes.get_last_error() == ERROR_ALREADY_EXISTS:  # type: ignore[reportAttributeAccessIssue]
                 kernel32.CloseHandle(handle)
                 self._mutex_handle = None
                 return False
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001
             return True  # Fall back to file lock path below.
 
     def _release_windows_mutex(self) -> None:
@@ -209,7 +242,7 @@ class SingleInstanceLock:
             try:
                 import ctypes
 
-                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[reportAttributeAccessIssue]
                 kernel32.CloseHandle(self._mutex_handle)
             except Exception:
                 self.logger.exception("Failed to release Windows mutex handle")
@@ -221,10 +254,13 @@ class SingleInstanceLock:
             if sys.platform == "win32" and not self._acquire_windows_mutex():
                 return False
 
-            self._lock_handle = os.open(str(self.lock_file_path), os.O_CREAT | os.O_RDWR)
+            self._lock_handle = os.open(
+                str(self.lock_file_path), os.O_CREAT | os.O_RDWR
+            )
 
             if sys.platform == "win32":
                 import msvcrt
+
                 try:
                     msvcrt.locking(self._lock_handle, msvcrt.LK_NBLCK, 1)
                 except OSError:
@@ -232,6 +268,7 @@ class SingleInstanceLock:
                     return False
             else:
                 import fcntl  # pylint: disable=import-error
+
                 try:
                     fcntl.flock(self._lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
@@ -240,7 +277,7 @@ class SingleInstanceLock:
             atexit.register(self.release)
             return True
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self._release_windows_mutex()
             print(f"Warning: Could not create lock file: {e}")
             return True
@@ -251,18 +288,20 @@ class SingleInstanceLock:
             try:
                 if sys.platform == "win32":
                     import msvcrt
+
                     msvcrt.locking(self._lock_handle, msvcrt.LK_UNLCK, 1)
                 else:
                     import fcntl  # pylint: disable=import-error
+
                     fcntl.flock(self._lock_handle, fcntl.LOCK_UN)
                 os.close(self._lock_handle)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.logger.warning("Failed to release lock")
             self._lock_handle = None
 
             try:
                 self.lock_file_path.unlink(missing_ok=True)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self.logger.warning("Failed to unlink lock file")
 
         self._release_windows_mutex()
@@ -274,18 +313,18 @@ def _show_error_dialog(title: str, message: str) -> bool:
 
     root = None
     try:
-        root = tk.Tk()
+        root = tk.Tk()  # type: ignore[reportPossiblyUnboundVariable]
         root.withdraw()
         root.attributes("-topmost", True)
-        messagebox.showerror(title, message, parent=root)
+        messagebox.showerror(title, message, parent=root)  # type: ignore[reportPossiblyUnboundVariable]
         return True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
     finally:
         if root is not None:
             try:
                 root.destroy()
-            except Exception:
+            except Exception:  # noqa: S110, BLE001
                 pass  # best-effort cleanup
 
 
@@ -322,7 +361,9 @@ def build_startup_banner(project_root: Path) -> Panel:
     )
 
 
-def print_summary_table(console: Console, elapsed: float, stats: dict[str, str]) -> None:
+def print_summary_table(
+    console: Console, elapsed: float, stats: dict[str, str]
+) -> None:
     """Show a compact summary table after all provisioning stages complete."""
     table = Table(
         title=f"[bold green]✅  Initialization Complete  ({elapsed:.1f}s)[/]",
@@ -354,8 +395,11 @@ class CompositionRoot:
 
     def __init__(self):
         self.config = config
-        self.console = Console()
-        self.logger = Logger(logger_name="Bot", logger_debug=config.LOGGER_DEBUG, console=self.console)
+        terminal_width = os.get_terminal_size().columns
+        self.console = Console(width=terminal_width)
+        self.logger = Logger(
+            logger_name="Bot", logger_debug=config.LOGGER_DEBUG, console=self.console
+        )
         self.logger.install_crash_handler()
         self.loop = None
         self.shutdown_manager = None
@@ -386,79 +430,106 @@ class CompositionRoot:
 
         with progress:
             task = progress.add_task(
-                "[cyan]Stage 1/9 — Core infrastructure (exchanges, sessions)...", total=9
+                "[cyan]Stage 1/9 — Core infrastructure (exchanges, sessions)...",
+                total=9,
             )
 
             self._init_directories()
             infra = await self._provision_infrastructure()
             progress.update(task, completed=1)
 
-            progress.update(task, description="[cyan]Stage 2/9 — Helper utilities & parsers...")
+            progress.update(
+                task, description="[cyan]Stage 2/9 — Helper utilities & parsers..."
+            )
             utils = self._provision_utilities()
             progress.update(task, completed=2)
 
-            progress.update(task, description="[cyan]Stage 3/9 — Market data platforms (CoinGecko, DeFiLlama, CCXT)...")
+            progress.update(
+                task,
+                description="[cyan]Stage 3/9 — Market data platforms (CoinGecko, DeFiLlama, CCXT)...",
+            )
             apis = await self._provision_platforms(infra)
             progress.update(task, completed=3)
 
-            progress.update(task, description="[cyan]Stage 4/9 — RAG news engine & taxonomy...")
+            progress.update(
+                task, description="[cyan]Stage 4/9 — RAG news engine & taxonomy..."
+            )
             rag = await self._provision_rag_layer(infra, apis, utils)
             progress.update(task, completed=4)
 
-            progress.update(task, description="[cyan]Stage 5/9 — AI provider models & orchestrator...")
+            progress.update(
+                task,
+                description="[cyan]Stage 5/9 — AI provider models & orchestrator...",
+            )
             models = self._provision_model_layer(utils)
             progress.update(task, completed=5)
 
-            progress.update(task, description="[cyan]Stage 6/9 — Technical analysis engine & patterns...")
-            analyzer = await self._provision_analyzer_layer(infra, apis, utils, rag, models)
+            progress.update(
+                task,
+                description="[cyan]Stage 6/9 — Technical analysis engine & patterns...",
+            )
+            analyzer = await self._provision_analyzer_layer(
+                infra, apis, utils, rag, models
+            )
             progress.update(task, completed=6)
 
-            progress.update(task, description="[cyan]Stage 7/9 — Trading brain, memory, risk manager & guards...")
+            progress.update(
+                task,
+                description="[cyan]Stage 7/9 — Trading brain, memory, risk manager & guards...",
+            )
             trading = self._provision_trading_layer(utils, models)
             progress.update(task, completed=7)
 
-            progress.update(task, description="[cyan]Stage 8/9 — Notification channels (Discord) & maintenance...")
+            progress.update(
+                task,
+                description="[cyan]Stage 8/9 — Notification channels (Discord) & maintenance...",
+            )
             notifiers = await self._provision_notifiers(utils)
-            await self._run_maintenance_tasks(trading['brain_service'])
+            await self._run_maintenance_tasks(trading["brain_service"])
             progress.update(task, completed=8)
 
-            progress.update(task, description="[green]Stage 9/9 — Dashboard server & web admin...")
+            progress.update(
+                task, description="[green]Stage 9/9 — Dashboard server & web admin..."
+            )
             dashboard = self._provision_dashboard_layer(infra, utils, analyzer, trading)
             progress.update(task, completed=9)
 
         end_time = time.perf_counter()
         init_duration = end_time - start_time
-        self.logger.info("All 9 provisioning stages initialized successfully in %.2f seconds", init_duration)
+        self.logger.info(
+            "All 9 provisioning stages initialized successfully in %.2f seconds",
+            init_duration,
+        )
 
         self._display_startup_summary(apis, rag, trading, init_duration)
 
         # Combine everything for the bot and dashboard
         deps = {
-            'exchange_manager': infra['exchange_manager'],
-            'market_analyzer': analyzer['engine'],
-            'trading_strategy': trading['strategy'],
-            'discord_notifier': notifiers['notifier'],
-            'discord_task': notifiers['task'],
-            'keyboard_handler': infra['keyboard_handler'],
-            'rag_engine': rag,
-            'coingecko_api': apis['coingecko'],
-            'market_api': apis['market'],
-            'alternative_me_api': apis['alternative_me'],
-            'http_session': infra['session'],
-            'persistence': trading['persistence'],
-            'model_manager': models['manager'],
-            'brain_service': trading['brain_service'],
-            'statistics_service': trading['statistics_service'],
-            'memory_service': trading['memory_service'],
-            'exit_monitor': trading['exit_monitor'],
-            'executor_handler': ExecutorHandler(
-                persistence=trading['persistence'],
+            "exchange_manager": infra["exchange_manager"],
+            "market_analyzer": analyzer["engine"],
+            "trading_strategy": trading["strategy"],
+            "discord_notifier": notifiers["notifier"],
+            "discord_task": notifiers["task"],
+            "keyboard_handler": infra["keyboard_handler"],
+            "rag_engine": rag,
+            "coingecko_api": apis["coingecko"],
+            "market_api": apis["market"],
+            "alternative_me_api": apis["alternative_me"],
+            "http_session": infra["session"],
+            "persistence": trading["persistence"],
+            "model_manager": models["manager"],
+            "brain_service": trading["brain_service"],
+            "statistics_service": trading["statistics_service"],
+            "memory_service": trading["memory_service"],
+            "exit_monitor": trading["exit_monitor"],
+            "executor_handler": ExecutorHandler(
+                persistence=trading["persistence"],
                 config=self.config,
                 logger=self.logger,
             ),
-            'dashboard_server': dashboard['dashboard_server'],
-            'dashboard_state': dashboard['dashboard_state'],
-            'force_analysis_event': dashboard['force_analysis_event'],
+            "dashboard_server": dashboard["dashboard_server"],
+            "dashboard_state": dashboard["dashboard_state"],
+            "force_analysis_event": dashboard["force_analysis_event"],
         }
 
         return deps
@@ -472,18 +543,25 @@ class CompositionRoot:
         os.makedirs(os.path.join(data_dir, "charts"), exist_ok=True)
 
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
-        brain_dir = os.path.join(data_dir, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}")
+        brain_dir = os.path.join(
+            data_dir, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}"
+        )
         os.makedirs(brain_dir, exist_ok=True)
 
     async def _run_maintenance_tasks(self, brain_service: TradingBrainService) -> None:
         """Run post-provisioning maintenance: journal rotation & codebase vector index."""
         try:
-            rotated_count = rotate_all_journals()
+            rotated_count = JournalRotator().rotate_all_journals()
             if rotated_count > 0:
-                self.logger.info("  -> Journal maintenance: rotated %d journal file(s) to .ai/archive/", rotated_count)
+                self.logger.info(
+                    "  -> Journal maintenance: rotated %d journal file(s) to .ai/archive/",
+                    rotated_count,
+                )
             else:
-                self.logger.info("  -> Journal maintenance: all journal files within size limits")
-        except Exception as e:
+                self.logger.info(
+                    "  -> Journal maintenance: all journal files within size limits"
+                )
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Journal rotation maintenance skipped: %s", e)
 
         if self.config.CODEBASE_INDEX_ENABLED:
@@ -495,7 +573,7 @@ class CompositionRoot:
                     logger=self.logger,
                     chroma_client=codebase_client,
                     embedding_model=brain_service.vector_memory.embedding_model,
-                    project_root=Path(".").resolve(),
+                    project_root=Path.cwd(),
                 )
                 self.logger.info("  -> Verifying codebase vector index embeddings...")
                 result = await asyncio.wait_for(
@@ -505,16 +583,20 @@ class CompositionRoot:
                 if result["indexed"] > 0:
                     self.logger.info(
                         "  -> Codebase vector index updated: %d files indexed, %d total chunks",
-                        result["indexed"], result["total_chunks"],
+                        result["indexed"],
+                        result["total_chunks"],
                     )
                 else:
                     self.logger.info(
                         "  -> Codebase vector index up-to-date: %d files verified, %d chunks ready",
-                        result["skipped"], result["total_chunks"],
+                        result["skipped"],
+                        result["total_chunks"],
                     )
             except TimeoutError:
-                self.logger.info("  -> Codebase vector index check deferred (startup prioritized)")
-            except Exception as e:
+                self.logger.info(
+                    "  -> Codebase vector index check deferred (startup prioritized)"
+                )
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Codebase vector indexing skipped: %s", e)
         else:
             self.logger.info("  -> Codebase vector index disabled in config.ini")
@@ -528,9 +610,9 @@ class CompositionRoot:
         keyboard_handler = KeyboardHandler(logger=self.logger)
 
         return {
-            'exchange_manager': exchange_manager,
-            'session': session,
-            'keyboard_handler': keyboard_handler
+            "exchange_manager": exchange_manager,
+            "session": session,
+            "keyboard_handler": keyboard_handler,
         }
 
     def _provision_utilities(self) -> dict:
@@ -542,35 +624,43 @@ class CompositionRoot:
         collision_resolver = CategoryCollisionResolver()
 
         return {
-            'format_utils': format_utils,
-            'parser': parser,
-            'token_counter': token_counter,
-            'timeframe_validator': timeframe_validator,
-            'collision_resolver': collision_resolver
+            "format_utils": format_utils,
+            "parser": parser,
+            "token_counter": token_counter,
+            "timeframe_validator": timeframe_validator,
+            "collision_resolver": collision_resolver,
         }
 
     async def _provision_platforms(self, infra: dict) -> dict:
         """Provision external API clients."""
-        self.logger.info("  -> Fetching CoinGecko coin catalog & initializing market APIs...")
-        coingecko_cache_ttl_seconds = int(self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS * 3600)
+        self.logger.info(
+            "  -> Fetching CoinGecko coin catalog & initializing market APIs..."
+        )
+        coingecko_cache_ttl_seconds = int(
+            self.config.RAG_COINGECKO_UPDATE_INTERVAL_HOURS * 3600
+        )
         coingecko_backend = SQLiteBackend(
-            cache_name='cache/coingecko_cache.db',
+            cache_name="cache/coingecko_cache.db",
             expire_after=coingecko_cache_ttl_seconds,
         )
 
         coingecko = CoinGeckoAPI(
             logger=self.logger,
             cache_backend=coingecko_backend,
-            cache_dir='data/market_data',
+            cache_dir="data/market_data",
             api_key=self.config.COINGECKO_API_KEY,
             update_interval_hours=24,
-            global_api_url=self.config.RAG_COINGECKO_GLOBAL_API_URL
+            global_api_url=self.config.RAG_COINGECKO_GLOBAL_API_URL,
         )
         await coingecko.initialize()
-        self.logger.info("  -> CoinGecko API ready (%d unique symbols mapped)", len(coingecko.symbol_to_id_map))
+        self.logger.info(
+            "  -> CoinGecko API ready (%d unique symbols mapped)",
+            len(coingecko.symbol_to_id_map),
+        )
 
         news_client = RSSCrawl4AINewsProvider(
-            self.logger, self.config,
+            self.logger,
+            self.config,
             enricher=Crawl4AIEnricher(
                 logger=self.logger,
                 config=self.config,
@@ -578,72 +668,104 @@ class CompositionRoot:
         )
 
         defillama = DefiLlamaClient(
-            logger=self.logger, session=infra['session'], cache_dir='cache',
-            update_interval_hours=self.config.RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS
+            logger=self.logger,
+            session=infra["session"],
+            cache_dir="cache",
+            update_interval_hours=self.config.RAG_DEFILLAMA_UPDATE_INTERVAL_HOURS,
         )
 
         alternative_me = AlternativeMeAPI(logger=self.logger)
         await alternative_me.initialize()
 
         return {
-            'coingecko': coingecko,
-            'news': news_client,
-            'market': CCXTMarketAPI(
+            "coingecko": coingecko,
+            "news": news_client,
+            "market": CCXTMarketAPI(
                 logger=self.logger,
-                exchange_manager=infra['exchange_manager'],
+                exchange_manager=infra["exchange_manager"],
             ),
-            'defillama': defillama,
-            'alternative_me': alternative_me
+            "defillama": defillama,
+            "alternative_me": alternative_me,
         }
 
-    async def _provision_rag_layer(self, infra: dict, apis: dict, utils: dict) -> RagEngine:
+    async def _provision_rag_layer(
+        self, infra: dict, apis: dict, utils: dict
+    ) -> RagEngine:
         """Provision the RAG (Retrieval Augmented Generation) engine."""
-        self.logger.info("  -> Loading news cache, taxonomy & building RAG search index...")
-        file_handler = RagFileHandler(logger=self.logger, config=self.config, unified_parser=utils['parser'])
+        self.logger.info(
+            "  -> Loading news cache, taxonomy & building RAG search index..."
+        )
+        file_handler = RagFileHandler(
+            logger=self.logger, config=self.config, unified_parser=utils["parser"]
+        )
         symbol_name_map = file_handler.load_symbol_name_map()
 
         article_processor = ArticleProcessor(
-            logger=self.logger, unified_parser=utils['parser'],
-            format_utils=utils['format_utils'],
+            logger=self.logger,
+            unified_parser=utils["parser"],
+            format_utils=utils["format_utils"],
             symbol_name_map=symbol_name_map,
         )
         news_manager = NewsManager(
-            logger=self.logger, file_handler=file_handler, news_client=apis['news'],
-            session=infra['session'], article_processor=article_processor
+            logger=self.logger,
+            file_handler=file_handler,
+            news_client=apis["news"],
+            session=infra["session"],
+            article_processor=article_processor,
         )
 
         marker_fetcher = MarketDataFetcher(
-            self.logger, apis['coingecko'], infra['exchange_manager'], apis['market'], apis['defillama']
+            self.logger,
+            apis["coingecko"],
+            infra["exchange_manager"],
+            apis["market"],
+            apis["defillama"],
         )
-        market_processor = MarketDataProcessor(self.logger, utils['parser'])
+        market_processor = MarketDataProcessor(self.logger, utils["parser"])
         data_manager = MarketDataManager(
-            self.logger, file_handler, apis['coingecko'], apis['market'],
-            infra['exchange_manager'], unified_parser=utils['parser'],
-            fetcher=marker_fetcher, processor=market_processor,
+            self.logger,
+            file_handler,
+            apis["coingecko"],
+            apis["market"],
+            infra["exchange_manager"],
+            unified_parser=utils["parser"],
+            fetcher=marker_fetcher,
+            processor=market_processor,
             cache=MarketDataCache(self.logger, file_handler),
-            overview_builder=MarketOverviewBuilder(self.logger, market_processor)
+            overview_builder=MarketOverviewBuilder(self.logger, market_processor),
         )
 
-        category_processor = CategoryProcessor(self.logger, utils['collision_resolver'], file_handler)
+        category_processor = CategoryProcessor(
+            self.logger, utils["collision_resolver"], file_handler
+        )
         engine = RagEngine(
-            logger=self.logger, token_counter=utils['token_counter'], config=self.config,
-            coingecko_api=apis['coingecko'],
-            file_handler=file_handler, news_manager=news_manager, market_data_manager=data_manager,
+            logger=self.logger,
+            token_counter=utils["token_counter"],
+            config=self.config,
+            coingecko_api=apis["coingecko"],
+            file_handler=file_handler,
+            news_manager=news_manager,
+            market_data_manager=data_manager,
             index_manager=IndexManager(self.logger, article_processor),
             category_fetcher=LocalTaxonomyProvider(self.logger),
             category_processor=category_processor,
-            ticker_manager=TickerManager(self.logger, file_handler, infra['exchange_manager']),
+            ticker_manager=TickerManager(
+                self.logger, file_handler, infra["exchange_manager"]
+            ),
             context_builder=ContextBuilder(
                 self.logger,
-                utils['token_counter'],
+                utils["token_counter"],
                 self.config,
                 ArticleScoringPolicy(config=self.config),
                 article_processor,
                 symbol_name_map=symbol_name_map,
-            )
+            ),
         )
         await engine.initialize()
-        self.logger.info("  -> RAG engine ready (%d news articles indexed)", engine.news_manager.get_database_size())
+        self.logger.info(
+            "  -> RAG engine ready (%d news articles indexed)",
+            engine.news_manager.get_database_size(),
+        )  # type: ignore[reportOptionalMemberAccess]
         return engine
 
     def _provision_model_layer(self, utils: dict) -> dict:
@@ -663,7 +785,9 @@ class CompositionRoot:
                     model=self.config.GOOGLE_STUDIO_MODEL,
                     logger=self.logger,
                 )
-                self.logger.debug("Google AI paid client initialized as fallback for overloaded free tier")
+                self.logger.debug(
+                    "Google AI paid client initialized as fallback for overloaded free tier"
+                )
         openrouter_client: OpenRouterClient | None = None
         if self.config.OPENROUTER_API_KEY:
             openrouter_client = OpenRouterClient(
@@ -678,7 +802,10 @@ class CompositionRoot:
                 base_url=self.config.LM_STUDIO_BASE_URL,
                 logger=self.logger,
             )
-            self.logger.debug("LM Studio client initialized for URL: %s", self.config.LM_STUDIO_BASE_URL)
+            self.logger.debug(
+                "LM Studio client initialized for URL: %s",
+                self.config.LM_STUDIO_BASE_URL,
+            )
         blockrun_client: BlockRunClient | None = None
         if self.config.BLOCKRUN_WALLET_KEY:
             blockrun_client = BlockRunClient(
@@ -697,68 +824,108 @@ class CompositionRoot:
         orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients)
 
         manager = ModelManager(
-            logger=self.logger, config=self.config, unified_parser=utils['parser'],
-            token_counter=utils['token_counter'], cost_storage=CostStorage(),
-            model_pricing=ModelPricing(), orchestrator=orchestrator, provider_clients=provider_clients
+            logger=self.logger,
+            config=self.config,
+            unified_parser=utils["parser"],
+            token_counter=utils["token_counter"],
+            cost_storage=CostStorage(),
+            model_pricing=ModelPricing(),
+            orchestrator=orchestrator,
+            provider_clients=provider_clients,
         )
-        primary_provider = getattr(self.config, 'AI_PROVIDER', 'googleai')
-        self.logger.info("  -> AI Provider fallback chain ready (Primary provider: %s)", primary_provider)
+        primary_provider = getattr(self.config, "AI_PROVIDER", "googleai")
+        self.logger.info(
+            "  -> AI Provider fallback chain ready (Primary provider: %s)",
+            primary_provider,
+        )
 
-        return {'manager': manager}
+        return {"manager": manager}
 
     async def _provision_analyzer_layer(
         self, infra: dict, apis: dict, utils: dict, rag: RagEngine, models: dict
     ) -> dict:
         """Provision the market analysis engine."""
-        overview_fmt = MarketOverviewFormatter(self.logger, utils['format_utils'])
-        long_term_fmt = LongTermFormatter(self.logger, utils['format_utils'])
+        overview_fmt = MarketOverviewFormatter(self.logger, utils["format_utils"])
+        long_term_fmt = LongTermFormatter(self.logger, utils["format_utils"])
 
         market_fmt = MarketFormatter(
-            self.logger, utils['format_utils'], self.config, utils['token_counter'],
-            overview_fmt, long_term_fmt
+            self.logger,
+            utils["format_utils"],
+            self.config,
+            utils["token_counter"],
+            overview_fmt,
+            long_term_fmt,
         )
 
-        tech_calc = TechnicalCalculator(self.logger, utils['format_utils'])
+        tech_calc = TechnicalCalculator(self.logger, utils["format_utils"])
         pattern_analyzer = PatternAnalyzer(
-            indicator_pattern_engine=IndicatorPatternEngine(),
-            logger=self.logger
+            indicator_pattern_engine=IndicatorPatternEngine(), logger=self.logger
         )
         try:
-            self.logger.info("  -> Warming up Numba JIT pattern engine (compiling 50+ indicator kernels)...")
+            self.logger.info(
+                "  -> Warming up Numba JIT pattern engine (compiling 50+ indicator kernels)..."
+            )
             pattern_analyzer.warmup()
             self.logger.info("  -> Numba JIT pattern engine compiled & warm")
-        except Exception as warmup_error:
-            self.logger.warning("Pattern analyzer warm-up could not run: %s", warmup_error)
+        except Exception as warmup_error:  # noqa: BLE001
+            self.logger.warning(
+                "Pattern analyzer warm-up could not run: %s", warmup_error
+            )
 
         prompt_builder = PromptBuilder(
-            self.config.TIMEFRAME, self.logger, self.config, utils['format_utils'],
-            overview_fmt, long_term_fmt, TechnicalFormatter(tech_calc, self.logger, utils['format_utils']),
-            market_fmt, utils['timeframe_validator'],
-            TemplateManager(self.config, self.logger, utils['timeframe_validator'])
+            self.config.TIMEFRAME,
+            self.logger,
+            self.config,
+            utils["format_utils"],
+            overview_fmt,
+            long_term_fmt,
+            TechnicalFormatter(tech_calc, self.logger, utils["format_utils"]),
+            market_fmt,
+            utils["timeframe_validator"],
+            TemplateManager(self.config, self.logger, utils["timeframe_validator"]),
         )
-        
+
         engine = AnalysisEngine(
-            self.logger, rag, models['manager'], apis['market'], self.config,
-            tech_calc, pattern_analyzer, prompt_builder,
-            MarketDataCollector(self.logger, rag, apis['alternative_me'], session=infra['session']),
+            self.logger,
+            rag,
+            models["manager"],
+            apis["market"],
+            self.config,
+            tech_calc,
+            pattern_analyzer,
+            prompt_builder,
+            MarketDataCollector(
+                self.logger, rag, apis["alternative_me"], session=infra["session"]
+            ),
             MarketMetricsCalculator(self.logger),
             AnalysisResultProcessor(
-                models['manager'], self.logger, utils['parser'], TrendValidator(), PatternQualityScorer()
+                models["manager"],
+                self.logger,
+                utils["parser"],
+                TrendValidator(),
+                PatternQualityScorer(),
             ),
             ChartGenerator(
-                self.logger, self.config, formatter=utils['format_utils'].fmt, format_utils=utils['format_utils']
+                self.logger,
+                self.config,
+                formatter=utils["format_utils"].fmt,
+                format_utils=utils["format_utils"],
             ),
         )
-        
-        return {'engine': engine}
+
+        return {"engine": engine}
 
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
         """Provision trading strategy and memory services."""
         persistence = PersistenceManager(self.logger, data_dir="data/trading")
 
         # --- Post-Mortem Repository (same trade_history.db, FTS5) ---
-        trade_db_path = os.path.join(self.config.DATA_DIR, "trading", "trade_history.db")
-        post_mortem_repo = PostMortemRepository(logger=self.logger, db_path=trade_db_path)
+        trade_db_path = os.path.join(
+            self.config.DATA_DIR, "trading", "trade_history.db"
+        )
+        post_mortem_repo = PostMortemRepository(
+            logger=self.logger, db_path=trade_db_path
+        )
 
         risk_manager = RiskManager(self.logger, self.config)
 
@@ -767,10 +934,14 @@ class CompositionRoot:
 
         safe_symbol = self.config.CRYPTO_PAIR.replace("/", "_").replace("-", "_")
         brain_path = os.path.join(
-            self.config.DATA_DIR, "trading", f"brain_{safe_symbol}_{self.config.TIMEFRAME}"
+            self.config.DATA_DIR,
+            "trading",
+            f"brain_{safe_symbol}_{self.config.TIMEFRAME}",
         )
 
-        self.logger.info("  -> Connecting to ChromaDB vector memory at %s...", brain_path)
+        self.logger.info(
+            "  -> Connecting to ChromaDB vector memory at %s...", brain_path
+        )
         chroma_client = chromadb.PersistentClient(path=brain_path)
 
         embed_device = _get_best_device()
@@ -778,7 +949,9 @@ class CompositionRoot:
             "  -> Loading SentenceTransformer embedding model ('BAAI/bge-base-en-v1.5') on %s...",
             embed_device,
         )
-        embedding_model = SentenceTransformer("BAAI/bge-base-en-v1.5", device=embed_device)
+        embedding_model = SentenceTransformer(
+            "BAAI/bge-base-en-v1.5", device=embed_device
+        )
         self.logger.info("  -> SentenceTransformer embedding model loaded successfully")
         timeframe = TimeframeValidator.validate_and_normalize(self.config.TIMEFRAME)
         timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
@@ -789,7 +962,9 @@ class CompositionRoot:
             embedding_model=embedding_model,
             timeframe_minutes=timeframe_minutes,
         )
-        exit_execution_context = build_exit_execution_context_from_config(self.config, timeframe)
+        exit_execution_context = build_exit_execution_context_from_config(
+            self.config, timeframe
+        )
         tightening_policy = StopLossTighteningPolicy.from_config(self.config)
 
         brain_service = TradingBrainService(
@@ -799,20 +974,22 @@ class CompositionRoot:
             exit_execution_context=exit_execution_context,
             timeframe_minutes=timeframe_minutes,
             tightening_policy=tightening_policy,
-            post_mortem_repo=post_mortem_repo,
         )
-        brain_service.refresh_semantic_rules_if_stale()
-        
+
         # Run startup collection maintenance: prune ChromaDB documents that are
         # definitively beyond the relevance window (~3× _max_age_days).
         try:
             prune_results = vector_memory.prune_aged_documents()
             for coll_name, count in prune_results.items():
                 if count > 0:
-                    self.logger.info("ChromaDB maintenance: removed %d documents from %s", count, coll_name)
-        except Exception as e:
+                    self.logger.info(
+                        "ChromaDB maintenance: removed %d documents from %s",
+                        count,
+                        coll_name,
+                    )
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("ChromaDB startup maintenance failed: %s", e)
-        
+
         memory_service = TradingMemoryService(
             self.logger,
             persistence,
@@ -831,52 +1008,62 @@ class CompositionRoot:
                 CooldownWindowGuard(persistence=persistence),
             ]
         )
-        self.logger.info("Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names))
-        
+        self.logger.info(
+            "Order guard pipeline active: %s", ", ".join(guard_pipeline.guard_names)
+        )
+
         post_mortem_service = PostMortemService(
             logger=self.logger,
-            model_manager=models['manager'],
-            unified_parser=utils['parser'],
+            model_manager=models["manager"],
+            unified_parser=utils["parser"],
             repository=post_mortem_repo,
         )
 
         strategy = TradingStrategy(
-            self.logger, persistence, brain_service, statistics_service, memory_service,
-            risk_manager, self.config, PositionExtractor(self.logger, utils['parser']),
+            self.logger,
+            persistence,
+            brain_service,
+            statistics_service,
+            memory_service,
+            risk_manager,
+            self.config,
+            PositionExtractor(self.logger, utils["parser"]),
             conditions_extractor=MarketConditionsExtractor(self.logger),
             tightening_policy=tightening_policy,
-            guard_pipeline=guard_pipeline, audit_trail=audit_trail,
+            guard_pipeline=guard_pipeline,
+            audit_trail=audit_trail,
             post_mortem_service=post_mortem_service,
         )
-        
+
         return {
-            'strategy': strategy,
-            'persistence': persistence,
-            'brain_service': brain_service,
-            'memory_service': memory_service,
-            'statistics_service': statistics_service,
-            'exit_monitor': exit_monitor,
-            'post_mortem_repo': post_mortem_repo,
+            "strategy": strategy,
+            "persistence": persistence,
+            "brain_service": brain_service,
+            "memory_service": memory_service,
+            "statistics_service": statistics_service,
+            "exit_monitor": exit_monitor,
+            "post_mortem_repo": post_mortem_repo,
         }
 
     async def _provision_notifiers(self, utils: dict) -> dict:
         """Provision notification services."""
         notifier = None
         task = None
-        
+
         if self.config.DISCORD_BOT_ENABLED and self.config.BOT_TOKEN_DISCORD:
             try:
                 import discord
+
                 from src.notifiers.filehandler import DiscordFileHandler
-                
+
                 intents = discord.Intents.default()
                 intents.message_content = False
                 intents.reactions = False
                 intents.typing = False
                 intents.presences = False
-                
+
                 bot = discord.Client(intents=intents)
-                
+
                 file_handler = DiscordFileHandler(
                     bot=bot,
                     logger=self.logger,
@@ -884,46 +1071,58 @@ class CompositionRoot:
                     tracking_file="data/tracked_messages.json",
                     cleanup_interval=7200,
                 )
-                
-                notifier = DiscordNotifier(
-                    self.logger, self.config, utils['parser'], 
-                    utils['format_utils'], bot, file_handler
+
+                notifier = DiscordNotifier(  # type: ignore[reportAbstractUsage]
+                    self.logger,
+                    self.config,
+                    utils["parser"],
+                    utils["format_utils"],
+                    bot,
+                    file_handler,
                 )
-                
+
                 task = asyncio.create_task(notifier.start())
                 await notifier.wait_until_ready()
-            except Exception as e:
-                self.logger.warning("Discord initialization failed: %s. Falling back to console output.", e)
-                notifier = ConsoleNotifier(self.logger, self.config, utils['parser'], utils['format_utils'])
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning(
+                    "Discord initialization failed: %s. Falling back to console output.",
+                    e,
+                )
+                notifier = ConsoleNotifier(
+                    self.logger, self.config, utils["parser"], utils["format_utils"]
+                )
         else:
-            notifier = ConsoleNotifier(self.logger, self.config, utils['parser'], utils['format_utils'])
-            
-        return {'notifier': notifier, 'task': task}
+            notifier = ConsoleNotifier(
+                self.logger, self.config, utils["parser"], utils["format_utils"]
+            )
+
+        return {"notifier": notifier, "task": task}
 
     def _display_startup_summary(
         self, apis: dict, rag: RagEngine, trading: dict, init_duration: float
     ) -> None:
         """Display the initialization summary panel and control footer."""
         symbols_count = (
-            len(apis['coingecko'].symbol_to_id_map)
-            if apis.get('coingecko') and hasattr(apis['coingecko'], 'symbol_to_id_map')
+            len(apis["coingecko"].symbol_to_id_map)
+            if apis.get("coingecko") and hasattr(apis["coingecko"], "symbol_to_id_map")
             else 0
         )
         news_count = (
-            rag.news_manager.get_database_size()
-            if rag and hasattr(rag, 'news_manager')
+            rag.news_manager.get_database_size()  # type: ignore[reportOptionalMemberAccess]
+            if rag and hasattr(rag, "news_manager")
             else 0
         )
         guards_count = (
-            len(trading['strategy'].guard_pipeline.guard_names)
-            if trading.get('strategy') and hasattr(trading['strategy'], 'guard_pipeline')
+            len(trading["strategy"].guard_pipeline.guard_names)
+            if trading.get("strategy")
+            and hasattr(trading["strategy"], "guard_pipeline")
             else 0
         )
 
         summary_stats = {
             "Symbols mapped": f"{symbols_count:,}",
             "News articles indexed": f"{news_count:,}",
-            "Primary AI provider": str(getattr(self.config, 'AI_PROVIDER', 'googleai')),
+            "Primary AI provider": str(getattr(self.config, "AI_PROVIDER", "googleai")),
             "Vector memory active": "ChromaDB (bge-base-en-v1.5)",
             "Order guard rules": f"{guards_count}",
             "Trading pair / TF": f"{self.config.CRYPTO_PAIR} ({self.config.TIMEFRAME})",
@@ -941,7 +1140,9 @@ class CompositionRoot:
         )
         self.console.print()
 
-    def _provision_dashboard_layer(self, infra: dict, utils: dict, analyzer: dict, trading: dict) -> dict:
+    def _provision_dashboard_layer(
+        self, infra: dict, utils: dict, analyzer: dict, trading: dict
+    ) -> dict:
         """Provision dashboard server and admin interface."""
         force_analysis_event = asyncio.Event()
 
@@ -952,39 +1153,52 @@ class CompositionRoot:
             "signing_key": self.config.ADMIN_SIGNING_KEY,
         }
         dashboard_server = DashboardServer(
-            brain_service=trading['brain_service'],
-            vector_memory=trading['brain_service'].vector_memory if trading['brain_service'] else None,
-            analysis_engine=analyzer['engine'],
+            brain_service=trading["brain_service"],
+            vector_memory=trading["brain_service"].vector_memory
+            if trading["brain_service"]
+            else None,
+            analysis_engine=analyzer["engine"],
             config=self.config,
             logger=self.logger,
-            unified_parser=utils['parser'],
-            persistence=trading['persistence'],
-            exchange_manager=infra['exchange_manager'],
+            unified_parser=utils["parser"],
+            persistence=trading["persistence"],
+            exchange_manager=infra["exchange_manager"],
             host=self.config.DASHBOARD_HOST,
             port=self.config.DASHBOARD_PORT,
             force_analysis_event=force_analysis_event,
             config_path=config_path,
             admin_credentials=admin_credentials,
-            post_mortem_repo=trading.get('post_mortem_repo'),
+            post_mortem_repo=trading.get("post_mortem_repo"),
         )
-        trading['strategy'].set_dashboard_state(dashboard_server.dashboard_state)
+        trading["strategy"].set_dashboard_state(dashboard_server.dashboard_state)
 
         return {
-            'dashboard_server': dashboard_server,
-            'dashboard_state': dashboard_server.dashboard_state,
-            'force_analysis_event': force_analysis_event,
+            "dashboard_server": dashboard_server,
+            "dashboard_state": dashboard_server.dashboard_state,
+            "force_analysis_event": force_analysis_event,
         }
 
     async def run_async(self):
         """Async entry point for the application."""
+
         def _asyncio_exception_handler(_loop, context):
+            # During graceful shutdown, asyncio floods us with expected noise:
+            #   - "generator didn't stop after athrow()" from starlette lifespan
+            #   - "Task was destroyed but it is pending!" from un-awaited tasks
+            #   - RuntimeError from the now-closed event loop
+            # All of these are benign during shutdown — silently swallow them.
+            if self.shutdown_manager and self.shutdown_manager.is_shutting_down:
+                return
+            # Guard against logging to a closed loop (LogStreamManager.put_nowait
+            # calls loop.call_soon which raises RuntimeError on a closed loop).
+            if _loop.is_closed():
+                return
+
             exc = context.get("exception")
             msg = context.get("message", "Unknown asyncio error")
             if exc is not None:
                 if isinstance(exc, KeyboardInterrupt):
-                    if self.shutdown_manager and self.shutdown_manager.is_shutting_down:
-                        return
-                    self.logger.debug("Asyncio task KeyboardInterrupt during shutdown: %s", msg)
+                    self.logger.debug("Asyncio task KeyboardInterrupt: %s", msg)
                     return
                 self.logger.error("Asyncio unhandled exception: %s", msg, exc_info=exc)
             else:
@@ -995,32 +1209,34 @@ class CompositionRoot:
 
         dependencies = await self.build_dependencies()
 
-        dashboard_server = dependencies.pop('dashboard_server', None)
-        force_analysis_event = dependencies.pop('force_analysis_event', None)
+        dashboard_server = dependencies.pop("dashboard_server", None)
+        force_analysis_event = dependencies.pop("force_analysis_event", None)
 
         def _create_position_monitor(bot: CryptoTradingBot) -> PositionStatusMonitor:
             return PositionStatusMonitor(
                 logger=self.logger,
                 config=self.config,
-                persistence=dependencies['persistence'],
-                trading_strategy=dependencies['trading_strategy'],
-                exit_monitor=dependencies['exit_monitor'],
-                notifier=dependencies['discord_notifier'],
+                persistence=dependencies["persistence"],
+                trading_strategy=dependencies["trading_strategy"],
+                exit_monitor=dependencies["exit_monitor"],
+                notifier=dependencies["discord_notifier"],
                 active_tasks=bot.active_tasks,
                 is_running=lambda: bot.running,
                 fetch_current_ticker=bot.fetch_current_ticker,
-                interruptible_sleep=bot.interruptible_sleep,
+                interruptible_sleep=bot.interruptible_sleep,  # type: ignore[reportAttributeAccessIssue]
                 get_symbol=lambda: bot.current_symbol,
             )
 
-        bot = CryptoTradingBot(BotServices(
-            logger=self.logger,
-            config=self.config,
-            shutdown_manager=self.shutdown_manager,
-            position_monitor_factory=_create_position_monitor,
-            force_analysis_event=force_analysis_event,
-            **dependencies
-        ))
+        bot = CryptoTradingBot(
+            BotServices(
+                logger=self.logger,
+                config=self.config,
+                shutdown_manager=self.shutdown_manager,
+                position_monitor_factory=_create_position_monitor,
+                force_analysis_event=force_analysis_event,
+                **dependencies,
+            )
+        )
 
         try:
             await bot.initialize()
@@ -1042,9 +1258,14 @@ class CompositionRoot:
                     self.logger.info("Dashboard: starting...")
                     await dashboard_server.start()
                     dashboard_running = True
-                    self.logger.info("Dashboard live at http://localhost:%s", self.config.DASHBOARD_PORT)
+                    self.logger.info(
+                        "Dashboard live at http://localhost:%s",
+                        self.config.DASHBOARD_PORT,
+                    )
 
-            bot.keyboard_handler.register_command('d', _toggle_dashboard, "Toggle dashboard on/off")
+            bot.keyboard_handler.register_command(
+                "d", _toggle_dashboard, "Toggle dashboard on/off"
+            )
 
             if dashboard_server and self.config.DASHBOARD_ENABLED:
                 await dashboard_server.start()
@@ -1059,38 +1280,38 @@ class CompositionRoot:
         finally:
             if dashboard_server:
                 await dashboard_server.stop()
-    
+
     def start(self):
         """Main entry point with clean shutdown delegation."""
         single_instance_lock = SingleInstanceLock(logger=self.logger)
-        
+
         if not single_instance_lock.acquire():
             shown = _show_error_dialog(
                 "Crypto Trading Bot",
-                "Another instance of Crypto Trading Bot is already running."
+                "Another instance of Crypto Trading Bot is already running.",
             )
             if not shown:
                 print("Another instance of Crypto Trading Bot is already running.")
             sys.exit(1)
-        
-        if sys.platform == 'win32':
+
+        if sys.platform == "win32":
             try:
-                sys.stdout.reconfigure(encoding="utf-8")
-                sys.stderr.reconfigure(encoding="utf-8")
-            except Exception:
+                sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[reportAttributeAccessIssue]
+                sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[reportAttributeAccessIssue]
+            except Exception:  # noqa: S110, BLE001
                 pass
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        
+
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        
+
         self.shutdown_manager = GracefulShutdownManager(
             self.loop,
             logger=self.logger,
-            confirmation_callback=GracefulShutdownManager.show_exit_confirmation
+            confirmation_callback=GracefulShutdownManager.show_exit_confirmation,
         )
         self.shutdown_manager.setup_signal_handlers()
-        
+
         try:
             while True:
                 try:
@@ -1098,13 +1319,20 @@ class CompositionRoot:
                     break
                 except KeyboardInterrupt:
                     print("\nKeyboardInterrupt received.")
-                    if GracefulShutdownManager.show_exit_confirmation():
-                        self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
-                        break
-                    print("Shutdown cancelled. Continuing operation...")
+                    if not GracefulShutdownManager.show_exit_confirmation():
+                        print("Shutdown cancelled. Continuing operation...")
+                        continue
+                    self.loop.run_until_complete(
+                        self.shutdown_manager.shutdown_gracefully()
+                    )
+                    break
                 except Exception:
-                    self.logger.exception("Unhandled exception in main loop — shutting down")
-                    self.loop.run_until_complete(self.shutdown_manager.shutdown_gracefully())
+                    self.logger.exception(
+                        "Unhandled exception in main loop — shutting down"
+                    )
+                    self.loop.run_until_complete(
+                        self.shutdown_manager.shutdown_gracefully()
+                    )
                     break
         finally:
             # Give any remaining threads time to clean up before closing the loop
@@ -1112,9 +1340,24 @@ class CompositionRoot:
             try:
                 if not self.loop.is_closed():
                     self.loop.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing event loop: %s", e)
 
 
 if __name__ == "__main__":
-    CompositionRoot().start()
+    try:
+        CompositionRoot().start()
+    except BaseException:
+        import traceback
+
+        print("\n" + "=" * 60)
+        print("FATAL: Unhandled exception — copy this error and press Enter")
+        print("=" * 60)
+        traceback.print_exc()
+        print("=" * 60)
+        # Keep window open so you can copy the error
+        try:
+            input("Press Enter to close...")
+        except (EOFError, KeyboardInterrupt):
+            pass
+        raise

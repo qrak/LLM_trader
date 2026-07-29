@@ -3,9 +3,9 @@ OpenRouter client implementation using the official OpenRouter SDK.
 Supports text-only and multimodal (text + image) requests with cost tracking.
 """
 import asyncio
-import io
 import base64
 import inspect
+import io
 from typing import Any
 
 from openrouter import OpenRouter
@@ -44,13 +44,13 @@ class OpenRouterClient(BaseAIClient):
                     result = async_exit(None, None, None)  # pylint: disable=not-callable
                     if inspect.isawaitable(result):
                         await result
-                except Exception as exc: # pylint: disable=broad-exception-caught
+                except Exception as exc: # pylint: disable=broad-exception-caught  # noqa: BLE001
                     self.logger.warning("OpenRouter async client cleanup failed: %s", exc)
             sync_exit = getattr(client, "__exit__", None)
             if callable(sync_exit):
                 try:
                     sync_exit(None, None, None)  # pylint: disable=not-callable
-                except Exception as exc: # pylint: disable=broad-exception-caught
+                except Exception as exc: # pylint: disable=broad-exception-caught  # noqa: BLE001
                     self.logger.warning("OpenRouter sync client cleanup failed: %s", exc)
         finally:
             self._client = None
@@ -77,7 +77,7 @@ class OpenRouterClient(BaseAIClient):
 
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(
+    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """Send a chat completion request to the OpenRouter API using the SDK."""
@@ -100,11 +100,11 @@ class OpenRouterClient(BaseAIClient):
                 **extra_kwargs
             )
             return self.convert_pydantic_response(response)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(
+    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
         messages: list[dict[str, Any]],
@@ -154,7 +154,7 @@ class OpenRouterClient(BaseAIClient):
             if response:
                 self.logger.debug("Received successful chart analysis response from OpenRouter SDK")
             return self.convert_pydantic_response(response)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during OpenRouter chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
@@ -213,7 +213,7 @@ class OpenRouterClient(BaseAIClient):
                     "native_completion_tokens": native_completion_tokens,
                 }
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             error_msg = str(e)
             if "not found" in error_msg.lower():
                 self.logger.debug("Generation stats not yet available for %s... (will be indexed shortly)", generation_id[:20])
@@ -257,3 +257,5 @@ class OpenRouterClient(BaseAIClient):
             return result
         self.logger.error("Unexpected OpenRouter error: %s", exception)
         return None
+
+

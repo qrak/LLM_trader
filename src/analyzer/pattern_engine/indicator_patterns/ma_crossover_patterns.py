@@ -6,6 +6,7 @@ Classic long-term trend reversal signals.
 """
 
 import math
+
 import numpy as np
 from numba import njit
 

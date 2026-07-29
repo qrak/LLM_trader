@@ -9,7 +9,12 @@ from datetime import datetime, timedelta, timezone
 from os.path import exists, getsize
 from typing import Any
 
-from aiohttp_client_cache import CachedSession, SQLiteBackend
+from aiohttp_client_cache.backends.sqlite import (
+    SQLiteBackend,  # type: ignore[reportPrivateImportUsage]  # type: ignore[reportPrivateImportUsage], SQLiteBackend
+)
+from aiohttp_client_cache.session import (
+    CachedSession,  # type: ignore[reportPrivateImportUsage]
+)
 
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
@@ -62,7 +67,7 @@ class CoinGeckoAPI:
                 self._update_symbol_map(coins)
                 self.logger.debug("Loaded %s unique symbols from coingecko.", len(self.symbol_to_id_map))
                 self._log_cache_info()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error initializing coin mappings: %s", e)
             self.symbol_to_id_map = {}
 
@@ -75,7 +80,7 @@ class CoinGeckoAPI:
                         loaded_time = loaded_time.replace(tzinfo=timezone.utc)
                     self.last_update = loaded_time
                     self.logger.debug("Loaded CoinGecko cache from %s", self.last_update.isoformat())
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error loading CoinGecko cache: %s", e)
 
     async def _read_cache_file(self) -> dict[str, Any] | None:
@@ -84,7 +89,7 @@ class CoinGeckoAPI:
             async with self._file_lock:
                 loop = asyncio.get_running_loop()
                 return await loop.run_in_executor(None, self._read_json_sync)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error reading cache file: %s", e)
             return None
 
@@ -99,7 +104,7 @@ class CoinGeckoAPI:
             async with self._file_lock:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, self._write_json_sync, data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error writing cache file: %s", e)
 
     def _write_json_sync(self, data: dict[str, Any]) -> None:
@@ -141,7 +146,7 @@ class CoinGeckoAPI:
 
         if dominance_data:
             coin_ids = []
-            for symbol in dominance_data.keys():
+            for symbol in dominance_data:
                 symbol_lower = symbol.lower()
                 if symbol_lower in symbol_to_id:
                     coin_ids.append(symbol_to_id[symbol_lower])
@@ -177,7 +182,7 @@ class CoinGeckoAPI:
         }
 
         try:
-            async with self.session.get(
+            async with self.session.get(  # type: ignore[reportOptionalMemberAccess]
                 self.COINS_MARKETS_URL,
                 params=params
             ) as response:
@@ -185,7 +190,7 @@ class CoinGeckoAPI:
                     return await response.json()
                 self.logger.error("Failed to fetch coins/markets. Status: %s", response.status)
                 return []
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching coins/markets: %s", e)
             return []
 
@@ -200,12 +205,12 @@ class CoinGeckoAPI:
             self.session = CachedSession(cache=self.cache_backend)
 
         try:
-            async with self.session.get(self.GLOBAL_DEFI_URL) as response:
+            async with self.session.get(self.GLOBAL_DEFI_URL) as response:  # type: ignore[reportOptionalMemberAccess]
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
                 return {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching DeFi data: %s", e)
             return {}
 
@@ -230,7 +235,7 @@ class CoinGeckoAPI:
                 if cached_data and "data" in cached_data:
                     self.logger.debug("Using cached CoinGecko data from %s", self.last_update.isoformat())
                     return cached_data["data"]
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to read cached data: %s", e)
 
         self.logger.debug("Fetching fresh CoinGecko global, top coins, and DeFi data")
@@ -244,7 +249,7 @@ class CoinGeckoAPI:
             return await self._get_cached_global_data()
 
         processed_global = self._process_global_data(global_data)
-        dominance_data = processed_global.get("dominance", {})
+        dominance_data = processed_global.get("dominance", {})  # type: ignore[reportOptionalMemberAccess]
 
         dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
 
@@ -262,7 +267,7 @@ class CoinGeckoAPI:
             self.logger.warning("Error fetching top coins: %s", top_coins)
 
         if defi_data and not isinstance(defi_data, Exception):
-            defi_dict = defi_data.get("data", {})
+            defi_dict = defi_data.get("data", {})  # type: ignore[reportOptionalMemberAccess]
             if defi_dict:
                 for key in ["defi_market_cap", "eth_market_cap", "defi_to_eth_ratio",
                            "trading_volume_24h", "defi_dominance"]:
@@ -288,12 +293,12 @@ class CoinGeckoAPI:
     async def _fetch_global(self) -> dict[str, Any]:
         """Fetch /global endpoint."""
         try:
-            async with self.session.get(self.global_api_url) as response:
+            async with self.session.get(self.global_api_url) as response:  # type: ignore[reportOptionalMemberAccess]
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch /global. Status: %s", response.status)
                 return {}
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching /global: %s", e)
             return {}
 
@@ -305,7 +310,7 @@ class CoinGeckoAPI:
                 if cached_data and "data" in cached_data:
                     self.logger.warning("Using cached CoinGecko global data as fallback")
                     return cached_data["data"]
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error reading cached global data: %s", e)
 
         return {}
@@ -319,16 +324,16 @@ class CoinGeckoAPI:
 
         return {
             "market_cap": {
-                "total_usd": data.get("total_market_cap", {}).get("usd", 0),
-                "change_24h": data.get("market_cap_change_percentage_24h_usd", 0)
+                "total_usd": data.get("total_market_cap", {}).get("usd", 0),  # type: ignore[reportOptionalMemberAccess]
+                "change_24h": data.get("market_cap_change_percentage_24h_usd", 0)  # type: ignore[reportOptionalMemberAccess]
             },
             "volume": {
-                "total_usd": data.get("total_volume", {}).get("usd", 0)
+                "total_usd": data.get("total_volume", {}).get("usd", 0)  # type: ignore[reportOptionalMemberAccess]
             },
-            "dominance": data.get("market_cap_percentage", {}),
+            "dominance": data.get("market_cap_percentage", {}),  # type: ignore[reportOptionalMemberAccess]
             "stats": {
-                "active_coins": data.get("active_cryptocurrencies", 0),
-                "active_markets": data.get("markets", 0)
+                "active_coins": data.get("active_cryptocurrencies", 0),  # type: ignore[reportOptionalMemberAccess]
+                "active_markets": data.get("markets", 0)  # type: ignore[reportOptionalMemberAccess]
             }
         }
 
@@ -336,7 +341,7 @@ class CoinGeckoAPI:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
-        async with self.session.get(self.COINS_LIST_URL) as response:
+        async with self.session.get(self.COINS_LIST_URL) as response:  # type: ignore[reportOptionalMemberAccess]
             if response.status == 200:
                 return await response.json()
             self.logger.error("Failed to fetch coin list. Status: %s", response.status)
@@ -354,7 +359,7 @@ class CoinGeckoAPI:
             })
 
     def _log_cache_info(self) -> None:
-        cache_file_path = self.cache_backend.name
+        cache_file_path = self.cache_backend.name  # type: ignore
         if exists(cache_file_path):
             cache_size = getsize(cache_file_path)
             cache_size_mb = cache_size / (1024 * 1024)
@@ -368,7 +373,8 @@ class CoinGeckoAPI:
                 await asyncio.wait_for(self.session.close(), timeout=1.0)
             except asyncio.TimeoutError:
                 self.logger.error("CoinGecko session close timed out")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing CoinGecko session: %s", e)
             finally:
                 self.session = None
+

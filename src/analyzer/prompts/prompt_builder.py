@@ -2,21 +2,22 @@
 
 Provides functionality for analyzer.prompts.prompt_builder.py.
 """
-from datetime import datetime, timezone, timedelta
-from typing import Any, TYPE_CHECKING
-
 import math
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 
 from src.logger.logger import Logger
+
 from ..analysis_context import AnalysisContext
-from .template_manager import TemplateManager
 from ..formatters import (
-    MarketFormatter,
-    TechnicalFormatter,
     LongTermFormatter,
-    MarketOverviewFormatter
+    MarketFormatter,
+    MarketOverviewFormatter,
+    TechnicalFormatter,
 )
+from .template_manager import TemplateManager
 
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
@@ -203,7 +204,7 @@ class PromptBuilder:
 
         # Weekly macro analysis (200W SMA)
         if context.weekly_macro_indicators and "weekly_macro_trend" in context.weekly_macro_indicators:
-            weekly_section = self.long_term_formatter._format_weekly_macro_section(  # pylint: disable=protected-access
+            weekly_section = self.long_term_formatter._format_weekly_macro_section(
                 context.weekly_macro_indicators["weekly_macro_trend"]
             )
             if weekly_section:
@@ -321,12 +322,13 @@ class PromptBuilder:
         if historical_data:
             sentiment_section += "\n\n        ### Historical Fear & Greed (Last 7 days):"
             for day in historical_data:
-                if isinstance(day["timestamp"], datetime):
-                    date_str = day["timestamp"].strftime("%Y-%m-%d")
-                elif isinstance(day["timestamp"], (int, float)):
-                    date_str = self.format_utils.format_date_from_timestamp(day["timestamp"])
+                ts = day["timestamp"]
+                if isinstance(ts, (int, float)):
+                    date_str = self.format_utils.format_date_from_timestamp(ts)
+                elif isinstance(ts, datetime):
+                    date_str = ts.strftime("%Y-%m-%d")
                 else:
-                    date_str = str(day["timestamp"])
+                    date_str = str(ts)
                 sentiment_section += f"\n    - {date_str}: {day['value']} ({day['value_classification']})"
 
         return sentiment_section

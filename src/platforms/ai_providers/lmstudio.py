@@ -55,7 +55,7 @@ class LMStudioClient(BaseAIClient):
         raise ValueError("No model specified and no models loaded in LM Studio")
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(
+    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """Send a chat completion request to the LM Studio API using the SDK."""
@@ -83,12 +83,12 @@ class LMStudioClient(BaseAIClient):
                     content=content,
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during LM Studio request: %s", str(e))
             return self._handle_exception(e)
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(
+    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
         messages: list[dict[str, Any]],
@@ -133,7 +133,7 @@ class LMStudioClient(BaseAIClient):
                     content=content,
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during LM Studio chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
@@ -179,7 +179,7 @@ class LMStudioClient(BaseAIClient):
                     content=complete_content,
                     usage=UsageModel(prompt_tokens=0, completion_tokens=0, total_tokens=0)
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during LM Studio streaming request: %s", str(e))
             return self._handle_exception(e)
 
@@ -227,3 +227,4 @@ class LMStudioClient(BaseAIClient):
             return result
         self.logger.error("LM Studio Error: %s", error_message)
         return None
+

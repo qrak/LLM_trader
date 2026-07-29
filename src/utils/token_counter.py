@@ -1,17 +1,18 @@
 """Token counting and cost tracking for AI model usage."""
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import tempfile
 import threading
 import time
-import atexit
-import tempfile
 from typing import Any
 
 import tiktoken
 
 from src.trading.data_models import ProviderCostStats, SessionCosts
+
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
@@ -275,7 +276,7 @@ class CostStorage:
 
             data = {"last_reset": self._last_reset}
             for provider, stats in self._providers.items():
-                data[provider] = stats.to_dict()
+                data[provider] = stats.to_dict()  # type: ignore[reportAttributeAccessIssue]
 
             # Atomic write using temporary file
             temp_path = None
@@ -290,7 +291,7 @@ class CostStorage:
                 os.replace(temp_path, self.file_path)
                 self._last_save_time = time.time()
                 self._dirty = False
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Fallback to direct print if logging is not available here
                 print(f"Error saving cost storage: {e}")
                 if temp_path and os.path.exists(temp_path):
@@ -333,4 +334,5 @@ class CostStorage:
     def get_provider_costs(self, provider: str) -> ProviderCostStats:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
+
 

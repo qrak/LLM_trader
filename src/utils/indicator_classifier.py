@@ -26,6 +26,33 @@ _NEUTRAL_SENTIMENTS = frozenset({"NEUTRAL", ""})
 _BALANCED_BIASES = frozenset({"BALANCED", ""})
 
 
+def _resolve_scalar(value: Any, default: float = 0.0) -> float:
+    """Extract scalar float from potentially array-like value (numpy, list)."""
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)  # numpy scalar
+    except (TypeError, ValueError):
+        pass
+    try:
+        if len(value) > 0:
+            return float(value[-1])
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
+def _classify_st_dir(raw: float) -> str:
+    """Classify supertrend direction (1/-1/0) to string."""
+    if raw > 0:
+        return "Bullish"
+    if raw < 0:
+        return "Bearish"
+    return "NEUTRAL"
+
+
 def _normalize_exit_execution_value(value: Any, default: str = EXIT_EXECUTION_UNKNOWN) -> str:
     if value is None:
         return default
@@ -330,6 +357,13 @@ def build_query_document_from_technical_data(
         market_sentiment=market_sentiment,
         order_book_bias=order_book_bias,
         exit_execution_context=exit_execution_context,
+        choppiness=_resolve_scalar(technical_data.get("choppiness")),
+        trend_strength=_resolve_scalar(technical_data.get("trend_strength")),
+        atr_percentage=_resolve_scalar(technical_data.get("atr_percent")),
+        mfi=_resolve_scalar(technical_data.get("mfi")),
+        cmf=_resolve_scalar(technical_data.get("cmf")),
+        vwap=_resolve_scalar(technical_data.get("vwap")),
+        supertrend_direction=_classify_st_dir(_resolve_scalar(technical_data.get("supertrend_direction"))),
     )
 
 
@@ -346,6 +380,14 @@ def build_query_document_from_classified_values(
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
     exit_execution_context: "ExitExecutionContext | None" = None,
+    # --- NEW: enriched query fields for better semantic matching (July 2026) ---
+    choppiness: float | None = None,
+    trend_strength: float = 0.0,
+    atr_percentage: float = 0.0,
+    mfi: float | None = None,
+    cmf: float | None = None,
+    vwap: float = 0.0,
+    supertrend_direction: str = "NEUTRAL",
 ) -> str:
     """Build an enriched vector query document from already classified values."""
     context_str = build_context_string_from_classified_values(
@@ -370,6 +412,18 @@ def build_query_document_from_classified_values(
         f"MACD={macd_signal}",
         f"BB={bb_position}",
     ]
+    if choppiness is not None and choppiness > 0:
+        chop_label = "Trending" if choppiness < 38 else "Choppy" if choppiness > 62 else "Transitional"
+        indicator_parts.append(f"Chop={choppiness:.0f} ({chop_label})")
+    if volume_state and volume_state != "NORMAL":
+        indicator_parts.append(f"VolState={volume_state}")
+    if trend_strength > 0:
+        indicator_parts.append(f"TrendStr={trend_strength:.0f}")
+    if rsi_level != "NEUTRAL":
+        indicator_parts.append(f"RSI={rsi_level}")
+    if supertrend_direction not in ("NEUTRAL", ""):
+        indicator_parts.append(f"STrend={supertrend_direction}")
+
     structure_parts: list[str] = []
     if market_sentiment not in ("NEUTRAL", ""):
         structure_parts.append(f"Sentiment={market_sentiment}")
@@ -378,6 +432,12 @@ def build_query_document_from_classified_values(
     exit_execution_text = format_exit_execution_context(exit_execution_context)
     if exit_execution_text:
         structure_parts.append(exit_execution_text)
+    if vwap > 0:
+        structure_parts.append(f"VWAP={vwap:.2f}")
+    if mfi is not None:
+        structure_parts.append(f"MFI={mfi:.1f}")
+    if cmf is not None:
+        structure_parts.append(f"CMF={cmf:+.3f}")
 
     lines = [context_str, f"Indicators: {' | '.join(indicator_parts)}"]
     if structure_parts:
