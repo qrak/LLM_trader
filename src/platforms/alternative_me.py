@@ -1,3 +1,7 @@
+"""Alternative Me module.
+
+Provides functionality for platforms.alternative_me.py.
+"""
 import asyncio
 import json
 import os
@@ -22,7 +26,7 @@ class AlternativeMeAPI:
     def __init__(
         self,
         logger: Logger,
-        data_dir: str = 'data/market_data',
+        data_dir: str = "data/market_data",
         cache_update_hours: int = 12
     ) -> None:
         self.logger = logger
@@ -49,17 +53,17 @@ class AlternativeMeAPI:
                     self.last_update = loaded_time
                     self.current_index = cached_data["data"]
                     self.logger.debug("Loaded Fear & Greed cache from %s", self.last_update.isoformat())
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error loading Fear & Greed cache: %s", e)
 
     def _read_cache_file(self) -> dict[str, Any]:
         """Read and parse the cache file. Executed in a thread."""
-        with open(self.fear_greed_cache_file, 'r', encoding='utf-8') as f:
+        with open(self.fear_greed_cache_file, encoding="utf-8") as f:
             return json.load(f)
 
     def _write_cache_file(self, data: dict[str, Any]) -> None:
         """Write data to cache file. Executed in a thread."""
-        with open(self.fear_greed_cache_file, 'w', encoding='utf-8') as f:
+        with open(self.fear_greed_cache_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     @retry_async(max_retries=3, initial_delay=2, backoff_factor=2, max_delay=30)
@@ -108,7 +112,7 @@ class AlternativeMeAPI:
 
                     self.last_update = current_time
                     self.current_index = result
-                    self.logger.debug("Updated Fear & Greed cache with value: %s - %s", result['value'], result['value_classification'])
+                    self.logger.debug("Updated Fear & Greed cache with value: %s - %s", result["value"], result["value_classification"])
 
                     return result
 
@@ -171,3 +175,4 @@ class AlternativeMeAPI:
         """Close the API client session."""
         if self.session and not self.session.closed:
             await self.session.close()
+

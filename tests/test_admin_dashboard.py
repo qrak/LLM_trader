@@ -9,30 +9,22 @@ Covers:
 """
 
 import asyncio
-import os
-import tempfile
 import time
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 from src.dashboard.auth import (
     check_credentials,
-    create_session,
     hash_password,
     init_auth,
-    verify_admin_session,
     _sign_token,
     _verify_token,
-    _is_lan_ip,
-    _get_real_client_ip,
     AdminAuthMiddleware,
 )
-from src.dashboard.log_stream import LogStreamHandler, LogStreamManager
+from src.dashboard.log_stream import LogStreamManager
 from src.config.writable_config import WritableConfig, SettingMeta, _validate_and_coerce
 
 

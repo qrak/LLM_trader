@@ -3,25 +3,27 @@
 import asyncio
 import dataclasses
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
     build_exit_execution_context_from_config,
 )
-from .data_models import MarketConditions, Position, TradeDecision
-from .brain import TradingBrainService
-from .statistics import TradingStatisticsService
-from .memory import TradingMemoryService
-from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
-from .order_lifecycle import OrderIntent, OrderLifecycle
+
 from .audit import AuditTrail
+from .brain import TradingBrainService
+from .data_models import MarketConditions, Position, TradeDecision
 from .guards.pipeline import GuardPipeline
+from .memory import TradingMemoryService
+from .order_lifecycle import OrderIntent, OrderLifecycle
+from .statistics import TradingStatisticsService
+from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 
 if TYPE_CHECKING:
     from src.dashboard.dashboard_state import DashboardState
-    from src.managers.risk_manager import RiskManager
     from src.managers.persistence_manager import PersistenceManager
+    from src.managers.risk_manager import RiskManager
+
     from .market_conditions_extractor import MarketConditionsExtractor
 
 
@@ -62,7 +64,7 @@ class TradingStrategy:
             guard_pipeline: Pre-execution guard pipeline (injected from start.py)
             audit_trail: Optional audit collector for governance events
         """
-        self.logger = logger
+        self.logger = logger  # type: ignore[reportOptionalMemberAccess]
         self.persistence = persistence
         self.brain_service = brain_service
         self.statistics_service = statistics_service
@@ -80,15 +82,16 @@ class TradingStrategy:
         self.audit_trail = audit_trail if audit_trail is not None else AuditTrail()
         self.guard_pipeline = guard_pipeline
         self.post_mortem_service = post_mortem_service
+        self._http_client = None  # Bolt: persistent httpx client for position queries
 
-        self.current_position: Position | None = self.persistence.load_position()
+        self.current_position: Position | None = self.persistence.load_position()  # type: ignore[arg-type]
 
         self._last_position_update_time: datetime | None = None
 
         try:
             from src.utils.timeframe_validator import TimeframeValidator
             self._tf_minutes: int = TimeframeValidator.to_minutes(config.TIMEFRAME) if config else 240
-        except Exception:
+        except Exception:  # noqa: BLE001
             self._tf_minutes = 240
 
         self._tightening_policy: StopLossTighteningPolicy = (
@@ -108,7 +111,7 @@ class TradingStrategy:
             self._min_update_interval_hours = tf / 60.0
 
         if self.current_position:
-            self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")
+            self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")  # type: ignore[reportOptionalMemberAccess]
 
         # Validate loaded position against current config — warn about mismatches
         # but don't discard the position (operator should decide).
@@ -116,9 +119,9 @@ class TradingStrategy:
             expected_symbol = config.CRYPTO_PAIR if config else None
             state_warnings = self.persistence.validate_loaded_position(expected_symbol)
             for warning in state_warnings:
-                self.logger.warning("STARTUP STATE WARNING: %s", warning)
-        except Exception as e:
-            self.logger.warning("Could not validate loaded position: %s", e)
+                self.logger.warning("STARTUP STATE WARNING: %s", warning)  # type: ignore[reportOptionalMemberAccess]
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("Could not validate loaded position: %s", e)  # type: ignore[reportOptionalMemberAccess]
 
     def set_dashboard_state(self, dashboard_state: "DashboardState | None") -> None:
         """Inject dashboard state after dashboard server construction."""
@@ -149,13 +152,13 @@ class TradingStrategy:
         if not await self._update_live_metrics(current_price):
             return None
 
-        if self.current_position.is_stop_hit(current_price):
-            conditions = self._conditions.build_conditions_from_position(self.current_position)
+        if self.current_position.is_stop_hit(current_price):  # type: ignore
+            conditions = self._conditions.build_conditions_from_position(self.current_position)  # type: ignore
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
-        if self.current_position.is_target_hit(current_price):
-            conditions = self._conditions.build_conditions_from_position(self.current_position)
+        if self.current_position.is_target_hit(current_price):  # type: ignore
+            conditions = self._conditions.build_conditions_from_position(self.current_position)  # type: ignore
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -166,8 +169,8 @@ class TradingStrategy:
         if not await self._update_live_metrics(current_price):
             return None
 
-        if self.current_position.is_stop_hit(current_price):
-            conditions = self._conditions.build_conditions_from_position(self.current_position)
+        if self.current_position.is_stop_hit(current_price):  # type: ignore
+            conditions = self._conditions.build_conditions_from_position(self.current_position)  # type: ignore
             await self.close_position("stop_loss", current_price, conditions)
             return "stop_loss"
 
@@ -178,8 +181,8 @@ class TradingStrategy:
         if not await self._update_live_metrics(current_price):
             return None
 
-        if self.current_position.is_target_hit(current_price):
-            conditions = self._conditions.build_conditions_from_position(self.current_position)
+        if self.current_position.is_target_hit(current_price):  # type: ignore
+            conditions = self._conditions.build_conditions_from_position(self.current_position)  # type: ignore
             await self.close_position("take_profit", current_price, conditions)
             return "take_profit"
 
@@ -224,7 +227,7 @@ class TradingStrategy:
             reasoning=f"Position closed: {reason}. P&L: {pnl:+.2f}%. Fee: ${closing_fee:.4f}",
         )
 
-        self.logger.info("Closing %s position (%s) @ $%s, P&L: %s%%, Fee: $%.4f", closed_position.direction, reason, f"{current_price:,.2f}", f"{pnl:+.2f}", closing_fee)
+        self.logger.info("Closing %s position (%s) @ $%s, P&L: %s%%, Fee: $%.4f", closed_position.direction, reason, f"{current_price:,.2f}", f"{pnl:+.2f}", closing_fee)  # type: ignore[reportOptionalMemberAccess]
 
         # Retrieve entry decision from trade history for brain learning
         entry_decision = None
@@ -235,11 +238,11 @@ class TradingStrategy:
             )
             if entry_decision:
                 reasoning_preview = entry_decision.reasoning[:500] if entry_decision.reasoning else "(no reasoning)"
-                self.logger.debug("Retrieved entry decision with reasoning: %s...", reasoning_preview)
+                self.logger.debug("Retrieved entry decision with reasoning: %s...", reasoning_preview)  # type: ignore[reportOptionalMemberAccess]
             else:
-                self.logger.warning("Could not retrieve entry decision from trade history")
-        except Exception as e:
-            self.logger.error("Error retrieving entry decision: %s", e)
+                self.logger.warning("Could not retrieve entry decision from trade history")  # type: ignore[reportOptionalMemberAccess]
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error retrieving entry decision: %s", e)  # type: ignore[reportOptionalMemberAccess]
 
         await self._record_trade_decision(decision)
 
@@ -258,12 +261,12 @@ class TradingStrategy:
                     market_conditions=market_conditions,
                 )
             except Exception:
-                self.logger.warning("Post-mortem analysis failed", exc_info=True)
+                self.logger.warning("Post-mortem analysis failed", exc_info=True)  # type: ignore[reportOptionalMemberAccess]
 
         try:
             self.statistics_service.recalculate(self.config.DEMO_QUOTE_CAPITAL)
-        except Exception as e:
-            self.logger.error("Error recalculating statistics: %s", e)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error recalculating statistics: %s", e)  # type: ignore[reportOptionalMemberAccess]
         await self.persistence.async_save_position(None)
         self.current_position = None
 
@@ -282,8 +285,8 @@ class TradingStrategy:
             )
             if self.dashboard_state:
                 await self.dashboard_state.mark_brain_rebuild_completed("Brain state rebuilt from closed trade")
-        except Exception as e:
-            self.logger.error("Error updating trading brain: %s", e)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error updating trading brain: %s", e)  # type: ignore[reportOptionalMemberAccess]
             if self.dashboard_state:
                 await self.dashboard_state.mark_brain_rebuild_failed("Brain rebuild failed after trade close")
 
@@ -299,28 +302,28 @@ class TradingStrategy:
         """
         try:
             raw_response = analysis_result.get("raw_response", "")
-            current_price = self._conditions.extract_price(analysis_result)
+            current_price = self._conditions.extract_price(analysis_result)  # type: ignore
 
             if not raw_response:
-                self.logger.warning("No response to process")
+                self.logger.warning("No response to process")  # type: ignore[reportOptionalMemberAccess]
                 return None
 
             if current_price <= 0:
-                self.logger.error("Invalid current_price extracted, cannot process trade")
+                self.logger.error("Invalid current_price extracted, cannot process trade")  # type: ignore[reportOptionalMemberAccess]
                 return None
 
             signal, confidence, stop_loss, take_profit, position_size, reasoning = \
-                self.extractor.extract_trading_info(raw_response)
+                self.extractor.extract_trading_info(raw_response)  # type: ignore
 
-            self.logger.info("Extracted Signal: %s, Confidence: %s", signal, confidence)
+            self.logger.info("Extracted Signal: %s, Confidence: %s", signal, confidence)  # type: ignore[reportOptionalMemberAccess]
 
-            if not self.extractor.validate_signal(signal):
-                self.logger.warning("Invalid signal: %s", signal)
+            if not self.extractor.validate_signal(signal):  # type: ignore
+                self.logger.warning("Invalid signal: %s", signal)  # type: ignore[reportOptionalMemberAccess]
                 return None
 
-            market_conditions = self._conditions.extract_market_conditions(analysis_result)
+            market_conditions = self._conditions.extract_market_conditions(analysis_result)  # type: ignore
 
-            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)
+            confluence_factors = self._conditions.extract_confluence_factors(analysis_result)  # type: ignore
 
             if self.current_position:
                 return await self._handle_existing_position(
@@ -336,13 +339,13 @@ class TradingStrategy:
                 )
 
             if reasoning:
-                self.logger.info("No action taken. Signal: %s. Reasoning: %s", signal, reasoning[:200])
+                self.logger.info("No action taken. Signal: %s. Reasoning: %s", signal, reasoning)  # type: ignore[reportOptionalMemberAccess]
             else:
-                self.logger.info("No action taken. Signal: %s", signal)
+                self.logger.info("No action taken. Signal: %s", signal)  # type: ignore[reportOptionalMemberAccess]
             return None
 
-        except Exception as e:
-            self.logger.error("Error processing analysis: %s", e)
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Error processing analysis: %s", e)  # type: ignore[reportOptionalMemberAccess]
             return None
 
     async def _handle_existing_position(
@@ -373,13 +376,13 @@ class TradingStrategy:
         """
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
             if not await self._executor_has_position(symbol):
-                self.logger.warning(
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                     "CLOSE signal for %s but executor reports no open position — "
                     "position may already be closed on exchange. Skipping.",
                     symbol,
                 )
                 return None
-            self.logger.info("Closing position based on analysis signal...")
+            self.logger.info("Closing position based on analysis signal...")  # type: ignore[reportOptionalMemberAccess]
             await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
                 timestamp=datetime.now(timezone.utc),
@@ -391,12 +394,12 @@ class TradingStrategy:
                 reasoning=reasoning,
             )
 
-        old_sl = self.current_position.stop_loss
-        old_tp = self.current_position.take_profit
+        old_sl = self.current_position.stop_loss  # type: ignore
+        old_tp = self.current_position.take_profit  # type: ignore
 
         # Verify position exists on executor before sending UPDATE
         if not await self._executor_has_position(symbol):
-            self.logger.warning(
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                 "UPDATE for %s skipped — executor reports no open position. "
                 "The position may have been closed on exchange (manual "
                 "intervention, stop hit, network partition).",
@@ -408,7 +411,7 @@ class TradingStrategy:
         if self._last_position_update_time is not None:
             hours_since_last = (now - self._last_position_update_time).total_seconds() / 3600
             if hours_since_last < self._min_update_interval_hours:
-                self.logger.info(
+                self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                     "REJECTED UPDATE: only %.1fh since last update (min %.1fh for %s). "
                     "Letting trade breathe.",
                     hours_since_last, self._min_update_interval_hours, self.config.TIMEFRAME,
@@ -421,9 +424,9 @@ class TradingStrategy:
         if updated:
             self._last_position_update_time = now
             try:
-                current_pnl = self.current_position.calculate_pnl(current_price)
+                current_pnl = self.current_position.calculate_pnl(current_price)  # type: ignore
                 self.brain_service.track_position_update(
-                    position=self.current_position,
+                    position=self.current_position,  # type: ignore
                     old_sl=old_sl,
                     old_tp=old_tp,
                     new_sl=stop_loss if stop_loss else old_sl,
@@ -433,8 +436,8 @@ class TradingStrategy:
                     market_conditions=market_conditions,
                     tightening_evaluation=self._last_sl_tightening_evaluation,
                 )
-            except Exception as e:
-                self.logger.warning("Failed to track position update: %s", e)
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning("Failed to track position update: %s", e)  # type: ignore[reportOptionalMemberAccess]
 
             decision = TradeDecision(
                 timestamp=datetime.now(timezone.utc),
@@ -448,12 +451,27 @@ class TradingStrategy:
                 reasoning=f"Updated position parameters. {reasoning}",
             )
             await self._record_trade_decision(decision)
-            self.logger.info("Position updated: New SL=$%s, TP=$%s",
+            self.logger.info("Position updated: New SL=$%s, TP=$%s",  # type: ignore[reportOptionalMemberAccess]
                              f"{stop_loss:,.2f}" if stop_loss else "unchanged",
                              f"{take_profit:,.2f}" if take_profit else "unchanged")
             return decision
 
         return None
+
+    def _get_http_client(self):
+        """Bolt: reuse persistent httpx.AsyncClient to keep TCP connection pools alive
+        and avoid per-request setup overhead.
+        """
+        if self._http_client is None or self._http_client.is_closed:
+            import httpx
+            self._http_client = httpx.AsyncClient(timeout=3.0)
+        return self._http_client
+
+    async def close(self) -> None:
+        """Close persistent HTTP client resources."""
+        if self._http_client is not None and not self._http_client.is_closed:
+            await self._http_client.aclose()
+            self._http_client = None
 
     async def _executor_has_position(self, symbol: str) -> bool:
         """Query executor API to confirm the position is actually open on exchange.
@@ -463,21 +481,20 @@ class TradingStrategy:
         UPDATE/CLOSE, verify the executor has the position tracked (which
         only happens after fill confirmation).
         """
-        if not getattr(self.config, 'EXECUTOR_API_ENABLED', False):
+        if not self.config.EXECUTOR_API_ENABLED:
             return True  # No executor configured — assume position is real
-        url: str = getattr(self.config, 'EXECUTOR_API_URL', '')
+        url: str = self.config.EXECUTOR_API_URL
         if not url:
             return True
         try:
-            import httpx
-            pos_url = url.rstrip('/') + '/position'
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get(pos_url, params={"symbol": symbol})
+            pos_url = url.rstrip("/") + "/position"
+            client = self._get_http_client()
+            resp = await client.get(pos_url, params={"symbol": symbol})
             if resp.status_code == 200:
                 data = resp.json()
                 return bool(data.get("open", False))
         except Exception:
-            self.logger.error(
+            self.logger.error(  # type: ignore[reportOptionalMemberAccess]  # noqa: G201
                 "CRITICAL: Failed to query executor position for %s — "
                 "cannot verify position state. Skipping UPDATE/CLOSE for safety.",
                 symbol, exc_info=True,
@@ -518,7 +535,7 @@ class TradingStrategy:
     ) -> TradeDecision:
         """Open a new trading position with guard-governed lifecycle."""
         direction = "LONG" if signal in ("BUY", "LONG") else "SHORT"
-        market_conditions = market_conditions or {}
+        market_conditions = market_conditions or {}  # type: ignore
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
         intent = OrderIntent(
@@ -529,7 +546,7 @@ class TradingStrategy:
             position_size=position_size, reasoning=reasoning,
             confluence_factors=confluence_factors, market_conditions=market_conditions,
         )
-        self.logger.info("Order intent created: %s %s @ $%.2f (order_id=%s)", signal, symbol, current_price, order_id)
+        self.logger.info("Order intent created: %s %s @ $%.2f (order_id=%s)", signal, symbol, current_price, order_id)  # type: ignore[reportOptionalMemberAccess]
         self._audit(order_id, "intent_created", "TradingStrategy", "created",
                     f"{signal} {symbol} @ {current_price}",
                     signal=signal, direction=direction, symbol=symbol)
@@ -556,7 +573,7 @@ class TradingStrategy:
                     order_id, "rejection", "GuardPipeline", "rejected", failure_reasons,
                     failed_guards=[r.guard_name for r in failed]
                 )
-                self.logger.warning("Order REJECTED by guard pipeline: %s", failure_reasons)
+                self.logger.warning("Order REJECTED by guard pipeline: %s", failure_reasons)  # type: ignore[reportOptionalMemberAccess]
                 return TradeDecision(
                     timestamp=datetime.now(timezone.utc), symbol=symbol,
                     action="HOLD", confidence=confidence, price=current_price, fee=0.0,
@@ -600,7 +617,7 @@ class TradingStrategy:
                     metadata={"friction": friction},
                 )
         except Exception:
-            self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)
+            self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)  # type: ignore[reportOptionalMemberAccess]
 
         final_sl = risk_assessment.stop_loss
         final_tp = risk_assessment.take_profit
@@ -611,8 +628,8 @@ class TradingStrategy:
         tp_distance_pct = risk_assessment.tp_distance_pct
         rr_ratio = risk_assessment.rr_ratio
 
-        self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)
-        self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)
+        self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)  # type: ignore[reportOptionalMemberAccess]
+        self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)  # type: ignore[reportOptionalMemberAccess]
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
         try:
@@ -620,7 +637,7 @@ class TradingStrategy:
         except (TypeError, ValueError):
             min_rr_for_entry = 1.5
         if rr_ratio < min_rr_for_entry:
-            self.logger.warning(
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                 "REJECTED entry: R/R %.2f below minimum %.1f. "
                 "Trade has unfavorable risk/reward. Signal: %s, Confidence: %s",
                 rr_ratio, min_rr_for_entry, signal, confidence,
@@ -635,7 +652,7 @@ class TradingStrategy:
                     reasoning_snippet=reasoning[:200] if reasoning else "",
                 )
             except Exception:
-                self.logger.warning("Failed to store blocked trade event", exc_info=True)
+                self.logger.warning("Failed to store blocked trade event", exc_info=True)  # type: ignore[reportOptionalMemberAccess]
 
             intent.transition_to(OrderLifecycle.REJECTED, reason=f"R/R {rr_ratio:.2f} below minimum")
             self._audit(
@@ -704,7 +721,7 @@ class TradingStrategy:
             self.guard_pipeline.invalidate_cooldown_cache()
 
         await self.persistence.async_save_position(self.current_position)
-        self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)
+        self.logger.info("Opened %s position @ $%s (SL: $%s, TP: $%s, Qty: %.6f, Fee: $%.4f)", direction, f"{current_price:,.2f}", f"{final_sl:,.2f}", f"{final_tp:,.2f}", quantity, entry_fee)  # type: ignore[reportOptionalMemberAccess]
 
         intent.transition_to(OrderLifecycle.EXECUTED, reason="Position persisted")
         self._audit(
@@ -722,6 +739,21 @@ class TradingStrategy:
             quantity=quantity,
         )
 
+        indicators_snapshot = {
+            "adx_at_entry": _mc.adx,
+            "rsi_at_entry": _mc.rsi,
+            "volatility_level": risk_assessment.volatility_level,
+            "macd_signal_at_entry": _mc.macd_signal,
+            "bb_position_at_entry": _mc.bb_position,
+            "volume_state_at_entry": _mc.volume_state,
+            "market_sentiment_at_entry": _mc.market_sentiment,
+            "order_book_bias_at_entry": _mc.order_book_bias,
+            "sl_distance_pct": risk_assessment.sl_distance_pct,
+            "tp_distance_pct": risk_assessment.tp_distance_pct,
+            "rr_ratio_at_entry": risk_assessment.rr_ratio,
+            "trend_direction_at_entry": _mc.trend_direction,
+        }
+
         decision = TradeDecision(
             timestamp=datetime.now(timezone.utc),
             symbol=symbol,
@@ -735,6 +767,7 @@ class TradingStrategy:
             quantity=quantity,
             fee=entry_fee,
             reasoning=reasoning,
+            indicators_json=indicators_snapshot,
         )
 
         await self._record_trade_decision(decision)
@@ -779,7 +812,7 @@ class TradingStrategy:
 
             if evaluation.is_tightening:
                 if not evaluation.allowed:
-                    self.logger.info(
+                    self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                         "REJECTED premature SL tightening: %s. "
                         "Keeping SL at $%s (AI requested $%s)",
                         evaluation.reason,
@@ -813,11 +846,11 @@ class TradingStrategy:
                             },
                         )
                     except Exception:
-                        self.logger.warning("Failed to store sl_tightening blocked event", exc_info=True)
+                        self.logger.warning("Failed to store sl_tightening blocked event", exc_info=True)  # type: ignore[reportOptionalMemberAccess]
                 else:
                     new_sl = stop_loss
                     self._last_sl_tightening_evaluation = evaluation
-                    self.logger.info(
+                    self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                         "Tightening Stop Loss: $%s -> $%s (%s)",
                         f"{old_sl:,.2f}",
                         f"{stop_loss:,.2f}",
@@ -836,7 +869,7 @@ class TradingStrategy:
                     original_sl_distance > 0
                     and proposed_sl_distance > max_allowed_distance
                 ):
-                    self.logger.warning(
+                    self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                         "REJECTED SL widening: proposed distance %.2f%% exceeds "
                         "150%% of original %.2f%%. Keeping SL at $%.2f "
                         "(AI requested $%.2f)",
@@ -848,19 +881,19 @@ class TradingStrategy:
                     # Don't update — keep old SL
                 else:
                     if direction == "LONG" and stop_loss < old_sl:
-                        self.logger.info(
+                        self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                             "AI Widening Stop Loss for LONG: $%.2f -> $%.2f "
                             "(Risk Increased)",
                             old_sl, stop_loss,
                         )
                     elif direction == "SHORT" and stop_loss > old_sl:
-                        self.logger.info(
+                        self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                             "AI Widening Stop Loss for SHORT: $%.2f -> $%.2f "
                             "(Risk Increased)",
                             old_sl, stop_loss,
                         )
                     else:
-                        self.logger.info(
+                        self.logger.info(  # type: ignore[reportOptionalMemberAccess]
                             "Updated Stop Loss: $%s", f"{stop_loss:,.2f}",
                         )
                     new_sl = stop_loss
@@ -868,7 +901,7 @@ class TradingStrategy:
 
         if take_profit and take_profit != self.current_position.take_profit:
             new_tp = take_profit
-            self.logger.info("Updated Take Profit: $%s", f"{take_profit:,.2f}")
+            self.logger.info("Updated Take Profit: $%s", f"{take_profit:,.2f}")  # type: ignore[reportOptionalMemberAccess]
             updated = True
 
         if updated:
@@ -917,7 +950,7 @@ class TradingStrategy:
                         time_ago = f"{total_seconds / 86400:.1f} days ago"
                     return f"{direction}, closed {time_ago}"
             return None
-        except Exception:
+        except Exception:  # noqa: BLE001
             return None
 
     def get_position_context(self, current_price: float | None = None) -> str:
@@ -983,7 +1016,7 @@ class TradingStrategy:
         ])
         if current_price and current_price > 0:
             pnl_pct = pos.calculate_pnl(current_price)
-            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == 'LONG' else (pos.entry_price - current_price) * pos.size
+            pnl_quote = (current_price - pos.entry_price) * pos.size if pos.direction == "LONG" else (pos.entry_price - current_price) * pos.size
             lines.append(f"- Unrealized P&L: {pnl_pct:+.2f}% (${pnl_quote:+,.2f} {currency})")
 
         brain_thresholds = self.brain_service.get_dynamic_thresholds()
@@ -1014,3 +1047,4 @@ class TradingStrategy:
             ])
 
         return "\n".join(lines)
+

@@ -1,3 +1,7 @@
+"""Test Position Persistence unit tests.
+
+Tests for test_position_persistence.py.
+"""
 from datetime import datetime, timezone
 import json
 from unittest.mock import MagicMock

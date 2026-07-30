@@ -1,3 +1,7 @@
+"""Test Dashboard Brain Router unit tests.
+
+Tests for test_dashboard_brain_router.py.
+"""
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock

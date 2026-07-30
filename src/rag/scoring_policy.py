@@ -4,10 +4,10 @@ Scoring policy for RAG article relevance.
 This module isolates ranking heuristics from ContextBuilder orchestration.
 """
 from __future__ import annotations
+
 import math
 import re
-from typing import Any, Set
-
+from typing import Any
 
 FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}
 
@@ -22,11 +22,11 @@ class ArticleScoringPolicy:
         self,
         article: dict[str, Any],
         content: Any,
-        keywords: Set[str],
+        keywords: set[str],
         coin: str | None,
         current_time: float,
         relevant_categories: list[str],
-        important_categories: Set[str],
+        important_categories: set[str],
         pub_time: float,
         coin_patterns: dict[str, Any] | None = None,
     ) -> float:
@@ -50,7 +50,7 @@ class ArticleScoringPolicy:
 
         return final_score
 
-    def calculate_keyword_score(self, keywords: Set[str], content: Any) -> float:
+    def calculate_keyword_score(self, keywords: set[str], content: Any) -> float:
         """Calculate score based on keyword frequency with log-normal smoothing."""
         score = 0.0
         content_dict = content._asdict()
@@ -112,7 +112,7 @@ class ArticleScoringPolicy:
         return score
 
     @staticmethod
-    def calculate_importance_score(categories: str, important_categories: Set[str]) -> float:
+    def calculate_importance_score(categories: str, important_categories: set[str]) -> float:
         """Calculate score based on important categories."""
         score = 0.0
         for category in important_categories:
@@ -131,7 +131,7 @@ class ArticleScoringPolicy:
             return self.config.RAG_DENSITY_BOOST_MULTIPLIER
         return 1.0
 
-    def calculate_cooccurrence_modifier(self, keywords: Set[str], content: Any) -> float:
+    def calculate_cooccurrence_modifier(self, keywords: set[str], content: Any) -> float:
         """Calculate score multiplier when all query keywords appear in article."""
         if not self.config or len(keywords) < 2:
             return 1.0

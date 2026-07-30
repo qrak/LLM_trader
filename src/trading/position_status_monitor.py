@@ -1,8 +1,9 @@
 """Background position status and hard-exit monitoring loop."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from .exit_monitor import ExitMonitor
 
@@ -55,7 +56,7 @@ class PositionStatusMonitor:
             )
             if close_reason:
                 await self.handle_position_closed(close_reason)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error checking position: %s", e)
 
     async def handle_new_position(self, current_price: float | None) -> None:
@@ -67,7 +68,7 @@ class PositionStatusMonitor:
             if current_price is None:
                 ticker = await self.fetch_current_ticker()
                 if ticker:
-                    current_price = float(ticker.get('last', ticker.get('close', 0)))
+                    current_price = float(ticker.get("last", ticker.get("close", 0)))
                 else:
                     self.logger.warning("No ticker available for initial position status, skipping")
                     return
@@ -85,7 +86,7 @@ class PositionStatusMonitor:
                 last_take_profit_check_at=now,
                 last_status_sent_at=now,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Error sending initial position status: %s", e)
 
         await self.start()
@@ -187,7 +188,7 @@ class PositionStatusMonitor:
                     now = datetime.now(timezone.utc)
                     state = await self.load_state()
                     ticker = await self.fetch_current_ticker()
-                    current_price = float(ticker.get('last', ticker.get('close', 0))) if ticker else None
+                    current_price = float(ticker.get("last", ticker.get("close", 0))) if ticker else None
 
                     close_reason = await self.run_hard_exit_checks(current_price, now, state)
                     if close_reason:
@@ -202,8 +203,9 @@ class PositionStatusMonitor:
                         )
                         await self.save_state(last_status_sent_at=now)
                         self.logger.debug("Sent position status update")
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning("Error running position monitor update: %s", e)
         except asyncio.CancelledError:
             self.logger.debug("Position status loop cancelled")
             raise
+

@@ -1,8 +1,13 @@
+"""Market Metrics Calculator module.
+
+Provides functionality for analyzer.market_metrics_calculator.py.
+"""
 import math
+
 import numpy as np
-from src.utils.timeframe_validator import TimeframeValidator
 
 from src.logger.logger import Logger
+from src.utils.timeframe_validator import TimeframeValidator
 
 
 class MarketMetricsCalculator:
@@ -44,7 +49,7 @@ class MarketMetricsCalculator:
             self.logger.warning("No OHLCV data for period metrics")
             return
 
-        timeframe = context.timeframe if context.timeframe else '1h'
+        timeframe = context.timeframe if context.timeframe else "1h"
 
         try:
             periods = {
@@ -54,7 +59,7 @@ class MarketMetricsCalculator:
                 "7D": TimeframeValidator.calculate_period_candles(timeframe, "7d"),
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to calculate dynamic periods for timeframe %s: %s", timeframe, e)
             periods = {
                 "1D": 24,
@@ -68,22 +73,21 @@ class MarketMetricsCalculator:
             for period_name, required_candles in periods.items():
                 if n >= required_candles:
                     period_metrics[period_name] = self._calculate_period_metrics(ohlcv[-required_candles:], period_name, context)
+                elif period_name in ["1D", "2D", "3D"]:
+                    self.logger.warning("Insufficient data for %s analysis. Need %s, have %s candles", period_name, required_candles, n)
+                    period_metrics[period_name] = self._calculate_period_metrics(ohlcv, f"{period_name} (Partial)", context)
+                elif period_name == "7D" and n >= periods["1D"]:
+                    self.logger.warning("Insufficient data for 7D metrics. Only %s candles available, need %s", n, required_candles)
+                    period_metrics["7D"] = self._calculate_period_metrics(ohlcv, "7D (Partial)", context)
+                elif period_name == "30D" and n >= periods["7D"]:
+                    self.logger.warning("Insufficient data for 30D metrics. Only %s candles available, need %s", n, required_candles)
+                    period_metrics["30D"] = self._calculate_period_metrics(ohlcv, "30D (Partial)", context)
                 else:
-                    if period_name in ["1D", "2D", "3D"]:
-                        self.logger.warning("Insufficient data for %s analysis. Need %s, have %s candles", period_name, required_candles, n)
-                        period_metrics[period_name] = self._calculate_period_metrics(ohlcv, f"{period_name} (Partial)", context)
-                    elif period_name == "7D" and n >= periods["1D"]:
-                        self.logger.warning("Insufficient data for 7D metrics. Only %s candles available, need %s", n, required_candles)
-                        period_metrics["7D"] = self._calculate_period_metrics(ohlcv, "7D (Partial)", context)
-                    elif period_name == "30D" and n >= periods["7D"]:
-                        self.logger.warning("Insufficient data for 30D metrics. Only %s candles available, need %s", n, required_candles)
-                        period_metrics["30D"] = self._calculate_period_metrics(ohlcv, "30D (Partial)", context)
-                    else:
-                        self.logger.warning("Cannot calculate %s metrics - not enough data (need %s, have %s)", period_name, required_candles, n)
+                    self.logger.warning("Cannot calculate %s metrics - not enough data (need %s, have %s)", period_name, required_candles, n)
 
             context.market_metrics = period_metrics
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error updating period metrics: %s", e)
             if not period_metrics and n > 0:
                 self.logger.warning("Setting fallback period metrics due to error")
@@ -110,9 +114,9 @@ class MarketMetricsCalculator:
         support_level = current_price
         resistance_level = current_price
 
-        if 'advanced_support' in td and 'advanced_resistance' in td:
-            adv_support = td.get('advanced_support', np.nan)
-            adv_resistance = td.get('advanced_resistance', np.nan)
+        if "advanced_support" in td and "advanced_resistance" in td:
+            adv_support = td.get("advanced_support", np.nan)
+            adv_resistance = td.get("advanced_resistance", np.nan)
 
             # Handle array indicators - take the last value, following promptt_builder.py pattern
             try:
@@ -223,3 +227,4 @@ class MarketMetricsCalculator:
                 self.logger.debug("%s is scalar, skipping", ind_name)
 
         return indicator_changes
+

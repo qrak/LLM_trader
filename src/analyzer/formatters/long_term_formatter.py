@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class LongTermFormatter:
     """Formatter for long-term historical analysis and macro trends."""
 
-    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the long-term formatter.
 
         Args:
@@ -25,7 +25,7 @@ class LongTermFormatter:
             raise ValueError("format_utils is required for LongTermFormatter")
         self.format_utils = format_utils
 
-    def format_long_term_analysis(self, long_term_data: dict, current_price: float = None) -> str:
+    def format_long_term_analysis(self, long_term_data: dict, current_price: float | None = None) -> str:
         """Format comprehensive long-term analysis from historical data."""
         if not long_term_data:
             return ""
@@ -65,8 +65,8 @@ class LongTermFormatter:
                 sections.append(ichimoku_section)
 
         # Macro trend analysis (365-day SMA context)
-        if 'macro_trend' in long_term_data:
-            macro_trend_section = self._format_macro_trend_section(long_term_data['macro_trend'])
+        if "macro_trend" in long_term_data:
+            macro_trend_section = self._format_macro_trend_section(long_term_data["macro_trend"])
             if macro_trend_section:
                 sections.append(macro_trend_section)
 
@@ -79,7 +79,7 @@ class LongTermFormatter:
     VOLUME_SMA_PERIODS = (20, 50)
 
     def _format_items_for_periods(self, data: dict, periods: tuple, key_template: str,
-                                  format_fn, item_template: str) -> str:
+                                  format_fn, item_template: str) -> list[str]:
         """Generic helper for formatting period-based items."""
         items = []
         for period in periods:
@@ -114,8 +114,8 @@ class LongTermFormatter:
         """Format price position relative to moving averages."""
         items = []
         for period in self.SMA_PERIODS:
-            key = f'sma_{period}'
-            if key in long_term_data and long_term_data[key]:
+            key = f"sma_{period}"
+            if long_term_data.get(key):
                 sma_value = long_term_data[key]
                 percentage = ((current_price - sma_value) / sma_value) * 100
                 direction = "above" if percentage > 0 else "below"
@@ -128,21 +128,21 @@ class LongTermFormatter:
         indicator_items = []
 
         # RSI
-        if 'daily_rsi' in long_term_data:
-            rsi_val = long_term_data['daily_rsi']
+        if "daily_rsi" in long_term_data:
+            rsi_val = long_term_data["daily_rsi"]
             rsi_status = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
             indicator_items.append(f"Daily RSI: {self.format_utils.fmt(rsi_val)} ({rsi_status})")
 
         # MACD
-        if 'daily_macd_line' in long_term_data and 'daily_macd_signal' in long_term_data:
-            macd_line = long_term_data['daily_macd_line']
-            macd_signal = long_term_data['daily_macd_signal']
+        if "daily_macd_line" in long_term_data and "daily_macd_signal" in long_term_data:
+            macd_line = long_term_data["daily_macd_line"]
+            macd_signal = long_term_data["daily_macd_signal"]
             macd_status = "Bullish" if macd_line > macd_signal else "Bearish"
             indicator_items.append(f"Daily MACD: {macd_status}")
 
         # Stochastic
-        if 'daily_stoch_k' in long_term_data:
-            stoch_val = long_term_data['daily_stoch_k']
+        if "daily_stoch_k" in long_term_data:
+            stoch_val = long_term_data["daily_stoch_k"]
             stoch_status = "Overbought" if stoch_val > 80 else "Oversold" if stoch_val < 20 else "Neutral"
             indicator_items.append(f"Daily Stoch: {self.format_utils.fmt(stoch_val)} ({stoch_status})")
 
@@ -152,10 +152,10 @@ class LongTermFormatter:
 
     def _format_adx_section(self, long_term_data: dict) -> str:
         """Format ADX trend strength analysis."""
-        if 'daily_adx' not in long_term_data:
+        if "daily_adx" not in long_term_data:
             return ""
 
-        adx_val = long_term_data['daily_adx']
+        adx_val = long_term_data["daily_adx"]
         if adx_val < 25:
             strength = "Weak/No Trend"
         elif adx_val < 50:
@@ -172,18 +172,18 @@ class LongTermFormatter:
         ichimoku_items = []
 
         # Tenkan and Kijun
-        if 'ichimoku_tenkan' in long_term_data:
-            tenkan = long_term_data['ichimoku_tenkan']
+        if "ichimoku_tenkan" in long_term_data:
+            tenkan = long_term_data["ichimoku_tenkan"]
             ichimoku_items.append(f"Tenkan: {self.format_utils.fmt(tenkan)}")
 
-        if 'ichimoku_kijun' in long_term_data:
-            kijun = long_term_data['ichimoku_kijun']
+        if "ichimoku_kijun" in long_term_data:
+            kijun = long_term_data["ichimoku_kijun"]
             ichimoku_items.append(f"Kijun: {self.format_utils.fmt(kijun)}")
 
         # Cloud analysis
-        if 'ichimoku_span_a' in long_term_data and 'ichimoku_span_b' in long_term_data:
-            span_a = long_term_data['ichimoku_span_a']
-            span_b = long_term_data['ichimoku_span_b']
+        if "ichimoku_span_a" in long_term_data and "ichimoku_span_b" in long_term_data:
+            span_a = long_term_data["ichimoku_span_a"]
+            span_b = long_term_data["ichimoku_span_b"]
             cloud_top = max(span_a, span_b)
             cloud_bottom = min(span_a, span_b)
 
@@ -205,13 +205,13 @@ class LongTermFormatter:
         if not macro_trend:
             return ""
 
-        trend_direction = macro_trend.get('trend_direction', 'Neutral')
-        sma_alignment = macro_trend.get('sma_alignment', 'Mixed')
-        sma_50_vs_200 = macro_trend.get('sma_50_vs_200', 'Neutral')
-        price_above_200sma = macro_trend.get('price_above_200sma', False)
-        golden_cross = macro_trend.get('golden_cross', False)
-        death_cross = macro_trend.get('death_cross', False)
-        long_term_price_change_pct = macro_trend.get('long_term_price_change_pct')
+        trend_direction = macro_trend.get("trend_direction", "Neutral")
+        sma_alignment = macro_trend.get("sma_alignment", "Mixed")
+        sma_50_vs_200 = macro_trend.get("sma_50_vs_200", "Neutral")
+        price_above_200sma = macro_trend.get("price_above_200sma", False)
+        golden_cross = macro_trend.get("golden_cross", False)
+        death_cross = macro_trend.get("death_cross", False)
+        long_term_price_change_pct = macro_trend.get("long_term_price_change_pct")
 
         # Build status indicators
         status_parts = []
@@ -238,10 +238,10 @@ class LongTermFormatter:
         if not weekly_macro:
             return ""
 
-        trend = weekly_macro.get('trend_direction', 'Neutral')
-        confidence = weekly_macro.get('confidence_score', 0)
-        cycle_phase = weekly_macro.get('cycle_phase')
-        distance = weekly_macro.get('distance_from_200w_sma_pct')
+        trend = weekly_macro.get("trend_direction", "Neutral")
+        confidence = weekly_macro.get("confidence_score", 0)
+        cycle_phase = weekly_macro.get("cycle_phase")
+        distance = weekly_macro.get("distance_from_200w_sma_pct")
 
         lines = ["## Weekly Macro Trend (200W SMA Analysis):"]
         lines.append(f"  • Overall Trend: **{trend}** (Confidence: {confidence}%)")
@@ -250,27 +250,27 @@ class LongTermFormatter:
             lines.append(f"  • Market Cycle Phase: {cycle_phase}")
         if distance is not None:
             lines.append(f"  • Distance from 200W SMA: {distance:+.1f}%")
-        if weekly_macro.get('price_above_200w_sma') is not None:
-            status = "Above" if weekly_macro['price_above_200w_sma'] else "Below"
+        if weekly_macro.get("price_above_200w_sma") is not None:
+            status = "Above" if weekly_macro["price_above_200w_sma"] else "Below"
             lines.append(f"  • Price vs 200W SMA: {status}")
 
         # Golden/Death Cross with dates
-        if weekly_macro.get('golden_cross'):
-            weeks = weekly_macro.get('golden_cross_weeks_ago', 0)
-            date = weekly_macro.get('golden_cross_date', 'N/A')
+        if weekly_macro.get("golden_cross"):
+            weeks = weekly_macro.get("golden_cross_weeks_ago", 0)
+            date = weekly_macro.get("golden_cross_date", "N/A")
             lines.append(f"  • Golden Cross: {weeks} weeks ago ({date})")
-        if weekly_macro.get('death_cross'):
-            weeks = weekly_macro.get('death_cross_weeks_ago', 0)
-            date = weekly_macro.get('death_cross_date', 'N/A')
+        if weekly_macro.get("death_cross"):
+            weeks = weekly_macro.get("death_cross_weeks_ago", 0)
+            date = weekly_macro.get("death_cross_date", "N/A")
             lines.append(f"  • Death Cross: {weeks} weeks ago ({date})")
 
         # Multi-year trend
-        if weekly_macro.get('multi_year_trend'):
-            mt = weekly_macro['multi_year_trend']
-            years = mt.get('years_analyzed', 0)
-            pct = mt.get('price_change_pct', 0)
-            start = mt.get('start_date', 'N/A')
-            end = mt.get('end_date', 'N/A')
+        if weekly_macro.get("multi_year_trend"):
+            mt = weekly_macro["multi_year_trend"]
+            years = mt.get("years_analyzed", 0)
+            pct = mt.get("price_change_pct", 0)
+            start = mt.get("start_date", "N/A")
+            end = mt.get("end_date", "N/A")
             lines.append(f"  • {years:.1f}-Year Trend: {pct:+.1f}% ({start} to {end})")
 
         return "\n".join(lines)

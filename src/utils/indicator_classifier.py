@@ -21,6 +21,37 @@ EXIT_EXECUTION_KEYS = (
 )
 EXIT_EXECUTION_TYPES = {"soft", "hard", EXIT_EXECUTION_UNKNOWN}
 
+# Bolt: module-level frozenset constants enable O(1) membership check without allocation
+_NEUTRAL_SENTIMENTS = frozenset({"NEUTRAL", ""})
+_BALANCED_BIASES = frozenset({"BALANCED", ""})
+
+
+def _resolve_scalar(value: Any, default: float = 0.0) -> float:
+    """Extract scalar float from potentially array-like value (numpy, list)."""
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(value)  # numpy scalar
+    except (TypeError, ValueError):
+        pass
+    try:
+        if len(value) > 0:
+            return float(value[-1])
+        return default
+    except (TypeError, ValueError):
+        return default
+
+
+def _classify_st_dir(raw: float) -> str:
+    """Classify supertrend direction (1/-1/0) to string."""
+    if raw > 0:
+        return "Bullish"
+    if raw < 0:
+        return "Bearish"
+    return "NEUTRAL"
+
 
 def _normalize_exit_execution_value(value: Any, default: str = EXIT_EXECUTION_UNKNOWN) -> str:
     if value is None:
@@ -96,55 +127,34 @@ def classify_trend_direction(technical_data: dict[str, Any]) -> str:
     """Classify trend direction from +DI/-DI crossover."""
     di_plus = technical_data.get("plus_di", 0.0)
     di_minus = technical_data.get("minus_di", 0.0)
-    if di_plus > di_minus + 5:
-        return "BULLISH"
-    if di_minus > di_plus + 5:
-        return "BEARISH"
-    return "NEUTRAL"
+    return "BULLISH" if di_plus > di_minus + 5 else ("BEARISH" if di_minus > di_plus + 5 else "NEUTRAL")
 
 
 def classify_volatility_level(technical_data: dict[str, Any]) -> str:
     """Classify volatility from ATR as percentage of price."""
     atr_pct = technical_data.get("atr_percent", 2.0)
-    if atr_pct > 3.0:
-        return "HIGH"
-    if atr_pct < 1.5:
-        return "LOW"
-    return "MEDIUM"
+    return "HIGH" if atr_pct > 3.0 else ("LOW" if atr_pct < 1.5 else "MEDIUM")
 
 
 def classify_adx_label(adx: float) -> str:
-    """Classify ADX value into trend strength label.
-
-    Single source of truth for ADX labeling used across brain, dashboard, and vector memory.
-    """
-    if adx >= 25:
-        return "High ADX"
-    if adx < 20:
-        return "Low ADX"
-    return "Medium ADX"
+    """Classify ADX value into trend strength label."""
+    return "High ADX" if adx >= 25 else ("Low ADX" if adx < 20 else "Medium ADX")
 
 
 def classify_rsi_label(rsi: float) -> str:
-    """Classify RSI value into momentum zone label.
-
-    Single source of truth for RSI labeling used across brain, dashboard, and vector memory.
-    """
+    """Classify RSI value into momentum zone label."""
     if rsi >= 70:
         return "OVERBOUGHT"
     if rsi >= 60:
         return "STRONG"
     if rsi <= 30:
         return "OVERSOLD"
-    if rsi <= 40:
-        return "WEAK"
-    return "NEUTRAL"
+    return "WEAK" if rsi <= 40 else "NEUTRAL"
 
 
 def classify_rsi_level(technical_data: dict[str, Any]) -> str:
     """Classify RSI into momentum zones from technical data dict."""
-    rsi = technical_data.get("rsi", 50.0)
-    return classify_rsi_label(rsi)
+    return classify_rsi_label(technical_data.get("rsi", 50.0))
 
 
 def classify_macd_signal(technical_data: dict[str, Any]) -> str:
@@ -162,11 +172,7 @@ def classify_macd_signal(technical_data: dict[str, Any]) -> str:
 def classify_volume_state(technical_data: dict[str, Any]) -> str:
     """Classify volume trend from On-Balance Volume slope."""
     obv_slope = technical_data.get("obv_slope", 0.0)
-    if obv_slope > 0.5:
-        return "ACCUMULATION"
-    if obv_slope < -0.5:
-        return "DISTRIBUTION"
-    return "NORMAL"
+    return "ACCUMULATION" if obv_slope > 0.5 else ("DISTRIBUTION" if obv_slope < -0.5 else "NORMAL")
 
 
 def classify_bb_position(
@@ -186,17 +192,20 @@ def classify_bb_position(
 
 def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
     """Classify Fear & Greed index into sentiment zones."""
-    if sentiment_data:
-        fear_greed = sentiment_data.get("fear_greed_index", 50)
-        if fear_greed <= 25:
+    if not sentiment_data:
+        return "NEUTRAL"
+    # Refactor: Python 3.10 pattern matching dispatches sentiment thresholds
+    match sentiment_data.get("fear_greed_index", 50):
+        case fg if fg <= 25:
             return "EXTREME_FEAR"
-        if fear_greed <= 45:
+        case fg if fg <= 45:
             return "FEAR"
-        if fear_greed >= 75:
+        case fg if fg >= 75:
             return "EXTREME_GREED"
-        if fear_greed >= 55:
+        case fg if fg >= 55:
             return "GREED"
-    return "NEUTRAL"
+        case _:
+            return "NEUTRAL"
 
 
 def classify_order_book_bias(microstructure_data: dict[str, Any] | None) -> str:
@@ -289,9 +298,10 @@ def build_context_string_from_classified_values(
         context_parts.append(f"Price at BB {bb_position}")
     if is_weekend:
         context_parts.append("Weekend Low Volume")
-    if market_sentiment not in ("NEUTRAL", ""):
+    # Bolt: O(1) frozenset lookup avoids set/tuple allocation on every context string build
+    if market_sentiment not in _NEUTRAL_SENTIMENTS:
         context_parts.append(f"Sentiment {market_sentiment}")
-    if order_book_bias not in ("BALANCED", ""):
+    if order_book_bias not in _BALANCED_BIASES:
         context_parts.append(f"OrderBook {order_book_bias}")
     exit_execution_text = format_exit_execution_context(exit_execution_context)
     if exit_execution_text:
@@ -347,6 +357,13 @@ def build_query_document_from_technical_data(
         market_sentiment=market_sentiment,
         order_book_bias=order_book_bias,
         exit_execution_context=exit_execution_context,
+        choppiness=_resolve_scalar(technical_data.get("choppiness")),
+        trend_strength=_resolve_scalar(technical_data.get("trend_strength")),
+        atr_percentage=_resolve_scalar(technical_data.get("atr_percent")),
+        mfi=_resolve_scalar(technical_data.get("mfi")),
+        cmf=_resolve_scalar(technical_data.get("cmf")),
+        vwap=_resolve_scalar(technical_data.get("vwap")),
+        supertrend_direction=_classify_st_dir(_resolve_scalar(technical_data.get("supertrend_direction"))),
     )
 
 
@@ -363,6 +380,14 @@ def build_query_document_from_classified_values(
     market_sentiment: str = "NEUTRAL",
     order_book_bias: str = "BALANCED",
     exit_execution_context: "ExitExecutionContext | None" = None,
+    # --- NEW: enriched query fields for better semantic matching (July 2026) ---
+    choppiness: float | None = None,
+    trend_strength: float = 0.0,
+    atr_percentage: float = 0.0,
+    mfi: float | None = None,
+    cmf: float | None = None,
+    vwap: float = 0.0,
+    supertrend_direction: str = "NEUTRAL",
 ) -> str:
     """Build an enriched vector query document from already classified values."""
     context_str = build_context_string_from_classified_values(
@@ -387,6 +412,18 @@ def build_query_document_from_classified_values(
         f"MACD={macd_signal}",
         f"BB={bb_position}",
     ]
+    if choppiness is not None and choppiness > 0:
+        chop_label = "Trending" if choppiness < 38 else "Choppy" if choppiness > 62 else "Transitional"
+        indicator_parts.append(f"Chop={choppiness:.0f} ({chop_label})")
+    if volume_state and volume_state != "NORMAL":
+        indicator_parts.append(f"VolState={volume_state}")
+    if trend_strength > 0:
+        indicator_parts.append(f"TrendStr={trend_strength:.0f}")
+    if rsi_level != "NEUTRAL":
+        indicator_parts.append(f"RSI={rsi_level}")
+    if supertrend_direction not in ("NEUTRAL", ""):
+        indicator_parts.append(f"STrend={supertrend_direction}")
+
     structure_parts: list[str] = []
     if market_sentiment not in ("NEUTRAL", ""):
         structure_parts.append(f"Sentiment={market_sentiment}")
@@ -395,6 +432,12 @@ def build_query_document_from_classified_values(
     exit_execution_text = format_exit_execution_context(exit_execution_context)
     if exit_execution_text:
         structure_parts.append(exit_execution_text)
+    if vwap > 0:
+        structure_parts.append(f"VWAP={vwap:.2f}")
+    if mfi is not None:
+        structure_parts.append(f"MFI={mfi:.1f}")
+    if cmf is not None:
+        structure_parts.append(f"CMF={cmf:+.3f}")
 
     lines = [context_str, f"Indicators: {' | '.join(indicator_parts)}"]
     if structure_parts:

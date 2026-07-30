@@ -3,18 +3,20 @@ Technical Calculator Module.
 
 Calculates technical indicators for market analysis.
 """
-from typing import Any
+import math
+from typing import Any, cast
 
 import numpy as np
-import math
 
+from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
+    detect_death_cross_numba,
+    detect_golden_cross_numba,
+)
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.logger.logger import Logger
-from src.utils.profiler import profile_performance
 from src.utils.data_utils import get_last_valid_value
-from src.analyzer.pattern_engine.indicator_patterns.ma_crossover_patterns import (
-    detect_golden_cross_numba, detect_death_cross_numba
-)
+from src.utils.profiler import profile_performance
+
 
 class TechnicalCalculator:
     """Core calculator for technical indicators"""
@@ -23,7 +25,7 @@ class TechnicalCalculator:
         """Initialize the technical indicator calculator"""
         self.logger = logger
         self.format_utils = format_utils
-        self.ti: TechnicalIndicators | None = None
+        self.ti: TechnicalIndicators = cast(TechnicalIndicators, None)
 
     @staticmethod
     def _create_indicators(ohlcv_data: np.ndarray) -> TechnicalIndicators:
@@ -226,23 +228,23 @@ class TechnicalCalculator:
 
         daily_indicators = self._compute_daily_indicators(ti_lt, available_days)
 
-        macro_trend_analysis = self._compute_macro_trend_analysis(ti_lt, available_days, sma_values, price_change_pct)
+        macro_trend_analysis = self._compute_macro_trend_analysis(ti_lt, available_days, sma_values, price_change_pct)  # type: ignore
 
         result = {
-            'sma_values': sma_values,
-            'volume_sma_values': volume_sma_values,
-            'price_change': price_change_pct,
-            'volume_change': volume_change_pct,
-            'volatility': volatility,
-            'available_days': available_days,
-            'macro_trend': macro_trend_analysis,
+            "sma_values": sma_values,
+            "volume_sma_values": volume_sma_values,
+            "price_change": price_change_pct,
+            "volume_change": volume_change_pct,
+            "volatility": volatility,
+            "available_days": available_days,
+            "macro_trend": macro_trend_analysis,
             **daily_indicators
         }
 
         # Ensure we're not returning numpy types that might not be recognized properly
         # Optimization: math.isnan is ~13x faster than np.isnan for scalar values
         result = {k: float(v) if isinstance(v, (np.floating, float)) and not math.isnan(v) else v
-                  for k, v in result.items() if k not in ('sma_values', 'volume_sma_values')}
+                  for k, v in result.items() if k not in ("sma_values", "volume_sma_values")}
 
         return result
 
@@ -259,34 +261,34 @@ class TechnicalCalculator:
         # Pre-calculate SMA arrays for crossover detection (avoid redundant calculation in macro analysis)
         sma_arrays = {}
         if available_weeks >= 50:
-            sma_arrays['sma_50'] = ti_weekly.sma(ti_weekly.close, 50)
+            sma_arrays["sma_50"] = ti_weekly.sma(ti_weekly.close, 50)
         if available_weeks >= 200:
-            sma_arrays['sma_200'] = ti_weekly.sma(ti_weekly.close, 200)
+            sma_arrays["sma_200"] = ti_weekly.sma(ti_weekly.close, 200)
 
         # NEW: Weekly-specific macro analysis (pass SMA arrays to avoid recalculation)
         weekly_macro_analysis = self._compute_weekly_macro_trend_analysis(
-            ti_weekly, available_weeks, weekly_sma_values, weekly_ohlcv_data, weekly_price_change, sma_arrays
+            ti_weekly, available_weeks, weekly_sma_values, weekly_ohlcv_data, weekly_price_change, sma_arrays  # type: ignore[arg-type]
         )
 
         result = {
-            'weekly_sma_values': weekly_sma_values,
-            'weekly_volume_sma_values': weekly_volume_sma_values,
-            'weekly_price_change': weekly_price_change,
-            'weekly_volume_change': weekly_volume_change,
-            'weekly_volatility': weekly_volatility,
-            'available_weeks': available_weeks,
-            'weekly_macro_trend': weekly_macro_analysis
+            "weekly_sma_values": weekly_sma_values,
+            "weekly_volume_sma_values": weekly_volume_sma_values,
+            "weekly_price_change": weekly_price_change,
+            "weekly_volume_change": weekly_volume_change,
+            "weekly_volatility": weekly_volatility,
+            "available_weeks": available_weeks,
+            "weekly_macro_trend": weekly_macro_analysis
         }
 
         result = {k: float(v) if isinstance(v, (np.floating, float)) and not math.isnan(v) else v
-                  for k, v in result.items() if k not in ('weekly_sma_values', 'weekly_volume_sma_values')}
+                  for k, v in result.items() if k not in ("weekly_sma_values", "weekly_volume_sma_values")}
 
         return result
 
     def _compute_weekly_macro_trend_analysis(
         self, ti: TechnicalIndicators, available_weeks: int,
         weekly_sma_values: dict[int, float], ohlcv_data: np.ndarray, price_change_pct: float,
-        sma_arrays: dict[str, np.ndarray] = None
+        sma_arrays: dict[str, np.ndarray] | None = None  # type: ignore
     ) -> dict[str, Any]:
         """Weekly macro trend using 200W SMA methodology with timestamps.
 
@@ -300,16 +302,16 @@ class TechnicalCalculator:
         """
         formatter = self.format_utils
         analysis = {
-            'trend_direction': 'Neutral',
-            'weekly_sma_alignment': 'Mixed',
-            'golden_cross': False,
-            'death_cross': False,
-            'price_above_200w_sma': False,
-            'sma_50w_vs_200w': 'Neutral',
-            'distance_from_200w_sma_pct': None,
-            'cycle_phase': None,
-            'confidence_score': 0,
-            'multi_year_trend': None
+            "trend_direction": "Neutral",
+            "weekly_sma_alignment": "Mixed",
+            "golden_cross": False,
+            "death_cross": False,
+            "price_above_200w_sma": False,
+            "sma_50w_vs_200w": "Neutral",
+            "distance_from_200w_sma_pct": None,
+            "cycle_phase": None,
+            "confidence_score": 0,
+            "multi_year_trend": None
         }
 
         # Skip if insufficient data
@@ -326,85 +328,86 @@ class TechnicalCalculator:
             start_ts = ohlcv_data[0, 0] / 1000
             end_ts = ohlcv_data[-1, 0] / 1000
 
-            analysis['multi_year_trend'] = {
-                'weeks_analyzed': available_weeks,
-                'years_analyzed': round(years, 1),
-                'price_change_pct': price_change_pct,
-                'start_date': formatter.format_date_from_timestamp(start_ts),
-                'end_date': formatter.format_date_from_timestamp(end_ts)
+            analysis["multi_year_trend"] = {
+                "weeks_analyzed": available_weeks,
+                "years_analyzed": round(years, 1),
+                "price_change_pct": price_change_pct,
+                "start_date": formatter.format_date_from_timestamp(start_ts),  # type: ignore[reportOptionalMemberAccess]
+                "end_date": formatter.format_date_from_timestamp(end_ts)  # type: ignore[reportOptionalMemberAccess]
             }
 
         # 200W SMA analysis (the gold standard)
         if 200 in weekly_sma_values:
             sma_200w = weekly_sma_values[200]
-            analysis['price_above_200w_sma'] = current_price > sma_200w
+            analysis["price_above_200w_sma"] = current_price > sma_200w
             distance = ((current_price - sma_200w) / sma_200w) * 100
-            analysis['distance_from_200w_sma_pct'] = float(distance)
+            analysis["distance_from_200w_sma_pct"] = float(distance)
 
         # Golden/Death Cross with timestamps
         if 50 in weekly_sma_values and 200 in weekly_sma_values:
-            sma_50w_array = sma_arrays['sma_50']
-            sma_200w_array = sma_arrays['sma_200']
+            assert sma_arrays is not None
+            sma_50w_array = sma_arrays["sma_50"]
+            sma_200w_array = sma_arrays["sma_200"]
 
 
 
             golden_found, golden_weeks_ago, _, _ = detect_golden_cross_numba(sma_50w_array, sma_200w_array)
             if golden_found:
-                analysis['golden_cross'] = True
-                analysis['golden_cross_weeks_ago'] = golden_weeks_ago
+                analysis["golden_cross"] = True
+                analysis["golden_cross_weeks_ago"] = golden_weeks_ago
                 cross_ts = ohlcv_data[-(golden_weeks_ago + 1), 0] / 1000
-                analysis['golden_cross_date'] = formatter.format_date_from_timestamp(cross_ts)
+                analysis["golden_cross_date"] = formatter.format_date_from_timestamp(cross_ts)  # type: ignore[reportOptionalMemberAccess]
                 if self.logger:
-                    self.logger.info("🌟 Weekly Golden Cross: %sw ago (%s)", golden_weeks_ago, analysis['golden_cross_date'])
+                    self.logger.info("🌟 Weekly Golden Cross: %sw ago (%s)", golden_weeks_ago, analysis["golden_cross_date"])
 
             death_found, death_weeks_ago, _, _ = detect_death_cross_numba(sma_50w_array, sma_200w_array)
             if death_found:
-                analysis['death_cross'] = True
-                analysis['death_cross_weeks_ago'] = death_weeks_ago
+                analysis["death_cross"] = True
+                analysis["death_cross_weeks_ago"] = death_weeks_ago
                 cross_ts = ohlcv_data[-(death_weeks_ago + 1), 0] / 1000
-                analysis['death_cross_date'] = formatter.format_date_from_timestamp(cross_ts)
+                analysis["death_cross_date"] = formatter.format_date_from_timestamp(cross_ts)  # type: ignore[reportOptionalMemberAccess]
                 if self.logger:
-                    self.logger.warning("⚠️ Weekly Death Cross: %sw ago (%s)", death_weeks_ago, analysis['death_cross_date'])
+                    self.logger.warning("⚠️ Weekly Death Cross: %sw ago (%s)", death_weeks_ago, analysis["death_cross_date"])
 
             # SMA relationship
             if weekly_sma_values[50] > weekly_sma_values[200]:
-                analysis['sma_50w_vs_200w'] = 'Bullish'
+                analysis["sma_50w_vs_200w"] = "Bullish"
             elif weekly_sma_values[50] < weekly_sma_values[200]:
-                analysis['sma_50w_vs_200w'] = 'Bearish'
+                analysis["sma_50w_vs_200w"] = "Bearish"
 
         # SMA alignment check
         if all(p in weekly_sma_values for p in [20, 50, 100, 200]):
             smas = [weekly_sma_values[p] for p in [20, 50, 100, 200]]
             if all(smas[i] >= smas[i+1] for i in range(len(smas)-1)):
-                analysis['weekly_sma_alignment'] = 'Bullish (Ascending)'
+                analysis["weekly_sma_alignment"] = "Bullish (Ascending)"
             elif all(smas[i] <= smas[i+1] for i in range(len(smas)-1)):
-                analysis['weekly_sma_alignment'] = 'Bearish (Descending)'
+                analysis["weekly_sma_alignment"] = "Bearish (Descending)"
 
         # Trend direction with confidence
         bullish = sum([
-            analysis['price_above_200w_sma'],
-            analysis['sma_50w_vs_200w'] == 'Bullish',
-            analysis['golden_cross'],
-            analysis['weekly_sma_alignment'] == 'Bullish (Ascending)',
-            analysis.get('distance_from_200w_sma_pct', 0) > 20
+            analysis["price_above_200w_sma"],
+            analysis["sma_50w_vs_200w"] == "Bullish",
+            analysis["golden_cross"],
+            analysis["weekly_sma_alignment"] == "Bullish (Ascending)",
+            analysis.get("distance_from_200w_sma_pct", 0) > 20
         ])
         bearish = sum([
-            not analysis['price_above_200w_sma'],
-            analysis['sma_50w_vs_200w'] == 'Bearish',
-            analysis['death_cross'],
-            analysis['weekly_sma_alignment'] == 'Bearish (Descending)',
-            analysis.get('distance_from_200w_sma_pct', 0) < -20
+            not analysis["price_above_200w_sma"],
+            analysis["sma_50w_vs_200w"] == "Bearish",
+            analysis["death_cross"],
+            analysis["weekly_sma_alignment"] == "Bearish (Descending)",
+            analysis.get("distance_from_200w_sma_pct", 0) < -20
         ])
 
         total = bullish + bearish
         if bullish >= 3 and bullish > bearish:
-            analysis['trend_direction'] = 'Bullish'
-            analysis['confidence_score'] = int((bullish / max(total, 1)) * 100)
+            analysis["trend_direction"] = "Bullish"
+            analysis["confidence_score"] = int((bullish / max(total, 1)) * 100)
         elif bearish >= 3 and bearish > bullish:
-            analysis['trend_direction'] = 'Bearish'
-            analysis['confidence_score'] = int((bearish / max(total, 1)) * 100)
+            analysis["trend_direction"] = "Bearish"
+            analysis["confidence_score"] = int((bearish / max(total, 1)) * 100)
         else:
-            analysis['confidence_score'] = 50
+            analysis["confidence_score"] = 50
 
         return analysis
 
@@ -433,9 +436,8 @@ class TechnicalCalculator:
             price_change_pct = float((ti.close[-1] / ti.close[0] - 1) * 100)
             volume_change_pct = float((ti.volume[-1] / max(ti.volume[0], 1) - 1) * 100)
 
-        else:
-            if self.logger:
-                self.logger.warning("Not enough data to calculate change metrics (only %s days)", available_days)
+        elif self.logger:
+            self.logger.warning("Not enough data to calculate change metrics (only %s days)", available_days)
 
         return price_change_pct, volume_change_pct
 
@@ -454,13 +456,13 @@ class TechnicalCalculator:
             price_change_pct: Already-calculated price change percentage from _compute_change_metrics
         """
         analysis = {
-            'trend_direction': 'Neutral',
-            'sma_alignment': 'Mixed',
-            'golden_cross': False,
-            'death_cross': False,
-            'price_above_200sma': False,
-            'sma_50_vs_200': 'Neutral',
-            'long_term_price_change_pct': None
+            "trend_direction": "Neutral",
+            "sma_alignment": "Mixed",
+            "golden_cross": False,
+            "death_cross": False,
+            "price_above_200sma": False,
+            "sma_50_vs_200": "Neutral",
+            "long_term_price_change_pct": None
         }
 
         if available_days < 200:
@@ -470,79 +472,79 @@ class TechnicalCalculator:
 
         current_price = float(ti.close[-1])
 
-        analysis['long_term_price_change_pct'] = price_change_pct
+        analysis["long_term_price_change_pct"] = price_change_pct
 
         if 200 in sma_values:
-            analysis['price_above_200sma'] = current_price > sma_values[200]
+            analysis["price_above_200sma"] = current_price > sma_values[200]
 
         if 50 in sma_values and 200 in sma_values:
             sma_50 = sma_values[50]
             sma_200 = sma_values[200]
 
             if sma_50 > sma_200:
-                analysis['sma_50_vs_200'] = 'Bullish'
+                analysis["sma_50_vs_200"] = "Bullish"
                 if available_days >= 250:
                     sma_50_prev = ti.sma(ti.close, 50)[-10]
                     sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev <= sma_200_prev and sma_50 > sma_200:
-                        analysis['golden_cross'] = True
+                        analysis["golden_cross"] = True
             elif sma_50 < sma_200:
-                analysis['sma_50_vs_200'] = 'Bearish'
+                analysis["sma_50_vs_200"] = "Bearish"
                 if available_days >= 250:
                     sma_50_prev = ti.sma(ti.close, 50)[-10]
                     sma_200_prev = ti.sma(ti.close, 200)[-10]
                     if sma_50_prev >= sma_200_prev and sma_50 < sma_200:
-                        analysis['death_cross'] = True
+                        analysis["death_cross"] = True
 
         if 20 in sma_values and 50 in sma_values and 100 in sma_values and 200 in sma_values:
             smas = [sma_values[20], sma_values[50], sma_values[100], sma_values[200]]
             if all(smas[i] >= smas[i+1] for i in range(len(smas)-1)):
-                analysis['sma_alignment'] = 'Bullish (Ascending)'
+                analysis["sma_alignment"] = "Bullish (Ascending)"
             elif all(smas[i] <= smas[i+1] for i in range(len(smas)-1)):
-                analysis['sma_alignment'] = 'Bearish (Descending)'
+                analysis["sma_alignment"] = "Bearish (Descending)"
             else:
-                analysis['sma_alignment'] = 'Mixed'
+                analysis["sma_alignment"] = "Mixed"
 
         bullish_signals = []
-        if analysis['price_above_200sma']:
-            bullish_signals.append('price_above_200sma')
-        if analysis['sma_50_vs_200'] == 'Bullish':
-            bullish_signals.append('sma_50_vs_200')
-        if analysis['golden_cross']:
-            bullish_signals.append('golden_cross')
-        if analysis['sma_alignment'] == 'Bullish (Ascending)':
-            bullish_signals.append('sma_alignment')
-        if analysis['long_term_price_change_pct'] is not None:
-            if analysis['long_term_price_change_pct'] > 20:
-                bullish_signals.append('strong_price_appreciation')
-            elif analysis['long_term_price_change_pct'] > 10:
-                bullish_signals.append('moderate_price_appreciation')
+        if analysis["price_above_200sma"]:
+            bullish_signals.append("price_above_200sma")
+        if analysis["sma_50_vs_200"] == "Bullish":
+            bullish_signals.append("sma_50_vs_200")
+        if analysis["golden_cross"]:
+            bullish_signals.append("golden_cross")
+        if analysis["sma_alignment"] == "Bullish (Ascending)":
+            bullish_signals.append("sma_alignment")
+        if analysis["long_term_price_change_pct"] is not None:
+            if analysis["long_term_price_change_pct"] > 20:
+                bullish_signals.append("strong_price_appreciation")
+            elif analysis["long_term_price_change_pct"] > 10:
+                bullish_signals.append("moderate_price_appreciation")
 
         bearish_signals = []
-        if not analysis['price_above_200sma']:
-            bearish_signals.append('price_below_200sma')
-        if analysis['sma_50_vs_200'] == 'Bearish':
-            bearish_signals.append('sma_50_vs_200')
-        if analysis['death_cross']:
-            bearish_signals.append('death_cross')
-        if analysis['sma_alignment'] == 'Bearish (Descending)':
-            bearish_signals.append('sma_alignment')
-        if analysis['long_term_price_change_pct'] is not None:
-            if analysis['long_term_price_change_pct'] < -20:
-                bearish_signals.append('strong_price_decline')
-            elif analysis['long_term_price_change_pct'] < -10:
-                bearish_signals.append('moderate_price_decline')
+        if not analysis["price_above_200sma"]:
+            bearish_signals.append("price_below_200sma")
+        if analysis["sma_50_vs_200"] == "Bearish":
+            bearish_signals.append("sma_50_vs_200")
+        if analysis["death_cross"]:
+            bearish_signals.append("death_cross")
+        if analysis["sma_alignment"] == "Bearish (Descending)":
+            bearish_signals.append("sma_alignment")
+        if analysis["long_term_price_change_pct"] is not None:
+            if analysis["long_term_price_change_pct"] < -20:
+                bearish_signals.append("strong_price_decline")
+            elif analysis["long_term_price_change_pct"] < -10:
+                bearish_signals.append("moderate_price_decline")
 
         bullish_count = len(bullish_signals)
         bearish_count = len(bearish_signals)
 
         # Determine trend direction (need at least 2 signals for clear direction)
         if bullish_count >= 2 and bullish_count > bearish_count:
-            analysis['trend_direction'] = 'Bullish'
+            analysis["trend_direction"] = "Bullish"
         elif bearish_count >= 2 and bearish_count > bullish_count:
-            analysis['trend_direction'] = 'Bearish'
+            analysis["trend_direction"] = "Bearish"
         else:
-            analysis['trend_direction'] = 'Neutral'
+            analysis["trend_direction"] = "Neutral"
 
         return analysis
 
@@ -564,19 +566,19 @@ class TechnicalCalculator:
     def _initialize_daily_indicators(self) -> dict[str, Any]:
         """Initialize dictionary with daily indicator keys."""
         return {
-            'daily_rsi': None,
-            'daily_macd_line': None,
-            'daily_macd_signal': None,
-            'daily_macd_hist': None,
-            'daily_atr': None,
-            'daily_adx': None,
-            'daily_plus_di': None,
-            'daily_minus_di': None,
-            'daily_obv': None,
-            'daily_ichimoku_conversion': None,
-            'daily_ichimoku_base': None,
-            'daily_ichimoku_span_a': None,
-            'daily_ichimoku_span_b': None
+            "daily_rsi": None,
+            "daily_macd_line": None,
+            "daily_macd_signal": None,
+            "daily_macd_hist": None,
+            "daily_atr": None,
+            "daily_adx": None,
+            "daily_plus_di": None,
+            "daily_minus_di": None,
+            "daily_obv": None,
+            "daily_ichimoku_conversion": None,
+            "daily_ichimoku_base": None,
+            "daily_ichimoku_span_a": None,
+            "daily_ichimoku_span_b": None
         }
 
     def _compute_14_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
@@ -584,52 +586,52 @@ class TechnicalCalculator:
         # RSI
         rsi_vals = ti.rsi(length=14)
         if rsi_vals is not None and not math.isnan(rsi_vals[-1]):
-            out['daily_rsi'] = float(rsi_vals[-1])
+            out["daily_rsi"] = float(rsi_vals[-1])
 
         # ATR
         atr_vals = ti.atr(length=14)
         if atr_vals is not None and not math.isnan(atr_vals[-1]):
-            out['daily_atr'] = float(atr_vals[-1])
+            out["daily_atr"] = float(atr_vals[-1])
 
         # ADX and DI
         adx_vals, plus_di_vals, minus_di_vals = ti.adx(length=14)
         if adx_vals is not None and not math.isnan(adx_vals[-1]):
-            out['daily_adx'] = float(adx_vals[-1])
+            out["daily_adx"] = float(adx_vals[-1])
         if plus_di_vals is not None and not math.isnan(plus_di_vals[-1]):
-            out['daily_plus_di'] = float(plus_di_vals[-1])
+            out["daily_plus_di"] = float(plus_di_vals[-1])
         if minus_di_vals is not None and not math.isnan(minus_di_vals[-1]):
-            out['daily_minus_di'] = float(minus_di_vals[-1])
+            out["daily_minus_di"] = float(minus_di_vals[-1])
 
         # OBV
         obv_vals = ti.obv()
         if obv_vals is not None and not math.isnan(obv_vals[-1]):
-            out['daily_obv'] = float(obv_vals[-1])
+            out["daily_obv"] = float(obv_vals[-1])
 
     def _compute_26_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
         """Compute indicators that require 26 days of data."""
         macd_line, macd_signal, macd_hist = ti.macd()
 
         if macd_line is not None and not math.isnan(macd_line[-1]):
-            out['daily_macd_line'] = float(macd_line[-1])
+            out["daily_macd_line"] = float(macd_line[-1])
         if macd_signal is not None and not math.isnan(macd_signal[-1]):
-            out['daily_macd_signal'] = float(macd_signal[-1])
+            out["daily_macd_signal"] = float(macd_signal[-1])
         if macd_hist is not None and not math.isnan(macd_hist[-1]):
-            out['daily_macd_hist'] = float(macd_hist[-1])
+            out["daily_macd_hist"] = float(macd_hist[-1])
 
     def _compute_52_day_indicators(self, ti: TechnicalIndicators, out: dict[str, Any]) -> None:
         """Compute indicators that require 52 days of data."""
         conversion, base, span_a, span_b = ti.ichimoku_cloud()
 
         if conversion is not None and not math.isnan(conversion[-1]):
-            out['daily_ichimoku_conversion'] = float(conversion[-1])
+            out["daily_ichimoku_conversion"] = float(conversion[-1])
         if base is not None and not math.isnan(base[-1]):
-            out['daily_ichimoku_base'] = float(base[-1])
+            out["daily_ichimoku_base"] = float(base[-1])
 
         # Handle span A
-        self._process_ichimoku_span(span_a, out, 'daily_ichimoku_span_a')
+        self._process_ichimoku_span(span_a, out, "daily_ichimoku_span_a")
 
         # Handle span B
-        self._process_ichimoku_span(span_b, out, 'daily_ichimoku_span_b')
+        self._process_ichimoku_span(span_b, out, "daily_ichimoku_span_b")
 
     def _process_ichimoku_span(self, span_data, out: dict[str, Any], key: str) -> None:
         """Process Ichimoku span data safely."""

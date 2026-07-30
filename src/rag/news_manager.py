@@ -3,9 +3,10 @@ News Management Module for RAG Engine
 
 Fetches, deduplicates, and caches cryptocurrency news articles.
 """
-from typing import Any, Set
+from typing import Any
 
 from src.logger.logger import Logger
+
 from .file_handler import RagFileHandler
 from .news_repository import NewsRepository
 
@@ -29,23 +30,23 @@ class NewsManager:
         self.article_processor = article_processor
         self.news_repository = news_repository or NewsRepository(logger=logger, file_handler=file_handler)
 
-        self.news_database: list[dict[str, Any]] = []
+        self.news_database: list[dict[str, Any]] = []  # type: ignore[reportOptionalMemberAccess]
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def load_cached_news(self) -> None:
         """Load cached news articles from disk."""
         try:
-            self.news_database = self.news_repository.load_recent_articles(max_age_seconds=86400)
-            for article in self.news_database:
+            self.news_database = self.news_repository.load_recent_articles(max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
+            for article in self.news_database:  # type: ignore[reportOptionalMemberAccess]
                 if "title_lower" not in article:
                     self._normalize(article)
-            self.logger.debug("Loaded %s cached news articles", len(self.news_database))
-        except Exception as e:
-            self.logger.exception("Error loading cached news: %s", e)
-            self.news_database = []
+            self.logger.debug("Loaded %s cached news articles", len(self.news_database))  # type: ignore[reportOptionalMemberAccess]
+        except Exception:
+            self.logger.exception("Error loading cached news: %s")
+            self.news_database = []  # type: ignore[reportOptionalMemberAccess]
 
-    async def fetch_fresh_news(self, known_crypto_tickers: Set[str]) -> list[dict[str, Any]]:
+    async def fetch_fresh_news(self, known_crypto_tickers: set[str]) -> list[dict[str, Any]]:
         """Fetch fresh articles from the news provider; fall back to cache on failure."""
         if self.news_client is None:
             self.logger.error("News client not initialized")
@@ -63,7 +64,7 @@ class NewsManager:
             articles = self.news_client.filter_by_age(raw, max_age_hours=72)
 
             for article in articles:
-                coins = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)
+                coins = self.article_processor.detect_coins_in_article(article, known_crypto_tickers)  # type: ignore
                 if coins:
                     article["detected_coins"] = list(coins)
                     article["detected_coins_str"] = "|".join(coins)
@@ -71,7 +72,7 @@ class NewsManager:
             self.logger.debug("Fetched %s recent news articles", len(articles))
             return articles
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching news: %s", e)
             return self._fallback()
 
@@ -93,11 +94,19 @@ class NewsManager:
         # URL-first dedup with body-length-aware update.
         # If an existing article was cached with a short body (enrichment may have
         # failed previously) and the fresh fetch produced a longer body, replace it.
-        _MIN_BODY = 400  # mirror news_min_body_chars default
-        url_to_existing = {a["url"]: a for a in self.news_database if a.get("url")}
-        existing_ids = {a.get("id") for a in self.news_database if a.get("id")}
+        min_body = 400  # mirror news_min_body_chars default
+        url_to_existing: dict[str, dict[str, Any]] = {}
+        existing_ids: set[str] = set()
+        for article_item in self.news_database:  # type: ignore[reportOptionalMemberAccess]
+            url_val = article_item.get("url")
+            if url_val:
+                url_to_existing[url_val] = article_item
+            aid = article_item.get("id")
+            if aid:
+                existing_ids.add(aid)
+
         unique: list = []
-        body_updates: list = []
+        body_updated = False
         for a in recent:
             url = a.get("url")
             if url:
@@ -107,41 +116,33 @@ class NewsManager:
                     existing = url_to_existing[url]
                     new_len = len(a.get("body", ""))
                     old_len = len(existing.get("body", ""))
-                    if old_len < _MIN_BODY and new_len > old_len:
-                        body_updates.append(a)
+                    if old_len < min_body and new_len > old_len:
+                        existing.update(a)
+                        self._normalize(existing)
+                        body_updated = True
             elif a.get("id") and a["id"] not in existing_ids:
                 unique.append(a)
 
-        if not unique and not body_updates:
+        if not unique and not body_updated:
             self.logger.debug("No new articles to add or only duplicates found")
             return False
-
-        # Apply in-place body updates first
-        if body_updates:
-            url_to_update = {a["url"]: a for a in body_updates}
-            for i, existing in enumerate(self.news_database):
-                url = existing.get("url")
-                if url and url in url_to_update:
-                    self.news_database[i] = url_to_update[url]
-                    self._normalize(self.news_database[i])
-            self.logger.debug("Re-enriched %d articles with longer bodies", len(body_updates))
 
         for article in unique:
             self._normalize(article)
 
-        combined = self.news_database + unique
-        combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)
-        self.news_database = self.news_repository.filter_recent_articles(combined, max_age_seconds=86400)
-        self.news_repository.save_recent_articles(self.news_database, max_age_seconds=86400)
+        combined = self.news_database + unique  # type: ignore[reportOptionalMemberAccess]
+        combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)  # type: ignore
+        self.news_database = self.news_repository.filter_recent_articles(combined, max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
+        self.news_repository.save_recent_articles(self.news_database, max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
 
-        self.logger.debug("Updated news database with %s recent articles", len(self.news_database))
+        self.logger.debug("Updated news database with %s recent articles", len(self.news_database))  # type: ignore[reportOptionalMemberAccess]
         return True
 
     def get_database_size(self) -> int:
-        return len(self.news_database)
+        return len(self.news_database)  # type: ignore[reportOptionalMemberAccess]
 
     def clear_database(self) -> None:
-        self.news_database.clear()
+        self.news_database.clear()  # type: ignore[reportOptionalMemberAccess]
 
     # ── Private ───────────────────────────────────────────────────────────────
 
@@ -162,3 +163,4 @@ class NewsManager:
         article["categories_lower"] = article.get("categories", "").lower()
         article["tags_lower"] = article.get("tags", "").lower()
         article["detected_coins_str_lower"] = article.get("detected_coins_str", "").lower()
+

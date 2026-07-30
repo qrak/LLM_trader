@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # Maximum allowed delta between LLM-reported and computed ADX before flagging
 ADX_DISCREPANCY_THRESHOLD: float = 15.0
 
@@ -124,9 +123,9 @@ class TrendValidator:
             result.llm_strength_4h = int(float(strength_4h))
         if self._is_valid_adx(strength_daily):
             result.llm_strength_daily = int(float(strength_daily))
-        if self._is_valid_adx(computed_adx):
+        if computed_adx is not None and self._is_valid_adx(computed_adx):
             result.computed_adx = float(computed_adx)
-        if self._is_valid_adx(computed_daily_adx):
+        if computed_daily_adx is not None and self._is_valid_adx(computed_daily_adx):
             result.computed_daily_adx = float(computed_daily_adx)
 
         llm_4h = result.llm_strength_4h
@@ -184,8 +183,8 @@ class TrendValidator:
         trend = analysis.setdefault("trend", {})
 
         # Replace with validated values
-        trend["strength_4h"] = int(round(validation.validated_4h))
-        trend["strength_daily"] = int(round(validation.validated_daily))
+        trend["strength_4h"] = round(validation.validated_4h)
+        trend["strength_daily"] = round(validation.validated_daily)
 
         # Add validation metadata for transparency
         analysis["_trend_validation"] = validation.to_dict()

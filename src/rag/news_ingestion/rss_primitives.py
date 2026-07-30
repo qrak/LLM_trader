@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 import re
+
 try:
     import defusedxml.ElementTree as ET
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405, B314
+import html as html_module
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -21,10 +23,7 @@ from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
-import html as html_module
-
 import aiohttp
-
 
 # Source registry – default values; callers may supply a filtered subset.
 
@@ -74,25 +73,42 @@ def normalize_url(raw_url: str) -> str:
     """Strip tracking query-params and trailing slashes from *raw_url*."""
     if not raw_url:
         return ""
-    parsed = urlparse(raw_url.strip())
-    filtered_qs = [
-        (k, v)
-        for k, v in parse_qsl(parsed.query, keep_blank_values=True)
-        if k.lower() not in _TRACKING_PARAMS
-    ]
-    new_query = urlencode(filtered_qs, doseq=True)
+    url_str = raw_url.strip()
+    parsed = urlparse(url_str)
     normalized_path = parsed.path.rstrip("/") if parsed.path != "/" else "/"
+
+    if not parsed.query and not parsed.fragment and normalized_path == parsed.path:
+        return url_str
+
+    if parsed.query:
+        filtered_qs = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=True)
+            if k.lower() not in _TRACKING_PARAMS
+        ]
+        new_query = urlencode(filtered_qs, doseq=True)
+    else:
+        new_query = ""
+
     cleaned = parsed._replace(query=new_query, fragment="", path=normalized_path)
     return urlunparse(cleaned)
 
 
 # HTML text extraction
 
+_RE_HTML_TAGS = re.compile(r"<[^>]+>")
+_RE_WHITESPACE = re.compile(r"\s+")
+
+
 def strip_html(text: str) -> str:
     """Remove HTML tags, unescape HTML entities, and collapse whitespace."""
-    no_tags = re.sub(r"<[^>]+>", " ", text)
+    if not text:
+        return ""
+    if "<" not in text and "&" not in text:
+        return _RE_WHITESPACE.sub(" ", text).strip()
+    no_tags = _RE_HTML_TAGS.sub(" ", text)
     unescaped = html_module.unescape(no_tags)
-    return re.sub(r"\s+", " ", unescaped).strip()
+    return _RE_WHITESPACE.sub(" ", unescaped).strip()
 
 
 def extract_html_body_text(html_text: str) -> str:
@@ -123,7 +139,7 @@ class _HtmlBodyTextParser(HTMLParser):
         self._skip_depth = 0
         self._parts: list[str] = []
 
-    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(self, tag: str, _attrs: list[tuple[str, str | None]]) -> None:  # type: ignore
         tag_name = tag.lower()
         if tag_name in self._IGNORED_TAGS:
             self._skip_depth += 1
@@ -179,13 +195,13 @@ def _extract_html_body_text_bs4(html_text: str) -> str:
 
     selector_groups: list[tuple[str, int]] = [
         (
-            "[data-module-name='article-body'], [data-testid='article-body'], "
-            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']",
+            ("[data-module-name='article-body'], [data-testid='article-body'], "
+            "[class*='article-body'], [class*='articleBody'], [class*='ArticleBody']"),
             200,
         ),
         (
-            "article, [class*='article-content'], [class*='articleContent'], "
-            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']",
+            ("article, [class*='article-content'], [class*='articleContent'], "
+            "[class*='ArticleContent'], [class*='post-content'], [class*='entry-content']"),
             1,
         ),
         ("main", 1),
@@ -248,7 +264,7 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
 
 # RSS XML parsing
 
-def _first_text(parent: ET.Element, path: str) -> str:
+def _first_text(parent: ET.Element, path: str) -> str:  # type: ignore
     node = parent.find(path)
     if node is None or node.text is None:
         return ""
@@ -267,8 +283,8 @@ def parse_rss_items(
     """
     results: list[dict[str, Any]] = []
     try:
-        root = ET.fromstring(payload_text)
-    except ET.ParseError:
+        root = ET.fromstring(payload_text)  # nosec B314
+    except (ET.ParseError, Exception):  # noqa: BLE001
         return results
 
     now_iso = datetime.now(timezone.utc).isoformat()

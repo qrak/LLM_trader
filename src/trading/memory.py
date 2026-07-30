@@ -3,10 +3,11 @@
 Handles short-term memory of trading decisions for AI context injection.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
-from .data_models import TradingMemory, TradeDecision
+
+from .data_models import TradeDecision, TradingMemory
 
 if TYPE_CHECKING:
     from src.managers.persistence_manager import PersistenceManager
@@ -103,8 +104,9 @@ class TradingMemoryService:
             try:
                 decision = TradeDecision.from_dict(trade_data)
                 memory.add_decision(decision)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not load decision from history: %s", e)
 
         self.logger.info("Built memory with %s decisions from history", len(memory.decisions))
         return memory
+

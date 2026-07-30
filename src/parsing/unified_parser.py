@@ -5,7 +5,7 @@ Eliminates duplication and unnecessary delegation layers.
 import json
 import math
 import re
-from typing import Any, Set
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -25,17 +25,17 @@ class UnifiedParser:
 
         # Numeric fields that should be converted from strings with their defaults
         self._numeric_fields = {
-            'risk_ratio': 1.0,
-            'risk_reward_ratio': None,
-            'trend_strength': 50,
-            'confidence': 50,
-            'confidence_score': 50,
-            'entry_price': None,
-            'stop_loss': None,
-            'take_profit': None,
-            'position_size': None,
-            'bullish_scenario': 0.0,
-            'bearish_scenario': 0.0
+            "risk_ratio": 1.0,
+            "risk_reward_ratio": None,
+            "trend_strength": 50,
+            "confidence": 50,
+            "confidence_score": 50,
+            "entry_price": None,
+            "stop_loss": None,
+            "take_profit": None,
+            "position_size": None,
+            "bullish_scenario": 0.0,
+            "bearish_scenario": 0.0
         }
 
 
@@ -58,7 +58,7 @@ class UnifiedParser:
                     except json.JSONDecodeError:
                         pass
 
-            first_brace = raw_text.find('{')
+            first_brace = raw_text.find("{")
             if first_brace != -1:
                 try:
                     decoder = json.JSONDecoder()
@@ -71,7 +71,7 @@ class UnifiedParser:
             self.logger.warning("Unable to parse AI response, using fallback. Preview: %s", raw_text[:200])
             return self._create_fallback_response(raw_text)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to parse AI response: %s", e)
             return self._create_error_response(str(e), raw_text)
 
@@ -125,16 +125,22 @@ class UnifiedParser:
         Returns:
             Parsed JSON dict or None if extraction fails
         """
+        if not text:
+            return None
         try:
-            json_match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL | re.IGNORECASE)
-            if json_match:
-                json_str = json_match.group(1)
-                data = json.loads(json_str)
-
-                if unwrap_key and unwrap_key in data and isinstance(data[unwrap_key], dict):
-                    return data[unwrap_key]
-                return data
-        except (json.JSONDecodeError, Exception) as e:
+            # Bolt: fast C-string find instead of regex engine traversal for ```json ... ``` blocks
+            text_lower = text.lower()
+            start = text_lower.find("```json")
+            if start != -1:
+                json_start = start + 7
+                end = text_lower.find("```", json_start)
+                if end != -1:
+                    json_str = text[json_start:end].strip()
+                    data = json.loads(json_str)
+                    if unwrap_key and isinstance(data, dict) and isinstance(data.get(unwrap_key), dict):
+                        return data[unwrap_key]
+                    return data
+        except (json.JSONDecodeError, Exception) as e:  # noqa: BLE001
             self.logger.debug("JSON block extraction failed: %s", e)
         return None
 
@@ -149,10 +155,12 @@ class UnifiedParser:
         Returns:
             Text before the JSON block, or full text if no JSON found
         """
-        json_match = re.search(r'```json', text, re.IGNORECASE)
-        if json_match:
-            reasoning = text[:json_match.start()].strip()
-            return reasoning
+        if not text:
+            return ""
+        # Bolt: fast C-string find instead of regex for ```json boundary
+        start = text.lower().find("```json")
+        if start != -1:
+            return text[:start].strip()
         return text.strip()
 
 
@@ -181,27 +189,27 @@ class UnifiedParser:
             return ""
 
         # Handle symbols with explicit separators first
-        if '/' in symbol:
-            return symbol.split('/')[0].upper()
-        if '-' in symbol:
-            return symbol.split('-')[0].upper()
+        if "/" in symbol:
+            return symbol.split("/")[0].upper()
+        if "-" in symbol:
+            return symbol.split("-")[0].upper()
 
         # Handle concatenated symbols by removing common quote currencies
         # Check longer quotes first to avoid partial matches (e.g. matching USD in BUSD)
-        common_quotes = ['USDT', 'USDC', 'BUSD', 'USD', 'BTC', 'ETH', 'BNB']
+        common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "BNB"]
         symbol_upper = symbol.upper()
 
         for quote in common_quotes:
             if symbol_upper.endswith(quote):
                 base = symbol_upper[:-len(quote)]
                 # Special handling for BNB/BUSD ambiguity: BNBUSD -> BN (via BUSD) is wrong, should be BNB (via USD)
-                if quote == 'BUSD' and base == 'BN':
+                if quote == "BUSD" and base == "BN":
                     continue
                 return base
 
         return symbol_upper
 
-    def detect_coins_in_text(self, text: str, known_tickers: Set[str]) -> Set[str]:
+    def detect_coins_in_text(self, text: str, known_tickers: set[str]) -> set[str]:
         """Detect cryptocurrency mentions in text content."""
         if not text:
             return set()
@@ -210,7 +218,7 @@ class UnifiedParser:
         text_upper = text.upper()
 
         # Find potential tickers using regex
-        potential_tickers = set(re.findall(r'\b[A-Z]{2,6}\b', text_upper))
+        potential_tickers = set(re.findall(r"\b[A-Z]{2,6}\b", text_upper))
 
         # Validate against known tickers
         for ticker in potential_tickers:
@@ -219,10 +227,10 @@ class UnifiedParser:
 
         # Special handling for major cryptocurrencies
         text_lower = text.lower()
-        if 'bitcoin' in text_lower:
-            coins_mentioned.add('BTC')
-        if 'ethereum' in text_lower:
-            coins_mentioned.add('ETH')
+        if "bitcoin" in text_lower:
+            coins_mentioned.add("BTC")
+        if "ethereum" in text_lower:
+            coins_mentioned.add("ETH")
 
         return coins_mentioned
 
@@ -235,25 +243,25 @@ class UnifiedParser:
         """Ensure numeric fields are properly typed at the data source."""
 
         # Check analysis section
-        analysis = data.get('analysis', {})
+        analysis = data.get("analysis", {})
         for field, default_value in self._numeric_fields.items():
             if field in analysis:
                 analysis[field] = self._parse_numeric_field(field, analysis[field], default_value)
 
         # Normalize confluence_factors (new Chain-of-Thought scoring)
-        confluence_factors = analysis.get('confluence_factors', {})
+        confluence_factors = analysis.get("confluence_factors", {})
         if isinstance(confluence_factors, dict):
-            for factor_key in ['trend_alignment', 'momentum_strength', 'volume_support',
-                              'pattern_quality', 'support_resistance_strength']:
+            for factor_key in ["trend_alignment", "momentum_strength", "volume_support",
+                              "pattern_quality", "support_resistance_strength"]:
                 if factor_key in confluence_factors:
                     confluence_factors[factor_key] = self._parse_finite_number(
                         confluence_factors[factor_key], 50.0
                     )
 
         # Normalize key_levels arrays (support/resistance)
-        key_levels = analysis.get('key_levels', {})
+        key_levels = analysis.get("key_levels", {})
         if isinstance(key_levels, dict):
-            for level_type in ['support', 'resistance']:
+            for level_type in ["support", "resistance"]:
                 levels = key_levels.get(level_type, [])
                 if isinstance(levels, list):
                     normalized_levels = []
@@ -275,8 +283,8 @@ class UnifiedParser:
         numeric_value = self._parse_finite_number(value, None)
         if numeric_value is None:
             return default_value
-        if field == 'position_size':
-            explicit_percent = isinstance(value, str) and value.strip().endswith('%')
+        if field == "position_size":
+            explicit_percent = isinstance(value, str) and value.strip().endswith("%")
             return numeric_value / 100 if explicit_percent or numeric_value > 1 else numeric_value
         if isinstance(default_value, int) and float(numeric_value).is_integer():
             return int(numeric_value)
@@ -292,7 +300,7 @@ class UnifiedParser:
             parsed = float(value)
         elif isinstance(value, str):
             try:
-                parsed = float(value.strip().replace(',', ''))
+                parsed = float(value.strip().replace(",", ""))
             except ValueError:
                 return default_value
         else:
@@ -362,3 +370,4 @@ class UnifiedParser:
             },
             "response_validation": self._create_validation_error_metadata(error_message, "parser_error")
         }
+

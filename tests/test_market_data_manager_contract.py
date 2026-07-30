@@ -1,3 +1,7 @@
+"""Test Market Data Manager Contract unit tests.
+
+Tests for test_market_data_manager_contract.py.
+"""
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -78,3 +82,25 @@ def test_is_overview_stale_false_for_recent_data(manager: MarketDataManager):
     manager.unified_parser.format_utils.parse_timestamp.return_value = recent_ts
 
     assert manager.is_overview_stale(max_age_hours=1) is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_market_overview_concurrent_calls(manager: MarketDataManager):
+    manager.fetcher.fetch_global_market_data = AsyncMock(return_value={"cg": 1})
+    manager.fetcher.fetch_macro_data = AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"m": 2}))
+    manager.fetcher.fetch_defi_fundamentals = AsyncMock(return_value=SimpleNamespace(model_dump=lambda: {"d": 3}))
+    manager.processor.extract_top_coins = MagicMock(return_value=["BTC"])
+    manager.fetcher.fetch_price_data = AsyncMock(return_value={"BTC": 90000})
+    manager.overview_builder.build_overview = MagicMock(return_value={"base": "ok"})
+
+    result = await manager.fetch_market_overview()
+
+    assert result is not None
+    assert result["macro"] == {"m": 2}
+    assert result["fundamentals"] == {"d": 3}
+
+    manager.fetcher.fetch_global_market_data.assert_awaited_once()
+    manager.fetcher.fetch_macro_data.assert_awaited_once()
+    manager.fetcher.fetch_defi_fundamentals.assert_awaited_once()
+    manager.fetcher.fetch_price_data.assert_awaited_once_with(["BTC"])
+

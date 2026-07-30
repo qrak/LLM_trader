@@ -2,9 +2,9 @@
 BlockRun.AI client implementation using the official blockrun-llm SDK (v1.4.7+).
 Supports text-only and multimodal (text + image) chat with x402 micropayments.
 """
-import io
 import base64
-from typing import Any, Union
+import io
+from typing import Any
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -55,7 +55,7 @@ class BlockRunClient(BaseAIClient):
         return message
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(
+    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -82,15 +82,15 @@ class BlockRunClient(BaseAIClient):
                 **kwargs,
             )
             return self._convert_response(response)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(
+    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any],
     ) -> ChatResponseModel | None:
         """
@@ -127,7 +127,7 @@ class BlockRunClient(BaseAIClient):
             if response:
                 self.logger.debug("Received successful chart analysis response from BlockRun SDK")
             return self._convert_response(response)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error during BlockRun chart analysis request: %s", self._redact_private_key(str(e)))
             return self._handle_exception(e)
 
@@ -216,3 +216,4 @@ class BlockRunClient(BaseAIClient):
         if result:
             return result
         return ChatResponseModel.from_error(redacted_error)
+

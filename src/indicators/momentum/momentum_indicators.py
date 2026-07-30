@@ -1,6 +1,10 @@
+"""Momentum Indicators module.
+
+Provides functionality for indicators.momentum.momentum_indicators.py.
+"""
+import math
 from typing import Any
 
-import math
 import numpy as np
 from numba import njit
 
@@ -90,10 +94,8 @@ def stochastic_numba(high, low, close, period_k, smooth_k, period_d):
         for j in range(start_idx + 1, end_idx):
             val_h = high[j]
             val_l = low[j]
-            if val_h > high_max:
-                high_max = val_h
-            if val_l < low_min:
-                low_min = val_l
+            high_max = max(high_max, val_h)
+            low_min = min(low_min, val_l)
 
         if high_max != low_min:
             k_values[i] = 100 * (close[i] - low_min) / (high_max - low_min)
@@ -194,10 +196,8 @@ def williams_r_numba(high, low, close, length):
         for j in range(start_idx + 1, end_idx):
             h_val = high[j]
             l_val = low[j]
-            if h_val > highest_high:
-                highest_high = h_val
-            if l_val < lowest_low:
-                lowest_low = l_val
+            highest_high = max(highest_high, h_val)
+            lowest_low = min(lowest_low, l_val)
 
         if highest_high != lowest_low:
             williams_r[i] = ((highest_high - close[i]) / (highest_high - lowest_low)) * -100
@@ -630,7 +630,7 @@ def uo_numba(
     """
     return _uo_numba(
         high, low, close,
-        config['fast'], config['medium'], config['slow'],
-        config['fast_w'], config['medium_w'], config['slow_w'],
-        config['drift']
+        config["fast"], config["medium"], config["slow"],
+        config["fast_w"], config["medium_w"], config["slow_w"],
+        config["drift"]
     )

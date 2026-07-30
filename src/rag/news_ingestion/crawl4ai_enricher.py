@@ -1,147 +1,27 @@
 """Crawl4AI-based article body enricher.
 
 Enriches items whose body text is below *min_chars* by crawling the article
-URL with Crawl4AI's AsyncWebCrawler.  Falls back to a plain aiohttp HTML
+URL with Crawl4AI's AsyncWebCrawler. Falls back to a plain aiohttp HTML
 extraction if crawl4ai is not installed or the browser setup is unavailable.
 """
 from __future__ import annotations
 
 import asyncio
-import logging
+import ipaddress
 import math
 import re
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 import aiohttp
 
 from .rss_primitives import extract_html_body_text, normalize_url
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from src.config.loader import Config
+    from src.logger.logger import Logger
 
-_CRAWL4AI_AVAILABLE: bool | None = None  # lazy-checked on first use
-
-_UNUSABLE_BODY_MARKERS: tuple[str, ...] = (
-    "article not found",
-    "oops! something went wrong",
-    "we're sorry for the inconvenience. please try again",
-    "page not found",
-    "404 not found",
-)
-
-
-def _clean_markdown_text(markdown_text: str) -> str:
-    """Normalize Crawl4AI markdown into prompt-friendly article text."""
-    text = markdown_text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"(?m)^\s*\[[^\]]+\]:\s+\S+.*$", "", text)
-    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
-    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
-    text = re.sub(r"[ \t]+\n", "\n", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def _is_unusable_body(text: str) -> bool:
-    normalized = re.sub(r"\s+", " ", text).strip().lower()
-    return any(marker in normalized for marker in _UNUSABLE_BODY_MARKERS)
-
-
-def _extract_crawl4ai_body(result: Any, min_chars: int) -> str | None:
-    """Return the best full-article text from a Crawl4AI CrawlResult.
-
-    When this function is called, crawl4ai has already succeeded, so all
-    CrawlResult attributes (markdown, cleaned_html, html, url, success)
-    exist as part of the library's documented API.
-    """
-    markdown_obj = result.markdown
-    candidates: list[str] = []
-
-    if isinstance(markdown_obj, str):
-        candidates.append(markdown_obj)
-    elif markdown_obj is not None:
-        # MarkdownGenerationResult — attributes present when DefaultMarkdownGenerator is used
-        fit = markdown_obj.fit_markdown
-        raw = markdown_obj.raw_markdown
-        cited = markdown_obj.markdown_with_citations
-        fit = fit if isinstance(fit, str) else ""
-        raw = raw if isinstance(raw, str) else ""
-        cited = cited if isinstance(cited, str) else ""
-        if fit:
-            candidates.append(fit)
-        if raw and len(raw) > len(fit):
-            candidates.append(raw)
-        if cited and cited not in candidates:
-            candidates.append(cited)
-
-    for candidate in candidates:
-        text = _clean_markdown_text(candidate)
-        if len(text) >= min_chars and not _is_unusable_body(text):
-            return text
-
-    html = result.cleaned_html or result.html or ""
-    if html:
-        text = extract_html_body_text(html).strip()
-        if len(text) >= min_chars and not _is_unusable_body(text):
-            return text
-
-    return None
-
-
-def _check_crawl4ai() -> bool:
-    global _CRAWL4AI_AVAILABLE  # noqa: PLW0603
-    if _CRAWL4AI_AVAILABLE is None:
-        try:
-            import crawl4ai  # pylint: disable=unused-import
-            _CRAWL4AI_AVAILABLE = True
-        except ImportError:
-            _CRAWL4AI_AVAILABLE = False
-    return _CRAWL4AI_AVAILABLE
-
-
-def _requires_dedicated_crawl_loop() -> bool:
-    """Return True when the current Windows loop cannot spawn subprocesses.
-
-    Playwright launches a browser subprocess. The app currently runs on
-    Windows' selector loop, which does not implement subprocess transports and
-    raises NotImplementedError. In that case we run Crawl4AI on a dedicated
-    Proactor loop in a worker thread.
-    """
-    if sys.platform != "win32":
-        return False
-
-    try:
-        current_loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return False
-
-    return isinstance(current_loop, asyncio.SelectorEventLoop)
-
-
-# aiohttp fallback enricher
-
-async def _fetch_body_aiohttp(
-    session: aiohttp.ClientSession,
-    url: str,
-    timeout: float,
-    min_chars: int,
-) -> str | None:
-    """Fetch article body via plain aiohttp + HTML extraction."""
-    try:
-        async with session.get(
-            url,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status != 200:
-                return None
-            html = await resp.text(encoding="utf-8", errors="replace")
-            body = extract_html_body_text(html)
-            return body if len(body) >= min_chars and not _is_unusable_body(body) else None
-    except Exception:  # noqa: BLE001
-        return None
-
-
-# Crawl4AI enricher
 
 class Crawl4AIEnricher:
     """Enriches article items with full body text using Crawl4AI.
@@ -151,30 +31,194 @@ class Crawl4AIEnricher:
 
     Parameters
     ----------
+    logger:
+        Application logger instance.
+    config:
+        Optional application configuration instance.
     concurrency:
-        Max simultaneous Crawl4AI crawl sessions.
+        Max simultaneous Crawl4AI crawl sessions (overrides config if provided).
     timeout:
-        Per-page timeout in seconds.
+        Per-page timeout in seconds (overrides config if provided).
     min_chars:
-        Skip items whose existing body already meets this length.
+        Skip items whose existing body already meets this length (overrides config if provided).
     use_crawl4ai:
         Force-enable or force-disable the Crawl4AI path regardless of
-        whether the package is installed.  ``None`` = auto-detect.
+        whether the package is installed. ``None`` = auto-detect.
     """
+
+    UNUSABLE_BODY_MARKERS: tuple[str, ...] = (
+        "article not found",
+        "oops! something went wrong",
+        "we're sorry for the inconvenience. please try again",
+        "page not found",
+        "404 not found",
+    )
 
     def __init__(
         self,
-        concurrency: int = 3,
-        timeout: float = 30.0,
-        min_chars: int = 400,
+        logger: Logger,
+        config: Config | None = None,
+        concurrency: int | None = None,
+        timeout: float | None = None,
+        min_chars: int | None = None,
         use_crawl4ai: bool | None = None,
     ) -> None:
-        self.concurrency = concurrency
-        self.timeout = timeout
-        self.min_chars = min_chars
-        self._use_crawl4ai: bool = (
-            _check_crawl4ai() if use_crawl4ai is None else use_crawl4ai
+        self.logger = logger
+        self.config = config
+
+        self.concurrency: int = (
+            concurrency
+            if concurrency is not None
+            else (config.RAG_NEWS_CRAWL_CONCURRENCY if config else 3)
         )
+        self.timeout: float = (
+            float(timeout)
+            if timeout is not None
+            else (float(config.RAG_NEWS_CRAWL_TIMEOUT) if config else 30.0)
+        )
+        self.min_chars: int = (
+            min_chars
+            if min_chars is not None
+            else (config.RAG_NEWS_ENRICH_MIN_CHARS if config else 400)
+        )
+
+        resolved_use_crawl4ai = (
+            use_crawl4ai
+            if use_crawl4ai is not None
+            else (config.RAG_NEWS_CRAWL4AI_ENABLED if config else None)
+        )
+        self._crawl4ai_available: bool | None = None
+        self._use_crawl4ai: bool = (
+            self._check_crawl4ai() if resolved_use_crawl4ai is None else resolved_use_crawl4ai
+        )
+
+    # ------------------------------------------------------------------
+    # Encapsulated Helper Methods
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _clean_markdown_text(markdown_text: str) -> str:
+        """Normalize Crawl4AI markdown into prompt-friendly article text."""
+        text = markdown_text.replace("\r\n", "\n").replace("\r", "\n")
+        text = re.sub(r"(?m)^\s*\[[^\]]+\]:\s+\S+.*$", "", text)
+        text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+        text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
+        text = re.sub(r"[ \t]+\n", "\n", text)
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
+    @staticmethod
+    def _is_safe_external_url(url: str) -> bool:
+        """Validate that a URL is http/https and does not target internal/private IP ranges (SSRF protection)."""
+        if not url:
+            return False
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return False
+        except ValueError:
+            pass
+        return True
+
+    @classmethod
+    def _is_unusable_body(cls, text: str) -> bool:
+        normalized = re.sub(r"\s+", " ", text).strip().lower()
+        return any(marker in normalized for marker in cls.UNUSABLE_BODY_MARKERS)
+
+    def _extract_crawl4ai_body(self, result: Any) -> str | None:
+        """Return the best full-article text from a Crawl4AI CrawlResult.
+
+        When this function is called, crawl4ai has already succeeded, so all
+        CrawlResult attributes (markdown, cleaned_html, html, url, success)
+        exist as part of the library's documented API.
+        """
+        markdown_obj = result.markdown
+        candidates: list[str] = []
+
+        if isinstance(markdown_obj, str):
+            candidates.append(markdown_obj)
+        elif markdown_obj is not None:
+            # MarkdownGenerationResult — attributes present when DefaultMarkdownGenerator is used
+            fit = markdown_obj.fit_markdown
+            raw = markdown_obj.raw_markdown
+            cited = markdown_obj.markdown_with_citations
+            fit = fit if isinstance(fit, str) else ""
+            raw = raw if isinstance(raw, str) else ""
+            cited = cited if isinstance(cited, str) else ""
+            if fit:
+                candidates.append(fit)
+            if raw and len(raw) > len(fit):
+                candidates.append(raw)
+            if cited and cited not in candidates:
+                candidates.append(cited)
+
+        for candidate in candidates:
+            text = self._clean_markdown_text(candidate)
+            if len(text) >= self.min_chars and not self._is_unusable_body(text):
+                return text
+
+        html = result.cleaned_html or result.html or ""
+        if html:
+            text = extract_html_body_text(html).strip()
+            if len(text) >= self.min_chars and not self._is_unusable_body(text):
+                return text
+
+        return None
+
+    def _check_crawl4ai(self) -> bool:
+        if self._crawl4ai_available is None:
+            try:
+                import crawl4ai  # noqa: F401 # pylint: disable=unused-import
+                self._crawl4ai_available = True
+            except ImportError:
+                self._crawl4ai_available = False
+        return self._crawl4ai_available
+
+    def _requires_dedicated_crawl_loop(self) -> bool:
+        """Return True when the current Windows loop cannot spawn subprocesses.
+
+        Playwright launches a browser subprocess. The app currently runs on
+        Windows' selector loop, which does not implement subprocess transports and
+        raises NotImplementedError. In that case we run Crawl4AI on a dedicated
+        Proactor loop in a worker thread.
+        """
+        if sys.platform != "win32":
+            return False
+
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return False
+
+        return isinstance(current_loop, asyncio.SelectorEventLoop)
+
+    async def _fetch_body_aiohttp(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+    ) -> str | None:
+        """Fetch article body via plain aiohttp + HTML extraction."""
+        try:
+            async with session.get(
+                url,
+                timeout=aiohttp.ClientTimeout(total=self.timeout),
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text(encoding="utf-8", errors="replace")
+                body = extract_html_body_text(html)
+                return body if len(body) >= self.min_chars and not self._is_unusable_body(body) else None
+        except Exception:  # noqa: BLE001
+            return None
 
     # ------------------------------------------------------------------
     # Public API
@@ -192,7 +236,7 @@ class Crawl4AIEnricher:
         targets = [
             item
             for item in items
-            if str(item.get("url") or "").startswith("http")
+            if self._is_safe_external_url(str(item.get("url") or ""))
             and len(str(item.get("body_text") or "")) < self.min_chars
         ]
         if not targets:
@@ -200,16 +244,15 @@ class Crawl4AIEnricher:
 
         if self._use_crawl4ai:
             return await self._enrich_crawl4ai(targets)
-        else:
-            return await self._enrich_aiohttp(targets, session)
+        return await self._enrich_aiohttp(targets, session)
 
     # ------------------------------------------------------------------
     # Crawl4AI path
     # ------------------------------------------------------------------
 
     async def _enrich_crawl4ai(self, targets: list[dict[str, Any]]) -> int:
-        if _requires_dedicated_crawl_loop():
-            logger.debug(
+        if self._requires_dedicated_crawl_loop():
+            self.logger.debug(
                 "Running Crawl4AI in a dedicated Proactor loop because the "
                 "current Windows event loop does not support subprocesses"
             )
@@ -228,11 +271,19 @@ class Crawl4AIEnricher:
         that Playwright raises when the event loop tears down mid-close.
         """
         try:
-            from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig  # type: ignore[import]
-            from crawl4ai.content_filter_strategy import PruningContentFilter  # type: ignore[import]
-            from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator  # type: ignore[import]
+            from crawl4ai import (  # type: ignore[import]
+                AsyncWebCrawler,
+                BrowserConfig,
+                CrawlerRunConfig,
+            )
+            from crawl4ai.content_filter_strategy import (
+                PruningContentFilter,  # type: ignore[import]
+            )
+            from crawl4ai.markdown_generation_strategy import (
+                DefaultMarkdownGenerator,  # type: ignore[import]
+            )
         except ImportError:
-            logger.warning(
+            self.logger.warning(
                 "crawl4ai import failed at enrichment time; falling back to aiohttp"
             )
             return await self._enrich_aiohttp(targets, None)
@@ -281,7 +332,7 @@ class Crawl4AIEnricher:
             async with AsyncWebCrawler(config=browser_cfg) as crawler:
                 wave_count = max(1, math.ceil(len(urls) / worker_count))
                 batch_timeout = max(self.timeout * wave_count + 15.0, self.timeout)
-                logger.debug(
+                self.logger.debug(
                     "Starting Crawl4AI batch for %d urls "
                     "(workers=%d, per-page timeout=%.1fs, batch timeout=%.1fs)",
                     len(urls),
@@ -289,18 +340,18 @@ class Crawl4AIEnricher:
                     self.timeout,
                     batch_timeout,
                 )
-                results = list(await asyncio.wait_for(
+                results = list(await asyncio.wait_for(  # type: ignore
                     crawler.arun_many(urls=urls, config=run_cfg),
                     timeout=batch_timeout,
                 ))
         except asyncio.TimeoutError:
-            logger.warning(
+            self.logger.warning(
                 "Crawl4AI batch timed out (urls=%d); falling back to aiohttp enrichment",
                 len(urls),
             )
             return await self._enrich_aiohttp(targets, None)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Crawl4AI browser session error, falling back to aiohttp: %s", exc)
+            self.logger.warning("Crawl4AI browser session error, falling back to aiohttp: %s", exc)
             return await self._enrich_aiohttp(targets, None)
 
         fallback_targets: list[dict[str, Any]] = []
@@ -316,7 +367,7 @@ class Crawl4AIEnricher:
                 fallback_targets.append(item)
                 continue
 
-            text = _extract_crawl4ai_body(result, self.min_chars)
+            text = self._extract_crawl4ai_body(result)
             if not text:
                 fallback_targets.append(item)
                 continue
@@ -344,7 +395,8 @@ class Crawl4AIEnricher:
         finally:
             try:
                 loop.run_until_complete(loop.shutdown_asyncgens())
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001,S110
+                # best-effort loop async generator shutdown cleanup
                 pass
             asyncio.set_event_loop(None)
             loop.close()
@@ -370,9 +422,7 @@ class Crawl4AIEnricher:
             nonlocal enriched
             url = str(item.get("url"))
             async with semaphore:
-                body = await _fetch_body_aiohttp(
-                    session, url, self.timeout, self.min_chars  # type: ignore[arg-type]
-                )
+                body = await self._fetch_body_aiohttp(session, url)  # type: ignore[arg-type]
                 if body:
                     item["body_text"] = body
                     item["body_source"] = "article_page"
@@ -385,3 +435,4 @@ class Crawl4AIEnricher:
                 await session.close()  # type: ignore[union-attr]
 
         return enriched
+

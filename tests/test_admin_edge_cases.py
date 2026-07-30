@@ -9,14 +9,9 @@ Tests:
 """
 
 import asyncio
-import configparser
-import os
-import tempfile
 import time
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import httpx
 import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
@@ -27,15 +22,12 @@ from src.dashboard.auth import (
     _verify_password,
     _is_lan_ip,
     check_credentials,
-    create_session,
     hash_password,
     init_auth,
-    verify_admin_session,
     COOKIE_NAME,
-    COOKIE_MAX_AGE,
     AdminAuthMiddleware,
 )
-from src.dashboard.log_stream import LogStreamHandler, LogStreamManager
+from src.dashboard.log_stream import LogStreamManager
 from src.config.writable_config import WritableConfig, SettingMeta, _validate_and_coerce, _SCHEMA
 
 

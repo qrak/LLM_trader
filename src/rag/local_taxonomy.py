@@ -91,7 +91,7 @@ class LocalTaxonomyProvider:
             )
             return []
         try:
-            with open(self._categories_file, "r", encoding="utf-8") as fh:
+            with open(self._categories_file, encoding="utf-8") as fh:
                 data = json.load(fh)
             # data may be {"timestamp": ..., "categories": [...]} or a plain list
             if isinstance(data, list):
@@ -103,7 +103,7 @@ class LocalTaxonomyProvider:
                 self._categories_file,
             )
             return []
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.logger.error(
                 "LocalTaxonomyProvider: error reading %s: %s",
                 self._categories_file,
@@ -122,3 +122,4 @@ class LocalTaxonomyProvider:
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
         return os.path.join(base, "data", "categories.json")
+

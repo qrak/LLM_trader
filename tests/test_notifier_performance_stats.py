@@ -1,3 +1,7 @@
+"""Test Notifier Performance Stats unit tests.
+
+Tests for test_notifier_performance_stats.py.
+"""
 from types import SimpleNamespace
 from typing import Any
 

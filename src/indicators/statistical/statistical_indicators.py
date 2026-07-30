@@ -1,17 +1,24 @@
+"""Statistical Indicators module.
+
+Provides functionality for indicators.statistical.statistical_indicators.py.
+"""
 import numpy as np
 from numba import njit
+
 from .utils import (
-    f_ess, f_hp,
     calculate_correlation_matrix,
+    calculate_dominant_cycle,
     calculate_spectral_components,
+    f_ess,
+    f_hp,
     smooth_power_spectrum,
-    calculate_dominant_cycle
 )
+
 
 @njit(cache=True)
 def apa_adaptive_eot_numba(closeprices, q1_=0.8, q2_=0.4, minlen=10, maxlen=48, avelen=3):
     masterdom = _auto_dom_imp(closeprices, minlen, maxlen, avelen)
-    dcout = max(minlen, min(maxlen, int(round(masterdom))))
+    dcout = max(minlen, min(maxlen, round(masterdom)))
 
     qup = _eot(closeprices, dcout, q1_)
     qdn = _eot(closeprices, dcout, q2_)
@@ -340,8 +347,7 @@ def entropy_numba(close, length=10, base=2.0):
 
     safe_close = np.copy(close)
     for k in range(n):
-        if safe_close[k] <= 1e-10:
-            safe_close[k] = 1e-10
+        safe_close[k] = max(1e-10, safe_close[k])
 
     x_ln_x = safe_close * np.log(safe_close)
     sum_x = 0.0

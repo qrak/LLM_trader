@@ -1,15 +1,16 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.5';
 import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.5';
-import { updateLogs } from './modules/log_viewer.js?v=4.6';
+import { updateLogs } from './modules/log_viewer.js?v=4.7';
 import { updateVisuals } from './modules/visuals.js?v=4.5';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.7';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.8';
 import { initFullscreen } from './modules/fullscreen.js?v=4.6';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.6';
-import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.8';
+import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.9';
 import { initUI } from './modules/ui.js?v=4.8';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.6';
-import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.6';
+import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.7';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.2';
+import { initConsolePanel } from './modules/console_panel.js?v=1.0';
 
 const state = {
     isConnected: false,
@@ -66,11 +67,7 @@ async function fetchCosts() {
 }
 
 function updateCostDisplay(data) {
-    const costs = data.costs_by_provider || {};
     const total = data.total_session_cost || 0;
-    const orCost = costs.openrouter || 0;
-    const googleCost = costs.google || 0;
-
     document.getElementById('overview-cost').textContent = formatCost(total);
 }
 
@@ -277,6 +274,7 @@ function initApp() {
     try { initStatisticsPanel(); } catch (e) { console.error('initStatisticsPanel failed:', e); }
     try { initNewsPanel(); } catch (e) { console.error('initNewsPanel failed:', e); }
     try { initPostMortemPanel(); } catch (e) { console.error('initPostMortemPanel failed:', e); }
+    _safeInit('initConsolePanel', initConsolePanel);
     _safeInit('initWebSocket', initWebSocket);
     _safeInit('initUI', initUI);
     _safeInit('startCountdownLoop', startCountdownLoop);

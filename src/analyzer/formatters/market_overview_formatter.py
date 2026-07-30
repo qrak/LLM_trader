@@ -2,8 +2,8 @@
 Market Overview Formatter - Formats global market overview data.
 Handles market overview, top coins, and DeFi statistics.
 """
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class MarketOverviewFormatter:
     """Formatter for market overview data including global metrics, top coins, and DeFi."""
 
-    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the market overview formatter.
 
         Args:
@@ -26,7 +26,7 @@ class MarketOverviewFormatter:
             raise ValueError("format_utils is required for MarketOverviewFormatter")
         self.format_utils = format_utils
 
-    def format_market_overview(self, market_overview: dict, analyzed_symbol: str = None) -> str:
+    def format_market_overview(self, market_overview: dict, analyzed_symbol: str | None = None) -> str:
         """
         Format market overview data with top coins and DeFi metrics.
 
@@ -44,33 +44,33 @@ class MarketOverviewFormatter:
         # Extract base symbol from trading pair (BTC/USDT -> BTC)
         analyzed_coin_symbol = None
         if analyzed_symbol:
-            analyzed_coin_symbol = analyzed_symbol.split('/')[0].lower()
+            analyzed_coin_symbol = analyzed_symbol.split("/")[0].lower()
 
         sections = []
 
         # Market cap and dominance
         market_cap_data = market_overview.get("market_cap", {})
-        if 'total_usd' in market_cap_data:
-            market_cap = market_cap_data['total_usd']
+        if "total_usd" in market_cap_data:
+            market_cap = market_cap_data["total_usd"]
             sections.append(f"Total Market Cap: ${self.format_utils.fmt(market_cap)}")
 
         dominance_data = market_overview.get("dominance", {})
-        if 'btc' in dominance_data:
-            btc_dom = dominance_data['btc']
+        if "btc" in dominance_data:
+            btc_dom = dominance_data["btc"]
             sections.append(f"Bitcoin Dominance: {self.format_utils.fmt(btc_dom)}%")
 
-        if 'eth' in dominance_data:
-            eth_dom = dominance_data['eth']
+        if "eth" in dominance_data:
+            eth_dom = dominance_data["eth"]
             sections.append(f"Ethereum Dominance: {self.format_utils.fmt(eth_dom)}%")
 
         # Market metrics
         volume_data = market_overview.get("volume", {})
-        total_volume = volume_data.get('total_usd', 0)
+        total_volume = volume_data.get("total_usd", 0)
         if total_volume:
             sections.append(f"Total Market 24h Volume: ${self.format_utils.fmt(total_volume)}")
 
-        if 'change_24h' in market_cap_data:
-            change = market_cap_data['change_24h']
+        if "change_24h" in market_cap_data:
+            change = market_cap_data["change_24h"]
             direction = "UP" if change >= 0 else "DOWN"
             sections.append(f"Total Market Cap Change 24h ({direction}): {self.format_utils.fmt(change)}%")
 
@@ -92,7 +92,7 @@ class MarketOverviewFormatter:
         if analyzed_coin_data:
             position_summary = self._format_analyzed_coin_position(
                 analyzed_coin_data,
-                market_cap_data.get('total_usd', 0),
+                market_cap_data.get("total_usd", 0),
                 total_volume
             )
             if position_summary:
@@ -110,7 +110,7 @@ class MarketOverviewFormatter:
         # DeFi metrics — skip for major coins (BTC/ETH) to save tokens
         defi_data = market_overview.get("defi", {})
         if defi_data and analyzed_coin_symbol not in ("btc", "eth"):
-            total_market_cap = market_cap_data.get('total_usd', 0)
+            total_market_cap = market_cap_data.get("total_usd", 0)
             defi_summary = self._format_defi_summary(defi_data, total_market_cap)
             if defi_summary:
                 sections.append(defi_summary)
@@ -244,7 +244,7 @@ class MarketOverviewFormatter:
             ath_date_str = ""
             if ath_date:
                 try:
-                    dt = datetime.fromisoformat(ath_date.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(ath_date.replace("Z", "+00:00"))
                     ath_date_str = dt.strftime("%b %d, %Y")
                 except (ValueError, TypeError):
                     pass

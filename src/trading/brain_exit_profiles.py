@@ -3,7 +3,10 @@
 from collections import Counter
 from typing import Any
 
-from src.utils.indicator_classifier import build_exit_execution_context, format_exit_execution_context
+from src.utils.indicator_classifier import (
+    build_exit_execution_context,
+    format_exit_execution_context,
+)
 
 from .data_models import ExitExecutionContext
 
@@ -123,14 +126,6 @@ class ExitProfileResolver:
             take_profit_type=most_common([context.take_profit_type for context in contexts]),
             take_profit_check_interval=most_common([context.take_profit_check_interval for context in contexts]),
         )
-
-    def legacy_unknown_exit_pattern_key(self, pattern_key: str) -> str:
-        """Return the equivalent rule key that used the old unknown exit profile."""
-        parts = pattern_key.split("|")
-        if len(parts) < 2:
-            return pattern_key
-        parts[-2:] = self.UNKNOWN_EXIT_PROFILE_KEY.split("|")
-        return "|".join(parts)
 
     def build_exit_profile_key(self, meta: dict[str, Any]) -> str:
         """Build a deterministic key for hard/soft SL/TP execution settings."""

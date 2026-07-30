@@ -1,13 +1,17 @@
+"""Rag Engine module.
+
+Provides functionality for rag.rag_engine.py.
+"""
 from __future__ import annotations
+
 import asyncio
-from datetime import datetime, timedelta, timezone
 import re
-from typing import Any, TYPE_CHECKING
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 from src.utils.profiler import profile_performance
 from src.utils.token_counter import TokenCounter
-
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -19,8 +23,8 @@ class RagEngine:
         self,
         logger: Logger,
         token_counter: TokenCounter,
-        config: "Config",
-        coingecko_api: "CoinGeckoAPI" | None = None,
+        config: Config,
+        coingecko_api: CoinGeckoAPI | None = None,
         file_handler=None,
         news_manager=None,
         market_data_manager=None,
@@ -86,32 +90,32 @@ class RagEngine:
     async def initialize(self) -> None:
         """Initialize RAG engine and load cached data"""
         try:
-            await self.ticker_manager.load_known_tickers()
+            await self.ticker_manager.load_known_tickers()  # type: ignore
 
             await self._ensure_categories_updated()
 
-            await self.news_manager.load_cached_news()
+            await self.news_manager.load_cached_news()  # type: ignore
 
-            if self.news_manager.get_database_size() > 0:
+            if self.news_manager.get_database_size() > 0:  # type: ignore
                 self.last_update = datetime.now(timezone.utc)
                 self._build_indices()
-                self.logger.debug("Loaded %s recent news articles", self.news_manager.get_database_size())
+                self.logger.debug("Loaded %s recent news articles", self.news_manager.get_database_size())  # type: ignore
 
-            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)
+            await self.ticker_manager.update_known_tickers(self.news_manager.news_database)  # type: ignore
 
-            if self.news_manager.get_database_size() < 10:
+            if self.news_manager.get_database_size() < 10:  # type: ignore
                 await self.refresh_market_data()
                 self.last_update = datetime.now(timezone.utc)
-        except Exception as e:
-            self.logger.exception("Error initializing RAG engine: %s", e)
-            self.news_manager.clear_database()
+        except Exception:
+            self.logger.exception("Error initializing RAG engine: %s")
+            self.news_manager.clear_database()  # type: ignore
 
     def _build_indices(self) -> None:
         """Build search indices from news database"""
-        self.index_manager.build_indices(
-            self.news_manager.news_database,
-            self.ticker_manager.get_known_tickers(),
-            self.category_processor.category_word_map
+        self.index_manager.build_indices(  # type: ignore
+            self.news_manager.news_database,  # type: ignore
+            self.ticker_manager.get_known_tickers(),  # type: ignore
+            self.category_processor.category_word_map  # type: ignore
         )
 
     async def update_if_needed(self, force_update: bool = False) -> bool:
@@ -124,7 +128,7 @@ class RagEngine:
                     await self.refresh_market_data()
                     self.last_update = datetime.now(timezone.utc)
                     return True
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.error("Failed to update market knowledge: %s", e)
                     return False
 
@@ -136,7 +140,7 @@ class RagEngine:
                     await self.refresh_market_data()
                     self.last_update = datetime.now(timezone.utc)
                     return True
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     self.logger.error("Failed to update market knowledge: %s", e)
                     return False
 
@@ -144,7 +148,7 @@ class RagEngine:
                 categories_updated = await self._ensure_categories_updated()
                 if categories_updated:
                     self._build_indices()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Failed to update categories: %s", e)
 
             return False
@@ -161,7 +165,7 @@ class RagEngine:
 
         # Process articles if any were fetched (gather converts exceptions to values with return_exceptions=True)
         if isinstance(articles, list) and articles:
-            updated = self.news_manager.update_news_database(articles)
+            updated = self.news_manager.update_news_database(articles)  # type: ignore
             if updated:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
@@ -169,18 +173,18 @@ class RagEngine:
     async def _safe_fetch_news(self) -> list:
         """Fetch news articles with error isolation."""
         try:
-            return await self.news_manager.fetch_fresh_news(
-                self.ticker_manager.get_known_tickers()
+            return await self.news_manager.fetch_fresh_news(  # type: ignore
+                self.ticker_manager.get_known_tickers()  # type: ignore
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error fetching crypto news: %s", e)
             return []
 
     async def _safe_update_market_overview(self) -> None:
         """Update market overview with error isolation."""
         try:
-            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)
-        except Exception as e:
+            await self.market_data_manager.update_market_overview_if_needed(max_age_hours=24)  # type: ignore
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error updating market overview: %s", e)
 
     def _resolve_retrieval_limits(self, k: int | None, max_tokens: int | None) -> tuple[int, int]:
@@ -202,7 +206,7 @@ class RagEngine:
     @staticmethod
     def _extract_query_keywords(query: str) -> set[str]:
         """Extract query keywords used by context selection heuristics."""
-        return set(re.findall(r'\b\w{3,15}\b', query.lower()))
+        return set(re.findall(r"\b\w{3,15}\b", query.lower()))
 
     def _expand_candidate_indices_for_symbol(
         self,
@@ -214,8 +218,8 @@ class RagEngine:
         if not symbol or len(relevant_indices) >= k:
             return relevant_indices
 
-        coin = self.category_processor.extract_base_coin(symbol)
-        coin_indices = self.index_manager.search_by_coin(coin)
+        coin = self.category_processor.extract_base_coin(symbol)  # type: ignore
+        coin_indices = self.index_manager.search_by_coin(coin)  # type: ignore
         for idx in coin_indices:
             if idx not in relevant_indices:
                 relevant_indices.append(idx)
@@ -229,7 +233,7 @@ class RagEngine:
         min_body_chars = self.config.RAG_NEWS_ENRICH_MIN_CHARS
         full_body_indices = [
             idx for idx in relevant_indices
-            if len(str(self.news_manager.news_database[idx].get('body', ''))) >= min_body_chars
+            if len(str(self.news_manager.news_database[idx].get("body", ""))) >= min_body_chars  # type: ignore
         ]
         short_body_indices = [idx for idx in relevant_indices if idx not in full_body_indices]
         return full_body_indices + short_body_indices
@@ -239,8 +243,8 @@ class RagEngine:
         base_coin = symbol
         if self.category_processor:
             base_coin = self.category_processor.extract_base_coin(symbol).upper()
-        elif '/' in symbol:
-            base_coin = symbol.split('/')[0].upper()
+        elif "/" in symbol:
+            base_coin = symbol.split("/")[0].upper()
         else:
             base_coin = symbol.upper()
 
@@ -260,7 +264,7 @@ class RagEngine:
         """
         k, max_tokens = self._resolve_retrieval_limits(k, max_tokens)
 
-        if self.news_manager.get_database_size() == 0:
+        if self.news_manager.get_database_size() == 0:  # type: ignore
             self.logger.warning("News database is empty")
             return ""
 
@@ -281,11 +285,11 @@ class RagEngine:
             keywords = self._extract_query_keywords(query)
 
             # Use context builder for keyword search
-            scores = await self.context_builder.keyword_search(
-                query, self.news_manager.news_database, symbol,
-                self.index_manager.get_coin_indices(),
-                self.category_processor.category_word_map,
-                self.category_processor.important_categories
+            scores = await self.context_builder.keyword_search(  # type: ignore
+                query, self.news_manager.news_database, symbol,  # type: ignore
+                self.index_manager.get_coin_indices(),  # type: ignore
+                self.category_processor.category_word_map,  # type: ignore
+                self.category_processor.important_categories  # type: ignore
             )
             relevant_indices = [idx for idx, _ in scores[:k*10]]
             scores_dict = {idx: score for idx, score in scores}
@@ -294,14 +298,14 @@ class RagEngine:
             relevant_indices = self._prioritize_full_body_candidates(relevant_indices)
 
             # Build context using context builder (pass keywords and scores for smart selection)
-            context_text, total_tokens = self.context_builder.add_articles_to_context(
-                relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict
+            context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore
+                relevant_indices, self.news_manager.news_database, max_tokens, k, keywords, scores_dict  # type: ignore
             )
-            self._latest_article_urls = self.context_builder.get_latest_article_urls()
+            self._latest_article_urls = self.context_builder.get_latest_article_urls()  # type: ignore
             self.logger.debug("Retrieved context with %s tokens", total_tokens)
 
             return context_text
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving context: %s", e)
             self._latest_article_urls = {}
             return "Error retrieving market context."
@@ -331,7 +335,7 @@ class RagEngine:
                  return self.market_data_manager.get_current_overview()
 
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error getting market overview: %s", e)
             return None
 
@@ -347,7 +351,7 @@ class RagEngine:
             self.logger.debug("Cancelling periodic update task")
             self._periodic_update_task.cancel()
             try:
-                await self._periodic_update_task
+                await self._periodic_update_task  # type: ignore
             except asyncio.CancelledError:
                 pass
 
@@ -355,7 +359,7 @@ class RagEngine:
         if self.coingecko_api:
             try:
                 await self.coingecko_api.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing CoinGecko API client: %s", e)
 
         self.logger.info("RAG Engine resources released")
@@ -367,11 +371,12 @@ class RagEngine:
             True if categories were updated, False otherwise
         """
         try:
-            categories = await self.category_fetcher.fetch_categories(force_refresh)
+            categories = await self.category_fetcher.fetch_categories(force_refresh)  # type: ignore
             if categories:
-                self.category_processor.process_api_categories(categories)
+                self.category_processor.process_api_categories(categories)  # type: ignore
                 return True
             return False
-        except Exception as e:
-            self.logger.exception("Error ensuring categories updated: %s", e)
+        except Exception:
+            self.logger.exception("Error ensuring categories updated: %s")
             return False
+

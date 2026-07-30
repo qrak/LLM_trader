@@ -1,10 +1,9 @@
 """Tests for model pricing metadata."""
 import io
-from pathlib import Path
-from types import ModuleType
 from typing import Any
 from unittest.mock import patch
 
+from src.config.loader import Config
 from src.utils.token_counter import ModelPricing
 
 
@@ -95,9 +94,6 @@ def test_model_pricing_returns_empty_pricing_when_json_corrupted() -> None:
 
     assert pricing._pricing == {"google": {}, "openrouter": {}}
     assert pricing.get_cost("openrouter", "any-model", input_tokens=1000, output_tokens=1000) is None
-
-
-from src.config.loader import Config
 
 
 def _make_config(config_data: dict[str, dict[str, Any]]) -> Any:

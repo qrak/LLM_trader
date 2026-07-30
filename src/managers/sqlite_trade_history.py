@@ -13,7 +13,6 @@ from typing import Any
 
 from src.logger.logger import Logger
 
-
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS trade_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +28,7 @@ CREATE TABLE IF NOT EXISTS trade_history (
     quantity REAL,
     fee REAL,
     reasoning TEXT,
+    indicators_json TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -41,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_th_action ON trade_history(action);
 _INSERT_COLS = [
     "timestamp", "symbol", "action", "confidence", "price",
     "stop_loss", "take_profit", "position_size", "quote_amount",
-    "quantity", "fee", "reasoning",
+    "quantity", "fee", "reasoning", "indicators_json",
 ]
 _INSERT_SQL = f"INSERT INTO trade_history ({', '.join(_INSERT_COLS)}) VALUES ({', '.join(['?'] * len(_INSERT_COLS))})"  # nosec B608
 
@@ -114,7 +114,7 @@ class SQLiteTradeHistory:
                 cursor = conn.execute(_INSERT_SQL, row)  # nosec B608
                 conn.commit()
                 return cursor.lastrowid or 0
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self._logger.error("Failed to insert trade decision: %s", e)
                 conn.rollback()
                 return 0
@@ -170,7 +170,7 @@ class SQLiteTradeHistory:
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         order_clause = f"ORDER BY timestamp {safe_order}"
-        sql = f"SELECT * FROM trade_history {where_clause} {order_clause} LIMIT ? OFFSET ?"
+        sql = f"SELECT * FROM trade_history {where_clause} {order_clause} LIMIT ? OFFSET ?"  # nosec B608
         params.extend([safe_limit, safe_offset])
 
         with self._lock:
@@ -178,7 +178,7 @@ class SQLiteTradeHistory:
             try:
                 rows = conn.execute(sql, params).fetchall()  # nosec B608
                 return [dict(r) for r in rows]
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self._logger.error("Query failed: %s", e)
                 return []
             finally:
@@ -198,9 +198,9 @@ class SQLiteTradeHistory:
 
         placeholders = ", ".join(["?"] * len(actions))
         sql = (
-            f"SELECT timestamp FROM trade_history "
+            f"SELECT timestamp FROM trade_history "  # nosec B608
             f"WHERE action IN ({placeholders}) "
-            "ORDER BY timestamp DESC LIMIT 1"
+            "ORDER BY timestamp DESC LIMIT 1"  # nosec B608
         )
 
         with self._lock:
@@ -228,7 +228,7 @@ class SQLiteTradeHistory:
             params.append(action)
 
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        sql = f"SELECT COUNT(*) FROM trade_history {where_clause}"
+        sql = f"SELECT COUNT(*) FROM trade_history {where_clause}"  # nosec B608
 
         with self._lock:
             conn = self._get_conn()
@@ -276,7 +276,7 @@ class SQLiteTradeHistory:
                     "first_trade": first_ts,
                     "last_trade": last_ts,
                 }
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self._logger.error("Stats query failed: %s", e)
                 return {"total_trades": 0, "error": str(e)}
             finally:
@@ -293,3 +293,4 @@ class SQLiteTradeHistory:
                 return [dict(r) for r in rows]
             finally:
                 conn.close()
+

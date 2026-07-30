@@ -1,3 +1,7 @@
+"""Test Rag Engine Retrieval Contract unit tests.
+
+Tests for test_rag_engine_retrieval_contract.py.
+"""
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any, cast

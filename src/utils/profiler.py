@@ -1,14 +1,19 @@
-import time
-import functools
+"""Profiler module.
+
+Provides functionality for utils.profiler.py.
+"""
 import asyncio
-from typing import Callable, Any
+import functools
+import time
+from collections.abc import Callable
+from typing import Any
 
 
 def _logger_debug_enabled() -> bool:
     try:
         from src.config.loader import config
         return bool(config.LOGGER_DEBUG)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 def profile_performance(func: Callable) -> Callable:
@@ -72,5 +77,5 @@ def profile_performance(func: Callable) -> Callable:
     # Return appropriate wrapper based on whether the original function is async
     if asyncio.iscoroutinefunction(func):
         return wrapper
-    else:
-        return sync_wrapper
+    return sync_wrapper
+

@@ -7,41 +7,84 @@ directly accessible on TechnicalIndicators instead of through category sub-objec
 import numpy as np
 
 from src.indicators.momentum import (
-    rsi_numba, macd_numba, stochastic_numba, roc_numba,
-    momentum_numba, williams_r_numba, tsi_numba, rmi_numba,
-    ppo_numba, coppock_curve_numba, detect_rsi_divergence,
-    calculate_relative_strength_numba, uo_numba, kst_numba
+    calculate_relative_strength_numba,
+    coppock_curve_numba,
+    detect_rsi_divergence,
+    kst_numba,
+    macd_numba,
+    momentum_numba,
+    ppo_numba,
+    rmi_numba,
+    roc_numba,
+    rsi_numba,
+    stochastic_numba,
+    tsi_numba,
+    uo_numba,
+    williams_r_numba,
 )
-from src.indicators.overlap import ema_numba, sma_numba, ewma_numba
-from src.indicators.price import log_return_numba, percent_return_numba, pdist_numba
+from src.indicators.overlap import ema_numba, ewma_numba, sma_numba
+from src.indicators.price import log_return_numba, pdist_numba, percent_return_numba
 from src.indicators.sentiment import fear_and_greed_index_numba
 from src.indicators.sentiment.sentiment_indicators import FearGreedConfig
 from src.indicators.statistical import (
-    kurtosis_numba, skew_numba, stdev_numba, variance_numba,
-    zscore_numba, mad_numba, quantile_numba, entropy_numba,
-    hurst_numba, linreg_numba, apa_adaptive_eot_numba,
-    calculate_eot_numba
+    apa_adaptive_eot_numba,
+    calculate_eot_numba,
+    entropy_numba,
+    hurst_numba,
+    kurtosis_numba,
+    linreg_numba,
+    mad_numba,
+    quantile_numba,
+    skew_numba,
+    stdev_numba,
+    variance_numba,
+    zscore_numba,
 )
 from src.indicators.support_resistance import (
-    support_resistance_numba, find_support_resistance_numba,
-    support_resistance_numba_advanced, advanced_support_resistance_numba,
-    fibonacci_retracement_numba, floating_levels_numba, fibonacci_bollinger_bands_numba,
-    pivot_points_numba, fibonacci_pivot_points_numba
+    advanced_support_resistance_numba,
+    fibonacci_bollinger_bands_numba,
+    fibonacci_pivot_points_numba,
+    fibonacci_retracement_numba,
+    find_support_resistance_numba,
+    floating_levels_numba,
+    pivot_points_numba,
+    support_resistance_numba,
+    support_resistance_numba_advanced,
 )
 from src.indicators.trend import (
-    adx_numba, supertrend_numba, ichimoku_cloud_numba,
-    parabolic_sar_numba, vortex_indicator_numba,
-    trix_numba, pfe_numba, td_sequential_numba
+    adx_numba,
+    ichimoku_cloud_numba,
+    parabolic_sar_numba,
+    pfe_numba,
+    supertrend_numba,
+    td_sequential_numba,
+    trix_numba,
+    vortex_indicator_numba,
 )
 from src.indicators.volatility import (
-    atr_numba, bollinger_bands_numba, chandelier_exit_numba,
-    vhf_numba, ebsw_numba, keltner_channels_numba, donchian_channels_numba,
-    choppiness_index_numba
+    atr_numba,
+    bollinger_bands_numba,
+    chandelier_exit_numba,
+    choppiness_index_numba,
+    donchian_channels_numba,
+    ebsw_numba,
+    keltner_channels_numba,
+    vhf_numba,
 )
 from src.indicators.volume import (
-    mfi_numba, obv_numba, obv_slope_numba, pvt_numba, chaikin_money_flow_numba,
-    ad_line_numba, force_index_numba, eom_numba, volume_profile_numba,
-    rolling_vwap_numba, twap_numba, average_quote_volume_numba, cci_numba
+    ad_line_numba,
+    average_quote_volume_numba,
+    cci_numba,
+    chaikin_money_flow_numba,
+    eom_numba,
+    force_index_numba,
+    mfi_numba,
+    obv_numba,
+    obv_slope_numba,
+    pvt_numba,
+    rolling_vwap_numba,
+    twap_numba,
+    volume_profile_numba,
 )
 
 from .indicator_base import IndicatorBase
@@ -211,13 +254,13 @@ class TechnicalIndicators(IndicatorBase):
 
     def uo(self, fast=7, medium=14, slow=28, fast_w=4.0, medium_w=2.0, slow_w=1.0, drift=1) -> np.ndarray:
         config = {
-            'fast': fast,
-            'medium': medium,
-            'slow': slow,
-            'fast_w': fast_w,
-            'medium_w': medium_w,
-            'slow_w': slow_w,
-            'drift': drift
+            "fast": fast,
+            "medium": medium,
+            "slow": slow,
+            "fast_w": fast_w,
+            "medium_w": medium_w,
+            "slow_w": slow_w,
+            "drift": drift
         }
         return self.calculate_indicator(
             uo_numba,
@@ -640,7 +683,7 @@ class TechnicalIndicators(IndicatorBase):
 
     # ==================== VOLATILITY INDICATORS ====================
 
-    def atr(self, length: int = 14, mamode: str = 'rma', percent: bool = False) -> np.ndarray:
+    def atr(self, length: int = 14, mamode: str = "rma", percent: bool = False) -> np.ndarray:
         return self.calculate_indicator(
             atr_numba,
             self.high,
@@ -661,7 +704,7 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = 'rma') -> tuple[
+    def chandelier_exit(self, length: int = 22, multiplier: float = 3.0, mamode: str = "rma") -> tuple[
         np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             chandelier_exit_numba,
@@ -690,7 +733,7 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = 'ema') -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = "ema") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             keltner_channels_numba,
             self.high,

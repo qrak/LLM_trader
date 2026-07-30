@@ -74,3 +74,30 @@ async def test_process_analysis_returns_error_when_response_validation_fails() -
 
     assert result["error"] == "Invalid response format"
     assert "raw_response" in result
+
+
+def test_invocation_result_error_formatting() -> None:
+    from src.managers.provider_types import InvocationResult
+
+    res_custom = InvocationResult(
+        success=False,
+        response=None,
+        provider="google",
+        model="gemini-3.5-flash",
+        error_message="Empty or invalid response content from Google AI"
+    )
+    assert res_custom.error == "Empty or invalid response content from Google AI"
+
+
+@pytest.mark.asyncio
+async def test_process_analysis_logs_clean_chart_warning() -> None:
+    processor = _make_processor(supports_image=True, chart_error=ValueError("Empty response content from Google AI"))
+
+    await processor.process_analysis(system_prompt="system", prompt="prompt", chart_image=b"img")
+
+    processor.logger.warning.assert_called_once()
+    warning_args = processor.logger.warning.call_args[0]
+    assert warning_args[0] == "Chart analysis failed: %s. Falling back to text-only analysis."
+    assert "Empty response content from Google AI" in str(warning_args[1])
+    assert not str(warning_args[1]).startswith("Chart analysis failed:")
+

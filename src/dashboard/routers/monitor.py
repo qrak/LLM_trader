@@ -1,12 +1,12 @@
 """Router for dashboard monitoring and news endpoints."""
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from datetime import datetime, timezone
-
 from fastapi import APIRouter
+
 from src.utils.token_counter import CostStorage
 
 NEWS_FILES = ("crypto_news.json", "news_cache/recent_news.json")
@@ -37,10 +37,10 @@ class MonitorRouter:
         path = Path(data_dir) / "trading" / "previous_response.json"
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as file:
+                with open(path, encoding="utf-8") as file:
                     return json.load(file)
             except Exception:
-                self.logger.error("Error loading previous response", exc_info=True)
+                self.logger.error("Error loading previous response", exc_info=True)  # noqa: G201
         return {}
 
     async def get_last_prompt(self) -> dict[str, Any]:
@@ -122,7 +122,7 @@ class MonitorRouter:
 
     def _read_news_file_sync(self, file_path: Path) -> list:
         """Synchronously read and parse a news JSON file."""
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
             return data.get("articles", data)
 
@@ -145,7 +145,7 @@ class MonitorRouter:
                         if articles:
                             break
                     except Exception:
-                        self.logger.error("Failed to load news from %s", news_path, exc_info=True)
+                        self.logger.error("Failed to load news from %s", news_path, exc_info=True)  # noqa: G201
         self.dashboard_state.set_cached("news", articles)
         return {"articles": articles, "count": len(articles)}
 
@@ -159,3 +159,4 @@ class MonitorRouter:
             "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+

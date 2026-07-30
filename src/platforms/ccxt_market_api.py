@@ -1,6 +1,10 @@
+"""Ccxt Market Api module.
+
+Provides functionality for platforms.ccxt_market_api.py.
+"""
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 
@@ -14,7 +18,7 @@ class CCXTMarketAPI:
     def __init__(
         self,
         logger: Logger,
-        exchange_manager: "ExchangeManager",
+        exchange_manager: ExchangeManager,
     ) -> None:
         self.logger = logger
         self.exchange_manager = exchange_manager

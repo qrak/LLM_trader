@@ -61,6 +61,6 @@ class GuardProtocol(Protocol):
 
 
 __all__ = [
-    "GuardResult",
     "GuardProtocol",
+    "GuardResult",
 ]

@@ -1,3 +1,4 @@
+/* global DOMPurify */
 // Sort state
 let currentSort = {
     by: 'date',
@@ -322,7 +323,8 @@ function renderExperienceTable(experiences) {
 
     function parseDocumentSections(doc) {
         if (!doc) return {};
-        const sections = {};
+        const sections = Object.create(null);
+        const allowedKeys = new Set(['Indicators', 'Structure', 'Confluences', 'Reasoning', 'Result', 'Post-trade']);
         // Split on recognisable section labels; the document is space-joined so we
         // split on "Label:" patterns.
         const pattern = /\b(Indicators|Structure|Confluences|Reasoning|Result|Post-trade):\s*/g;
@@ -333,8 +335,11 @@ function renderExperienceTable(experiences) {
             hits.push({ key: match[1], start: match.index, contentStart: match.index + match[0].length });
         }
         for (let i = 0; i < hits.length; i++) {
-            const end = i + 1 < hits.length ? hits[i + 1].start : doc.length;
-            sections[hits[i].key] = doc.slice(hits[i].contentStart, end).trim();
+            const key = hits[i].key;
+            if (allowedKeys.has(key)) {
+                const end = i + 1 < hits.length ? hits[i + 1].start : doc.length;
+                sections[key] = doc.slice(hits[i].contentStart, end).trim();
+            }
         }
         if (hits.length > 0) {
             sections['_header'] = doc.slice(0, hits[0].start).trim();

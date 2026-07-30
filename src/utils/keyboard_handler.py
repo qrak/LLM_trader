@@ -1,6 +1,10 @@
+"""Keyboard Handler module.
+
+Provides functionality for utils.keyboard_handler.py.
+"""
 import asyncio
 import sys
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
 
 from src.logger.logger import Logger
 
@@ -9,8 +13,8 @@ if sys.platform == "win32":
     import msvcrt
 else:
     import select
-    import tty
     import termios
+    import tty
 
 
 class KeyboardHandler:
@@ -55,7 +59,7 @@ class KeyboardHandler:
                 fd = sys.stdin.fileno()
                 self._old_settings = termios.tcgetattr(fd)
                 tty.setcbreak(fd)  # cbreak allows handling keys immediately but keeps signals like Ctrl+C
-            except Exception as e:
+            except (OSError, AttributeError) as e:
                 if self.logger:
                     self.logger.warning("Failed to set terminal mode: %s", e)
 
@@ -71,7 +75,7 @@ class KeyboardHandler:
                 if self.logger:
                     self.logger.debug("Keyboard listener task cancelled")
                 break
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 await self._handle_keyboard_error(e)
 
     async def _process_keyboard_input(self) -> None:
@@ -94,9 +98,8 @@ class KeyboardHandler:
         """Check if keyboard input is available."""
         if sys.platform == "win32":
             return msvcrt.kbhit()
-        else:
-            # Linux/Unix implementation using select
-            return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+        # Linux/Unix implementation using select
+        return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
     def _read_key(self) -> str | None:
         """Read a single character from keyboard input.
@@ -107,23 +110,22 @@ class KeyboardHandler:
             if sys.platform == "win32":
                 char = msvcrt.getch()
                 # Decode and return as-is (preserves uppercase/lowercase)
-                decoded = char.decode('utf-8', errors='ignore')
+                decoded = char.decode("utf-8", errors="ignore")
                 return decoded if decoded else None
-            else:
-                # Linux/Unix implementation
-                # We are already in cbreak mode, so just read
-                if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
-                    return sys.stdin.read(1)
-                return None
-        except Exception:
+            # Linux/Unix implementation
+            # We are already in cbreak mode, so just read
+            if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                return sys.stdin.read(1)
+            return None
+        except (OSError, ValueError, UnicodeDecodeError):
             return None
 
     async def _execute_command(self, key: str) -> None:
         """Execute a keyboard command."""
-        callback, description = self._commands[key]
+        callback, _ = self._commands[key]
         try:
             await callback()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.error("Error executing keyboard command '%s': %s", key, e)
 
@@ -140,7 +142,7 @@ class KeyboardHandler:
         if self._listening_task and not self._listening_task.done():
             self._listening_task.cancel()
             try:
-                await self._listening_task
+                await self._listening_task  # type: ignore
             except asyncio.CancelledError:
                 pass
 
@@ -150,7 +152,7 @@ class KeyboardHandler:
                 fd = sys.stdin.fileno()
                 termios.tcsetattr(fd, termios.TCSADRAIN, self._old_settings)
                 self._old_settings = None
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self.logger:
                     self.logger.warning("Failed to restore terminal settings: %s", e)
 
@@ -164,3 +166,5 @@ class KeyboardHandler:
                 self.logger.info("  '%s' - %s", key, description)
             else:
                 print(f"  '{key}' - {description}")
+
+

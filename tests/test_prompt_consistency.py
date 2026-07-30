@@ -18,6 +18,8 @@ def _make_manager() -> TemplateManager:
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
         MODEL_VERBOSITY="high",
+        MARKET_TYPE="spot",
+        ENTRY_ORDER_TYPE="market",
     )
     return TemplateManager(
         config=config,
@@ -36,6 +38,8 @@ def _make_manager_with_verbosity(level: str) -> TemplateManager:
         MAX_POSITION_SIZE=0.10,
         AI_CHART_CANDLE_LIMIT=120,
         MODEL_VERBOSITY=level,
+        MARKET_TYPE="spot",
+        ENTRY_ORDER_TYPE="market",
     )
     return TemplateManager(
         config=config,
@@ -260,7 +264,8 @@ Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
             performance_context="Recent trade performance available.",
         )
         response_template = self.manager.build_response_template()
-        combined = f"{system_prompt}\n{response_template}"
+        decision_rules = self.manager.build_decision_rules()
+        combined = f"{system_prompt}\n{decision_rules}\n{response_template}"
 
         assert ">40%" not in combined
         assert "50%+ of the entry-to-TP distance" not in combined
@@ -288,6 +293,8 @@ class TestVerbosityParserContract:
             MAX_POSITION_SIZE=0.10,
             AI_CHART_CANDLE_LIMIT=120,
             MODEL_VERBOSITY=level,
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="market",
         )
         return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
 

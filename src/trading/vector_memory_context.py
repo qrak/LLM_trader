@@ -4,7 +4,11 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
-from src.utils.indicator_classifier import build_exit_execution_context, classify_rsi_label, format_exit_execution_context
+from src.utils.indicator_classifier import (
+    build_exit_execution_context,
+    classify_rsi_label,
+    format_exit_execution_context,
+)
 
 from .data_models import ExitExecutionContext, VectorSearchResult
 
@@ -27,6 +31,17 @@ class VectorMemoryContextMixin:
         def get_anti_patterns_for_prompt(self, k: int = 3) -> str: ...
 
     @staticmethod
+    def _sanitize_prompt_text(text: str) -> str:
+        """Sanitize retrieved text from ChromaDB to prevent prompt injection."""
+        if not text:
+            return ""
+        clean = text.replace("---", "-").replace("###", "").replace("##", "").replace("#", "")
+        for keyword in ("System:", "User:", "Assistant:", "<USER_REQUEST>", "</USER_REQUEST>"):
+            clean = clean.replace(keyword, "")
+        clean = "".join(ch for ch in clean if ch in ("\n", "\r", "\t") or (ord(ch) >= 32 and ord(ch) != 127))
+        return clean.strip()
+
+    @staticmethod
     def _parse_trade_timestamp(timestamp: str) -> datetime:
         """Parse trade timestamp safely and normalize to UTC."""
         try:
@@ -37,8 +52,8 @@ class VectorMemoryContextMixin:
         except (TypeError, ValueError):
             return datetime.min.replace(tzinfo=timezone.utc)
 
+    @staticmethod
     def _build_experience_document(
-        self,
         direction: str,
         symbol: str,
         outcome: str,
@@ -62,6 +77,19 @@ class VectorMemoryContextMixin:
         max_drawdown_pct: float | None,
         factor_scores: dict[str, float],
         exit_execution_context: ExitExecutionContext | None = None,
+        # --- NEW: enriched indicators (July 2026) ---
+        atr_percentage: float | None = None,
+        choppiness: float | None = None,
+        volume_state: str = "",
+        trend_strength: float | None = None,
+        rsi_level: str = "",
+        vwap: float | None = None,
+        mfi: float | None = None,
+        cmf: float | None = None,
+        bb_percent_b: float | None = None,
+        chandelier_long: float | None = None,
+        pfe: float | None = None,
+        supertrend_signal: str = "",
     ) -> str:
         """Build the discriminative text document embedded for semantic search."""
         symbol_str = f" [{symbol}]" if symbol else ""
@@ -69,17 +97,30 @@ class VectorMemoryContextMixin:
 
         indicator_parts: list[str] = []
         if adx is not None:
-            indicator_parts.append(f"ADX={adx:.1f} ({self._adx_label(adx)})")
+            indicator_parts.append(f"ADX={adx:.1f} ({VectorMemoryContextMixin._adx_label(adx)})")
         if rsi is not None:
             indicator_parts.append(f"RSI={rsi:.1f} ({classify_rsi_label(rsi)})")
         if atr_pct is not None:
             indicator_parts.append(f"ATR=${atr_pct:.0f}")
+        if atr_percentage is not None and atr_percentage > 0:
+            indicator_parts.append(f"ATR%={atr_percentage:.1f}%")
         if volatility:
             indicator_parts.append(f"Vol={volatility}")
         if macd_signal:
             indicator_parts.append(f"MACD={macd_signal}")
         if bb_position:
             indicator_parts.append(f"BB={bb_position}")
+        if choppiness is not None and choppiness > 0:
+            chop_label = "Trending" if choppiness < 38 else "Choppy" if choppiness > 62 else "Transitional"
+            indicator_parts.append(f"Chop={choppiness:.0f} ({chop_label})")
+        if volume_state and volume_state != "NORMAL":
+            indicator_parts.append(f"VolState={volume_state}")
+        if trend_strength is not None and trend_strength > 0:
+            indicator_parts.append(f"TrendStr={trend_strength:.0f}")
+        if rsi_level and rsi_level != "NEUTRAL":
+            indicator_parts.append(f"RSI={rsi_level}")
+        if supertrend_signal and supertrend_signal != "NEUTRAL":
+            indicator_parts.append(f"STrend={supertrend_signal}")
         indicators_str = " | ".join(indicator_parts)
 
         structure_parts: list[str] = []
@@ -96,6 +137,12 @@ class VectorMemoryContextMixin:
         exit_execution_text = format_exit_execution_context(exit_execution_context)
         if exit_execution_text:
             structure_parts.append(exit_execution_text)
+        if vwap is not None and vwap > 0:
+            structure_parts.append(f"VWAP={vwap:.2f}")
+        if mfi is not None:
+            structure_parts.append(f"MFI={mfi:.1f}")
+        if cmf is not None:
+            structure_parts.append(f"CMF={cmf:+.3f}")
         structure_str = " | ".join(structure_parts)
 
         factor_parts: list[str] = []
@@ -227,7 +274,7 @@ class VectorMemoryContextMixin:
 
             return experiences
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to retrieve experiences: %s", e)
             return []
 
@@ -268,18 +315,19 @@ class VectorMemoryContextMixin:
             outcome = meta.get("outcome", "UNKNOWN")
             pnl = meta.get("pnl_pct", 0)
             direction = meta.get("direction", "?")
+            raw_context = self._sanitize_prompt_text(meta.get("market_context", "N/A"))
 
             lines.append(f"{i}. [SIMILARITY {exp.similarity:.0f}%] {direction} trade")
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
-            lines.append(f"   - Context: {meta.get('market_context', 'N/A')}")
+            lines.append(f"   - Context: {raw_context}")
 
             match_factors = self._build_match_factors(meta, display)
             if match_factors:
                 lines.append(f"   - Match Factors: {match_factors}")
 
-            reasoning = meta.get("reasoning", "")
-            if reasoning and reasoning != "N/A":
-                lines.append(f'   - Key Insight: "{reasoning}"')
+            raw_reasoning = self._sanitize_prompt_text(meta.get("reasoning", ""))
+            if raw_reasoning and raw_reasoning != "N/A":
+                lines.append(f'   - Key Insight: "{raw_reasoning}"')
             else:
                 lines.append(f'   - Key Insight: "{self._generate_synthetic_insight(meta)}"')
             lines.append("")
@@ -335,6 +383,26 @@ class VectorMemoryContextMixin:
             parts.append(f"MaxProfit: +{max_profit:.1f}%")
         if max_dd is not None and max_dd > 0:
             parts.append(f"MaxDD: -{max_dd:.1f}%")
+
+        chop = meta.get("choppiness_at_entry")
+        if chop is not None and chop > 0:
+            chop_label = "Trending" if chop < 38 else "Choppy" if chop > 62 else "Transitional"
+            parts.append(f"Chop: {chop:.0f}({chop_label})")
+
+        vol_state = meta.get("volume_state", "")
+        if vol_state and vol_state != "NORMAL":
+            parts.append(f"Vol: {vol_state}")
+
+        mfi_val = meta.get("mfi_at_entry")
+        cmf_val = meta.get("cmf_at_entry")
+        if mfi_val is not None:
+            parts.append(f"MFI: {mfi_val:.0f}")
+        if cmf_val is not None:
+            parts.append(f"CMF: {cmf_val:+.2f}")
+
+        st_signal = meta.get("supertrend_signal", "")
+        if st_signal and st_signal != "NEUTRAL":
+            parts.append(f"ST: {st_signal}")
 
         return " | ".join(parts) if parts else "No additional data"
 
@@ -400,6 +468,45 @@ class VectorMemoryContextMixin:
         if atr is not None:
             parts.append(f"ATR=${atr:.0f}")
 
+        atr_pct_val = meta.get("atr_percentage_at_entry")
+        if atr_pct_val is not None and atr_pct_val > 0:
+            parts.append(f"ATR%={atr_pct_val:.1f}%")
+
+        chop = meta.get("choppiness_at_entry")
+        if chop is not None and chop > 0:
+            chop_label = "Trending" if chop < 38 else "Choppy" if chop > 62 else "Transitional"
+            ctx_has_trending = "Trending" in ctx_upper
+            ctx_has_choppy = "Choppy" in ctx_upper
+            chop_mismatch = (ctx_has_trending or ctx_has_choppy) and chop_label.upper() not in ctx_upper
+            flag = " ⚠️" if chop_mismatch else ""
+            parts.append(f"Chop={chop:.0f}({chop_label}){flag}")
+
+        vol_state = meta.get("volume_state", "")
+        if vol_state and vol_state != "NORMAL":
+            vol_state_mismatch = f"VolState={vol_state}".upper() not in ctx_upper and f"VOLUME {vol_state}" not in ctx_upper
+            flag = " ⚠️" if vol_state_mismatch else ""
+            parts.append(f"VolState={vol_state}{flag}")
+
+        trend_str = meta.get("trend_strength")
+        if trend_str is not None and trend_str > 0:
+            parts.append(f"TrendStr={trend_str:.0f}")
+
+        st_signal = meta.get("supertrend_signal", "")
+        if st_signal and st_signal != "NEUTRAL":
+            parts.append(f"ST={st_signal}")
+
+        mfi_val = meta.get("mfi_at_entry")
+        if mfi_val is not None:
+            parts.append(f"MFI={mfi_val:.0f}")
+
+        cmf_val = meta.get("cmf_at_entry")
+        if cmf_val is not None:
+            parts.append(f"CMF={cmf_val:+.2f}")
+
+        vwap_val = meta.get("vwap_at_entry")
+        if vwap_val is not None and vwap_val > 0:
+            parts.append(f"VWAP={vwap_val:.2f}")
+
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")
 
@@ -437,3 +544,4 @@ class VectorMemoryContextMixin:
             "avg_pnl": sum(pnls) / len(pnls) if pnls else 0,
             "total_trades": len(experiences),
         }
+

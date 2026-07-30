@@ -3,11 +3,12 @@
 This module holds state that is updated by the trading bot and read by the dashboard.
 It enables WebSocket broadcasts and API endpoints to share live data.
 """
+import asyncio
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
-import asyncio
-import time
+
 from src.dashboard.routers.ws_router import broadcast
 
 
@@ -66,7 +67,7 @@ class DashboardState:
 
     def set_cached(self, key: str, value: Any) -> None:
         """Store a value in cache with current timestamp, enforcing max size."""
-        if len(self._cache) >= 100 and key not in self._cache:
+        if len(self._cache) >= 100 and key not in self._cache:  # noqa: SIM102
             if self.cache_timestamps:
                 oldest_key = min(self.cache_timestamps, key=lambda cache_key: self.cache_timestamps[cache_key])
                 self.invalidate_cache(oldest_key)
@@ -142,3 +143,4 @@ class DashboardState:
 
 
 dashboard_state = DashboardState()
+

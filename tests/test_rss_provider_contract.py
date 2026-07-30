@@ -34,6 +34,7 @@ def _make_config(**overrides) -> SimpleNamespace:
         RAG_NEWS_CRAWL_CONCURRENCY=3,
         RAG_NEWS_CRAWL_TIMEOUT=30,
         RAG_NEWS_ENRICH_MIN_CHARS=400,
+        RAG_NEWS_LIMIT=5,
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

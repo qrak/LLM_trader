@@ -2,11 +2,12 @@
 Market Data Cache Manager
 Handles caching and storage of market overview data.
 """
-from datetime import datetime, timedelta, timezone
 import math
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.logger.logger import Logger
+
 from ..file_handler import RagFileHandler
 
 
@@ -29,8 +30,8 @@ class MarketDataCache:
         if self.current_market_overview is None:
             return True
 
-        timestamp_field = self.current_market_overview.get('published_on',
-                                                           self.current_market_overview.get('timestamp', 0))
+        timestamp_field = self.current_market_overview.get("published_on",
+                                                           self.current_market_overview.get("timestamp", 0))
 
         if normalize_timestamp_func:
             timestamp = normalize_timestamp_func(timestamp_field)

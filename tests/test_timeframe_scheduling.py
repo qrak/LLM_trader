@@ -1,3 +1,7 @@
+"""Test Timeframe Scheduling unit tests.
+
+Tests for test_timeframe_scheduling.py.
+"""
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo

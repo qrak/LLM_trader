@@ -12,7 +12,6 @@ import hashlib
 import hmac
 import os
 import time
-from typing import Optional
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -80,7 +79,7 @@ def _sign_token(username: str, timestamp: float) -> str:
     return f"{payload}:{sig}"
 
 
-def _verify_token(token: str) -> Optional[str]:
+def _verify_token(token: str) -> str | None:
     """Verify an HMAC-signed session token. Returns username or None."""
     try:
         parts = token.split(":")
@@ -119,7 +118,7 @@ def create_session(username: str, response: Response, secure: bool = True) -> No
     )
 
 
-def verify_admin_session(request: Request) -> Optional[str]:
+def verify_admin_session(request: Request) -> str | None:
     """Check the request for a valid admin session.
 
     Checks cookie first, then Authorization header (Bearer token).
@@ -185,7 +184,7 @@ def _is_lan_ip(ip: str) -> bool:
             return True
         if a == 172 and 16 <= b <= 31:  # 172.16.0.0/12
             return True
-        if a == 169 and b == 254:  # Link-local
+        if a == 169 and b == 254:  # Link-local  # noqa: SIM103
             return True
         return False
     except (ValueError, IndexError):
@@ -218,6 +217,48 @@ def _get_real_client_ip(request: Request) -> str:
     return direct_ip
 
 
+_LOGIN_ATTEMPTS: dict[str, list[float]] = {}
+
+
+def check_login_rate_limit(ip: str, max_attempts: int = 5, window_seconds: float = 60.0) -> tuple[bool, int]:
+    """Check if an IP has exceeded maximum login attempts within the sliding window.
+
+    Returns (allowed, retry_after_seconds).
+    """
+    now = time.time()
+    # Periodic housekeeping: evict IP records with no active window attempts
+    stale_ips = [
+        client_ip for client_ip, timestamps in _LOGIN_ATTEMPTS.items()
+        if not any(now - t < window_seconds for t in timestamps)
+    ]
+    for client_ip in stale_ips:
+        _LOGIN_ATTEMPTS.pop(client_ip, None)
+
+    attempts = [t for t in _LOGIN_ATTEMPTS.get(ip, []) if now - t < window_seconds]
+    if attempts:
+        _LOGIN_ATTEMPTS[ip] = attempts
+    else:
+        _LOGIN_ATTEMPTS.pop(ip, None)
+
+    if len(attempts) >= max_attempts:
+        oldest = attempts[0]
+        retry_after = int(window_seconds - (now - oldest)) + 1
+        return False, max(1, retry_after)
+    return True, 0
+
+
+def record_login_attempt(ip: str) -> None:
+    """Record a failed login attempt for rate limiting."""
+    if ip not in _LOGIN_ATTEMPTS:
+        _LOGIN_ATTEMPTS[ip] = []
+    _LOGIN_ATTEMPTS[ip].append(time.time())
+
+
+def reset_login_rate_limit(ip: str) -> None:
+    """Reset login attempt count on successful authentication."""
+    _LOGIN_ATTEMPTS.pop(ip, None)
+
+
 class AdminAuthMiddleware(BaseHTTPMiddleware):
     """ASGI middleware that protects all /api/admin/* routes.
 
@@ -228,7 +269,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
     """
 
     # API routes that don't require authentication (but still require LAN)
-    _PUBLIC_PATHS: set[str] = {
+    _PUBLIC_PATHS: set[str] = {  # noqa: RUF012
         "/api/admin/login",
         "/api/admin/health",
     }
@@ -239,7 +280,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
 
         # Only process admin routes (API + static HTML)
-        if not (path.startswith("/api/admin/") or path.startswith("/admin")):
+        if not (path.startswith(("/api/admin/", "/admin"))):
             return await call_next(request)
 
         # LAN-only check: block non-private IPs from ALL admin paths
@@ -270,3 +311,4 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
         # Attach username to request state for downstream handlers
         request.state.admin_user = username
         return await call_next(request)
+

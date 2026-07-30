@@ -12,7 +12,7 @@ Tests the full user journey:
 9. Unauthenticated API requests return 401
 
 Requires: playwright>=1.49.0, pytest-asyncio
-Run: .venv-wsl/bin/python -m pytest tests/test_admin_playwright.py -x --tb=short -v
+Run: pytest tests/test_admin_playwright.py -x --tb=short -v
 """
 
 import asyncio
@@ -52,7 +52,6 @@ def _run_test_server(port: int, ready_event: multiprocessing.Event):
     from src.config.writable_config import WritableConfig
     import tempfile
     import uvicorn
-    import asyncio
 
     # Create temp config
     tmpdir = tempfile.mkdtemp()

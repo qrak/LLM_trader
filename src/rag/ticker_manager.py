@@ -1,7 +1,8 @@
 """
 Ticker management and validation operations.
 """
-from typing import Set, Any
+from typing import Any
+
 from src.logger.logger import Logger
 
 
@@ -12,7 +13,7 @@ class TickerManager:
         self.logger = logger
         self.file_handler = file_handler
         self.exchange_manager = exchange_manager
-        self.known_tickers: Set[str] = set()
+        self.known_tickers: set[str] = set()
 
     async def load_known_tickers(self) -> None:
         """Load known cryptocurrency tickers from disk."""
@@ -22,8 +23,8 @@ class TickerManager:
                 if tickers_data:
                     self.known_tickers = set(tickers_data)
                     self.logger.debug("Loaded %s known tickers", len(self.known_tickers))
-        except Exception as e:
-            self.logger.exception("Error loading known tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error loading known tickers: %s")
             self.known_tickers = set()
 
     async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
@@ -48,15 +49,15 @@ class TickerManager:
             # Save updated tickers
             await self.save_tickers()
 
-        except Exception as e:
-            self.logger.exception("Error updating known tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error updating known tickers: %s")
 
     def _extract_detected_coins(self, news_database: list[dict[str, Any]]) -> set:
         """Extract coins that were detected in news articles."""
         detected_coins = set()
 
         for article in news_database:
-            coins_mentioned = article.get('detected_coins', [])
+            coins_mentioned = article.get("detected_coins", [])
             for coin in coins_mentioned:
                 if len(coin) >= 2:
                     detected_coins.add(coin.upper())
@@ -68,9 +69,9 @@ class TickerManager:
         category_coins = set()
 
         for article in news_database:
-            categories = article.get('categories', '')
+            categories = article.get("categories", "")
             # Look for ticker-like categories
-            category_parts = categories.split(',')
+            category_parts = categories.split(",")
             for category in category_parts:
                 category = category.strip()
                 if self._is_valid_ticker_category(category):
@@ -88,8 +89,8 @@ class TickerManager:
 
         # Skip obviously non-ticker categories
         skip_categories = {
-            'bitcoin', 'ethereum', 'blockchain', 'cryptocurrency', 'trading',
-            'market', 'price', 'analysis', 'news', 'defi', 'nft'
+            "bitcoin", "ethereum", "blockchain", "cryptocurrency", "trading",
+            "market", "price", "analysis", "news", "defi", "nft"
         }
 
         category_lower = category.lower()
@@ -101,9 +102,8 @@ class TickerManager:
         category_upper = category.upper()
 
         # Remove common prefixes/suffixes
-        for remove in ['-USD', '-USDT', '-BTC', '-ETH']:
-            if category_upper.endswith(remove):
-                category_upper = category_upper[:-len(remove)]
+        for remove in ["-USD", "-USDT", "-BTC", "-ETH"]:
+            category_upper = category_upper.removesuffix(remove)
 
         # Basic validation - should be 2-10 characters, mostly letters
         if 2 <= len(category_upper) <= 10 and category_upper.isalnum():
@@ -117,7 +117,7 @@ class TickerManager:
             return False
 
         # Skip obvious non-tickers
-        skip_terms = {'USD', 'EUR', 'GBP', 'JPY', 'NEWS', 'MARKET', 'PRICE'}
+        skip_terms = {"USD", "EUR", "GBP", "JPY", "NEWS", "MARKET", "PRICE"}
         return coin.upper() not in skip_terms
 
     async def _validate_and_add_coins(self, filtered_coins: set) -> None:
@@ -130,7 +130,7 @@ class TickerManager:
         if self.exchange_manager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not get exchange symbols for validation: %s", e)
 
         new_coins_added = 0
@@ -160,12 +160,13 @@ class TickerManager:
         """Save known tickers to disk."""
         try:
             if self.file_handler:
-                tickers_list = sorted(list(self.known_tickers))
+                tickers_list = sorted(self.known_tickers)
                 self.file_handler.save_known_tickers(tickers_list)
                 self.logger.debug("Saved %s known tickers", len(tickers_list))
-        except Exception as e:
-            self.logger.exception("Error saving tickers: %s", e)
+        except Exception:
+            self.logger.exception("Error saving tickers: %s")
 
-    def get_known_tickers(self) -> Set[str]:
+    def get_known_tickers(self) -> set[str]:
         """Get the set of known cryptocurrency tickers."""
         return self.known_tickers.copy()
+

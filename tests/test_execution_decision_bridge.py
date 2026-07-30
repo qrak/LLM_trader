@@ -118,18 +118,30 @@ class TestBuildPayload:
 
 class TestHandle:
     @pytest.mark.asyncio
-    async def test_persists_and_forwards(self):
+    async def test_forwards_only_on_success(self):
         handler = _make_handler()
         handler._persist = MagicMock()
-        handler._forward = AsyncMock()
+        handler._forward = AsyncMock(return_value=True)
+
+        decision = _make_decision()
+        await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
+
+        handler._persist.assert_not_called()
+        handler._forward.assert_awaited_once()
+        payload = handler._forward.call_args[0][0]
+        assert payload["signal"] == "BUY"
+
+    @pytest.mark.asyncio
+    async def test_persists_on_forward_failure(self):
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=False)
 
         decision = _make_decision()
         await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
 
         handler._persist.assert_called_once()
         handler._forward.assert_awaited_once()
-        payload = handler._forward.call_args[0][0]
-        assert payload["signal"] == "BUY"
 
     @pytest.mark.asyncio
     async def test_skips_none_analysis(self):
@@ -255,6 +267,31 @@ class TestForward:
 
         mock_client.post.assert_awaited()
         handler.logger.info.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_forward_reuses_client_and_closes_cleanly(self):
+        handler = _make_handler()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.aclose = AsyncMock()
+
+        payload = {"timestamp": "t", "symbol": "BTC/USDC", "signal": "BUY"}
+
+        with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=mock_client) as mock_cls:
+            await handler._forward(payload)
+            await handler._forward(payload)
+
+            # AsyncClient should only be constructed ONCE across multiple forwards
+            assert mock_cls.call_count == 1
+            assert mock_client.post.call_count == 2
+
+            await handler.close()
+            mock_client.aclose.assert_awaited_once()
+            assert handler._http_client is None
 
 
 class TestAtomicPersistence:

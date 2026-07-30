@@ -1,6 +1,7 @@
 """Prompt context and threshold retrieval for the trading brain."""
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.utils.indicator_classifier import (
     build_context_string_from_classified_values,
@@ -16,16 +17,23 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
+    # Maximum characters for the full brain context block injected into the system prompt.
+    # Prevents token bloat as trade count grows; sections are truncated tail-first
+    # (journal → rules → experiences) while preserving headers and calibration stats.
+    BRAIN_CONTEXT_MAX_CHARS = 12000
+
     def __init__(
         self,
         vector_memory: VectorMemoryService,
         exit_profiles: ExitProfileResolver,
         post_mortem_repo: Any | None = None,
+        logger: Any | None = None,
     ):
         """Initialize context provider dependencies and cache state."""
         self.vector_memory = vector_memory
         self.exit_profiles = exit_profiles
         self.post_mortem_repo = post_mortem_repo
+        self.logger = logger
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
 
@@ -47,6 +55,14 @@ class BrainContextProvider:
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
         exit_execution_context: ExitExecutionContext | None = None,
+        # --- NEW: enriched context fields (July 2026) ---
+        choppiness: float | None = None,
+        trend_strength: float = 0.0,
+        atr_percentage: float = 0.0,
+        mfi: float | None = None,
+        cmf: float | None = None,
+        vwap: float = 0.0,
+        supertrend_direction: str = "NEUTRAL",
     ) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval."""
         lines = []
@@ -66,7 +82,8 @@ class BrainContextProvider:
                 if stats.get("total_trades", 0) > 0:
                     lines.append(
                         f"- {level} Confidence: Win Rate {stats['win_rate']:.0f}% "
-                        f"({stats['winning_trades']}/{stats['total_trades']} trades) | Avg P&L: {stats['avg_pnl_pct']:+.2f}%"
+                        f"({stats['winning_trades']}/{stats['total_trades']} trades) | "
+                        f"Avg P&L: {stats['avg_pnl_pct']:+.2f}%"
                     )
             recommendation = self.vector_memory.get_confidence_recommendation()
             if recommendation:
@@ -79,15 +96,19 @@ class BrainContextProvider:
                     f"- Historical trades: {direction_bias['long_count']} LONG, {direction_bias['short_count']} SHORT",
                 ])
                 if direction_bias["short_count"] == 0:
-                    lines.append("- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; lack of data means you may be missing valid setups.")
+                    lines.append(
+                        "- ⚠️ NO SHORT TRADES IN HISTORY: Consider SHORT opportunities more carefully; "
+                        "lack of data means you may be missing valid setups."
+                    )
         try:
             blocked_feedback = self.vector_memory.get_blocked_trade_feedback(
                 n=5, max_age_hours=168
             )
             if blocked_feedback:
                 lines.extend(["", blocked_feedback])
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            if self.logger:
+                self.logger.warning("Failed to fetch blocked trade feedback: %s", exc)
         vector_context = self.get_vector_context(
             trend_direction=trend_direction,
             adx=adx,
@@ -101,6 +122,13 @@ class BrainContextProvider:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
+            choppiness=choppiness,
+            trend_strength=trend_strength,
+            atr_percentage=atr_percentage,
+            mfi=mfi,
+            cmf=cmf,
+            vwap=vwap,
+            supertrend_direction=supertrend_direction,
             k=3,
         )
         if vector_context:
@@ -111,9 +139,39 @@ class BrainContextProvider:
             lines.extend([
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
-                "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and state it. Weight both wins AND losses, not just the favorable cases.",
-                "- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state \"⚠️ ANTI-PATTERN MATCH\", compare the current setup to the failed assumption, and downgrade confidence unless the missing confirmation is now present. State the adjustment you apply (stricter confluences, higher R/R, or reduced size).",
-                "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime (ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; do not use it as a confidence prior without explaining the mismatch.",
+                (
+                    "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and "
+                    "state it. Weight both wins AND losses, not just the favorable cases."
+                ),
+                (
+                    '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state '
+                    '"⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade '
+                    "confidence unless the missing confirmation is now present. State the adjustment you apply "
+                    "(stricter confluences, higher R/R, or reduced size)."
+                ),
+                (
+                    "- REGIME / EXIT MISMATCH: Treat a retrieved experience as informational only when its regime "
+                    "(ADX/volatility marked ⚠️) or its hard/soft SL/TP exit profile differs from current conditions; "
+                    "do not use it as a confidence prior without explaining the mismatch."
+                ),
+                (
+                    "- CHOPPINESS MISMATCH: If a stored trade had low choppiness (Trending) but the current market "
+                    "shows high choppiness (Choppy), treat this as a ⚠️ regime mismatch — a trade that worked in "
+                    "a clean trend may fail in noise. Reduce confidence accordingly."
+                ),
+                (
+                    "- VOLUME DIVERGENCE: If a stored trade entered during ACCUMULATION but current conditions "
+                    "show DISTRIBUTION, the trade thesis may not hold. Flag this explicitly in your reasoning."
+                ),
+                (
+                    "- MONEY FLOW CONTRADICTION: If CMF (Chaikin Money Flow) or MFI contradicts price direction "
+                    "(e.g., BULLISH setup with CMF < 0 or MFI < 50), state the divergence and downgrade confidence "
+                    "unless there is clear evidence of reversal building."
+                ),
+                (
+                    "- ATR SCALE AWARENESS: Compare ATR% not just raw ATR — ATR=$1,500 means 2.5% on a $60K BTC vs "
+                    "15% on a $10K BTC. Same raw ATR, very different risk. Factor this into your position sizing."
+                ),
                 "",
             ])
         elif lines and has_limited_data:
@@ -173,7 +231,18 @@ class BrainContextProvider:
                 "",
             ])
 
-        return "\n".join(lines)
+        result = "\n".join(lines)
+        if len(result) > self.BRAIN_CONTEXT_MAX_CHARS:
+            # Truncate at entry boundary (\n\n) to keep clean sections
+            truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n\n", 1)[0]
+            if not truncated:
+                truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n", 1)[0]
+            result = (
+                truncated + "\n\n[Brain context truncated: token budget reached. "
+                "Rely on standard analysis for remaining decisions.]"
+            )
+        return result
+
 
     def _build_trade_journal_context(self) -> str:
         """Build a formatted string of recent post-mortem lessons for prompt injection.
@@ -189,12 +258,14 @@ class BrainContextProvider:
                 return ""
             lines = []
             for pm in recent:
-                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get('pnl_pct') is not None else ""
+                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get("pnl_pct") is not None else ""
                 lines.append(
                     f"— {pm['verdict']} ({pm['created_at'][:10]}, {pm['symbol']}): {pm['lesson_learned']}{pnl_str}"
                 )
             return "\n".join(lines)
-        except Exception:
+        except Exception as e:  # noqa: BLE001
+            if self.logger:
+                self.logger.warning("Failed to retrieve post-mortem lessons for brain context: %s", e)
             return ""
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
@@ -264,6 +335,14 @@ class BrainContextProvider:
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
         exit_execution_context: ExitExecutionContext | None = None,
+        # --- NEW: enriched fields (July 2026) ---
+        choppiness: float | None = None,
+        trend_strength: float = 0.0,
+        atr_percentage: float = 0.0,
+        mfi: float | None = None,
+        cmf: float | None = None,
+        vwap: float = 0.0,
+        supertrend_direction: str = "NEUTRAL",
     ) -> str:
         """Build a query document that mirrors stored experience document format."""
         return build_query_document_from_classified_values(
@@ -279,6 +358,13 @@ class BrainContextProvider:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
+            choppiness=choppiness,
+            trend_strength=trend_strength,
+            atr_percentage=atr_percentage,
+            mfi=mfi,
+            cmf=cmf,
+            vwap=vwap,
+            supertrend_direction=supertrend_direction,
         )
 
     def get_vector_context(
@@ -295,6 +381,14 @@ class BrainContextProvider:
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
         exit_execution_context: ExitExecutionContext | None = None,
+        # --- NEW: enriched query fields (July 2026) ---
+        choppiness: float | None = None,
+        trend_strength: float = 0.0,
+        atr_percentage: float = 0.0,
+        mfi: float | None = None,
+        cmf: float | None = None,
+        vwap: float = 0.0,
+        supertrend_direction: str = "NEUTRAL",
         k: int = 5,
     ) -> str:
         """Get context from similar past experiences via vector retrieval."""
@@ -324,6 +418,13 @@ class BrainContextProvider:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
+            choppiness=choppiness,
+            trend_strength=trend_strength,
+            atr_percentage=atr_percentage,
+            mfi=mfi,
+            cmf=cmf,
+            vwap=vwap,
+            supertrend_direction=supertrend_direction,
         )
         vector_context = self.vector_memory.get_context_for_prompt(
             query_document, k, display_context=context_query
@@ -349,3 +450,4 @@ class BrainContextProvider:
         if key not in self._stats_cache:
             self._stats_cache[key] = compute_fn()
         return self._stats_cache[key]
+

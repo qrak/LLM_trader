@@ -12,7 +12,7 @@ import re
 
 class TimeframeValidator:
     """Validates and manages timeframe configurations"""
-    SUPPORTED_TIMEFRAMES = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w']
+    SUPPORTED_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
     # Time constants
     MINUTES_IN_HOUR = 60
     MINUTES_IN_DAY = 1440
@@ -27,20 +27,20 @@ class TimeframeValidator:
     # Monday (1970-01-05) is +4 days from Epoch.
     MONDAY_ALIGNMENT_OFFSET_DAYS = 4
 
-    TIMEFRAME_MINUTES = {
-        '5m': 5,
-        '15m': 15,
-        '30m': 30,
-        '1h': MINUTES_IN_HOUR,
-        '2h': 2 * MINUTES_IN_HOUR,
-        '4h': 4 * MINUTES_IN_HOUR,
-        '6h': 6 * MINUTES_IN_HOUR,
-        '8h': 8 * MINUTES_IN_HOUR,
-        '12h': 12 * MINUTES_IN_HOUR,
-        '1d': MINUTES_IN_DAY,
-        '1w': MINUTES_IN_WEEK
+    TIMEFRAME_MINUTES = {  # noqa: RUF012
+        "5m": 5,
+        "15m": 15,
+        "30m": 30,
+        "1h": MINUTES_IN_HOUR,
+        "2h": 2 * MINUTES_IN_HOUR,
+        "4h": 4 * MINUTES_IN_HOUR,
+        "6h": 6 * MINUTES_IN_HOUR,
+        "8h": 8 * MINUTES_IN_HOUR,
+        "12h": 12 * MINUTES_IN_HOUR,
+        "1d": MINUTES_IN_DAY,
+        "1w": MINUTES_IN_WEEK
     }
-    CCXT_STANDARD_TIMEFRAMES = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '1w']
+    CCXT_STANDARD_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
 
     @classmethod
     def validate(cls, timeframe: str) -> bool:
@@ -87,20 +87,20 @@ class TimeframeValidator:
         Raises:
             ValueError: If period format is invalid
         """
-        match = re.match(r'^(\d+)([mhdw])$', period.lower())
+        match = re.match(r"^(\d+)([mhdw])$", period.lower())
         if not match:
             raise ValueError(f"Invalid period format: {period}")
 
         value = int(match.group(1))
         unit = match.group(2)
 
-        if unit == 'm':
+        if unit == "m":
             return value
-        if unit == 'h':
+        if unit == "h":
             return value * cls.MINUTES_IN_HOUR
-        if unit == 'd':
+        if unit == "d":
             return value * cls.MINUTES_IN_DAY
-        if unit == 'w':
+        if unit == "w":
             return value * cls.MINUTES_IN_WEEK
         raise ValueError(f"Invalid period unit: {unit}")
 
@@ -141,7 +141,7 @@ class TimeframeValidator:
             to check its .timeframes property directly.
         """
         # Basic check for standard timeframes
-        if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:
+        if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:  # noqa: SIM103
             return True
 
         # Could be extended to check specific exchange support
@@ -224,7 +224,7 @@ class TimeframeValidator:
         Returns:
             int: Offset in milliseconds required to align the timeframe
         """
-        if timeframe == '1w':
+        if timeframe == "1w":
             return cls.MONDAY_ALIGNMENT_OFFSET_DAYS * cls.MS_IN_DAY
         return 0
 
@@ -277,3 +277,4 @@ class TimeframeValidator:
         candle2 = (time2_ms - offset) // interval_ms
 
         return candle1 == candle2
+

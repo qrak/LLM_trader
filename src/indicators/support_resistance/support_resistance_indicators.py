@@ -1,4 +1,9 @@
+"""Support Resistance Indicators module.
+
+Provides functionality for indicators.support_resistance.support_resistance_indicators.py.
+"""
 import math
+
 import numpy as np
 from numba import njit
 
@@ -473,8 +478,7 @@ def fibonacci_bollinger_bands_numba(src, volume, length, mult):
 
         mean = sum_src * inv_length
         variance = (sum_src_sq * inv_length) - (mean * mean)
-        if variance < 0.0:
-            variance = 0.0
+        variance = max(variance, 0.0)
         stdev_values[i] = np.sqrt(variance)
 
         basis[i] = vwma_values[i]

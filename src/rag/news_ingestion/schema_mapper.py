@@ -27,7 +27,6 @@ import hashlib
 import re
 from typing import Any
 
-
 _BASE_TAIL_MARKERS: tuple[str, ...] = (
     "More For You",
     "Read full story",

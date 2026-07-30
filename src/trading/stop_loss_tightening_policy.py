@@ -163,7 +163,7 @@ class StopLossTighteningPolicy:
             price_progress = (position.entry_price - current_price) / tp_distance_total
 
         base = self.get_base_threshold(tf_minutes)
-        effective, source = self._resolve_effective_threshold(base, brain_thresholds)
+        effective, source = self.resolve_effective_threshold(base, brain_thresholds)
 
         if price_progress >= effective:
             reason = (
@@ -194,7 +194,7 @@ class StopLossTighteningPolicy:
             reason=reason,
         )
 
-    def _resolve_effective_threshold(
+    def resolve_effective_threshold(
         self,
         base: float,
         brain_thresholds: dict[str, Any] | None,

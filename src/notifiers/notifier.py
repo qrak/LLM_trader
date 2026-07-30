@@ -4,16 +4,18 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 """
 import asyncio
 import io
-from typing import TYPE_CHECKING, Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 import discord
 from aiohttp import ClientSession
 
 from src.utils.decorators import retry_async
+
 from .base_notifier import BaseNotifier
 from .filehandler import DiscordFileHandler
 
-ENTRY_ACTIONS = {'BUY', 'SELL'}
+ENTRY_ACTIONS = {"BUY", "SELL"}
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -25,7 +27,7 @@ if TYPE_CHECKING:
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
-    _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}
+    _DISCORD_TRANSIENT_STATUS_CODES = {500, 502, 503, 504}  # noqa: RUF012
     _DISCORD_SEND_MAX_ATTEMPTS = 3
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
 
@@ -48,7 +50,7 @@ class DiscordNotifier(BaseNotifier):
         self._shutdown_started = False
 
         self.bot = bot
-        self.bot.discord_notifier = self
+        self.bot.discord_notifier = self  # type: ignore
         self.bot.event(self.on_ready)
         self.file_handler = file_handler
 
@@ -86,7 +88,7 @@ class DiscordNotifier(BaseNotifier):
         for attempt in range(1, self._DISCORD_SEND_MAX_ATTEMPTS + 1):
             try:
                 return await self._send_with_spacing(send_operation)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._is_transient_discord_error(exc) or attempt >= self._DISCORD_SEND_MAX_ATTEMPTS:
                     raise
 
@@ -108,14 +110,14 @@ class DiscordNotifier(BaseNotifier):
     async def on_ready(self):
         """Called when bot is ready."""
         try:
-            self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)
+            self.logger.info("DiscordNotifier: Logged in as %s", self.bot.user.name)  # type: ignore
             self.file_handler.initialize()
             self.logger.debug("FileHandler initialized")
             self.is_initialized = True
             self._ready_event.set()
             self.logger.debug("DiscordNotifier ready")
         except Exception as e:
-            self.logger.error("Error in on_ready: %s", e, exc_info=True)
+            self.logger.error("Error in on_ready: %s", e, exc_info=True)  # noqa: G201
 
     async def __aenter__(self):
         if self.session is None:
@@ -131,13 +133,13 @@ class DiscordNotifier(BaseNotifier):
             try:
                 await self.session.close()
                 self.session = None
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Session close error: %s", e)
 
         if self.file_handler:
             try:
                 await self.file_handler.shutdown()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error during file handler shutdown: %s", e)
 
         if self.bot:
@@ -147,7 +149,7 @@ class DiscordNotifier(BaseNotifier):
                     await self.bot.close()
                     # Allow discord.py's keep-alive thread to observe the closed websocket.
                     await asyncio.sleep(0.25)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error closing Discord bot: %s", e)
 
         self.logger.info("Discord notifier resources released")
@@ -164,9 +166,9 @@ class DiscordNotifier(BaseNotifier):
         try:
             await self.bot.start(token)
         except discord.LoginFailure as e:
-            self.logger.error("Discord Login Failure: %s. Check your BOT_TOKEN_DISCORD.", e, exc_info=True)
+            self.logger.error("Discord Login Failure: %s. Check your BOT_TOKEN_DISCORD.", e, exc_info=True)  # noqa: G201
         except Exception as e:
-            self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)
+            self.logger.error("Failed to start Discord bot: %s", e, exc_info=True)  # noqa: G201
 
     async def wait_until_ready(self) -> None:
         """Wait for the bot to fully initialize."""
@@ -176,11 +178,11 @@ class DiscordNotifier(BaseNotifier):
         """Shutdown the Discord notifier and cleanup resources."""
         try:
             await self.__aexit__(None, None, None)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.warning("Error during Discord notifier shutdown: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_message(
+    async def send_message(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             message: str,
             channel_id: int,
@@ -224,36 +226,36 @@ class DiscordNotifier(BaseNotifier):
 
                 delete_after = float(expire_after) if expire_after is not None else None
                 sent_message = await self._send_with_transient_retry(
-                    lambda: channel.send(
-                        content=chunk,
-                        delete_after=delete_after
+                    lambda: channel.send(  # type: ignore[reportAttributeAccessIssue]
+                        content=chunk,  # noqa: B023
+                        delete_after=delete_after  # type: ignore[arg-type]  # noqa: B023
                     ),
                     operation_name="sending message chunk",
                 )
                 await self.file_handler.track_message(
                     message_id=sent_message.id,
                     channel_id=channel_id,
-                    user_id=None,
+                    user_id=None,  # type: ignore
                     message_type="message",
                     expire_after=expire_after
                 )
 
-            self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else 'None')
+            self.logger.debug("Sent %s message chunk(s) (Last ID: %s)", len(chunks), sent_message.id if sent_message else "None")
             return sent_message
         except discord.HTTPException as e:
-            self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)
+            self.logger.error("Discord HTTPException when sending message: %s", e, exc_info=True)  # noqa: G201
         except Exception as e:
-            self.logger.error("Unexpected error when sending message: %s", e, exc_info=True)
+            self.logger.error("Unexpected error when sending message: %s", e, exc_info=True)  # noqa: G201
         return None
 
     def _get_discord_color(self, color_key: str) -> discord.Color:
         """Convert color key to discord.Color."""
         color_map = {
-            'green': discord.Color.green(),
-            'red': discord.Color.red(),
-            'grey': discord.Color.light_grey(),
-            'orange': discord.Color.orange(),
-            'blue': discord.Color.blue(),
+            "green": discord.Color.green(),
+            "red": discord.Color.red(),
+            "grey": discord.Color.light_grey(),
+            "orange": discord.Color.orange(),
+            "blue": discord.Color.blue(),
         }
         return color_map.get(color_key, discord.Color.light_grey())
 
@@ -283,7 +285,7 @@ class DiscordNotifier(BaseNotifier):
 
         try:
             sent_message = await self._send_with_transient_retry(
-                lambda: channel.send(embed=embed, delete_after=expire_after),
+                lambda: channel.send(embed=embed, delete_after=expire_after),  # type: ignore[reportAttributeAccessIssue]
                 operation_name="sending embed",
             )
 
@@ -291,18 +293,18 @@ class DiscordNotifier(BaseNotifier):
             await self.file_handler.track_message(
                 message_id=sent_message.id,
                 channel_id=channel_id,
-                user_id=None,
+                user_id=None,  # type: ignore
                 message_type="embed",
                 expire_after=int(expire_after)
             )
 
             return sent_message
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending embed: %s", e)
             return None
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:
+    async def send_trading_decision(self, decision: Any, channel_id: int) -> None:  # type: ignore[reportIncompatibleMethodOverride]
         """Send a trading decision as Discord embed.
 
         Args:
@@ -345,11 +347,11 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending trading decision: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_analysis_notification(
+    async def send_analysis_notification(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             result: dict,
             symbol: str,
@@ -375,7 +377,7 @@ class DiscordNotifier(BaseNotifier):
             reasoning = self.unified_parser.extract_text_before_json(raw_response) if raw_response else ""
 
             if reasoning:
-                await self.send_message(
+                await self.send_message(  # type: ignore
                     message=f"**{symbol} Analysis**\n\n{reasoning}",
                     channel_id=channel_id
                 )
@@ -391,7 +393,7 @@ class DiscordNotifier(BaseNotifier):
                     timeframe=timeframe,
                     channel_id=channel_id
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending analysis notification: %s", e)
 
     async def _send_analysis_chart(
@@ -420,11 +422,11 @@ class DiscordNotifier(BaseNotifier):
                 self.logger.warning("Chart image buffer is empty; skipping Discord chart upload")
                 return None
 
-            safe_symbol = symbol.replace('/', '_')
+            safe_symbol = symbol.replace("/", "_")
             filename = f"{safe_symbol}_{timeframe}_analysis_chart.png"
 
             sent_message = await self._send_with_transient_retry(
-                lambda: channel.send(
+                lambda: channel.send(  # type: ignore[reportAttributeAccessIssue]
                     content=f"📈 {symbol} {timeframe} chart snapshot",
                     file=discord.File(io.BytesIO(chart_bytes), filename=filename),
                     delete_after=expire_after,
@@ -435,12 +437,12 @@ class DiscordNotifier(BaseNotifier):
             await self.file_handler.track_message(
                 message_id=sent_message.id,
                 channel_id=channel_id,
-                user_id=None,
+                user_id=None,  # type: ignore
                 message_type="chart",
                 expire_after=int(expire_after)
             )
             return sent_message
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending analysis chart: %s", e)
             return None
 
@@ -491,11 +493,11 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
             embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending position status: %s", e)
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def send_performance_stats(
+    async def send_performance_stats(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             trade_history: list[dict[str, Any]],
             symbol: str,
@@ -516,21 +518,21 @@ class DiscordNotifier(BaseNotifier):
             embed = discord.Embed(
                 title="📈 Trading Performance Summary",
                 description=f"Overall performance after {stats['closed_trades']} closed trades",
-                color=discord.Color.blue() if stats['net_pnl'] > 0 else discord.Color.red()
+                color=discord.Color.blue() if stats["net_pnl"] > 0 else discord.Color.red()
             )
 
             embed.add_field(name=f"Total P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['total_pnl_quote']:+,.2f}", inline=True)
             embed.add_field(name="Total P&L (%)", value=f"{stats['total_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Avg P&L/Trade", value=f"{stats['avg_pnl_pct']:+.2f}%", inline=True)
             embed.add_field(name="Win Rate", value=f"{stats['win_rate']:.1f}% ({stats['winning_trades']}/{stats['closed_trades']})", inline=True)
-            embed.add_field(name="Total Trades", value=str(stats['closed_trades']), inline=True)
+            embed.add_field(name="Total Trades", value=str(stats["closed_trades"]), inline=True)
             embed.add_field(name="Total Fees", value=f"${stats['total_fees']:.4f}", inline=True)
             embed.add_field(name=f"Net P&L ({self.config.QUOTE_CURRENCY})", value=f"${stats['net_pnl']:+,.2f}", inline=True)
 
-            last_closed_trade = stats.get('last_closed_trade')
+            last_closed_trade = stats.get("last_closed_trade")
             if last_closed_trade:
-                outcome = last_closed_trade.get('outcome', 'UNKNOWN')
-                close_reason = last_closed_trade.get('close_reason')
+                outcome = last_closed_trade.get("outcome", "UNKNOWN")
+                close_reason = last_closed_trade.get("close_reason")
                 outcome_value = f"{outcome}\n{close_reason}" if close_reason else outcome
                 embed.add_field(name="Last Outcome", value=outcome_value, inline=True)
                 embed.add_field(
@@ -541,46 +543,46 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Symbol: {symbol}")
             await self._send_embed(embed, channel_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending performance stats: %s", e)
 
     def _create_analysis_embed(self, analysis: dict, symbol: str, timeframe: str) -> discord.Embed | None:
         """Create Discord embed from analysis JSON."""
         try:
             fields = self.extract_analysis_fields(analysis)
-            color_key, _ = self.get_action_styling(fields['signal'])
+            color_key, _ = self.get_action_styling(fields["signal"])
             color = self._get_discord_color(color_key)
 
             embed = discord.Embed(
                 title=f"📊 {symbol} - {fields['signal']}",
-                description=fields['reasoning'][:4096],
+                description=fields["reasoning"][:4096],
                 color=color
             )
 
-            if fields['entry_price']:
+            if fields["entry_price"]:
                 embed.add_field(name="Entry", value=f"${fields['entry_price']:,.2f}", inline=True)
-            if fields['stop_loss']:
+            if fields["stop_loss"]:
                 embed.add_field(name="Stop Loss", value=f"${fields['stop_loss']:,.2f}", inline=True)
-            if fields['take_profit']:
+            if fields["take_profit"]:
                 embed.add_field(name="Take Profit", value=f"${fields['take_profit']:,.2f}", inline=True)
 
             embed.add_field(name="Confidence", value=f"{fields['confidence']}%", inline=True)
 
-            if fields['risk_reward_ratio']:
+            if fields["risk_reward_ratio"]:
                 embed.add_field(name="R:R", value=f"{fields['risk_reward_ratio']:.2f}", inline=True)
 
-            trend = fields['trend']
+            trend = fields["trend"]
             if trend:
-                direction = trend.get('direction', 'N/A')
-                strength = trend.get('strength')
+                direction = trend.get("direction", "N/A")
+                strength = trend.get("strength")
                 if strength is None:
-                    strength = trend.get('strength_daily', trend.get('strength_4h', 0))
+                    strength = trend.get("strength_daily", trend.get("strength_4h", 0))
                 embed.add_field(name="Trend", value=f"{direction} ({strength}%)", inline=True)
 
-            key_levels = fields['key_levels']
+            key_levels = fields["key_levels"]
             if key_levels:
-                supports = key_levels.get('support', [])
-                resistances = key_levels.get('resistance', [])
+                supports = key_levels.get("support", [])
+                resistances = key_levels.get("resistance", [])
                 if supports:
                     support_str = ", ".join([f"${s:,.2f}" for s in supports[:3]])
                     embed.add_field(name="Support", value=support_str, inline=False)
@@ -590,6 +592,7 @@ class DiscordNotifier(BaseNotifier):
 
             embed.set_footer(text=f"Timeframe: {timeframe}")
             return embed
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Error creating embed: %s", e)
             return None
+

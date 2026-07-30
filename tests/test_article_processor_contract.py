@@ -1,3 +1,7 @@
+"""Test Article Processor Contract unit tests.
+
+Tests for test_article_processor_contract.py.
+"""
 from unittest.mock import MagicMock
 
 from src.rag.article_processor import ArticleProcessor

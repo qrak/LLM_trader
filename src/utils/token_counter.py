@@ -1,17 +1,18 @@
 """Token counting and cost tracking for AI model usage."""
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import tempfile
 import threading
 import time
-import atexit
-import tempfile
 from typing import Any
 
 import tiktoken
 
 from src.trading.data_models import ProviderCostStats, SessionCosts
+
 
 class ModelPricing:
     """Loads and provides model pricing from config/model_pricing.json."""
@@ -24,7 +25,7 @@ class ModelPricing:
         pricing_path = os.path.join(os.path.dirname(__file__), "..", "..", "config", "model_pricing.json")
         pricing_path = os.path.normpath(pricing_path)
         try:
-            with open(pricing_path, "r", encoding="utf-8") as f:
+            with open(pricing_path, encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return {"google": {}, "openrouter": {}}
@@ -147,14 +148,13 @@ class TokenCounter:
         """Format cost in human-readable format."""
         if cost == 0 or cost is None:
             return "Free"
-        elif cost < 0.0001:
+        if cost < 0.0001:
             return f"${cost:.8f} ({cost * 100:.6f}¢)"
-        elif cost < 0.01:
+        if cost < 0.01:
             return f"${cost:.6f} ({cost * 100:.4f}¢)"
-        elif cost < 1:
+        if cost < 1:
             return f"${cost:.4f}"
-        else:
-            return f"${cost:.2f}"
+        return f"${cost:.2f}"
 
     def process_response_usage(
         self,
@@ -244,7 +244,7 @@ class CostStorage:
         """Load existing costs or create default structure."""
         if os.path.exists(self.file_path):
             try:
-                with open(self.file_path, 'r', encoding='utf-8') as f:
+                with open(self.file_path, encoding="utf-8") as f:
                     data = json.load(f)
                 self._last_reset = data.get("last_reset")
                 for provider in self.PROVIDERS:
@@ -258,7 +258,7 @@ class CostStorage:
                     else:
                         self._providers[provider] = ProviderCostStats()
                 return
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass  # file not found or corrupt, use defaults
         self._init_defaults()
 
@@ -276,13 +276,13 @@ class CostStorage:
 
             data = {"last_reset": self._last_reset}
             for provider, stats in self._providers.items():
-                data[provider] = stats.to_dict()
+                data[provider] = stats.to_dict()  # type: ignore[reportAttributeAccessIssue]
 
             # Atomic write using temporary file
             temp_path = None
             try:
                 directory = os.path.dirname(self.file_path)
-                with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8', dir=directory) as f:
+                with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", dir=directory) as f:
                     temp_path = f.name
                     json.dump(data, f, indent=2)
                     f.flush()
@@ -291,7 +291,7 @@ class CostStorage:
                 os.replace(temp_path, self.file_path)
                 self._last_save_time = time.time()
                 self._dirty = False
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Fallback to direct print if logging is not available here
                 print(f"Error saving cost storage: {e}")
                 if temp_path and os.path.exists(temp_path):
@@ -334,4 +334,5 @@ class CostStorage:
     def get_provider_costs(self, provider: str) -> ProviderCostStats:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
+
 

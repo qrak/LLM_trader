@@ -5,7 +5,7 @@ Locks build_overview_structure and _finalize_overview behavior before any
 structural changes.  Uses a real processor stub so we test the builder's own
 logic, not a mock.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 from typing import Any, Dict, Optional
 
@@ -152,9 +152,9 @@ class TestBuildOverviewStructureTopCoins:
 
 class TestFinalizeOverview:
     def test_adds_published_on(self, builder):
-        before = datetime.now().timestamp()
+        before = datetime.now(timezone.utc).timestamp()
         result = builder._finalize_overview({})
-        after = datetime.now().timestamp()
+        after = datetime.now(timezone.utc).timestamp()
         assert before <= result["published_on"] <= after
 
     def test_adds_data_sources_list(self, builder):

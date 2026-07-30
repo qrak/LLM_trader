@@ -4,7 +4,7 @@ Tests the live server at semanticsignal.qrak.org (via Cloudflare).
 Covers: security headers, CSP compliance, full login flow, config editing,
 WebSocket connectivity, and error handling.
 
-Run: .venv-wsl/bin/python -m pytest tests/test_admin_live.py -v --tb=short
+Run: pytest tests/test_admin_live.py -v --tb=short
 Requires: live bot with admin credentials configured in keys.env
 """
 

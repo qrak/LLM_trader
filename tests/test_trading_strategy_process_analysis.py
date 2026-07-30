@@ -90,6 +90,10 @@ def _build_strategy() -> TradingStrategy:
         STOP_LOSS_CHECK_INTERVAL="4h",
         TAKE_PROFIT_TYPE="soft",
         TAKE_PROFIT_CHECK_INTERVAL="4h",
+        EXECUTOR_API_ENABLED=False,
+        EXECUTOR_API_URL="",
+        ENTRY_ORDER_TYPE="limit",
+        MARKET_TYPE="spot",
     )
     strategy.current_position = None
     strategy.guard_pipeline = None

@@ -6,6 +6,7 @@ Excellent momentum indicator for identifying reversal points.
 """
 
 import math
+
 import numpy as np
 from numba import njit
 

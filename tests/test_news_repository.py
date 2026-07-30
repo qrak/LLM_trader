@@ -1,3 +1,7 @@
+"""Test News Repository unit tests.
+
+Tests for test_news_repository.py.
+"""
 from unittest.mock import MagicMock
 
 from src.rag.news_repository import NewsRepository

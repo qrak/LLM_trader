@@ -56,6 +56,6 @@ node_modules/
 website/.astro/
 website/dist/
 
-# AI-generated artifacts (plans, drafts, research — never committed)
-.ai/
+# AI-generated temporary plans (never committed)
+.ai/plans/
 .hermes.md

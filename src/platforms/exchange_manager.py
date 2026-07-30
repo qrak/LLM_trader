@@ -1,9 +1,13 @@
-import asyncio
-from datetime import datetime
-from typing import Set, Any, TYPE_CHECKING
+"""Exchange Manager module.
 
-import ccxt.async_support as ccxt
+Provides functionality for platforms.exchange_manager.py.
+"""
+import asyncio
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Any
+
 import aiohttp
+import ccxt.async_support as ccxt
 
 from src.logger.logger import Logger
 from src.utils.decorators import retry_async
@@ -28,13 +32,13 @@ class ExchangeManager:
         self.logger = logger
         self.config = config
         self.exchanges: dict[str, ccxt.Exchange] = {}
-        self.symbols_by_exchange: dict[str, Set[str]] = {}
+        self.symbols_by_exchange: dict[str, set[str]] = {}
         self.exchange_last_loaded: dict[str, datetime] = {}
         self._update_task: asyncio.Task | None = None
         self._shutdown_in_progress = False
         self.exchange_config: dict[str, Any] = {
-            'enableRateLimit': True,
-            'options': {'defaultType': 'spot'}
+            "enableRateLimit": True,
+            "options": {"defaultType": "spot"}
         }
         self.exchange_names = self.config.SUPPORTED_EXCHANGES
         self.session: aiohttp.ClientSession | None = None
@@ -43,7 +47,7 @@ class ExchangeManager:
         """Initialize the session for exchanges - no longer loads all exchanges upfront"""
         self.logger.debug("Initializing ExchangeManager with lazy loading")
         self.session = aiohttp.ClientSession()
-        self.exchange_config['session'] = self.session
+        self.exchange_config["session"] = self.session
 
         self._update_task = asyncio.create_task(self._periodic_update())
         self._update_task.add_done_callback(self._handle_update_task_done)
@@ -63,8 +67,8 @@ class ExchangeManager:
                 await self._update_task
             except asyncio.CancelledError:
                 pass  # expected during shutdown
-            except Exception as e:
-                self.logger.exception("Error during update task cancellation: %s", e)
+            except Exception:
+                self.logger.exception("Error during update task cancellation: %s")
             finally:
                 self._update_task = None
 
@@ -73,14 +77,14 @@ class ExchangeManager:
             try:
                 await exchange.close()
                 self.logger.debug("Closed %s connection", exchange_id)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing %s connection: %s", exchange_id, e)
 
         if self.session:
             try:
                 self.logger.debug("Closing shared aiohttp session")
                 await self.session.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing shared aiohttp session: %s", e)
             finally:
                 self.session = None
@@ -103,37 +107,35 @@ class ExchangeManager:
             exchange_config = self.exchange_config.copy()
 
             if self.session:
-                exchange_config['session'] = self.session
+                exchange_config["session"] = self.session
 
             exchange = exchange_class(exchange_config)
 
             await exchange.load_markets()
 
             self.exchanges[exchange_id] = exchange
-            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
-            self.exchange_last_loaded[exchange_id] = datetime.now()
+            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)  # type: ignore[arg-type]
+            self.exchange_last_loaded[exchange_id] = datetime.now(timezone.utc)
             self.logger.debug("Loaded %s with %s symbols", exchange_id, len(exchange.symbols))
 
             return exchange
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to load %s markets: %s", exchange_id, e)
             return None
 
     async def _ensure_exchange_loaded(self, exchange_id: str) -> ccxt.Exchange | None:
         """Ensure exchange is loaded and markets are up to date"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         if exchange_id in self.exchanges:
             last_loaded = self.exchange_last_loaded.get(exchange_id)
 
             if last_loaded and (now - last_loaded).total_seconds() < self.config.MARKET_REFRESH_HOURS * 3600:
                 return self.exchanges[exchange_id]
-            else:
-                self.logger.info("Refreshing %s markets (last loaded: %s)", exchange_id, last_loaded)
-                await self._refresh_exchange_markets(exchange_id)
-                return self.exchanges.get(exchange_id)
-        else:
-            return await self._load_exchange(exchange_id)
+            self.logger.info("Refreshing %s markets (last loaded: %s)", exchange_id, last_loaded)
+            await self._refresh_exchange_markets(exchange_id)
+            return self.exchanges.get(exchange_id)
+        return await self._load_exchange(exchange_id)
 
     async def _refresh_exchange_markets(self, exchange_id: str) -> None:
         """Refresh markets for a single exchange"""
@@ -144,16 +146,16 @@ class ExchangeManager:
         try:
             self.logger.debug("Refreshing %s markets", exchange_id)
             await exchange.load_markets(reload=True)
-            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
-            self.exchange_last_loaded[exchange_id] = datetime.now()
-            self.logger.info("Refreshed %s with %s symbols", exchange_id, len(exchange.symbols))
-        except Exception as e:
+            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)  # type: ignore[arg-type]
+            self.exchange_last_loaded[exchange_id] = datetime.now(timezone.utc)
+            self.logger.info("Refreshed %s with %s symbols", exchange_id, len(exchange.symbols))  # type: ignore
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to refresh %s markets: %s", exchange_id, e)
             # Try to reconnect if refresh fails
             try:
                 try:
                     await exchange.close()
-                except Exception as e_close:
+                except Exception as e_close:  # noqa: BLE001
                     self.logger.warning("Error closing old %s connection: %s", exchange_id, e_close)
 
                 new_exchange = await self._load_exchange(exchange_id)
@@ -161,7 +163,7 @@ class ExchangeManager:
                     self.exchanges.pop(exchange_id, None)
                     self.symbols_by_exchange.pop(exchange_id, None)
                     self.exchange_last_loaded.pop(exchange_id, None)
-            except Exception as reconnect_err:
+            except Exception as reconnect_err:  # noqa: BLE001
                 self.logger.error("Failed to reconnect to %s: %s", exchange_id, reconnect_err)
                 self.exchanges.pop(exchange_id, None)
                 self.symbols_by_exchange.pop(exchange_id, None)
@@ -184,7 +186,7 @@ class ExchangeManager:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error in periodic update: %s", e)
                 await asyncio.sleep(300)
 
@@ -199,21 +201,22 @@ class ExchangeManager:
                         return exchange, exchange_id
 
                 exchange = await self._ensure_exchange_loaded(exchange_id)
-                if exchange and exchange_id in self.symbols_by_exchange:
+                if exchange and exchange_id in self.symbols_by_exchange:  # noqa: SIM102
                     if symbol in self.symbols_by_exchange[exchange_id]:
                         self.logger.info("Found %s on %s", symbol, exchange_id)
                         return exchange, exchange_id
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 self.logger.error("Error checking %s for symbol %s: %s", exchange_id, symbol, e)
                 continue
 
         self.logger.warning("Symbol %s not found on any supported exchange", symbol)
         return None, None
 
-    def get_all_symbols(self) -> Set[str]:
+    def get_all_symbols(self) -> set[str]:
         """Get all unique symbols across all loaded exchanges"""
-        all_symbols = set()
+        all_symbols = set()  # type: ignore[arg-type]
         for symbols in self.symbols_by_exchange.values():
             all_symbols.update(symbols)
         return all_symbols
+

@@ -2,22 +2,38 @@
 Consolidated Technical Analysis Formatter.
 Handles all technical analysis formatting in a single comprehensive class.
 """
-from typing import TYPE_CHECKING
 import re
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from src.logger.logger import Logger
-from src.utils.data_utils import get_last_valid_value, get_last_n_valid, safe_array_to_scalar
+from src.utils.data_utils import (
+    get_last_n_valid,
+    get_last_valid_value,
+    safe_array_to_scalar,
+)
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
+# Bolt: module-level constant avoids allocating dictionary on every staleness calculation
+_STALENESS_TARGET_HOURS: dict[str, int] = {
+    "rsi": 40,           # Momentum: ~40h
+    "macd": 40,          # Momentum: ~40h
+    "stochastic": 40,    # Momentum: ~40h
+    "ma_crossover": 200, # Trend: ~8 days
+    "divergence": 80,    # Divergence: ~3 days
+    "volatility": 20,    # Volatility: ~20h
+    "volume": 40,        # Volume: ~40h
+}
+
 
 class TechnicalFormatter:
     """Consolidated formatter for all technical analysis sections."""
 
-    def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils" = None):
+    def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
         """Initialize the technical analysis formatter.
 
         Args:
@@ -90,8 +106,8 @@ class TechnicalFormatter:
             close_delta = float(closes[-1] - closes[0])
             close_delta_pct = (close_delta / closes[0] * 100) if closes[0] != 0 else 0
 
-            # Count green/red candles
-            green_candles = sum(1 for i in range(len(closes)) if closes[i] >= opens[i])
+            # Count green/red candles vectorially
+            green_candles = int(np.count_nonzero(closes >= opens))
             red_candles = len(closes) - green_candles
 
             # Determine close trend text
@@ -137,7 +153,7 @@ class TechnicalFormatter:
 
             return price_action
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error formatting price action with OHLCV: %s", e)
             # Fallback to simple format
@@ -146,9 +162,9 @@ class TechnicalFormatter:
     def format_momentum_section(self, td: dict) -> str:
         """Format the momentum indicators section with temporal context (last 12 candles)."""
         # Get temporal arrays for critical momentum indicators
-        rsi_temporal = self._format_temporal_array(td, 'rsi', 12, 1)
-        macd_hist_temporal = self._format_temporal_array(td, 'macd_hist', 12, 8)
-        stoch_k_temporal = self._format_temporal_array(td, 'stoch_k', 12, 1)
+        rsi_temporal = self._format_temporal_array(td, "rsi", 12, 1)
+        macd_hist_temporal = self._format_temporal_array(td, "macd_hist", 12, 8)
+        stoch_k_temporal = self._format_temporal_array(td, "stoch_k", 12, 1)
 
         return f"""## Momentum:
 - RSI:{self.format_utils.fmt_ta(td, 'rsi', 1)}{rsi_temporal} | MACD:{self.format_utils.fmt_ta(td, 'macd_line', 8)}/{self.format_utils.fmt_ta(td, 'macd_signal', 8)} Hist:{self.format_utils.fmt_ta(td, 'macd_hist', 8)}{macd_hist_temporal}
@@ -157,7 +173,7 @@ class TechnicalFormatter:
 
     def format_trend_section(self, td: dict) -> str:
         """Format the trend indicators section with temporal context for trend strength evolution."""
-        supertrend_direction = self.format_utils.get_supertrend_direction_string(td.get('supertrend_direction', 0))
+        supertrend_direction = self.format_utils.get_supertrend_direction_string(td.get("supertrend_direction", 0))
 
         # TD Sequential (trend exhaustion indicator)
         td_seq_str = self._format_td_sequential(td)
@@ -169,7 +185,7 @@ class TechnicalFormatter:
         ichimoku_str = self._format_ichimoku_signal(td)
 
         # ADX temporal array to show trend strength evolution
-        adx_temporal = self._format_temporal_array(td, 'adx', 12, 1)
+        adx_temporal = self._format_temporal_array(td, "adx", 12, 1)
 
         return (
             "## Trend:\n"
@@ -183,7 +199,7 @@ class TechnicalFormatter:
         """Format the volume indicators section with temporal context for volume trends."""
         cmf_interpretation = self.format_utils.format_cmf_interpretation(td)
 
-        mfi_temporal = self._format_temporal_array(td, 'mfi', 12, 1)
+        mfi_temporal = self._format_temporal_array(td, "mfi", 12, 1)
 
         return (
             "## Volume:\n"
@@ -197,10 +213,10 @@ class TechnicalFormatter:
         bb_interpretation = self.format_utils.format_bollinger_interpretation(td)
 
         # ATR temporal array to show volatility expansion/contraction
-        atr_temporal = self._format_temporal_array(td, 'atr', 12, 8)
+        atr_temporal = self._format_temporal_array(td, "atr", 12, 8)
 
         # BB %B temporal array to show price position in bands over time
-        bb_percent_b_temporal = self._format_temporal_array(td, 'bb_percent_b', 12, 2)
+        bb_percent_b_temporal = self._format_temporal_array(td, "bb_percent_b", 12, 2)
 
         # Choppiness Index interpretation
         chop_str = self._format_choppiness(td)
@@ -224,13 +240,13 @@ class TechnicalFormatter:
     def format_advanced_indicators_section(self, td: dict) -> str:
         """Format advanced indicators section with temporal context for advanced signals."""
         # CCI temporal array to show commodity channel momentum
-        cci_temporal = self._format_temporal_array(td, 'cci', 12, 1)
+        cci_temporal = self._format_temporal_array(td, "cci", 12, 1)
 
         # Coppock temporal array to show long-term momentum shifts
-        coppock_temporal = self._format_temporal_array(td, 'coppock', 12, 2)
+        coppock_temporal = self._format_temporal_array(td, "coppock", 12, 2)
 
         # KST temporal array to show know sure thing momentum
-        kst_temporal = self._format_temporal_array(td, 'kst', 12, 2)
+        kst_temporal = self._format_temporal_array(td, "kst", 12, 2)
 
         return (
             "## Advanced:\n"
@@ -241,7 +257,7 @@ class TechnicalFormatter:
             f"- Chandelier: Long:{self.format_utils.fmt_ta(td, 'chandelier_long', 8)} Short:{self.format_utils.fmt_ta(td, 'chandelier_short', 8)}"
         )
 
-    def _format_patterns_section(self, context, timeframe: str = '4h') -> str:
+    def _format_patterns_section(self, context, timeframe: str = "4h") -> str:
         """Format patterns section using detected patterns from context.
 
         Args:
@@ -266,7 +282,7 @@ class TechnicalFormatter:
                             # Filter patterns based on recency relative to total candles analyzed
                             # Strategy: Show patterns from most recent 20% of data (e.g., last 200 of 999 candles)
                             # This makes filtering adaptive to different timeframes and candle counts
-                            pattern_index = pattern_dict.get('index', None)
+                            pattern_index = pattern_dict.get("index", None)
                             # Determine recency threshold based on pattern type and data size
                             if last_candle_index is not None and pattern_index is not None:
                                 total_candles = last_candle_index + 1
@@ -277,11 +293,11 @@ class TechnicalFormatter:
                                 abs_threshold = self._calculate_staleness_threshold(category, timeframe)
 
                                 # Calculate percentage-based threshold (existing logic)
-                                if category == 'ma_crossover':
+                                if category == "ma_crossover":
                                     pct_threshold = int(total_candles * 0.3)
-                                elif category in ['volatility', 'volume']:
+                                elif category in ["volatility", "volume"]:
                                     pct_threshold = max(10, int(total_candles * 0.05))
-                                elif category == 'divergence':
+                                elif category == "divergence":
                                     pct_threshold = max(20, int(total_candles * 0.10))
                                 else:
                                     pct_threshold = max(20, int(total_candles * 0.15))
@@ -298,35 +314,35 @@ class TechnicalFormatter:
                                 # Extract base type for deduplication
                                 # e.g., 'stoch_bullish_crossover' -> 'stoch_crossover'
                                 # This groups bullish/bearish variants together
-                                pattern_type = pattern_dict.get('type', '')
+                                pattern_type = pattern_dict.get("type", "")
                                 base_type = self._get_dedup_key(category, pattern_type)
                                 dedup_key = (category, base_type)
-                                periods_ago_val = pattern_dict.get('details', {}).get('periods_ago', 999)
+                                periods_ago_val = pattern_dict.get("details", {}).get("periods_ago", 999)
                                 # Keep only the most recent pattern per dedup key
-                                if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]['periods']:
+                                if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]["periods"]:
                                     dedup_tracker[dedup_key] = {
-                                        'pattern': pattern_dict,
-                                        'periods': periods_ago_val,
-                                        'category': category
+                                        "pattern": pattern_dict,
+                                        "periods": periods_ago_val,
+                                        "category": category
                                     }
                 # Convert dedup_tracker to pattern_summaries
                 for dedup_key, entry in dedup_tracker.items():
-                    pattern_dict = entry['pattern']
-                    category = entry['category']
-                    description = pattern_dict.get('description', f'Unknown {category} pattern')
+                    pattern_dict = entry["pattern"]
+                    category = entry["category"]
+                    description = pattern_dict.get("description", f"Unknown {category} pattern")
                     compressed_desc = self._compress_pattern_description(description)
                     pattern_summaries.append(f"- {compressed_desc}")
                 if pattern_summaries:
                     if self.logger:
                         self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 if self.logger:
                     self.logger.debug("Error using stored technical_patterns: %s", e)
 
         try:
             ohlcv_data = context.ohlcv_candles
-            technical_history = context.technical_data.get('history', {})
+            technical_history = context.technical_data.get("history", {})
 
             patterns = self.technical_calculator.get_all_patterns(ohlcv_data, technical_history)
 
@@ -336,13 +352,13 @@ class TechnicalFormatter:
             if patterns:
                 pattern_summaries = []
                 for pattern in patterns[-5:]:  # Show last 5 patterns
-                    description = pattern.get('description', 'Unknown pattern')
+                    description = pattern.get("description", "Unknown pattern")
                     compressed_desc = self._compress_pattern_description(description)
                     pattern_summaries.append(f"- {compressed_desc}")
 
                 if pattern_summaries:
                     return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Could not use fallback pattern detection: %s", e)
 
@@ -360,30 +376,30 @@ class TechnicalFormatter:
 
 
         # Remove full timestamps (keep relative time if present)
-        description = re.sub(r' at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?', '', description)
+        description = re.sub(r" at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?", "", description)
 
         # Remove index numbers
-        description = re.sub(r' \(index \d+\)', '', description)
+        description = re.sub(r" \(index \d+\)", "", description)
 
         # Compress common words
         replacements = {
-            'crossover': '×',
-            'bullish': 'bull',
-            'bearish': 'bear',
-            'histogram': 'hist',
-            'periods ago': 'bars ago',
-            'period ago': 'bar ago',
-            'detected': '',
-            'squeeze': 'sqz',
-            'breakout imminent': 'breakout',
-            'zero-line cross': 'zero×',
+            "crossover": "×",
+            "bullish": "bull",
+            "bearish": "bear",
+            "histogram": "hist",
+            "periods ago": "bars ago",
+            "period ago": "bar ago",
+            "detected": "",
+            "squeeze": "sqz",
+            "breakout imminent": "breakout",
+            "zero-line cross": "zero×",
         }
 
         for old, new in replacements.items():
             description = description.replace(old, new)
 
         # Compress multiple spaces
-        description = re.sub(r'\s+', ' ', description).strip()
+        description = re.sub(r"\s+", " ", description).strip()
 
         return description
     def _get_dedup_key(self, category: str, pattern_type: str) -> str:
@@ -395,13 +411,13 @@ class TechnicalFormatter:
         - 'rsi_overbought' -> 'rsi_level'
         """
         # Remove directional qualifiers to group similar patterns
-        base = pattern_type.replace('bullish_', '').replace('bearish_', '')
+        base = pattern_type.replace("bullish_", "").replace("bearish_", "")
         # Group oversold/overbought together
-        if 'oversold' in base or 'overbought' in base:
+        if "oversold" in base or "overbought" in base:
             return f"{category}_level"
         # Group divergences by indicator
-        if 'divergence' in base:
-            return base.split('_')[0] + '_divergence'
+        if "divergence" in base:
+            return base.split("_")[0] + "_divergence"
         return base
 
     def _calculate_staleness_threshold(self, category: str, timeframe: str) -> int:
@@ -412,18 +428,8 @@ class TechnicalFormatter:
         except (ValueError, TypeError):
             minutes_per_candle = 240
 
-        # Target hours relative to pattern significance
-        target_hours = {
-            'rsi': 40,           # Momentum: ~40h
-            'macd': 40,          # Momentum: ~40h
-            'stochastic': 40,    # Momentum: ~40h
-            'ma_crossover': 200, # Trend: ~8 days
-            'divergence': 80,    # Divergence: ~3 days
-            'volatility': 20,    # Volatility: ~20h
-            'volume': 40,        # Volume: ~40h
-        }
-
-        target_minutes = target_hours.get(category, 40) * 60
+        # Target hours relative to pattern significance (from module constant)
+        target_minutes = _STALENESS_TARGET_HOURS.get(category, 40) * 60
         # Ensure at least 1 bar
         return max(1, target_minutes // minutes_per_candle)
 
@@ -433,7 +439,7 @@ class TechnicalFormatter:
         TD Sequential counts consecutive candles (up to 9) where close > close[4] (bullish)
         or close < close[4] (bearish). Count of 8-9 signals potential trend exhaustion.
         """
-        td_seq = td.get('td_sequential')
+        td_seq = td.get("td_sequential")
         if td_seq is None:
             return ""
 
@@ -443,7 +449,7 @@ class TechnicalFormatter:
         if td_val > 0:
             count = int(abs(td_val))
             return f" | TD:{count}↑⚠️" if count >= 8 else f" | TD:{count}↑" if count >= 1 else ""
-        elif td_val < 0:
+        if td_val < 0:
             count = int(abs(td_val))
             return f" | TD:{count}↓⚠️" if count >= 8 else f" | TD:{count}↓" if count >= 1 else ""
         return ""
@@ -457,9 +463,9 @@ class TechnicalFormatter:
         - Price position relative to SMAs
         """
         try:
-            sma_20 = td.get('sma_20')
-            sma_50 = td.get('sma_50')
-            sma_200 = td.get('sma_200')
+            sma_20 = td.get("sma_20")
+            sma_50 = td.get("sma_50")
+            sma_200 = td.get("sma_200")
 
             # Extract last values from arrays using shared utility
             sma_20_val = get_last_valid_value(sma_20)
@@ -492,7 +498,7 @@ class TechnicalFormatter:
                     cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
 
             return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error formatting SMA structure: %s", e)
             return ""
@@ -504,29 +510,18 @@ class TechnicalFormatter:
         Calculates signal on-demand from raw span data.
         """
         try:
-            # Get ichimoku spans
-            span_a = td.get('ichimoku_span_a')
-            span_b = td.get('ichimoku_span_b')
+            span_a = td.get("ichimoku_span_a")
+            span_b = td.get("ichimoku_span_b")
+            close_data = td.get("close")
 
-            if span_a is None or span_b is None:
+            if span_a is None or span_b is None or close_data is None:
                 return ""
 
-            # Extract last values
             span_a_val = get_last_valid_value(span_a)
             span_b_val = get_last_valid_value(span_b)
+            current_price = safe_array_to_scalar(close_data, -1)
 
-            if span_a_val is None or span_b_val is None:
-                return ""
-
-            # Get current price - try multiple sources
-            current_price = None
-
-            # Method 1: Try from close prices in technical data
-            close_data = td.get('close')
-            if close_data is not None:
-                current_price = safe_array_to_scalar(close_data, -1)
-
-            if current_price is None:
+            if span_a_val is None or span_b_val is None or current_price is None:
                 return ""
 
             # Calculate cloud boundaries
@@ -536,19 +531,18 @@ class TechnicalFormatter:
             # Determine signal based on price position relative to cloud
             if current_price > cloud_top:
                 return " | Ichi:☁️↑"
-            elif current_price < cloud_bottom:
+            if current_price < cloud_bottom:
                 return " | Ichi:☁️↓"
-            else:
-                return " | Ichi:☁️="
-        except Exception as e:
+            return " | Ichi:☁️="
+        except Exception as e:  # noqa: BLE001
             if self.logger:
                 self.logger.debug("Error calculating ichimoku signal: %s", e)
             return ""
 
     BOUNDED_OSCILLATORS = frozenset([
-        'rsi', 'stoch_k', 'stoch_d', 'mfi', 'williams_r',
-        'cci', 'bb_percent_b', 'adx', 'plus_di', 'minus_di',
-        'choppiness', 'uo', 'rmi',
+        "rsi", "stoch_k", "stoch_d", "mfi", "williams_r",
+        "cci", "bb_percent_b", "adx", "plus_di", "minus_di",
+        "choppiness", "uo", "rmi",
     ])
 
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:
@@ -579,7 +573,7 @@ class TechnicalFormatter:
             delta_pct = abs(delta / last_n[0]) * 100
         else:
             delta_pct = abs(delta) * 100
-        threshold_pct = 3.0 if key in ['rsi', 'stoch_k', 'stoch_d', 'mfi', 'cci'] else 5.0
+        threshold_pct = 3.0 if key in ["rsi", "stoch_k", "stoch_d", "mfi", "cci"] else 5.0
         if delta_pct >= threshold_pct:
             trend_text = "↑" if delta > 0 else "↓"
         else:
@@ -591,7 +585,7 @@ class TechnicalFormatter:
 
         Thresholds: >61.8 Choppy, <38.2 Trending, else Transition.
         """
-        chop = td.get('choppiness')
+        chop = td.get("choppiness")
         if chop is None:
             return ""
         chop_val = get_last_valid_value(chop)
@@ -604,3 +598,4 @@ class TechnicalFormatter:
         else:
             state = "Transition"
         return f"- Choppiness:{chop_val:.1f} ({state})"
+

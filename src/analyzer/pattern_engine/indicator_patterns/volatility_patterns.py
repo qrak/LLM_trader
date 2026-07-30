@@ -44,15 +44,15 @@ def detect_atr_spike_numba(
 
     # Avoid division by zero
     if avg_atr < 0.0001:
-        return (False, -1, current_atr, avg_atr)
+        return (False, -1, current_atr, avg_atr)  # type: ignore
 
     # Check if current ATR is significantly higher
     spike_ratio = current_atr / avg_atr
 
     if spike_ratio >= spike_threshold:
-        return (True, 0, current_atr, avg_atr)
+        return (True, 0, current_atr, avg_atr)  # type: ignore
 
-    return (False, -1, current_atr, avg_atr)
+    return (False, -1, current_atr, avg_atr)  # type: ignore
 
 
 @njit(cache=True)
@@ -145,10 +145,9 @@ def detect_volatility_trend_numba(
 
     if float(increasing) >= threshold:
         return 1
-    elif float(decreasing) >= threshold:
+    if float(decreasing) >= threshold:
         return -1
-    else:
-        return 0
+    return 0
 
 
 @njit(cache=True)
@@ -184,7 +183,4 @@ def detect_keltner_squeeze_numba(
     bb_l = bb_lower[-1]
 
     # Squeeze = BB inside KC
-    if bb_u <= kc_u and bb_l >= kc_l:
-        return True
-
-    return False
+    return bool(bb_u <= kc_u and bb_l >= kc_l)

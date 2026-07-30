@@ -1,3 +1,4 @@
+/* global DOMPurify */
 /**
  * News panel module - Displays latest crypto news articles.
  */
@@ -24,7 +25,8 @@ export async function updateNewsData() {
             `;
             return;
         }
-        container.innerHTML = DOMPurify.sanitize(renderNews(data.articles));
+        const newsHtml = renderNews(data.articles);
+        container.innerHTML = window.DOMPurify ? DOMPurify.sanitize(newsHtml) : newsHtml;
     } catch (e) {
         container.innerHTML = `
             <div class="empty-state">

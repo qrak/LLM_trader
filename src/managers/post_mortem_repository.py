@@ -113,7 +113,7 @@ class PostMortemRepository:
                     (llm_analysis, lesson_learned, post_mortem_id),
                 )
                 conn.commit()
-                return post_mortem_id
+                return int(post_mortem_id or 0)
             finally:
                 conn.close()
 

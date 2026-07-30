@@ -1,3 +1,7 @@
+"""Test Low Timeframe Data Warnings unit tests.
+
+Tests for test_low_timeframe_data_warnings.py.
+"""
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -54,3 +58,29 @@ async def test_data_fetcher_uses_timeframe_aware_expected_candles():
     warning_calls = [call.args for call in logger.warning.call_args_list]
     assert any("for %s target coverage" in args[0] for args in warning_calls)
     assert any(args[1] == 400 and args[2] == 998 and args[3] == "30m" for args in warning_calls)
+
+
+@pytest.mark.asyncio
+async def test_market_data_collector_fetches_concurrently():
+    import numpy as np
+    from types import SimpleNamespace
+
+    collector = MarketDataCollector(logger=MagicMock(), rag_engine=MagicMock())
+    collector.symbol = "BTC/USDC"
+    collector.exchange = MagicMock()
+    collector.data_fetcher = MagicMock()
+
+    mock_candles = np.array(_ohlcv_rows(100))
+    collector.data_fetcher.fetch_candlestick_data = AsyncMock(return_value=(mock_candles, 100.5))
+
+    collector.fetch_long_term_historical_data = AsyncMock(return_value=True)
+    collector.fetch_weekly_macro_data = AsyncMock(return_value=True)
+    collector.fetch_and_process_sentiment_data = AsyncMock(return_value=True)
+
+    ctx = SimpleNamespace()
+    success = await collector.fetch_ohlcv(ctx)
+
+    assert success is True
+    collector.fetch_long_term_historical_data.assert_awaited_once_with(ctx)
+    collector.fetch_weekly_macro_data.assert_awaited_once_with(ctx, target_weeks=300)
+    collector.fetch_and_process_sentiment_data.assert_awaited_once_with(ctx)

@@ -4,7 +4,9 @@ Manages statistics state, recalculation, and context formatting.
 """
 
 from typing import TYPE_CHECKING
+
 from src.logger.logger import Logger
+
 from .statistics_calculator import StatisticsCalculator
 
 if TYPE_CHECKING:
@@ -79,7 +81,7 @@ class TradingStatisticsService:
             f"- Sharpe Ratio: {stats.sharpe_ratio:.2f} | Sortino: {stats.sortino_ratio:.2f}",
         ]
 
-        if stats.profit_factor > 0 and stats.profit_factor != float('inf'):
+        if stats.profit_factor > 0 and stats.profit_factor != float("inf"):
             lines.append(f"- Profit Factor: {stats.profit_factor:.2f}")
 
         return "\n".join(lines)

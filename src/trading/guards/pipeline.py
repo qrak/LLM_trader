@@ -14,9 +14,29 @@ class GuardPipeline:
         self._guards = list(guards)
 
     def evaluate(self, intent, /, *, capital: float, config: Any) -> list[GuardResult]:
+        """Evaluate all guards sequentially against an order intent.
+
+        Args:
+            intent: Order intent to validate.
+            capital: Available portfolio capital.
+            config: Runtime configuration mapping or object.
+
+        Returns:
+            List of GuardResult instances for all executed guards.
+        """
         results: list[GuardResult] = []
         for guard in self._guards:
-            result = guard.check(intent, capital=capital, config=config)
+            try:
+                result = guard.check(intent, capital=capital, config=config)
+            except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+                results.append(
+                    GuardResult(
+                        guard_name=getattr(guard, "name", "unknown_guard"),
+                        passed=False,
+                        reason=f"Guard '{getattr(guard, 'name', 'unknown')}' failed closed due to error: {exc}",
+                    )
+                )
+                break
             results.append(result)
             if not result.passed:
                 break
@@ -24,6 +44,7 @@ class GuardPipeline:
 
     @property
     def guard_names(self) -> list[str]:
+        """Return the list of guard names registered in this pipeline."""
         return [g.name for g in self._guards]
 
     def invalidate_cooldown_cache(self) -> None:
@@ -34,5 +55,6 @@ class GuardPipeline:
         """
         for guard in self._guards:
             if guard.name == "cooldown_window":
-                guard.invalidate_cache()
+                guard.invalidate_cache()  # type: ignore
                 return
+

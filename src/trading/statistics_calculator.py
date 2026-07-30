@@ -5,13 +5,13 @@ drawdowns, win rate, and other performance metrics from trade history.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
+
 import numpy as np
 
-from src.utils.data_utils import SerializableMixin
 from src.trading.data_models import ClosedTradeResult
-
+from src.utils.data_utils import SerializableMixin
 
 
 @dataclass(slots=True)
@@ -104,7 +104,7 @@ class StatisticsCalculator:
             sharpe_ratio=sharpe,
             sortino_ratio=sortino,
             profit_factor=profit_factor,
-            last_updated=datetime.now(),
+            last_updated=datetime.now(timezone.utc),
         )
 
     @staticmethod
@@ -153,7 +153,7 @@ class StatisticsCalculator:
         peaks = np.maximum.accumulate(equity_curve)
 
         # Avoid division by zero
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             drawdowns = np.where(peaks > 0, (equity_curve - peaks) / peaks * 100, 0.0)
 
         max_dd = float(np.min(drawdowns)) if len(drawdowns) > 0 else 0.0
@@ -201,7 +201,7 @@ class StatisticsCalculator:
 
         # Use isclose to handle floating point precision issues near zero
         if np.isclose(downside_deviation, 0):
-            return float('inf') if mean_return > 0 else 0.0
+            return float("inf") if mean_return > 0 else 0.0
 
         sortino = (mean_return - risk_free_rate) / downside_deviation
         return round(float(sortino), 2)
@@ -213,6 +213,7 @@ class StatisticsCalculator:
         gross_loss = abs(np.sum(pnl_amounts[pnl_amounts < 0]))
 
         if gross_loss == 0:
-            return float('inf') if gross_profit > 0 else 0.0
+            return float("inf") if gross_profit > 0 else 0.0
 
         return round(float(gross_profit / gross_loss), 2)
+

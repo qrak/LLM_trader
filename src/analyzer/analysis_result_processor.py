@@ -3,13 +3,14 @@
 Handles the processing and formatting of analysis results from the AI models.
 """
 from __future__ import annotations
+
 import io
 import re
-from typing import Any, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from src.logger.logger import Logger
-from src.analyzer.trend_validator import TrendValidator
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+from src.analyzer.trend_validator import TrendValidator
+from src.logger.logger import Logger
 
 if TYPE_CHECKING:
     from src.analyzer.analysis_context import AnalysisContext
@@ -21,7 +22,7 @@ class AnalysisResultProcessor:
 
     def __init__(
         self,
-        model_manager: "ModelManager",
+        model_manager: ModelManager,
         logger: Logger,
         unified_parser,
         trend_validator: TrendValidator,
@@ -31,12 +32,12 @@ class AnalysisResultProcessor:
         self.model_manager = model_manager
         self.logger = logger
         self.unified_parser = unified_parser
-        self.context: "AnalysisContext" | None = None
+        self.context: AnalysisContext | None = None
         self._trend_validator = trend_validator
         self._quality_scorer = quality_scorer
 
     async def process_analysis(self, system_prompt: str, prompt: str,
-                              chart_image: Union[io.BytesIO, bytes, str] | None = None,
+                              chart_image: io.BytesIO | bytes | str | None = None,
                               provider: str | None = None, model: str | None = None) -> dict[str, Any]:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         """
@@ -57,7 +58,7 @@ class AnalysisResultProcessor:
 
         # Use chart analysis if image is provided and model supports it
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
-        if use_chart_analysis:
+        if chart_image is not None and use_chart_analysis:
             prov_name, model_name = self.model_manager.describe_provider_and_model(provider, model, chart=True)
             prov_label = prov_name.upper() if prov_name else "UNKNOWN"
             self.logger.info(
@@ -73,7 +74,7 @@ class AnalysisResultProcessor:
                     provider=provider,
                     model=model
                 )
-            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught
+            except (ValueError, Exception) as chart_error:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 self.logger.warning("Chart analysis failed: %s. Falling back to text-only analysis.", chart_error)
                 complete_response = await self.model_manager.send_prompt_streaming(
                     prompt=prompt,
@@ -162,7 +163,7 @@ class AnalysisResultProcessor:
     @staticmethod
     def _clean_response(text: str) -> str:
         """Remove thinking sections and extra whitespace from AI responses"""
-        return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
     def _validate_llm_claims(self, parsed_response: dict[str, Any]) -> None:
         """Validate LLM-reported ADX strengths and pattern quality against computed data.
@@ -225,3 +226,4 @@ class AnalysisResultProcessor:
                 "Pattern quality: computed=%s (%s)",
                 round(quality.overall), quality.label,
             )
+

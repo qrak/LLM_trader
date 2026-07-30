@@ -5,9 +5,11 @@ Implements common patterns: context managers, image processing, error handling.
 import io
 import re
 from abc import ABC, abstractmethod
-from typing import Any, Union, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.logger.logger import Logger
+
 from .response_models import ChatResponseModel, ChoiceModel, MessageModel, UsageModel
 
 
@@ -18,7 +20,7 @@ class BaseAIClient(ABC):
         self.logger = logger
         self.api_key: str | None = None
         # Common unsupported parameters to pre-filter
-        self._known_unsupported_params = {'thinking_budget', 'thinking_config', 'top_k', 'freq_penalty', 'pres_penalty'}
+        self._known_unsupported_params = {"thinking_budget", "thinking_config", "top_k", "freq_penalty", "pres_penalty"}
 
     async def __aenter__(self):
         """Async context manager entry - calls _initialize_client."""
@@ -48,12 +50,12 @@ class BaseAIClient(ABC):
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """Send a chat completion request with chart image analysis."""
 
-    def process_chart_image(self, chart_image: Union[io.BytesIO, bytes, str]) -> bytes:
+    def process_chart_image(self, chart_image: io.BytesIO | bytes | str) -> bytes:
         """
         Process chart image from various input formats to bytes.
 
@@ -69,7 +71,7 @@ class BaseAIClient(ABC):
             chart_image.seek(0)
             return img_data
         if isinstance(chart_image, str):
-            with open(chart_image, 'rb') as f:
+            with open(chart_image, "rb") as f:
                 return f.read()
         return chart_image
 
@@ -145,12 +147,12 @@ class BaseAIClient(ABC):
         """
         if response is None:
             return ChatResponseModel.from_error("Empty response from SDK")
-            
+
         try:
             inner = response.response if unwrap_response else response
         except AttributeError:
             inner = response
-            
+
         try:
             choices_data = []
             for choice in (inner.choices or []):
@@ -158,17 +160,17 @@ class BaseAIClient(ABC):
                     role = choice.message.role
                 except AttributeError:
                     role = "assistant"
-                    
+
                 try:
                     content = choice.message.content
                 except AttributeError:
                     content = ""
-                    
+
                 try:
                     finish_reason = choice.finish_reason
                 except AttributeError:
                     finish_reason = None
-                    
+
                 choices_data.append(
                     ChoiceModel(
                         message=MessageModel(role=role, content=content),
@@ -201,7 +203,7 @@ class BaseAIClient(ABC):
                 resp_id = inner.id
             except AttributeError:
                 resp_id = None
-                
+
             try:
                 resp_model = inner.model
             except AttributeError:

@@ -5,7 +5,7 @@ Supports both text-only and multimodal (text + image) requests for pattern analy
 import inspect
 import io
 import struct
-from typing import Any, Union
+from typing import Any
 
 from google import genai
 from google.genai import errors, types
@@ -48,11 +48,22 @@ class GoogleAIClient(BaseAIClient):
         if self.client:
             try:
                 aio_client = getattr(self.client, "aio", None)
-                aclose = getattr(aio_client, "aclose", None)
-                if callable(aclose):
-                    close_result = aclose()
-                    if inspect.isawaitable(close_result):
-                        await close_result
+                if aio_client is not None:
+                    aclose = getattr(aio_client, "aclose", None)
+                    if callable(aclose):
+                        try:
+                            close_result = aclose()  # pylint: disable=not-callable
+                            if inspect.isawaitable(close_result):
+                                await close_result
+                        except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+                            self.logger.warning("GoogleAIClient async cleanup failed: %s", exc)
+
+                sync_close = getattr(self.client, "close", None)
+                if callable(sync_close):
+                    try:
+                        sync_close()  # pylint: disable=not-callable
+                    except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+                        self.logger.warning("GoogleAIClient sync cleanup failed: %s", exc)
             finally:
                 self.client = None
                 self.logger.debug("GoogleAIClient closed successfully")
@@ -93,7 +104,7 @@ class GoogleAIClient(BaseAIClient):
             if non_text_parts:
                 self.logger.debug("Google AI response contains non-text parts: %s. Extracting text only.", non_text_parts)
             return "\n".join(text_parts)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to extract text from Google AI response: %s", e)
             return ""
 
@@ -102,20 +113,20 @@ class GoogleAIClient(BaseAIClient):
 
         Returns (width, height) or None if format is unknown.
         """
-        if img_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+        if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
             # PNG: IHDR chunk at offset 16 (4B width, 4B height, big-endian)
             if len(img_bytes) >= 33:
-                w = struct.unpack('>I', img_bytes[16:20])[0]
-                h = struct.unpack('>I', img_bytes[20:24])[0]
+                w = struct.unpack(">I", img_bytes[16:20])[0]
+                h = struct.unpack(">I", img_bytes[20:24])[0]
                 return w, h
-        elif img_bytes[:2] in (b'\xff\xd8',):
+        elif img_bytes[:2] in (b"\xff\xd8",):
             # JPEG: scan for SOF0 (0xff 0xc0/0xc1/0xc2) marker
             i = 2
             while i < len(img_bytes) - 1:
-                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):
+                if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):  # noqa: SIM102
                     if i + 9 < len(img_bytes):
-                        h = struct.unpack('>H', img_bytes[i + 5:i + 7])[0]
-                        w = struct.unpack('>H', img_bytes[i + 7:i + 9])[0]
+                        h = struct.unpack(">H", img_bytes[i + 5:i + 7])[0]
+                        w = struct.unpack(">H", img_bytes[i + 7:i + 9])[0]
                         return w, h
                 i += 1
         return None
@@ -160,9 +171,9 @@ class GoogleAIClient(BaseAIClient):
             if not metadata:
                 return None
 
-            prompt = getattr(metadata, 'prompt_token_count', 0) or 0
-            completion = getattr(metadata, 'candidates_token_count', 0) or 0
-            thoughts = getattr(metadata, 'thoughts_token_count', 0) or 0
+            prompt = getattr(metadata, "prompt_token_count", 0) or 0
+            completion = getattr(metadata, "candidates_token_count", 0) or 0
+            thoughts = getattr(metadata, "thoughts_token_count", 0) or 0
 
             # Google bills thinking tokens as output ("Output price including thinking tokens").
             output_tokens = completion + thoughts
@@ -170,14 +181,14 @@ class GoogleAIClient(BaseAIClient):
             # Log per-modality breakdown from SDK for transparency
             text_tokens = None
             image_tokens_sdk = None
-            prompt_details = getattr(metadata, 'prompt_tokens_details', None)
+            prompt_details = getattr(metadata, "prompt_tokens_details", None)
             if prompt_details:
                 for detail in prompt_details:
-                    mod = getattr(detail, 'modality', '')
-                    count = getattr(detail, 'token_count', 0) or 0
-                    if mod == 'TEXT':
+                    mod = getattr(detail, "modality", "")
+                    count = getattr(detail, "token_count", 0) or 0
+                    if mod == "TEXT":
                         text_tokens = count
-                    elif mod == 'IMAGE':
+                    elif mod == "IMAGE":
                         image_tokens_sdk = count
 
             # Diagnostic: log the modality breakdown if available
@@ -194,7 +205,7 @@ class GoogleAIClient(BaseAIClient):
                     text_tokens or prompt, est, prompt, output_tokens,
                 )
 
-            total = getattr(metadata, 'total_token_count', 0) or 0
+            total = getattr(metadata, "total_token_count", 0) or 0
             return UsageModel(
                 prompt_tokens=prompt,
                 completion_tokens=output_tokens,
@@ -203,7 +214,7 @@ class GoogleAIClient(BaseAIClient):
             )
         except AttributeError:
             pass
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Failed to extract usage metadata: %s", e)
         return None
 
@@ -264,7 +275,7 @@ class GoogleAIClient(BaseAIClient):
         return any(term in error_text for term in ("invalid", "unsupported", "unknown", "field", "400"))
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion(
+    async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -297,7 +308,7 @@ class GoogleAIClient(BaseAIClient):
                 usage = self._extract_usage_metadata(response, image_bytes=None)
                 self.logger.debug("Received successful response from Google AI")
                 return self.create_response(content_text, usage=usage)
-            except Exception as e: # pylint: disable=broad-exception-caught
+            except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
                 if include_thinking and self._should_retry_without_thinking(e):
                     self.logger.warning("Model may not support thinking_config, retrying without it: %s", e)
                     continue
@@ -306,11 +317,11 @@ class GoogleAIClient(BaseAIClient):
         return None
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
-    async def chat_completion_with_chart_analysis(
+    async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
         messages: list[dict[str, Any]],
-        chart_image: Union[io.BytesIO, bytes, str],
+        chart_image: io.BytesIO | bytes | str,
         model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """
@@ -329,17 +340,15 @@ class GoogleAIClient(BaseAIClient):
         prompt = self._extract_text_from_messages(messages)
         effective_model = model if model else self.model
         img_data = self.process_chart_image(chart_image)
-        image_part = types.Part.from_bytes(data=img_data, mime_type='image/png')
+        image_part = types.Part.from_bytes(data=img_data, mime_type="image/png")
         contents = [prompt, image_part]
         include_code_execution = model_config.get("google_code_execution", False)
 
         # Outer: try with thinking, then without
         # Inner: try with code_execution (if enabled), then without
+        ce_options = (True, False) if include_code_execution else (False,)
         for include_thinking in (True, False):
-            for include_ce in (include_code_execution, False):
-                if not include_ce and not include_code_execution:
-                    break  # code_execution not requested — skip second inner iteration
-
+            for include_ce in ce_options:
                 try:
                     generation_config = self._create_generation_config(
                         model_config,
@@ -361,7 +370,7 @@ class GoogleAIClient(BaseAIClient):
                     usage = self._extract_usage_metadata(response, image_bytes=img_data)
                     self.logger.debug("Received successful chart analysis response from Google AI")
                     return self.create_response(content_text, usage=usage)
-                except Exception as e: # pylint: disable=broad-exception-caught
+                except Exception as e: # pylint: disable=broad-exception-caught  # noqa: BLE001
                     if include_ce and self._should_retry_without_code_execution(e):
                         self.logger.warning(
                             "Model may not support code_execution, retrying without it: %s", e
@@ -384,3 +393,5 @@ class GoogleAIClient(BaseAIClient):
         sanitized_error = self._sanitize_error_message(str(exception))
         self.logger.error("Unexpected Google AI error: %s", sanitized_error)
         return None
+
+

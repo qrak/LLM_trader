@@ -1,3 +1,4 @@
+/* global ApexCharts */
 let chart;
 
 export function initPerformanceChart() {

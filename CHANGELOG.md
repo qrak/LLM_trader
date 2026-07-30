@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-30 — v1.0.4 — Public Live Console View + 7-Day Log Buffer + Vector Memory 768D Upgrade
+
+### Added
+- **Live Console tab** on public dashboard — real-time log streaming via WebSocket, styled like `rich` terminal output with level-based color coding (ERROR=red, WARNING=yellow, INFO=gray, DEBUG=dim)
+- **ConsoleBuffer** (`src/dashboard/console_buffer.py`) — in-memory day-grouped ring buffer, max 7 days, clears on restart
+- **ConsoleRouter** (`src/dashboard/routers/console.py`) — public REST endpoints (`/api/console/recent`, `/api/console/pages`, `/api/console/page/{n}`) + WebSocket (`/api/console/live`) for live streaming
+- Day page navigation — buttons for each historical day, auto-fetched from buffer
+- Level filter (All/Errors/Warnings/Info+), auto-scroll toggle, clear button
+
+### Changed
+- `DashboardServer` — wires ConsoleBuffer, ConsoleRouter, and lifespan consumer task
+- `main.js` — imports and initializes ConsolePanel module
+
 ## 2026-07-23 — Dependabot security fixes + Futures LONG/SHORT signals + Executor safety hardening
 
 ### Security (Dependabot — 19 alerts resolved)

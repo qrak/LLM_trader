@@ -20,7 +20,7 @@ class PositionExitStrategy(Protocol):
 class ExitMonitor:
     """Keeps SL/TP monitor configuration and persisted cadence logic out of app orchestration."""
 
-    VALID_EXIT_TYPES = {"soft", "hard"}
+    VALID_EXIT_TYPES = {"soft", "hard"}  # noqa: RUF012
     STOP_LOSS = "stop_loss"
     TAKE_PROFIT = "take_profit"
 
@@ -221,3 +221,4 @@ class ExitMonitor:
         if minutes > timeframe_minutes:
             raise ValueError(f"{label} interval '{interval}' must not be greater than timeframe '{self.timeframe}'")
         return minutes
+

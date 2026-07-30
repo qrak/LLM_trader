@@ -1,21 +1,29 @@
+"""Graceful Shutdown Manager module.
+
+Provides functionality for utils.graceful_shutdown_manager.py.
+"""
+
 import asyncio
 import signal
 import sys
-from typing import Callable
+import warnings
+from collections.abc import Callable
 
 try:
     import tkinter as tk
     from tkinter import messagebox
+
     TKINTER_AVAILABLE = True
 except ImportError:
     TKINTER_AVAILABLE = False
+
 
 class GracefulShutdownManager:
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
         logger=None,
-        confirmation_callback: Callable[[], bool] | None = None
+        confirmation_callback: Callable[[], bool] | None = None,
     ):
         self.loop = loop
         self.logger = logger
@@ -29,7 +37,7 @@ class GracefulShutdownManager:
         return self._shutting_down
 
     def setup_signal_handlers(self):
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             # On Windows, let Ctrl+C propagate as KeyboardInterrupt so start.py can
             # await shutdown synchronously before the event loop is closed.
             return
@@ -48,7 +56,7 @@ class GracefulShutdownManager:
             return True
         try:
             return bool(self.confirmation_callback())
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             if self.logger:
                 self.logger.warning("Confirmation callback failed: %s", exc)
             return True
@@ -71,18 +79,19 @@ class GracefulShutdownManager:
 
         if self._confirm_shutdown():
             if self.logger:
-                self.logger.info("User confirmed shutdown. Initiating graceful shutdown...")
+                self.logger.info(
+                    "User confirmed shutdown. Initiating graceful shutdown..."
+                )
             else:
                 print("User confirmed shutdown, initiating...")
             self._request_shutdown()
+        elif self.logger:
+            self.logger.info("User cancelled shutdown. Continuing operation...")
         else:
-            if self.logger:
-                self.logger.info("User cancelled shutdown. Continuing operation...")
-            else:
-                print("User cancelled shutdown. Continuing operation...")
+            print("User cancelled shutdown. Continuing operation...")
 
     async def shutdown_gracefully(self):
-        """Execute all registered shutdown callbacks and cancel pending tasks."""
+        """Execute all registered shutdown callbacks and drain the event loop."""
         if self._shutting_down:
             return
         self._shutting_down = True
@@ -92,10 +101,12 @@ class GracefulShutdownManager:
         else:
             print("Performing graceful shutdown...")
 
-        # Execute registered callbacks first
+        # Execute registered callbacks first (each cleans up its own tasks)
         if self._callbacks:
             if self.logger:
-                self.logger.info("Executing %s shutdown callbacks...", len(self._callbacks))
+                self.logger.info(
+                    "Executing %s shutdown callbacks...", len(self._callbacks)
+                )
             else:
                 print(f"Executing {len(self._callbacks)} shutdown callbacks...")
 
@@ -105,59 +116,86 @@ class GracefulShutdownManager:
                         await callback()
                     else:
                         callback()
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     error_msg = f"Error in shutdown callback {callback}: {e}"
                     if self.logger:
                         self.logger.error(error_msg)
                     else:
                         print(error_msg)
 
-        pending_tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
-        if pending_tasks:
-            msg = f"Cancelling {len(pending_tasks)} tasks..."
+        # Let remaining tasks (dashboard server, uvicorn) drain naturally
+        # instead of forcefully cancelling them. Cancelling the uvicorn
+        # server task triggers capture_signals().__exit__ which raises
+        # KeyboardInterrupt → chained CancelledError in Py3.13.
+        # The event loop will clean them up on close.
+        remaining = [
+            t
+            for t in asyncio.all_tasks()
+            if t is not asyncio.current_task() and not t.done()
+        ]
+        if remaining:
             if self.logger:
-                self.logger.info(msg)
-            else:
-                print(msg)
+                self.logger.info(
+                    "Draining %s remaining tasks (no cancellation)...", len(remaining)
+                )
+            # Give server tasks a moment to respond to the shutdown signal
+            # (sent via the callbacks above)
+            await asyncio.sleep(0.2)
 
-            for task in pending_tasks:
-                task.cancel()
-            try:
-                await asyncio.wait_for(asyncio.wait(pending_tasks), timeout=10.0)
-            except asyncio.TimeoutError:
-                task_details = []
-                for t in pending_tasks:
-                    if not t.done():
-                        try:
-                            # asyncio.Task has get_name() since Python 3.8
-                            name = t.get_name()
-                        except AttributeError:
-                            name = str(t)
-                        task_details.append(name)
-
-                timeout_msg = f"Some tasks didn't complete in time: {task_details}"
-                if self.logger:
-                    self.logger.warning(timeout_msg)
-                else:
-                    print(timeout_msg)
+        # Shut down async generators
         try:
             await asyncio.wait_for(self.loop.shutdown_asyncgens(), timeout=2.0)
-        except (asyncio.TimeoutError, Exception) as e:
+        except (asyncio.TimeoutError, Exception) as e:  # noqa: BLE001
             err_msg = f"Error shutting down async generators: {e}"
             if self.logger:
                 self.logger.error(err_msg)
             else:
                 print(err_msg)
-        
-        # Final pause to allow background threads (e.g., Discord keep-alive handler) to fully terminate
-        # before the event loop is closed. This prevents RuntimeError: Event loop is closed
+
+        # ------------------------------------------------------------------
+        # Transport & kaleido cleanup
+        # ------------------------------------------------------------------
+        # 1) Shut down kaleido sync server if it was ever started (Plotly
+        #    chart export spawns a subprocess that leaks a BaseSubprocessTransport
+        #    on Python 3.13+).
+        try:
+            import kaleido as _kl  # type: ignore[import-untyped]
+
+            _kl.stop_sync_server(silence_warnings=True)
+            if self.logger:
+                self.logger.debug("Kaleido sync server stopped")
+        except (ImportError, AttributeError, Exception):  # noqa: S110, BLE001
+            pass
+
+        # 2) Run the event loop a few extra iterations so pending transport
+        #    __del__ callbacks (aiohttp, kaleido subprocess, chromadb) are
+        #    drained before the loop is closed. This avoids
+        #    _ProactorBasePipeTransport / BaseSubprocessTransport ResourceWarning.
+        try:
+            for _ in range(5):
+                self.loop.call_soon(lambda: None)
+                await asyncio.sleep(0.01)
+        except Exception:  # noqa: S110, BLE001
+            pass
+
+        # 3) Suppress asyncio transport ResourceWarning noise from
+        #    dependencies (kaleido, chromadb, discord.py) that may still
+        #    have unclosed transports after explicit cleanup.
+        warnings.filterwarnings(
+            "ignore",
+            category=ResourceWarning,
+            message="unclosed transport",
+        )
+
+        # Final pause to allow background threads (e.g., Discord keep-alive
+        # handler) to fully terminate before the event loop is closed.
         await asyncio.sleep(0.5)
 
     @staticmethod
     def _prompt_exit_confirmation() -> bool:
         try:
             response = input("\nAre you sure you want to exit? (y/n): ").strip().lower()
-            return response in ['y', 'yes']
+            return response in ["y", "yes"]
         except (EOFError, KeyboardInterrupt):
             return True
 
@@ -166,16 +204,16 @@ class GracefulShutdownManager:
         """Detect headless environments: no display server + no interactive terminal.
 
         Returns True when there is no user to interact with — the process is
-        running under systemd, Wired, Docker, or an unattended WSL terminal
+        running under systemd, Wired, Docker, or an unattended terminal
         where a blocking prompt would stall the shutdown indefinitely.
         """
         import os as _os
+
         return not _os.environ.get("DISPLAY") and not sys.stdin.isatty()
 
     @staticmethod
     def show_exit_confirmation() -> bool:
-        """
-        Show a confirmation dialog before closing the application.
+        """Show a confirmation dialog before closing the application.
 
         In headless environments (no DISPLAY + non-TTY stdin) skips all prompts
         and proceeds with shutdown immediately so systemd / Wired / Docker can
@@ -195,21 +233,23 @@ class GracefulShutdownManager:
 
         root = None
         try:
-            root = tk.Tk()
+            root = tk.Tk()  # type: ignore[reportPossiblyUnboundVariable]
             root.withdraw()
             root.attributes("-topmost", True)
-            result = messagebox.askyesno(
+            result = messagebox.askyesno(  # type: ignore[reportPossiblyUnboundVariable]
                 "Exit Confirmation",
                 "Are you sure you want to close the Crypto Trading Bot application?",
-                parent=root
+                parent=root,
             )
             return bool(result)
-        except Exception as e:
-            print(f"Warning: Could not show confirmation dialog: {e}. Falling back to terminal prompt.")
+        except Exception as e:  # noqa: BLE001
+            print(
+                f"Warning: Could not show confirmation dialog: {e}. Falling back to terminal prompt."
+            )
             return GracefulShutdownManager._prompt_exit_confirmation()
         finally:
             if root is not None:
                 try:
                     root.destroy()
-                except Exception:  # best-effort cleanup
+                except Exception:  # noqa: BLE001, S110 # best-effort cleanup
                     pass

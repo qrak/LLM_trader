@@ -159,7 +159,7 @@ class PostMortemService:
         ]
 
         # Entry reasoning (the original AI justification for opening)
-        entry_reasoning = entry_decision.reasoning or '(no reasoning recorded)'
+        entry_reasoning = entry_decision.reasoning or "(no reasoning recorded)"
         lines.extend(["", "## Original Entry Reasoning:", entry_reasoning])
 
         # Exit data
@@ -177,7 +177,8 @@ class PostMortemService:
             try:
                 hold_duration = exit_timestamp - entry_time
                 lines.append(f"- Hold Duration: {hold_duration}")
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
+                # best-effort hold duration formatting
                 pass
 
         # Market conditions at exit (if available)
@@ -197,13 +198,14 @@ class PostMortemService:
             data = self.unified_parser.extract_json_block(response_text)
             if data:
                 return PostMortemResult(**data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Post-mortem markdown parse error: %s", e)
 
         # Fallback: try raw JSON (LLM may return plain JSON without ``` fences)
         try:
             data = json.loads(response_text.strip())
             return PostMortemResult(**data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             self.logger.debug("Post-mortem raw JSON parse error: %s", e)
             return None
+

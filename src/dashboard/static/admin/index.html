@@ -48,13 +48,13 @@
                 <p class="sidebar-user" id="sidebar-user"></p>
             </div>
             <nav class="sidebar-nav">
-                <button data-page="dashboard" class="nav-btn">📊 Dashboard</button>
-                <button data-page="control" class="nav-btn">🎮 Control Panel</button>
-                <button data-page="config" class="nav-btn">⚙️ Configuration</button>
-                <button data-page="logs" class="nav-btn">📜 Live Logs</button>
+                <button data-page="dashboard" class="nav-btn"><span aria-hidden="true">📊</span> Dashboard</button>
+                <button data-page="control" class="nav-btn"><span aria-hidden="true">🎮</span> Control Panel</button>
+                <button data-page="config" class="nav-btn"><span aria-hidden="true">⚙️</span> Configuration</button>
+                <button data-page="logs" class="nav-btn"><span aria-hidden="true">📜</span> Live Logs</button>
             </nav>
             <div class="sidebar-footer">
-                <button id="btn-logout" class="logout-btn">🚪 Sign Out</button>
+                <button id="btn-logout" class="logout-btn"><span aria-hidden="true">🚪</span> Sign Out</button>
             </div>
         </aside>
 
@@ -222,11 +222,15 @@
             function showLoginError(msg) {
                 const el = $('#login-error');
                 el.textContent = msg;
+                el.setAttribute('role', 'alert');
+                el.setAttribute('aria-live', 'assertive');
                 el.classList.remove('hidden');
             }
 
             // ─── Auth ─────────────────────────────────────────────────────
             async function login(username, password) {
+                const btn = $('#login-form button[type="submit"]');
+                if (btn) btn.disabled = true;
                 try {
                     const res = await fetch('/api/admin/login', {
                         method: 'POST',
@@ -244,6 +248,8 @@
                     }
                 } catch (e) {
                     showLoginError('Connection failed: ' + e.message);
+                } finally {
+                    if (btn) btn.disabled = false;
                 }
             }
 

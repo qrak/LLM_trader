@@ -1,3 +1,7 @@
+"""Test Dashboard Server Cache unit tests.
+
+Tests for test_dashboard_server_cache.py.
+"""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
