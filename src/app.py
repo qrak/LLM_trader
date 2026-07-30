@@ -63,7 +63,6 @@ class BotServices:
     memory_service: TradingMemoryService
     exit_monitor: ExitMonitor
     sentiment_analyst: Any = None  # RedditSentimentAnalyst, injected by composition root
-    nitter_sentiment: Any = None  # NitterSentimentAnalyst, for X/Twitter
     rl_policy: Any = None  # RLPolicyNetwork, local LLM inference
     executor_handler: Any = None  # ExecutorHandler, wired by composition root
     ev_formatter: Any = None  # EVFrameworkFormatter, injected by composition root
@@ -117,7 +116,6 @@ class CryptoTradingBot:
         # Executor pipeline
         self.executor_handler = services.executor_handler
         self.sentiment_analyst = services.sentiment_analyst
-        self.nitter_sentiment = services.nitter_sentiment
         self.rl_policy = services.rl_policy
         self.ev_formatter = services.ev_formatter
         self.dashboard_state = services.dashboard_state
@@ -133,7 +131,6 @@ class CryptoTradingBot:
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
         self._reddit_sentiment_label = "NEUTRAL"
-        self._nitter_sentiment_label = "NEUTRAL"
         self.position_monitor = (
             services.position_monitor_factory(self)
             if services.position_monitor_factory is not None
@@ -331,7 +328,6 @@ class CryptoTradingBot:
 
         # Inject social sentiment + EV snapshot for vector DB learning on position entry
         result["_social_sentiment_reddit"] = self._reddit_sentiment_label
-        result["_social_sentiment_nitter"] = self._nitter_sentiment_label
         demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
@@ -450,21 +446,6 @@ class CryptoTradingBot:
                 self._reddit_sentiment_label = sentiment_data.get("overall_sentiment", "NEUTRAL")
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch Reddit sentiment: %s", e)
-
-        # Fetch X/Twitter sentiment via Nitter (non-critical — best-effort)
-        self._nitter_sentiment_label = "NEUTRAL"
-        if (
-            getattr(self.config, "NITTER_SENTIMENT_ENABLED", False)
-            and self.nitter_sentiment is not None
-        ):
-            try:
-                nitter_data = await self.nitter_sentiment.fetch_sentiment()
-                additional_context += self.nitter_sentiment.format_sentiment_section(
-                    nitter_data
-                )
-                self._nitter_sentiment_label = nitter_data.get("overall_sentiment", "NEUTRAL")
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("Failed to fetch Nitter sentiment: %s", e)
 
         return {
             "previous_response": previous_response,

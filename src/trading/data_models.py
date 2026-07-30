@@ -333,7 +333,6 @@ class MarketConditions:
     supertrend_direction: str = "NEUTRAL"
     # --- Social sentiment at position entry (for vector DB similarity) ---
     social_sentiment_reddit: str = "NEUTRAL"     # BULLISH, SLIGHTLY_BULLISH, NEUTRAL, SLIGHTLY_BEARISH, BEARISH, NO_DATA
-    social_sentiment_nitter: str = "NEUTRAL"      # same scale
     # --- Portfolio EV snapshot at position entry ---
     portfolio_pnl_pct: float = 0.0                # portfolio P&L % at entry time
 

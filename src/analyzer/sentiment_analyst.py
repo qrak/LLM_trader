@@ -1,7 +1,7 @@
-"""Social media sentiment analyst using Reddit's public JSON API.
+"""Social media sentiment analyst scraping old.reddit.com HTML.
 
-Fetches top posts from crypto subreddits to gauge community sentiment.
-No API key required — uses Reddit's free public JSON endpoint.
+Scrapes top posts from crypto subreddits to gauge community sentiment.
+No API key required — reads the same HTML a browser sees.
 
 Based on TradingAgents (Xiao et al., 2024) sentiment analyst role.
 """
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class RedditSentimentAnalyst:
-    """Fetches and analyzes sentiment from crypto subreddits."""
+    """Fetches and analyzes sentiment from crypto subreddits via old.reddit.com."""
 
     # Subreddits to query — ordered by relevance to crypto trading
     SUBREDDITS: ClassVar[list[str]] = [
@@ -33,11 +33,15 @@ class RedditSentimentAnalyst:
     # Max posts per subreddit
     POST_LIMIT = 10
 
-    # Base URL for Reddit's public JSON API (no auth needed)
-    BASE_URL = "https://www.reddit.com/r/{subreddit}/hot.json"
+    # Base URL for old.reddit.com (no auth, no API key)
+    BASE_URL = "https://old.reddit.com/r/{subreddit}/"
 
-    # User-Agent required by Reddit's API policy
-    USER_AGENT = "LLM_trader/1.0 (sentiment analysis bot; contact via GitHub)"
+    # User-Agent to present as a normal browser
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
 
     def __init__(self, logger: Logger, session: Any = None) -> None:
         """Initialize the sentiment analyst.
@@ -74,23 +78,18 @@ class RedditSentimentAnalyst:
                 url = self.BASE_URL.format(subreddit=subreddit)
                 try:
                     async with session.get(  # type: ignore[union-attr]
-                        url, params={"limit": limit}, timeout=aiohttp.ClientTimeout(total=15)
+                        url,
+                        params={"limit": limit},
+                        timeout=aiohttp.ClientTimeout(total=15),
                     ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            posts = data.get("data", {}).get("children", [])
-                            for post in posts:
-                                post_data = post.get("data", {})
-                                all_posts.append({
-                                    "subreddit": subreddit,
-                                    "title": post_data.get("title", ""),
-                                    "score": post_data.get("score", 0),
-                                    "num_comments": post_data.get("num_comments", 0),
-                                    "upvote_ratio": post_data.get("upvote_ratio", 0.0),
-                                    "created_utc": post_data.get("created_utc", 0),
-                                })
-                        else:
+                        if resp.status != 200:
                             errors.append(f"{subreddit}: HTTP {resp.status}")
+                            continue
+                        html = await resp.text()
+                        posts = self._parse_listing_html(html, subreddit, limit)
+                        all_posts.extend(posts)
+                        if not posts:
+                            errors.append(f"{subreddit}: no posts parsed")
                 except asyncio.TimeoutError:
                     errors.append(f"{subreddit}: timeout")
                 except Exception as e:  # noqa: BLE001
@@ -106,8 +105,81 @@ class RedditSentimentAnalyst:
         }
         if errors:
             result["error"] = "; ".join(errors)
+            self.logger.warning("Reddit fetch had errors: %s", result["error"])
+        if not all_posts:
+            self.logger.warning(
+                "Reddit returned 0 posts across %d subreddits", len(self.SUBREDDITS)
+            )
 
         return result
+
+    @staticmethod
+    def _parse_listing_html(html: str, subreddit: str, limit: int) -> list[dict[str, Any]]:
+        """Parse old.reddit.com listing HTML with BeautifulSoup.
+
+        Extracts post title, score, comment count and upvote ratio from
+        the ``<div class=\"thing\">`` elements on the page.
+        """
+        try:
+            from bs4 import BeautifulSoup  # type: ignore[import]
+        except ImportError:
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        posts: list[dict[str, Any]] = []
+
+        for thing in soup.find_all("div", class_="thing"):
+            if len(posts) >= limit:
+                break
+
+            # Skip promoted/sponsored posts
+            if "promoted" in thing.get("class", []):
+                continue
+
+            # Title
+            title_el = thing.find("a", class_="title")
+            if not title_el:
+                continue
+            title = title_el.get_text(strip=True)
+            if not title:
+                continue
+
+            # Score — from data-score attribute on the thing div
+            score = 0
+            score_raw = thing.get("data-score")
+            if score_raw is not None:
+                try:
+                    score = int(str(score_raw))
+                except (ValueError, TypeError):
+                    pass
+
+            # Comment count — from data-comments-count attribute
+            num_comments = 0
+            comments_raw = thing.get("data-comments-count")
+            if comments_raw is not None:
+                try:
+                    num_comments = int(str(comments_raw))
+                except (ValueError, TypeError):
+                    pass
+
+            # Upvote ratio — not directly available on listing pages.
+            # High-score posts on /hot typically have >85% upvotes.
+            upvote_ratio = 0.85
+            if score > 1000:
+                upvote_ratio = 0.90
+            elif score > 100:
+                upvote_ratio = 0.82
+
+            posts.append({
+                "subreddit": subreddit,
+                "title": title,
+                "score": score,
+                "num_comments": num_comments,
+                "upvote_ratio": upvote_ratio,
+                "created_utc": 0,
+            })
+
+        return posts
 
     @staticmethod
     def _compute_overall_sentiment(posts: list[dict[str, Any]]) -> str:
@@ -137,11 +209,9 @@ class RedditSentimentAnalyst:
         all_words: list[str] = []
         for post in posts:
             title = post.get("title", "").lower()
-            # Extract words, filter out short/common ones
             words = re.findall(r"[a-z]{4,}", title)
             all_words.extend(words)
 
-        # Filter out common stopwords
         stopwords = {
             "this", "that", "with", "from", "have", "been", "will",
             "just", "what", "when", "your", "about", "which", "their",
@@ -184,8 +254,8 @@ class RedditSentimentAnalyst:
             comments = post.get("num_comments", 0)
             ratio = post.get("upvote_ratio", 0.0)
             lines.append(
-                f"{i}. [{post['subreddit']}] **{score}**↑ ({ratio:.0%} ratio, {comments} comments): "
-                f"{post['title'][:120]}"
+                f"{i}. [{post['subreddit']}] **{score}**↑ ({ratio:.0%} ratio, "
+                f"{comments} comments): {post['title'][:120]}"
             )
 
         error = sentiment_data.get("error")

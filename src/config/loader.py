@@ -427,19 +427,6 @@ class Config:
         """Whether Reddit social sentiment fetching is enabled."""
         return bool(self.get_config("social_sentiment", "enabled", False))
 
-    @property
-    def NITTER_SENTIMENT_ENABLED(self) -> bool:
-        """Whether Nitter (X/Twitter) sentiment fetching is enabled."""
-        return bool(self.get_config("nitter_sentiment", "enabled", False))
-
-    @property
-    def NITTER_TRADING_SYMBOLS(self) -> list[str]:
-        """Crypto tickers to search on Nitter (comma-separated in config)."""
-        raw = self.get_config("nitter_sentiment", "trading_symbols", "BTC,ETH,SOL")
-        if isinstance(raw, list):
-            return [str(s).strip() for s in raw if str(s).strip()]
-        return [s.strip() for s in raw.split(",") if s.strip()]
-
     # RL Training Configuration
     @property
     def RL_TRAINING_ENABLED(self) -> bool:

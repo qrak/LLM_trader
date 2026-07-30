@@ -49,11 +49,10 @@ from src.analyzer.formatters import (
     MarketFormatter,
     MarketOverviewFormatter,
 )
-from src.analyzer.nitter_sentiment import NitterSentimentAnalyst
 from src.analyzer.pattern_engine import ChartGenerator
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
-from src.analyzer.prompts import PromptBuilder
+from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
 from src.analyzer.trend_validator import TrendValidator
@@ -528,10 +527,6 @@ class CompositionRoot:
             "exit_monitor": trading["exit_monitor"],
             "sentiment_analyst": RedditSentimentAnalyst(
                 logger=self.logger,
-            ),
-            "nitter_sentiment": NitterSentimentAnalyst(
-                logger=self.logger,
-                symbols=self.config.NITTER_TRADING_SYMBOLS,
             ),
             "rl_policy": RLPolicyNetwork(
                 config=self.config,

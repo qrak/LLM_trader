@@ -148,15 +148,6 @@ enabled = false
 [social_sentiment]
 enabled = false
 
-# === X/Twitter Sentiment (via Nitter) ===
-# Nitter = free, open-source Twitter frontend. No API key, no login.
-# Scrapes recent crypto tweets faster than Reddit for breaking news.
-# Multiple Nitter instances for redundancy.
-# trading_symbols: comma-separated crypto tickers to search for (no spaces).
-[nitter_sentiment]
-enabled = false
-trading_symbols = BTC,ETH,SOL
-
 # === RL Policy Training (Optional) ===
 # Fine-tune a small LLM (Qwen3-0.6B-Instruct) with PPO on trading outcomes.
 # When enabled, closed trades feed into a local policy network that replaces
