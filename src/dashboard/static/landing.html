@@ -346,24 +346,20 @@
                 <span class="red"></span><span class="yellow"></span><span class="green"></span>
             </div>
             <div class="terminal-body">
-                <span class="dim"># 1. Market Data Pipeline</span><br>
-                <span class="prompt">$</span> <span class="cmd">fetch --source binance --symbol BTC/USDC</span><br>
-                <span class="dim">OHLCV candles · order book · funding rate · 24h volume</span><br><br>
-                <span class="dim"># 2. Technical Analysis Engine (Numba JIT-compiled)</span><br>
-                <span class="prompt">$</span> <span class="cmd">compute --indicators 50+ --kernel-patterns 12</span><br>
-                <span class="dim">RSI · MACD · Bollinger · ATR · ADX · Ichimoku · OBV · MFI · VWAP · EMA crosses · +40 more</span><br><br>
-                <span class="dim"># 3. Sentiment & News (zero API cost)</span><br>
-                <span class="prompt">$</span> <span class="cmd">scrape --reddit r/Bitcoin r/CryptoCurrency --nitter BTC --rss CoinDesk CoinTelegraph</span><br>
-                <span class="dim">Reddit JSON · Nitter (X/Twitter) · RSS feeds · RAG search index</span><br><br>
-                <span class="dim"># 4. AI Analysis (Gemini 3.6 Flash)</span><br>
-                <span class="prompt">$</span> <span class="cmd">analyze --model gemini --debate bull-bear --context adversarial</span><br>
-                <span class="dim">Chart visual analysis · Bull/Bear internal debate · EV Framework · Risk Profile selection</span><br><br>
-                <span class="dim"># 5. Decision & Execution</span><br>
-                <span class="prompt">$</span> <span class="cmd">decide --sl 1.8xATR --tp risk-reward-2.5 --max-size 5%</span><br>
-                <span class="dim">BUY/SELL/HOLD · Stop-loss · Take-profit · Position size · Cooldown guard</span><br><br>
-                <span class="dim"># 6. Post-Mortem Learning (ChromaDB)</span><br>
-                <span class="prompt">$</span> <span class="cmd">learn --outcome CLOSED --pnl +3.2% --embed --store vectors/775</span><br>
-                <span class="dim">AI post-mortem analysis · vector embedding · risk profile recalibration</span>
+                <span class="dim">[17:00:00] [INFO] [AnalysisEngine] ── Starting 4h Market Cycle: BTC/USDC ──</span><br><br>
+                <span class="cyan"># 1. Market Data Pipeline (CCXT)</span><br>
+                <span class="green">✔</span> Fetched 999 OHLCV candles, 20-level order book, funding rate &amp; 24h volume<br><br>
+                <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
+                <span class="green">✔</span> Computed 50+ technical indicators &amp; 12 deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
+                <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
+                <span class="green">✔</span> Ingested RSS news feeds, Reddit JSON &amp; Nitter sentiment (zero API cost)<br><br>
+                <span class="cyan"># 4. Multimodal AI Analysis (Google Gemini)</span><br>
+                <span class="green">✔</span> Visual 4K candlestick chart analysis + Bull vs. Bear debate + EV framework evaluation<br><br>
+                <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
+                <span class="green">✔</span> Signal: BUY | Position: 5% capital | Dynamic SL: 1.8x ATR | TP: 2.5 R:R<br><br>
+                <span class="cyan"># 6. Reflection &amp; Memory (ChromaDB)</span><br>
+                <span class="green">✔</span> Outcome embedded as 768D vector experience; semantic rule base updated<br><br>
+                <span class="dim">[17:00:14] [INFO] [TradingStrategy] Cycle complete. Decision logged to SQLite audit trail.</span>
             </div>
         </div>
     </div>
