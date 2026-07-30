@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
@@ -475,6 +475,16 @@ class DashboardServer:
 
         # Admin auth middleware (protects /api/admin/* except login and health)
         app.add_middleware(AdminAuthMiddleware)
+
+        # Landing page route (for Google AdSense content requirements)
+        @app.get("/landing", include_in_schema=False)
+        async def landing_page():
+            landing_path = os.path.join(
+                os.path.dirname(__file__), "static", "landing.html"
+            )
+            if os.path.exists(landing_path):
+                return FileResponse(landing_path, media_type="text/html")
+            return PlainTextResponse("Landing page not found", status_code=404)
 
         # Mount Static Files (Frontend)
         # We assume the static folder is in the same directory as this file

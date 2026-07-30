@@ -44,15 +44,18 @@ from src.analyzer import (
 )
 from src.analyzer.analysis_engine import AnalysisEngine
 from src.analyzer.formatters import (
+    EVFrameworkFormatter,
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
 )
+from src.analyzer.nitter_sentiment import NitterSentimentAnalyst
 from src.analyzer.pattern_engine import ChartGenerator
 from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngine
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.prompts import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
+from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
 from src.analyzer.trend_validator import TrendValidator
 from src.app import POSITION_UPDATE_INTERVAL, BotServices, CryptoTradingBot
 from src.config.loader import config
@@ -118,6 +121,7 @@ from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
 from src.trading.post_mortem import PostMortemService
+from src.trading.rl_policy import RLPolicyNetwork
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.vector_memory import VectorMemoryService
 from src.utils.format_utils import FormatUtils
@@ -522,6 +526,18 @@ class CompositionRoot:
             "statistics_service": trading["statistics_service"],
             "memory_service": trading["memory_service"],
             "exit_monitor": trading["exit_monitor"],
+            "sentiment_analyst": RedditSentimentAnalyst(
+                logger=self.logger,
+            ),
+            "nitter_sentiment": NitterSentimentAnalyst(
+                logger=self.logger,
+                symbols=self.config.NITTER_TRADING_SYMBOLS,
+            ),
+            "rl_policy": RLPolicyNetwork(
+                config=self.config,
+                logger=self.logger,
+            ),
+            "ev_formatter": analyzer["ev_formatter"],
             "executor_handler": ExecutorHandler(
                 persistence=trading["persistence"],
                 config=self.config,
@@ -872,6 +888,8 @@ class CompositionRoot:
                 "Pattern analyzer warm-up could not run: %s", warmup_error
             )
 
+        ev_fmt = EVFrameworkFormatter(self.config)
+
         prompt_builder = PromptBuilder(
             self.config.TIMEFRAME,
             self.logger,
@@ -881,8 +899,9 @@ class CompositionRoot:
             long_term_fmt,
             TechnicalFormatter(tech_calc, self.logger, utils["format_utils"]),
             market_fmt,
-            utils["timeframe_validator"],
-            TemplateManager(self.config, self.logger, utils["timeframe_validator"]),
+            ev_formatter=ev_fmt,
+            timeframe_validator=utils["timeframe_validator"],
+            template_manager=TemplateManager(self.config, self.logger, utils["timeframe_validator"]),
         )
 
         engine = AnalysisEngine(
@@ -913,7 +932,7 @@ class CompositionRoot:
             ),
         )
 
-        return {"engine": engine}
+        return {"engine": engine, "ev_formatter": ev_fmt}
 
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
         """Provision trading strategy and memory services."""

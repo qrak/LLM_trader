@@ -62,7 +62,11 @@ class BotServices:
     statistics_service: TradingStatisticsService
     memory_service: TradingMemoryService
     exit_monitor: ExitMonitor
+    sentiment_analyst: Any = None  # RedditSentimentAnalyst, injected by composition root
+    nitter_sentiment: Any = None  # NitterSentimentAnalyst, for X/Twitter
+    rl_policy: Any = None  # RLPolicyNetwork, local LLM inference
     executor_handler: Any = None  # ExecutorHandler, wired by composition root
+    ev_formatter: Any = None  # EVFrameworkFormatter, injected by composition root
     dashboard_state: Any = None
     discord_task: asyncio.Task | None = None
     position_monitor_factory: Callable[[Any], PositionStatusMonitor] | None = None
@@ -110,7 +114,12 @@ class CryptoTradingBot:
         self.statistics_service = services.statistics_service
         self.memory_service = services.memory_service
         self.exit_monitor = services.exit_monitor
-        self.executor_handler = services.executor_handler  # ExecutorHandler
+        # Executor pipeline
+        self.executor_handler = services.executor_handler
+        self.sentiment_analyst = services.sentiment_analyst
+        self.nitter_sentiment = services.nitter_sentiment
+        self.rl_policy = services.rl_policy
+        self.ev_formatter = services.ev_formatter
         self.dashboard_state = services.dashboard_state
 
         # Runtime state
@@ -123,6 +132,8 @@ class CryptoTradingBot:
         # Trading state
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
+        self._reddit_sentiment_label = "NEUTRAL"
+        self._nitter_sentiment_label = "NEUTRAL"
         self.position_monitor = (
             services.position_monitor_factory(self)
             if services.position_monitor_factory is not None
@@ -318,6 +329,13 @@ class CryptoTradingBot:
             self.logger.error("Analysis failed: %s", result["error"])
             return
 
+        # Inject social sentiment + EV snapshot for vector DB learning on position entry
+        result["_social_sentiment_reddit"] = self._reddit_sentiment_label
+        result["_social_sentiment_nitter"] = self._nitter_sentiment_label
+        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        current_capital = self.statistics_service.get_current_capital(demo_capital)
+        result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
+
         self.persistence.save_last_analysis_time()
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)  # type: ignore[reportCallIssue]
 
@@ -417,6 +435,37 @@ class CryptoTradingBot:
         last_analysis_time_str = self._get_formatted_last_analysis_time()
         dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
 
+        # Fetch Reddit social sentiment (non-critical — best-effort)
+        additional_context = ""
+        self._reddit_sentiment_label = "NEUTRAL"
+        if (
+            getattr(self.config, "SOCIAL_SENTIMENT_ENABLED", False)
+            and self.sentiment_analyst is not None
+        ):
+            try:
+                sentiment_data = await self.sentiment_analyst.fetch_sentiment()
+                additional_context += self.sentiment_analyst.format_sentiment_section(
+                    sentiment_data
+                )
+                self._reddit_sentiment_label = sentiment_data.get("overall_sentiment", "NEUTRAL")
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning("Failed to fetch Reddit sentiment: %s", e)
+
+        # Fetch X/Twitter sentiment via Nitter (non-critical — best-effort)
+        self._nitter_sentiment_label = "NEUTRAL"
+        if (
+            getattr(self.config, "NITTER_SENTIMENT_ENABLED", False)
+            and self.nitter_sentiment is not None
+        ):
+            try:
+                nitter_data = await self.nitter_sentiment.fetch_sentiment()
+                additional_context += self.nitter_sentiment.format_sentiment_section(
+                    nitter_data
+                )
+                self._nitter_sentiment_label = nitter_data.get("overall_sentiment", "NEUTRAL")
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning("Failed to fetch Nitter sentiment: %s", e)
+
         return {
             "previous_response": previous_response,
             "previous_indicators": previous_indicators,
@@ -425,7 +474,10 @@ class CryptoTradingBot:
             "brain_service": self.brain_service,
             "last_analysis_time": last_analysis_time_str,
             "current_ticker": current_ticker,
-            "dynamic_thresholds": dynamic_thresholds
+            "dynamic_thresholds": dynamic_thresholds,
+            "ev_context": self._build_ev_context(),
+            "additional_context": additional_context,
+            "rl_policy": self.rl_policy,
         }
 
     def _get_formatted_last_analysis_time(self) -> str | None:
@@ -440,6 +492,14 @@ class CryptoTradingBot:
             last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
 
         return last_analysis_time_obj.strftime("%Y-%m-%d %H:%M:%S")
+
+    def _build_ev_context(self) -> str:
+        """Build the EV framework context string with dynamic capital tracking."""
+        if self.ev_formatter is None:
+            return ""
+        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        current_capital = self.statistics_service.get_current_capital(demo_capital)
+        return self.ev_formatter.build_ev_framework_section(current_capital)
 
     async def _handle_new_position(self, decision, current_price: float | None):
         """Handle new position creation and status updates"""

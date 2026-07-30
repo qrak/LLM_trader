@@ -12,6 +12,7 @@ from src.logger.logger import Logger
 
 from ..analysis_context import AnalysisContext
 from ..formatters import (
+    EVFrameworkFormatter,
     LongTermFormatter,
     MarketFormatter,
     MarketOverviewFormatter,
@@ -36,6 +37,7 @@ class PromptBuilder:
         long_term_formatter: LongTermFormatter | None = None,
         technical_formatter: TechnicalFormatter | None = None,
         market_formatter: MarketFormatter | None = None,
+        ev_formatter: EVFrameworkFormatter | None = None,
         timeframe_validator: Any = None,
         template_manager: TemplateManager | None = None,
     ) -> None:
@@ -50,6 +52,7 @@ class PromptBuilder:
             long_term_formatter: LongTermFormatter instance (required)
             technical_formatter: TechnicalFormatter instance (required)
             market_formatter: MarketFormatter instance (required)
+            ev_formatter: EVFrameworkFormatter instance (optional)
             timeframe_validator: TimeframeValidator instance (injected)
             template_manager: TemplateManager instance (required)
         """
@@ -67,6 +70,8 @@ class PromptBuilder:
         if template_manager is None:
             raise ValueError("template_manager is required for PromptBuilder")
         self.template_manager = template_manager
+        # ev_formatter is optional — only injected when EV framework is enabled
+        self.ev_formatter = ev_formatter
         if overview_formatter is None:
             raise ValueError("overview_formatter is required for PromptBuilder")
         self.overview_formatter = overview_formatter
@@ -580,6 +585,7 @@ class PromptBuilder:
         has_chart_analysis: bool = False,
         dynamic_thresholds: dict[str, Any] | None = None,
         model_verbosity: str | None = None,
+        ev_context: str | None = None,
     ) -> str:
         """Build system prompt using template manager.
 
@@ -593,6 +599,7 @@ class PromptBuilder:
             has_chart_analysis: Whether chart image analysis is available
             dynamic_thresholds: Brain-learned thresholds for response template
             model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
+            ev_context: EV framework section text (injected when EV formatter enabled)
 
         Returns:
             str: Formatted system prompt with instructions
@@ -614,6 +621,10 @@ class PromptBuilder:
             dynamic_thresholds=dynamic_thresholds,
             model_verbosity=eff_verbosity,
         )
+
+        # Inject EV framework if available (before decision rules)
+        if ev_context:
+            base_prompt += ev_context
 
         # Check if we have advanced support/resistance detected
         advanced_support_resistance_detected = self._has_advanced_support_resistance()
