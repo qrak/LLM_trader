@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-07-29 — Public Live Console View + 7-day log buffer
+## 2026-07-30 — v1.0.4 — Public Live Console View + 7-Day Log Buffer + Vector Memory 768D Upgrade
 
 ### Added
 - **Live Console tab** on public dashboard — real-time log streaming via WebSocket, styled like `rich` terminal output with level-based color coding (ERROR=red, WARNING=yellow, INFO=gray, DEBUG=dim)
