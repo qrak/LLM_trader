@@ -1,6 +1,26 @@
 # Changelog
 
+## 2026-07-30 — v1.1.0 — 768D Vector Memory Upgrade + EV Framework + Social Sentiment + Risk Profiles
+
+### Breaking Changes
+- **768D Vector Memory Model Upgrade**: Switched ChromaDB vector embedding engine to `BAAI/bge-base-en-v1.5` (768-dimensional embeddings). Legacy 384D ChromaDB collections require re-indexing/re-creation on upgrade.
+
+### Added
+- **Expected Value (EV) Framework** (`src/analyzer/formatters/ev_formatter.py`) — calculates win rates, Expected Value ratios, and R:R thresholds for prompt context synthesis
+- **Social Sentiment Analysis Modules**:
+  - `src/analyzer/nitter_sentiment.py` — decentralized Twitter/X sentiment scraper and processor
+  - `src/analyzer/sentiment_analyst.py` — multi-source social sentiment scoring engine (Reddit & Nitter)
+- **Risk Profile Selector & RL Policy**:
+  - `src/trading/risk_profile_selector.py` — dynamic regime-aware risk profile selection
+  - `src/trading/rl_policy.py` — reinforcement learning post-mortem feedback loop for position size adjustment
+- **Public Showcase Landing Page** (`src/dashboard/static/landing.html`, `layout.css`) — interactive landing page for Semantic Signal LLM Trader dashboard
+
+### Changed
+- `rag_engine.py` — updated RAG engine initialization logic to integrate social sentiment streams
+- `template_manager.py` & `prompt_builder.py` — injected EV metrics and social sentiment indicators into primary analysis prompts
+
 ## 2026-07-30 — v1.0.4 — Public Live Console View + 7-Day Log Buffer + Vector Memory 768D Upgrade
+
 
 ### Added
 - **Live Console tab** on public dashboard — real-time log streaming via WebSocket, styled like `rich` terminal output with level-based color coding (ERROR=red, WARNING=yellow, INFO=gray, DEBUG=dim)
