@@ -6,6 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE.md)
 [![GitHub Stars](https://img.shields.io/github/stars/qrak/LLM_trader?style=flat&logo=github)](https://github.com/qrak/LLM_trader)
 
+🌐 **[Public Landing Page](https://semanticsignal.qrak.org/landing.html)** — Interactive architecture overview & system showcase  
 📊 **[Live Dashboard](https://semanticsignal.qrak.org)** — Watch the neural trading brain in action  
 📖 **[Read the Full Story (Medium)](https://medium.com/@donqrakko/i-built-a-trading-bot-that-doesnt-just-calculate-it-reasons-remembers-and-learns-from-its-749064869d73)**  
 💬 **[Join the Discord](https://discord.gg/ZC48aTTqR2)**  
@@ -90,12 +91,6 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 - Inference: CPU-viable at ~2-5 tokens/sec on modern desktop CPUs
 - Training: PPO requires 8+ GB RAM; GPU strongly recommended for training speed
 - First run auto-downloads the model from HuggingFace
-
-## 📸 Screenshots
-
-![Dashboard Overview](img/1.png)
-
-![Decision Pathways](img/2.png)
 
 ---
 

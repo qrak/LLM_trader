@@ -403,6 +403,16 @@
                 <p>Cooldown windows prevent overtrading. Max position size enforced. Symbol whitelist. SL/TP validated against ATR. Paper trading by default.</p>
             </div>
             <div class="card">
+                <div class="icon">🔍</div>
+                <h3>AST Codebase Vector Search</h3>
+                <p>Natural-language semantic search across 160+ Python files and docs via ChromaDB (<code>scripts/query_codebase.py</code>). Finds exact symbols, functions, and architecture patterns instantly.</p>
+            </div>
+            <div class="card">
+                <div class="icon">📐</div>
+                <h3>768D Vector Memory Engine</h3>
+                <p>Powered by <code>BAAI/bge-base-en-v1.5</code> high-dimensional embeddings. Retains trade experiences, semantic rules, surprise ratio annotations, and confidence stats across trading sessions.</p>
+            </div>
+            <div class="card">
                 <div class="icon">🔮</div>
                 <h3>Adversarial Awareness</h3>
                 <p>The system prompt teaches the LLM about real order books — counterparty orders, funding rate traps, liquidity squeezes. Not just abstract lines on a chart.</p>
@@ -458,10 +468,56 @@
     </div>
 </section>
 
+<!-- ═══════════ RUNTIME ARCHITECTURE & SYSTEM AGENTS ═══════════ -->
+<section style="background:rgba(0,0,0,.15)">
+    <div class="container">
+        <h2><span>🤖</span> Runtime Multi-Agent Intelligence</h2>
+        <p class="subhead">Seven specialized runtime agents coordinate autonomously via a central Dependency Injection Composition Root (<code>start.py</code>).</p>
+
+        <div class="grid">
+            <div class="card" style="border-left:3px solid var(--cyan)">
+                <div class="icon">🧠</div>
+                <h3>1. Brain Agent</h3>
+                <p><code>TradingBrainService</code> — outcome-aware decision enricher. Manages 768D ChromaDB vector memory (experiences, semantic rules, surprise ratio annotations).</p>
+            </div>
+            <div class="card" style="border-left:3px solid var(--green)">
+                <div class="icon">🔬</div>
+                <h3>2. Analysis Engine Agent</h3>
+                <p>Collects market data, computes 50+ Numba indicators, generates 4K candlestick charts, and orchestrates LLM Bull vs. Bear debate & EV framework evaluation.</p>
+            </div>
+            <div class="card" style="border-left:3px solid var(--yellow)">
+                <div class="icon">📰</div>
+                <h3>3. RAG Engine Agent</h3>
+                <p>Aggregates zero-cost RSS feeds, CoinGecko metrics, DeFiLlama TVL data, and Reddit / Nitter social sentiment with semantic relevance scoring.</p>
+            </div>
+            <div class="card" style="border-left:3px solid #ff6b9d">
+                <div class="icon">⚙️</div>
+                <h3>4. Risk Manager Agent</h3>
+                <p>Enforces dynamic ATR-scaled Stop-Loss / Take-Profit bounds, portfolio percentage position sizing, R:R thresholds (min 1.5), and friction drains.</p>
+            </div>
+            <div class="card" style="border-left:3px solid #a371f7">
+                <div class="icon">☁️</div>
+                <h3>5. Provider Orchestrator</h3>
+                <p>Manages multi-provider AI fallback chains (Google Gemini 3.6 Flash primary → OpenRouter base/fallback → LM Studio local text fallback).</p>
+            </div>
+            <div class="card" style="border-left:3px solid #ff5f57">
+                <div class="icon">🛡️</div>
+                <h3>6. Governance Pipeline</h3>
+                <p>Chain-of-responsibility pre-execution guard pipeline: symbol whitelist, maximum position cap, and cooldown window enforcement.</p>
+            </div>
+            <div class="card" style="border-left:3px solid #00f0ff">
+                <div class="icon">📊</div>
+                <h3>7. Dashboard Agent</h3>
+                <p>FastAPI + WebSocket monitoring server with live log ring buffer (ConsoleBuffer), Vis.js decision graphs, and interactive REST router suite.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══════════ SEVEN AGENTS ═══════════ -->
 <section>
     <div class="container">
-        <h2><span>👥</span> The Seven-Agent System</h2>
+        <h2><span>👥</span> Autonomous Development System</h2>
         <p class="subhead">The codebase maintains itself. Seven specialized AI agents — each with a dedicated prompt, journal, and scope — continuously improve the bot.</p>
 
         <div class="agent-grid">
