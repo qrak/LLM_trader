@@ -1,0 +1,194 @@
+# === AI Providers ===
+[ai_providers]
+# local | googleai | openrouter | blockrun | all
+provider = googleai
+
+# LM Studio (local)
+lm_studio_base_url = http://localhost:1234/v1
+lm_studio_model =
+lm_studio_streaming = false
+
+# OpenRouter
+openrouter_base_url = https://openrouter.ai/api/v1
+openrouter_base_model = google/gemini-3-flash-preview
+openrouter_fallback_model = deepseek/deepseek-r1:free
+
+# Google AI Studio
+google_studio_model = gemini-3.5-flash
+
+# BlockRun.AI (x402 micropayments)
+# Base URL for BlockRun AI API
+# blockrun_base_url = https://blockrun.ai/api
+# Model to use with BlockRun (format: provider/model)
+# Examples: openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash
+# blockrun_model = deepseek/deepseek-reasoner
+
+# === General ===
+[general]
+crypto_pair = BTC/USDC
+# ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
+# signals with high noise, frequent false breakouts, and reduced win rates.
+# The bot was designed and tested for 4h+ swing/positional trading. Smaller
+# timeframes will degrade performance significantly and increase costs due to
+# more frequent LLM calls. You have been warned.
+timeframe = 4h
+candle_limit = 999
+ai_chart_candle_limit = 125
+discord_bot = false
+
+include_coin_description = false
+# spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
+market_type = spot
+# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
+entry_order_type = market
+
+# === Debug ===
+[debug]
+save_chart_images = false
+chart_save_path = chart_images
+logger_debug = true
+
+# === Paths ===
+[directories]
+log_dir = logs
+data_dir = data
+
+# === Codebase Vector Index (AI Agents) ===
+[codebase_index]
+# Enable local vector semantic search across the codebase for AI agents
+enabled = true
+index_dir = data/codebase_index
+
+# === RAG / News ===
+[rag]
+update_interval_hours = 4               # hours between RAG rebuilds
+categories_update_interval_hours = 168  # hours between taxonomy refreshes
+coingecko_update_interval_hours = 24    # hours between coin-list refreshes
+defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
+coingecko_global_api_url = https://api.coingecko.com/api/v3/global
+news_limit = 5                          # max articles in AI context
+article_max_tokens = 1000               # max tokens per article
+news_sources =
+news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
+news_source_cointelegraph_url = https://cointelegraph.com/rss
+news_source_decrypt_url = https://decrypt.co/feed
+news_source_cryptoslate_url = https://cryptoslate.com/feed/
+news_page_enrichment = true             # fetch full article body via Crawl4AI
+news_min_body_chars = 400               # skip articles with less body text
+news_timeout_seconds = 20
+rag_update_timeout_seconds = 180
+news_fetch_total_timeout_seconds = 45
+news_enrichment_timeout_seconds = 120
+news_max_concurrency = 6                # parallel Crawl4AI fetches
+news_max_items_per_source = 100
+# Article scoring weights
+density_penalty_threshold = 300
+density_boost_threshold = 1000
+density_penalty_multiplier = 0.5
+density_boost_multiplier = 1.2
+cooccurrence_multiplier = 1.5
+news_crawl4ai_enabled = true
+news_crawl_timeout = 20
+
+# === Exchanges ===
+[exchanges]
+supported = binance,kucoin,gateio,mexc,hyperliquid  # priority order
+market_refresh_hours = 24
+
+# === Paper Trading ===
+[demo_trading]
+demo_quote_capital = 10000
+transaction_fee_percent = 0.00075
+
+# === Risk Management ===
+[risk_management]
+# SL/TP execution mode: soft (candle-close only) | hard (intra-candle polling)
+stop_loss_type = hard
+take_profit_type = hard
+stop_loss_check_interval = 15m
+take_profit_check_interval = 15m
+max_position_size = 0.10
+# Fallback sizes when AI doesn't provide position_size (by confidence)
+position_size_fallback_low = 0.01
+position_size_fallback_medium = 0.02
+position_size_fallback_high = 0.03
+# SL tightening: minimum price progress toward TP before SL can be tightened
+sl_tightening_scalping = 0.25        # < 1h timeframe
+sl_tightening_intraday = 0.20        # 1h–4h
+sl_tightening_swing = 0.15           # 4h–1d
+sl_tightening_position = 0.10        # 1d+
+sl_tightening_floor = 0.05           # brain can't push below this
+sl_tightening_ceiling = 0.40         # brain can't push above this
+sl_tightening_min_samples = 10       # min paired samples before brain override
+
+# === Executor API ===
+# Forward trading decisions to the separate llm_trader_executor service
+# (https://github.com/qrak/llm_trader_executor) which executes real exchange
+# orders via CCXT. File-based fallback (latest_decision.json) still works
+# when the executor is offline or disabled.
+[executor_api]
+enabled = true
+url = http://127.0.0.1:9199/decision
+
+# === Cooldowns ===
+[cooldowns]
+file_message_expiry = 168  # hours before tracked messages are cleaned up
+
+# === Research Team (Bull/Bear Debate) ===
+# Enables structured bull-vs-bear analysis in the LLM prompt.
+# When true, the prompt instructs the model to argue both sides before deciding.
+# This reduces confirmation bias at the cost of slightly longer prompts.
+# No additional LLM call — both perspectives are generated in ONE response.
+[research_team]
+enabled = false
+
+# === Social Sentiment (Reddit) ===
+# Fetches hot posts from r/CryptoCurrency, r/Bitcoin, r/ethereum.
+# No API key needed — uses Reddit's free public JSON endpoint.
+[social_sentiment]
+enabled = false
+
+# === X/Twitter Sentiment (via Nitter) ===
+# Nitter = free, open-source Twitter frontend. No API key, no login.
+# Scrapes recent crypto tweets faster than Reddit for breaking news.
+# Multiple Nitter instances for redundancy.
+# trading_symbols: comma-separated crypto tickers to search for (no spaces).
+[nitter_sentiment]
+enabled = false
+trading_symbols = BTC,ETH,SOL
+
+# === RL Policy Training (Optional) ===
+# Fine-tune a small LLM (Qwen3-0.6B-Instruct) with PPO on trading outcomes.
+# When enabled, closed trades feed into a local policy network that replaces
+# the external LLM call with a free, locally-trained model.
+# Minimum: 8 GB RAM, 2 CPU cores. GPU optional (CPU inference viable at 0.6B).
+# Model auto-downloaded from HuggingFace on first use (~1.2 GB disk).
+[rl_training]
+enabled = false
+model = Qwen/Qwen3-0.6B-Instruct
+update_interval = 10
+checkpoint_dir = data/rl_checkpoints
+device = auto
+
+# === Model Configuration ===
+[model_config]
+temperature = 1.0
+top_p = 0.9
+top_k = 40
+max_tokens = 32768
+# fre*q*uency_penalty and pres*ence*_penalty also accepted
+google_max_tokens = 32768
+google_thinking_level = high
+google_code_execution = false
+model_verbosity = high
+# OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
+# xhigh and max both map to DeepSeek's max reasoning level
+openrouter_reasoning_effort = max
+
+# === Dashboard ===
+[dashboard]
+enabled = true
+host = 0.0.0.0
+port = 8000
+enable_cors = false
+cors_origins = *
