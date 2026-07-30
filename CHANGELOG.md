@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-30 — v1.1.1 — Remove Deprecated Nitter Sentiment & Dependency Upgrades
+
+### Removed
+- **Nitter Sentiment Analyst**: Removed deprecated and unreliable `NitterSentimentAnalyst` module and associated tests (`test_nitter_sentiment.py`).
+- Cleaned up Nitter references across initialization (`start.py`, `app.py`), configuration loader, and vector memory context.
+
+### Changed
+- **Dependencies**: Updated `beautifulsoup4` (`>=4.15.0`) and `crawl4ai` (`>=0.9.2`) in `requirements.txt`.
+
+### Added
+- `scripts/fix_sarif.py` helper script for SARIF security reporting.
+
 ## 2026-07-30 — v1.1.0 — 768D Vector Memory Upgrade + EV Framework + Social Sentiment + Risk Profiles
 
 ### Breaking Changes
