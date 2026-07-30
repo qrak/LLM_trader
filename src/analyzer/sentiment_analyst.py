@@ -9,7 +9,11 @@ Based on TradingAgents (Xiao et al., 2024) sentiment analyst role.
 from __future__ import annotations
 
 import asyncio
+import re
+from collections import Counter
 from typing import TYPE_CHECKING, Any, ClassVar
+
+import aiohttp
 
 if TYPE_CHECKING:
     from src.logger.logger import Logger
@@ -56,8 +60,6 @@ class RedditSentimentAnalyst:
             dict with keys: 'posts' (list of post dicts), 'overall_sentiment',
             'top_topics', 'error' (if any).
         """
-        import aiohttp
-
         headers = {"User-Agent": self.USER_AGENT}
         all_posts: list[dict[str, Any]] = []
         errors: list[str] = []
@@ -132,9 +134,6 @@ class RedditSentimentAnalyst:
     @staticmethod
     def _extract_top_topics(posts: list[dict[str, Any]], top_n: int = 5) -> list[str]:
         """Extract most frequent keywords from post titles."""
-        import re
-        from collections import Counter
-
         all_words: list[str] = []
         for post in posts:
             title = post.get("title", "").lower()

@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections import Counter
 from typing import TYPE_CHECKING, Any, ClassVar
+
+import aiohttp
 
 if TYPE_CHECKING:
     from src.logger.logger import Logger
@@ -76,8 +79,6 @@ class NitterSentimentAnalyst:
 
     async def _fetch_from_instance(self, base_url: str) -> list[dict[str, str]]:
         """Fetch tweets from a Nitter instance using RSS search."""
-        import aiohttp
-
         all_items: list[dict[str, str]] = []
         seen_titles: set[str] = set()
 
@@ -207,8 +208,6 @@ class NitterSentimentAnalyst:
     @staticmethod
     def _extract_terms(tweets: list[dict[str, str]], top_n: int = 8) -> list[str]:
         """Extract most common significant terms from tweet text."""
-        from collections import Counter
-
         all_words: list[str] = []
         for tweet in tweets:
             text = tweet.get("title", "").lower()

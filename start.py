@@ -778,10 +778,11 @@ class CompositionRoot:
             ),
         )
         await engine.initialize()
+        db_size = engine.news_manager.get_database_size() if engine.news_manager is not None else 0
         self.logger.info(
             "  -> RAG engine ready (%d news articles indexed)",
-            engine.news_manager.get_database_size(),
-        )  # type: ignore[reportOptionalMemberAccess]
+            db_size,
+        )
         return engine
 
     def _provision_model_layer(self, utils: dict) -> dict:
