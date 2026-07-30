@@ -56,6 +56,11 @@ node_modules/
 website/.astro/
 website/dist/
 
+# Temporary & Cloud Sync Files
+.tmp.driveupload/
+*.tmp
+
 # AI-generated temporary plans (never committed)
 .ai/plans/
 .hermes.md
+
