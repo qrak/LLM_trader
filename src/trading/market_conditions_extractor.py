@@ -145,6 +145,11 @@ class MarketConditionsExtractor:
             conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
             conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
 
+            # Social sentiment from Reddit + Nitter (injected by app.py)
+            conditions["social_sentiment_reddit"] = result.get("_social_sentiment_reddit", "NEUTRAL")
+            conditions["social_sentiment_nitter"] = result.get("_social_sentiment_nitter", "NEUTRAL")
+            conditions["portfolio_pnl_pct"] = float(result.get("_portfolio_pnl_pct", 0.0))
+
             # Fallback: extract trend direction from raw response signal
             raw_response = result.get("raw_response", "").lower()
             if not conditions.get("trend_direction"):

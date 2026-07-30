@@ -403,6 +403,32 @@ class TemplateManager:
                 "",
             ])
 
+        # Bull/Bear Debate — structured adversarial reasoning (single LLM call, no extra cost)
+        if getattr(self.config, "RESEARCH_TEAM_ENABLED", False):
+            header_lines.extend([
+                "## Bull vs Bear Debate Protocol",
+                "Before making your final decision, you MUST internally debate both sides:",
+                "",
+                "### 🔺 BULL CASE (argue FOR entering a position)",
+                "- What technical evidence supports a bullish thesis?",
+                "- Which indicators, patterns, or volume signals align bullish?",
+                "- What macro or sentiment factors support upside?",
+                "",
+                "### 🔻 BEAR CASE (argue AGAINST entering / FOR exiting)",
+                "- What technical evidence contradicts the bullish thesis?",
+                "- Which risk factors, divergences, or resistance levels argue against entry?",
+                "- What could go wrong — be adversarial and realistic.",
+                "",
+                "### ⚖️ SYNTHESIS",
+                "- Which case has stronger evidence AFTER weighing both sides?",
+                "- Explicitly state: 'The bull case is [STRONGER/WEAKER/EQUAL] because...'",
+                "- Only then proceed to the final signal decision.",
+                "",
+                "This debate replaces your default reasoning. You are the analyst AND the skeptic.",
+                "Do NOT default to HOLD just because both cases exist — weigh the evidence.",
+                "",
+            ])
+
         header_lines.extend([
             "## Core Principles",
             "- Indicators on CLOSED CANDLES ONLY. Current price is REAL-TIME (incomplete candle).",
@@ -419,6 +445,13 @@ class TemplateManager:
                 "before finalizing. If your R/R is below the required minimum, either widen TP or tighten SL "
                 "using ATR-scaled levels, or output HOLD."
             ),
+            "",
+            "## Adversarial Awareness (Market Microstructure)",
+            "- The order book depth, trade flow, and liquidity data represent REAL counterparties.",
+            "- Large buy orders may attract front-runners. Thin order books increase adverse selection risk.",
+            "- Consider: who is on the other side of this trade? Is the liquidity there?",
+            "- When order book imbalance is against your direction, demand higher R/R to compensate.",
+            "- Funding rate extremes signal crowded positioning — elevated squeeze risk on contrarian plays.",
             "",
             "## Key Terminology",
             (

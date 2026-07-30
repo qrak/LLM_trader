@@ -416,6 +416,56 @@ class Config:
         hours = self.get_config("cooldowns", "file_message_expiry", 168)
         return hours * 3600
 
+    # Research Team Configuration
+    @property
+    def RESEARCH_TEAM_ENABLED(self) -> bool:
+        """Whether bull/bear debate is enabled in the LLM prompt."""
+        return bool(self.get_config("research_team", "enabled", False))
+
+    @property
+    def SOCIAL_SENTIMENT_ENABLED(self) -> bool:
+        """Whether Reddit social sentiment fetching is enabled."""
+        return bool(self.get_config("social_sentiment", "enabled", False))
+
+    @property
+    def NITTER_SENTIMENT_ENABLED(self) -> bool:
+        """Whether Nitter (X/Twitter) sentiment fetching is enabled."""
+        return bool(self.get_config("nitter_sentiment", "enabled", False))
+
+    @property
+    def NITTER_TRADING_SYMBOLS(self) -> list[str]:
+        """Crypto tickers to search on Nitter (comma-separated in config)."""
+        raw = self.get_config("nitter_sentiment", "trading_symbols", "BTC,ETH,SOL")
+        if isinstance(raw, list):
+            return [str(s).strip() for s in raw if str(s).strip()]
+        return [s.strip() for s in raw.split(",") if s.strip()]
+
+    # RL Training Configuration
+    @property
+    def RL_TRAINING_ENABLED(self) -> bool:
+        """Whether PPO fine-tuning of local policy model is enabled."""
+        return bool(self.get_config("rl_training", "enabled", False))
+
+    @property
+    def RL_TRAINING_MODEL(self) -> str:
+        """HuggingFace model ID for the policy network."""
+        return self.get_config("rl_training", "model", "Qwen/Qwen3-0.6B-Instruct")
+
+    @property
+    def RL_TRAINING_UPDATE_INTERVAL(self) -> int:
+        """Number of closed trades between PPO update cycles."""
+        return int(self.get_config("rl_training", "update_interval", 10))
+
+    @property
+    def RL_TRAINING_CHECKPOINT_DIR(self) -> str:
+        """Directory for saving fine-tuned model checkpoints."""
+        return self.get_config("rl_training", "checkpoint_dir", "data/rl_checkpoints")
+
+    @property
+    def RL_TRAINING_DEVICE(self) -> str:
+        """Training device: cpu, cuda, or auto."""
+        return self.get_config("rl_training", "device", "auto")
+
     # RAG Configuration
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self):

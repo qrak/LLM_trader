@@ -20,6 +20,9 @@ Pillow==12.3.0
 python-dotenv>=1.0.0
 kaleido==1.1.0
 torch>=2.6.0
+transformers>=4.46.0
+accelerate>=1.0.0
+bitsandbytes>=0.45.0
 chromadb>=1.0.0
 sentence-transformers>=5.2.0
 fastapi==0.138.0
