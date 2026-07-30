@@ -231,6 +231,11 @@ class BrainContextProvider:
                 "",
             ])
 
+        # --- Risk Profile (adaptive, brain-driven) ---
+        risk_profile_text = self._build_risk_profile_context(atr_percentage)
+        if risk_profile_text:
+            lines.extend(["", risk_profile_text])
+
         result = "\n".join(lines)
         if len(result) > self.BRAIN_CONTEXT_MAX_CHARS:
             # Truncate at entry boundary (\n\n) to keep clean sections
@@ -267,6 +272,103 @@ class BrainContextProvider:
             if self.logger:
                 self.logger.warning("Failed to retrieve post-mortem lessons for brain context: %s", e)
             return ""
+
+    def _build_risk_profile_context(self, atr_percentage: float) -> str:
+        """Build risk profile context using all available vector memory analytics.
+
+        Uses confidence stats (HIGH/MEDIUM/LOW win rates), ADX regime performance,
+        trade count, and volatility to select profile and provide actionable guidance.
+
+        Returns a short string for the system prompt, or empty if not enough data.
+        """
+        trade_count = self.vector_memory.trade_count
+        if trade_count < 5:
+            return ""
+
+        conf_stats = self.vector_memory.compute_confidence_stats()
+        adx_perf = self.vector_memory.compute_adx_performance()
+
+        # ── Weighted composite score ──
+        # HIGH confidence = 50% weight, MEDIUM = 35%, LOW = 15%
+        high = conf_stats.get("HIGH", {})
+        med = conf_stats.get("MEDIUM", {})
+        low = conf_stats.get("LOW", {})
+
+        h_wr = high.get("win_rate", 50.0)
+        h_n = high.get("total_trades", 0)
+        m_wr = med.get("win_rate", 50.0)
+        m_n = med.get("total_trades", 0)
+        l_wr = low.get("win_rate", 50.0)
+        l_n = low.get("total_trades", 0)
+
+        # Weighted composite win rate: HIGH×0.50, MED×0.35, LOW×0.15
+        weighted_denom = (h_n * 0.50) + (m_n * 0.35) + (l_n * 0.15) or 1
+        composite_wr = (
+            (h_wr * h_n * 0.50) + (m_wr * m_n * 0.35) + (l_wr * l_n * 0.15)
+        ) / weighted_denom
+
+        # ── ADX regime bias ──
+        adx_bias = 0.0
+        adx_detail = ""
+        for bucket_key, bucket_data in adx_perf.items():
+            b_wr = bucket_data.get("win_rate", 50.0)
+            b_n = bucket_data.get("total_trades", 0)
+            if b_n >= 2:
+                if b_wr >= 65:
+                    adx_bias += 0.15
+                    adx_detail = f"{bucket_data.get('level', bucket_key)} ({b_wr:.0f}% WR, {b_n} trades)"
+                elif b_wr <= 40:
+                    adx_bias -= 0.15
+
+        # ── Decision matrix ──
+        profile: str
+        reason: str
+        guidance: str
+
+        # Safety overrides first
+        if atr_percentage > 4.0:
+            profile = "CONSERVATIVE"
+            reason = f"High ATR ({atr_percentage:.1f}%) — protect capital"
+            guidance = "SL: 2.5× ATR, TP: 5× ATR, Max position: 5%. Only high-conviction entries."
+        elif trade_count < 10 or composite_wr < 35:
+            profile = "CONSERVATIVE"
+            reason = f"Low data confidence ({trade_count} trades, composite WR {composite_wr:.0f}%)"
+            guidance = "SL: 2.5× ATR, TP: 5× ATR, Max position: 5%."
+        elif composite_wr >= 60 and adx_bias >= 0.05 and atr_percentage < 3.0:
+            profile = "AGGRESSIVE"
+            reason_parts = [f"Strong composite WR ({composite_wr:.0f}%)"]
+            if adx_detail:
+                reason_parts.append(f"ADX edge: {adx_detail}")
+            reason = "; ".join(reason_parts)
+            guidance = "SL: 1.5× ATR, TP: 3× ATR, Max position: 10%. Take calculated risks."
+        elif composite_wr >= 55 and h_wr >= 65 and atr_percentage < 2.5:
+            profile = "AGGRESSIVE"
+            reason = f"HIGH-confidence WR {h_wr:.0f}% ({h_n} trades) + moderate ATR ({atr_percentage:.1f}%)"
+            guidance = "SL: 1.5× ATR, TP: 3× ATR, Max position: 10%."
+        elif h_wr <= 42 and h_n >= 3:
+            profile = "CONSERVATIVE"
+            reason = f"Weak HIGH-confidence ({h_wr:.0f}% over {h_n} trades)"
+            guidance = "SL: 2.5× ATR, TP: 5× ATR, Max position: 5%. Wait for clearer edge."
+        elif adx_bias <= -0.10:
+            profile = "CONSERVATIVE"
+            reason = "Negative ADX regime edge"
+            guidance = "SL: 2.5× ATR, TP: 5× ATR, Max position: 5%."
+        else:
+            profile = "NEUTRAL"
+            reason = (
+                f"Composite WR {composite_wr:.0f}% (HIGH: {h_wr:.0f}%/{h_n}t, "
+                f"MED: {m_wr:.0f}%/{m_n}t, LOW: {l_wr:.0f}%/{l_n}t), "
+                f"ATR {atr_percentage:.1f}%"
+            )
+            guidance = "SL: 2× ATR, TP: 4× ATR, Max position: 8%."
+
+        return (
+            f"### Active Risk Profile: {profile}\n"
+            f"Reason: {reason}\n"
+            f"→ {guidance}\n"
+            f"(Composite WR: {composite_wr:.0f}% across {trade_count} trades "
+            f"weighted: HIGH×0.50 MED×0.35 LOW×0.15)"
+        )
 
     def get_dynamic_thresholds(self) -> dict[str, Any]:
         """Get brain-learned thresholds from vector store."""

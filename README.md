@@ -73,6 +73,24 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 
 ---
 
+## System Requirements
+
+| Component | Minimum | Recommended (RL Training) |
+|-----------|---------|---------------------------|
+| **Python** | 3.13+ | 3.14+ |
+| **RAM** | 4 GB | 8+ GB |
+| **Disk** | 2 GB | 5+ GB (model checkpoints) |
+| **CPU** | 2 cores | 4+ cores (Ryzen 5700G+) |
+| **GPU** | Not required | Optional for RL training |
+| **OS** | Windows 10+, Linux, macOS | Linux (WSL2) |
+| **Internet** | Required (API calls) | Required |
+
+**RL Policy Training** (optional `[rl_training] enabled=true`):
+- Model: Qwen3-0.6B-Instruct (~1.2 GB download, HuggingFace)
+- Inference: CPU-viable at ~2-5 tokens/sec on modern desktop CPUs
+- Training: PPO requires 8+ GB RAM; GPU strongly recommended for training speed
+- First run auto-downloads the model from HuggingFace
+
 ## 📸 Screenshots
 
 ![Dashboard Overview](img/1.png)

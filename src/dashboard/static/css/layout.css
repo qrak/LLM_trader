@@ -2,6 +2,7 @@
     display: flex;
     height: 100vh;
     width: 100vw;
+    padding-bottom: 28px;
 }
 
 /* Sidebar */
@@ -110,6 +111,7 @@
     padding: 24px;
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 240, 255, 0.02) 100%);
     border-top: 1px solid var(--border-subtle);
+    overflow-y: auto;
 }
 
 .status-indicator {
@@ -223,6 +225,210 @@
 }
 
 /* Contact Info in Sidebar */
+/* ── Donation Block ── */
+.donation-block {
+    margin-top: 12px;
+    padding: 8px 8px;
+    background: linear-gradient(135deg,
+        rgba(100, 200, 255, 0.05) 0%,
+        rgba(100, 200, 255, 0.01) 100%);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.35;
+}
+
+.donation-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.donation-header .icon {
+    font-size: 12px;
+}
+
+.donation-story {
+    margin: 0 0 6px 0;
+    font-size: 9.5px;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.donation-details {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 6px;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 10.5px;
+}
+
+.donation-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.donation-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    min-width: 65px;
+    flex-shrink: 0;
+}
+
+.donation-value {
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.donation-title {
+    color: var(--text-green, #4ade80) !important;
+    font-style: italic;
+}
+
+.donation-ref {
+    margin-top: 2px;
+    padding-top: 2px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.donation-ref .donation-value {
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.donation-ps {
+    margin: 2px 0 0 0;
+    font-size: 9px;
+    color: var(--text-muted);
+    opacity: 0.65;
+    font-style: italic;
+    text-align: center;
+}
+
+/* ── Bottom Supporter Banner ── */
+.supporter-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 6px 16px;
+    background: linear-gradient(90deg,
+        rgba(255, 221, 0, 0.06) 0%,
+        rgba(255, 221, 0, 0.02) 100%);
+    border-top: 1px solid rgba(255, 221, 0, 0.12);
+    text-align: center;
+    font-size: 11px;
+    z-index: 5;
+}
+
+.supporter-text {
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+}
+
+.supporter-divider {
+    color: rgba(255, 255, 255, 0.1);
+    font-size: 10px;
+}
+
+.supporter-link {
+    color: #FFDD00;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.supporter-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+}
+
+/* Buy Me a Coffee button */
+.bmc-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 10px;
+    margin: 6px 0;
+    background: #FFDD00;
+    color: #000;
+    text-decoration: none;
+    border-radius: 5px;
+    font-weight: 600;
+    font-size: 11px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.bmc-btn:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 6px rgba(255, 221, 0, 0.3);
+}
+
+/* AdSense placeholder */
+.adsense-placeholder {
+    margin: 6px 0;
+    padding: 14px 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    text-align: center;
+    min-height: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+}
+
+.adsense-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.adsense-hint {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.2);
+    font-style: italic;
+}
+
+/* Copy-to-clipboard inline button */
+.btn-copy-inline {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 1px 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-copy-inline:hover {
+    background: rgba(100, 200, 255, 0.15);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+.btn-copy-inline.copied {
+    color: var(--text-green, #4ade80);
+}
+
 .contact-list {
     margin-top: 15px;
     padding-top: 15px;

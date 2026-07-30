@@ -134,6 +134,42 @@ url = http://127.0.0.1:9199/decision
 [cooldowns]
 file_message_expiry = 168  # hours before tracked messages are cleaned up
 
+# === Research Team (Bull/Bear Debate) ===
+# Enables structured bull-vs-bear analysis in the LLM prompt.
+# When true, the prompt instructs the model to argue both sides before deciding.
+# This reduces confirmation bias at the cost of slightly longer prompts.
+# No additional LLM call — both perspectives are generated in ONE response.
+[research_team]
+enabled = false
+
+# === Social Sentiment (Reddit) ===
+# Fetches hot posts from r/CryptoCurrency, r/Bitcoin, r/ethereum.
+# No API key needed — uses Reddit's free public JSON endpoint.
+[social_sentiment]
+enabled = false
+
+# === X/Twitter Sentiment (via Nitter) ===
+# Nitter = free, open-source Twitter frontend. No API key, no login.
+# Scrapes recent crypto tweets faster than Reddit for breaking news.
+# Multiple Nitter instances for redundancy.
+# trading_symbols: comma-separated crypto tickers to search for (no spaces).
+[nitter_sentiment]
+enabled = false
+trading_symbols = BTC,ETH,SOL
+
+# === RL Policy Training (Optional) ===
+# Fine-tune a small LLM (Qwen3-0.6B-Instruct) with PPO on trading outcomes.
+# When enabled, closed trades feed into a local policy network that replaces
+# the external LLM call with a free, locally-trained model.
+# Minimum: 8 GB RAM, 2 CPU cores. GPU optional (CPU inference viable at 0.6B).
+# Model auto-downloaded from HuggingFace on first use (~1.2 GB disk).
+[rl_training]
+enabled = false
+model = Qwen/Qwen3-0.6B-Instruct
+update_interval = 10
+checkpoint_dir = data/rl_checkpoints
+device = auto
+
 # === Model Configuration ===
 [model_config]
 temperature = 1.0

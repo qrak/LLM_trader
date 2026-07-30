@@ -13,6 +13,7 @@ from .brain_experience import BrainExperienceRecorder
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
 from .data_models import ExitExecutionContext, Position, TradeDecision
+from .risk_profile_selector import RiskProfileSelector
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 from .vector_memory import VectorMemoryService
 
@@ -103,8 +104,9 @@ class TradingBrainService:
             vector_memory=self.vector_memory,
             exit_profiles=self.exit_profiles,
             post_mortem_repo=post_mortem_repo,
+            logger=self.logger,
         )
-
+        self.risk_profile_selector = RiskProfileSelector(self.vector_memory)
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(
             "Trading brain reflection interval: every %s closed trades",

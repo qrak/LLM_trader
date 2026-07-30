@@ -90,6 +90,10 @@ class VectorMemoryContextMixin:
         chandelier_long: float | None = None,
         pfe: float | None = None,
         supertrend_signal: str = "",
+        # --- Social sentiment + EV snapshot from position entry ---
+        social_sentiment_reddit: str = "",
+        social_sentiment_nitter: str = "",
+        portfolio_pnl_pct: float | None = None,
     ) -> str:
         """Build the discriminative text document embedded for semantic search."""
         symbol_str = f" [{symbol}]" if symbol else ""
@@ -143,6 +147,12 @@ class VectorMemoryContextMixin:
             structure_parts.append(f"MFI={mfi:.1f}")
         if cmf is not None:
             structure_parts.append(f"CMF={cmf:+.3f}")
+        if social_sentiment_reddit and social_sentiment_reddit not in ("NEUTRAL", "NO_DATA"):
+            structure_parts.append(f"Reddit={social_sentiment_reddit}")
+        if social_sentiment_nitter and social_sentiment_nitter not in ("NEUTRAL", "NO_DATA"):
+            structure_parts.append(f"Nitter={social_sentiment_nitter}")
+        if portfolio_pnl_pct is not None:
+            structure_parts.append(f"PortfolioPnL={portfolio_pnl_pct:+.1f}%")
         structure_str = " | ".join(structure_parts)
 
         factor_parts: list[str] = []
@@ -520,6 +530,23 @@ class VectorMemoryContextMixin:
         )
         if exit_execution_text:
             parts.append(exit_execution_text)
+
+        # Social sentiment match factors
+        reddit_sent = meta.get("social_sentiment_reddit", "")
+        if reddit_sent and reddit_sent not in ("NEUTRAL", "NO_DATA"):
+            reddit_mismatch = f"Reddit={reddit_sent}" not in ctx_upper and reddit_sent.upper() not in ctx_upper
+            flag = " ⚠️" if reddit_mismatch else ""
+            parts.append(f"Reddit={reddit_sent}{flag}")
+
+        nitter_sent = meta.get("social_sentiment_nitter", "")
+        if nitter_sent and nitter_sent not in ("NEUTRAL", "NO_DATA"):
+            nitter_mismatch = f"Nitter={nitter_sent}" not in ctx_upper and nitter_sent.upper() not in ctx_upper
+            flag = " ⚠️" if nitter_mismatch else ""
+            parts.append(f"Nitter={nitter_sent}{flag}")
+
+        pf_pnl = meta.get("portfolio_pnl_pct")
+        if pf_pnl is not None:
+            parts.append(f"PortfolioPnL={pf_pnl:+.1f}%")
 
         return " | ".join(parts)
 

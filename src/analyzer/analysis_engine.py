@@ -186,7 +186,9 @@ class AnalysisEngine:
         brain_service = None,
         last_analysis_time: str | None = None,
         current_ticker: dict[str, Any] | None = None,
-        dynamic_thresholds: dict[str, Any] | None = None
+        dynamic_thresholds: dict[str, Any] | None = None,
+        ev_context: str | None = None,
+        rl_policy = None,
     ) -> dict[str, Any]:
         """
         Orchestrate the complete market analysis workflow.
@@ -203,6 +205,7 @@ class AnalysisEngine:
             last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
             current_ticker: Optional dict containing current ticker data to avoid redundant API calls
             dynamic_thresholds: Optional dict containing brain-learned thresholds for response template
+            ev_context: Expected Value framework section text (dynamic capital tracking)
 
         Returns:
             Dictionary containing analysis results
@@ -266,7 +269,9 @@ class AnalysisEngine:
                 provider, model, additional_context, previous_response,
                 previous_indicators, position_context, performance_context,
                 brain_context, last_analysis_time, dynamic_thresholds,
-                precomputed_chart=(chart_image, has_chart_analysis) # Pass precomputed chart
+                precomputed_chart=(chart_image, has_chart_analysis),
+                ev_context=ev_context,
+                rl_policy=rl_policy,
             )
 
             # Reset custom instructions for next run
@@ -480,9 +485,15 @@ class AnalysisEngine:
         brain_context: str | None = None,
         last_analysis_time: str | None = None,
         dynamic_thresholds: dict[str, Any] | None = None,
-        precomputed_chart: tuple[io.BytesIO | None, bool] | None = None
+        precomputed_chart: tuple[io.BytesIO | None, bool] | None = None,
+        ev_context: str | None = None,
+        rl_policy = None,
     ) -> dict[str, Any]:
-        """Generate AI analysis using prompt builder and result processor"""
+        """Generate AI analysis using prompt builder and result processor.
+
+        When rl_policy is enabled and loaded, the local Qwen3-0.6B model
+        replaces the external LLM call entirely — zero API cost.
+        """
 
         if precomputed_chart:
             chart_image, has_chart_analysis = precomputed_chart
@@ -506,6 +517,7 @@ class AnalysisEngine:
             last_analysis_time,
             has_chart_analysis,
             dynamic_thresholds,
+            ev_context=ev_context,
         )
         assert self.prompt_builder is not None
         prompt = self.prompt_builder.build_prompt(

@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Signal LLM — AI Trading Bot That Thinks, Remembers, and Learns</title>
+    <meta name="description" content="An autonomous AI trading agent powered by Google Gemini. 50+ technical indicators, vector memory, 7 specialized AI agents, and a self-learning brain. Built by a self-taught warehouse worker from Poland.">
+    <meta property="og:title" content="Semantic Signal LLM — AI Crypto Trading Bot">
+    <meta property="og:description" content="Reads charts. Remembers outcomes. Learns from every trade. 1324 tests. Zero AI fluff.">
+    <meta property="og:url" content="https://qrak.org">
+    <meta name="google-adsense-account" content="ca-pub-0077039593558808">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --bg: #05070a;
+            --bg2: #0d1117;
+            --bg3: #161b22;
+            --border: #21262d;
+            --cyan: #00f0ff;
+            --green: #00ff9d;
+            --yellow: #FFDD00;
+            --text: #e6edf3;
+            --muted: #8b949e;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+            --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+        }
+        *{margin:0;padding:0;box-sizing:border-box}
+        html{scroll-behavior:smooth}
+        body{
+            font-family:var(--font);
+            background:var(--bg);
+            color:var(--text);
+            line-height:1.65;
+            overflow-x:hidden;
+        }
+
+        /* ── Hero ── */
+        .hero{
+            position:relative;
+            min-height:100vh;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            justify-content:center;
+            text-align:center;
+            padding:60px 20px;
+            overflow:hidden;
+            background:radial-gradient(ellipse 80% 60% at 50% 30%, rgba(0,240,255,.06) 0%, transparent 70%),
+                       radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0,255,157,.04) 0%, transparent 70%);
+        }
+        .hero::before{
+            content:'';
+            position:absolute;
+            top:0;left:0;right:0;bottom:0;
+            background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2300f0ff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity:.5;
+            pointer-events:none;
+        }
+        .hero-badge{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:6px 16px;
+            border:1px solid rgba(0,240,255,.2);
+            border-radius:30px;
+            font-size:13px;
+            color:var(--cyan);
+            margin-bottom:24px;
+            background:rgba(0,240,255,.03);
+        }
+        .hero-badge .pulse{
+            width:8px;height:8px;
+            border-radius:50%;
+            background:var(--green);
+            animation:pulse 2s infinite;
+        }
+        @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 6px var(--green)}50%{opacity:.4;box-shadow:0 0 2px var(--green)}}
+        .hero h1{
+            font-size:clamp(2.2em,6vw,4.5em);
+            font-weight:800;
+            letter-spacing:-.03em;
+            line-height:1.1;
+            margin-bottom:16px;
+        }
+        .hero h1 .hl{color:var(--cyan)}
+        .hero h1 .hl2{color:var(--green)}
+        .hero .tagline{
+            font-size:clamp(1em,2.5vw,1.3em);
+            color:var(--muted);
+            max-width:700px;
+            line-height:1.6;
+        }
+        .hero-cta{
+            display:flex;
+            gap:12px;
+            flex-wrap:wrap;
+            justify-content:center;
+            margin-top:32px;
+        }
+        .btn{
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            padding:12px 28px;
+            border-radius:10px;
+            font-weight:600;
+            font-size:15px;
+            text-decoration:none;
+            transition:transform .15s,box-shadow .15s,opacity .15s;
+            cursor:pointer;
+        }
+        .btn:hover{transform:translateY(-2px)}
+        .btn-primary{background:var(--cyan);color:#000;box-shadow:0 0 30px rgba(0,240,255,.2)}
+        .btn-primary:hover{box-shadow:0 0 40px rgba(0,240,255,.35)}
+        .btn-outline{border:1.5px solid var(--cyan);color:var(--cyan);background:transparent}
+        .btn-outline:hover{background:rgba(0,240,255,.06)}
+        .btn-coffee{background:var(--yellow);color:#000}
+        .btn-coffee:hover{box-shadow:0 4px 20px rgba(255,221,0,.3)}
+        .hero-stats{
+            display:flex;
+            gap:40px;
+            flex-wrap:wrap;
+            justify-content:center;
+            margin-top:48px;
+            padding-top:32px;
+            border-top:1px solid var(--border);
+        }
+        .hero-stat{text-align:center}
+        .hero-stat .num{font-size:2em;font-weight:700;color:var(--cyan);font-family:var(--mono)}
+        .hero-stat .lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px}
+
+        /* ── Section ── */
+        section{padding:80px 20px}
+        .container{max-width:1100px;margin:0 auto}
+        h2{
+            font-size:2em;
+            font-weight:700;
+            margin-bottom:12px;
+            color:var(--text);
+        }
+        h2 span{color:var(--cyan)}
+        .subhead{
+            color:var(--muted);
+            font-size:1.05em;
+            margin-bottom:40px;
+            max-width:600px;
+        }
+
+        /* ── Feature Grid ── */
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+        .card{
+            background:var(--bg2);
+            border:1px solid var(--border);
+            border-radius:12px;
+            padding:24px;
+            transition:border-color .2s,transform .2s;
+        }
+        .card:hover{border-color:var(--cyan);transform:translateY(-2px)}
+        .card .icon{font-size:1.6em;margin-bottom:12px}
+        .card h3{font-size:1.05em;margin-bottom:8px;color:var(--text)}
+        .card p{font-size:.9em;color:var(--muted);line-height:1.55}
+
+        /* ── Architecture ── */
+        .arch-diagram{
+            background:var(--bg2);
+            border:1px solid var(--border);
+            border-radius:16px;
+            padding:32px;
+            overflow-x:auto;
+            font-family:var(--mono);
+            font-size:12px;
+            line-height:1.7;
+            color:var(--muted);
+        }
+        .arch-diagram .node{color:var(--cyan);font-weight:600}
+        .arch-diagram .green{color:var(--green)}
+        .arch-diagram .dim{opacity:.5}
+
+        /* ── Agent Grid ── */
+        .agent-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+        .agent-card{
+            background:var(--bg2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:20px;
+            border-left:3px solid transparent;
+            transition:border-left-color .2s;
+        }
+        .agent-card:hover{border-left-color:var(--cyan)}
+        .agent-card .emoji{font-size:1.5em;margin-bottom:6px}
+        .agent-card h4{font-size:.95em;color:var(--text);margin-bottom:4px}
+        .agent-card p{font-size:.82em;color:var(--muted)}
+
+        /* ── Code Block ── */
+        pre{
+            background:var(--bg3);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:20px;
+            overflow-x:auto;
+            font-family:var(--mono);
+            font-size:13px;
+            line-height:1.6;
+            color:var(--muted);
+        }
+        pre .hl{color:var(--cyan)}
+        pre .hl2{color:var(--green)}
+        pre .dim{opacity:.4}
+
+        /* ── CTA Section ── */
+        .cta{
+            text-align:center;
+            padding:80px 20px;
+            background:linear-gradient(180deg,transparent 0%,rgba(0,240,255,.03) 50%,transparent 100%);
+            border-top:1px solid var(--border);
+            border-bottom:1px solid var(--border);
+        }
+        .cta h2{margin-bottom:8px}
+        .cta .cta-buttons{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:24px}
+
+        /* ── About ── */
+        .about{
+            display:flex;
+            gap:32px;
+            align-items:flex-start;
+            flex-wrap:wrap;
+        }
+        .about-avatar{
+            width:100px;height:100px;
+            border-radius:50%;
+            background:linear-gradient(135deg,var(--cyan),var(--green));
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            font-size:2.8em;
+            flex-shrink:0;
+        }
+        .about-text{flex:1;min-width:260px}
+        .about-text h3{margin-bottom:8px}
+        .about-text p{color:var(--muted);font-size:.95em;margin-bottom:10px}
+
+        /* ── Footer ── */
+        footer{
+            text-align:center;
+            padding:40px 20px;
+            color:var(--muted);
+            font-size:.82em;
+            border-top:1px solid var(--border);
+        }
+        footer a{color:var(--cyan);text-decoration:none}
+        footer a:hover{text-decoration:underline}
+
+        /* ── Terminal Effect ── */
+        .terminal-box{
+            background:var(--bg2);
+            border:1px solid var(--border);
+            border-radius:12px;
+            overflow:hidden;
+            margin:30px 0;
+        }
+        .terminal-header{
+            background:var(--bg3);
+            padding:10px 16px;
+            display:flex;
+            gap:8px;
+        }
+        .terminal-header span{
+            width:12px;height:12px;
+            border-radius:50%;
+        }
+        .terminal-header .red{background:#ff5f57}
+        .terminal-header .yellow{background:#febc2e}
+        .terminal-header .green{background:#28c840}
+        .terminal-body{
+            padding:20px 24px;
+            font-family:var(--mono);
+            font-size:13px;
+            line-height:1.7;
+            color:var(--muted);
+        }
+        .terminal-body .prompt{color:var(--green)}
+        .terminal-body .cmd{color:var(--cyan)}
+
+        /* ── Responsive ── */
+        @media(max-width:768px){
+            .hero-stats{gap:24px}
+            .hero-stat .num{font-size:1.5em}
+            .arch-diagram{padding:20px;font-size:11px}
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section class="hero">
+    <div class="hero-badge">
+        <span class="pulse"></span> Live on Mainnet — Paper Trading
+    </div>
+    <h1>
+        SEMANTIC<span class="hl">SIGNAL</span> <span class="hl2">LLM</span>
+    </h1>
+    <p class="tagline">
+        An autonomous AI trading agent that <strong>reads charts</strong>,
+        <strong>remembers outcomes</strong>, and
+        <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and seven specialized AI agents.
+    </p>
+    <div class="hero-cta">
+        <a href="https://semanticsignal.qrak.org" class="btn btn-primary" target="_blank" rel="noopener">
+            ▶ Watch It Trade Live
+        </a>
+        <a href="https://github.com/qrak/LLM_trader" class="btn btn-outline" target="_blank" rel="noopener">
+            ⭐ Source Code
+        </a>
+        <a href="https://www.buymeacoffee.com/qrak" class="btn btn-coffee" target="_blank" rel="noopener">
+            ☕ Buy Me a Coffee
+        </a>
+    </div>
+    <div class="hero-stats">
+        <div class="hero-stat">
+            <div class="num">50+</div>
+            <div class="lbl">Technical Indicators</div>
+        </div>
+        <div class="hero-stat">
+            <div class="num">1,324</div>
+            <div class="lbl">Automated Tests</div>
+        </div>
+        <div class="hero-stat">
+            <div class="num">7</div>
+            <div class="lbl">Specialized AI Agents</div>
+        </div>
+        <div class="hero-stat">
+            <div class="num">$0</div>
+            <div class="lbl">Sentiment API Cost</div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ ARCHITECTURE ═══════════ -->
+<section>
+    <div class="container">
+        <h2><span>⚙</span> How It Works</h2>
+        <p class="subhead">Every 4 hours, the bot executes a full analysis pipeline — from raw market data to a reasoned trading decision with SL/TP levels.</p>
+
+        <div class="terminal-box">
+            <div class="terminal-header">
+                <span class="red"></span><span class="yellow"></span><span class="green"></span>
+            </div>
+            <div class="terminal-body">
+                <span class="dim"># 1. Market Data Pipeline</span><br>
+                <span class="prompt">$</span> <span class="cmd">fetch --source binance --symbol BTC/USDC</span><br>
+                <span class="dim">OHLCV candles · order book · funding rate · 24h volume</span><br><br>
+                <span class="dim"># 2. Technical Analysis Engine (Numba JIT-compiled)</span><br>
+                <span class="prompt">$</span> <span class="cmd">compute --indicators 50+ --kernel-patterns 12</span><br>
+                <span class="dim">RSI · MACD · Bollinger · ATR · ADX · Ichimoku · OBV · MFI · VWAP · EMA crosses · +40 more</span><br><br>
+                <span class="dim"># 3. Sentiment & News (zero API cost)</span><br>
+                <span class="prompt">$</span> <span class="cmd">scrape --reddit r/Bitcoin r/CryptoCurrency --nitter BTC --rss CoinDesk CoinTelegraph</span><br>
+                <span class="dim">Reddit JSON · Nitter (X/Twitter) · RSS feeds · RAG search index</span><br><br>
+                <span class="dim"># 4. AI Analysis (Gemini 3.6 Flash)</span><br>
+                <span class="prompt">$</span> <span class="cmd">analyze --model gemini --debate bull-bear --context adversarial</span><br>
+                <span class="dim">Chart visual analysis · Bull/Bear internal debate · EV Framework · Risk Profile selection</span><br><br>
+                <span class="dim"># 5. Decision & Execution</span><br>
+                <span class="prompt">$</span> <span class="cmd">decide --sl 1.8xATR --tp risk-reward-2.5 --max-size 5%</span><br>
+                <span class="dim">BUY/SELL/HOLD · Stop-loss · Take-profit · Position size · Cooldown guard</span><br><br>
+                <span class="dim"># 6. Post-Mortem Learning (ChromaDB)</span><br>
+                <span class="prompt">$</span> <span class="cmd">learn --outcome CLOSED --pnl +3.2% --embed --store vectors/775</span><br>
+                <span class="dim">AI post-mortem analysis · vector embedding · risk profile recalibration</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ FEATURES ═══════════ -->
+<section style="background:rgba(0,0,0,.15)">
+    <div class="container">
+        <h2><span>🧠</span> Core Features</h2>
+        <p class="subhead">Not just another trading bot. This one reasons, debates, remembers, and improves.</p>
+
+        <div class="grid">
+            <div class="card">
+                <div class="icon">🤖</div>
+                <h3>LLM Chart Reading</h3>
+                <p>Google Gemini 3.6 Flash reads candlestick charts visually AND numerically — interpreting 50+ indicators simultaneously, spotting patterns a human would miss.</p>
+            </div>
+            <div class="card">
+                <div class="icon">⚔️</div>
+                <h3>Bull vs Bear Internal Debate</h3>
+                <p>Before every decision, the LLM argues BOTH sides. Bull case optimistic, Bear case pessimistic. Then it decides. More balanced, less emotional.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🧬</div>
+                <h3>Vector Memory (ChromaDB)</h3>
+                <p>Every closed trade is embedded as a vector. On the next cycle, the bot queries its own brain: <em>"Have I seen this pattern before? What happened?"</em></p>
+            </div>
+            <div class="card">
+                <div class="icon">🎯</div>
+                <h3>Risk Profile Selector</h3>
+                <p>Three dynamic modes — <strong>Aggressive</strong>, <strong>Conservative</strong>, <strong>Neutral</strong>. Switches automatically based on win rate, avg PnL, and market trend (ADX).</p>
+            </div>
+            <div class="card">
+                <div class="icon">📰</div>
+                <h3>Zero-Cost Sentiment</h3>
+                <p>Reddit (r/CryptoCurrency, r/Bitcoin) and X/Twitter (via Nitter) scraped directly — free JSON feeds. No API keys. Plus RSS from CoinDesk, CoinTelegraph, Decrypt.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🛡️</div>
+                <h3>Execution Safeguards</h3>
+                <p>Cooldown windows prevent overtrading. Max position size enforced. Symbol whitelist. SL/TP validated against ATR. Paper trading by default.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🔮</div>
+                <h3>Adversarial Awareness</h3>
+                <p>The system prompt teaches the LLM about real order books — counterparty orders, funding rate traps, liquidity squeezes. Not just abstract lines on a chart.</p>
+            </div>
+            <div class="card">
+                <div class="icon">📊</div>
+                <h3>Real-Time Dashboard</h3>
+                <p>WebSocket-powered live UI with ApexCharts candlesticks, Vis.js decision graphs, FTS5 trade journal search, and full prompt/response transparency.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ RESEARCH-BACKED ═══════════ -->
+<section>
+    <div class="container">
+        <h2><span>📚</span> Research-Backed. Competitor-Aware.</h2>
+        <p class="subhead">This bot doesn't exist in a vacuum. It merges the best ideas from academic papers and open-source frameworks into a single, battle-tested trading engine.</p>
+
+        <div class="grid">
+            <div class="card" style="border-left:3px solid #ff6b9d">
+                <h3 style="font-size:.95em">TradingAgents (UCLA/MIT)</h3>
+                <p style="font-size:.82em;color:var(--muted)">Multi-agent stock trading framework with bull/bear debate. <strong>Great design, but:</strong> stocks only, no crypto, no chart vision, no vector memory, no self-learning rules. <em>We took their debate idea and ran with it — for crypto, with vision, with memory.</em></p>
+            </div>
+            <div class="card" style="border-left:3px solid #FFDD00">
+                <h3 style="font-size:.95em">Optiver Research (2026)</h3>
+                <p style="font-size:.82em;color:var(--muted)">LLMs pass the intern exam but fail at EV maximization and multi-step reasoning. <strong>Our fix:</strong> EV Framework that computes expected value from real trade history, adversarial awareness prompt, and a falsification check that rejects signals the LLM can't defend.</p>
+            </div>
+            <div class="card" style="border-left:3px solid var(--cyan)">
+                <h3 style="font-size:.95em">Agentic Trading Survey (arXiv 2026)</h3>
+                <p style="font-size:.82em;color:var(--muted)">77 studies reviewed. Only 2 had proper time-consistent splits. Reproducibility: R0 (none). <strong>We hit R2:</strong> fully mocked test suite with 1,324 tests, deterministic output, CI-ready. All LLM responses validated before execution.</p>
+            </div>
+            <div class="card" style="border-left:3px solid #00ff9d">
+                <h3 style="font-size:.95em">Lopez-Lira (Bank of Finland)</h3>
+                <p style="font-size:.82em;color:var(--muted)">LLMs trade but don't care about money unless explicitly instructed. <strong>Our approach:</strong> risk profiles with real P&L feedback, post-mortem AI analysis of every closed trade, and a ChromaDB memory that literally shows the bot its past mistakes.</p>
+            </div>
+        </div>
+
+        <div style="text-align:center;margin-top:24px">
+            <p style="color:var(--muted);font-size:.9em;line-height:1.7;max-width:750px;margin:0 auto">
+                <strong>LLM Trader is the only open-source crypto trading bot that combines:</strong><br>
+                Chart Vision (Gemini reads candlesticks visually) ·
+                Bull/Bear Internal Debate (zero extra API cost) ·
+                Vector Memory (ChromaDB semantic trade recall) ·
+                Self-Writing Rules (reflection engine) ·
+                Zero-Cost Sentiment (Reddit + Nitter + RSS, no API keys) ·
+                7 Specialized AI Agents maintaining the codebase ·
+                1,324 Automated Tests ·
+                EV Framework with Falsification Checks ·
+                Adversarial Awareness (real order book dynamics)
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ SEVEN AGENTS ═══════════ -->
+<section>
+    <div class="container">
+        <h2><span>👥</span> The Seven-Agent System</h2>
+        <p class="subhead">The codebase maintains itself. Seven specialized AI agents — each with a dedicated prompt, journal, and scope — continuously improve the bot.</p>
+
+        <div class="agent-grid">
+            <div class="agent-card" style="border-left-color:#FFDD00">
+                <div class="emoji">⚡</div>
+                <h4>Bolt — Performance</h4>
+                <p>Caching, async patterns, Numba JIT, vector search latency, memory footprint. <em>"Make it faster."</em></p>
+            </div>
+            <div class="agent-card" style="border-left-color:#ff6b9d">
+                <div class="emoji">🎨</div>
+                <h4>Palette — UX & Accessibility</h4>
+                <p>Dashboard HTML/CSS/JS, ARIA labels, keyboard navigation, responsive design, toast notifications.</p>
+            </div>
+            <div class="agent-card" style="border-left-color:#ff5f57">
+                <div class="emoji">🛡️</div>
+                <h4>Sentinel — Security</h4>
+                <p>CSP headers, rate limiting, auth hardening, XSS protection, API key isolation, CORS policies.</p>
+            </div>
+            <div class="agent-card" style="border-left-color:#a371f7">
+                <div class="emoji">✨</div>
+                <h4>Refactor — Clean Code</h4>
+                <p>Eliminates isinstance chains, enforces DI patterns, removes code smells, strengthens type hints.</p>
+            </div>
+            <div class="agent-card" style="border-left-color:#28c840">
+                <div class="emoji">✂️</div>
+                <h4>Concise — Code Reduction</h4>
+                <p>DRY violations, mixins, dispatch tables, functional expressions. <em>"Make it shorter without losing clarity."</em></p>
+            </div>
+            <div class="agent-card" style="border-left-color:#ff9800">
+                <div class="emoji">🐛</div>
+                <h4>Bugfixer — Regressions</h4>
+                <p>Finds bugs, verifies other agents' changes don't break things, reads all journals for context.</p>
+            </div>
+            <div class="agent-card" style="border-left-color:#e91e63">
+                <div class="emoji">🔥</div>
+                <h4>Smoke Tests — Pre-Flight</h4>
+                <p>Syntax compilation, targeted unit tests, linter gates, startup sanity checks before every commit.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ DASHBOARD ARCHITECTURE ═══════════ -->
+<section style="background:rgba(0,0,0,.15)">
+    <div class="container">
+        <h2><span>📡</span> Dashboard Architecture</h2>
+        <p class="subhead">FastAPI + WebSocket with six dedicated API routers and a real-time admin console.</p>
+
+        <pre>
+┌─────────────────────────────────────────────────────────┐
+│  <span class="hl">FastAPI Server</span> (0.0.0.0:8000)                          │
+│  ├── <span class="hl2">/api/brain/</span>*       → decisions, signals, context       │
+│  ├── <span class="hl2">/api/monitor/</span>*     → system health, provider status     │
+│  ├── <span class="hl2">/api/performance/</span>* → P&amp;L curves, statistics, trade history │
+│  ├── <span class="hl2">/api/visuals/</span>*     → chart data, indicator plots          │
+│  ├── <span class="hl2">/ws/</span>*              → real-time WebSocket streaming          │
+│  ├── <span class="hl2">/api/admin/</span>*       → config CRUD, force analysis, log stream │
+│  └── <span class="hl2">/admin</span>            → admin console UI (HMAC auth)            │
+│                                                         │
+│  <span class="dim">Frontend:</span> Vanilla JS + Vis.js + ApexCharts + WebSocket    │
+│  <span class="dim">State:</span>    Shared dashboard_state singleton                │
+│  <span class="dim">Cache:</span>    Cloudflare CDN with selective bypass rules       │
+└─────────────────────────────────────────────────────────┘</pre>
+    </div>
+</section>
+
+<!-- ═══════════ TECH STACK ═══════════ -->
+<section>
+    <div class="container">
+        <h2><span>🛠</span> Tech Stack</h2>
+        <div class="grid">
+            <div class="card"><div class="icon">🐍</div><h3>Python 3.13.14</h3><p>asyncio, DI composition root, modular architecture</p></div>
+            <div class="card"><div class="icon">⚡</div><h3>FastAPI + uvicorn</h3><p>WebSocket streaming, 6 API routers, middleware pipeline</p></div>
+            <div class="card"><div class="icon">🤖</div><h3>Google Gemini 3.6</h3><p>Chart reading, technical reasoning, adversarial awareness</p></div>
+            <div class="card"><div class="icon">🔢</div><h3>pandas-ta + Numba</h3><p>50+ JIT-compiled indicators, 12 kernel patterns</p></div>
+            <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, FTS5 search</p></div>
+            <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision pathways graph, candlestick charts, live KPI cards</p></div>
+            <div class="card"><div class="icon">🌐</div><h3>Cloudflare</h3><p>Tunnel, CDN, Page Rules, zero-downtime deploys</p></div>
+            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>1,324 passing tests, zero lint errors, CI-ready</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ CTA ═══════════ -->
+<div class="cta">
+    <h2>Ready to Watch the Brain Trade?</h2>
+    <p style="color:var(--muted);max-width:500px;margin:0 auto">
+        Live dashboard with real-time charts, decision graphs, and full trading transparency. No signup. Just watch.
+    </p>
+    <div class="cta-buttons">
+        <a href="https://semanticsignal.qrak.org" class="btn btn-primary" target="_blank" rel="noopener">
+            ▶ Open Live Dashboard
+        </a>
+        <a href="https://www.buymeacoffee.com/qrak" class="btn btn-coffee" target="_blank" rel="noopener">
+            ☕ Buy Me a Coffee
+        </a>
+    </div>
+</div>
+
+<!-- ═══════════ ABOUT ═══════════ -->
+<section>
+    <div class="container">
+        <h2><span>👨‍💻</span> About the Developer</h2>
+
+        <div class="about">
+            <div class="about-avatar">🏭</div>
+            <div class="about-text">
+                <h3>Piotr Kurnicki <span style="font-weight:400;font-size:.8em;color:var(--muted)">(@qrak)</span></h3>
+
+                <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,255,157,.08);border:1px solid rgba(0,255,157,.2);border-radius:20px;padding:4px 14px;font-size:.8em;color:var(--green);margin-bottom:12px">
+                    <span style="width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite"></span>
+                    Open to Work — Backend / AI roles (Wrocław or remote)
+                </div>
+
+                <p>
+                    <strong>Self-taught backend developer</strong> with deep AI/LLM expertise.
+                    Currently working in warehouse logistics while building autonomous AI systems
+                    after hours. My strength: I learn slowly but become an expert — every line of
+                    this codebase I wrote, tested, and understand.
+                </p>
+                <p>
+                    Previously worked with <strong>SAP P4B</strong> at BSH Sprzęt Gospodarstwa Domowego,
+                    where I gained enterprise software experience and learned to navigate complex
+                    business processes. Now I build AI agents that trade crypto autonomously.
+                </p>
+
+                <div style="display:flex;gap:20px;flex-wrap:wrap;margin:16px 0;font-size:.85em;color:var(--muted)">
+                    <div>
+                        <strong style="color:var(--text)">📍</strong> Wrocław, Poland<br>
+                        <strong style="color:var(--text)">🌍</strong> Remote-ready<br>
+                        <strong style="color:var(--text)">🗣</strong> Polish (native) + English (technical)
+                    </div>
+                    <div>
+                        <strong style="color:var(--text)">🐍</strong> Python 3.13.14, FastAPI, asyncio<br>
+                        <strong style="color:var(--text)">🤖</strong> LLMs, prompt engineering, ChromaDB<br>
+                        <strong style="color:var(--text)">🛠</strong> DI patterns, pytest, ruff, Cloudflare
+                    </div>
+                </div>
+
+                <p style="font-size:.85em;color:var(--muted)">
+                    <strong>Interested in:</strong> Backend Python/FastAPI, AI engineering, LLM infrastructure —
+                    ideally a role where I can apply both my AI knowledge and backend skills.
+                    No university degree, but I bring something better: a project with 1,324 tests,
+                    zero lint errors, and a live dashboard you can inspect right now.
+                </p>
+
+                <div style="margin-top:12px">
+                    <a href="https://www.buymeacoffee.com/qrak" class="btn btn-coffee" target="_blank" rel="noopener">
+                        ☕ Buy Me a Coffee
+                    </a>
+                    <a href="https://github.com/qrak" class="btn btn-outline" target="_blank" rel="noopener" style="margin-left:8px">
+                        GitHub
+                    </a>
+                    <a href="mailto:contact@qrak.org" class="btn btn-outline" style="margin-left:8px">
+                        contact@qrak.org
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer>
+    <p>
+        Built with ❤️ in Wrocław, Poland by <a href="https://github.com/qrak" target="_blank" rel="noopener">@qrak</a>
+        · <a href="https://semanticsignal.qrak.org">Dashboard</a>
+        · <a href="https://discord.gg/ZC48aTTqR2">Discord</a>
+        · <a href="https://www.buymeacoffee.com/qrak">Buy Me a Coffee</a>
+    </p>
+</footer>
+
+</body>
+</html>
