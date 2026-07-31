@@ -90,18 +90,10 @@ class AuditTrail:
         self._records.append(entry)
         return entry
 
-    def records_for_order(self, order_id: str) -> list[AuditRecord]:
-        """Return all audit records for a specific order."""
-        return [r for r in self._records if r.order_id == order_id]
-
     @property
     def all_records(self) -> list[AuditRecord]:
         """Return all records in insertion order (immutable view)."""
         return list(self._records)
-
-    def to_telemetry(self) -> list[dict]:
-        """Export all records as a list of dicts for dashboard/telemetry."""
-        return [r.to_telemetry_dict() for r in self._records]
 
     def __len__(self) -> int:
         return len(self._records)

@@ -114,38 +114,6 @@ def safe_array_to_scalar(val: Any, default: float = 0.0) -> float:
         return default
 
 
-def format_array_value(
-    val: Any,
-    fmt_spec: str = ".2f",
-    default: str = "N/A"
-) -> str:
-    """Safely format a scalar or array value with format specifier.
-
-    Args:
-        val: Input scalar or array.
-        fmt_spec: Python format specifier (e.g. '.2f', '.4f').
-        default: Fallback text if NaN/invalid.
-
-    Returns:
-        Formatted string or default.
-    """
-    if val is None:
-        return default
-    try:
-        if isinstance(val, np.ndarray):
-            if val.size == 0:
-                return default
-            scalar = float(val.flat[0])
-        else:
-            scalar = float(val)
-
-        if math.isnan(scalar) or math.isinf(scalar):
-            return default
-        return format(scalar, fmt_spec)
-    except (TypeError, ValueError, IndexError):
-        return "N/A"
-
-
 def get_indicator_value(td: dict, key: str) -> float | str:
     """Get indicator value with proper type checking and error handling.
 

@@ -58,6 +58,7 @@ from src.analyzer.sentiment_analyst import RedditSentimentAnalyst
 from src.analyzer.trend_validator import TrendValidator
 from src.app import POSITION_UPDATE_INTERVAL, BotServices, CryptoTradingBot
 from src.config.loader import config
+from src.dashboard.routers.ws_router import ConnectionManager
 from src.dashboard.server import DashboardServer
 from src.logger.logger import Logger
 from src.managers.model_manager import (
@@ -1160,6 +1161,7 @@ class CompositionRoot:
     ) -> dict:
         """Provision dashboard server and admin interface."""
         force_analysis_event = asyncio.Event()
+        connection_manager = ConnectionManager()
 
         config_path = str(Path(__file__).parent / "config" / "config.ini")
         admin_credentials = {
@@ -1184,6 +1186,7 @@ class CompositionRoot:
             config_path=config_path,
             admin_credentials=admin_credentials,
             post_mortem_repo=trading.get("post_mortem_repo"),
+            connection_manager=connection_manager,
         )
         trading["strategy"].set_dashboard_state(dashboard_server.dashboard_state)
 

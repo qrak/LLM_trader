@@ -4,6 +4,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
+from src.trading.regime_risk_profile import RegimeRiskProfileSelector
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -19,6 +20,7 @@ class RiskManager:
         self.logger = logger
         self.config = config
         self._last_frictions: list[dict[str, Any]] = []
+        self.regime_profile_selector = RegimeRiskProfileSelector()
 
     def validate_signal(self, signal: str) -> bool:
         """Validate if a signal is actionable."""
@@ -44,9 +46,14 @@ class RiskManager:
         )
         return self.config.POSITION_SIZE_FALLBACK_MEDIUM
 
-    def _resolve_position_size_pct(self, position_size: float | None, confidence: str) -> float:
-        """Resolve final position size from AI request or configured confidence fallback."""
-        max_size = self.config.MAX_POSITION_SIZE
+    def _resolve_position_size_pct(self, position_size: float | None, confidence: str, profile_cap: float | None = None) -> float:
+        """Resolve final position size from AI request or configured confidence fallback.
+
+        Args:
+            profile_cap: Optional regime-based max position cap (overrides config
+                MAX_POSITION_SIZE when more conservative).
+        """
+        max_size = profile_cap if profile_cap is not None else self.config.MAX_POSITION_SIZE
         if not math.isfinite(max_size) or max_size <= 0:
             raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
 
@@ -91,10 +98,15 @@ class RiskManager:
         stop_loss: float | None = None,
         take_profit: float | None = None,
         position_size: float | None = None,
-        market_conditions: "MarketConditions | None" = None
+        market_conditions: "MarketConditions | None" = None,
+        choppiness: float | None = None,
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
+
+        Args:
+            choppiness: Choppiness index (0-100). When provided, used to select
+                the regime-based risk profile for SL/TP/size multipliers.
         """
         from src.trading.data_models import RiskAssessment
         mc = market_conditions
@@ -112,10 +124,16 @@ class RiskManager:
         else:
             volatility_level = "MEDIUM"
 
-        # 2. Dynamic SL/TP Calculation (Dynamic Defaults)
-        # Use 2x ATR for SL, 4x ATR for TP (2:1 R/R default)
-        dynamic_sl_distance = atr * 2
-        dynamic_tp_distance = atr * 4
+        # 2. Select regime risk profile and get adaptive multipliers
+        profile = self.regime_profile_selector.select_profile(
+            choppiness=choppiness,
+            atr_percentage=atr_pct,
+        )
+        sl_mult = self.regime_profile_selector.get_sl_multiplier(profile)
+        tp_mult = self.regime_profile_selector.get_tp_multiplier(profile)
+
+        dynamic_sl_distance = atr * sl_mult
+        dynamic_tp_distance = atr * tp_mult
 
         if direction == "LONG":
             dynamic_sl = current_price - dynamic_sl_distance
@@ -244,8 +262,9 @@ class RiskManager:
                 })
                 final_tp = dynamic_tp
 
-        # 5. Position Sizing
-        final_size_pct = self._resolve_position_size_pct(position_size, confidence)
+        # 5. Position Sizing (with regime-based cap)
+        profile_cap = self.regime_profile_selector.get_position_size_cap(profile)
+        final_size_pct = self._resolve_position_size_pct(position_size, confidence, profile_cap)
 
         # 6. Calculate Financials
         allocation = capital * final_size_pct
@@ -269,7 +288,8 @@ class RiskManager:
             sl_distance_pct=sl_distance_pct,
             tp_distance_pct=tp_distance_pct,
             rr_ratio=rr_ratio,
-            volatility_level=volatility_level
+            volatility_level=volatility_level,
+            regime_profile=profile.value,
         )
 
     def get_and_clear_frictions(self) -> list[dict[str, Any]]:

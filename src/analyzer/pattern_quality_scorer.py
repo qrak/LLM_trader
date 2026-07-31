@@ -100,12 +100,6 @@ class PatternQualityScorer:
         "rsi_overbought", "stoch_overbought",
     })
 
-    # Patterns that are informative but not directional
-    NEUTRAL_PATTERNS = frozenset({
-        "doji", "spinning_top", "high_wave", "marubozu",
-        "symmetrical_triangle", "rectangle", "pennant",
-    })
-
     @classmethod
     def _classify_direction(cls, pattern_name: str) -> str:
         """Classify a pattern name as bullish, bearish, or neutral."""

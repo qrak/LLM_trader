@@ -3,9 +3,10 @@
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
-from src.trading.executor_handler import ExecutorHandler
-from src.trading.data_models import TradeDecision
+
 from src.logger.logger import Logger
+from src.trading.data_models import TradeDecision
+from src.trading.executor_handler import ExecutorHandler
 
 
 class TestExecutorWireContract(unittest.TestCase):

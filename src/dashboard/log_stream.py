@@ -104,10 +104,6 @@ class LogStreamManager:
         """Attach the stream handler to a specific logger."""
         logger.addHandler(self.handler)
 
-    def attach_to_root_logger(self) -> None:
-        """Attach the stream handler to the root logger (captures everything)."""
-        logging.getLogger().addHandler(self.handler)
-
     def get_recent_logs(self, count: int = 200) -> list[str]:
         """Return the last N formatted log lines."""
         return self.handler.get_recent(count)

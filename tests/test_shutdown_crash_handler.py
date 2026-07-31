@@ -9,7 +9,6 @@ Simulates the uvicorn/starlette shutdown scenario:
 import asyncio
 import os
 import sys
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +16,7 @@ from pathlib import Path
 _proj_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_proj_root))
 
-from src.logger.logger import Logger, _write_fallback_crash, _CRASH_LOG_PATH
+from src.logger.logger import _CRASH_LOG_PATH, Logger, _write_fallback_crash
 
 
 def test_fallback_writer_works():
@@ -40,7 +39,7 @@ def test_fallback_writer_works():
         with open(error_path) as f:
             content = f.read()
         assert "TEST: fallback writer" in content, f"FAIL: content={content[:200]}"
-        assert "RuntimeError" in content, f"FAIL: no RuntimeError in content"
+        assert "RuntimeError" in content, "FAIL: no RuntimeError in content"
         print("✅ Test 1 PASSED: _write_fallback_crash writes to errors.log")
     else:
         print(f"❌ Test 1 FAILED: {error_path} does not exist")

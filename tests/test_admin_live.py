@@ -9,12 +9,12 @@ Requires: live bot with admin credentials configured in keys.env
 """
 
 import os
+
 import pytest
 
 pytest.importorskip("playwright")
 
-from playwright.sync_api import sync_playwright, expect
-
+from playwright.sync_api import expect, sync_playwright
 
 LIVE_URL = os.environ.get("LLM_TRADER_URL", "https://semanticsignal.qrak.org")
 ADMIN_URL = f"{LIVE_URL}/admin"

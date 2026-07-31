@@ -394,13 +394,3 @@ class AdminRouter:
         """Check if dashboard feed is enabled (read by app loop)."""
         return self._dashboard_feed_enabled
 
-    @property
-    def human_input(self) -> str:
-        """Get current human input text."""
-        return self._human_input
-
-    def consume_human_input(self) -> str:
-        """Get and clear the human input (called by bot on each cycle)."""
-        text = self._human_input
-        self._human_input = ""
-        return text

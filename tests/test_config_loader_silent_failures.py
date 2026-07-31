@@ -5,7 +5,6 @@ These tests bypass the conftest.py mock by importing the source module directly.
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # _convert_value unit tests
 # ═══════════════════════════════════════════════════════════════════════
@@ -117,7 +116,7 @@ class TestIniLoading:
     """Real INI parsing behavior around inline comments and interpolation."""
 
     def test_load_ini_config_strips_inline_comments_and_allows_percent_signs(self, tmp_path, monkeypatch):
-        import src.config.loader as loader
+        from src.config import loader
 
         config_path = tmp_path / "config.ini"
         config_path.write_text(
@@ -150,7 +149,7 @@ note = keep 20% buffer                  # literal percent in value is valid
         assert cfg._config_data["debug"]["note"] == "keep 20% buffer"
 
     def test_example_config_loads_values_without_inline_comment_text(self, monkeypatch):
-        import src.config.loader as loader
+        from src.config import loader
 
         monkeypatch.setattr(loader, "CONFIG_INI_PATH", loader.CONFIG_DIR / "config.ini.example")
         cfg = loader.Config.__new__(loader.Config)

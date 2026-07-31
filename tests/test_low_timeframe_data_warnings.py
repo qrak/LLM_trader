@@ -62,8 +62,9 @@ async def test_data_fetcher_uses_timeframe_aware_expected_candles():
 
 @pytest.mark.asyncio
 async def test_market_data_collector_fetches_concurrently():
-    import numpy as np
     from types import SimpleNamespace
+
+    import numpy as np
 
     collector = MarketDataCollector(logger=MagicMock(), rag_engine=MagicMock())
     collector.symbol = "BTC/USDC"

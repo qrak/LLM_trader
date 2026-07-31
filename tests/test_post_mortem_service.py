@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.trading.post_mortem import PostMortemService, PostMortemResult
+from src.trading.post_mortem import PostMortemResult, PostMortemService
 
 
 class TestAnalyzeClosedTrade:

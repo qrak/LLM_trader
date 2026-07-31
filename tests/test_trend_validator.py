@@ -21,7 +21,6 @@ from src.analyzer.trend_validator import (
     TrendValidator,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────
 
 

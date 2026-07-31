@@ -9,13 +9,12 @@ import asyncio
 import os
 import signal
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 _proj_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_proj_root))
 
-from src.logger.logger import Logger, _write_fallback_crash, _CRASH_LOG_PATH
+from src.logger.logger import _CRASH_LOG_PATH, Logger
 
 
 async def test_real_scenario():
@@ -112,7 +111,7 @@ async def test_real_scenario():
         except Exception as e:
             print(f"[TEST] Unexpected exception from wait: {type(e).__name__}: {e}")
 
-        print(f"[TEST] Shutdown complete. Checking errors.log...")
+        print("[TEST] Shutdown complete. Checking errors.log...")
     finally:
         try:
             loop.close()

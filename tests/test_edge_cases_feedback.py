@@ -25,7 +25,6 @@ from src.trading.data_models import MarketConditions
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 
-
 # ═════════════════════════════════════════════════════════════════
 # SECTION 1: EMPTY STATE — Brain with zero rejections
 # ═════════════════════════════════════════════════════════════════

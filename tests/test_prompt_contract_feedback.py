@@ -12,9 +12,7 @@ Validates:
 
 from unittest.mock import MagicMock
 
-
 from src.trading.brain import TradingBrainService
-
 
 # ── Helpers ──────────────────────────────────────────────────────
 

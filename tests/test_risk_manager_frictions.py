@@ -15,7 +15,6 @@ import pytest
 from src.managers.risk_manager import RiskManager
 from src.trading.data_models import MarketConditions
 
-
 # ── Helpers ──────────────────────────────────────────────────────
 
 

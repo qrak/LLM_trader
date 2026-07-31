@@ -16,16 +16,6 @@ class OrderLifecycle(str, Enum):
     REJECTED = "REJECTED"
     EXECUTED = "EXECUTED"
 
-    @property
-    def is_terminal(self) -> bool:
-        """Return True if this state represents a terminal outcome."""
-        return self in (OrderLifecycle.EXECUTED, OrderLifecycle.REJECTED)
-
-    @property
-    def is_blocking(self) -> bool:
-        """Return True if this state blocks execution."""
-        return self is OrderLifecycle.REJECTED
-
 
 _ALLOWED_TRANSITIONS: dict[OrderLifecycle, tuple[OrderLifecycle, ...]] = {
     OrderLifecycle.INTENT: (OrderLifecycle.READY_FOR_REVIEW, OrderLifecycle.REJECTED),

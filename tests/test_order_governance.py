@@ -7,10 +7,10 @@ import pytest
 
 from src.trading.audit import AuditTrail
 from src.trading.guards import GuardResult
+from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
-from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.order_lifecycle import OrderIntent, OrderLifecycle
 from src.trading.trading_strategy import TradingStrategy
 

@@ -16,7 +16,6 @@ import pytest
 from src.notifiers.base_notifier import BaseNotifier
 from src.utils.decorators import retry_async
 
-
 # ── 1. RETRY ON NETWORK/TIMEOUT ERRORS ──────────────────────────────────────
 
 class TestFetchCurrentTickerRetry:

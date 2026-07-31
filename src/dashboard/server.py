@@ -17,7 +17,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from ..config.writable_config import WritableConfig
 from .auth import AdminAuthMiddleware, init_auth
 from .console_buffer import ConsoleBuffer
-from .dashboard_state import dashboard_state
+from .dashboard_state import DashboardState
 from .log_stream import LogStreamManager
 from .routers import brain, monitor, performance, visuals, ws_router
 from .routers.admin import AdminRouter
@@ -44,6 +44,7 @@ class DashboardServer:
         config_path=None,
         admin_credentials=None,
         post_mortem_repo=None,
+        connection_manager=None,
     ):
         self.brain_service = brain_service
         self.vector_memory = vector_memory
@@ -58,7 +59,7 @@ class DashboardServer:
         self.port = port
         self.server_task = None
         self._server = None
-        self.dashboard_state = dashboard_state
+        self.dashboard_state = DashboardState(connection_manager=connection_manager)
 
         # Admin console dependencies
         self._force_analysis_event = force_analysis_event
@@ -439,7 +440,7 @@ class DashboardServer:
         )
         visuals_router = visuals.VisualsRouter(analysis_engine=self.analysis_engine)
         websocket_router = ws_router.WebSocketRouter(
-            manager_instance=ws_router.manager,
+            manager_instance=self.dashboard_state.connection_manager,
             config=self.config,
             dashboard_state=self.dashboard_state,
         )

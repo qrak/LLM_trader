@@ -6,7 +6,6 @@ from unittest.mock import patch
 from src.config.loader import Config
 from src.utils.token_counter import ModelPricing
 
-
 _CONFIG_CLASS: type | None = None
 
 

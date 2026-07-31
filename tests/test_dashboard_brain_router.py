@@ -9,8 +9,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.dashboard.dashboard_state import DashboardState
-from src.dashboard.routers.brain import BrainRouter
-from src.dashboard.routers.brain import _build_current_market_context, _extract_market_status
+from src.dashboard.routers.brain import (
+    BrainRouter,
+    _build_current_market_context,
+    _extract_market_status,
+)
 from src.trading.data_models import Position, VectorSearchResult
 
 

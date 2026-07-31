@@ -18,7 +18,6 @@ import pytest
 from src.rag.rag_engine import RagEngine
 from src.trading.vector_memory import VectorMemoryService
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _make_mock_rag_engine() -> RagEngine:

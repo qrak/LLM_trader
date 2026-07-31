@@ -1,7 +1,9 @@
 """Unit tests for Crawl4AIEnricher."""
 
 from unittest.mock import MagicMock
+
 import pytest
+
 from src.rag.news_ingestion.crawl4ai_enricher import Crawl4AIEnricher
 
 

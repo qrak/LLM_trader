@@ -16,16 +16,16 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
+from src.config.writable_config import SettingMeta, WritableConfig, _validate_and_coerce
 from src.dashboard.auth import (
+    AdminAuthMiddleware,
+    _sign_token,
+    _verify_token,
     check_credentials,
     hash_password,
     init_auth,
-    _sign_token,
-    _verify_token,
-    AdminAuthMiddleware,
 )
 from src.dashboard.log_stream import LogStreamManager
-from src.config.writable_config import WritableConfig, SettingMeta, _validate_and_coerce
 
 
 def _has_numpy() -> bool:

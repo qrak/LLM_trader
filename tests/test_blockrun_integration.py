@@ -18,7 +18,6 @@ from src.managers.provider_types import ProviderClients
 from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
 
-
 # ─────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────

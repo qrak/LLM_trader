@@ -13,7 +13,6 @@ from .brain_experience import BrainExperienceRecorder
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
 from .data_models import ExitExecutionContext, Position, TradeDecision
-from .risk_profile_selector import RiskProfileSelector
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 from .vector_memory import VectorMemoryService
 
@@ -106,7 +105,6 @@ class TradingBrainService:
             post_mortem_repo=post_mortem_repo,
             logger=self.logger,
         )
-        self.risk_profile_selector = RiskProfileSelector(self.vector_memory)
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(
             "Trading brain reflection interval: every %s closed trades",
@@ -196,8 +194,12 @@ class TradingBrainService:
             exit_execution_context=exit_execution_context,
         )
 
-    def get_dynamic_thresholds(self) -> dict[str, Any]:
+    def get_dynamic_thresholds(self, choppiness: float | None = None) -> dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
+
+        Args:
+            choppiness: Choppiness index value (0-100). When > 61.8 (ranging),
+                the R/R minimum is relaxed to 1.2 for mean-reversion setups.
 
         Returns: dict with learned thresholds. Defaults used when insufficient data.
         """
@@ -214,6 +216,12 @@ class TradingBrainService:
         sl_payload["effective_threshold_pct"] = round(effective_threshold * 100)
         sl_payload["source"] = source
         thresholds["sl_tightening"] = sl_payload
+
+        # Ranging market: relax R/R minimum for higher-probability mean-reversion setups
+        if choppiness is not None and choppiness > 61.8:
+            current_min = thresholds.get("rr_borderline_min", 1.5)
+            thresholds["rr_borderline_min"] = min(current_min, 1.2)
+
         return thresholds
 
     def _build_rich_context_string(

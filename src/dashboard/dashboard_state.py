@@ -2,6 +2,9 @@
 
 This module holds state that is updated by the trading bot and read by the dashboard.
 It enables WebSocket broadcasts and API endpoints to share live data.
+
+The ConnectionManager is injected by the composition root (start.py) — never
+constructed here.
 """
 import asyncio
 import time
@@ -9,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from src.dashboard.routers.ws_router import broadcast
+from src.dashboard.routers.ws_router import ConnectionManager
 
 
 @dataclass
@@ -26,6 +29,7 @@ class DashboardState:
     _cache: dict[str, Any] = field(default_factory=dict)
     cache_timestamps: dict[str, float] = field(default_factory=dict)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    connection_manager: ConnectionManager | None = field(default=None, repr=False)
 
     async def update_price(self, price: float) -> None:
         """Update current price (no broadcast to avoid spam)."""
@@ -36,11 +40,15 @@ class DashboardState:
         """Update next check time and broadcast to clients."""
         async with self._lock:
             self.next_check_utc = next_time
-        await self._broadcast({"type": "countdown", "next_check_utc": next_time.isoformat()})
+        await self.broadcast({"type": "countdown", "next_check_utc": next_time.isoformat()})
 
-    async def _broadcast(self, data: dict[str, Any]) -> None:
-        """Broadcast data to all connected WebSocket clients."""
-        await broadcast(data)
+    async def broadcast(self, data: dict[str, Any]) -> None:
+        """Broadcast data to all connected WebSocket clients.
+
+        No-op when no ConnectionManager was injected (tests, headless runs).
+        """
+        if self.connection_manager:
+            await self.connection_manager.broadcast(data)
 
     def get_countdown_data(self) -> dict[str, Any]:
         """Get current countdown state for REST API."""
@@ -112,7 +120,7 @@ class DashboardState:
             self.brain_rebuild_message = message
             lifecycle = self.get_brain_lifecycle()
         self.invalidate_brain_caches()
-        await self._broadcast({"type": "brain_rebuild_started", "data": lifecycle})
+        await self.broadcast({"type": "brain_rebuild_started", "data": lifecycle})
 
     async def mark_brain_rebuild_completed(self, message: str = "Brain state rebuilt") -> None:
         """Mark brain rebuild as complete, clear stale caches, and notify clients."""
@@ -122,7 +130,7 @@ class DashboardState:
             self.brain_rebuild_message = message
             lifecycle = self.get_brain_lifecycle()
         self.invalidate_brain_caches()
-        await self._broadcast({"type": "brain_rebuild_completed", "data": lifecycle})
+        await self.broadcast({"type": "brain_rebuild_completed", "data": lifecycle})
 
     async def mark_brain_rebuild_failed(self, message: str) -> None:
         """Mark brain rebuild as failed and notify dashboard clients."""
@@ -132,15 +140,12 @@ class DashboardState:
             self.brain_rebuild_message = message
             lifecycle = self.get_brain_lifecycle()
         self.invalidate_brain_caches()
-        await self._broadcast({"type": "brain_rebuild_failed", "data": lifecycle})
+        await self.broadcast({"type": "brain_rebuild_failed", "data": lifecycle})
 
     async def broadcast_brain_state_updated(self, message: str = "Brain state refreshed") -> None:
         """Notify clients that brain-bound panels should refresh."""
-        await self._broadcast({
+        await self.broadcast({
             "type": "brain_state_updated",
             "data": {"message": message, "lifecycle": self.get_brain_lifecycle()},
         })
-
-
-dashboard_state = DashboardState()
 

@@ -1,6 +1,7 @@
 """Tests for template_manager.py changes: system prompt and response template."""
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
 import pytest
 
 from src.analyzer.prompts.template_manager import TemplateManager

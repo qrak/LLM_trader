@@ -4,7 +4,6 @@ Tests for test_dashboard_static_bindings.py.
 """
 from pathlib import Path
 
-
 DASHBOARD_STATIC = Path("src/dashboard/static")
 
 

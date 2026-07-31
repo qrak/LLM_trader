@@ -585,6 +585,15 @@ class TradingStrategy:
 
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
 
+        # Extract choppiness early — used for both regime risk profile and R/R threshold
+        choppiness_val: float | None = None
+        if market_conditions is not None:
+            if isinstance(market_conditions, dict):
+                raw = market_conditions.get("choppiness")
+                choppiness_val = float(raw) if raw is not None else None
+            elif hasattr(market_conditions, "choppiness"):
+                choppiness_val = getattr(market_conditions, "choppiness", None)
+
         risk_assessment = self.risk_manager.calculate_entry_parameters(
             signal=signal,
             current_price=current_price,
@@ -593,7 +602,8 @@ class TradingStrategy:
             stop_loss=stop_loss,
             take_profit=take_profit,
             position_size=position_size,
-            market_conditions=market_conditions
+            market_conditions=market_conditions,
+            choppiness=choppiness_val,
         )
 
         try:
@@ -631,7 +641,7 @@ class TradingStrategy:
         self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)  # type: ignore[reportOptionalMemberAccess]
         self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)  # type: ignore[reportOptionalMemberAccess]
 
-        brain_thresholds = self.brain_service.get_dynamic_thresholds()
+        brain_thresholds = self.brain_service.get_dynamic_thresholds(choppiness=choppiness_val)
         try:
             min_rr_for_entry = float(brain_thresholds.get("rr_borderline_min", 1.5))
         except (TypeError, ValueError):
@@ -714,6 +724,7 @@ class TradingStrategy:
             take_profit_check_interval_at_entry=_ec.take_profit_check_interval,
             max_drawdown_pct=0.0,
             max_profit_pct=0.0,
+            regime_profile=risk_assessment.regime_profile,
         )
 
         # Invalidate cooldown guard cache now that a new position was opened

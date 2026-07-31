@@ -25,7 +25,6 @@ from src.platforms.ai_providers.response_models import (
     TradingSignal,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _make_config_stub():

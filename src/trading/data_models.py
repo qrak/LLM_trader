@@ -52,6 +52,8 @@ class Position(SerializableMixin):
     # Performance metrics (MAE/MFE)
     max_drawdown_pct: float = 0.0       # Max adverse excursion (MAE)
     max_profit_pct: float = 0.0         # Max favorable excursion (MFE)
+    # Risk profile at entry (for brain learning per-profile performance)
+    regime_profile: str = "NEUTRAL"     # aggressive/neutral/conservative
 
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""
@@ -169,8 +171,6 @@ class TradingMemory(SerializableMixin):
     def get_recent_decisions(self, n: int = 5) -> list[TradeDecision]:
         """Get the n most recent decisions."""
         return self.decisions[-n:]
-
-    MAX_DECISIONS_SORTED = 5
 
     def get_context_summary(
         self,
@@ -352,6 +352,7 @@ class RiskAssessment(SerializableMixin):
     tp_distance_pct: float
     rr_ratio: float
     volatility_level: str
+    regime_profile: str = "NEUTRAL"  # active RegimeRiskProfile at entry time
 
 
 @dataclass(slots=True)

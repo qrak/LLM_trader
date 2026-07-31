@@ -16,11 +16,14 @@ import pytest
 
 from src.managers.provider_orchestrator import ProviderOrchestrator
 from src.managers.provider_types import ProviderClients
-from src.platforms.ai_providers.response_models import ChatResponseModel, ChoiceModel, MessageModel
+from src.platforms.ai_providers.response_models import (
+    ChatResponseModel,
+    ChoiceModel,
+    MessageModel,
+)
 
 # Import the retry helpers directly for unit testing
-from src.utils.decorators import retry_api_call, retry_async, _RetryContext
-
+from src.utils.decorators import _RetryContext, retry_api_call, retry_async
 
 # ── 1. HTTP 429 RATE-LIMITED RESPONSES ────────────────────────────────────────
 

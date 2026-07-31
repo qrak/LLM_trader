@@ -161,6 +161,7 @@ class BrainExperienceRecorder:
                 "supertrend_signal": conditions.supertrend_direction,
                 "social_sentiment_reddit": conditions.social_sentiment_reddit,
                 "portfolio_pnl_pct": conditions.portfolio_pnl_pct,
+                "regime_profile": position.regime_profile,
                 "position_entry_timestamp": position.entry_time.isoformat(),
                 "position_entry_trade_id": trade_id,
                 "position_id": position_id,

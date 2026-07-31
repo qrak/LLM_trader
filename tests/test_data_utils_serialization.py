@@ -22,6 +22,7 @@ def test_from_dict_restores_nested_tuple_fields():
 
 def test_serialize_for_json_primitives_and_numpy():
     import numpy as np
+
     from src.utils.data_utils import serialize_for_json
 
     data = {
@@ -55,6 +56,7 @@ def test_serialize_for_json_primitives_and_numpy():
 
 def test_get_last_valid_value():
     import numpy as np
+
     from src.utils.data_utils import get_last_valid_value
 
     arr = np.array([1.0, np.nan, 3.5, np.nan])
@@ -69,6 +71,7 @@ def test_get_last_valid_value():
 
 def test_get_last_n_valid():
     import numpy as np
+
     from src.utils.data_utils import get_last_n_valid
 
     arr = np.array([1.0, 2.0, np.nan, 4.0, 5.0, np.nan])

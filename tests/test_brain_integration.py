@@ -1,10 +1,16 @@
 """Tests for brain.py changes: classify_adx_label integration in _build_rich_context_string."""
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
+
 import pytest
 
-from src.trading.data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
 from src.trading.brain import TradingBrainService
+from src.trading.data_models import (
+    ExitExecutionContext,
+    MarketConditions,
+    Position,
+    TradeDecision,
+)
 from src.trading.stop_loss_tightening_policy import TighteningEvaluation
 
 

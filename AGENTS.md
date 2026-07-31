@@ -99,7 +99,7 @@ flowchart TB
 | # | Agent Name | Primary Responsibility | Core Model | Core Implementation |
 |---|------------|----------------------|------------|---------------------|
 | 1 | **🧠 Brain Agent** (TradingBrainService) | Outcome-aware decision enricher, semantic rule learning via reflection loops, confidence calibration | Deterministic/vector memory; context is injected into provider-routed LLM prompts | [`src/trading/brain.py`](./src/trading/brain.py) |
-| 2 | **🔬 Analysis Engine Agent** | Market data collection, 40+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Gemini 3.5 Flash (multimodal) | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
+| 2 | **🔬 Analysis Engine Agent** | Market data collection, 40+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Gemini 3.6 Flash (multimodal) | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
 | 3 | **📰 RAG Engine Agent** | News aggregation (RSS + Crawl4AI), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
 | 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [`src/managers/risk_manager.py`](./src/managers/risk_manager.py) |
 | 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
@@ -274,7 +274,7 @@ Active config at `config/config.ini`. Key settings:
 | **Max Position** | 10% of portfolio |
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Model** | Google Gemini 3.5 Flash (provider=`googleai`), OpenRouter base model `google/gemini-3-flash-preview`, OpenRouter fallback `deepseek/deepseek-r1:free` |
+| **Model** | Google Gemini 3.6 Flash (provider=`googleai`), OpenRouter base model `google/gemini-3-flash-preview`, OpenRouter fallback `deepseek/deepseek-r1:free` |
 | **Dashboard** | 0.0.0.0:8000 |
 
 ---
@@ -301,6 +301,9 @@ LLM_trader/
 │   │   ├── trading_strategy.py  # Strategy orchestration
 │   │   ├── exit_monitor.py      # Hard/soft exit checks
 │   │   ├── vector_memory.py     # ChromaDB interface
+│   │   ├── vector_memory_*.py   # Analytics, rules, context (3 collaborators)
+│   │   ├── regime_risk_profile.py # Regime-aware risk profile selector (Risk Manager)
+│   │   ├── rl_policy.py         # RL policy network (experimental)
 │   │   ├── statistics.py        # P&L tracking
 │   │   └── guards/              # 🛡️ Governance Pipeline
 │   ├── analyzer/                # 🔬 Analysis Engine
@@ -331,7 +334,7 @@ LLM_trader/
 │   ├── logger/                  # Structured logging
 │   ├── notifiers/               # Discord, console, file
 │   └── utils/                   # Profiler, token counter, etc.
-├── tests/                       # 63 test_*.py files + conftest.py
+├── tests/                       # 89 test_*.py files + conftest.py
 ├── data/                        # Runtime state (not committed)
 ├── logs/                        # Rotated daily log output
 │   └── Bot/                     # Logger name (defined in logger init)
@@ -351,7 +354,7 @@ LLM_trader/
 
 - **Exchanges:** Binance, KuCoin, Gate.io, MEXC, Hyperliquid (via CCXT)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** Google AI (primary — Gemini 3.5 Flash), LM Studio (local text fallback), OpenRouter (secondary provider with configurable base + fallback models)
+- **AI Providers:** Google AI (primary — Gemini 3.6 Flash), LM Studio (local text fallback), OpenRouter (secondary provider with configurable base + fallback models)
 - **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, RSS feeds with Crawl4AI enrichment
 
 ---

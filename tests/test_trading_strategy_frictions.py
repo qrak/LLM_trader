@@ -16,7 +16,6 @@ import pytest
 from src.managers.risk_manager import RiskManager
 from src.trading.trading_strategy import TradingStrategy
 
-
 # ── Fixture builders ─────────────────────────────────────────────
 
 

@@ -15,7 +15,6 @@ class ExitProfileResolver:
     """Resolve, format, and normalize SL/TP execution profiles."""
 
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
-    UNKNOWN_EXIT_PROFILE_KEY = "sl_unknown_unknown|tp_unknown_unknown"
 
     def __init__(self, default_exit_execution_context: ExitExecutionContext):
         """Initialize the resolver with the configured fallback execution context."""

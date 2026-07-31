@@ -7,10 +7,10 @@ corrupted numbers (NaN/Inf), and fail-closed security properties.
 import unittest
 from unittest.mock import MagicMock
 
+from src.logger.logger import Logger
 from src.trading.guards import GuardProtocol, GuardResult
 from src.trading.guards.pipeline import GuardPipeline
 from src.trading.position_extractor import PositionExtractor
-from src.logger.logger import Logger
 
 
 class FaultyGuard(GuardProtocol):

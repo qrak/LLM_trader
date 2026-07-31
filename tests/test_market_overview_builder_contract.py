@@ -6,13 +6,12 @@ structural changes.  Uses a real processor stub so we test the builder's own
 logic, not a mock.
 """
 from datetime import datetime, timezone
+from typing import Any
 from unittest.mock import MagicMock
-from typing import Any, Dict, Optional
 
 import pytest
 
 from src.rag.market_components.market_overview_builder import MarketOverviewBuilder
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -21,7 +20,7 @@ from src.rag.market_components.market_overview_builder import MarketOverviewBuil
 class _StubProcessor:
     """Minimal processor that echoes processed coin data deterministically."""
 
-    def process_coin_data(self, values: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def process_coin_data(self, values: dict[str, Any]) -> dict[str, Any] | None:
         if not values:
             return None
         return {

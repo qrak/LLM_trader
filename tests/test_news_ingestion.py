@@ -22,17 +22,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.rag.local_taxonomy import LocalTaxonomyProvider
 from src.rag.news_ingestion.rss_primitives import (
+    dedupe_by_url,
+    extract_html_body_text,
     normalize_url,
     parse_pub_date_to_epoch,
-    strip_html,
-    extract_html_body_text,
     parse_rss_items,
-    dedupe_by_url,
+    strip_html,
 )
 from src.rag.news_ingestion.schema_mapper import make_article_id, to_article_schema
-from src.rag.local_taxonomy import LocalTaxonomyProvider
-
 
 # ---------------------------------------------------------------------------
 # URL normalisation

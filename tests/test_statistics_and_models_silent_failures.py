@@ -3,11 +3,11 @@
 Focus: scenarios that produce wrong results without raising exceptions.
 """
 
-import pytest
-import math
 import json
+import math
 from datetime import datetime
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════
 # Statistics calculator edge cases
@@ -206,8 +206,9 @@ class TestDataModelSerialization:
     def test_datetime_from_invalid_string_now_raises(self, cfg=None):
         """FIXED: invalid datetime now raises ValueError instead of silently
         keeping the corrupt string that would crash on .isoformat()."""
-        from src.utils.data_utils import SerializableMixin
         from dataclasses import dataclass
+
+        from src.utils.data_utils import SerializableMixin
 
         @dataclass
         class HasDatetime(SerializableMixin):

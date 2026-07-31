@@ -1,10 +1,11 @@
 """Tests for vector_memory.py changes: classify_rsi_label integration and _adx_label."""
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+
 import numpy as np
 
-from src.trading.vector_memory import VectorMemoryService
 from src.trading.data_models import ExitExecutionContext, VectorSearchResult
+from src.trading.vector_memory import VectorMemoryService
 from src.utils.indicator_classifier import classify_rsi_label
 
 

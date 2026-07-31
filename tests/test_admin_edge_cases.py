@@ -16,20 +16,24 @@ import pytest
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 
+from src.config.writable_config import (
+    _SCHEMA,
+    SettingMeta,
+    WritableConfig,
+    _validate_and_coerce,
+)
 from src.dashboard.auth import (
-    _sign_token,
-    _verify_token,
-    _verify_password,
+    COOKIE_NAME,
+    AdminAuthMiddleware,
     _is_lan_ip,
+    _sign_token,
+    _verify_password,
+    _verify_token,
     check_credentials,
     hash_password,
     init_auth,
-    COOKIE_NAME,
-    AdminAuthMiddleware,
 )
 from src.dashboard.log_stream import LogStreamManager
-from src.config.writable_config import WritableConfig, SettingMeta, _validate_and_coerce, _SCHEMA
-
 
 # ─── Auth Edge Cases ─────────────────────────────────────────────────
 
@@ -444,9 +448,9 @@ class TestAdminAuthMiddleware:
         app = FastAPI()
         app.add_middleware(AdminAuthMiddleware)
 
-        from src.dashboard.routers.admin import AdminRouter
-        from src.dashboard.log_stream import LogStreamManager
         from src.config.writable_config import WritableConfig
+        from src.dashboard.log_stream import LogStreamManager
+        from src.dashboard.routers.admin import AdminRouter
 
         admin_router = AdminRouter(
             writable_config=WritableConfig(str(cfg)),
@@ -524,9 +528,9 @@ class TestLANAccessControl:
         app = FastAPI()
         app.add_middleware(AdminAuthMiddleware)
 
-        from src.dashboard.routers.admin import AdminRouter
-        from src.dashboard.log_stream import LogStreamManager
         from src.config.writable_config import WritableConfig
+        from src.dashboard.log_stream import LogStreamManager
+        from src.dashboard.routers.admin import AdminRouter
 
         admin_router = AdminRouter(
             writable_config=WritableConfig(str(cfg)),

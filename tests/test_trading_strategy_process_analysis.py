@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.parsing.unified_parser import UnifiedParser
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.position_extractor import PositionExtractor
 from src.trading.trading_strategy import TradingStrategy
-from src.trading.market_conditions_extractor import MarketConditionsExtractor
 
 
 def _make_compact_buy_response() -> str:
@@ -121,6 +121,7 @@ async def test_process_analysis_compact_buy_uses_json_fields_for_risk_inputs() -
         rr_ratio=2.0,
         quote_amount=4000.0,
         volatility_level="HIGH",
+        regime_profile="aggressive",
     )
     strategy.risk_manager.calculate_entry_parameters = MagicMock(return_value=risk_assessment)
 
@@ -189,6 +190,7 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
         rr_ratio=2.0,
         quote_amount=4000.0,
         volatility_level="HIGH",
+        regime_profile="conservative",
     )
     strategy.risk_manager.calculate_entry_parameters = MagicMock(return_value=risk_assessment)
 

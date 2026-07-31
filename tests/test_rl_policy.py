@@ -1,7 +1,8 @@
 """Tests for RLPolicyNetwork — config, status, error handling (no model download)."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestRLPolicyNetwork:

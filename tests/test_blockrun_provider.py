@@ -4,8 +4,9 @@ SDK v1.4.7+ — tests security features, message handling, and API interactions.
 """
 import base64
 import io
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.blockrun import BlockRunClient
@@ -139,7 +140,7 @@ class TestChatCompletion:
     @pytest.mark.asyncio
     async def test_chat_completion_success(self, blockrun_client):
         """Full text completion returns ChatResponseModel."""
-        from blockrun_llm.types import ChatResponse, ChatChoice, ChatMessage
+        from blockrun_llm.types import ChatChoice, ChatMessage, ChatResponse
 
         fake_response = ChatResponse(
             id="test-id",
@@ -174,7 +175,7 @@ class TestChatCompletion:
     @pytest.mark.asyncio
     async def test_chat_completion_empty_content(self, blockrun_client):
         """Empty content returns error ChatResponseModel."""
-        from blockrun_llm.types import ChatResponse, ChatChoice, ChatMessage
+        from blockrun_llm.types import ChatChoice, ChatMessage, ChatResponse
 
         fake_response = ChatResponse(
             id="test-id",
@@ -231,7 +232,7 @@ class TestChartAnalysis:
     @pytest.mark.asyncio
     async def test_chart_analysis_success(self, blockrun_client):
         """Chart image is base64-encoded and included in multimodal content."""
-        from blockrun_llm.types import ChatResponse, ChatChoice, ChatMessage
+        from blockrun_llm.types import ChatChoice, ChatMessage, ChatResponse
 
         fake_response = ChatResponse(
             id="test-id",

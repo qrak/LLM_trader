@@ -25,7 +25,6 @@ from src.analyzer.pattern_quality_scorer import (
     QualityScore,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────
 
 

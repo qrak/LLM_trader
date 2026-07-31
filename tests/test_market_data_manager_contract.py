@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.market_data_manager import MarketDataManager
 from src.rag.market_components import MarketDataCache
+from src.rag.market_data_manager import MarketDataManager
 
 
 @pytest.fixture

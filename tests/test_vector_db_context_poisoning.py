@@ -12,14 +12,13 @@ Covers Pillar 4 — verifies the system handles:
 """
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.rag_engine import RagEngine
 from src.rag.context_builder import ContextBuilder
+from src.rag.rag_engine import RagEngine
 from src.trading.vector_memory import VectorMemoryService
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

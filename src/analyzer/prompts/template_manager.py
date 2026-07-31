@@ -387,10 +387,13 @@ class TemplateManager:
             "",
             "## Decision Protocol",
             "- Classify regime first: trending, ranging, breakout, reversal, or unclear.",
+            "- TRENDING (ADX >= 25, Choppiness < 38.2): trade with trend. HOLD only on weak R/R or invalidation.",
+            "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. R/R >= 1.2 acceptable here (higher-probability setups). When price is in range middle: HOLD (no edge).",
+            "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
+            "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
-            "- HOLD when bull/bear cases are both plausible, R/R is poor, or invalidation is unclear.",
-            "- UPDATE only when an open-position thesis still holds AND changed SL/TP levels improve risk control or reward capture.",
-            "- CLOSE immediately when original thesis is invalidated — don't wait for SL.",
+            "- UPDATE when close-price event triggers a candidate exit signal or for SL breakeven/trailing moves on confirmed price progress toward TP.",
+            "- CLOSE when original thesis is invalidated at candle close — don't wait for SL.",
             "",
         ]
 
@@ -633,8 +636,9 @@ SIGNALS:
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
 RISK/REWARD GUIDELINES:
-- R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (THE ONLY hard gate)
-- R/R >= {rr_borderline:.1f}: Allowed — meets system-enforced minimum for entry
+- R/R < 1.2: REJECTED — system blocks entries below this (THE ONLY hard gate)
+- R/R 1.2-1.5: Allowed in RANGING markets — higher-probability mean-reversion setups at range boundaries
+- R/R >= 1.5: Allowed in all regimes — meets standard system minimum
 - Historical winning average: {min_rr:.1f}+ R/R (aspirational target — not enforced, not a gate)
 - R/R >= {rr_strong:.1f}: Exceptional setup
 

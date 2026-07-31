@@ -4,7 +4,6 @@ import ast
 from pathlib import Path
 
 
-
 def test_start_py_has_no_unbound_local_variables():
     """Verify start.py has no local variable shadowing (e.g. UnboundLocalError)."""
     start_path = Path("start.py").resolve()

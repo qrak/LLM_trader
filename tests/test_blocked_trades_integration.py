@@ -18,7 +18,6 @@ from sentence_transformers import SentenceTransformer
 
 from src.trading.vector_memory import VectorMemoryService
 
-
 # ── Fixtures ─────────────────────────────────────────────────────
 
 

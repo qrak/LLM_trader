@@ -1,7 +1,10 @@
-import numpy as np
 from unittest.mock import MagicMock
+
+import numpy as np
+
 from src.analyzer.formatters.technical_formatter import TechnicalFormatter
 from src.utils.format_utils import FormatUtils
+
 
 def test_technical_formatter_price_action_vectorized():
     format_utils = FormatUtils()

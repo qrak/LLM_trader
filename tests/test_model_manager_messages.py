@@ -1,7 +1,6 @@
 """Unit tests for ModelManager._prepare_messages() role separation."""
 from unittest.mock import MagicMock
 
-
 from src.managers.model_manager import ModelManager
 
 

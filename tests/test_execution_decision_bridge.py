@@ -228,8 +228,9 @@ class TestDeadLetter:
         handler.logger = MagicMock()
 
         # Cause open() to fail: path where parent is a file, not a directory
-        import src.trading.executor_handler as mod
         import tempfile
+
+        import src.trading.executor_handler as mod
         orig_path = mod.DEAD_LETTER_PATH
         try:
             with tempfile.NamedTemporaryFile(delete=False) as tf:

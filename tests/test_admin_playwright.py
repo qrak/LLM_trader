@@ -26,8 +26,7 @@ import pytest
 # Skip if playwright not available
 pytest.importorskip("playwright")
 
-from playwright.sync_api import sync_playwright, expect
-
+from playwright.sync_api import expect, sync_playwright
 
 # ─── Test Server ─────────────────────────────────────────────────────
 
@@ -39,19 +38,21 @@ def _find_free_port() -> int:
 
 def _run_test_server(port: int, ready_event: multiprocessing.Event):
     """Run a minimal FastAPI app with admin routes for testing."""
-    import sys
     import os
+    import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
+    import tempfile
+
+    import uvicorn
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
     from starlette.middleware.gzip import GZipMiddleware
-    from src.dashboard.auth import AdminAuthMiddleware, init_auth, hash_password
+
+    from src.config.writable_config import WritableConfig
+    from src.dashboard.auth import AdminAuthMiddleware, hash_password, init_auth
     from src.dashboard.log_stream import LogStreamManager
     from src.dashboard.routers.admin import AdminRouter
-    from src.config.writable_config import WritableConfig
-    import tempfile
-    import uvicorn
 
     # Create temp config
     tmpdir = tempfile.mkdtemp()

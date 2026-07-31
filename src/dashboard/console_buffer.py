@@ -38,7 +38,6 @@ class ConsoleBuffer:
     """
 
     def __init__(self, max_days: int = 7, max_lines_per_day: int = 10000):
-        self._max_days = max_days
         self._max_lines_per_day = max_lines_per_day
         self._days: deque[DayPage] = deque(maxlen=max_days)
         self._lock = asyncio.Lock()

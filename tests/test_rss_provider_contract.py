@@ -16,7 +16,6 @@ import pytest
 
 from src.rag.news_ingestion.rss_provider import RSSCrawl4AINewsProvider
 
-
 # ---------------------------------------------------------------------------
 # Minimal config stub
 # ---------------------------------------------------------------------------

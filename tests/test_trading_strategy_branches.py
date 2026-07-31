@@ -15,13 +15,11 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-
 from src.dashboard.dashboard_state import DashboardState
 from src.trading.data_models import MarketConditions, Position
 from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
-
 
 # ═════════════════════════════════════════════════════════════════
 # Fixtures
@@ -432,6 +430,7 @@ class TestClosePosition:
             rr_ratio=2.4,
             quote_amount=500.0,
             volatility_level="MEDIUM",
+            regime_profile="neutral",
         )
         cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
 

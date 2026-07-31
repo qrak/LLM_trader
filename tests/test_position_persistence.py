@@ -2,10 +2,9 @@
 
 Tests for test_position_persistence.py.
 """
-from datetime import datetime, timezone
 import json
-from unittest.mock import MagicMock
-from unittest.mock import patch
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 import pytest
 

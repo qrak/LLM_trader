@@ -1,7 +1,8 @@
 """Tests for template_manager — Bull/Bear Debate and Adversarial Awareness sections."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.analyzer.prompts.template_manager import TemplateManager
 

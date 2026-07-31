@@ -1,6 +1,6 @@
 """Analytics helpers for vector memory."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from .data_models import VectorSearchResult
 
@@ -210,6 +210,181 @@ class VectorMemoryAnalyticsMixin:
                 "winning_trades": data["winning_trades"],
                 "win_rate": (data["winning_trades"] / total * 100) if total > 0 else 0.0,
                 "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else 0.0,
+            }
+
+        return result
+
+    def compute_per_profile_stats(self) -> dict[str, dict[str, Any]]:
+        """Compute win rate and P&L stats per regime risk profile.
+
+        Returns dict like:
+            {"aggressive": {"win_rate": 65.0, "total_trades": 10, ...},
+             "neutral": {...}, "conservative": {...}}
+
+        Aggregates from all stored trades tagged with their entry-time regime_profile.
+        Used by the brain to suggest multiplier adjustments when a profile underperforms.
+        """
+        metas = self.get_trade_metadatas()
+        if not metas:
+            return {}
+
+        profiles = {
+            "aggressive": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+            "neutral": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+            "conservative": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+        }
+
+        for meta in metas:
+            profile = (meta.get("regime_profile") or "NEUTRAL").lower()
+            if profile not in profiles:
+                profile = "neutral"
+
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            profiles[profile]["total"] += 1
+            if is_win:
+                profiles[profile]["wins"] += 1
+            profiles[profile]["pnl_sum"] += pnl
+
+        result: dict[str, dict[str, Any]] = {}
+        for key, data in profiles.items():
+            total = data["total"]
+            result[key] = {
+                "total_trades": total,
+                "winning_trades": data["wins"],
+                "win_rate": (data["wins"] / total * 100) if total > 0 else None,
+                "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else None,
+            }
+
+        return result
+
+    # RSI bucket labels (consistent with indicator_classifier.classify_rsi_level)
+    RSI_BUCKETS: ClassVar[dict[str, tuple[float, float]]] = {
+        "OVERSOLD": (0, 30),
+        "WEAK": (30, 40),
+        "NEUTRAL": (40, 60),
+        "STRONG": (60, 70),
+        "OVERBOUGHT": (70, 100),
+    }
+
+    def compute_rsi_performance(self) -> dict[str, dict[str, Any]]:
+        """Compute win rate per RSI bucket at entry time.
+
+        Returns dict keyed by RSI level label (OVERSOLD/WEAK/NEUTRAL/STRONG/OVERBOUGHT)
+        with win_rate, total_trades, avg_pnl_pct per bucket.
+        """
+        metas = self.get_trade_metadatas()
+        if not metas:
+            return {}
+
+        buckets: dict[str, dict[str, Any]] = {}
+        for label, (lo, hi) in self.RSI_BUCKETS.items():
+            buckets[label] = {"range": f"{lo}-{hi}", "total": 0, "wins": 0, "pnl_sum": 0.0}
+
+        for meta in metas:
+            rsi = meta.get("rsi_at_entry", meta.get("rsi", 50))
+            if not isinstance(rsi, (int, float)):
+                continue
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            bucket = "NEUTRAL"
+            for label, (lo, hi) in self.RSI_BUCKETS.items():
+                if lo <= rsi < hi:
+                    bucket = label
+                    break
+
+            buckets[bucket]["total"] += 1
+            if is_win:
+                buckets[bucket]["wins"] += 1
+            buckets[bucket]["pnl_sum"] += pnl
+
+        result: dict[str, dict[str, Any]] = {}
+        for label, data in buckets.items():
+            total = data["total"]
+            result[label] = {
+                "range": data["range"],
+                "total_trades": total,
+                "winning_trades": data["wins"],
+                "win_rate": (data["wins"] / total * 100) if total > 0 else None,
+                "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else None,
+            }
+
+        return result
+
+    def compute_volume_performance(self) -> dict[str, dict[str, Any]]:
+        """Compute win rate per volume state at entry time.
+
+        Returns dict keyed by ACCUMULATION/NORMAL/DISTRIBUTION.
+        """
+        metas = self.get_trade_metadatas()
+        if not metas:
+            return {}
+
+        states = {
+            "ACCUMULATION": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+            "NORMAL": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+            "DISTRIBUTION": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+        }
+
+        for meta in metas:
+            vol = (meta.get("volume_state") or "NORMAL").upper()
+            if vol not in states:
+                vol = "NORMAL"
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            states[vol]["total"] += 1
+            if is_win:
+                states[vol]["wins"] += 1
+            states[vol]["pnl_sum"] += pnl
+
+        result: dict[str, dict[str, Any]] = {}
+        for key, data in states.items():
+            total = data["total"]
+            result[key] = {
+                "total_trades": total,
+                "winning_trades": data["wins"],
+                "win_rate": (data["wins"] / total * 100) if total > 0 else None,
+                "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else None,
+            }
+
+        return result
+
+    def compute_weekend_performance(self) -> dict[str, Any]:
+        """Compute win rate for weekend vs weekday trades.
+
+        Returns dict with 'weekend' and 'weekday' keys.
+        """
+        metas = self.get_trade_metadatas()
+        if not metas:
+            return {}
+
+        groups = {
+            "weekend": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+            "weekday": {"total": 0, "wins": 0, "pnl_sum": 0.0},
+        }
+
+        for meta in metas:
+            is_weekend = bool(meta.get("is_weekend", False))
+            key = "weekend" if is_weekend else "weekday"
+            pnl = meta.get("pnl_pct", 0)
+            is_win = meta.get("outcome") == "WIN"
+
+            groups[key]["total"] += 1
+            if is_win:
+                groups[key]["wins"] += 1
+            groups[key]["pnl_sum"] += pnl
+
+        result: dict[str, Any] = {}
+        for key, data in groups.items():
+            total = data["total"]
+            result[key] = {
+                "total_trades": total,
+                "winning_trades": data["wins"],
+                "win_rate": (data["wins"] / total * 100) if total > 0 else None,
+                "avg_pnl_pct": (data["pnl_sum"] / total) if total > 0 else None,
             }
 
         return result

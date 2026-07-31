@@ -32,7 +32,6 @@ class VectorMemoryRulesMixin:
     RULE_EVIDENCE_WEIGHT = 0.25
     RULE_FRESHNESS_WEIGHT = 0.15
     RULE_CONTRADICTION_WEIGHT = 0.05
-    RULE_EVIDENCE_FULL_SAMPLE_SIZE = 20
 
     @staticmethod
     def _clamp_score(value: float) -> float:

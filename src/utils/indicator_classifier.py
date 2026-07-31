@@ -13,12 +13,6 @@ if TYPE_CHECKING:
 
 
 EXIT_EXECUTION_UNKNOWN = "unknown"
-EXIT_EXECUTION_KEYS = (
-    "stop_loss_type",
-    "stop_loss_check_interval",
-    "take_profit_type",
-    "take_profit_check_interval",
-)
 EXIT_EXECUTION_TYPES = {"soft", "hard", EXIT_EXECUTION_UNKNOWN}
 
 # Bolt: module-level frozenset constants enable O(1) membership check without allocation

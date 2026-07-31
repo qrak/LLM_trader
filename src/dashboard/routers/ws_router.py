@@ -61,16 +61,6 @@ class ConnectionManager:
                 self.disconnect(connection)
 
 
-manager = ConnectionManager()
-
-connected_clients = manager.active_connections
-
-
-async def broadcast(data: dict[str, Any]) -> None:
-    """Broadcast data to all connected WebSocket clients."""
-    await manager.broadcast(data)
-
-
 class WebSocketRouter:
     """Router for WebSocket connections."""
     def __init__(self, manager_instance, config, dashboard_state):

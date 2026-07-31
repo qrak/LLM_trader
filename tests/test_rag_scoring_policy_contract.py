@@ -2,12 +2,11 @@
 
 Tests for test_rag_scoring_policy_contract.py.
 """
-from collections import namedtuple
 import re
+from collections import namedtuple
 from types import SimpleNamespace
 
 from src.rag.scoring_policy import ArticleScoringPolicy
-
 
 ArticleContent = namedtuple("ArticleContent", ["title", "body", "categories", "tags", "detected_coins"])
 
