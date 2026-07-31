@@ -107,16 +107,16 @@ class RegimeRiskProfileSelector:
         descriptions = {
             RegimeRiskProfile.AGGRESSIVE: (
                 "AGGRESSIVE — ranging market with low/medium volatility. "
-                "Tighter SL (1.5x ATR), closer TP (3x ATR), max position 10%. "
+                "Tighter SL (1.5x ATR), TP at structure (range boundary), max position 10%. "
                 "Mean-reversion setups at range boundaries."
             ),
             RegimeRiskProfile.NEUTRAL: (
                 "NEUTRAL — trending/transitional market. "
-                "Standard SL (2x ATR), standard TP (4x ATR), max position 8%."
+                "Standard SL (2x ATR), TP at structure (resistance/support), max position 8%."
             ),
             RegimeRiskProfile.CONSERVATIVE: (
                 "CONSERVATIVE — high volatility (>4% ATR). "
-                "Wider SL (2.5x ATR) to survive noise, wider TP (5x ATR), max position 5%. "
+                "Wider SL (2.5x ATR) to survive noise, TP at structure, max position 5%. "
                 "Prioritize capital preservation."
             ),
         }
