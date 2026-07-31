@@ -1,0 +1,311 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Semantic Signal — Vision-Capable Open Source Crypto Trading Bot">
+	<section class="hero">
+		<div class="badge">Open Source • Paper Trading by Default • Python 3.13</div>
+		<h1>Freqtrade, 3Commas, Cryptohopper — None of Them See What This Bot Sees</h1>
+		<p class="hero-sub">
+			An autonomous crypto trading agent with multimodal 1080p chart vision, 768D vector trade memory, self-written rules, and deterministic expected value gates.
+		</p>
+		<div class="cta-buttons">
+			<a href="/story" class="btn btn-primary">Read the 7-Month Story</a>
+			<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-secondary">📊 Live Dashboard</a>
+			<a href="https://github.com/qrak/LLM_trader" target="_blank" class="btn btn-outline">🐙 GitHub Repository</a>
+		</div>
+	</section>
+
+	<section class="scoreboard-section">
+		<h2>The Technical Scoreboard</h2>
+		<div class="table-container">
+			<table>
+				<thead>
+					<tr>
+						<th>Capability</th>
+						<th>Freqtrade</th>
+						<th>3Commas</th>
+						<th>Cryptohopper</th>
+						<th>Semantic Signal (Mine)</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td><strong>Chart Vision (reads image)</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (Gemini Flash)</td>
+					</tr>
+					<tr>
+						<td><strong>Semantic Trade Memory</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (ChromaDB 768D)</td>
+					</tr>
+					<tr>
+						<td><strong>Bull/Bear Self-Debate</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (Single-Prompt)</td>
+					</tr>
+					<tr>
+						<td><strong>EV + Falsification Gates</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (Deterministic Math)</td>
+					</tr>
+					<tr>
+						<td><strong>Hardened CCXT Executor</strong></td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔ (llm_trader_executor)</td>
+					</tr>
+					<tr>
+						<td><strong>Self-Maintaining Codebase</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (8-Agent System)</td>
+					</tr>
+					<tr>
+						<td><strong>Zero-Cost News & Sentiment</strong></td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="no">✘</td>
+						<td class="yes">✔ (RSS + Reddit RAG)</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<section class="features-grid">
+		<div class="card">
+			<div class="card-icon">👁️</div>
+			<h3>Multimodal Chart Vision</h3>
+			<p>Renders 1080p Plotly candlestick charts directly to Gemini Flash. The model reads visual geometry (support wicks, volume spikes, wedge breakouts) rather than flat indicator floats.</p>
+		</div>
+
+		<div class="card">
+			<div class="card-icon">🧠</div>
+			<h3>768D Vector Memory</h3>
+			<p>Every closed trade is embedded into ChromaDB (BAAI/bge-base-en-v1.5). Queries top-5 similar past trade setups and applies the <strong>Surprise Ratio</strong> metric to filter out market noise.</p>
+		</div>
+
+		<div class="card">
+			<div class="card-icon">⚔️</div>
+			<h3>EV & Falsification Gates</h3>
+			<p>Calculates Kelly Criterion position sizes based on historical win rates and forces the LLM to write an explicit price invalidation trigger before any signal is accepted.</p>
+		</div>
+
+		<div class="card">
+			<div class="card-icon">🛡️</div>
+			<h3>Decoupled Execution</h3>
+			<p>Separates reasoning from live execution. The main engine outputs atomic JSON decisions to <code>llm_trader_executor</code>, protecting exchange-side OCO stop-losses from API latency.</p>
+		</div>
+	</section>
+
+	<section class="story-preview">
+		<h2>Built in a Wrocław Apartment After Warehouse Shifts</h2>
+		<p>
+			In December 2025, I was working 8-hour warehouse shifts in Poland. Tired of subscription "AI bots" that were just simple moving average crossovers, I spent 7 months building a cognitive trading engine with 1,300+ automated tests.
+		</p>
+		<a href="/story" class="read-more-link">Read the Full 7-Month Development History →</a>
+	</section>
+</Layout>
+
+<style>
+	.hero {
+		text-align: center;
+		padding: 3rem 1rem 4rem;
+	}
+
+	.badge {
+		display: inline-block;
+		background: rgba(16, 185, 129, 0.1);
+		color: var(--accent-emerald);
+		border: 1px solid var(--border-accent);
+		padding: 0.35rem 1rem;
+		border-radius: 9999px;
+		font-size: 0.85rem;
+		font-weight: 600;
+		margin-bottom: 1.5rem;
+	}
+
+	h1 {
+		font-size: 2.75rem;
+		font-weight: 800;
+		line-height: 1.2;
+		margin-bottom: 1.25rem;
+		background: linear-gradient(135deg, #ffffff 0%, #9ca3af 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	.hero-sub {
+		font-size: 1.2rem;
+		color: var(--text-muted);
+		max-width: 750px;
+		margin: 0 auto 2.5rem;
+	}
+
+	.cta-buttons {
+		display: flex;
+		justify-content: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.btn {
+		padding: 0.75rem 1.5rem;
+		border-radius: 8px;
+		font-weight: 600;
+		font-size: 1rem;
+		transition: all 0.2s ease;
+	}
+
+	.btn-primary {
+		background: var(--accent-emerald);
+		color: #0b0f19;
+	}
+
+	.btn-primary:hover {
+		background: #059669;
+		color: #0b0f19;
+		box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+	}
+
+	.btn-secondary {
+		background: rgba(6, 182, 212, 0.15);
+		color: var(--accent-cyan);
+		border: 1px solid rgba(6, 182, 212, 0.3);
+	}
+
+	.btn-secondary:hover {
+		background: rgba(6, 182, 212, 0.25);
+		color: var(--accent-cyan);
+	}
+
+	.btn-outline {
+		background: rgba(255, 255, 255, 0.05);
+		color: #fff;
+		border: 1px solid var(--border-color);
+	}
+
+	.btn-outline:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: #fff;
+	}
+
+	.scoreboard-section {
+		margin: 4rem 0;
+	}
+
+	h2 {
+		font-size: 1.8rem;
+		font-weight: 700;
+		margin-bottom: 1.5rem;
+		text-align: center;
+	}
+
+	.table-container {
+		overflow-x: auto;
+		border: 1px solid var(--border-color);
+		border-radius: 12px;
+		background: var(--bg-card);
+	}
+
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		text-align: left;
+		font-size: 0.95rem;
+	}
+
+	th, td {
+		padding: 1rem 1.25rem;
+		border-bottom: 1px solid var(--border-color);
+	}
+
+	th {
+		background: rgba(255, 255, 255, 0.03);
+		color: var(--text-muted);
+		font-weight: 600;
+	}
+
+	.yes {
+		color: var(--accent-emerald);
+		font-weight: 600;
+	}
+
+	.no {
+		color: #ef4444;
+	}
+
+	.features-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 1.5rem;
+		margin: 4rem 0;
+	}
+
+	.card {
+		background: var(--bg-card);
+		border: 1px solid var(--border-color);
+		padding: 1.75rem;
+		border-radius: 12px;
+		transition: transform 0.2s ease, border-color 0.2s ease;
+	}
+
+	.card:hover {
+		transform: translateY(-4px);
+		border-color: var(--border-accent);
+	}
+
+	.card-icon {
+		font-size: 2rem;
+		margin-bottom: 1rem;
+	}
+
+	.card h3 {
+		font-size: 1.2rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.card p {
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		line-height: 1.6;
+	}
+
+	.story-preview {
+		background: rgba(16, 185, 129, 0.04);
+		border: 1px solid var(--border-accent);
+		padding: 2.5rem;
+		border-radius: 12px;
+		text-align: center;
+	}
+
+	.story-preview p {
+		color: var(--text-muted);
+		max-width: 700px;
+		margin: 0 auto 1.5rem;
+		font-size: 1.1rem;
+	}
+
+	.read-more-link {
+		font-weight: 700;
+		font-size: 1.05rem;
+	}
+
+	@media (max-width: 768px) {
+		h1 {
+			font-size: 2rem;
+		}
+	}
+</style>

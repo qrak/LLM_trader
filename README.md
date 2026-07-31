@@ -8,8 +8,10 @@
 
 🌐 **[Public Landing Page](https://semanticsignal.qrak.org/landing.html)** — Interactive architecture overview & system showcase  
 📊 **[Live Dashboard](https://semanticsignal.qrak.org)** — Watch the neural trading brain in action  
-📖 **[Read the Full Story (Medium)](https://medium.com/@donqrakko/i-built-a-trading-bot-that-doesnt-just-calculate-it-reasons-remembers-and-learns-from-its-749064869d73)**  
+📖 **[Interactive Web Story & Tech](https://semanticsignal.qrak.org/story)** | **[GitHub Article Document](articles/architecture_and_journey.md)** — Read the 7-month development story  
 💬 **[Join the Discord](https://discord.gg/ZC48aTTqR2)**  
+
+
 
 ---
 

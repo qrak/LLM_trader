@@ -477,6 +477,24 @@ class DashboardServer:
         # Admin auth middleware (protects /api/admin/* except login and health)
         app.add_middleware(AdminAuthMiddleware)
 
+        # Story page route (Astro generated development story)
+        @app.get("/story", include_in_schema=False)
+        async def story_page():
+            story_path = os.path.abspath(
+                os.path.join(
+                    os.path.dirname(__file__),
+                    "..",
+                    "..",
+                    "website",
+                    "dist",
+                    "story",
+                    "index.html",
+                )
+            )
+            if os.path.exists(story_path):
+                return FileResponse(story_path, media_type="text/html")
+            return PlainTextResponse("Story page not found. Run 'npm run build' inside website/ directory.", status_code=404)
+
         # Landing page route (for Google AdSense content requirements)
         @app.get("/landing", include_in_schema=False)
         async def landing_page():
@@ -486,6 +504,7 @@ class DashboardServer:
             if os.path.exists(landing_path):
                 return FileResponse(landing_path, media_type="text/html")
             return PlainTextResponse("Landing page not found", status_code=404)
+
 
         # Mount Static Files (Frontend)
         # We assume the static folder is in the same directory as this file

@@ -1,0 +1,213 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="The Full Story & Technology — Semantic Signal LLM Trader">
+	<article class="article-container">
+		<header class="article-header">
+			<div class="meta">Published July 2026 • By @qrak</div>
+			<h1>I Built a Trading Bot That Doesn't Just Calculate — It Sees, Remembers, and Learns from Its Failures</h1>
+			<p class="subtitle">The complete 7-month engineering journey of an open-source, vision-capable crypto bot.</p>
+		</header>
+
+		<hr class="divider" />
+
+		<section class="section">
+			<h2>1. The Wrocław Warehouse Spark</h2>
+			<p>In December 2025, I was living in Wrocław, Poland. By day, I worked 8-hour shifts in a physical warehouse. My back was sore, my energy depleted, but my mind was occupied with a single question: <em>Why are all the "AI trading bots" on the market so incredibly dumb?</em></p>
+			<p>I spent my evenings testing open-source strategy templates. I did what every YouTube tutorial recommended: pulled RSI, MACD, and Bollinger Bands values via Python, wrote a basic prompt template, and dumped the floats into the ChatGPT API.</p>
+			<p>The bot's decisions were confident, articulate, and completely wrong. It would say: <code>"RSI is at 28, oversold. BUY."</code> The next morning, the market would slide another 4.5%, dragging my paper portfolio down with it.</p>
+			<p>The problem wasn't the AI model. The problem was the architecture. I was building a stateless calculator, not a reasoning engine.</p>
+		</section>
+
+		<section class="section">
+			<h2>2. Chronological Timeline (Dec 2025 – Jul 2026)</h2>
+			<div class="timeline">
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 1: Float Prompts (Dec 2025 – Jan 2026)</h3>
+						<p>Calculated indicators in Python and dumped them as YAML text into Claude/Gemini. The bot was stateless, forgot past trades, and bled capital (-4.2%).</p>
+					</div>
+				</div>
+
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 2: Multimodal Chart Vision (Feb – Mar 2026)</h3>
+						<p>Scrapped 900 lines of hardcoded pattern-matching heuristics. Plotly now renders a 1080p chart image (SMA, RSI, Volume, CMF, OBV) fed directly to Gemini Flash. The visual model spots pattern geometry far better than programmatic rules.</p>
+					</div>
+				</div>
+
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 3: Stateful Vector Memory (Apr – May 2026)</h3>
+						<p>Integrated local SQLite and ChromaDB (768D BAAI/bge-base-en-v1.5 embeddings). Every closed trade is embedded. The bot queries top-5 similar past setups. Introduced the <strong>Surprise Ratio</strong> metric to filter out market noise.</p>
+					</div>
+				</div>
+
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 4: EV & Falsification Gates (Jun 2026)</h3>
+						<p>Added deterministic Expected Value math (Kelly sizing, min 1.5 R:R threshold) and the Falsification Gate (forcing the LLM to write a strict price invalidation trigger before any trade is executed).</p>
+					</div>
+				</div>
+
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 5: 8-Agent Dev System (Mid-Jul 2026)</h3>
+						<p>Built a local multi-agent system (<code>.ai/</code> directory). A Supervisor orchestrates 7 specialized developer agents (Bolt, Palette, Sentinel, Refactor, Concise, Bugfixer, Smoke Tests) to maintain the codebase.</p>
+					</div>
+				</div>
+
+				<div class="timeline-item">
+					<div class="timeline-dot"></div>
+					<div class="timeline-content">
+						<h3>Phase 6: Hardened Executor Separation (Late-Jul 2026)</h3>
+						<p>Decoupled the engine into Semantic Signal (reasoning) and <code>llm_trader_executor</code> (CCXT order placement, leverage, OCO stop-losses, and dead-letter queue).</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="section">
+			<h2>3. The Mathematics & Engineering</h2>
+			
+			<h3>Numba JIT Indicator Engine</h3>
+			<p>50+ custom technical indicators written in NumPy and Numba. Every calculation compiles to machine code on first call and caches the result, running in microseconds on a standard CPU:</p>
+			<pre><code>@njit(cache=True)
+def _ema_numba(prices: np.ndarray, period: int) -> np.ndarray:
+    alpha = 2.0 / (period + 1)
+    result = np.empty_like(prices)
+    result[0] = prices[0]
+    for i in range(1, len(prices)):
+        result[i] = alpha * prices[i] + (1 - alpha) * result[i - 1]
+    return result</code></pre>
+
+			<h3>The Surprise Ratio Metric</h3>
+			<p>To prevent the bot from learning bad habits from lucky trades (e.g. buying a support breach that won due to random news spikes):</p>
+			<div class="formula-box">
+				Surprise Ratio = |Realized P&L - Expected P&L| / |Expected P&L|
+			</div>
+			<p>Trades with a surprise ratio &gt; 1.5 carry a <code>⚠️ high surprise</code> tag in vector memory so the LLM discounts them in future cycles.</p>
+
+			<h3>Deterministic Expected Value Gate</h3>
+			<div class="formula-box">
+				EV = (Win Rate × Average Win) - ((1 - Win Rate) × Average Loss) - Fees
+			</div>
+			<p>If EV is negative or Risk-to-Reward ratio is under 1.5, the signal is rejected outright, overriding the LLM.</p>
+		</section>
+
+		<section class="section">
+			<h2>4. Quick Start</h2>
+			<pre><code>git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp keys.env.example keys.env  # Add GOOGLE_STUDIO_API_KEY (free tier works)
+python start.py               # Dashboard launches at http://localhost:8000</code></pre>
+		</section>
+	</article>
+</Layout>
+
+<style>
+	.article-container {
+		max-width: 800px;
+		margin: 0 auto;
+	}
+
+	.article-header {
+		text-align: center;
+		margin-bottom: 2rem;
+	}
+
+	.meta {
+		color: var(--text-dim);
+		font-size: 0.9rem;
+		font-weight: 500;
+		margin-bottom: 0.5rem;
+	}
+
+	h1 {
+		font-size: 2.2rem;
+		font-weight: 800;
+		line-height: 1.3;
+		margin-bottom: 1rem;
+	}
+
+	.subtitle {
+		font-size: 1.15rem;
+		color: var(--text-muted);
+	}
+
+	.divider {
+		border: 0;
+		height: 1px;
+		background: var(--border-color);
+		margin: 2rem 0;
+	}
+
+	.section {
+		margin: 3rem 0;
+	}
+
+	h2 {
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin-bottom: 1.25rem;
+		color: var(--accent-emerald);
+	}
+
+	h3 {
+		font-size: 1.2rem;
+		font-weight: 600;
+		margin: 1.5rem 0 0.75rem;
+		color: var(--text-main);
+	}
+
+	p {
+		margin-bottom: 1.25rem;
+		color: #d1d5db;
+		font-size: 1.05rem;
+	}
+
+	.timeline {
+		border-left: 2px solid var(--border-color);
+		padding-left: 1.5rem;
+		margin: 2rem 0;
+	}
+
+	.timeline-item {
+		position: relative;
+		margin-bottom: 2rem;
+	}
+
+	.timeline-dot {
+		position: absolute;
+		left: -2.05rem;
+		top: 0.35rem;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--accent-emerald);
+		box-shadow: 0 0 10px var(--accent-emerald);
+	}
+
+	.timeline-content h3 {
+		margin-top: 0;
+	}
+
+	.formula-box {
+		background: var(--code-bg);
+		border: 1px solid var(--border-accent);
+		padding: 1rem 1.5rem;
+		border-radius: 8px;
+		font-family: 'Fira Code', monospace;
+		font-size: 1.05rem;
+		color: var(--accent-cyan);
+		margin: 1rem 0;
+		text-align: center;
+	}
+</style>
