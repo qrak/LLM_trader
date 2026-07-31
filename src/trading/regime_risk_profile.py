@@ -123,15 +123,15 @@ class RegimeRiskProfileSelector:
         desc = descriptions.get(profile, descriptions[RegimeRiskProfile.NEUTRAL])
 
         lines = [
-            f"\n## ACTIVE RISK PROFILE: {desc}",
+            f"## ACTIVE RISK PROFILE: {desc}",
             f"Profile reason: {reason}",
         ]
 
         # --- Brain-learned per-profile performance ---
         if brain_stats:
             profile_key = profile.value
-            my_stats = brain_stats.get(profile_key)
-            if my_stats and my_stats.get("total_trades", 0) >= 3:
+            my_stats = brain_stats.get(profile_key, {})
+            if isinstance(my_stats, dict) and my_stats.get("total_trades", 0) >= 3:
                 wr = my_stats["win_rate"]
                 total = my_stats["total_trades"]
                 wins = my_stats["winning_trades"]

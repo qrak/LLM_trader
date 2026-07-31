@@ -160,6 +160,14 @@ class TradingBrainService:
         market_sentiment: str = "NEUTRAL",
         order_book_bias: str = "BALANCED",
         exit_execution_context: "ExitExecutionContext | None" = None,
+        # --- NEW: enriched context fields (July 2026) ---
+        choppiness: float | None = None,
+        trend_strength: float = 0.0,
+        atr_percentage: float = 0.0,
+        mfi: float | None = None,
+        cmf: float | None = None,
+        vwap: float = 0.0,
+        supertrend_direction: str = "NEUTRAL",
     ) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval.
 
@@ -175,6 +183,14 @@ class TradingBrainService:
             is_weekend: Whether current day is Saturday or Sunday
             market_sentiment: Fear & Greed state (EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED)
             order_book_bias: Order book pressure (BUY_PRESSURE/SELL_PRESSURE/BALANCED)
+            exit_execution_context: Exit execution configuration
+            choppiness: Choppiness index (0-100) for regime risk profile selection
+            trend_strength: Current trend strength value
+            atr_percentage: ATR as % of current price (for regime risk profile)
+            mfi: Money Flow Index
+            cmf: Chaikin Money Flow
+            vwap: Volume-weighted average price
+            supertrend_direction: Supertrend direction (Bullish/Bearish/NEUTRAL)
 
         Returns:
             Formatted string with vector-retrieved experiences and confidence calibration.
@@ -192,6 +208,13 @@ class TradingBrainService:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
+            choppiness=choppiness,
+            trend_strength=trend_strength,
+            atr_percentage=atr_percentage,
+            mfi=mfi,
+            cmf=cmf,
+            vwap=vwap,
+            supertrend_direction=supertrend_direction,
         )
 
     def get_dynamic_thresholds(self, choppiness: float | None = None) -> dict[str, Any]:

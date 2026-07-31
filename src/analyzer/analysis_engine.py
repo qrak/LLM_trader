@@ -13,6 +13,7 @@ import numpy as np
 from src.analyzer.data_fetcher import DataFetcher
 from src.logger.logger import Logger
 from src.utils.indicator_classifier import (
+    _resolve_scalar,
     build_exit_execution_context_from_config,
     classify_bb_position,
     classify_macd_signal,
@@ -775,6 +776,20 @@ class AnalysisEngine:
             self.timeframe,
         )
 
+        # --- NEW: enriched regime/volatility fields (July 2026) ---
+        # Real values from current indicators — without these the risk profile
+        # selector silently falls back to (choppiness=None, atr_percentage=0.0)
+        # and always reports NEUTRAL with "ATR 0.0%".
+        choppiness = _resolve_scalar(technical_data.get("choppiness"))
+        atr_percentage = _resolve_scalar(technical_data.get("atr_percent"))
+        mfi = _resolve_scalar(technical_data.get("mfi"))
+        cmf = _resolve_scalar(technical_data.get("cmf"))
+        vwap = _resolve_scalar(technical_data.get("vwap"))
+        _st_dir = _resolve_scalar(technical_data.get("supertrend_direction"))
+        supertrend_direction = (
+            "Bullish" if _st_dir > 0 else "Bearish" if _st_dir < 0 else "NEUTRAL"
+        )
+
         return await asyncio.to_thread(
             brain_service.get_context,
             trend_direction=trend_direction,
@@ -789,6 +804,12 @@ class AnalysisEngine:
             market_sentiment=market_sentiment,
             order_book_bias=order_book_bias,
             exit_execution_context=exit_execution_context,
+            choppiness=choppiness,
+            atr_percentage=atr_percentage,
+            mfi=mfi,
+            cmf=cmf,
+            vwap=vwap,
+            supertrend_direction=supertrend_direction,
         )
 
 

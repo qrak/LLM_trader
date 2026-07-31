@@ -98,7 +98,7 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 
 - **🧠 Brain with Memory** — ChromaDB vector store retains trade experiences, semantic rules, system rejections, and confidence statistics. Past outcomes are retrieved by similarity to current market conditions and injected into every LLM prompt.
 
-- **📈 Vision AI Chart Analysis** — Generates 4K PNG candlestick charts with indicators, sends them to a multimodal LLM (Gemini 3.5 Flash) for visual pattern recognition. Chart-pattern code was dropped because the AI reads charts better than hardcoded rules.
+- **📈 Vision AI Chart Analysis** — Generates 4K PNG candlestick charts with indicators, sends them to a multimodal LLM (Gemini 3.6 Flash) for visual pattern recognition. Chart-pattern code was dropped because the AI reads charts better than hardcoded rules.
 
 - **🔄 Reflection Engine** — After every `N` closed trades, the system synthesizes best-practice rules, anti-patterns, and AI-mistake rules with **surprise ratio** annotation — high-surprise outcomes are flagged so the LLM discounts lucky/unlucky noise. Rules persist in vector memory and influence future decisions. The bot learns from its own outcomes.
 
@@ -114,11 +114,11 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 
 - **🛡️ Risk Pipeline** — Pre-execution guard chain (symbol whitelist, max position size, cooldown) + dynamic SL/TP scaling with minimum 1.5 R:R enforced. Soft exits at candle close, hard exits at configurable intervals against live ticker price.
 
-- **🔄 Multi-Provider AI Routing** — Primary: Google Gemini 3.5 Flash (free tier). Fallback chain through OpenRouter and LM Studio. Chart vision support on every provider that allows it.
+- **🔄 Multi-Provider AI Routing** — Primary: Google Gemini 3.6 Flash (free tier). Fallback chain through OpenRouter and LM Studio. Chart vision support on every provider that allows it.
 
-- **🧪 1,200+ Tests** — Fully mocked test suite covering LLM output corruption, async races, rate-limit backoff, vector-DB boundaries, friction-reporting, closed-loop feedback, AST code indexing, and positional market types (spot / perpetual futures).
+- **🧪 1,300+ Tests** — Fully mocked test suite covering LLM output corruption, async races, rate-limit backoff, vector-DB boundaries, friction-reporting, closed-loop feedback, AST code indexing, and positional market types (spot / perpetual futures).
 
-- **🤖 Multi-Agent AI Development** — Five specialized AI agents (Bolt ⚡, Palette 🎨, Sentinel 🛡️, Refactor ✨, Bugfixer 🐛) coordinate via a Supervisor 🧠. Each agent writes journal entries to `.ai/` — the project's collective memory. Journals auto-rotate on startup.
+- **🤖 Multi-Agent AI Development** — Eight specialized AI agents (Supervisor 🧠 + Bolt ⚡, Palette 🎨, Sentinel 🛡️, Refactor ✨, Concise ✂️, Smoke Tests 🔥, Bugfixer 🐛) coordinate via a Supervisor 🧠. Each agent writes journal entries to `.ai/` — the project's collective memory. Journals auto-rotate on startup.
 
 ---
 
@@ -132,7 +132,7 @@ flowchart TB
         FUND["CoinGecko + DeFiLlama + Alternative.me"]
     end
     subgraph Analysis["Analysis Engine"]
-        TC["Technical Calculator<br/>40+ indicators"]
+        TC["Technical Calculator<br/>50+ indicators"]
         PE["Pattern Engine<br/>Deterministic indicator patterns"]
         CG["Chart Generator<br/>4K PNG with SMA/RSI/Volume"]
         RAG["RAG Engine<br/>News relevance scoring"]
@@ -188,7 +188,7 @@ flowchart TB
 ## Testing
 
 ```bash
-# Full suite (1,200+ tests)
+# Full suite (1,300+ tests)
 pytest tests/ -q
 
 # Focused
@@ -242,7 +242,7 @@ Required API keys in `keys.env`:
 
 ## Multi-Agent AI Development
 
-The codebase uses a **Supervisor + 5 specialized agents** pattern for AI-assisted development:
+The codebase uses a **Supervisor + 7 specialized agents** pattern for AI-assisted development:
 
 | Agent | Emoji | Scope | Journal |
 |-------|-------|-------|---------|
@@ -251,6 +251,8 @@ The codebase uses a **Supervisor + 5 specialized agents** pattern for AI-assiste
 | **Palette** | 🎨 | UX & Accessibility — dashboard HTML/CSS/JS, ARIA, responsive design | `.ai/palette-journal.md` |
 | **Sentinel** | 🛡️ | Security — auth, CSP, rate limiting, XSS, input validation | `.ai/sentinel-journal.md` |
 | **Refactor** | ✨ | Clean Code — isinstance chains, DRY violations, DI enforcement | `.ai/refactor-journal.md` |
+| **Concise** | ✂️ | Code Line Reduction — DRY abstractions, mixins, dispatch tables | `.ai/concise-journal.md` |
+| **Smoke Tests** | 🔥 | Fast Pre-Flight — syntax compilation, targeted unit tests, linter gates (< 5s) | `.ai/smoketest-journal.md` |
 | **Bugfixer** | 🐛 | Bugs & Regressions — verifying changes, running full suite | `.ai/bugfixing-journal.md` |
 
 Journals auto-rotate on startup via `scripts/rotate_journals.py`. The full architecture blueprint lives in [`AGENTS.md`](AGENTS.md).

@@ -85,8 +85,8 @@ class TestFrictionAccumulationAndClearing:
     def test_multiple_frictions_accumulate_across_calls(self):
         """Multiple guarded entries accumulate until cleared."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config(max_position_size=0.02))
-        _entry(mgr, position_size=0.50)  # size clamp
-        _entry(mgr, signal="BUY", stop_loss=99.0, current_price=100.0)  # SL min
+        _entry(mgr, position_size=0.50)  # size clamp (NEUTRAL profile cap = 0.08)
+        _entry(mgr, signal="BUY", stop_loss=99.5, current_price=100.0)  # SL min (0.5% < 1%)
 
         frictions = mgr.get_and_clear_frictions()
         assert len(frictions) >= 2
@@ -122,17 +122,17 @@ class TestGuardPositionSizeClamp:
         assert f["guard_type"] == "position_size_clamp"
         assert f["direction"] == "N/A"
         assert f["suggested_size"] == pytest.approx(0.30)
-        assert f["max_size"] == pytest.approx(0.05)
+        assert f["max_size"] == pytest.approx(0.08)  # NEUTRAL regime profile cap
         assert f["detail"].startswith("Position size")
-        assert assessment.size_pct == pytest.approx(0.05)
+        assert assessment.size_pct == pytest.approx(0.08)
 
     def test_size_clamp_delta_correct(self):
-        """Suggested 0.30 vs max 0.10 — delta is 0.20."""
+        """Suggested 0.30 vs NEUTRAL profile cap 0.08 — delta is 0.22."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config(max_position_size=0.10))
         _entry(mgr, position_size=0.30)
 
         f = mgr.get_and_clear_frictions()[0]
-        assert f["suggested_size"] - f["max_size"] == pytest.approx(0.20)
+        assert f["suggested_size"] - f["max_size"] == pytest.approx(0.22)
 
     def test_size_within_limit_no_friction(self):
         """Position size within cap should not generate friction."""

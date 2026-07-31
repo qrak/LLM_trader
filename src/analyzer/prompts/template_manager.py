@@ -467,30 +467,33 @@ class TemplateManager:
 
         # Add performance context if available
         if performance_context:
-            thresholds = dynamic_thresholds or {}
-            sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
-            sl_tightening_source = thresholds.get("sl_tightening_source", "config")
-            if sl_tightening_pct is not None:
-                tightening_rule = (
-                    f"Only move SL after price reaches {sl_tightening_pct}%+ of the entry-to-TP distance "
-                    f"(hybrid policy, source: {sl_tightening_source})."
-                )
-            else:
-                tightening_rule = (
-                    "Only move SL once the hybrid tightening policy confirms sufficient price progress "
-                    "(see SL Tightening Policy in position context)."
-                )
             header_lines.extend([
                 "",
                 performance_context.strip(),
-                "",
-                "",
-                "## Profit Maximization Strategy",
-                f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
-                "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
-                "- HOLD discipline: better to miss a trade than force a weak setup.",
-                "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
             ])
+
+        # Profit Maximization strategy — always present, independent of trade history
+        thresholds = dynamic_thresholds or {}
+        sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
+        sl_tightening_source = thresholds.get("sl_tightening_source", "config")
+        if sl_tightening_pct is not None:
+            tightening_rule = (
+                f"Only move SL after price reaches {sl_tightening_pct}%+ of the entry-to-TP distance "
+                f"(hybrid policy, source: {sl_tightening_source})."
+            )
+        else:
+            tightening_rule = (
+                "Only move SL once the hybrid tightening policy confirms sufficient price progress "
+                "(see SL Tightening Policy in position context)."
+            )
+        header_lines.extend([
+            "",
+            "## Profit Maximization Strategy",
+            f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
+            "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
+            "- HOLD discipline: better to miss a trade than force a weak setup.",
+            "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
+        ])
 
         if brain_context:
             header_lines.extend([
@@ -631,11 +634,11 @@ Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional
 Override with exceptional conviction ({conf_weak + 1}+ confluences). State reasoning.
 
 SIGNALS:
-- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, R/R >= {rr_borderline:.1f} (system-enforced minimum — the only hard gate), clear SL/TP
+- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, R/R >= {rr_borderline:.1f} (standard minimum for full-confidence entries), clear SL/TP
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
-RISK/REWARD GUIDELINES:
+RISK/REWARD GUIDELINES (authoritative — the only hard gate is below):
 - R/R < 1.2: REJECTED — system blocks entries below this (THE ONLY hard gate)
 - R/R 1.2-1.5: Allowed in RANGING markets — higher-probability mean-reversion setups at range boundaries
 - R/R >= 1.5: Allowed in all regimes — meets standard system minimum
@@ -645,7 +648,8 @@ RISK/REWARD GUIDELINES:
 R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
 
 POSITION SIZING:
-- Max {max_pos:.2f} ({max_pos*100:.0f}% capital). Base = confidence/100 × {max_pos:.2f}.
+- Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
+- Base = confidence/100 × active profile cap.
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
 - Weak trend (ADX < {adx_weak}): reduce size. Min normal: {min_pos_size:.3f} (target). Don't round up.
 
@@ -661,8 +665,7 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- LONG: SL below swing low + 1x ATR (max {avg_sl:.1f}% from entry). TP at resistance/Fib levels.
-- SHORT: SL above swing high + 1x ATR (max {avg_sl:.1f}% from entry). TP at support/Fib levels.
+- SL distance scales with the ACTIVE RISK PROFILE ATR multiple (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x ATR — see ACTIVE RISK PROFILE section). LONG: SL below the swing low, offset by the profile ATR multiple; SHORT: SL above the swing high, offset by the profile ATR multiple. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
 
@@ -792,16 +795,16 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
             "pattern_quality": 67,
             "support_resistance_strength": 78
         }},
-        "entry_price": 77900.0,
-        "stop_loss": 79750.0,
-        "take_profit": 73114.0,
+        "entry_price": 63370.0,
+        "stop_loss": 62050.0,
+        "take_profit": 65680.0,
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
-        "key_levels": {{"support": [77275.0, 76564.0], "resistance": [78930.57, 79515.0]}},
-        "trend": {{"direction": "NEUTRAL", "strength_4h": 32, "strength_daily": 41, "timeframe_alignment": "DIVERGENT"}},
-        "risk_reward_ratio": 2.58,
+        "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
+        "trend": {{"direction": "NEUTRAL", "strength_4h": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
+        "risk_reward_ratio": 1.75,
         "symbol": "BTC/USDC",
-        "order_type": "{order_type}",
+        "order_type": null,
         "quantity": 0.0,
         "reduce_only": false,
         "leverage": 1

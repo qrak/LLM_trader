@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Semantic Signal LLM — AI Trading Bot That Thinks, Remembers, and Learns</title>
-    <meta name="description" content="An autonomous AI trading agent powered by Google Gemini. 50+ technical indicators, vector memory, 7 specialized AI agents, and a self-learning brain. Built by a self-taught warehouse worker from Poland.">
+    <meta name="description" content="An autonomous AI trading agent powered by Google Gemini. Reads charts, remembers outcomes, learns from every trade. 50+ technical indicators, vector memory, and a live dashboard.">
     <meta property="og:title" content="Semantic Signal LLM — AI Crypto Trading Bot">
-    <meta property="og:description" content="Reads charts. Remembers outcomes. Learns from every trade. 1324 tests. Zero AI fluff.">
+    <meta property="og:description" content="Reads charts. Remembers outcomes. Learns from every trade. Autonomous, transparent, and live right now.">
     <meta property="og:url" content="https://qrak.org">
     <meta name="google-adsense-account" content="ca-pub-0077039593558808">
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-0077039593558808" crossorigin="anonymous"></script>
@@ -160,36 +160,53 @@
         .card h3{font-size:1.05em;margin-bottom:8px;color:var(--text)}
         .card p{font-size:.9em;color:var(--muted);line-height:1.55}
 
-        /* ── Architecture ── */
-        .arch-diagram{
+        /* ── Comparison ── */
+        .compare{
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:16px;
+            margin-bottom:16px;
+        }
+        .compare-col{
             background:var(--bg2);
             border:1px solid var(--border);
-            border-radius:16px;
-            padding:32px;
-            overflow-x:auto;
-            font-family:var(--mono);
-            font-size:12px;
-            line-height:1.7;
+            border-radius:12px;
+            padding:24px;
+        }
+        .compare-col.win{
+            border-color:rgba(0,255,157,.35);
+            background:linear-gradient(180deg,rgba(0,255,157,.05),var(--bg2));
+        }
+        .compare-col h3{font-size:1em;margin-bottom:14px}
+        .compare-col.win h3{color:var(--green)}
+        .compare-col ul{list-style:none;margin:0;padding:0}
+        .compare-col li{
+            font-size:.88em;
             color:var(--muted);
+            padding:7px 0;
+            border-bottom:1px dashed rgba(255,255,255,.05);
+            line-height:1.45;
         }
-        .arch-diagram .node{color:var(--cyan);font-weight:600}
-        .arch-diagram .green{color:var(--green)}
-        .arch-diagram .dim{opacity:.5}
+        .compare-col li:last-child{border-bottom:none}
+        .compare-col .x{color:#ff5f57}
+        .compare-col .chk{color:var(--green)}
+        .compare-note{
+            text-align:center;
+            color:var(--muted);
+            font-size:.95em;
+            max-width:700px;
+            margin:0 auto;
+        }
+        .compare-note strong{color:var(--text)}
 
-        /* ── Agent Grid ── */
-        .agent-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-        .agent-card{
-            background:var(--bg2);
-            border:1px solid var(--border);
-            border-radius:10px;
-            padding:20px;
-            border-left:3px solid transparent;
-            transition:border-left-color .2s;
+        /* ── Claim Banner ── */
+        .claim{
+            margin-top:16px;
+            font-size:clamp(1em,2.4vw,1.15em);
+            font-weight:600;
+            color:var(--green);
         }
-        .agent-card:hover{border-left-color:var(--cyan)}
-        .agent-card .emoji{font-size:1.5em;margin-bottom:6px}
-        .agent-card h4{font-size:.95em;color:var(--text);margin-bottom:4px}
-        .agent-card p{font-size:.82em;color:var(--muted)}
+        .claim em{color:var(--cyan);font-style:normal}
 
         /* ── Code Block ── */
         pre{
@@ -285,7 +302,7 @@
         @media(max-width:768px){
             .hero-stats{gap:24px}
             .hero-stat .num{font-size:1.5em}
-            .arch-diagram{padding:20px;font-size:11px}
+            .compare{grid-template-columns:1fr}
         }
     </style>
 </head>
@@ -304,6 +321,10 @@
         <strong>remembers outcomes</strong>, and
         <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and seven specialized AI agents.
     </p>
+    <div class="claim">
+        No other open-source bot combines chart vision, internal debate, vector memory,
+        self-written rules, and zero-cost sentiment. <em>This is it.</em>
+    </div>
     <div class="hero-cta">
         <a href="https://semanticsignal.qrak.org" class="btn btn-primary" target="_blank" rel="noopener">
             ▶ Watch It Trade Live
@@ -321,8 +342,8 @@
             <div class="lbl">Technical Indicators</div>
         </div>
         <div class="hero-stat">
-            <div class="num">1,324</div>
-            <div class="lbl">Automated Tests</div>
+            <div class="num">24/7</div>
+            <div class="lbl">Autonomous Trading</div>
         </div>
         <div class="hero-stat">
             <div class="num">7</div>
@@ -352,7 +373,7 @@
                 <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
                 <span class="green">✔</span> Computed 50+ technical indicators &amp; 12 deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
                 <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
-                <span class="green">✔</span> Ingested RSS news feeds, Reddit JSON &amp; Nitter sentiment (zero API cost)<br><br>
+                <span class="green">✔</span> Ingested RSS news feeds &amp; Reddit community sentiment (zero API cost)<br><br>
                 <span class="cyan"># 4. Multimodal AI Analysis (Google Gemini)</span><br>
                 <span class="green">✔</span> Visual 4K candlestick chart analysis + Bull vs. Bear debate + EV framework evaluation<br><br>
                 <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
@@ -360,6 +381,29 @@
                 <span class="cyan"># 6. Reflection &amp; Memory (ChromaDB)</span><br>
                 <span class="green">✔</span> Outcome embedded as 768D vector experience; semantic rule base updated<br><br>
                 <span class="dim">[17:00:14] [INFO] [TradingStrategy] Cycle complete. Decision logged to SQLite audit trail.</span>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:24px">
+            <div class="card">
+                <div class="icon">🔎</div>
+                <h3>Read the Market</h3>
+                <p>CCXT pulls 999 candles, a 20-level order book, funding rate and 24h volume from the exchange. Numba JIT computes 50+ indicators and 12 deterministic chart patterns in milliseconds — the bot sees both the raw numbers and their technical context.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🗣️</div>
+                <h3>Reason About It</h3>
+                <p>Gemini receives the 4K chart image plus the indicator stack plus fresh news and Reddit sentiment. It argues the bull case, then the bear case, then evaluates expected value against its own trade history — and must pass a falsification check before a signal is accepted.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🛡️</div>
+                <h3>Decide Safely</h3>
+                <p>Every signal runs a guard chain: symbol whitelist, position cap, cooldown window, R:R gate. Stop-loss scales with ATR volatility, take-profit targets minimum 1.5 R:R. The decision, reasoning, and risk parameters are all logged to the audit trail.</p>
+            </div>
+            <div class="card">
+                <div class="icon">🧬</div>
+                <h3>Learn From It</h3>
+                <p>When a trade closes, its outcome is embedded as a 768D vector in ChromaDB. The reflection engine periodically synthesizes new rules from what worked and what didn't — flagging surprising outcomes so luck isn't confused with skill. Next cycle, the bot remembers.</p>
             </div>
         </div>
     </div>
@@ -374,213 +418,164 @@
         <div class="grid">
             <div class="card">
                 <div class="icon">🤖</div>
-                <h3>LLM Chart Reading</h3>
-                <p>Google Gemini 3.6 Flash reads candlestick charts visually AND numerically — interpreting 50+ indicators simultaneously, spotting patterns a human would miss.</p>
+                <h3>AI Chart Reading</h3>
+                <p>Google Gemini reads candlestick charts visually AND numerically — interpreting 50+ indicators simultaneously and spotting patterns a human would miss.</p>
+                <p style="margin-top:8px">A 4K chart image with SMA, RSI and volume overlay is sent to the model alongside the raw indicator values. It sees the shape of the wicks, the volume context, the pattern structure — the same picture a human trader sees. And it's not taken on faith: every numeric claim is cross-checked against computed values.</p>
             </div>
             <div class="card">
                 <div class="icon">⚔️</div>
                 <h3>Bull vs Bear Internal Debate</h3>
                 <p>Before every decision, the LLM argues BOTH sides. Bull case optimistic, Bear case pessimistic. Then it decides. More balanced, less emotional.</p>
+                <p style="margin-top:8px">The debate is followed by an expected-value calculation using real trade history — probability of win × average win, minus probability of loss × average loss, minus fees. A falsification check then rejects any signal the LLM cannot defend. A missed +EV opportunity is treated as mathematically identical to a realized loss.</p>
             </div>
             <div class="card">
-                <div class="icon">🧬</div>
-                <h3>Vector Memory (ChromaDB)</h3>
-                <p>Every closed trade is embedded as a vector. On the next cycle, the bot queries its own brain: <em>"Have I seen this pattern before? What happened?"</em></p>
+                <div class="icon">🧠</div>
+                <h3>Long-Term Memory</h3>
+                <p>Every closed trade is embedded as a vector in a semantic database. On the next cycle, the bot queries its own brain: <em>"Have I seen this pattern before? What happened?"</em></p>
+                <p style="margin-top:8px">Trade experiences, semantic rules, blocked trades, and confidence statistics live in four ChromaDB collections, embedded with BAAI/bge-base-en-v1.5 at 768 dimensions. Before each decision the brain retrieves the <strong>top-5 most similar past trades</strong> plus the rules matched to current conditions — scored by similarity, evidence quality, and timeframe freshness. The bot literally reviews its own history before acting.</p>
             </div>
             <div class="card">
                 <div class="icon">🎯</div>
-                <h3>Risk Profile Selector</h3>
-                <p>Three dynamic modes — <strong>Aggressive</strong>, <strong>Conservative</strong>, <strong>Neutral</strong>. Switches automatically based on win rate, avg PnL, and market trend (ADX).</p>
+                <h3>Adaptive Risk Management</h3>
+                <p>ATR-scaled stop-loss and take-profit, portfolio-percentage position sizing, and risk profiles that adapt automatically to market conditions and its own track record.</p>
+                <p style="margin-top:8px">Three risk modes — aggressive, conservative, neutral — switch automatically based on win rate, average P&L, and market trend strength (ADX). Position size scales with confidence: fallback sizes of 1% / 2% / 3% of capital for LOW / MEDIUM / HIGH conviction. Stop-loss distance scales with volatility (ATR), take-profit enforces a minimum 1.5 R:R, and friction from position-size clamping is measured and reported rather than silently ignored.</p>
             </div>
             <div class="card">
                 <div class="icon">📰</div>
-                <h3>Zero-Cost Sentiment</h3>
-                <p>Reddit (r/CryptoCurrency, r/Bitcoin) and X/Twitter (via Nitter) scraped directly — free JSON feeds. No API keys. Plus RSS from CoinDesk, CoinTelegraph, Decrypt.</p>
+                <h3>Zero-Cost Market Intelligence</h3>
+                <p>Live news feeds (CoinDesk, CoinTelegraph, Decrypt) and Reddit community sentiment — all scraped directly. No API keys, no subscription fees.</p>
+                <p style="margin-top:8px">Every 4-hour cycle ingests up to 5 top articles, scored for relevance before they reach the model. Fundamentals come from CoinGecko and DeFiLlama, plus the Alternative.me Fear &amp; Greed index. X/Twitter was tried and dropped — without paid auth it isn't reliably scrapable, so the bot honestly runs on Reddit + RSS rather than pretending otherwise.</p>
             </div>
             <div class="card">
                 <div class="icon">🛡️</div>
-                <h3>Execution Safeguards</h3>
-                <p>Cooldown windows prevent overtrading. Max position size enforced. Symbol whitelist. SL/TP validated against ATR. Paper trading by default.</p>
+                <h3>Safety-First Execution</h3>
+                <p>Cooldown windows prevent overtrading. Position caps, symbol whitelist, and validated SL/TP levels enforced before every order. Paper trading by default.</p>
+                <p style="margin-top:8px">Every signal passes a pre-execution guard chain: symbol whitelist → maximum position size → cooldown window. If governance or risk validation can't decide safely, the system <strong>fails closed</strong> — no order, no exceptions. Soft exits trigger at candle close, hard exits check against live ticker prices at 15-minute intervals. Real exchange execution is in testing via a separate executor service — capital is simulated until the pipeline proves itself.</p>
+            </div>
+            <div class="card">
+                <div class="icon">📊</div>
+                <h3>Full Transparency</h3>
+                <p>Live WebSocket dashboard with candlestick charts, decision graphs, and the exact prompt, reasoning, and response behind every trade.</p>
+                <p style="margin-top:8px">The FastAPI dashboard streams brain activity, position state, performance statistics, news, market data, and the memory bank across nine tabs. Every decision's full prompt and LLM response is visible — plus an admin console for configuration, force-analysis, and log streaming. No black boxes.</p>
             </div>
             <div class="card">
                 <div class="icon">🔍</div>
-                <h3>AST Codebase Vector Search</h3>
-                <p>Natural-language semantic search across 160+ Python files and docs via ChromaDB (<code>scripts/query_codebase.py</code>). Finds exact symbols, functions, and architecture patterns instantly.</p>
-            </div>
-            <div class="card">
-                <div class="icon">📐</div>
-                <h3>768D Vector Memory Engine</h3>
-                <p>Powered by <code>BAAI/bge-base-en-v1.5</code> high-dimensional embeddings. Retains trade experiences, semantic rules, surprise ratio annotations, and confidence stats across trading sessions.</p>
-            </div>
-            <div class="card">
-                <div class="icon">🔮</div>
-                <h3>Adversarial Awareness</h3>
-                <p>The system prompt teaches the LLM about real order books — counterparty orders, funding rate traps, liquidity squeezes. Not just abstract lines on a chart.</p>
-            </div>
-            <div class="card">
-                <div class="icon">📊</div>
-                <h3>Real-Time Dashboard</h3>
-                <p>WebSocket-powered live UI with ApexCharts candlesticks, Vis.js decision graphs, FTS5 trade journal search, and full prompt/response transparency.</p>
+                <h3>Real Market Awareness</h3>
+                <p>Trains on real order book dynamics — counterparty orders, funding rate traps, liquidity squeezes. Not just abstract lines on a chart.</p>
+                <p style="margin-top:8px">The system prompt teaches the LLM how real markets behave: where counterparty orders sit, how funding rates trap leveraged positions, how liquidity squeezes play out. A post-mortem is written after every closed trade and stored with the experience — so the bot learns market behavior from its own results, not from theory.</p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ═══════════ RESEARCH-BACKED ═══════════ -->
+<!-- ═══════════ WHY IT'S DIFFERENT ═══════════ -->
 <section>
     <div class="container">
-        <h2><span>📚</span> Research-Backed. Competitor-Aware.</h2>
-        <p class="subhead">This bot doesn't exist in a vacuum. It merges the best ideas from academic papers and open-source frameworks into a single, battle-tested trading engine.</p>
+        <h2><span>🏆</span> Why Nothing Else Comes Close</h2>
+        <p class="subhead">Freqtrade, 3Commas, Cryptohopper, Gunbot, Hummingbot — none of them do what this bot does. Here's the honest comparison.</p>
+        <p style="color:var(--muted);margin-bottom:24px;max-width:750px;line-height:1.7">The difference isn't one feature — it's the whole architecture. Most bots are a strategy engine: fixed rules, fixed size, no memory, no context. This bot is a reasoning system: it reads the chart as an image, recalls its own trade history, argues both market directions, and is forced to defend every signal before it's executed. Below is the same comparison every bot vendor hopes you never see.</p>
 
-        <div class="grid">
-            <div class="card" style="border-left:3px solid #ff6b9d">
-                <h3 style="font-size:.95em">TradingAgents (UCLA/MIT)</h3>
-                <p style="font-size:.82em;color:var(--muted)">Multi-agent stock trading framework with bull/bear debate. <strong>Great design, but:</strong> stocks only, no crypto, no chart vision, no vector memory, no self-learning rules. <em>We took their debate idea and ran with it — for crypto, with vision, with memory.</em></p>
+        <div class="compare">
+            <div class="compare-col">
+                <h3>Every Other Bot</h3>
+                <ul>
+                    <li><span class="x">✘</span> Reads numbers only — blind to the actual chart</li>
+                    <li><span class="x">✘</span> No memory — repeats the same mistakes every cycle</li>
+                    <li><span class="x">✘</span> No debate, no self-check, no falsification</li>
+                    <li><span class="x">✘</span> Fixed rules, fixed size — no ATR-aware risk</li>
+                    <li><span class="x">✘</span> Paid sentiment APIs or no market context at all</li>
+                    <li><span class="x">✘</span> Black box — you can't see why it traded</li>
+                    <li><span class="x">✘</span> Closed source, subscription fees ($30–$100+/mo)</li>
+                </ul>
             </div>
-            <div class="card" style="border-left:3px solid #FFDD00">
-                <h3 style="font-size:.95em">Optiver Research (2026)</h3>
-                <p style="font-size:.82em;color:var(--muted)">LLMs pass the intern exam but fail at EV maximization and multi-step reasoning. <strong>Our fix:</strong> EV Framework that computes expected value from real trade history, adversarial awareness prompt, and a falsification check that rejects signals the LLM can't defend.</p>
-            </div>
-            <div class="card" style="border-left:3px solid var(--cyan)">
-                <h3 style="font-size:.95em">Agentic Trading Survey (arXiv 2026)</h3>
-                <p style="font-size:.82em;color:var(--muted)">77 studies reviewed. Only 2 had proper time-consistent splits. Reproducibility: R0 (none). <strong>We hit R2:</strong> fully mocked test suite with 1,324 tests, deterministic output, CI-ready. All LLM responses validated before execution.</p>
-            </div>
-            <div class="card" style="border-left:3px solid #00ff9d">
-                <h3 style="font-size:.95em">Lopez-Lira (Bank of Finland)</h3>
-                <p style="font-size:.82em;color:var(--muted)">LLMs trade but don't care about money unless explicitly instructed. <strong>Our approach:</strong> risk profiles with real P&L feedback, post-mortem AI analysis of every closed trade, and a ChromaDB memory that literally shows the bot its past mistakes.</p>
+            <div class="compare-col win">
+                <h3>Semantic Signal LLM</h3>
+                <ul>
+                    <li><span class="chk">✔</span> Gemini <strong>sees</strong> the 4K candlestick chart — vision + numbers</li>
+                    <li><span class="chk">✔</span> ChromaDB vector memory — recalls every closed trade semantically</li>
+                    <li><span class="chk">✔</span> Bull vs. Bear debate + EV framework + falsification check</li>
+                    <li><span class="chk">✔</span> ATR-scaled SL/TP, position caps, adaptive risk profiles</li>
+                    <li><span class="chk">✔</span> Zero-cost Reddit + RSS sentiment — no API keys</li>
+                    <li><span class="chk">✔</span> Full transparency — every prompt &amp; decision visible live</li>
+                    <li><span class="chk">✔</span> Open source, free, self-improving (8 AI agents maintain it)</li>
+                </ul>
             </div>
         </div>
 
-        <div style="text-align:center;margin-top:24px">
-            <p style="color:var(--muted);font-size:.9em;line-height:1.7;max-width:750px;margin:0 auto">
-                <strong>LLM Trader is the only open-source crypto trading bot that combines:</strong><br>
-                Chart Vision (Gemini reads candlesticks visually) ·
-                Bull/Bear Internal Debate (zero extra API cost) ·
-                Vector Memory (ChromaDB semantic trade recall) ·
-                Self-Writing Rules (reflection engine) ·
-                Zero-Cost Sentiment (Reddit + Nitter + RSS, no API keys) ·
-                7 Specialized AI Agents maintaining the codebase ·
-                1,324 Automated Tests ·
-                EV Framework with Falsification Checks ·
-                Adversarial Awareness (real order book dynamics)
-            </p>
-        </div>
+        <p class="compare-note">
+            <strong>1,300+ automated tests.</strong> Deterministic outputs. CI-ready. A trading engine
+            engineered to the same standard as production banking software — not a weekend script.
+        </p>
     </div>
 </section>
 
-<!-- ═══════════ RUNTIME ARCHITECTURE & SYSTEM AGENTS ═══════════ -->
-<section style="background:rgba(0,0,0,.15)">
+<!-- ═══════════ LLM TRADING IS NEW ═══════════ -->
+<section>
     <div class="container">
-        <h2><span>🤖</span> Runtime Multi-Agent Intelligence</h2>
-        <p class="subhead">Seven specialized runtime agents coordinate autonomously via a central Dependency Injection Composition Root (<code>start.py</code>).</p>
+        <h2><span>🧭</span> LLM Trading Is Brand New</h2>
+        <p class="subhead">This is not a mature industry with proven products. It's a frontier — and that's exactly why this project exists.</p>
 
         <div class="grid">
-            <div class="card" style="border-left:3px solid var(--cyan)">
-                <div class="icon">🧠</div>
-                <h3>1. Brain Agent</h3>
-                <p><code>TradingBrainService</code> — outcome-aware decision enricher. Manages 768D ChromaDB vector memory (experiences, semantic rules, surprise ratio annotations).</p>
-            </div>
-            <div class="card" style="border-left:3px solid var(--green)">
-                <div class="icon">🔬</div>
-                <h3>2. Analysis Engine Agent</h3>
-                <p>Collects market data, computes 50+ Numba indicators, generates 4K candlestick charts, and orchestrates LLM Bull vs. Bear debate & EV framework evaluation.</p>
-            </div>
-            <div class="card" style="border-left:3px solid var(--yellow)">
-                <div class="icon">📰</div>
-                <h3>3. RAG Engine Agent</h3>
-                <p>Aggregates zero-cost RSS feeds, CoinGecko metrics, DeFiLlama TVL data, and Reddit / Nitter social sentiment with semantic relevance scoring.</p>
-            </div>
-            <div class="card" style="border-left:3px solid #ff6b9d">
+            <div class="card">
                 <div class="icon">⚙️</div>
-                <h3>4. Risk Manager Agent</h3>
-                <p>Enforces dynamic ATR-scaled Stop-Loss / Take-Profit bounds, portfolio percentage position sizing, R:R thresholds (min 1.5), and friction drains.</p>
+                <h3>XGBoost Is Proven. LLM Isn't (Yet).</h3>
+                <p>Classical ML — XGBoost, random forests, feature-engineered signals — has a real, decades-long track record in quant trading. <strong>LLM-based autonomous trading does not.</strong> That distinction matters, and we don't blur it.</p>
             </div>
-            <div class="card" style="border-left:3px solid #a371f7">
-                <div class="icon">☁️</div>
-                <h3>5. Provider Orchestrator</h3>
-                <p>Manages multi-provider AI fallback chains (Google Gemini 3.6 Flash primary → OpenRouter base/fallback → LM Studio local text fallback).</p>
+            <div class="card">
+                <div class="icon">📜</div>
+                <h3>No Playbook Exists</h3>
+                <p>LLM trading has no decade of backtests, no academic consensus, no established best practices. The research papers on LLM agents for trading are barely two years old. Every builder is figuring it out from scratch — <strong>including us.</strong></p>
             </div>
-            <div class="card" style="border-left:3px solid #ff5f57">
-                <div class="icon">🛡️</div>
-                <h3>6. Governance Pipeline</h3>
-                <p>Chain-of-responsibility pre-execution guard pipeline: symbol whitelist, maximum position cap, and cooldown window enforcement.</p>
+            <div class="card">
+                <div class="icon">🚫</div>
+                <h3>Anyone Claiming a Track Record Is Lying</h3>
+                <p>If a vendor tells you their LLM bot has a "proven" record — they don't. The field is too young for one to exist. The only honest response is what we do: <strong>run in the open, show every trade, and let the data speak.</strong></p>
             </div>
-            <div class="card" style="border-left:3px solid #00f0ff">
-                <div class="icon">📊</div>
-                <h3>7. Dashboard Agent</h3>
-                <p>FastAPI + WebSocket monitoring server with live log ring buffer (ConsoleBuffer), Vis.js decision graphs, and interactive REST router suite.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ═══════════ SEVEN AGENTS ═══════════ -->
-<section>
-    <div class="container">
-        <h2><span>👥</span> Autonomous Development System</h2>
-        <p class="subhead">The codebase maintains itself. Seven specialized AI agents — each with a dedicated prompt, journal, and scope — continuously improve the bot.</p>
-
-        <div class="agent-grid">
-            <div class="agent-card" style="border-left-color:#FFDD00">
-                <div class="emoji">⚡</div>
-                <h4>Bolt — Performance</h4>
-                <p>Caching, async patterns, Numba JIT, vector search latency, memory footprint. <em>"Make it faster."</em></p>
-            </div>
-            <div class="agent-card" style="border-left-color:#ff6b9d">
-                <div class="emoji">🎨</div>
-                <h4>Palette — UX & Accessibility</h4>
-                <p>Dashboard HTML/CSS/JS, ARIA labels, keyboard navigation, responsive design, toast notifications.</p>
-            </div>
-            <div class="agent-card" style="border-left-color:#ff5f57">
-                <div class="emoji">🛡️</div>
-                <h4>Sentinel — Security</h4>
-                <p>CSP headers, rate limiting, auth hardening, XSS protection, API key isolation, CORS policies.</p>
-            </div>
-            <div class="agent-card" style="border-left-color:#a371f7">
-                <div class="emoji">✨</div>
-                <h4>Refactor — Clean Code</h4>
-                <p>Eliminates isinstance chains, enforces DI patterns, removes code smells, strengthens type hints.</p>
-            </div>
-            <div class="agent-card" style="border-left-color:#28c840">
-                <div class="emoji">✂️</div>
-                <h4>Concise — Code Reduction</h4>
-                <p>DRY violations, mixins, dispatch tables, functional expressions. <em>"Make it shorter without losing clarity."</em></p>
-            </div>
-            <div class="agent-card" style="border-left-color:#ff9800">
-                <div class="emoji">🐛</div>
-                <h4>Bugfixer — Regressions</h4>
-                <p>Finds bugs, verifies other agents' changes don't break things, reads all journals for context.</p>
-            </div>
-            <div class="agent-card" style="border-left-color:#e91e63">
-                <div class="emoji">🔥</div>
-                <h4>Smoke Tests — Pre-Flight</h4>
-                <p>Syntax compilation, targeted unit tests, linter gates, startup sanity checks before every commit.</p>
+            <div class="card">
+                <div class="icon">🎟️</div>
+                <h3>A Front-Row Seat to History</h3>
+                <p>You're not buying a finished product here. You're watching a new category get figured out in real time — mistakes, lessons, and all. <strong>That's a feature, not a bug.</strong></p>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ═══════════ DASHBOARD ARCHITECTURE ═══════════ -->
+<!-- ═══════════ HONEST LIMITATIONS ═══════════ -->
 <section style="background:rgba(0,0,0,.15)">
     <div class="container">
-        <h2><span>📡</span> Dashboard Architecture</h2>
-        <p class="subhead">FastAPI + WebSocket with six dedicated API routers and a real-time admin console.</p>
+        <h2><span>🪞</span> Not a Money Machine. Honest Limitations.</h2>
+        <p class="subhead">Every bot has flaws. Here are ours — stated plainly, before you ask. And here's what we're doing about each one.</p>
 
-        <pre>
-┌─────────────────────────────────────────────────────────┐
-│  <span class="hl">FastAPI Server</span> (0.0.0.0:8000)                          │
-│  ├── <span class="hl2">/api/brain/</span>*       → decisions, signals, context       │
-│  ├── <span class="hl2">/api/monitor/</span>*     → system health, provider status     │
-│  ├── <span class="hl2">/api/performance/</span>* → P&amp;L curves, statistics, trade history │
-│  ├── <span class="hl2">/api/visuals/</span>*     → chart data, indicator plots          │
-│  ├── <span class="hl2">/ws/</span>*              → real-time WebSocket streaming          │
-│  ├── <span class="hl2">/api/admin/</span>*       → config CRUD, force analysis, log stream │
-│  └── <span class="hl2">/admin</span>            → admin console UI (HMAC auth)            │
-│                                                         │
-│  <span class="dim">Frontend:</span> Vanilla JS + Vis.js + ApexCharts + WebSocket    │
-│  <span class="dim">State:</span>    Shared dashboard_state singleton                │
-│  <span class="dim">Cache:</span>    Cloudflare CDN with selective bypass rules       │
-└─────────────────────────────────────────────────────────┘</pre>
+        <div class="compare">
+            <div class="compare-col">
+                <h3 style="color:#ff6b9d">Where It Struggles Today</h3>
+                <ul>
+                    <li><span class="x">✘</span> <strong>4-hour cycles.</strong> LLM analysis takes time — no HFT, no scalping. It's a swing trader, not a sniper.</li>
+                    <li><span class="x">✘</span> <strong>Paper trading today.</strong> Real capital is the next step — and it will behave differently than simulation.</li>
+                    <li><span class="x">✘</span> <strong>No X/Twitter sentiment.</strong> Reddit + RSS only. A noisy crowd on X is invisible to it.</li>
+                    <li><span class="x">✘</span> <strong>LLMs are fallible.</strong> Gemini can be wrong — the falsification check catches a lot, not everything.</li>
+                    <li><span class="x">✘</span> <strong>Losses are part of the process.</strong> It trades probabilities, not certainties. Some trades lose. That's trading.</li>
+                    <li><span class="x">✘</span> <strong>Not financial advice.</strong> No guarantees, no promises of returns. Anyone claiming a bot prints money is selling you something.</li>
+                </ul>
+            </div>
+            <div class="compare-col win">
+                <h3>How Each Flaw Is Being Mitigated</h3>
+                <ul>
+                    <li><span class="chk">✔</span> <strong>Quality over speed.</strong> Deeper analysis beats faster analysis. Longer timeframes = fewer, better decisions.</li>
+                    <li><span class="chk">✔</span> <strong>Paper → real, step by step.</strong> Position caps, ATR-scaled risk, and cooldowns are built for the transition to live capital.</li>
+                    <li><span class="chk">✔</span> <strong>More sources in progress.</strong> Additional sentiment channels are on the roadmap — without paying for API keys.</li>
+                    <li><span class="chk">✔</span> <strong>Self-correction loop.</strong> Every wrong call is embedded into memory and reviewed — the same mistake gets harder to repeat.</li>
+                    <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 1,300+ tests exist precisely because losses are expected.</li>
+                    <li><span class="chk">✔</span> <strong>Transparency instead of promises.</strong> Every trade, prompt, and decision is public — judge it yourself.</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="compare-note">
+            <strong>The honest pitch:</strong> this is an experiment in autonomous AI trading — running in the open,
+            with its flaws visible, and improving every cycle. If you want a money printer, this isn't it.
+            If you want to watch a genuinely novel system learn to trade, <em>this is the most interesting one you'll find.</em>
+        </p>
     </div>
 </section>
 
@@ -589,14 +584,14 @@
     <div class="container">
         <h2><span>🛠</span> Tech Stack</h2>
         <div class="grid">
-            <div class="card"><div class="icon">🐍</div><h3>Python 3.13.14</h3><p>asyncio, DI composition root, modular architecture</p></div>
-            <div class="card"><div class="icon">⚡</div><h3>FastAPI + uvicorn</h3><p>WebSocket streaming, 6 API routers, middleware pipeline</p></div>
-            <div class="card"><div class="icon">🤖</div><h3>Google Gemini 3.6</h3><p>Chart reading, technical reasoning, adversarial awareness</p></div>
-            <div class="card"><div class="icon">🔢</div><h3>pandas-ta + Numba</h3><p>50+ JIT-compiled indicators, 12 kernel patterns</p></div>
-            <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, FTS5 search</p></div>
-            <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision pathways graph, candlestick charts, live KPI cards</p></div>
+            <div class="card"><div class="icon">🐍</div><h3>Python 3.13</h3><p>asyncio, dependency injection, modular architecture</p></div>
+            <div class="card"><div class="icon">⚡</div><h3>FastAPI + uvicorn</h3><p>REST API, WebSocket streaming, middleware pipeline</p></div>
+            <div class="card"><div class="icon">🤖</div><h3>Google Gemini</h3><p>Chart reading, technical reasoning, trade debates</p></div>
+            <div class="card"><div class="icon">🔢</div><h3>Pure Python + Numba JIT</h3><p>50+ home-grown indicators, 0 external TA dependencies</p></div>
+            <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, full-text search</p></div>
+            <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision graphs, candlestick charts, live KPI cards</p></div>
             <div class="card"><div class="icon">🌐</div><h3>Cloudflare</h3><p>Tunnel, CDN, Page Rules, zero-downtime deploys</p></div>
-            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>1,324 passing tests, zero lint errors, CI-ready</p></div>
+            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>1,300+ automated tests, zero lint errors, CI-ready</p></div>
         </div>
     </div>
 </section>
@@ -605,7 +600,8 @@
 <div class="cta">
     <h2>Ready to Watch the Brain Trade?</h2>
     <p style="color:var(--muted);max-width:500px;margin:0 auto">
-        Live dashboard with real-time charts, decision graphs, and full trading transparency. No signup. Just watch.
+        Live dashboard with real-time charts, decision graphs, and full trading transparency.
+        No signup. Just watch the system that's being scaled to real trades.
     </p>
     <div class="cta-buttons">
         <a href="https://semanticsignal.qrak.org" class="btn btn-primary" target="_blank" rel="noopener">
@@ -641,7 +637,8 @@
                 <p>
                     Previously worked with <strong>SAP P4B</strong> at BSH Sprzęt Gospodarstwa Domowego,
                     where I gained enterprise software experience and learned to navigate complex
-                    business processes. Now I build AI agents that trade crypto autonomously.
+                    business processes. Now I build AI agents that trade crypto autonomously —
+                    and I'm working on taking this exact system to real trades.
                 </p>
 
                 <div style="display:flex;gap:20px;flex-wrap:wrap;margin:16px 0;font-size:.85em;color:var(--muted)">
@@ -660,8 +657,8 @@
                 <p style="font-size:.85em;color:var(--muted)">
                     <strong>Interested in:</strong> Backend Python/FastAPI, AI engineering, LLM infrastructure —
                     ideally a role where I can apply both my AI knowledge and backend skills.
-                    No university degree, but I bring something better: a project with 1,324 tests,
-                    zero lint errors, and a live dashboard you can inspect right now.
+                    No university degree, but I bring something better: a project with 1,300+ automated
+                    tests, zero lint errors, and a live dashboard you can inspect right now.
                 </p>
 
                 <div style="margin-top:12px">

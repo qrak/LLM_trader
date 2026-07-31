@@ -187,7 +187,7 @@ class TradingMemory(SerializableMixin):
             Formatted summary of last 5 decisions with overall P&L data from all trades
         """
         if not self.decisions:
-            return "No previous trading decisions."
+            return ""
 
         recent_source = full_history if full_history else self.decisions
         recent = recent_source[-5:]  # Last 5 decisions for context

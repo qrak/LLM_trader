@@ -33,6 +33,10 @@ def _make_brain_with_feedback(feedback: str = "", trade_count: int = 5, **kwargs
     }
     vector_memory.get_confidence_recommendation.return_value = "Focus on HIGH confidence setups"
     vector_memory.get_direction_bias.return_value = {"long_count": 4, "short_count": 1}
+    vector_memory.compute_per_profile_stats.return_value = {}
+    vector_memory.compute_rsi_performance.return_value = {}
+    vector_memory.compute_volume_performance.return_value = {}
+    vector_memory.compute_weekend_performance.return_value = {}
 
     return TradingBrainService(
         logger=logger,
@@ -54,6 +58,10 @@ def _make_brain_no_trades():
     vector_memory.compute_confidence_stats.return_value = {}
     vector_memory.get_confidence_recommendation.return_value = ""
     vector_memory.get_direction_bias.return_value = None
+    vector_memory.compute_per_profile_stats.return_value = {}
+    vector_memory.compute_rsi_performance.return_value = {}
+    vector_memory.compute_volume_performance.return_value = {}
+    vector_memory.compute_weekend_performance.return_value = {}
 
     return TradingBrainService(
         logger=logger,

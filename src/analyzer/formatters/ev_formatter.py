@@ -74,6 +74,9 @@ class EVFrameworkFormatter:
             "**Counteract these biases.** A missed +EV opportunity is mathematically identical to a realized loss.",
             "The goal is NOT a high win rate — it is a positive cumulative EV across all trades.",
             "",
+            "**Priority rule:** if the Decision Gate passes (evidence + risk) AND EV is positive, the trade is the correct action.",
+            "Defaulting to HOLD under uncertainty is the exact bias this section exists to counter — only HOLD when the gate fails or EV is negative.",
+            "",
         ]
         return "\n".join(lines)
 

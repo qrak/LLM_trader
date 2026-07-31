@@ -85,6 +85,7 @@ def _make_strategy(
         quote_amount=500.0,
         entry_price=100.0,
         volatility_level="MEDIUM",
+        regime_profile="neutral",
     )
 
     config = SimpleNamespace(

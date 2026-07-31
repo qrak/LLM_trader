@@ -21,7 +21,7 @@ def _make_manager(**overrides):
         MARKET_TYPE="spot",
         ENTRY_ORDER_TYPE="limit",
     )
-    defaults = dict(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
+    defaults = {"config": config, "logger": MagicMock(), "timeframe_validator": TimeframeValidator}
     defaults.update(overrides)
     return TemplateManager(**defaults)
 
@@ -175,8 +175,8 @@ class TestBuildSystemPrompt:
         assert "Decision Protocol" in prompt
         assert "Classify regime first" in prompt
         assert "Resolve conflicts explicitly" in prompt
-        assert "HOLD when bull/bear cases are both plausible" in prompt
-        assert "CLOSE immediately when original thesis is invalidated" in prompt
+        assert "HOLD only when invalidation is genuinely unclear" in prompt
+        assert "CLOSE when original thesis is invalidated" in prompt
 
     def test_deterministic_time_check_with_previous(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response="test analysis")
@@ -233,18 +233,18 @@ class TestBuildResponseTemplate:
         rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
         assert "ADX >= 30" in rules
         assert "ADX < 18" in rules
-        assert "R/R >= 1.8" in rules  # rr_borderline_min as system-enforced minimum
+        assert "R/R >= 1.8" in rules  # rr_borderline_min as standard minimum for full-confidence entries
         assert "aspirational target" in rules  # min_rr_recommended as aspirational, not a gate
-        assert "system-enforced minimum" in rules
+        assert "standard minimum" in rules
         assert "REJECTED" in rules  # hard gate label in R/R guidelines
-        assert "Allowed — meets system-enforced minimum" in rules  # allowed range label
+        assert "Allowed in RANGING markets" in rules  # allowed range label
         assert "3.0%" in rules  # avg_sl
         assert "BUY/SELL: 75+ conf" in rules
         assert "strong evidence against entry" in rules
 
     def test_signal_line_uses_borderline_not_recommended_as_gate(self):
-        """BUY/SELL signal line must use rr_borderline_min as hard minimum, and
-        min_rr_recommended must appear as a recommendation NOT as a hard gate."""
+        """BUY/SELL signal line must use rr_borderline_min as the standard minimum,
+        while the ONLY hard gate is the 1.2 rejection boundary in the R/R guidelines."""
         thresholds = {
             "rr_borderline_min": 1.5,
             "min_rr_recommended": 2.0,
@@ -254,12 +254,13 @@ class TestBuildResponseTemplate:
         }
         rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
 
-        # SIGNALS line: hard gate is rr_borderline
-        assert "R/R >= 1.5 (system-enforced minimum — the only hard gate)" in rules
+        # SIGNALS line: rr_borderline is the standard minimum, NOT labeled as the only hard gate
+        assert "R/R >= 1.5 (standard minimum for full-confidence entries)" in rules
+        assert "system-enforced minimum — the only hard gate" not in rules
 
-        # R/R GUIDELINES: first line is the hard rejection boundary
-        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
-        assert "R/R >= 1.5: Allowed — meets system-enforced minimum for entry" in rules
+        # R/R GUIDELINES: the hard rejection boundary is fixed at 1.2
+        assert "R/R < 1.2: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
+        assert "R/R >= 1.5: Allowed in all regimes — meets standard system minimum" in rules
         assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in rules
         assert "R/R >= 2.5: Exceptional setup" in rules
 

@@ -422,6 +422,32 @@ def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return list(best.values())
 
 
+def _normalize_title(title: str) -> str:
+    """Lowercase, strip punctuation, and collapse whitespace for title matching."""
+    return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+
+
+def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Secondary dedup by normalized title, keeping the entry with the longest body.
+
+    Catches the same story ingested from different URLs (e.g., RSS summary link
+    vs Crawl4AI-enriched canonical link), which URL-only dedup misses.
+    """
+    best: dict[str, dict[str, Any]] = {}
+    for item in items:
+        title = _normalize_title(item.get("title") or "")
+        if not title:
+            continue
+        current = best.get(title)
+        if current is None:
+            best[title] = item
+            continue
+        # Prefer the item with the longer body (enriched full text over RSS summary)
+        if len(item.get("body") or "") > len(current.get("body") or ""):
+            best[title] = item
+    return list(best.values())
+
+
 def sort_by_date(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Sort items newest-first by ``published_at_epoch``."""
     return sorted(items, key=lambda x: x.get("published_at_epoch", 0.0), reverse=True)

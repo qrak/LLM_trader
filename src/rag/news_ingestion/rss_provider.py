@@ -18,6 +18,7 @@ from src.logger.logger import Logger
 from .crawl4ai_enricher import Crawl4AIEnricher
 from .rss_primitives import (
     FetchResult,
+    dedupe_by_normalized_title,
     dedupe_by_url,
     fetch_source,
     get_sources,
@@ -163,6 +164,8 @@ class RSSCrawl4AINewsProvider:
     ) -> list[dict[str, Any]]:
         """Enrich bodies, deduplicate, sort, and map to canonical article schema."""
         deduped = dedupe_by_url(merged)
+        # Secondary pass: same story from different URLs (RSS summary vs enriched canonical)
+        deduped = dedupe_by_normalized_title(deduped)
         sorted_items = sort_by_date(deduped)
 
         if self.config.RAG_NEWS_PAGE_ENRICHMENT and sorted_items:

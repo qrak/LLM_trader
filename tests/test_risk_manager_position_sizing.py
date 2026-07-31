@@ -45,14 +45,15 @@ def test_ai_position_size_is_clamped_to_configured_cap() -> None:
 
     assessment = _calculate_entry(manager, position_size=0.50)
 
-    assert assessment.size_pct == pytest.approx(0.10)
-    assert assessment.quote_amount == pytest.approx(1000.0)
-    assert assessment.quantity == pytest.approx(10.0)
+    # NEUTRAL regime profile cap = 0.08 overrides config MAX_POSITION_SIZE=0.10
+    assert assessment.size_pct == pytest.approx(0.08)
+    assert assessment.quote_amount == pytest.approx(800.0)
+    assert assessment.quantity == pytest.approx(8.0)
     logger.warning.assert_any_call(
         "%s position size %.2f%% exceeds cap %.2f%%, clamping",
         "AI",
         50.0,
-        10.0,
+        8.0,
     )
 
 
