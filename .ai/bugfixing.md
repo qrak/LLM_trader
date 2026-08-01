@@ -343,28 +343,31 @@ This project has **four other specialized agents** whose changes you verify. Loa
 2. Check if the same bug pattern exists elsewhere (systematic fix)
 3. Add a regression test
 
-## CI Mode — You Are the Automation (label `ai-fix`)
+## CI Mode — You Are the Automation (automatic on every new issue)
 
-When launched from GitHub Actions (`.github/workflows/agent-fix.yml`,
-triggered by labeling an issue or PR with `ai-fix`), **Hermes Agent**
-(the interactive developer of this bot) runs you with these constraints:
+You are triggered **automatically** from GitHub Actions
+(`.github/workflows/agent-fix.yml`) whenever a new issue is opened —
+no label, no human request. **Hermes Agent** (the interactive developer
+of this bot) runs you with these constraints:
 
 1. You get the issue/PR number in your prompt — read it first, then
    `.ai/bugfixing.md` (this file) and `AGENTS.md` before touching code.
 2. Work on the checked-out `master` (the workflow already created the
-   `ai-fix/issue-<N>-<ts>` branch for you).
+   `ai-fix/ISSUE-<N>-<ts>` branch for you).
 3. Follow the exact same rules as manual mode: minimal diff, regression
    test when feasible, `ruff check src/ tests/` + test suite green,
    conventional commit (`fix: ...`).
-4. If the issue is not a real bug (repro fails, it's intended behavior),
-   do NOT create a fix — explain in your final message so the PR is
-   skipped with a clear reason.
+4. If the issue is not a real bug (feature request, question, intended
+   behavior, unreproducible), do NOT create a fix — explain in your final
+   message so the workflow only comments on the issue and skips the PR.
 5. Never commit secrets, never touch `.ai/*.md` unless the task is about
    the agents themselves.
+6. Labeling an issue or PR with `ai-fix` re-triggers you manually — same
+   rules apply.
 
-The weekly `auto-fix` PRs (ruff autofix) are also yours to review when
-Supervisor assigns them — they are deterministic style fixes, but a
-stray autofix can still break a test.
+The automatic `auto-fix` PRs (ruff autofix, every push to master) are
+also yours to review when Supervisor assigns them — they are
+deterministic style fixes, but a stray autofix can still break a test.
 
 ---
 

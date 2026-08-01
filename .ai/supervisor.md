@@ -216,24 +216,26 @@ Any journal with 0 entries means that agent has never written its history — ei
 The repo has two automated workflows that keep the "code improves itself"
 claim true even when no human is at the keyboard:
 
-### 1. `.github/workflows/auto-fix-pr.yml` — weekly deterministic autofix
+### 1. `.github/workflows/auto-fix-pr.yml` — deterministic autofix on every push
 
-- Runs **every Monday 03:30 UTC** + on demand (Actions tab → Auto-Fix PR → Run workflow).
-- Executes `ruff check src/ tests/ --fix` on master.
+- Runs on **every push to master** (paths: `src/`, `tests/`, `.github/workflows/`)
+  + **weekly Monday 03:30 UTC** safety net + on demand (Actions tab).
+- Executes `ruff check src/ tests/ --fix`.
 - If anything changed → creates branch `ci/auto-fix-<timestamp>` → **opens a PR**
   labeled `auto-fix` with the diff. No human needed for the mechanics.
 - Your role as Supervisor: if such a PR appears, treat it like any other
   task — assign Bolt/Concise to review the diff before merge.
 
-### 2. `.github/workflows/agent-fix.yml` — label-triggered AI bug fixing
+### 2. `.github/workflows/agent-fix.yml` — FULLY AUTOMATIC AI bug fixing
 
-- Label an **issue or PR** with `ai-fix` → the workflow checks out master,
-  installs **Hermes Agent** (pip), configures it with the repo's LLM
-  provider (default: DeepSeek, same model as the interactive setup), and
-  runs the **Bugfixer** prompt (`.ai/bugfixing.md`) with a pointer to the
-  issue/PR number.
+- **Every newly opened issue** is picked up automatically — no label needed.
+  Hermes Agent (pip-installed, configured with the repo's LLM provider —
+  default DeepSeek, same model as the interactive setup) runs the
+  **Bugfixer** prompt (`.ai/bugfixing.md`) with a pointer to the issue.
 - Hermes investigates, fixes, commits (`fix: ...`) and pushes branch
-  `ai-fix/ISSUE-<N>-<ts>`, then opens a PR labeled `ai-fix`.
+  `ai-fix/ISSUE-<N>-<ts>`, then opens a PR labeled `ai-fix` and comments
+  the result on the issue (fix PR link, or "not a real bug" when it skips).
+- Labeling any issue/PR with `ai-fix` re-triggers the workflow manually.
 - Requires the `DEEPSEEK_API_KEY` repository secret (or the secret of the
   configured provider).
 

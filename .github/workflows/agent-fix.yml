@@ -1,8 +1,10 @@
 name: AI Agent Fix
 
-# The "self-improving codebase" claim made real: label an issue or PR
-# with `ai-fix` and Hermes Agent (the same AI that develops this bot
-# interactively) investigates, implements the fix, and opens a PR.
+# The "self-improving codebase" claim made real, FULLY AUTOMATIC:
+# every newly opened issue is picked up by Hermes Agent (the same AI
+# that develops this bot interactively) — it investigates, implements
+# the fix, and opens a PR. No label, no human in the loop.
+# Labeling an issue/PR with `ai-fix` re-triggers the workflow manually.
 #
 # Requires a repository secret with your LLM provider key, e.g.:
 #   DEEPSEEK_API_KEY  (default — matches the interactive setup)
@@ -11,7 +13,7 @@ name: AI Agent Fix
 
 on:
   issues:
-    types: [labeled, unlabeled]
+    types: [opened, labeled]
   pull_request:
     types: [labeled]
 
@@ -20,9 +22,15 @@ permissions:
   pull-requests: write
   issues: write
 
+concurrency:
+  group: agent-fix-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   agent-fix:
-    if: github.event.label.name == 'ai-fix'
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'opened') ||
+      (github.event.label.name == 'ai-fix')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,6 +58,13 @@ jobs:
           hermes config set model.default deepseek-v4-flash
           hermes config set approvals.mode off
 
+      - name: Announce investigation (issues only)
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --body "🤖 **Hermes Bugfixer investigating...** This issue was picked up automatically. A fix PR will appear here if a real bug is found." || true
+
       - name: Run Hermes Bugfixer
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -57,7 +72,7 @@ jobs:
           if [ "${{ github.event_name }}" = "issues" ]; then
             TARGET="${{ github.event.issue.number }}"
             URL="https://github.com/${{ github.repository }}/issues/$TARGET"
-            KIND="issue"
+            KIND="ISSUE"
           else
             TARGET="${{ github.event.pull_request.number }}"
             URL="https://github.com/${{ github.repository }}/pull/$TARGET"
@@ -74,10 +89,11 @@ jobs:
           when feasible, run 'ruff check src/ tests/' and the test suite
           (pytest) before finishing, do NOT touch files outside the fix scope.
           Commit with a conventional message (fix: ...) and push the current
-          branch. If the issue is not a real bug, do not create a fix —
-          just say so in your final message." --yolo || true
+          branch. If the issue is NOT a real bug (feature request, question,
+          intended behavior), do NOT create a fix — just say so in your final
+          message." --yolo || true
 
-      - name: Open PR
+      - name: Open PR or report result
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,7 +101,14 @@ jobs:
           BRANCH="ai-fix/$([ "${{ github.event_name }}" = "issues" ] && echo "ISSUE" || echo "PR")-${{ github.event.issue.number || github.event.pull_request.number }}-*"
           LATEST=$(git ls-remote origin "$BRANCH" | head -1 | awk '{print $2}' | sed 's|refs/heads/||')
           if [ -n "$LATEST" ]; then
-            gh pr create --base master --head "$LATEST" --title "🤖 AI Fix (Hermes)" --body "Automated fix by Hermes Agent (rules: .ai/bugfixing.md)." --label "ai-fix" || echo "PR already exists"
+            PR_URL=$(gh pr create --base master --head "$LATEST" --title "🤖 AI Fix (Hermes)" --body "Automated fix by Hermes Agent (rules: .ai/bugfixing.md)." --label "ai-fix" 2>/dev/null)
+            if [ "${{ github.event_name }}" = "issues" ]; then
+              gh issue comment "${{ github.event.issue.number }}" --body "✅ **Fix PR opened:** $PR_URL" || true
+            fi
           else
-            echo "No branch with changes — Hermes found nothing to fix."
+            if [ "${{ github.event_name }}" = "issues" ]; then
+              gh issue comment "${{ github.event.issue.number }}" --body "ℹ️ **No fix created** — Hermes determined this is not a real bug (feature request / question / intended behavior), or the problem could not be reproduced." || true
+            else
+              echo "No branch with changes — Hermes found nothing to fix."
+            fi
           fi

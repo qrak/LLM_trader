@@ -1,18 +1,28 @@
 name: Auto-Fix PR
 
-# Self-improving codebase: every Monday (and on demand) the bot's own
-# deterministic checks (ruff autofix + test suite) run against master.
+# Self-improving codebase, fully automatic: every push to master (and
+# weekly as a safety net) runs the deterministic checks (ruff autofix).
 # Any fixable issue produces an automatic pull request — no human needed.
 # AI agents (see .ai/) can then review/extend the PR.
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/**'
   schedule:
-    - cron: '30 3 * * 1'          # every Monday 03:30 UTC
+    - cron: '30 3 * * 1'          # weekly safety net: every Monday 03:30 UTC
   workflow_dispatch: {}            # manual trigger from Actions tab
 
 permissions:
   contents: write
   pull-requests: write
+
+concurrency:
+  group: auto-fix
+  cancel-in-progress: true
 
 jobs:
   auto-fix:
@@ -67,5 +77,5 @@ jobs:
             --base master \
             --head "$branch" \
             --title "🤖 Auto-Fix: ruff autofix $(date +%Y-%m-%d)" \
-            --body "Automated PR from the self-improving CI pipeline.\\n\\n## What\\n- ruff check --fix applied on src/ and tests/\\n\\n## Review\\nRun 'ruff check src/ tests/' and the test suite before merging.\\nIf a real bug is suspected, label this PR 'ai-fix' and the AI agents (see .ai/) will investigate and extend the fix." \
+            --body "Automated PR from the self-improving CI pipeline.\\n\\n## What\\n- ruff check --fix applied on src/ and tests/\\n\\n## Review\\nRun 'ruff check src/ tests/' and the test suite before merging.\\nIf a real bug is suspected, the AI agents (see .ai/) will investigate on demand." \
             --label "auto-fix" || echo "PR already exists or creation failed"
