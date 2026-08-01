@@ -68,7 +68,7 @@ class ExchangeManager:
             except asyncio.CancelledError:
                 pass  # expected during shutdown
             except Exception:
-                self.logger.exception("Error during update task cancellation: %s")
+                self.logger.exception("Error during update task cancellation")
             finally:
                 self._update_task = None
 

@@ -244,6 +244,11 @@ class UnifiedParser:
 
         # Check analysis section
         analysis = data.get("analysis", {})
+        # LLM can emit "analysis": null / list / string — never crash the whole
+        # cycle on a malformed field; degrade to {} (NEUTRAL fallback) instead.
+        if not isinstance(analysis, dict):
+            analysis = {}
+            data["analysis"] = analysis
         for field, default_value in self._numeric_fields.items():
             if field in analysis:
                 analysis[field] = self._parse_numeric_field(field, analysis[field], default_value)

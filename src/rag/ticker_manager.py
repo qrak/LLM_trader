@@ -24,7 +24,7 @@ class TickerManager:
                     self.known_tickers = set(tickers_data)
                     self.logger.debug("Loaded %s known tickers", len(self.known_tickers))
         except Exception:
-            self.logger.exception("Error loading known tickers: %s")
+            self.logger.exception("Error loading known tickers")
             self.known_tickers = set()
 
     async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
@@ -50,7 +50,7 @@ class TickerManager:
             await self.save_tickers()
 
         except Exception:
-            self.logger.exception("Error updating known tickers: %s")
+            self.logger.exception("Error updating known tickers")
 
     def _extract_detected_coins(self, news_database: list[dict[str, Any]]) -> set:
         """Extract coins that were detected in news articles."""
@@ -164,7 +164,7 @@ class TickerManager:
                 self.file_handler.save_known_tickers(tickers_list)
                 self.logger.debug("Saved %s known tickers", len(tickers_list))
         except Exception:
-            self.logger.exception("Error saving tickers: %s")
+            self.logger.exception("Error saving tickers")
 
     def get_known_tickers(self) -> set[str]:
         """Get the set of known cryptocurrency tickers."""

@@ -126,8 +126,19 @@ class MarketOverviewBuilder:
     def _finalize_overview(self, overview: dict) -> dict[str, Any]:
         """Finalize and validate the overview structure."""
         try:
-            # Add metadata
-            overview["published_on"] = datetime.now(timezone.utc).timestamp()
+            # Stamp published_on with the REAL data age, not the build time.
+            # CoinGecko data may come from a 24h file cache; using `now` here
+            # would make is_overview_stale() report ≤1h-fresh data that is
+            # actually up to 24h old. data_timestamp is set by CoinGeckoClient
+            # on both the cache-hit and fresh paths.
+            source_ts = overview.get("data_timestamp")
+            if source_ts:
+                try:
+                    overview["published_on"] = datetime.fromisoformat(str(source_ts)).timestamp()
+                except (ValueError, TypeError, OverflowError):
+                    overview["published_on"] = datetime.now(timezone.utc).timestamp()
+            else:
+                overview["published_on"] = datetime.now(timezone.utc).timestamp()
             overview["data_sources"] = []
 
             # Track data sources

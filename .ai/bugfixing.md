@@ -343,6 +343,29 @@ This project has **four other specialized agents** whose changes you verify. Loa
 2. Check if the same bug pattern exists elsewhere (systematic fix)
 3. Add a regression test
 
+## CI Mode — You Are the Automation (label `ai-fix`)
+
+When launched from GitHub Actions (`.github/workflows/agent-fix.yml`,
+triggered by labeling an issue or PR with `ai-fix`), you run with these
+constraints:
+
+1. You get the issue/PR number in your prompt — read it first, then
+   `.ai/bugfixing.md` (this file) and `AGENTS.md` before touching code.
+2. Work on the checked-out `master` (the workflow already created the
+   `ai-fix/issue-<N>-<ts>` branch for you).
+3. Follow the exact same rules as manual mode: minimal diff, regression
+   test when feasible, `ruff check src/ tests/` + test suite green,
+   conventional commit (`fix: ...`).
+4. If the issue is not a real bug (repro fails, it's intended behavior),
+   do NOT create a fix — explain in your final message so the PR is
+   skipped with a clear reason.
+5. Never commit secrets, never touch `.ai/*.md` unless the task is about
+   the agents themselves.
+
+The weekly `auto-fix` PRs (ruff autofix) are also yours to review when
+Supervisor assigns them — they are deterministic style fixes, but a
+stray autofix can still break a test.
+
 ---
 
 **Remember:** You're Bugfixer, the safety net of the LLM_trader codebase. A silent bug is worse than a visible crash — a missed trade costs real money, a doubled position costs even more. Every `except: pass` you delete is a potential disaster averted. Every regression you catch before it ships is a night the developer won't spend debugging at 3 AM.

@@ -1,6 +1,7 @@
 """Tests for ExecutorHandler — payload building, persistence, forwarding, dead-letter."""
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -168,7 +169,7 @@ class TestHandle:
         handler = _make_handler()
         handler._persist = MagicMock()
         handler._forward = AsyncMock(side_effect=RuntimeError("network down"))
-        handler._write_dead_letter = MagicMock()
+        handler._write_dead_letter = AsyncMock()
 
         decision = _make_decision()
         await handler.handle({"signal": "SELL"}, decision, "ETH/USDC")
@@ -213,7 +214,7 @@ class TestDeadLetter:
         try:
             handler = _make_handler()
             payload = {"timestamp": "2026-07-23T12:00:00.000000", "symbol": "BTC/USDC", "signal": "BUY"}
-            handler._write_dead_letter(payload)
+            asyncio.run(handler._write_dead_letter(payload))
 
             assert dl_path.exists()
             lines = dl_path.read_text().strip().split("\n")
@@ -238,13 +239,13 @@ class TestDeadLetter:
                 block_path = tf.name
             mod.DEAD_LETTER_PATH = Path(block_path) / "sub" / "nope.jsonl"
 
-            handler._write_dead_letter({"signal": "SELL"})
+            asyncio.run(handler._write_dead_letter({"signal": "SELL"}))
             handler.logger.error.assert_called_once()
         finally:
             mod.DEAD_LETTER_PATH = orig_path
             try:
                 Path(block_path).unlink(missing_ok=True)
-            except Exception:  # best-effort cleanup
+            except Exception:  # noqa: BLE001, S110 — best-effort cleanup
                 pass
 
 

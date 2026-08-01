@@ -332,7 +332,7 @@ class CryptoTradingBot:
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
 
-        self.persistence.save_last_analysis_time()
+        await self.persistence.async_save_last_analysis_time()
         decision = await self.trading_strategy.process_analysis(result, self.current_symbol)  # type: ignore[reportCallIssue]
 
         if decision:
@@ -350,7 +350,7 @@ class CryptoTradingBot:
 
         # Then notify and persist (best-effort, non-critical)
         await self._send_discord_notification(result)
-        self._save_analysis_data(result)
+        await self._save_analysis_data(result)
 
     def _log_check_header(self, check_count: int):
         """Log trading check header"""
@@ -520,13 +520,13 @@ class CryptoTradingBot:
                 chart_image=chart_image
             )
 
-    def _save_analysis_data(self, result: dict[str, Any]):
-        """Save analysis response and technical data"""
+    async def _save_analysis_data(self, result: dict[str, Any]):
+        """Save analysis response and technical data (off the event loop)"""
         raw_response = result.get("raw_response", "")
         if raw_response:
             technical_data = result.get("technical_data")
             generated_prompt = result.get("generated_prompt")
-            self.persistence.save_previous_response(raw_response, technical_data, generated_prompt)
+            await self.persistence.async_save_previous_response(raw_response, technical_data, generated_prompt)
 
     def _patch_rejected_signal_in_response(
         self, result: dict[str, Any], decision: TradeDecision

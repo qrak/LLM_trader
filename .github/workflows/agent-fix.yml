@@ -1,0 +1,84 @@
+name: AI Agent Fix
+
+# The "self-improving codebase" claim made real: label an issue or PR
+# with `ai-fix` and the AI coding agents (Claude Code, rules in .ai/)
+# investigate, implement the fix, and open a PR — fully automatic.
+#
+# Requires a repository secret: ANTHROPIC_API_KEY
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  agent-fix:
+    if: github.event.label.name == 'ai-fix'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install tooling
+        run: |
+          pip install ruff pytest pytest-asyncio
+
+      - name: Install Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          npm install -g @anthropic-ai/claude-code || true
+
+      - name: Run agent fix (Bugfixer role, .ai/bugfixing.md)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            TARGET="${{ github.event.issue.number }}"
+            TITLE="Fix #$TARGET (AI agent)"
+            DESC="Automated fix for issue #$TARGET by the AI coding agents (rules: .ai/bugfixing.md)."
+          else
+            TARGET="${{ github.event.pull_request.number }}"
+            TITLE="Extend fix for PR #$TARGET (AI agent)"
+            DESC="Automated extension of PR #$TARGET by the AI coding agents (rules: .ai/bugfixing.md)."
+          fi
+
+          BRANCH="ai-fix/issue-$TARGET-$(date +%s)"
+          git checkout -b "$BRANCH"
+
+          claude -p "You are the Bugfixer agent of LLM_trader. Read .ai/bugfixing.md and AGENTS.md first. Investigate and fix the problem described in $([ "${{ github.event_name }}" = "issues" ] && echo "issue" || echo "PR") #$TARGET (https://github.com/${{ github.repository }}/$([ "${{ github.event_name }}" = "issues" ] && echo "issues" || echo "pull")/$TARGET). Follow the project rules: one bug per PR, minimal diff, add a regression test if feasible. Run 'ruff check src/ tests/' and the test suite before finishing. Do NOT touch files outside the fix scope. Commit with a conventional message (fix: ...)." \
+            --dangerously-skip-permissions || true
+
+          git add -A
+          git config user.name "LLM_trader AI Agent"
+          git config user.email "agents@users.noreply.github.com"
+          git commit -m "fix: AI agent fix for #$TARGET" || true
+          git push origin "$BRANCH" || true
+
+      - name: Open PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="ai-fix/issue-${{ github.event.issue.number || github.event.pull_request.number }}-*"
+          LATEST=$(git ls-remote origin "$BRANCH" | head -1 | awk '{print $2}' | sed 's|refs/heads/||')
+          if [ -n "$LATEST" ]; then
+            gh pr create --base master --head "$LATEST" --title "🤖 AI Fix" --body "Automated fix by the AI coding agents (rules: .ai/bugfixing.md)." --label "ai-fix" || echo "PR already exists"
+          else
+            echo "No branch with changes — agent found nothing to fix."
+          fi

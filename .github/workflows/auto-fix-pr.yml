@@ -1,0 +1,71 @@
+name: Auto-Fix PR
+
+# Self-improving codebase: every Monday (and on demand) the bot's own
+# deterministic checks (ruff autofix + test suite) run against master.
+# Any fixable issue produces an automatic pull request — no human needed.
+# AI agents (see .ai/) can then review/extend the PR.
+
+on:
+  schedule:
+    - cron: '30 3 * * 1'          # every Monday 03:30 UTC
+  workflow_dispatch: {}            # manual trigger from Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install tooling
+        run: |
+          pip install ruff pytest pytest-asyncio
+
+      - name: Run ruff autofix
+        run: ruff check src/ tests/ --fix || true
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit autofixes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          BRANCH="ci/auto-fix-$(date +%Y%m%d-%H%M)"
+          git checkout -b "$BRANCH"
+          git config user.name "LLM_trader AutoFix Bot"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "style: automatic ruff autofix [skip ci]" || true
+          git push origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: Open PR with autofixes
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base master \
+            --head "$branch" \
+            --title "🤖 Auto-Fix: ruff autofix $(date +%Y-%m-%d)" \
+            --body "Automated PR from the self-improving CI pipeline.\\n\\n## What\\n- ruff check --fix applied on src/ and tests/\\n\\n## Review\\nRun 'ruff check src/ tests/' and the test suite before merging.\\nIf a real bug is suspected, label this PR 'ai-fix' and the AI agents (see .ai/) will investigate and extend the fix." \
+            --label "auto-fix" || echo "PR already exists or creation failed"

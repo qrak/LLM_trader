@@ -7,6 +7,7 @@ wire format, persist it as a file fallback, and HTTP-forward it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 from datetime import datetime, timezone
@@ -85,7 +86,7 @@ class ExecutorHandler:
                 "writing to dead-letter",
                 signal, symbol_name,
             )
-            self._write_dead_letter(payload)
+            await self._write_dead_letter(payload)
             forward_success = False
 
         # Bolt: skip disk file write when HTTP primary path succeeds (executor reachable)
@@ -126,6 +127,38 @@ class ExecutorHandler:
             except (ValueError, TypeError):
                 return default
 
+        def _to_int(val: Any, default: int = 1) -> int:
+            """Parse an LLM-supplied integer safely; never raises.
+
+            LLMs emit ``null``, ``"5x"``, ``NaN`` or floats for leverage —
+            none of those may crash order forwarding with a TypeError.
+            """
+            if val is None:
+                return default
+            try:
+                f_val = float(val)
+                if not math.isfinite(f_val) or f_val < 1:
+                    return default
+                return int(f_val)
+            except (ValueError, TypeError):
+                return default
+
+        def _to_bool(val: Any, default: bool = False) -> bool:
+            """Parse an LLM-supplied boolean safely.
+
+            LLMs frequently emit string booleans (``"false"``), which
+            ``bool("false")`` would wrongly coerce to True and flip order
+            semantics (e.g. a BUY forwarded as reduce-only). Only actual
+            truthy tokens are accepted.
+            """
+            if isinstance(val, bool):
+                return val
+            if val is None:
+                return default
+            if isinstance(val, (int, float)):
+                return val != 0
+            return str(val).strip().lower() in ("true", "1", "yes", "on")
+
         return {
             "timestamp": datetime.now(timezone.utc).strftime(
                 "%Y-%m-%dT%H:%M:%S.%f"
@@ -137,8 +170,8 @@ class ExecutorHandler:
             "entry_price": _to_float(raw_price),
             "stop_loss": _to_float(raw_sl),
             "take_profit": _to_float(raw_tp),
-            "reduce_only": bool(analysis.get("reduce_only", False)),
-            "leverage": int(analysis.get("leverage", 1)),
+            "reduce_only": _to_bool(analysis.get("reduce_only", False)),
+            "leverage": _to_int(analysis.get("leverage", 1)),
             "confidence": str(strategy_decision.confidence) if strategy_decision.confidence else "MEDIUM",
             "reasoning": str(strategy_decision.reasoning or ""),
         }
@@ -189,35 +222,38 @@ class ExecutorHandler:
         )
         return False
 
-    def _write_dead_letter(self, payload: dict[str, Any]) -> None:
-        """Append a failed forward to the dead-letter journal."""
+    async def _write_dead_letter(self, payload: dict[str, Any]) -> None:
+        """Append a failed forward to the dead-letter journal (off the event loop)."""
         try:
-            DEAD_LETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(DEAD_LETTER_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps(payload) + "\n")
+            await asyncio.to_thread(self._write_dead_letter_sync, payload)
         except Exception:
             self.logger.error("Failed to write dead-letter entry", exc_info=True)  # noqa: G201
 
+    def _write_dead_letter_sync(self, payload: dict[str, Any]) -> None:
+        """Synchronous dead-letter append (runs in a worker thread)."""
+        DEAD_LETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(DEAD_LETTER_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+
     async def _replay_dead_letters(self) -> None:
-        """Replay previously failed forwards now that executor is reachable."""
-        if not DEAD_LETTER_PATH.exists():
-            return
+        """Replay previously failed forwards now that executor is reachable.
+
+        Entries that fail to replay are KEPT in the journal — the file is
+        only deleted once every entry has been acknowledged by the executor.
+        A transient replay failure must never silently drop a trade signal
+        (a lost CLOSE would strand an unprotected live position).
+        """
         url: str = self._config.EXECUTOR_API_URL
         if not url:
             return
         try:
-            entries: list[dict[str, Any]] = []
-            with open(DEAD_LETTER_PATH, encoding="utf-8") as f:  # noqa: ASYNC230
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        entries.append(json.loads(line))
-
+            entries = await asyncio.to_thread(self._read_dead_letters)
             if not entries:
                 return
 
             self.logger.info("Replaying %d dead-letter entries...", len(entries))
             client = self._get_client()
+            failed: list[dict[str, Any]] = []
             for entry in entries:
                 sig = entry.get("signal")
                 sym = entry.get("symbol")
@@ -228,16 +264,48 @@ class ExecutorHandler:
                             "Dead-letter replayed: %s %s", sig, sym,
                         )
                     else:
-                        self.logger.warning(
-                            "Dead-letter replay failed (%s): %s %s",
+                        self.logger.error(
+                            "Dead-letter replay failed (%s): %s %s — keeping entry",
                             r.status_code, sig, sym,
                         )
-                except Exception:  # noqa: BLE001
-                    self.logger.warning(
-                        "Dead-letter replay exception: %s %s", sig, sym,
+                        failed.append(entry)
+                except Exception:
+                    self.logger.exception(
+                        "Dead-letter replay exception: %s %s — keeping entry",
+                        sig, sym,
                     )
+                    failed.append(entry)
 
-            DEAD_LETTER_PATH.unlink(missing_ok=True)
+            if failed:
+                await asyncio.to_thread(self._write_dead_letter_batch, failed)
+                self.logger.error(
+                    "Dead-letter: %d/%d entries could not be replayed and were kept",
+                    len(failed), len(entries),
+                )
+            else:
+                await asyncio.to_thread(self._delete_dead_letters)
         except Exception:
             self.logger.error("Dead-letter replay failed", exc_info=True)  # noqa: G201
+
+    def _read_dead_letters(self) -> list[dict[str, Any]]:
+        """Read all journal entries (synchronous, runs in a worker thread)."""
+        if not DEAD_LETTER_PATH.exists():
+            return []
+        entries: list[dict[str, Any]] = []
+        with open(DEAD_LETTER_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+        return entries
+
+    def _write_dead_letter_batch(self, entries: list[dict[str, Any]]) -> None:
+        """Rewrite the journal with only the entries that still need replaying."""
+        DEAD_LETTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(DEAD_LETTER_PATH, "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(entry) + "\n" for entry in entries)
+
+    def _delete_dead_letters(self) -> None:
+        """Remove the journal once every entry has been replayed."""
+        DEAD_LETTER_PATH.unlink(missing_ok=True)
 

@@ -3,6 +3,7 @@ News Management Module for RAG Engine
 
 Fetches, deduplicates, and caches cryptocurrency news articles.
 """
+import asyncio
 from typing import Any
 
 from src.logger.logger import Logger
@@ -35,15 +36,18 @@ class NewsManager:
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def load_cached_news(self) -> None:
-        """Load cached news articles from disk."""
+        """Load cached news articles from disk (off the event loop)."""
         try:
-            self.news_database = self.news_repository.load_recent_articles(max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
+            self.news_database = await asyncio.to_thread(  # type: ignore[reportOptionalMemberAccess]
+                self.news_repository.load_recent_articles,  # type: ignore[reportOptionalMemberAccess]
+                max_age_seconds=86400,
+            )
             for article in self.news_database:  # type: ignore[reportOptionalMemberAccess]
                 if "title_lower" not in article:
                     self._normalize(article)
             self.logger.debug("Loaded %s cached news articles", len(self.news_database))  # type: ignore[reportOptionalMemberAccess]
         except Exception:
-            self.logger.exception("Error loading cached news: %s")
+            self.logger.exception("Error loading cached news")
             self.news_database = []  # type: ignore[reportOptionalMemberAccess]
 
     async def fetch_fresh_news(self, known_crypto_tickers: set[str]) -> list[dict[str, Any]]:

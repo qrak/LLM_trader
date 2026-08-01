@@ -122,13 +122,10 @@ class DefiLlamaClient:
         temp_path = f"{self.cache_file_path}.tmp"
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(cache_payload, f, ensure_ascii=False, indent=2)
-
-        if os.path.exists(self.cache_file_path):
-            try:
-                os.remove(self.cache_file_path)
-            except Exception:  # noqa: BLE001
-                self.logger.warning("Failed to remove cache file")
-        os.rename(temp_path, self.cache_file_path)
+        # os.replace is atomic AND cross-platform (removes the destination on
+        # Windows); remove-then-rename left a window where the cache file did
+        # not exist and two concurrent writers could corrupt each other.
+        os.replace(temp_path, self.cache_file_path)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None:

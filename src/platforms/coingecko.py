@@ -108,9 +108,11 @@ class CoinGeckoAPI:
             self.logger.error("Error writing cache file: %s", e)
 
     def _write_json_sync(self, data: dict[str, Any]) -> None:
-        """Synchronous file write for executor"""
-        with open(self.coingecko_cache_file, "w", encoding="utf-8") as f:
+        """Synchronous file write for executor (atomic: temp + os.replace)."""
+        temp_path = f"{self.coingecko_cache_file}.tmp"
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(temp_path, self.coingecko_cache_file)
 
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
         """
@@ -234,7 +236,11 @@ class CoinGeckoAPI:
                 cached_data = await self._read_cache_file()
                 if cached_data and "data" in cached_data:
                     self.logger.debug("Using cached CoinGecko data from %s", self.last_update.isoformat())
-                    return cached_data["data"]
+                    # Stamp the REAL data age so downstream staleness checks
+                    # (market overview published_on) can't lie about freshness.
+                    data = cached_data["data"]
+                    data["data_timestamp"] = cached_data.get("timestamp", current_time.isoformat())
+                    return data
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to read cached data: %s", e)
 
@@ -249,6 +255,15 @@ class CoinGeckoAPI:
             return await self._get_cached_global_data()
 
         processed_global = self._process_global_data(global_data)
+
+        # Fail-closed: never cache an EMPTY payload as fresh data. A dead
+        # CoinGecko response must not poison the 24h cache with zeros —
+        # serve the previous cached data instead and keep last_update intact.
+        if not processed_global:
+            self.logger.error("CoinGecko returned no usable global data — keeping previous cache")
+            cached = await self._get_cached_global_data()
+            return cached if cached else {}
+
         dominance_data = processed_global.get("dominance", {})  # type: ignore[reportOptionalMemberAccess]
 
         dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
@@ -284,6 +299,7 @@ class CoinGeckoAPI:
             "timestamp": current_time.isoformat(),
             "data": processed_data
         }
+        processed_data["data_timestamp"] = current_time.isoformat()
         await self._write_cache_file(cache_data)
 
         self.last_update = current_time
@@ -309,7 +325,9 @@ class CoinGeckoAPI:
                 cached_data = await self._read_cache_file()
                 if cached_data and "data" in cached_data:
                     self.logger.warning("Using cached CoinGecko global data as fallback")
-                    return cached_data["data"]
+                    data = cached_data["data"]
+                    data["data_timestamp"] = cached_data.get("timestamp", datetime.now(timezone.utc).isoformat())
+                    return data
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error reading cached global data: %s", e)
 

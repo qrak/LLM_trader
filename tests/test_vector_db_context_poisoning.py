@@ -510,5 +510,7 @@ class TestRagEngineRetrievalBoundaries:
         engine.context_builder.keyword_search = raise_error
 
         context = await engine.retrieve_context("BTC analysis", "BTC/USDC")
-        # The exception is caught and a fallback string returned
-        assert "Error retrieving" in context
+        # The exception is caught; returns EMPTY string so the caller's
+        # truthiness check skips the context instead of injecting an error
+        # sentence into the LLM prompt as if it were market data.
+        assert context == ""

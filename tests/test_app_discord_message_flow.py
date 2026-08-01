@@ -38,6 +38,7 @@ def _make_bot_for_trading_check(**overrides):
 
     persistence = MagicMock()
     persistence.save_last_analysis_time = MagicMock()
+    persistence.async_save_last_analysis_time = AsyncMock()
     persistence.get_last_analysis_time = MagicMock(return_value=datetime.now(timezone.utc))
     persistence.async_load_previous_response = AsyncMock(return_value={})
 
@@ -89,7 +90,7 @@ def _make_bot_for_trading_check(**overrides):
     bot._fetch_ticker_data = AsyncMock(return_value=({"last": 77163.94}, 77163.94))
     bot._execute_market_knowledge_update = AsyncMock()
     bot._build_analysis_context = AsyncMock(return_value={})
-    bot._save_analysis_data = MagicMock()
+    bot._save_analysis_data = AsyncMock()
 
     return SimpleNamespace(
         bot=bot,

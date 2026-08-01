@@ -107,7 +107,7 @@ class RagEngine:
                 await self.refresh_market_data()
                 self.last_update = datetime.now(timezone.utc)
         except Exception:
-            self.logger.exception("Error initializing RAG engine: %s")
+            self.logger.exception("Error initializing RAG engine")
             self.news_manager.clear_database()  # type: ignore
 
     def _build_indices(self) -> None:
@@ -165,7 +165,8 @@ class RagEngine:
 
         # Process articles if any were fetched (gather converts exceptions to values with return_exceptions=True)
         if isinstance(articles, list) and articles:
-            updated = self.news_manager.update_news_database(articles)  # type: ignore
+            # update_news_database does sync JSON file I/O — keep it off the event loop
+            updated = await asyncio.to_thread(self.news_manager.update_news_database, articles)  # type: ignore
             if updated:
                 self._build_indices()
                 self.logger.debug("News database updated; rebuilt indices")
@@ -308,7 +309,11 @@ class RagEngine:
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving context: %s", e)
             self._latest_article_urls = {}
-            return "Error retrieving market context."
+            # Return EMPTY, not an error sentence: the caller's truthiness
+            # check (analysis_engine) would otherwise inject the literal
+            # "Error retrieving market context." into the LLM prompt as if
+            # it were real market data.
+            return ""
 
     def get_news_cache_snapshot(self, limit: int | None = None) -> list[dict[str, Any]]:
         """Return a copy of cached news articles for read-only external consumption."""
@@ -377,6 +382,6 @@ class RagEngine:
                 return True
             return False
         except Exception:
-            self.logger.exception("Error ensuring categories updated: %s")
+            self.logger.exception("Error ensuring categories updated")
             return False
 

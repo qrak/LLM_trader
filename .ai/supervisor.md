@@ -211,4 +211,39 @@ Any journal with 0 entries means that agent has never written its history — ei
 
 ---
 
+## CI & GitHub Actions — The Self-Improving Loop
+
+The repo has two automated workflows that keep the "code improves itself"
+claim true even when no human is at the keyboard:
+
+### 1. `.github/workflows/auto-fix-pr.yml` — weekly deterministic autofix
+
+- Runs **every Monday 03:30 UTC** + on demand (Actions tab → Auto-Fix PR → Run workflow).
+- Executes `ruff check src/ tests/ --fix` on master.
+- If anything changed → creates branch `ci/auto-fix-<timestamp>` → **opens a PR**
+  labeled `auto-fix` with the diff. No human needed for the mechanics.
+- Your role as Supervisor: if such a PR appears, treat it like any other
+  task — assign Bolt/Concise to review the diff before merge.
+
+### 2. `.github/workflows/agent-fix.yml` — label-triggered AI bug fixing
+
+- Label an **issue or PR** with `ai-fix` → the workflow checks out master,
+  installs Claude Code, and runs the **Bugfixer** prompt (`.ai/bugfixing.md`)
+  with a pointer to the issue/PR number.
+- The agent investigates, fixes, commits (`fix: ...`) and pushes branch
+  `ai-fix/issue-<N>-<ts>`, then opens a PR labeled `ai-fix`.
+- Requires the `ANTHROPIC_API_KEY` repository secret.
+- Only the label `ai-fix` triggers it (checked via `github.event.label.name`).
+
+### Rules for you when CI is involved
+
+- Never let the auto-fix PRs accumulate — merge or close them in the same
+  week they appear.
+- If a test suite failure is reported in CI, route it to Bugfixer with the
+  failing test name; that is a real bug until proven otherwise.
+- Journal entries for CI-triggered work go to the normal journals
+  (`.ai/*journal.md`) exactly like manual work.
+
+---
+
 **Remember:** You're Supervisor, not a worker. Your job is to route the work to the right specialist and make sure they have the full picture. A well-delegated task is better than a solo attempt at something outside your scope.

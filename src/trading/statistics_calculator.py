@@ -4,6 +4,7 @@ Calculates all-time cumulative statistics including Sharpe/Sortino ratios,
 drawdowns, win rate, and other performance metrics from trade history.
 """
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -120,10 +121,11 @@ class StatisticsCalculator:
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
                 quantity = open_position.get("quantity", 0)
-                # Guard against zero/negative entry prices that would produce
-                # bogus PnL values (pnl_pct division by zero, pnl_quote
-                # phantom profit from unconstrained multiplication).
-                if entry_price <= 0:
+                # Guard against zero/negative/NaN entry prices that would
+                # produce bogus PnL values (pnl_pct division by zero, pnl_quote
+                # phantom profit, NaN propagation into capital). `entry_price <= 0`
+                # alone is bypassed by NaN (nan <= 0 is False), hence isfinite.
+                if entry_price is None or not math.isfinite(entry_price) or entry_price <= 0:
                     open_position = None
                     continue
                 if open_position.get("action", "").upper() == "BUY":

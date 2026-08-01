@@ -90,7 +90,7 @@ class AnalysisEngine:
             self.logger.error("Invalid configured timeframe: %s", e)
             raise
         except Exception:  # pylint: disable=broad-exception-caught
-            self.logger.exception("Error loading configuration values: %s.")
+            self.logger.exception("Error loading configuration values")
             raise
         self.model_manager = model_manager
         self.technical_calculator = technical_calculator
@@ -241,14 +241,29 @@ class AnalysisEngine:
 
                 return market_context, rag_urls
 
+            # Isolate subtasks: one flaky task (indicator edge case, RAG
+            # hiccup) must not abort the whole cycle and discard healthy results.
             results = await asyncio.gather(
                 self._enrich_market_context(current_ticker=current_ticker),
                 run_tech_and_chart(),
-                run_rag_analysis()
+                run_rag_analysis(),
+                return_exceptions=True,
             )
 
-            chart_image, has_chart_analysis = results[1]
-            market_context, rag_urls = results[2]
+            if isinstance(results[0], BaseException):
+                self.logger.error("Market context enrichment subtask failed: %s", results[0])
+
+            if isinstance(results[1], BaseException):
+                self.logger.error("Technical/chart analysis subtask failed: %s", results[1])
+                chart_image, has_chart_analysis = None, False
+            else:
+                chart_image, has_chart_analysis = results[1]
+
+            if isinstance(results[2], BaseException):
+                self.logger.error("RAG analysis subtask failed: %s", results[2])
+                market_context, rag_urls = None, {}
+            else:
+                market_context, rag_urls = results[2]
 
             self.article_urls.update(rag_urls)
 
@@ -282,7 +297,7 @@ class AnalysisEngine:
             return analysis_result
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            self.logger.exception("Analysis failed: %s")
+            self.logger.exception("Analysis failed")
             return {"error": str(e), "recommendation": "HOLD"}
 
     async def _collect_market_data(self) -> bool:

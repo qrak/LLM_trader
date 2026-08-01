@@ -5,6 +5,7 @@ Extracted from TradingStrategy to reduce SRP violation (was 1151 lines / 19 meth
 
 from __future__ import annotations
 
+import math
 import re
 from typing import TYPE_CHECKING, Any
 
@@ -70,7 +71,19 @@ class MarketConditionsExtractor:
             trend = analysis.get("trend", {})
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                conditions["trend_strength"] = trend.get("strength_4h", trend.get("strength", 50))
+                # Sanitize the nested LLM field: json.loads accepts NaN/Infinity
+                # literals and null, so strength_4h can be non-finite or None.
+                # The top-level trend_strength key is sanitized by unified_parser,
+                # but this nested path is NOT — sanitize here or NaN/None poisons
+                # MarketConditions and then brain/vector storage.
+                raw_strength = trend.get("strength_4h", trend.get("strength", 50))
+                try:
+                    strength_float = float(raw_strength)
+                    if not math.isfinite(strength_float):
+                        strength_float = 50.0
+                except (TypeError, ValueError):
+                    strength_float = 50.0
+                conditions["trend_strength"] = strength_float
                 conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
 
             # Technical data

@@ -168,7 +168,7 @@ async def test_retrieve_context_returns_error_message_on_exception(base_componen
         k=2,
     )
 
-    assert result == "Error retrieving market context."
+    assert result == ""  # empty, not an error sentence — never poison the LLM prompt
 
 
 @pytest.mark.asyncio

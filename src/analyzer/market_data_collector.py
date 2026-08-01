@@ -95,7 +95,7 @@ class MarketDataCollector:
             result["article_urls"] = {}
 
         except Exception as e:
-            self.logger.exception("Error collecting market data: %s")
+            self.logger.exception("Error collecting market data")
             result["success"] = False
             result["errors"].append(str(e))
 
@@ -129,16 +129,22 @@ class MarketDataCollector:
             self._warn_if_insufficient_history(len(context.ohlcv_candles))
 
             # Bolt: fetch long-term daily, weekly macro, and sentiment data concurrently with asyncio.gather (~370ms latency reduction per cycle)
-            await asyncio.gather(
+            # Isolated: a residual exception in one secondary fetcher (e.g. changed
+            # API payload shape) must not mark the whole data collection failed.
+            secondary_results = await asyncio.gather(
                 self.fetch_long_term_historical_data(context),
                 self.fetch_weekly_macro_data(context, target_weeks=300),
                 self.fetch_and_process_sentiment_data(context),
+                return_exceptions=True,
             )
+            for i, res in enumerate(secondary_results):
+                if isinstance(res, BaseException):
+                    self.logger.error("Secondary market data fetcher %d failed: %s", i, res)
 
             return True
 
         except Exception:
-            self.logger.exception("OHLCV fetch failed: %s")
+            self.logger.exception("OHLCV fetch failed")
             return False
 
     def _warn_if_insufficient_history(self, candle_count: int, target_days: int = 30) -> None:
@@ -207,7 +213,7 @@ class MarketDataCollector:
             return True
 
         except Exception:
-            self.logger.exception("Long-term data fetch failed: %s")
+            self.logger.exception("Long-term data fetch failed")
             context.long_term_data = None
             return False
 

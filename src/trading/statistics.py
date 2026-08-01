@@ -3,6 +3,7 @@
 Manages statistics state, recalculation, and context formatting.
 """
 
+import math
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
@@ -78,8 +79,14 @@ class TradingStatisticsService:
             f"- Avg Trade: {stats.avg_trade_pct:+.2f}% | Best: {stats.best_trade_pct:+.2f}% | Worst: {stats.worst_trade_pct:+.2f}%",
             f"- Total P&L: ${stats.total_pnl_quote:+,.2f} ({stats.total_pnl_pct:+.2f}%)",
             f"- Max Drawdown: {stats.max_drawdown_pct:.2f}%",
-            f"- Sharpe Ratio: {stats.sharpe_ratio:.2f} | Sortino: {stats.sortino_ratio:.2f}",
         ]
+
+        # Sortino is float("inf") for an all-winning streak (zero downside
+        # deviation) — never inject "Sortino: inf" into the LLM prompt.
+        if math.isfinite(stats.sharpe_ratio) and math.isfinite(stats.sortino_ratio):
+            lines.append(f"- Sharpe Ratio: {stats.sharpe_ratio:.2f} | Sortino: {stats.sortino_ratio:.2f}")
+        elif math.isfinite(stats.sharpe_ratio):
+            lines.append(f"- Sharpe Ratio: {stats.sharpe_ratio:.2f}")
 
         if stats.profit_factor > 0 and stats.profit_factor != float("inf"):
             lines.append(f"- Profit Factor: {stats.profit_factor:.2f}")

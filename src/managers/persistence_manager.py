@@ -485,6 +485,15 @@ class PersistenceManager:
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving previous response: %s", e)
 
+    async def async_save_previous_response(
+        self,
+        response: str,
+        technical_data: dict[str, Any] | None = None,
+        prompt: str | None = None
+    ) -> None:
+        """Non-blocking save_previous_response: runs on a thread-pool worker."""
+        await asyncio.to_thread(self.save_previous_response, response, technical_data, prompt)
+
     def save_latest_decision(self, decision_data: dict[str, Any]) -> None:
         """Atomically write the latest trading decision for external bot consumption.
 
@@ -569,6 +578,10 @@ class PersistenceManager:
 
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error saving last analysis time: %s", e)
+
+    async def async_save_last_analysis_time(self, timestamp: datetime | None = None) -> None:
+        """Non-blocking save_last_analysis_time: runs on a thread-pool worker."""
+        await asyncio.to_thread(self.save_last_analysis_time, timestamp)
 
     def get_last_analysis_time(self) -> datetime | None:
         """Get timestamp of last successful analysis."""

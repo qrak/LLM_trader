@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses
+import math
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -308,7 +309,8 @@ class TradingStrategy:
                 self.logger.warning("No response to process")  # type: ignore[reportOptionalMemberAccess]
                 return None
 
-            if current_price <= 0:
+            # NaN/Inf bypass `<= 0` (nan <= 0 is False), so guard with isfinite.
+            if current_price is None or not math.isfinite(current_price) or current_price <= 0:
                 self.logger.error("Invalid current_price extracted, cannot process trade")  # type: ignore[reportOptionalMemberAccess]
                 return None
 
