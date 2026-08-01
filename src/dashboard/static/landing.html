@@ -319,7 +319,7 @@
     <p class="tagline">
         An autonomous AI trading agent that <strong>reads charts</strong>,
         <strong>remembers outcomes</strong>, and
-        <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and eight specialized AI agents.
+        <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and a multi-stage reasoning pipeline.
     </p>
     <div class="claim">
         No other open-source bot combines chart vision, internal debate, vector memory,
@@ -349,8 +349,8 @@
             <div class="lbl">Autonomous Trading</div>
         </div>
         <div class="hero-stat">
-            <div class="num">8</div>
-            <div class="lbl">AI Agents (Supervisor + 7)</div>
+            <div class="num">6</div>
+            <div class="lbl">Pipeline Stages per Cycle</div>
         </div>
         <div class="hero-stat">
             <div class="num">$0</div>
@@ -372,7 +372,7 @@
             <div class="terminal-body">
                 <span class="dim">[17:00:00] [INFO] [AnalysisEngine] ── Starting 4h Market Cycle: BTC/USDC ──</span><br><br>
                 <span class="cyan"># 1. Market Data Pipeline (CCXT)</span><br>
-                <span class="green">✔</span> Fetched 999 OHLCV candles, 20-level order book, funding rate &amp; 24h volume<br><br>
+                <span class="green">✔</span> Fetched 999 OHLCV candles, 50-level order book, funding rate &amp; 24h volume<br><br>
                 <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
                 <span class="green">✔</span> Computed 50+ technical indicators &amp; dozens of deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
                 <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
@@ -380,7 +380,7 @@
                 <span class="cyan"># 4. Multimodal AI Analysis (Google Gemini)</span><br>
                 <span class="green">✔</span> Visual Full HD candlestick chart analysis + Bull vs. Bear debate + EV framework evaluation<br><br>
                 <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
-                <span class="green">✔</span> Signal: BUY | Position: 5% capital | SL: 2x ATR (profile-scaled) | TP: min 1.5 R:R at structure<br><br>
+                <span class="green">✔</span> Signal: BUY | Position: 1-3% (confidence-scaled) | SL: 2x ATR (profile-scaled) | TP: min 1.5 R:R at structure<br><br>
                 <span class="cyan"># 6. Reflection &amp; Memory (ChromaDB)</span><br>
                 <span class="green">✔</span> Outcome embedded as 768D vector experience; semantic rule base updated<br><br>
                 <span class="dim">[17:00:14] [INFO] [TradingStrategy] Cycle complete. Decision logged to SQLite audit trail.</span>
@@ -391,7 +391,7 @@
             <div class="card">
                 <div class="icon">🔎</div>
                 <h3>Read the Market</h3>
-                <p>CCXT pulls 999 candles, a 20-level order book, funding rate and 24h volume from the exchange. Numba JIT computes 50+ indicators and dozens of deterministic chart patterns in milliseconds — the bot sees both the raw numbers and their technical context.</p>
+                <p>CCXT pulls 999 candles, a 50-level order book, funding rate and 24h volume from the exchange. Numba JIT computes 50+ indicators and dozens of deterministic chart patterns in milliseconds — the bot sees both the raw numbers and their technical context.</p>
             </div>
             <div class="card">
                 <div class="icon">🗣️</div>
@@ -459,7 +459,7 @@
                 <div class="icon">📊</div>
                 <h3>Full Transparency</h3>
                 <p>Live WebSocket dashboard with candlestick charts, decision graphs, and the exact prompt, reasoning, and response behind every trade.</p>
-                <p style="margin-top:8px">The FastAPI dashboard streams brain activity, position state, performance statistics, news, market data, and the memory bank across nine tabs. Every decision's full prompt and LLM response is visible — plus an admin console for configuration, force-analysis, and log streaming. No black boxes.</p>
+                <p>The FastAPI dashboard streams brain activity, position state, performance statistics, news, market data, and the memory bank across ten tabs. Every decision's full prompt and LLM response is visible — plus an admin console for configuration, force-analysis, and log streaming. No black boxes.</p>
             </div>
             <div class="card">
                 <div class="icon">🔍</div>
@@ -500,13 +500,13 @@
                     <li><span class="chk">✔</span> ATR-scaled SL/TP, position caps, adaptive risk profiles</li>
                     <li><span class="chk">✔</span> Zero-cost Reddit + RSS sentiment — no API keys</li>
                     <li><span class="chk">✔</span> Full transparency — every prompt &amp; decision visible live</li>
-                    <li><span class="chk">✔</span> Open source, free, self-improving (8 AI agents maintain it)</li>
+                    <li><span class="chk">✔</span> Open source, free, self-improving (8 AI coding agents maintain the codebase)</li>
                 </ul>
             </div>
         </div>
 
         <p class="compare-note">
-            <strong>1,300+ automated tests.</strong> Deterministic outputs. CI-ready. A trading engine
+            <strong>1,270+ automated tests.</strong> Deterministic outputs. CI-ready. A trading engine
             engineered to the same standard as production banking software — not a weekend script.
         </p>
     </div>
@@ -568,7 +568,7 @@
                     <li><span class="chk">✔</span> <strong>Paper → real, step by step.</strong> Position caps, ATR-scaled risk, and cooldowns are built for the transition to live capital — and a dedicated executor service for live exchange orders is under active development.</li>
                     <li><span class="chk">✔</span> <strong>More sources in progress.</strong> Additional sentiment channels are on the roadmap — without paying for API keys.</li>
                     <li><span class="chk">✔</span> <strong>Self-correction loop.</strong> Every wrong call is embedded into memory and reviewed — the same mistake gets harder to repeat.</li>
-                    <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 1,300+ tests exist precisely because losses are expected.</li>
+                    <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 1,270+ tests exist precisely because losses are expected.</li>
                     <li><span class="chk">✔</span> <strong>Transparency instead of promises.</strong> Every trade, prompt, and decision is public — judge it yourself.</li>
                 </ul>
             </div>
@@ -594,7 +594,7 @@
             <div class="card"><div class="icon">🧬</div><h3>ChromaDB</h3><p>Vector embeddings, semantic trade memory, full-text search</p></div>
             <div class="card"><div class="icon">📊</div><h3>Vis.js + ApexCharts</h3><p>Decision graphs, candlestick charts, live KPI cards</p></div>
             <div class="card"><div class="icon">🌐</div><h3>Cloudflare</h3><p>Tunnel, CDN, Page Rules, zero-downtime deploys</p></div>
-            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>1,300+ automated tests, zero lint errors, CI-ready</p></div>
+            <div class="card"><div class="icon">🧪</div><h3>pytest + ruff</h3><p>1,270+ automated tests, zero lint errors, CI-ready</p></div>
         </div>
     </div>
 </section>
@@ -661,7 +661,7 @@
                 <p style="font-size:.85em;color:var(--muted)">
                     <strong>Interested in:</strong> Backend Python/FastAPI, AI engineering, LLM infrastructure —
                     ideally a role where I can apply both my AI knowledge and backend skills.
-                    No university degree, but I bring something better: a project with 1,300+ automated
+                    No university degree, but I bring something better: a project with 1,270+ automated
                     tests, zero lint errors, and a live dashboard you can inspect right now.
                 </p>
 
