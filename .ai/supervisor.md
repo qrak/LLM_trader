@@ -228,12 +228,14 @@ claim true even when no human is at the keyboard:
 ### 2. `.github/workflows/agent-fix.yml` — label-triggered AI bug fixing
 
 - Label an **issue or PR** with `ai-fix` → the workflow checks out master,
-  installs Claude Code, and runs the **Bugfixer** prompt (`.ai/bugfixing.md`)
-  with a pointer to the issue/PR number.
-- The agent investigates, fixes, commits (`fix: ...`) and pushes branch
-  `ai-fix/issue-<N>-<ts>`, then opens a PR labeled `ai-fix`.
-- Requires the `ANTHROPIC_API_KEY` repository secret.
-- Only the label `ai-fix` triggers it (checked via `github.event.label.name`).
+  installs **Hermes Agent** (pip), configures it with the repo's LLM
+  provider (default: DeepSeek, same model as the interactive setup), and
+  runs the **Bugfixer** prompt (`.ai/bugfixing.md`) with a pointer to the
+  issue/PR number.
+- Hermes investigates, fixes, commits (`fix: ...`) and pushes branch
+  `ai-fix/ISSUE-<N>-<ts>`, then opens a PR labeled `ai-fix`.
+- Requires the `DEEPSEEK_API_KEY` repository secret (or the secret of the
+  configured provider).
 
 ### Rules for you when CI is involved
 

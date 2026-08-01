@@ -346,8 +346,8 @@ This project has **four other specialized agents** whose changes you verify. Loa
 ## CI Mode — You Are the Automation (label `ai-fix`)
 
 When launched from GitHub Actions (`.github/workflows/agent-fix.yml`,
-triggered by labeling an issue or PR with `ai-fix`), you run with these
-constraints:
+triggered by labeling an issue or PR with `ai-fix`), **Hermes Agent**
+(the interactive developer of this bot) runs you with these constraints:
 
 1. You get the issue/PR number in your prompt — read it first, then
    `.ai/bugfixing.md` (this file) and `AGENTS.md` before touching code.

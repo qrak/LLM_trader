@@ -1,10 +1,13 @@
 name: AI Agent Fix
 
 # The "self-improving codebase" claim made real: label an issue or PR
-# with `ai-fix` and the AI coding agents (Claude Code, rules in .ai/)
-# investigate, implement the fix, and open a PR — fully automatic.
+# with `ai-fix` and Hermes Agent (the same AI that develops this bot
+# interactively) investigates, implements the fix, and opens a PR.
 #
-# Requires a repository secret: ANTHROPIC_API_KEY
+# Requires a repository secret with your LLM provider key, e.g.:
+#   DEEPSEEK_API_KEY  (default — matches the interactive setup)
+# To use another provider, change `provider` / `model` below and add the
+# matching secret (ANTHROPIC_API_KEY, OPENROUTER_API_KEY, ...).
 
 on:
   issues:
@@ -21,7 +24,7 @@ jobs:
   agent-fix:
     if: github.event.label.name == 'ai-fix'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,47 +41,51 @@ jobs:
         run: |
           pip install ruff pytest pytest-asyncio
 
-      - name: Install Claude Code
+      - name: Install Hermes Agent
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          npm install -g @anthropic-ai/claude-code || true
+          pip install hermes-agent
+          hermes config set model.provider deepseek
+          hermes config set model.default deepseek-v4-flash
+          hermes config set approvals.mode off
 
-      - name: Run agent fix (Bugfixer role, .ai/bugfixing.md)
+      - name: Run Hermes Bugfixer
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           if [ "${{ github.event_name }}" = "issues" ]; then
             TARGET="${{ github.event.issue.number }}"
-            TITLE="Fix #$TARGET (AI agent)"
-            DESC="Automated fix for issue #$TARGET by the AI coding agents (rules: .ai/bugfixing.md)."
+            URL="https://github.com/${{ github.repository }}/issues/$TARGET"
+            KIND="issue"
           else
             TARGET="${{ github.event.pull_request.number }}"
-            TITLE="Extend fix for PR #$TARGET (AI agent)"
-            DESC="Automated extension of PR #$TARGET by the AI coding agents (rules: .ai/bugfixing.md)."
+            URL="https://github.com/${{ github.repository }}/pull/$TARGET"
+            KIND="PR"
           fi
 
-          BRANCH="ai-fix/issue-$TARGET-$(date +%s)"
+          BRANCH="ai-fix/$KIND-$TARGET-$(date +%s)"
           git checkout -b "$BRANCH"
 
-          claude -p "You are the Bugfixer agent of LLM_trader. Read .ai/bugfixing.md and AGENTS.md first. Investigate and fix the problem described in $([ "${{ github.event_name }}" = "issues" ] && echo "issue" || echo "PR") #$TARGET (https://github.com/${{ github.repository }}/$([ "${{ github.event_name }}" = "issues" ] && echo "issues" || echo "pull")/$TARGET). Follow the project rules: one bug per PR, minimal diff, add a regression test if feasible. Run 'ruff check src/ tests/' and the test suite before finishing. Do NOT touch files outside the fix scope. Commit with a conventional message (fix: ...)." \
-            --dangerously-skip-permissions || true
-
-          git add -A
-          git config user.name "LLM_trader AI Agent"
-          git config user.email "agents@users.noreply.github.com"
-          git commit -m "fix: AI agent fix for #$TARGET" || true
-          git push origin "$BRANCH" || true
+          hermes chat -q "You are the Bugfixer agent of LLM_trader (this repo).
+          First read .ai/bugfixing.md and AGENTS.md. Then investigate and fix
+          the problem described in $KIND #$TARGET ($URL).
+          Project rules: one bug per PR, minimal diff, add a regression test
+          when feasible, run 'ruff check src/ tests/' and the test suite
+          (pytest) before finishing, do NOT touch files outside the fix scope.
+          Commit with a conventional message (fix: ...) and push the current
+          branch. If the issue is not a real bug, do not create a fix —
+          just say so in your final message." --yolo || true
 
       - name: Open PR
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="ai-fix/issue-${{ github.event.issue.number || github.event.pull_request.number }}-*"
+          BRANCH="ai-fix/$([ "${{ github.event_name }}" = "issues" ] && echo "ISSUE" || echo "PR")-${{ github.event.issue.number || github.event.pull_request.number }}-*"
           LATEST=$(git ls-remote origin "$BRANCH" | head -1 | awk '{print $2}' | sed 's|refs/heads/||')
           if [ -n "$LATEST" ]; then
-            gh pr create --base master --head "$LATEST" --title "🤖 AI Fix" --body "Automated fix by the AI coding agents (rules: .ai/bugfixing.md)." --label "ai-fix" || echo "PR already exists"
+            gh pr create --base master --head "$LATEST" --title "🤖 AI Fix (Hermes)" --body "Automated fix by Hermes Agent (rules: .ai/bugfixing.md)." --label "ai-fix" || echo "PR already exists"
           else
-            echo "No branch with changes — agent found nothing to fix."
+            echo "No branch with changes — Hermes found nothing to fix."
           fi
