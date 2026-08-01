@@ -665,7 +665,7 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- SL distance scales with the ACTIVE RISK PROFILE ATR multiple (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x ATR — see ACTIVE RISK PROFILE section). LONG: SL below the swing low, offset by the profile ATR multiple; SHORT: SL above the swing high, offset by the profile ATR multiple. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
+- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section). LONG: SL below the swing low, at least the profile multiple × ATR from entry; SHORT: SL above the swing high, at least the profile multiple × ATR from entry. Never tighten SL below the profile multiple — structural levels may be wider, not narrower. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
 

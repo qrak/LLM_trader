@@ -311,7 +311,7 @@
 <!-- ═══════════ HERO ═══════════ -->
 <section class="hero">
     <div class="hero-badge">
-        <span class="pulse"></span> Live on Mainnet — Paper Trading
+        <span class="pulse"></span> Live — Paper Trading (BTC/USDC)
     </div>
     <h1>
         SEMANTIC<span class="hl">SIGNAL</span> <span class="hl2">LLM</span>
@@ -319,7 +319,7 @@
     <p class="tagline">
         An autonomous AI trading agent that <strong>reads charts</strong>,
         <strong>remembers outcomes</strong>, and
-        <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and seven specialized AI agents.
+        <strong>learns from every trade</strong> — powered by Google Gemini, ChromaDB vector memory, and eight specialized AI agents.
     </p>
     <div class="claim">
         No other open-source bot combines chart vision, internal debate, vector memory,
@@ -349,8 +349,8 @@
             <div class="lbl">Autonomous Trading</div>
         </div>
         <div class="hero-stat">
-            <div class="num">7</div>
-            <div class="lbl">Specialized AI Agents</div>
+            <div class="num">8</div>
+            <div class="lbl">AI Agents (Supervisor + 7)</div>
         </div>
         <div class="hero-stat">
             <div class="num">$0</div>
@@ -374,13 +374,13 @@
                 <span class="cyan"># 1. Market Data Pipeline (CCXT)</span><br>
                 <span class="green">✔</span> Fetched 999 OHLCV candles, 20-level order book, funding rate &amp; 24h volume<br><br>
                 <span class="cyan"># 2. Technical Calculator (Numba JIT)</span><br>
-                <span class="green">✔</span> Computed 50+ technical indicators &amp; 12 deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
+                <span class="green">✔</span> Computed 50+ technical indicators &amp; dozens of deterministic chart patterns (RSI, MACD, ADX, ATR)<br><br>
                 <span class="cyan"># 3. RAG Engine &amp; Social Sentiment</span><br>
                 <span class="green">✔</span> Ingested RSS news feeds &amp; Reddit community sentiment (zero API cost)<br><br>
                 <span class="cyan"># 4. Multimodal AI Analysis (Google Gemini)</span><br>
-                <span class="green">✔</span> Visual 4K candlestick chart analysis + Bull vs. Bear debate + EV framework evaluation<br><br>
+                <span class="green">✔</span> Visual Full HD candlestick chart analysis + Bull vs. Bear debate + EV framework evaluation<br><br>
                 <span class="cyan"># 5. Risk Governance &amp; Execution</span><br>
-                <span class="green">✔</span> Signal: BUY | Position: 5% capital | Dynamic SL: 1.8x ATR | TP: 2.5 R:R<br><br>
+                <span class="green">✔</span> Signal: BUY | Position: 5% capital | SL: 2x ATR (profile-scaled) | TP: min 1.5 R:R at structure<br><br>
                 <span class="cyan"># 6. Reflection &amp; Memory (ChromaDB)</span><br>
                 <span class="green">✔</span> Outcome embedded as 768D vector experience; semantic rule base updated<br><br>
                 <span class="dim">[17:00:14] [INFO] [TradingStrategy] Cycle complete. Decision logged to SQLite audit trail.</span>
@@ -391,12 +391,12 @@
             <div class="card">
                 <div class="icon">🔎</div>
                 <h3>Read the Market</h3>
-                <p>CCXT pulls 999 candles, a 20-level order book, funding rate and 24h volume from the exchange. Numba JIT computes 50+ indicators and 12 deterministic chart patterns in milliseconds — the bot sees both the raw numbers and their technical context.</p>
+                <p>CCXT pulls 999 candles, a 20-level order book, funding rate and 24h volume from the exchange. Numba JIT computes 50+ indicators and dozens of deterministic chart patterns in milliseconds — the bot sees both the raw numbers and their technical context.</p>
             </div>
             <div class="card">
                 <div class="icon">🗣️</div>
                 <h3>Reason About It</h3>
-                <p>Gemini receives the 4K chart image plus the indicator stack plus fresh news and Reddit sentiment. It argues the bull case, then the bear case, then evaluates expected value against its own trade history — and must pass a falsification check before a signal is accepted.</p>
+                <p>Gemini receives the Full HD chart image plus the indicator stack plus fresh news and Reddit sentiment. It argues the bull case, then the bear case, then evaluates expected value against its own trade history — and must pass a falsification check before a signal is accepted.</p>
             </div>
             <div class="card">
                 <div class="icon">🛡️</div>
@@ -423,7 +423,7 @@
                 <div class="icon">🤖</div>
                 <h3>AI Chart Reading</h3>
                 <p>Google Gemini reads candlestick charts visually AND numerically — interpreting 50+ indicators simultaneously and spotting patterns a human would miss.</p>
-                <p style="margin-top:8px">A 4K chart image with SMA, RSI and volume overlay is sent to the model alongside the raw indicator values. It sees the shape of the wicks, the volume context, the pattern structure — the same picture a human trader sees. And it's not taken on faith: every numeric claim is cross-checked against computed values.</p>
+                <p style="margin-top:8px">A Full HD chart image with SMA, RSI and volume overlay is sent to the model alongside the raw indicator values. It sees the shape of the wicks, the volume context, the pattern structure — the same picture a human trader sees. And it's not taken on faith: every numeric claim is cross-checked against computed values.</p>
             </div>
             <div class="card">
                 <div class="icon">⚔️</div>
@@ -441,7 +441,7 @@
                 <div class="icon">🎯</div>
                 <h3>Adaptive Risk Management</h3>
                 <p>ATR-scaled stop-loss and take-profit, portfolio-percentage position sizing, and risk profiles that adapt automatically to market conditions and its own track record.</p>
-                <p style="margin-top:8px">Three risk modes — aggressive, conservative, neutral — switch automatically based on win rate, average P&L, and market trend strength (ADX). Position size scales with confidence: fallback sizes of 1% / 2% / 3% of capital for LOW / MEDIUM / HIGH conviction. Stop-loss distance scales with volatility (ATR), take-profit enforces a minimum 1.5 R:R, and friction from position-size clamping is measured and reported rather than silently ignored.</p>
+                <p style="margin-top:8px">Three risk modes — aggressive, conservative, neutral — switch automatically based on win rate, average P&L, and market trend strength (ADX). Position size scales with confidence: fallback sizes of 1% / 2% / 3% of capital for LOW / MEDIUM / HIGH conviction. Stop-loss distance scales with volatility (ATR), take-profit targets minimum 1.5 R:R at structure, and friction from position-size clamping is measured and reported rather than silently ignored.</p>
             </div>
             <div class="card">
                 <div class="icon">📰</div>
@@ -453,7 +453,7 @@
                 <div class="icon">🛡️</div>
                 <h3>Safety-First Execution</h3>
                 <p>Cooldown windows prevent overtrading. Position caps, symbol whitelist, and validated SL/TP levels enforced before every order. Paper trading by default.</p>
-                <p style="margin-top:8px">Every signal passes a pre-execution guard chain: symbol whitelist → maximum position size → cooldown window. If governance or risk validation can't decide safely, the system <strong>fails closed</strong> — no order, no exceptions. Soft exits trigger at candle close, hard exits check against live ticker prices at 15-minute intervals. Real exchange execution is in testing via a separate executor service — capital is simulated until the pipeline proves itself.</p>
+                <p style="margin-top:8px">Every signal passes a pre-execution guard chain: symbol whitelist → maximum position size → cooldown window. If governance or risk validation can't decide safely, the system <strong>fails closed</strong> — no order, no exceptions. Soft exits trigger at candle close, hard exits check against live ticker prices at 15-minute intervals. Real exchange execution is being built as a dedicated executor service — a separate component that places and manages live orders under the same guard chain, with capital simulated until the pipeline proves itself.</p>
             </div>
             <div class="card">
                 <div class="icon">📊</div>
@@ -494,7 +494,7 @@
             <div class="compare-col win">
                 <h3>Semantic Signal LLM</h3>
                 <ul>
-                    <li><span class="chk">✔</span> Gemini <strong>sees</strong> the 4K candlestick chart — vision + numbers</li>
+                    <li><span class="chk">✔</span> Gemini <strong>sees</strong> the Full HD candlestick chart — vision + numbers</li>
                     <li><span class="chk">✔</span> ChromaDB vector memory — recalls every closed trade semantically</li>
                     <li><span class="chk">✔</span> Bull vs. Bear debate + EV framework + falsification check</li>
                     <li><span class="chk">✔</span> ATR-scaled SL/TP, position caps, adaptive risk profiles</li>
@@ -565,7 +565,7 @@
                 <h3>How Each Flaw Is Being Mitigated</h3>
                 <ul>
                     <li><span class="chk">✔</span> <strong>Quality over speed.</strong> Deeper analysis beats faster analysis. Longer timeframes = fewer, better decisions.</li>
-                    <li><span class="chk">✔</span> <strong>Paper → real, step by step.</strong> Position caps, ATR-scaled risk, and cooldowns are built for the transition to live capital.</li>
+                    <li><span class="chk">✔</span> <strong>Paper → real, step by step.</strong> Position caps, ATR-scaled risk, and cooldowns are built for the transition to live capital — and a dedicated executor service for live exchange orders is under active development.</li>
                     <li><span class="chk">✔</span> <strong>More sources in progress.</strong> Additional sentiment channels are on the roadmap — without paying for API keys.</li>
                     <li><span class="chk">✔</span> <strong>Self-correction loop.</strong> Every wrong call is embedded into memory and reviewed — the same mistake gets harder to repeat.</li>
                     <li><span class="chk">✔</span> <strong>Risk-first design.</strong> EV framework, falsification checks, and 1,300+ tests exist precisely because losses are expected.</li>
@@ -634,14 +634,15 @@
                 <p>
                     <strong>Self-taught backend developer</strong> with deep AI/LLM expertise.
                     Currently working in warehouse logistics while building autonomous AI systems
-                    after hours. My strength: I learn slowly but become an expert — every line of
+                    after hours. My strength: I go deep rather than wide — every line of
                     this codebase I wrote, tested, and understand.
                 </p>
                 <p>
-                    Previously worked with <strong>SAP P4B</strong> at BSH Sprzęt Gospodarstwa Domowego,
+                    Previously worked with <strong>enterprise SAP environments</strong> at BSH Sprzęt Gospodarstwa Domowego,
                     where I gained enterprise software experience and learned to navigate complex
                     business processes. Now I build AI agents that trade crypto autonomously —
-                    and I'm working on taking this exact system to real trades.
+                    and right now I'm building the trade executor: the dedicated service that
+                    carries this system from paper trading to live exchange orders.
                 </p>
 
                 <div style="display:flex;gap:20px;flex-wrap:wrap;margin:16px 0;font-size:.85em;color:var(--muted)">
@@ -651,7 +652,7 @@
                         <strong style="color:var(--text)">🗣</strong> Polish (native) + English (technical)
                     </div>
                     <div>
-                        <strong style="color:var(--text)">🐍</strong> Python 3.13.14, FastAPI, asyncio<br>
+                        <strong style="color:var(--text)">🐍</strong> Python 3.13, FastAPI, asyncio<br>
                         <strong style="color:var(--text)">🤖</strong> LLMs, prompt engineering, ChromaDB<br>
                         <strong style="color:var(--text)">🛠</strong> DI patterns, pytest, ruff, Cloudflare
                     </div>
