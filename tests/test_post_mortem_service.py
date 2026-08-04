@@ -96,6 +96,62 @@ class TestAnalyzeClosedTrade:
         repo.insert_post_mortem.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_trade_id_is_forwarded_to_repository(self):
+        """trade_id passed to analyze_closed_trade must reach insert_post_mortem.
+
+        Regression guard: previously trade_id was hardcoded None in the insert,
+        breaking the JOIN between the journal and trade_history.
+        """
+        parser = MagicMock()
+        parser.extract_json_block.return_value = None  # force raw JSON path
+        manager = MagicMock()
+        manager.send_prompt = AsyncMock(return_value=(
+            '{"verdict": "oversold_short_entry", "llm_analysis": "Short into support.", '
+            '"expected_vs_actual": "Expected breakdown, got bounce.", '
+            '"lesson_learned": "Wait for breakdown confirmation."}'
+        ))
+        repo = MagicMock()
+        repo.insert_post_mortem.return_value = 1
+
+        service = self._make_service(model_manager=manager, unified_parser=parser, repository=repo)
+        result = await service.analyze_closed_trade(
+            closed_position=self._make_position(),
+            entry_decision=self._make_entry_decision(),
+            exit_decision=self._make_exit_decision(),
+            pnl=-1.95,
+            reason="stop_loss",
+            trade_id=42,
+        )
+
+        assert result is not None
+        assert repo.insert_post_mortem.call_args.kwargs["trade_id"] == 42
+
+    @pytest.mark.asyncio
+    async def test_trade_id_defaults_to_none_when_not_provided(self):
+        """Omitting trade_id must store None (graceful for legacy callers)."""
+        parser = MagicMock()
+        parser.extract_json_block.return_value = None
+        manager = MagicMock()
+        manager.send_prompt = AsyncMock(return_value=(
+            '{"verdict": "good_exit", "llm_analysis": "ok", '
+            '"expected_vs_actual": "ok", "lesson_learned": "ok"}'
+        ))
+        repo = MagicMock()
+        repo.insert_post_mortem.return_value = 1
+
+        service = self._make_service(model_manager=manager, unified_parser=parser, repository=repo)
+        result = await service.analyze_closed_trade(
+            closed_position=self._make_position(),
+            entry_decision=self._make_entry_decision(),
+            exit_decision=self._make_exit_decision(),
+            pnl=2.5,
+            reason="take_profit",
+        )
+
+        assert result is not None
+        assert repo.insert_post_mortem.call_args.kwargs["trade_id"] is None
+
+    @pytest.mark.asyncio
     async def test_empty_llm_response_returns_none(self):
         """Empty LLM response should return None and not store."""
         manager = MagicMock()
