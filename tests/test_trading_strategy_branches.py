@@ -1098,6 +1098,39 @@ class TestExecutorTriState:
         result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
         assert result is True
 
+    def test_position_query_url_strips_decision_suffix(self):
+        """EXECUTOR_API_URL ends with /decision — the position query must hit
+        the base /position path, not /decision/position (which 404s).
+
+        Regression guard: config default is http://127.0.0.1:9199/decision,
+        and naive url + \"/position\" produced /decision/position → the
+        executor answered 404 and every UPDATE/CLOSE was skipped.
+        """
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=_make_position(direction="LONG"),
+            EXECUTOR_API_ENABLED=True,
+            EXECUTOR_API_URL="http://127.0.0.1:9199/decision",
+        )
+        client = self._stub_http_client(strategy, 200, {"open": False})
+
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+
+        assert result is False
+        called_url = client.get.call_args[0][0]
+        assert called_url == "http://127.0.0.1:9199/position"
+        assert "/decision/position" not in called_url
+
+    def test_position_query_url_base_url_without_suffix(self):
+        """EXECUTOR_API_URL without /decision suffix still works (backward compat)."""
+        strategy, _, _, _, _, _ = self._make_executor_strategy()  # url = http://executor:8000
+        client = self._stub_http_client(strategy, 200, {"open": False})
+
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+
+        assert result is False
+        called_url = client.get.call_args[0][0]
+        assert called_url == "http://executor:8000/position"
+
     def test_http_200_open_false(self):
         """Executor 200 + open:false → False (confirmed no position)."""
         strategy, _, _, _, _, _ = self._make_executor_strategy()

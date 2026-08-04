@@ -509,7 +509,12 @@ class TradingStrategy:
         if not url:
             return True
         try:
-            pos_url = url.rstrip("/") + "/position"
+            # EXECUTOR_API_URL points at the /decision endpoint
+            # (e.g. http://127.0.0.1:9199/decision). The position query
+            # lives at the base path (/position), so strip the /decision
+            # suffix — otherwise we'd query /decision/position → 404.
+            base = url.rstrip("/").removesuffix("/decision")
+            pos_url = base + "/position"
             client = self._get_http_client()
             resp = await client.get(pos_url, params={"symbol": symbol})
             if resp.status_code == 200:
