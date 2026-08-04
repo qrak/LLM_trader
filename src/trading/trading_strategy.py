@@ -128,10 +128,11 @@ class TradingStrategy:
         """Inject dashboard state after dashboard server construction."""
         self.dashboard_state = dashboard_state
 
-    async def _record_trade_decision(self, decision: TradeDecision) -> None:
-        """Persist a decision and refresh short-term memory."""
-        await self.persistence.async_save_trade_decision(decision)
+    async def _record_trade_decision(self, decision: TradeDecision) -> int:
+        """Persist a decision, refresh short-term memory, return SQLite row ID."""
+        row_id = await self.persistence.async_save_trade_decision(decision)
         self.memory_service.add_decision(decision)
+        return row_id
 
     async def _update_live_metrics(self, current_price: float) -> bool:
         """Update live position metrics before evaluating an exit."""
@@ -245,7 +246,7 @@ class TradingStrategy:
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving entry decision: %s", e)  # type: ignore[reportOptionalMemberAccess]
 
-        await self._record_trade_decision(decision)
+        close_row_id = await self._record_trade_decision(decision)
 
         # --- Post-Mortem Analysis ---
         # Trigger LLM post-mortem after the CLOSE row is persisted to SQLite.
@@ -257,6 +258,7 @@ class TradingStrategy:
                     closed_position=closed_position,
                     entry_decision=entry_decision,
                     exit_decision=decision,
+                    trade_id=close_row_id,
                     pnl=pnl,
                     reason=reason,
                     market_conditions=market_conditions,
@@ -376,14 +378,25 @@ class TradingStrategy:
         Returns:
             TradeDecision if action taken
         """
+        executor_pos_state = await self._executor_has_position(symbol)
+
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
-            if not await self._executor_has_position(symbol):
+            if executor_pos_state is False:
                 self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
-                    "CLOSE signal for %s but executor reports no open position — "
-                    "position may already be closed on exchange. Skipping.",
+                    "CLOSE signal for %s but executor confirmed no open position — "
+                    "position was closed on exchange or rejected on entry. Resetting local position state.",
+                    symbol,
+                )
+                self.current_position = None
+                await self.persistence.async_save_position(None)
+                return None
+            if executor_pos_state is None:
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                    "CLOSE signal for %s skipped — failed to verify executor position state.",
                     symbol,
                 )
                 return None
+
             self.logger.info("Closing position based on analysis signal...")  # type: ignore[reportOptionalMemberAccess]
             await self.close_position("analysis_signal", current_price, market_conditions)
             return TradeDecision(
@@ -400,11 +413,18 @@ class TradingStrategy:
         old_tp = self.current_position.take_profit  # type: ignore
 
         # Verify position exists on executor before sending UPDATE
-        if not await self._executor_has_position(symbol):
+        if executor_pos_state is False:
             self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
-                "UPDATE for %s skipped — executor reports no open position. "
-                "The position may have been closed on exchange (manual "
-                "intervention, stop hit, network partition).",
+                "UPDATE for %s skipped — executor confirmed no open position. "
+                "The position was closed on exchange or rejected on entry. Clearing local ghost position state.",
+                symbol,
+            )
+            self.current_position = None
+            await self.persistence.async_save_position(None)
+            return None
+        if executor_pos_state is None:
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                "UPDATE for %s skipped — failed to verify executor position state.",
                 symbol,
             )
             return None
@@ -475,13 +495,13 @@ class TradingStrategy:
             await self._http_client.aclose()
             self._http_client = None
 
-    async def _executor_has_position(self, symbol: str) -> bool:
+    async def _executor_has_position(self, symbol: str) -> bool | None:
         """Query executor API to confirm the position is actually open on exchange.
 
-        LLM_trader marks a position as "open" as soon as a decision is made,
-        but limit orders may sit unfilled on the orderbook. Before sending
-        UPDATE/CLOSE, verify the executor has the position tracked (which
-        only happens after fill confirmation).
+        Returns:
+            True if position is open (or executor API disabled).
+            False if executor explicitly returned open: False.
+            None if query failed (network error, timeout, HTTP error).
         """
         if not self.config.EXECUTOR_API_ENABLED:
             return True  # No executor configured — assume position is real
@@ -495,13 +515,18 @@ class TradingStrategy:
             if resp.status_code == 200:
                 data = resp.json()
                 return bool(data.get("open", False))
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                "Executor returned HTTP %s for position query: %s",
+                resp.status_code, resp.text,
+            )
+            return None
         except Exception:
             self.logger.error(  # type: ignore[reportOptionalMemberAccess]  # noqa: G201
                 "CRITICAL: Failed to query executor position for %s — "
-                "cannot verify position state. Skipping UPDATE/CLOSE for safety.",
+                "cannot verify position state.",
                 symbol, exc_info=True,
             )
-        return False  # Fail closed: don't act on unverified state
+            return None
 
     def _audit(
         self,

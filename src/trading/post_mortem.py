@@ -72,6 +72,7 @@ class PostMortemService:
         exit_decision: Any,
         pnl: float,
         reason: str,
+        trade_id: int | None = None,
         market_conditions: Any | None = None,
     ) -> PostMortemResult | None:
         """Analyze a closed trade and store the post-mortem.
@@ -82,6 +83,7 @@ class PostMortemService:
             exit_decision: The exit TradeDecision just written to SQLite.
             pnl: P&L percentage of the closed trade.
             reason: Close reason (stop_loss / take_profit / analysis_signal).
+            trade_id: trade_history.id of the CLOSE row (links journal to trade).
             market_conditions: Optional MarketConditions at exit time.
 
         Returns:
@@ -107,7 +109,7 @@ class PostMortemService:
             # Store in SQLite + FTS5 (offload to thread for async safety)
             await asyncio.to_thread(
                 self.repository.insert_post_mortem,
-                trade_id=None,
+                trade_id=trade_id,
                 symbol=closed_position.symbol,
                 direction=closed_position.direction,
                 verdict=result.verdict,

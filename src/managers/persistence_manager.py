@@ -262,8 +262,8 @@ class PersistenceManager:
 
         return warnings
 
-    def save_trade_decision(self, decision: TradeDecision) -> None:
-        """Save a trade decision to SQLite history."""
+    def save_trade_decision(self, decision: TradeDecision) -> int:
+        """Save a trade decision to SQLite history and return its row ID."""
         decision_dict = decision.to_dict()
         sanitized = serialize_for_json(decision_dict)
         if isinstance(sanitized.get("indicators_json"), (dict, list)):
@@ -274,14 +274,14 @@ class PersistenceManager:
             if row_id:
                 self.logger.debug("Saved trade decision to SQLite (row %d): %s @ $%s",
                                   row_id, decision.action, f"{decision.price:,.2f}")
-                return
+                return row_id
         except Exception as e:  # noqa: BLE001
             self.logger.error("SQLite save failed: %s", e)
         raise RuntimeError("Failed to save trade decision to SQLite")
 
-    async def async_save_trade_decision(self, decision: TradeDecision) -> None:
+    async def async_save_trade_decision(self, decision: TradeDecision) -> int:
         """Non-blocking save_trade_decision: runs on a thread-pool worker."""
-        await asyncio.to_thread(self.save_trade_decision, decision)
+        return await asyncio.to_thread(self.save_trade_decision, decision)
 
     def load_trade_history(self) -> list[dict[str, Any]]:
         """Load full trade history from SQLite."""
