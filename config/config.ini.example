@@ -129,6 +129,10 @@ sl_tightening_min_samples = 10       # min paired samples before brain override
 [executor_api]
 enabled = true
 url = http://127.0.0.1:9199/decision
+# Hard cap on entry notional forwarded to the executor (USDC).
+# 0 = no clamp. Set to match llm_trader_executor's MAX_POSITION_SIZE_USDC
+# so entries are scaled down instead of being rejected as "Notional exceeds max".
+max_position_usdc = 100.0
 
 # === Cooldowns ===
 [cooldowns]

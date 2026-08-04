@@ -15,6 +15,8 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from src.dashboard.dashboard_state import DashboardState
 from src.trading.data_models import MarketConditions, Position
 from src.trading.market_conditions_extractor import MarketConditionsExtractor
@@ -246,7 +248,7 @@ class TestUpdatePositionParameters:
     def test_tp_change_only(self):
         """Changing only take_profit works."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0)
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=None, take_profit=115.0, current_price=105.0,
@@ -301,7 +303,7 @@ class TestClosePosition:
 
     def test_no_position_returns_early(self):
         """When no position exists, nothing happens."""
-        strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=None)
+        strategy, _, _, brain, stats, _ = _make_strategy(current_position=None)
         strategy.current_position = None
 
         asyncio.run(strategy.close_position("stop_loss", 90.0))
@@ -335,7 +337,7 @@ class TestClosePosition:
     def test_close_position_take_profit(self):
         """Take-profit close flow."""
         pos = _make_position(direction="SHORT")
-        strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=pos)
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
 
         asyncio.run(strategy.close_position("take_profit", 85.0))
 
@@ -377,7 +379,7 @@ class TestClosePosition:
     def test_close_position_brain_update_failure_non_fatal(self):
         """Brain update error doesn't prevent position close."""
         pos = _make_position()
-        strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=pos)
+        strategy, _, persistence, brain, _, _ = _make_strategy(current_position=pos)
         dashboard_state = DashboardState()
         dashboard_state.mark_brain_rebuild_started = AsyncMock()
         dashboard_state.mark_brain_rebuild_completed = AsyncMock()
@@ -400,10 +402,53 @@ class TestClosePosition:
     def test_close_position_stats_recalculate_failure_non_fatal(self):
         """Stats recalculate error doesn't prevent position close."""
         pos = _make_position()
-        strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, stats, _ = _make_strategy(current_position=pos)
         stats.recalculate.side_effect = RuntimeError("Stats crash")
 
         asyncio.run(strategy.close_position("stop_loss", 90.0))
+        assert strategy.current_position is None
+
+    def test_close_position_passes_row_id_to_post_mortem(self):
+        """The CLOSE row's SQLite rowid must reach the post-mortem journal.
+
+        Regression guard: trade_id was hardcoded None in insert_post_mortem,
+        so the journal could never be JOINed back to trade_history.
+        """
+        pos = _make_position(direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        # Simulate the CLOSE row being persisted and returning its rowid
+        persistence.async_save_trade_decision = AsyncMock(return_value=42)
+        # Post-mortem needs the original entry decision to analyze
+        entry = MagicMock()
+        entry.reasoning = "Expected breakout continuation."
+        persistence.get_entry_decision_for_position = MagicMock(return_value=entry)
+        # Wire a post-mortem service
+        pm_service = MagicMock()
+        pm_service.analyze_closed_trade = AsyncMock(return_value=None)
+        strategy.post_mortem_service = pm_service
+
+        asyncio.run(strategy.close_position("stop_loss", 90.0))
+
+        pm_service.analyze_closed_trade.assert_called_once()
+        call_kwargs = pm_service.analyze_closed_trade.call_args.kwargs
+        assert call_kwargs["trade_id"] == 42
+        assert call_kwargs["pnl"] == pos.calculate_pnl(90.0)
+        assert call_kwargs["reason"] == "stop_loss"
+        assert call_kwargs["entry_decision"] is entry
+        assert call_kwargs["exit_decision"].action == "CLOSE_LONG"
+
+    def test_close_position_skips_post_mortem_without_entry_decision(self):
+        """No entry decision → post-mortem must be skipped, close still works."""
+        pos = _make_position(direction="LONG")
+        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        persistence.get_entry_decision_for_position = MagicMock(return_value=None)
+        pm_service = MagicMock()
+        pm_service.analyze_closed_trade = AsyncMock()
+        strategy.post_mortem_service = pm_service
+
+        asyncio.run(strategy.close_position("stop_loss", 90.0))
+
+        pm_service.analyze_closed_trade.assert_not_called()
         assert strategy.current_position is None
 
     def test_close_position_calculates_correct_pnl_long(self):
@@ -448,6 +493,140 @@ class TestClosePosition:
 
         persistence.async_save_trade_decision.assert_called_once_with(decision)
         cast(MagicMock, strategy.memory_service.add_decision).assert_called_once_with(decision)
+
+    def test_open_new_position_clamps_to_executor_max(self):
+        """Notional above EXECUTOR_MAX_POSITION_USDC is scaled down, not rejected.
+
+        Regression guard: the bot used to persist a full-size position while
+        the executor rejected it ("Notional X exceeds max Y"), leaving a ghost
+        position that could never be updated or closed.
+        """
+        strategy, logger, _, _, _, _ = _make_strategy(
+            current_position=None,
+            EXECUTOR_MAX_POSITION_USDC=100.0,
+        )
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=112.0,
+            size_pct=0.05,
+            quantity=5.0,           # 5.0 × 100.0 = $500 notional
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.12,
+            rr_ratio=2.4,
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=112.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        # $500 notional clamped to $100 → qty 5.0→1.0, size 5%→1%
+        assert decision.quantity == pytest.approx(1.0)
+        assert decision.quote_amount == pytest.approx(100.0)
+        assert decision.position_size == pytest.approx(0.01)
+        assert strategy.current_position is not None
+        pos: Position = cast(Position, strategy.current_position)
+        assert pos.size == pytest.approx(1.0)
+        assert pos.quote_amount == pytest.approx(100.0)
+        assert pos.size_pct == pytest.approx(0.01)
+        # Fee scales down proportionally too (0.5 × 0.2)
+        assert decision.fee == pytest.approx(0.1)
+        # Warning logged so the operator sees the clamp happened
+        clamp_logs = [c for c in logger.warning.call_args_list if "Executor notional clamp" in str(c)]
+        assert len(clamp_logs) == 1
+
+    def test_open_new_position_no_clamp_below_executor_max(self):
+        """Notional at or below the cap passes through unchanged."""
+        strategy, logger, _, _, _, _ = _make_strategy(
+            current_position=None,
+            EXECUTOR_MAX_POSITION_USDC=100.0,
+        )
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=112.0,
+            size_pct=0.005,
+            quantity=0.5,           # 0.5 × 100.0 = $50 notional
+            entry_fee=0.05,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.12,
+            rr_ratio=2.4,
+            quote_amount=50.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=112.0,
+            position_size=0.005,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        assert decision.quantity == 0.5
+        assert decision.quote_amount == 50.0
+        pos: Position = cast(Position, strategy.current_position)
+        assert pos.quote_amount == 50.0
+        clamp_logs = [c for c in logger.warning.call_args_list if "Executor notional clamp" in str(c)]
+        assert len(clamp_logs) == 0
+
+    def test_open_new_position_no_clamp_when_config_absent(self):
+        """EXECUTOR_MAX_POSITION_USDC unset (0) → sizing untouched (backward compat)."""
+        strategy, logger, _, _, _, _ = _make_strategy(current_position=None)
+        # Default _make_config has no EXECUTOR_MAX_POSITION_USDC attribute
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=112.0,
+            size_pct=0.05,
+            quantity=5.0,
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.12,
+            rr_ratio=2.4,
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=112.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        assert decision.quantity == 5.0
+        assert decision.quote_amount == 500.0
+        pos: Position = cast(Position, strategy.current_position)
+        assert pos.quote_amount == 500.0
+        clamp_logs = [c for c in logger.warning.call_args_list if "Executor notional clamp" in str(c)]
+        assert len(clamp_logs) == 0
 
     def test_close_position_calculates_correct_pnl_short(self):
         """Short position closing with profit calculates P&L correctly."""
@@ -713,7 +892,7 @@ class TestCheckPositionHitDetection:
     def test_long_sl_hit(self):
         """LONG: price below stop-loss triggers close_position('stop_loss')."""
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         result = asyncio.run(strategy.check_position(94.0))
         assert result == "stop_loss"
         assert strategy.current_position is None
@@ -721,7 +900,7 @@ class TestCheckPositionHitDetection:
     def test_long_tp_hit(self):
         """LONG: price above take-profit triggers close_position('take_profit')."""
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         result = asyncio.run(strategy.check_position(116.0))
         assert result == "take_profit"
         assert strategy.current_position is None
@@ -729,7 +908,7 @@ class TestCheckPositionHitDetection:
     def test_short_sl_hit(self):
         """SHORT: price above stop-loss triggers close_position."""
         pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         result = asyncio.run(strategy.check_position(106.0))
         assert result == "stop_loss"
         assert strategy.current_position is None
@@ -768,7 +947,7 @@ class TestHandleExistingPosition:
     def test_close_signal_exits(self):
         """CLOSE signal triggers close_position."""
         pos = _make_position(direction="LONG")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         result = asyncio.run(strategy._handle_existing_position(
             signal="CLOSE", confidence="MEDIUM",
             stop_loss=None, take_profit=None,
@@ -806,7 +985,7 @@ class TestHandleExistingPosition:
     def test_update_sl_succeeds(self):
         """UPDATE with SL change works after interval (within 150% widening cap)."""
         pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
         # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         result = asyncio.run(strategy._handle_existing_position(
@@ -820,7 +999,7 @@ class TestHandleExistingPosition:
     def test_update_tp_succeeds(self):
         """UPDATE with TP change works."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
-        strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
         result = asyncio.run(strategy._handle_existing_position(
             signal="UPDATE", confidence="HIGH",
@@ -875,6 +1054,134 @@ class TestHandleExistingPosition:
         )
         result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
         assert result is True
+
+
+# ═════════════════════════════════════════════════════════════════
+# SECTION 5b: executor tri-state — HTTP 200 / HTTP error / network failure
+# ═════════════════════════════════════════════════════════════════
+
+
+class TestExecutorTriState:
+    """Regression guard for ghost-position fix: _executor_has_position
+    returns True (open) / False (confirmed closed) / None (unverifiable).
+
+    None must never trigger a close/update; False must clear ghost state.
+    """
+
+    @staticmethod
+    def _make_executor_strategy(**overrides):
+        return _make_strategy(
+            current_position=_make_position(direction="LONG"),
+            EXECUTOR_API_ENABLED=True,
+            EXECUTOR_API_URL="http://executor:8000",
+            **overrides,
+        )
+
+    def _stub_http_client(self, strategy, status_code=200, payload=None, exc=None):
+        """Replace _get_http_client with a mock returning a stubbed response."""
+        client = MagicMock()
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.text = "stub body"
+        resp.json.return_value = payload if payload is not None else {}
+        if exc is not None:
+            client.get = AsyncMock(side_effect=exc)
+        else:
+            client.get = AsyncMock(return_value=resp)
+        strategy._get_http_client = MagicMock(return_value=client)
+        return client
+
+    def test_http_200_open_true(self):
+        """Executor 200 + open:true → True (position exists)."""
+        strategy, _, _, _, _, _ = self._make_executor_strategy()
+        self._stub_http_client(strategy, 200, {"open": True})
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is True
+
+    def test_http_200_open_false(self):
+        """Executor 200 + open:false → False (confirmed no position)."""
+        strategy, _, _, _, _, _ = self._make_executor_strategy()
+        self._stub_http_client(strategy, 200, {"open": False})
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is False
+
+    def test_http_error_returns_none(self):
+        """HTTP 404/500 → None (cannot verify, do not act)."""
+        strategy, _, _, _, _, _ = self._make_executor_strategy()
+        self._stub_http_client(strategy, status_code=404)
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is None
+
+    def test_network_error_returns_none(self):
+        """Connection failure → None (cannot verify, do not act)."""
+        strategy, _, _, _, _, _ = self._make_executor_strategy()
+        self._stub_http_client(strategy, exc=RuntimeError("connection refused"))
+        result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
+        assert result is None
+
+    def test_close_false_resets_ghost_state(self):
+        """CLOSE + executor confirmed no position → reset local state, no close."""
+        pos = _make_position(direction="LONG")
+        strategy, _, persistence, _, _, _ = self._make_executor_strategy()
+        strategy.current_position = pos
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE", confidence="HIGH",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+        ))
+        assert result is None
+        assert strategy.current_position is None
+        persistence.async_save_position.assert_called_with(None)
+
+    def test_close_none_keeps_position(self):
+        """CLOSE + unverifiable executor → skip close, keep local state."""
+        pos = _make_position(direction="LONG")
+        strategy, _, persistence, _, _, _ = self._make_executor_strategy()
+        strategy.current_position = pos
+        strategy._executor_has_position = AsyncMock(return_value=None)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="CLOSE", confidence="HIGH",
+            stop_loss=None, take_profit=None,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+        ))
+        assert result is None
+        assert strategy.current_position is pos
+        persistence.async_save_position.assert_not_called()
+
+    def test_update_false_resets_ghost_state(self):
+        """UPDATE + executor confirmed no position → reset local state, no update."""
+        pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = self._make_executor_strategy()
+        strategy.current_position = pos
+        strategy._executor_has_position = AsyncMock(return_value=False)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=93.0, take_profit=115.0,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+        ))
+        assert result is None
+        assert strategy.current_position is None
+        persistence.async_save_position.assert_called_with(None)
+
+    def test_update_none_keeps_position(self):
+        """UPDATE + unverifiable executor → skip update, keep local state."""
+        pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
+        strategy, _, persistence, _, _, _ = self._make_executor_strategy()
+        strategy.current_position = pos
+        strategy._executor_has_position = AsyncMock(return_value=None)
+
+        result = asyncio.run(strategy._handle_existing_position(
+            signal="UPDATE", confidence="MEDIUM",
+            stop_loss=93.0, take_profit=115.0,
+            current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+        ))
+        assert result is None
+        assert strategy.current_position is pos
+        persistence.async_save_position.assert_not_called()
 
 
 # ═════════════════════════════════════════════════════════════════

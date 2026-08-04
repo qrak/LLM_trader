@@ -164,3 +164,32 @@ note = keep 20% buffer                  # literal percent in value is valid
         ]
         assert cfg._config_data["risk_management"]["sl_tightening_scalping"] == 0.25
         assert cfg._config_data["cooldowns"]["file_message_expiry"] == 168
+
+
+class TestExecutorMaxPositionConfig:
+    """EXECUTOR_MAX_POSITION_USDC property — coercion and defaults."""
+
+    @staticmethod
+    def _make_cfg(max_value):
+        from src.config import loader
+
+        cfg = loader.Config.__new__(loader.Config)
+        cfg._config_data = {}
+        cfg._config_data["executor_api"] = {"max_position_usdc": max_value}
+        return cfg
+
+    def test_parses_float_value(self):
+        cfg = self._make_cfg("100.0")
+        assert cfg.EXECUTOR_MAX_POSITION_USDC == 100.0
+        assert isinstance(cfg.EXECUTOR_MAX_POSITION_USDC, float)
+
+    def test_defaults_to_zero_when_absent(self):
+        from src.config import loader
+
+        cfg = loader.Config.__new__(loader.Config)
+        cfg._config_data = {}  # no executor_api section at all
+        assert cfg.EXECUTOR_MAX_POSITION_USDC == 0.0
+
+    def test_non_numeric_value_falls_back_to_zero(self):
+        cfg = self._make_cfg("not-a-number")
+        assert cfg.EXECUTOR_MAX_POSITION_USDC == 0.0

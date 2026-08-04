@@ -717,6 +717,20 @@ class Config:
         """URL of the llm_trader_executor REST API."""
         return self.get_config("executor_api", "url", "http://127.0.0.1:9199/decision")
 
+    @property
+    def EXECUTOR_MAX_POSITION_USDC(self) -> float:
+        """Hard cap on position notional forwarded to the executor (USDC).
+
+        0/absent = no clamp (let the executor enforce its own limit).
+        When set, entry sizing is scaled down so quantity × price never
+        exceeds this value — prevents the executor rejecting every BUY
+        with "Notional X exceeds max Y".
+        """
+        try:
+            return float(self.get_config("executor_api", "max_position_usdc", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+
     # ── Codebase Vector Index ────────────────────────────────────────────────
     @property
     def CODEBASE_INDEX_ENABLED(self) -> bool:

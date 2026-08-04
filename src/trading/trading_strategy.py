@@ -660,10 +660,33 @@ class TradingStrategy:
         final_tp = risk_assessment.take_profit
         final_size_pct = risk_assessment.size_pct
         quantity = risk_assessment.quantity
+        quote_amount = risk_assessment.quote_amount
         entry_fee = risk_assessment.entry_fee
         sl_distance_pct = risk_assessment.sl_distance_pct
         tp_distance_pct = risk_assessment.tp_distance_pct
         rr_ratio = risk_assessment.rr_ratio
+
+        # --- Executor notional clamp ---
+        # The executor (llm_trader_executor) rejects entries whose notional
+        # (quantity × price) exceeds its MAX_POSITION_SIZE_USDC. Clamp locally
+        # so the bot never sends an order the executor will refuse — otherwise
+        # the bot records an open position that never executed (ghost position).
+        executor_max = float(getattr(self.config, "EXECUTOR_MAX_POSITION_USDC", 0.0) or 0.0)
+        if executor_max > 0 and quantity > 0 and current_price > 0:
+            notional = quantity * current_price
+            if notional > executor_max:
+                scale = executor_max / notional
+                old_quantity = quantity
+                quantity = quantity * scale
+                final_size_pct = final_size_pct * scale
+                quote_amount = quote_amount * scale
+                entry_fee = entry_fee * scale
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                    "Executor notional clamp: $%.2f exceeds max $%.2f — "
+                    "scaling qty %.6f→%.6f, size %.2f%%→%.2f%%",
+                    notional, executor_max, old_quantity, quantity,
+                    risk_assessment.size_pct * 100, final_size_pct * 100,
+                )
 
         self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)  # type: ignore[reportOptionalMemberAccess]
         self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)  # type: ignore[reportOptionalMemberAccess]
@@ -723,15 +746,15 @@ class TradingStrategy:
             entry_price=risk_assessment.entry_price,
             stop_loss=risk_assessment.stop_loss,
             take_profit=risk_assessment.take_profit,
-            size=risk_assessment.quantity,
+            size=quantity,
             entry_time=datetime.now(timezone.utc),
             confidence=confidence,
             direction=direction,
             symbol=symbol,
             confluence_factors=confluence_factors,
-            entry_fee=risk_assessment.entry_fee,
-            quote_amount=risk_assessment.quote_amount,
-            size_pct=risk_assessment.size_pct,
+            entry_fee=entry_fee,
+            quote_amount=quote_amount,
+            size_pct=final_size_pct,
             atr_at_entry=_mc.atr,
             volatility_level=risk_assessment.volatility_level,
             sl_distance_pct=risk_assessment.sl_distance_pct,
@@ -801,7 +824,7 @@ class TradingStrategy:
             stop_loss=final_sl,
             take_profit=final_tp,
             position_size=final_size_pct,
-            quote_amount=risk_assessment.quote_amount,
+            quote_amount=quote_amount,
             quantity=quantity,
             fee=entry_fee,
             reasoning=reasoning,
