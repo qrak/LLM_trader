@@ -1,9 +1,6 @@
-from pathlib import Path
 import json
-import tempfile
-import pytest
 
-from scripts.fix_sarif import fix_sarif, sanitize_level, fix_uri, main
+from scripts.fix_sarif import fix_sarif, main, sanitize_level
 
 
 def test_sanitize_level():
