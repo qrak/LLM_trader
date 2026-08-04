@@ -145,6 +145,39 @@ class TestHandle:
         handler._forward.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_clears_stale_fallback_file_on_forward_success(self):
+        """Successful HTTP forward must clear the stale latest_decision.json.
+
+        Regression guard: the fallback file from a past HTTP outage lingered
+        forever (only written on failure), so the executor's file poller kept
+        re-reading an old decision and reporting "Already executed".
+        """
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=True)
+        handler._persistence.clear_latest_decision = AsyncMock()
+
+        decision = _make_decision()
+        await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
+
+        handler._persist.assert_not_called()
+        handler._forward.assert_awaited_once()
+        handler._persistence.clear_latest_decision.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_does_not_clear_fallback_file_on_forward_failure(self):
+        """On forward failure the file fallback must remain (it is the fallback)."""
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=False)
+
+        decision = _make_decision()
+        await handler.handle({"signal": "BUY"}, decision, "BTC/USDC")
+
+        handler._persist.assert_called_once()
+        handler._persistence.clear_latest_decision.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_skips_none_analysis(self):
         handler = _make_handler()
         handler._persist = MagicMock()

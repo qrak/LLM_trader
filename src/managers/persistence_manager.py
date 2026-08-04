@@ -525,6 +525,22 @@ class PersistenceManager:
             self.logger.error("Error saving latest decision: %s", e, exc_info=True)  # noqa: G201
             raise
 
+    def clear_latest_decision(self) -> None:
+        """Remove the fallback decision file after a successful HTTP forward.
+
+        The file is only meant as an offline fallback. Leaving a stale copy
+        behind (e.g. from a past HTTP outage) makes the executor's file poller
+        re-read an old decision on every restart and report a confusing
+        "Already executed (duplicate content hash)" block.
+        """
+        try:
+            decision_path = self.data_dir / "latest_decision.json"
+            if decision_path.exists():
+                decision_path.unlink()
+                self.logger.debug("Cleared stale latest_decision.json fallback")
+        except OSError as e:
+            self.logger.warning("Failed to clear latest_decision.json: %s", e)
+
     async def async_load_previous_response(self) -> dict[str, Any] | None:
         """Non-blocking load_previous_response: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.load_previous_response)

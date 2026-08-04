@@ -92,6 +92,17 @@ class ExecutorHandler:
         # Bolt: skip disk file write when HTTP primary path succeeds (executor reachable)
         if not forward_success:
             self._persist(payload)
+        else:
+            # HTTP path delivered the decision — remove any stale fallback file
+            # so the executor's file poller doesn't re-read an old decision on
+            # every restart ("Already executed (duplicate content hash)").
+            try:
+                self._persistence.clear_latest_decision()
+            except Exception:
+                self.logger.warning(
+                    "Failed to clear stale latest_decision.json after successful forward",
+                    exc_info=True,
+                )
 
     # ── internal ──────────────────────────────────────────────────────────
 
