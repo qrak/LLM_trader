@@ -1279,3 +1279,94 @@ class TestSlWideningDirectionalLogs:
         assert updated is True
         widening_logs = [c for c in logger.info.call_args_list if "Widening" in str(c) and "LONG" in str(c)]
         assert len(widening_logs) > 0
+
+
+class TestEntryRollback:
+    """Entry confirmation: the executor processes orders asynchronously, so a
+    queued entry may still be blocked. rollback_blocked_entry() must roll back
+    the local phantom (and record a compensating CLOSE) only when the executor
+    explicitly and repeatedly reports no position after an HTTP-delivered
+    forward — never on file-fallback delivery or transient query errors.
+    """
+
+    @pytest.mark.asyncio
+    async def test_confirm_true_when_executor_confirms(self):
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_false_when_stably_no_position(self):
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(return_value=False)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC") is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_fail_open_on_query_errors(self):
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(return_value=None)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_true_after_transient_errors_then_confirmed(self):
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(side_effect=[None, None, True])
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 5), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
+
+    @pytest.mark.asyncio
+    async def test_rollback_noop_without_position(self):
+        strategy, _, persistence, *_ = _make_strategy(current_position=None)
+        await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=True)
+        persistence.async_save_position.assert_not_called()
+        persistence.async_save_trade_decision.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rollback_noop_when_forward_undelivered(self):
+        """File-fallback delivery may execute later — never roll back."""
+        strategy, _, persistence, *_ = _make_strategy(current_position=_make_position())
+        strategy._executor_has_position = AsyncMock(return_value=False)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=False)
+        strategy._executor_has_position.assert_not_called()
+        persistence.async_save_position.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rollback_keeps_position_when_executor_confirms(self):
+        pos = _make_position()
+        strategy, _, persistence, *_ = _make_strategy(current_position=pos)
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=True)
+        assert strategy.current_position is pos
+        persistence.async_save_position.assert_not_called()
+        persistence.async_save_trade_decision.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_rollback_blocked_clears_position_and_records_close(self):
+        pos = _make_position()
+        strategy, logger, persistence, *_ = _make_strategy(current_position=pos)
+        strategy._executor_has_position = AsyncMock(return_value=False)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=True)
+        assert strategy.current_position is None
+        persistence.async_save_position.assert_awaited_once_with(None)
+        decision = persistence.async_save_trade_decision.call_args.args[0]
+        assert decision.action == "CLOSE"
+        assert decision.symbol == "BTC/USDC"
+        assert decision.quantity == pos.size
+        assert decision.price == pos.entry_price
+        assert decision.fee == 0.0
+        assert "blocked" in (decision.reasoning or "").lower()
+        rollback_logs = [c for c in logger.warning.call_args_list if "rolled back local phantom" in str(c)]
+        assert len(rollback_logs) > 0

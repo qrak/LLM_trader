@@ -28,6 +28,18 @@ if TYPE_CHECKING:
     from .market_conditions_extractor import MarketConditionsExtractor
 
 
+# Entry confirmation: after forwarding an entry order, poll the executor's
+# /position endpoint until it confirms the order was actually opened. The
+# executor processes /decision asynchronously (queue → SafetyGuard → exchange),
+# so give it room: attempts × delay comfortably exceeds its 10s poll interval.
+ENTRY_CONFIRM_ATTEMPTS = 10
+ENTRY_CONFIRM_DELAY = 2.5
+# A blocked order must survive at least this many explicit "no position"
+# reports before we roll back the local phantom — guards against rolling back
+# a queued-but-not-yet-processed order.
+ENTRY_CONFIRM_MIN_FALSE_REPORTS = 2
+
+
 class TradingStrategy:
     """Manages trading positions and decision execution based on AI analysis."""
 
@@ -532,6 +544,95 @@ class TradingStrategy:
                 symbol, exc_info=True,
             )
             return None
+
+    async def confirm_entry_with_executor(self, symbol: str) -> bool:
+        """Poll the executor until it confirms a queued entry order opened.
+
+        The executor processes ``/decision`` asynchronously (queue → SafetyGuard
+        → exchange), so a successful HTTP forward does NOT mean the order
+        executed. This polls ``/position`` until:
+
+        - the executor reports the position open → True (confirmed)
+        - it explicitly and repeatedly reports no position → False (blocked:
+          confidence, notional, dedup, order type, insufficient funds)
+        - verification stays inconclusive (query errors) → True (fail-open:
+          never roll back a possibly-live order because the API hiccuped)
+        """
+        false_reports = 0
+        for _ in range(ENTRY_CONFIRM_ATTEMPTS):
+            state = await self._executor_has_position(symbol)
+            if state is True:
+                return True
+            if state is False:
+                false_reports += 1
+                if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
+                    break
+            # None → transient query failure; keep polling
+            await asyncio.sleep(ENTRY_CONFIRM_DELAY)
+        if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                "Executor reports no position for %s after %d polls — entry was likely blocked",
+                symbol, ENTRY_CONFIRM_ATTEMPTS,
+            )
+            return False
+        self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+            "Could not verify executor position for %s after %d polls — "
+            "keeping local position (fail-open)",
+            symbol, ENTRY_CONFIRM_ATTEMPTS,
+        )
+        return True
+
+    async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool) -> None:
+        """After forwarding an entry, roll back the local position if the
+        executor rejected the order.
+
+        The bot persists a Position (and records the BUY/SELL row) BEFORE the
+        executor processes the order. If the executor then blocks it (silent
+        ``Blocked`` on its console), the bot would manage a phantom position
+        forever. This verification runs right after the forward:
+
+        - ``forward_delivered=False`` → the order went to the file fallback and
+          may still execute later; never roll back a possibly-live order.
+        - executor confirms the position → nothing to do.
+        - executor explicitly reports no position → roll back the phantom and
+          record a compensating CLOSE so trade history stays paired/truthful.
+        """
+        if self.current_position is None:
+            return
+        if not forward_delivered:
+            return
+        if await self.confirm_entry_with_executor(symbol):
+            return
+        entry = self.current_position
+        self.current_position = None
+        await self.persistence.async_save_position(None)
+        await self._record_blocked_entry_close(entry)
+        self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+            "Executor blocked %s entry for %s (no position after forward) — "
+            "rolled back local phantom position and recorded compensating CLOSE.",
+            entry.direction, symbol,
+        )
+
+    async def _record_blocked_entry_close(self, entry: Position) -> None:
+        """Record a compensating CLOSE row for an executor-blocked entry."""
+        decision = TradeDecision(
+            timestamp=datetime.now(timezone.utc),
+            symbol=entry.symbol,
+            action="CLOSE",
+            confidence=entry.confidence,
+            price=entry.entry_price,
+            stop_loss=entry.stop_loss,
+            take_profit=entry.take_profit,
+            position_size=entry.size_pct,
+            quote_amount=entry.quote_amount,
+            quantity=entry.size,
+            fee=0.0,
+            reasoning=(
+                f"Executor blocked the {entry.direction} entry (no position on exchange). "
+                f"Local phantom rolled back; entry recorded {entry.entry_time.isoformat()}."
+            ),
+        )
+        await self._record_trade_decision(decision)
 
     def _audit(
         self,

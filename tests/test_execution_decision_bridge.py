@@ -211,6 +211,40 @@ class TestHandle:
         handler._write_dead_letter.assert_called_once()
         assert handler._write_dead_letter.call_args[0][0]["signal"] == "SELL"
 
+    @pytest.mark.asyncio
+    async def test_handle_returns_true_when_http_delivered(self):
+        """handle() must report HTTP fast-path delivery so callers can verify
+        the entry against /position instead of assuming it executed."""
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=True)
+
+        result = await handler.handle({"signal": "BUY"}, _make_decision(), "BTC/USDC")
+
+        assert result is True
+        handler._persist.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_returns_false_when_file_fallback_used(self):
+        handler = _make_handler()
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock(return_value=False)
+
+        result = await handler.handle({"signal": "BUY"}, _make_decision(), "BTC/USDC")
+
+        assert result is False
+        handler._persist.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handle_returns_false_when_payload_suppressed(self):
+        handler = _make_handler()
+        handler._forward = AsyncMock()
+
+        result = await handler.handle({"signal": "HOLD"}, _make_decision(action="HOLD"), "BTC/USDC")
+
+        assert result is False
+        handler._forward.assert_not_awaited()
+
 
 class TestPersist:
     def test_persist_saves_latest_decision(self):

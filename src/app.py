@@ -346,7 +346,14 @@ class CryptoTradingBot:
         # Forward to executor FIRST — trade execution is the priority
         analysis = result.get("analysis")
         if self.executor_handler is not None and analysis and decision is not None:
-            await self.executor_handler.handle(analysis, decision, self.current_symbol)
+            forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
+            # The executor processes entries asynchronously — verify it actually
+            # opened the position; if it blocked the order, roll back the local
+            # phantom so we never manage a position the exchange doesn't have.
+            if decision.action in ("BUY", "SELL"):
+                await self.trading_strategy.rollback_blocked_entry(
+                    self.current_symbol, forward_delivered
+                )
 
         # Then notify and persist (best-effort, non-critical)
         await self._send_discord_notification(result)

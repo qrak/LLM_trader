@@ -63,15 +63,21 @@ class ExecutorHandler:
         analysis: dict[str, Any],
         strategy_decision: TradeDecision | None,
         symbol: str,
-    ) -> None:
+    ) -> bool:
         """Full pipeline: build payload, persist to file, HTTP-forward.
 
         When ``strategy_decision.action == "HOLD"`` the payload is suppressed
         entirely — no file write, no HTTP call.
+
+        Returns:
+            True when the payload was delivered via the HTTP fast path
+            (executor reachable and queued). False when it was suppressed,
+            written to the file fallback, or dead-lettered — callers must
+            NOT treat a False as "order will never execute".
         """
         payload = self._build(analysis, strategy_decision, symbol)
         if payload is None:
-            return
+            return False
 
         forward_success = False
         try:
@@ -103,6 +109,7 @@ class ExecutorHandler:
                     "Failed to clear stale latest_decision.json after successful forward",
                     exc_info=True,
                 )
+        return forward_success
 
     # ── internal ──────────────────────────────────────────────────────────
 
