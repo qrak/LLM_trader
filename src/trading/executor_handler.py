@@ -69,12 +69,19 @@ class ExecutorHandler:
         When ``strategy_decision.action == "HOLD"`` the payload is suppressed
         entirely — no file write, no HTTP call.
 
+        When the executor is disabled in config (``EXECUTOR_API_ENABLED=False``)
+        nothing is produced at all — no HTTP forward AND no file fallback. A
+        live executor process polls ``latest_decision.json``; writing the
+        fallback while "disabled" would still deliver decisions to it.
+
         Returns:
             True when the payload was delivered via the HTTP fast path
             (executor reachable and queued). False when it was suppressed,
             written to the file fallback, or dead-lettered — callers must
             NOT treat a False as "order will never execute".
         """
+        if not self._config.EXECUTOR_API_ENABLED:
+            return False
         payload = self._build(analysis, strategy_decision, symbol)
         if payload is None:
             return False

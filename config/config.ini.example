@@ -124,8 +124,9 @@ sl_tightening_min_samples = 10       # min paired samples before brain override
 # === Executor API ===
 # Forward trading decisions to the separate llm_trader_executor service
 # (https://github.com/qrak/llm_trader_executor) which executes real exchange
-# orders via CCXT. File-based fallback (latest_decision.json) still works
-# when the executor is offline or disabled.
+# orders via CCXT. When disabled, the bot is pure paper/sim — NO HTTP forward
+# and NO latest_decision.json file fallback is written (a live executor would
+# poll that file and execute decisions despite the disable).
 [executor_api]
 enabled = true
 url = http://127.0.0.1:9199/decision

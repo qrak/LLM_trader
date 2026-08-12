@@ -225,6 +225,22 @@ class TestHandle:
         handler._persist.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_handle_disabled_writes_nothing(self):
+        """When the executor is disabled in config, handle() must produce
+        NOTHING — no HTTP forward AND no file fallback. A live executor
+        process polls latest_decision.json; writing it while "disabled"
+        would still deliver decisions to the executor."""
+        handler = _make_handler(executor_enabled=False)
+        handler._persist = MagicMock()
+        handler._forward = AsyncMock()
+
+        result = await handler.handle({"signal": "BUY"}, _make_decision(), "BTC/USDC")
+
+        assert result is False
+        handler._forward.assert_not_awaited()
+        handler._persist.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_handle_returns_false_when_file_fallback_used(self):
         handler = _make_handler()
         handler._persist = MagicMock()
