@@ -130,6 +130,12 @@ sl_tightening_min_samples = 10       # min paired samples before brain override
 [executor_api]
 enabled = true
 url = http://127.0.0.1:9199/decision
+# Verdict journal: JSONL file the executor appends one outcome line per
+# processed decision to, keyed by the bot's order_id (executed/blocked/error
+# + reason). The bot reads this to confirm what happened to ITS order instead
+# of polling /position and guessing. Must match the executor's
+# LLM_TRADER_VERDICT_PATH env var (default: sibling of latest_decision.json).
+verdict_path = data/trading/executor_verdicts.jsonl
 # Hard cap on entry notional forwarded to the executor (USDC).
 # 0 = no clamp — the executor enforces its own MAX_POSITION_SIZE_USDC limit.
 # Only set this if you want the bot to size DOWN before sending (e.g. to match

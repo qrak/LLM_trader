@@ -191,6 +191,7 @@ class ExecutorHandler:
             "symbol": str(symbol),
             "signal": str(signal),
             "order_type": str(self._config.ENTRY_ORDER_TYPE),
+            "order_id": str(strategy_decision.order_id) if strategy_decision.order_id else None,
             "quantity": _to_float(raw_qty, 0.0) or 0.0,
             "entry_price": _to_float(raw_price),
             "stop_loss": _to_float(raw_sl),

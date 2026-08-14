@@ -1296,6 +1296,81 @@ class TestEntryRollback:
         assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
 
     @pytest.mark.asyncio
+    async def test_confirm_via_verdict_journal_executed(self, tmp_path):
+        """order_id present + journal says executed → keep position."""
+        strategy, *_ = _make_strategy()
+        journal = tmp_path / "executor_verdicts.jsonl"
+        journal.write_text(
+            '{"order_id": "order-abc", "verdict": "executed", "reason": ""}\n',
+            encoding="utf-8",
+        )
+        strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_via_verdict_journal_blocked(self, tmp_path):
+        """order_id present + journal says blocked → roll back (False)."""
+        strategy, *_ = _make_strategy()
+        journal = tmp_path / "executor_verdicts.jsonl"
+        journal.write_text(
+            '{"order_id": "order-abc", "verdict": "blocked", "reason": "Notional exceeds max"}\n',
+            encoding="utf-8",
+        )
+        strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_via_verdict_journal_error(self, tmp_path):
+        """order_id present + journal says error → roll back (False)."""
+        strategy, *_ = _make_strategy()
+        journal = tmp_path / "executor_verdicts.jsonl"
+        journal.write_text(
+            '{"order_id": "order-abc", "verdict": "error", "reason": "insufficient funds"}\n',
+            encoding="utf-8",
+        )
+        strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_via_verdict_journal_no_entry_fail_open(self, tmp_path):
+        """order_id present but no journal entry (executor not yet processed /
+        journal missing) → fail-open True, never roll back a possibly-live order."""
+        strategy, *_ = _make_strategy()
+        missing = tmp_path / "does_not_exist.jsonl"
+        strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(missing))
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_via_verdict_journal_late_verdict(self, tmp_path):
+        """2026-08-11 race regression via journal: executor writes the verdict
+        after several polls (its 10s queue tick) — must keep polling, not roll
+        back on absence. A verdict appearing on poll 3 → True."""
+        strategy, *_ = _make_strategy()
+        journal = tmp_path / "executor_verdicts.jsonl"
+        strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
+
+        async def delayed_write():
+            # Simulate executor main loop tick landing after ~2 polls
+            await asyncio.sleep(0.005)
+            journal.write_text(
+                '{"order_id": "order-abc", "verdict": "executed", "reason": ""}\n',
+                encoding="utf-8",
+            )
+
+        task = asyncio.create_task(delayed_write())
+        try:
+            with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
+                 patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.002):
+                assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
+        finally:
+            task.cancel()
+
+    @pytest.mark.asyncio
     async def test_confirm_false_when_stably_no_position(self):
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(return_value=False)
@@ -1303,6 +1378,36 @@ class TestEntryRollback:
              patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
              patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is False
+
+    @pytest.mark.asyncio
+    async def test_confirm_true_when_executor_slow_to_process(self):
+        """2026-08-11 race regression: the executor polls its queue every 10s,
+        so a freshly forwarded entry legitimately reports 'no position' for
+        several polls before the next tick processes it. With the old
+        MIN_FALSE_REPORTS=2 the bot gave up after ~5s, rolled back the phantom,
+        and recorded a compensating CLOSE — while the executor then executed
+        the SHORT 6s later, leaving a real position the bot no longer tracked.
+        MIN_FALSE_REPORTS=6 (15s) must outlast the 10s tick: a few early False
+        reports followed by a confirmed position → True, no rollback."""
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(
+            side_effect=[False, False, False, False, True]  # executor's tick lands on poll 5
+        )
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_false_when_executor_really_blocked(self):
+        """True block: position never appears within the 15s window → rollback."""
+        strategy, *_ = _make_strategy()
+        strategy._executor_has_position = AsyncMock(return_value=False)
+        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
+             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+            assert await strategy.confirm_entry_with_executor("BTC/USDC") is False
+        assert strategy._executor_has_position.await_count == 6
 
     @pytest.mark.asyncio
     async def test_confirm_fail_open_on_query_errors(self):

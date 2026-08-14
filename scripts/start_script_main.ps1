@@ -52,7 +52,7 @@ if (-not $SkipInstall) {
     if (Test-Path $RequirementsPath) {
         Write-Output "Checking installed packages against requirements.txt..."
         $reqs = Get-Content $RequirementsPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($_ -match '^(\s*#)') }
-        $installed = & pip freeze
+        $installed = & python -m pip freeze
         $missing = @()
         foreach ($req in $reqs) {
             $name = ($req -split '[=<>!~]')[0].Trim()
@@ -71,8 +71,8 @@ if (-not $SkipInstall) {
         else {
             Write-Output "Missing or mismatched requirements detected:`n$missing"
             Write-Output "Installing/updating dependencies from requirements.txt..."
-            pip install --upgrade pip
-            pip install -r $RequirementsPath
+            python -m pip install --upgrade pip
+            python -m pip install -r $RequirementsPath
         }
     }
     else {

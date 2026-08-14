@@ -2,8 +2,10 @@
 
 import asyncio
 import dataclasses
+import json
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
@@ -30,14 +32,21 @@ if TYPE_CHECKING:
 
 # Entry confirmation: after forwarding an entry order, poll the executor's
 # /position endpoint until it confirms the order was actually opened. The
-# executor processes /decision asynchronously (queue → SafetyGuard → exchange),
-# so give it room: attempts × delay comfortably exceeds its 10s poll interval.
+# executor processes /decision asynchronously (queue → SafetyGuard → exchange)
+# on a POLL_INTERVAL_SECONDS=10s main-loop tick, so the confirmation window
+# must OUTLAST one full tick — otherwise a freshly-queued order looks
+# "blocked" when it simply hasn't been processed yet.
 ENTRY_CONFIRM_ATTEMPTS = 10
 ENTRY_CONFIRM_DELAY = 2.5
 # A blocked order must survive at least this many explicit "no position"
 # reports before we roll back the local phantom — guards against rolling back
 # a queued-but-not-yet-processed order.
-ENTRY_CONFIRM_MIN_FALSE_REPORTS = 2
+#
+# 2026-08-11 incident: MIN was 2 (≈5s window) but the executor's queue tick
+# is 10s — the bot gave up and rolled back a SHORT that the executor executed
+# 6s later. 6 reports × 2.5s = 15s > 10s tick + exchange round-trip, so a
+# legitimately queued order is confirmed before the rollback can fire.
+ENTRY_CONFIRM_MIN_FALSE_REPORTS = 6
 
 
 class TradingStrategy:
@@ -545,44 +554,102 @@ class TradingStrategy:
             )
             return None
 
-    async def confirm_entry_with_executor(self, symbol: str) -> bool:
-        """Poll the executor until it confirms a queued entry order opened.
+    async def confirm_entry_with_executor(self, symbol: str, order_id: str | None = None) -> bool:
+        """Confirm a forwarded entry executed, using the verdict journal.
 
-        The executor processes ``/decision`` asynchronously (queue → SafetyGuard
-        → exchange), so a successful HTTP forward does NOT mean the order
-        executed. This polls ``/position`` until:
+        The executor appends one verdict line per processed decision, keyed by
+        the bot's ``order_id`` (written on /decision → queue → main loop →
+        SafetyGuard / execution). Polling this journal answers "what happened
+        to MY order" definitively — unlike polling /position, which only says
+        whether ANY position exists and races the executor's 10s queue tick.
 
-        - the executor reports the position open → True (confirmed)
-        - it explicitly and repeatedly reports no position → False (blocked:
-          confidence, notional, dedup, order type, insufficient funds)
-        - verification stays inconclusive (query errors) → True (fail-open:
-          never roll back a possibly-live order because the API hiccuped)
+        Returns:
+            True if the executor reports ``executed`` (or the journal is
+            unreadable/absent — fail-open: never roll back a possibly-live
+            order because a log file hiccuped).
+            False only when the executor explicitly recorded ``blocked`` or
+            ``error`` for THIS order_id.
         """
-        false_reports = 0
-        for _ in range(ENTRY_CONFIRM_ATTEMPTS):
-            state = await self._executor_has_position(symbol)
-            if state is True:
-                return True
-            if state is False:
-                false_reports += 1
-                if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
-                    break
-            # None → transient query failure; keep polling
-            await asyncio.sleep(ENTRY_CONFIRM_DELAY)
-        if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
+        if not order_id:
+            # No correlation id (legacy decision / journal disabled): fall back
+            # to /position polling.
+            false_reports = 0
+            polls = 0
+            for _ in range(ENTRY_CONFIRM_ATTEMPTS):
+                polls += 1
+                state = await self._executor_has_position(symbol)
+                if state is True:
+                    return True
+                if state is False:
+                    false_reports += 1
+                    if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
+                        break
+                # None → transient query failure; keep polling
+                await asyncio.sleep(ENTRY_CONFIRM_DELAY)
+            if false_reports >= ENTRY_CONFIRM_MIN_FALSE_REPORTS:
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                    "Executor reports no position for %s after %d polls — entry was likely blocked",
+                    symbol, polls,
+                )
+                return False
             self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
-                "Executor reports no position for %s after %d polls — entry was likely blocked",
-                symbol, ENTRY_CONFIRM_ATTEMPTS,
+                "Could not verify executor position for %s after %d polls — "
+                "keeping local position (fail-open)",
+                symbol, polls,
             )
-            return False
+            return True
+
+        for _ in range(ENTRY_CONFIRM_ATTEMPTS):
+            verdict = self._read_executor_verdict(order_id)
+            if verdict == "executed":
+                return True
+            if verdict in ("blocked", "error"):
+                self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                    "Executor verdict for %s: %s — entry was %s",
+                    order_id, verdict,
+                    "blocked" if verdict == "blocked" else "rejected with error",
+                )
+                return False
+            # No verdict yet — executor hasn't processed the queue tick.
+            await asyncio.sleep(ENTRY_CONFIRM_DELAY)
+
         self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
-            "Could not verify executor position for %s after %d polls — "
-            "keeping local position (fail-open)",
-            symbol, ENTRY_CONFIRM_ATTEMPTS,
+            "No executor verdict for %s after %d polls — keeping local position (fail-open)",
+            order_id, ENTRY_CONFIRM_ATTEMPTS,
         )
         return True
 
-    async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool) -> None:
+    def _read_executor_verdict(self, order_id: str) -> str | None:
+        """Read the executor's verdict journal for one order_id.
+
+        Returns ``"executed"`` / ``"blocked"`` / ``"error"``, or None when the
+        journal has no entry for this order yet (or is unreadable — treated as
+        "no verdict yet", the caller fails open).
+        """
+        path = self._executor_verdict_path()
+        try:
+            if not path.exists():
+                return None
+            # Read newest-first: the journal is append-only, so the LAST line
+            # for an order_id is the final verdict.
+            for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+                entry = json.loads(line)
+                if entry.get("order_id") == order_id:
+                    return entry.get("verdict")
+        except (OSError, json.JSONDecodeError):
+            self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                "Failed to read executor verdict journal at %s", path,
+            )
+        return None
+
+    def _executor_verdict_path(self) -> Path:
+        """Filesystem path of the executor's verdict journal."""
+        configured = getattr(self.config, "EXECUTOR_VERDICT_PATH", "")
+        if configured:
+            return Path(configured)
+        return Path("data/trading/executor_verdicts.jsonl")
+
+    async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool, order_id: str | None = None) -> None:
         """After forwarding an entry, roll back the local position if the
         executor rejected the order.
 
@@ -593,15 +660,17 @@ class TradingStrategy:
 
         - ``forward_delivered=False`` → the order went to the file fallback and
           may still execute later; never roll back a possibly-live order.
-        - executor confirms the position → nothing to do.
-        - executor explicitly reports no position → roll back the phantom and
-          record a compensating CLOSE so trade history stays paired/truthful.
+        - executor confirms the position (via verdict journal or /position) →
+          nothing to do.
+        - executor explicitly reports the order blocked/error → roll back the
+          phantom and record a compensating CLOSE so trade history stays
+          paired/truthful.
         """
         if self.current_position is None:
             return
         if not forward_delivered:
             return
-        if await self.confirm_entry_with_executor(symbol):
+        if await self.confirm_entry_with_executor(symbol, order_id=order_id):
             return
         entry = self.current_position
         self.current_position = None
@@ -935,6 +1004,7 @@ class TradingStrategy:
             fee=entry_fee,
             reasoning=reasoning,
             indicators_json=indicators_snapshot,
+            order_id=order_id,
         )
 
         await self._record_trade_decision(decision)

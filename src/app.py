@@ -352,7 +352,8 @@ class CryptoTradingBot:
             # phantom so we never manage a position the exchange doesn't have.
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
-                    self.current_symbol, forward_delivered
+                    self.current_symbol, forward_delivered,
+                    order_id=getattr(decision, "order_id", None),
                 )
 
         # Then notify and persist (best-effort, non-critical)

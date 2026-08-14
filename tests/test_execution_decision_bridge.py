@@ -84,6 +84,25 @@ class TestBuildPayload:
         assert payload["confidence"] == "HIGH"
         assert payload["reasoning"] == "Breakout confirmation"
 
+    def test_payload_carries_order_id(self):
+        """The bot's order_id must reach the executor payload so the verdict
+        journal can correlate outcomes back to the originating decision."""
+        handler = _make_handler()
+        decision = _make_decision(order_id="order-20260811160128949603")
+        payload = handler._build(
+            {"signal": "SELL", "reduce_only": False, "leverage": 1},
+            decision,
+            symbol="BTC/USDC",
+        )
+        assert payload["order_id"] == "order-20260811160128949603"
+
+    def test_payload_order_id_none_when_missing(self):
+        handler = _make_handler()
+        payload = handler._build(
+            {"signal": "BUY"}, _make_decision(order_id=None), symbol="BTC/USDC"
+        )
+        assert payload["order_id"] is None
+
     def test_uses_config_entry_order_type(self):
         handler = _make_handler(entry_order_type="limit")
         decision = _make_decision()

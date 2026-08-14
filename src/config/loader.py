@@ -718,6 +718,18 @@ class Config:
         return self.get_config("executor_api", "url", "http://127.0.0.1:9199/decision")
 
     @property
+    def EXECUTOR_VERDICT_PATH(self) -> str:
+        """Filesystem path of the executor's verdict journal (JSONL).
+
+        The executor appends one outcome line per processed decision, keyed by
+        the bot's order_id. The bot reads this to confirm what happened to its
+        order instead of polling /position and guessing.
+        """
+        return self.get_config(
+            "executor_api", "verdict_path", "data/trading/executor_verdicts.jsonl"
+        )
+
+    @property
     def EXECUTOR_MAX_POSITION_USDC(self) -> float:
         """Hard cap on position notional forwarded to the executor (USDC).
 

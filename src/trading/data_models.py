@@ -113,6 +113,7 @@ class TradeDecision(SerializableMixin):
     fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
     reasoning: str = ""
     indicators_json: str | dict[str, Any] | None = None
+    order_id: str | None = None  # Correlation ID shared with the executor
 
 
 @dataclass(slots=True)
