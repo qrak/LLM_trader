@@ -1,0 +1,60 @@
+---
+import ArticleLayout from '../../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="Vector Memory: How an LLM Trader Remembers Its Mistakes — Semantic Signal"
+	description="How Semantic Signal stores every closed trade as a 768D vector in ChromaDB, retrieves top-5 similar setups before each decision, and uses the Surprise Ratio to separate luck from skill."
+	meta="Article · August 2026 · By @qrak"
+>
+	<span slot="title">Vector Memory: How an LLM Trader Remembers Its Mistakes</span>
+	<p slot="subtitle" class="subtitle">A stateless LLM is just a calculator. This bot keeps a semantic memory of every trade — and reviews its own history before acting.</p>
+
+	<section class="section">
+		<h2>The Problem With Stateless Bots</h2>
+		<p>An LLM without memory treats every decision as if it's the first one ever made. It doesn't know it bought the same breakdown pattern twice before — and lost both times. The first version of this project (December 2025) was exactly that: a stateless prompt pipeline that produced confident, articulate, and consistently wrong decisions.</p>
+		<p>The fix wasn't a better model. It was <strong>architecture</strong>: give the system a brain that actually remembers.</p>
+	</section>
+
+	<section class="section">
+		<h2>Every Trade Becomes a Vector</h2>
+		<p>When a trade closes, its outcome is embedded as a <strong>768-dimensional vector</strong> in ChromaDB using <code>BAAI/bge-base-en-v1.5</code>. Semantic memory lives in four collections:</p>
+		<ul>
+			<li><strong>Trade experiences</strong> — every closed trade with its full context and outcome;</li>
+			<li><strong>Semantic rules</strong> — rules the reflection engine has synthesized from past results;</li>
+			<li><strong>Blocked trades</strong> — signals that were rejected, and why;</li>
+			<li><strong>Confidence statistics</strong> — the system's own track record across market conditions.</li>
+		</ul>
+	</section>
+
+	<section class="section">
+		<h2>Retrieval: "Have I Seen This Before?"</h2>
+		<p>Before each decision, the brain retrieves the <strong>top-5 most similar past trades</strong> plus the rules that match current conditions — scored by vector similarity, evidence quality, and timeframe freshness. The prompt effectively starts with: <em>"Here are five times something like this happened, and here's what happened next."</em></p>
+		<p>That retrieval is what turns the model from a confident guesser into a system that reasons from its own track record.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Surprise Ratio: Separating Luck From Skill</h2>
+		<p>Not all outcomes are equally informative. A support breach that won because of a random news spike teaches the wrong lesson. To handle this, every trade gets a Surprise Ratio:</p>
+		<div class="formula-box">
+			Surprise Ratio = |Realized P&amp;L − Expected P&amp;L| / |Expected P&amp;L|
+		</div>
+		<p>Trades with a surprise ratio <strong>&gt; 1.5</strong> carry a <code>⚠️ high surprise</code> tag in vector memory, so the LLM discounts them in future cycles. The bot learns from what it understood — not from what it got lucky on.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Reflection Engine</h2>
+		<p>Periodically, a reflection pass reviews recent outcomes and <strong>synthesizes new rules</strong> from what worked and what didn't. Rules are semantic — written in natural language, embedded, and retrieved when conditions match. A missed +EV opportunity is treated as mathematically identical to a realized loss, so the system is honest about its omissions too.</p>
+		<p>The result is a loop: act → embed the outcome → retrieve the lesson → act differently. Next cycle, the bot remembers.</p>
+	</section>
+
+	<div class="cta-box">
+		<p>See the memory bank in action — the dashboard streams the top-5 retrievals behind every decision.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
+		<a href="/articles/executor-separation" class="btn btn-secondary">Next: The Executor Separation →</a>
+	</div>
+
+	<div class="disclaimer-box">
+		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Results are simulated unless stated otherwise. Trading crypto carries substantial risk. See the <a href="/disclaimer">full risk disclaimer</a>.
+	</div>
+</ArticleLayout>

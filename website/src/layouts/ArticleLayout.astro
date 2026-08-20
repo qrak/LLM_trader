@@ -1,0 +1,195 @@
+---
+import Layout from './Layout.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+	meta?: string;
+}
+
+const { title, description, meta } = Astro.props;
+---
+
+<Layout title={title} description={description}>
+	<article class="article-container">
+		<header class="article-header">
+			{meta && <div class="meta">{meta}</div>}
+			<h1><slot name="title" /></h1>
+			<slot name="subtitle" />
+		</header>
+
+		<hr class="divider" />
+
+		<slot />
+	</article>
+</Layout>
+
+<style>
+	.article-container {
+		max-width: 800px;
+		margin: 0 auto;
+	}
+
+	.article-header {
+		text-align: center;
+		margin-bottom: 2rem;
+	}
+
+	.meta {
+		color: var(--text-dim);
+		font-size: 0.9rem;
+		font-weight: 500;
+		margin-bottom: 0.5rem;
+	}
+
+	.article-header h1 {
+		font-size: 2.2rem;
+		font-weight: 800;
+		line-height: 1.3;
+		margin-bottom: 1rem;
+	}
+
+	.subtitle {
+		font-size: 1.15rem;
+		color: var(--text-muted);
+	}
+
+	.divider {
+		border: 0;
+		height: 1px;
+		background: var(--border-color);
+		margin: 2rem 0;
+	}
+
+	.section {
+		margin: 3rem 0;
+	}
+
+	h2 {
+		font-size: 1.5rem;
+		font-weight: 700;
+		margin-bottom: 1.25rem;
+		color: var(--accent-emerald);
+	}
+
+	h3 {
+		font-size: 1.2rem;
+		font-weight: 600;
+		margin: 1.5rem 0 0.75rem;
+		color: var(--text-main);
+	}
+
+	p {
+		margin-bottom: 1.25rem;
+		color: #d1d5db;
+		font-size: 1.05rem;
+	}
+
+	ul, ol {
+		margin: 0 0 1.25rem 1.5rem;
+		color: #d1d5db;
+		font-size: 1.05rem;
+	}
+
+	li {
+		margin-bottom: 0.5rem;
+	}
+
+	code {
+		font-family: 'Fira Code', monospace;
+		background: var(--code-bg);
+		padding: 0.2rem 0.4rem;
+		border-radius: 4px;
+		font-size: 0.9em;
+		color: #e5e7eb;
+		border: 1px solid var(--border-color);
+	}
+
+	pre {
+		background: var(--code-bg);
+		padding: 1.25rem;
+		border-radius: 8px;
+		overflow-x: auto;
+		border: 1px solid var(--border-color);
+		margin: 1.5rem 0;
+	}
+
+	pre code {
+		background: transparent;
+		padding: 0;
+		border: none;
+	}
+
+	.formula-box {
+		background: var(--code-bg);
+		border: 1px solid var(--border-accent);
+		padding: 1rem 1.5rem;
+		border-radius: 8px;
+		font-family: 'Fira Code', monospace;
+		font-size: 1.05rem;
+		color: var(--accent-cyan);
+		margin: 1rem 0;
+		text-align: center;
+	}
+
+	.disclaimer-box {
+		background: rgba(245, 158, 11, 0.06);
+		border: 1px solid rgba(245, 158, 11, 0.25);
+		border-radius: 8px;
+		padding: 1.25rem 1.5rem;
+		margin: 2.5rem 0 0;
+		font-size: 0.95rem;
+		color: var(--text-muted);
+	}
+
+	.disclaimer-box strong {
+		color: #fbbf24;
+	}
+
+	.cta-box {
+		background: rgba(16, 185, 129, 0.04);
+		border: 1px solid var(--border-accent);
+		padding: 2rem;
+		border-radius: 12px;
+		text-align: center;
+		margin: 3rem 0 0;
+	}
+
+	.cta-box p {
+		color: var(--text-muted);
+		max-width: 640px;
+		margin: 0 auto 1.25rem;
+	}
+
+	.btn {
+		display: inline-block;
+		padding: 0.75rem 1.5rem;
+		border-radius: 8px;
+		font-weight: 600;
+		font-size: 1rem;
+		transition: all 0.2s ease;
+		margin: 0 0.35rem 0.5rem;
+	}
+
+	.btn-primary {
+		background: var(--accent-emerald);
+		color: #0b0f19;
+	}
+
+	.btn-primary:hover {
+		background: #059669;
+		color: #0b0f19;
+		box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+	}
+
+	.btn-secondary {
+		background: rgba(6, 182, 212, 0.15);
+		color: var(--accent-cyan);
+		border: 1px solid rgba(6, 182, 212, 0.3);
+	}
+
+	.btn-secondary:hover {
+		background: rgba(6, 182, 212, 0.25);
+		color: var(--accent-cyan);
+	}
+</style>

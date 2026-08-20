@@ -116,8 +116,30 @@ import Layout from '../layouts/Layout.astro';
 			In December 2025, I was working 8-hour warehouse shifts in Poland. Tired of subscription "AI bots" that were just simple moving average crossovers, I spent 7 months building a cognitive trading engine with 1,270+ automated tests.
 		</p>
 		<a href="/story" class="read-more-link">Read the Full 7-Month Development History →</a>
-	</section>
-</Layout>
+		</section>
+
+		<section class="articles-section">
+		<h2>From the Blog</h2>
+		<div class="articles-grid">
+			<a href="/articles/chart-vision" class="article-card">
+				<h3>📈 How the Bot Reads Charts</h3>
+				<p>999 candles, 50+ Numba indicators, a 1080p chart image — and an LLM that has to defend its call.</p>
+			</a>
+			<a href="/articles/vector-memory" class="article-card">
+				<h3>🧠 Vector Memory</h3>
+				<p>How 768D embeddings turn closed trades into lessons the bot retrieves before every decision.</p>
+			</a>
+			<a href="/articles/executor-separation" class="article-card">
+				<h3>🛡️ Paper → Real: The Executor</h3>
+				<p>Why reasoning and order execution are separate services, and how the system earns real money.</p>
+			</a>
+		</div>
+		</section>
+
+		<section class="risk-disclaimer">
+		<p><strong>⚠️ Risk disclaimer:</strong> Semantic Signal is an experimental, open-source software project — not financial advice, not a money machine. It currently trades <strong>simulated capital by default</strong>, and trading cryptocurrencies carries substantial risk of loss. <a href="/disclaimer">Read the full disclaimer</a>.</p>
+		</section>
+		</Layout>
 
 <style>
 	.hero {
@@ -301,6 +323,62 @@ import Layout from '../layouts/Layout.astro';
 	.read-more-link {
 		font-weight: 700;
 		font-size: 1.05rem;
+	}
+
+	.articles-section {
+		margin: 4rem 0 2rem;
+	}
+
+	.articles-section h2 {
+		text-align: center;
+		margin-bottom: 1.5rem;
+	}
+
+	.articles-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 1.25rem;
+	}
+
+	.article-card {
+		display: block;
+		background: var(--bg-card);
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		padding: 1.5rem;
+		transition: transform 0.2s ease, border-color 0.2s ease;
+	}
+
+	.article-card:hover {
+		transform: translateY(-4px);
+		border-color: var(--border-accent);
+	}
+
+	.article-card h3 {
+		color: var(--text-main);
+		font-size: 1.05rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.article-card p {
+		color: var(--text-muted);
+		font-size: 0.92rem;
+		line-height: 1.6;
+		margin: 0;
+	}
+
+	.risk-disclaimer {
+		margin: 2rem 0 0;
+		background: rgba(245, 158, 11, 0.06);
+		border: 1px solid rgba(245, 158, 11, 0.25);
+		border-radius: 10px;
+		padding: 1.25rem 1.5rem;
+		font-size: 0.95rem;
+		color: var(--text-muted);
+	}
+
+	.risk-disclaimer strong {
+		color: #fbbf24;
 	}
 
 	@media (max-width: 768px) {

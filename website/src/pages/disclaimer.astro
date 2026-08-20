@@ -1,0 +1,37 @@
+---
+import ArticleLayout from '../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="Risk Disclaimer — Semantic Signal LLM Trader"
+	description="Risk disclaimer for qrak.org: this project is experimental, not financial advice, and trading crypto carries substantial risk."
+	meta="Risk Disclaimer · Last updated: August 20, 2026"
+>
+	<span slot="title">Risk Disclaimer</span>
+	<p slot="subtitle" class="subtitle">Please read this before acting on anything shown on this site.</p>
+
+	<section class="section">
+		<h2>Not Financial Advice</h2>
+		<p>Semantic Signal is an <strong>experimental, open-source software project</strong> created for engineering and educational purposes. Nothing on this website — including the project description, the code, the dashboard, or any articles — constitutes financial advice, investment advice, or a solicitation to buy or sell any asset.</p>
+	</section>
+
+	<section class="section">
+		<h2>This Is Not a Money Machine</h2>
+		<p>The system is an LLM reasoning experiment. It is <strong>not guaranteed to be profitable</strong>, and it can and will lose money. It has lost money on paper during development (the development history documents this openly). Real exchange execution is not yet enabled: the pipeline trades simulated capital by default, and live trading remains disabled until the system proves itself over a sustained period.</p>
+	</section>
+
+	<section class="section">
+		<h2>Paper Results ≠ Live Results</h2>
+		<p>Results shown on the dashboard are <strong>simulated (paper) results</strong>. Paper trading does not involve real order execution: no slippage, no partial fills, no liquidity constraints, no exchange outages. Historical or simulated performance is <strong>not a reliable indicator of future results</strong>.</p>
+	</section>
+
+	<section class="section">
+		<h2>Trading Risk</h2>
+		<p>Trading cryptocurrencies carries substantial risk, including the loss of your entire capital. Markets are volatile and can move against you faster than any automated system can react. Never trade money you cannot afford to lose, and never rely on an automated system without understanding its logic.</p>
+	</section>
+
+	<section class="section">
+		<h2>No Fiduciary Relationship</h2>
+		<p>Use of this site or the software creates no advisory, fiduciary, or professional relationship with the developer. You are solely responsible for your own trading decisions.</p>
+	</section>
+</ArticleLayout>

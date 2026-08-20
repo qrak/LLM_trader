@@ -1,0 +1,75 @@
+---
+import ArticleLayout from '../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="Articles — Semantic Signal LLM Trader"
+	description="Technical articles about the Semantic Signal LLM trading bot: chart vision, vector memory, and the executor separation."
+	meta="Articles · August 2026"
+>
+	<span slot="title">Articles</span>
+	<p slot="subtitle" class="subtitle">Deep dives into how the system actually works — written by the developer, grounded in the code.</p>
+
+	<section class="section">
+		<h2>Latest</h2>
+
+		<div class="article-card">
+			<h3><a href="/articles/chart-vision">How the Bot Reads Charts: From Candles to Conviction</a></h3>
+			<p>The full pipeline from raw market data to a reasoned trading decision — 999 candles, 50+ Numba indicators, a 1080p chart image, and an LLM that has to defend its call.</p>
+		</div>
+
+		<div class="article-card">
+			<h3><a href="/articles/vector-memory">Vector Memory: How an LLM Trader Remembers Its Mistakes</a></h3>
+			<p>Every closed trade becomes a 768-dimensional vector in ChromaDB. Before each decision, the bot reviews its own history — and a math check separates luck from skill.</p>
+		</div>
+
+		<div class="article-card">
+			<h3><a href="/articles/executor-separation">From Paper to Real Money: Why the Executor Is a Separate Service</a></h3>
+			<p>Reasoning and order execution are deliberately decoupled. Why that matters for safety, and how the system is being carried from simulated capital to live exchange orders.</p>
+		</div>
+
+		<div class="article-card">
+			<h3><a href="/story">The Full 7-Month Development Story</a></h3>
+			<p>The complete engineering journey — from stateless prompt experiments in a Wrocław warehouse to a 1,270-test cognitive trading engine.</p>
+		</div>
+	</section>
+
+	<div class="cta-box">
+		<p>See the system in action: the live dashboard streams every decision, prompt, and reasoning step in real time.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
+		<a href="https://github.com/qrak/LLM_trader" target="_blank" class="btn btn-secondary">🐙 GitHub Repository</a>
+	</div>
+</ArticleLayout>
+
+<style>
+	.article-card {
+		background: var(--bg-card);
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		padding: 1.5rem 1.75rem;
+		margin-bottom: 1.25rem;
+		transition: transform 0.2s ease, border-color 0.2s ease;
+	}
+
+	.article-card:hover {
+		transform: translateY(-3px);
+		border-color: var(--border-accent);
+	}
+
+	.article-card h3 {
+		margin: 0 0 0.5rem;
+	}
+
+	.article-card h3 a {
+		color: var(--text-main);
+	}
+
+	.article-card h3 a:hover {
+		color: var(--accent-emerald);
+	}
+
+	.article-card p {
+		margin: 0;
+		font-size: 0.98rem;
+	}
+</style>

@@ -5,6 +5,26 @@ interface Props {
 }
 
 const { title, description = "Semantic Signal LLM Trader — Autonomous AI Trading Agent with Chart Vision, 768D Vector Memory, and Risk Governance" } = Astro.props;
+
+const jsonLd = {
+	"@context": "https://schema.org",
+	"@type": "WebSite",
+	name: "Semantic Signal LLM Trader",
+	url: "https://qrak.org/",
+	description:
+		"Open-source AI trading agent with multimodal chart vision, 768D vector trade memory, and deterministic risk gates. Built by Piotr Kurnicki (@qrak).",
+	inLanguage: "en",
+	author: {
+		"@type": "Person",
+		name: "Piotr Kurnicki",
+		url: "https://qrak.org/about",
+		sameAs: [
+			"https://github.com/qrak",
+			"https://discord.gg/ZC48aTTqR2",
+			"https://www.buymeacoffee.com/qrak",
+		],
+	},
+};
 ---
 
 <!doctype html>
@@ -16,7 +36,14 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="generator" content={Astro.generator} />
 		<title>{title}</title>
-		
+
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="Semantic Signal LLM Trader" />
+
+		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -31,6 +58,9 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 				<nav class="nav-links">
 					<a href="/">Home</a>
 					<a href="/story">Full Story & Tech</a>
+					<a href="/articles">Articles</a>
+					<a href="/about">About</a>
+					<a href="/contact">Contact</a>
 					<a href="https://semanticsignal.qrak.org" target="_blank" class="live-btn">📊 Live Dashboard</a>
 					<a href="https://github.com/qrak/LLM_trader" target="_blank" class="github-btn">🐙 GitHub</a>
 				</nav>
@@ -45,6 +75,11 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 			<div class="footer-container">
 				<p>© 2026 Semantic Signal by <a href="https://qrak.org" target="_blank">@qrak</a>. Built with ☕ and no sleep in Wrocław, Poland.</p>
 				<div class="footer-links">
+					<a href="/about">About</a>
+					<a href="/articles">Articles</a>
+					<a href="/contact">Contact</a>
+					<a href="/privacy-policy">Privacy Policy</a>
+					<a href="/disclaimer">Risk Disclaimer</a>
 					<a href="https://github.com/qrak/LLM_trader" target="_blank">GitHub</a>
 					<a href="https://semanticsignal.qrak.org" target="_blank">Dashboard</a>
 					<a href="https://discord.gg/ZC48aTTqR2" target="_blank">Discord</a>
@@ -52,6 +87,36 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 				</div>
 			</div>
 		</footer>
+
+		<div id="cookie-banner" class="cookie-banner" role="dialog" aria-label="Cookie consent">
+			<p>This site uses essential cookies for delivery and security, and — if you consent — advertising cookies from Google AdSense. <a href="/privacy-policy">Privacy Policy</a></p>
+			<div class="cookie-actions">
+				<button id="cookie-accept" class="cookie-btn cookie-btn-primary">Accept</button>
+				<button id="cookie-decline" class="cookie-btn">Decline</button>
+			</div>
+		</div>
+
+		<script is:inline>
+			(function () {
+				var KEY = "ss_cookie_consent";
+				var banner = document.getElementById("cookie-banner");
+				if (!banner) return;
+				if (localStorage.getItem(KEY)) {
+					banner.remove();
+					return;
+				}
+				function setConsent(value) {
+					try {
+						localStorage.setItem(KEY, value);
+					} catch (e) {}
+					banner.remove();
+				}
+				var accept = document.getElementById("cookie-accept");
+				var decline = document.getElementById("cookie-decline");
+				if (accept) accept.addEventListener("click", function () { setConsent("accepted"); });
+				if (decline) decline.addEventListener("click", function () { setConsent("declined"); });
+			})();
+		</script>
 	</body>
 </html>
 
@@ -135,7 +200,9 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 	.nav-links {
 		display: flex;
 		align-items: center;
-		gap: 1.5rem;
+		gap: 1.25rem;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
 	.nav-links a {
@@ -203,6 +270,68 @@ const { title, description = "Semantic Signal LLM Trader — Autonomous AI Tradi
 	.footer-links {
 		display: flex;
 		gap: 1.2rem;
+		flex-wrap: wrap;
+	}
+
+	.cookie-banner {
+		position: fixed;
+		bottom: 1rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 200;
+		max-width: 720px;
+		width: calc(100% - 2rem);
+		background: rgba(17, 24, 39, 0.97);
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		padding: 1rem 1.25rem;
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+		font-size: 0.9rem;
+		color: var(--text-muted);
+	}
+
+	.cookie-banner p {
+		flex: 1;
+		min-width: 240px;
+		margin: 0;
+	}
+
+	.cookie-actions {
+		display: flex;
+		gap: 0.6rem;
+	}
+
+	.cookie-btn {
+		background: rgba(255, 255, 255, 0.06);
+		color: var(--text-main);
+		border: 1px solid var(--border-color);
+		padding: 0.45rem 1.1rem;
+		border-radius: 6px;
+		font-size: 0.9rem;
+		font-weight: 600;
+		cursor: pointer;
+		font-family: inherit;
+		transition: all 0.2s ease;
+	}
+
+	.cookie-btn:hover {
+		border-color: var(--border-accent);
+	}
+
+	.cookie-btn-primary {
+		background: var(--accent-emerald);
+		color: #0b0f19;
+		border-color: var(--accent-emerald);
+	}
+
+	.cookie-btn-primary:hover {
+		background: #059669;
+		color: #0b0f19;
 	}
 
 	code {

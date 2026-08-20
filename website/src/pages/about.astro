@@ -1,0 +1,36 @@
+---
+import ArticleLayout from '../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="About — Semantic Signal LLM Trader"
+	description="About Piotr Kurnicki (@qrak): self-taught backend developer from Wrocław, Poland, building an open-source AI trading bot with 1,270+ automated tests."
+	meta="About"
+>
+	<span slot="title">About the Developer</span>
+	<p slot="subtitle" class="subtitle">Self-taught backend developer. AI/LLM specialist. Building autonomous systems after hours in Wrocław, Poland.</p>
+
+	<section class="section">
+		<h2>Who I Am</h2>
+		<p>I'm <strong>Piotr Kurnicki (@qrak)</strong> — a self-taught backend developer with deep AI/LLM expertise. By day I work in warehouse logistics; after hours I build autonomous AI systems. My strength is going deep rather than wide: every line of this codebase was written, tested, and understood by me.</p>
+		<p>Before the warehouse, I worked with <strong>enterprise SAP environments at BSH Sprzęt Gospodarstwa Domowego</strong>, where I learned to navigate complex business processes and enterprise software. That experience taught me how large, mission-critical systems are structured — and what happens when they're built carelessly.</p>
+	</section>
+
+	<section class="section">
+		<h2>What I'm Building Now</h2>
+		<p>Semantic Signal is an open-source, vision-capable AI trading agent: it reads candlestick charts as images, keeps a semantic vector memory of every trade, and reasons with bull/bear debates and deterministic expected-value gates before acting.</p>
+		<p>Right now I'm building the <strong>trade executor</strong> — the dedicated service that carries the system from paper trading to real exchange orders, under the same guard chain that governs the paper pipeline. Capital stays simulated until the pipeline proves itself.</p>
+		<p>More on the project: <a href="/story">the full 7-month development history</a>.</p>
+	</section>
+
+	<section class="section">
+		<h2>Open to Work</h2>
+		<p>I'm looking for a role as a <strong>backend developer (Python/FastAPI)</strong> or <strong>AI/LLM engineer</strong> — ideally where I can apply both my AI knowledge and backend skills, in Wrocław or remote.</p>
+		<p>No university degree — but I bring something better: a public project with <strong>1,270+ automated tests</strong>, zero lint errors, and a <a href="https://semanticsignal.qrak.org" target="_blank">live dashboard</a> you can inspect right now.</p>
+	</section>
+
+	<section class="section">
+		<h2>Contact</h2>
+		<p>Email: <a href="mailto:contact@qrak.org">contact@qrak.org</a> · GitHub: <a href="https://github.com/qrak" target="_blank">@qrak</a> · Discord: <a href="https://discord.gg/ZC48aTTqR2" target="_blank">community server</a></p>
+	</section>
+</ArticleLayout>

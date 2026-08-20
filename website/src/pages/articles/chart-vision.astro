@@ -1,0 +1,61 @@
+---
+import ArticleLayout from '../../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="How the Bot Reads Charts: From Candles to Conviction — Semantic Signal"
+	description="The full Semantic Signal pipeline: CCXT market data, 50+ Numba JIT indicators, a 1080p chart image for Gemini, and a falsification check before any signal is accepted."
+	meta="Article · August 2026 · By @qrak"
+>
+	<span slot="title">How the Bot Reads Charts: From Candles to Conviction</span>
+	<p slot="subtitle" class="subtitle">What actually happens inside a 4-hour analysis cycle — from raw exchange data to a reasoned decision with stop-loss and take-profit levels.</p>
+
+	<section class="section">
+		<h2>The Input: More Than Candles</h2>
+		<p>Most trading bots reduce the market to a handful of indicator values. Semantic Signal starts with a wider picture. Every 4-hour cycle, CCXT pulls <strong>999 candles</strong>, a <strong>50-level order book</strong>, the <strong>funding rate</strong>, and <strong>24-hour volume</strong> from the exchange.</p>
+		<p>The order book matters: it shows counterparty orders, funding rate traps, and liquidity squeezes — dynamics you can't see in a line chart. The bot trains on real market microstructure, not just abstract lines.</p>
+	</section>
+
+	<section class="section">
+		<h2>50+ Indicators in Milliseconds</h2>
+		<p>The indicator engine is written in NumPy and Numba. Every calculation compiles to machine code on first call and caches the result, so <strong>50+ home-grown indicators and dozens of deterministic chart patterns</strong> run in microseconds on a standard CPU — with zero external technical-analysis dependencies.</p>
+		<p>This matters for the LLM step: the model receives a numeric stack it can trust, because every value was computed deterministically and can be cross-checked.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Chart Image: Seeing Like a Human Trader</h2>
+		<p>Plotly renders a <strong>Full HD (1080p) candlestick chart</strong> with SMA, RSI, and volume overlays. That image is sent to Google Gemini alongside the raw indicator values.</p>
+		<p>Why an image at all? Because geometry carries information: the shape of a wick, a volume spike at support, a wedge breakout — patterns a human trader sees at a glance but that are awkward to express as floats. The LLM reads both channels: the picture <em>and</em> the numbers, and every numeric claim it makes is checked against the computed values. Nothing is taken on faith.</p>
+	</section>
+
+	<section class="section">
+		<h2>Fresh Context: News and Community Sentiment</h2>
+		<p>Before reasoning, the cycle ingests up to 5 top articles from live news feeds (CoinDesk, CoinTelegraph, Decrypt) plus Reddit community sentiment — all scraped directly via RSS, with no paid API keys. Fundamentals come from CoinGecko and DeFiLlama, plus the Alternative.me Fear &amp; Greed index.</p>
+		<p>One honest detail: X/Twitter was tried and dropped. Without paid authentication it isn't reliably scrapable, so the bot runs on Reddit + RSS rather than pretending otherwise.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Debate: Bull vs Bear</h2>
+		<p>Gemini argues the <strong>bull case</strong>, then the <strong>bear case</strong>, then evaluates expected value against the bot's own trade history:</p>
+		<div class="formula-box">
+			EV = (Win Rate × Average Win) − ((1 − Win Rate) × Average Loss) − Fees
+		</div>
+		<p>If EV is negative, or the risk-to-reward ratio is under <strong>1.5 R:R</strong>, the signal is rejected outright — this is deterministic math that overrides the LLM, not a suggestion.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Falsification Check</h2>
+		<p>Before any signal is accepted, the LLM must write an explicit price invalidation trigger: the exact condition under which the trade is wrong. If the model cannot defend its call against its own invalidation test, the signal is rejected. A missed +EV opportunity is treated as mathematically identical to a realized loss — the bot is penalized for not trading when it should.</p>
+		<p>The final output is a decision with reasoning, risk parameters, and stop-loss/take-profit levels — all logged to the audit trail, all visible on the <a href="https://semanticsignal.qrak.org" target="_blank">live dashboard</a>.</p>
+	</section>
+
+	<div class="cta-box">
+		<p>Watch a real cycle end-to-end — the dashboard streams every prompt and decision.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
+		<a href="/articles/vector-memory" class="btn btn-secondary">Next: Vector Memory →</a>
+	</div>
+
+	<div class="disclaimer-box">
+		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Results are simulated unless stated otherwise. Trading crypto carries substantial risk. See the <a href="/disclaimer">full risk disclaimer</a>.
+	</div>
+</ArticleLayout>

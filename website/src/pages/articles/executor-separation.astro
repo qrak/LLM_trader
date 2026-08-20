@@ -1,0 +1,53 @@
+---
+import ArticleLayout from '../../layouts/ArticleLayout.astro';
+---
+
+<ArticleLayout
+	title="From Paper to Real Money: Why the Executor Is a Separate Service — Semantic Signal"
+	description="Why Semantic Signal separates reasoning from order execution, how the llm_trader_executor service places orders under a strict guard chain, and how the system moves from simulated to real capital."
+	meta="Article · August 2026 · By @qrak"
+>
+	<span slot="title">From Paper to Real Money: Why the Executor Is a Separate Service</span>
+	<p slot="subtitle" class="subtitle">The engine thinks. The executor acts. Keeping those two apart is the difference between a research prototype and something you'd trust near a real exchange.</p>
+
+	<section class="section">
+		<h2>Two Very Different Jobs</h2>
+		<p>Reasoning and execution have opposite failure modes. Reasoning is slow, deliberate, and benefits from context. Execution is fast, unforgiving, and benefits from discipline.</p>
+		<p>Semantic Signal splits them cleanly: the main engine produces <strong>atomic JSON decisions</strong> — symbol, side, size, stop-loss, take-profit, reasoning. The <code>llm_trader_executor</code> service handles everything on the exchange side: CCXT order placement, leverage, OCO stop-losses, and a dead-letter queue for orders that can't be reconciled.</p>
+	</section>
+
+	<section class="section">
+		<h2>The Guard Chain</h2>
+		<p>Every signal passes a pre-execution guard chain, in order:</p>
+		<ol>
+			<li><strong>Symbol whitelist</strong> — the bot only trades instruments it's configured for;</li>
+			<li><strong>Maximum position size</strong> — portfolio-percentage sizing with fallback sizes of 1% / 2% / 3% of capital for LOW / MEDIUM / HIGH conviction;</li>
+			<li><strong>Cooldown window</strong> — prevents overtrading;</li>
+			<li><strong>R:R gate</strong> — take-profit targets minimum 1.5 R:R at structure;</li>
+			<li><strong>ATR-scaled stops</strong> — stop-loss distance scales with volatility, not a fixed percentage.</li>
+		</ol>
+		<p>If governance or risk validation can't decide safely, the system <strong>fails closed</strong> — no order, no exceptions. Soft exits trigger at candle close; hard exits check against live ticker prices at 15-minute intervals.</p>
+	</section>
+
+	<section class="section">
+		<h2>Honest Accounting</h2>
+		<p>Every order outcome is journaled and reconciled against the exchange — not taken on trust from the API response. Orders that can't be confirmed go to a dead-letter queue instead of disappearing. Friction from position-size clamping is measured and reported rather than silently ignored.</p>
+		<p>The dashboard doesn't hide ambiguity: if a state can't be determined, it says so. No fake green checkmarks.</p>
+	</section>
+
+	<section class="section">
+		<h2>Paper First. Real Money Only When the Pipeline Proves Itself</h2>
+		<p>Right now the system trades <strong>simulated capital by default</strong>. Real exchange execution is being built as this dedicated executor service — the same guard chain, the same journaling, the same fail-closed behavior — and capital stays simulated until the pipeline proves itself over a sustained period.</p>
+		<p>That's a deliberate product decision, not a limitation to hide: demo and live are different worlds, and the system earns live trading the way it earns everything else — by demonstrating it can survive its own history.</p>
+	</section>
+
+	<div class="cta-box">
+		<p>Track the executor's progress — the dashboard shows live position state and the audit trail behind every decision.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
+		<a href="https://github.com/qrak/LLM_trader" target="_blank" class="btn btn-secondary">🐙 GitHub Repository</a>
+	</div>
+
+	<div class="disclaimer-box">
+		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Results are simulated unless stated otherwise. Trading crypto carries substantial risk. See the <a href="/disclaimer">full risk disclaimer</a>.
+	</div>
+</ArticleLayout>
