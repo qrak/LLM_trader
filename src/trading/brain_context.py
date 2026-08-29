@@ -140,10 +140,6 @@ class BrainContextProvider:
                 "",
                 "### Apply Insights (CoT Step 6 - Historical Evidence):",
                 (
-                    "- CONFIDENCE: If win rate in similar conditions <50%, reduce confidence by 10 points and "
-                    "state it. Weight both wins AND losses, not just the favorable cases."
-                ),
-                (
                     '- ANTI-PATTERN / AI MISTAKE: If an AVOID or AI-mistake rule matches (>50% similarity), state '
                     '"⚠️ ANTI-PATTERN MATCH", compare the current setup to the failed assumption, and downgrade '
                     "confidence unless the missing confirmation is now present. State the adjustment you apply "
