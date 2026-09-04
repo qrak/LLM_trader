@@ -218,6 +218,19 @@ class TestBuildResponseTemplate:
         assert "ADX >= 25" in rules  # adx_strong default
 
     def test_custom_thresholds_injected(self):
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY="high",
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="limit",
+            MIN_RR_ENTRY=2.9,  # config floor above brain value → brain value renders
+        )
+        mgr = _make_manager(config=config)
         thresholds = {
             "adx_strong_threshold": 30,
             "adx_weak_threshold": 18,
@@ -230,21 +243,34 @@ class TestBuildResponseTemplate:
             "trade_count": 0,
             "learned_keys": [],
         }
-        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        rules = mgr.build_decision_rules(dynamic_thresholds=thresholds)
         assert "ADX >= 30" in rules
         assert "ADX < 18" in rules
         assert "R/R >= 1.8" in rules  # rr_borderline_min as standard minimum for full-confidence entries
-        assert "aspirational target" in rules  # min_rr_recommended as aspirational, not a gate
+        assert "aspirational" in rules  # min_rr_recommended as aspirational, not a gate
         assert "standard minimum" in rules
         assert "REJECTED" in rules  # hard gate label in R/R guidelines
-        assert "Allowed in RANGING markets" in rules  # allowed range label
+        assert "Accepted when the setup is real" in rules  # new rangeless acceptance wording
         assert "3.0%" in rules  # avg_sl
         assert "BUY/SELL: 75+ conf" in rules
         assert "strong evidence against entry" in rules
 
     def test_signal_line_uses_borderline_not_recommended_as_gate(self):
         """BUY/SELL signal line must use rr_borderline_min as the standard minimum,
-        while the ONLY hard gate is the 1.2 rejection boundary in the R/R guidelines."""
+        while the ONLY hard gate is the rejection boundary in the R/R guidelines."""
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY="high",
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="limit",
+            MIN_RR_ENTRY=2.9,  # config floor above brain value → brain value renders
+        )
+        mgr = _make_manager(config=config)
         thresholds = {
             "rr_borderline_min": 1.5,
             "min_rr_recommended": 2.0,
@@ -252,17 +278,71 @@ class TestBuildResponseTemplate:
             "trade_count": 0,
             "learned_keys": [],
         }
-        rules = self.mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        rules = mgr.build_decision_rules(dynamic_thresholds=thresholds)
 
         # SIGNALS line: rr_borderline is the standard minimum, NOT labeled as the only hard gate
         assert "R/R >= 1.5 (standard minimum for full-confidence entries)" in rules
         assert "system-enforced minimum — the only hard gate" not in rules
 
-        # R/R GUIDELINES: the hard rejection boundary is fixed at 1.2
-        assert "R/R < 1.2: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
-        assert "R/R >= 1.5: Allowed in all regimes — meets standard system minimum" in rules
-        assert "Historical winning average: 2.0+ R/R (aspirational target — not enforced, not a gate)" in rules
-        assert "R/R >= 2.5: Exceptional setup" in rules
+        # R/R GUIDELINES: the hard rejection boundary renders the effective gate (1.5)
+        assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
+        assert "R/R >= 2.5: Preferred / exceptional setup" in rules
+        assert "Historical winning average: 2.0+ R/R (aspirational" in rules
+        assert "exceptional setup" in rules
+
+    def test_rr_gate_clamps_brain_above_config_floor(self):
+        """When the brain-learned minimum is TIGHTER than the config floor, the config
+        floor wins — the rendered gate must be the config value, never the tighter brain value."""
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY="high",
+            MARKET_TYPE="spot",
+            ENTRY_ORDER_TYPE="limit",
+            MIN_RR_ENTRY=1.0,
+        )
+        mgr = _make_manager(config=config)
+        thresholds = {
+            "rr_borderline_min": 1.5,  # tighter than config floor
+            "min_rr_recommended": 2.0,
+            "rr_strong_setup": 2.5,
+            "trade_count": 0,
+            "learned_keys": [],
+        }
+        rules = mgr.build_decision_rules(dynamic_thresholds=thresholds)
+        assert "R/R < 1.0: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
+        assert "R/R >= 1.0 (standard minimum for full-confidence entries)" in rules
+
+    def test_breakout_confirmation_rule_present(self):
+        """The BREAKOUT CONFIRMATION rule must instruct the model to EMIT the entry signal
+        on a confirmed breakout close instead of re-staging a HOLD forever."""
+        rules = self.mgr.build_decision_rules(dynamic_thresholds={})
+        assert "BREAKOUT CONFIRMATION" in rules
+        assert "EMIT BUY THIS cycle" in rules  # spot default → entry_signal_open is BUY
+        assert "HOLD only if you can name a concrete contrary reason" in rules
+        assert "strong reason to enter" in rules
+
+    def test_breakout_confirmation_rule_futures_long(self):
+        """Futures market renders the breakout rule with LONG as the entry signal."""
+        config = SimpleNamespace(
+            STOP_LOSS_TYPE="soft",
+            STOP_LOSS_CHECK_INTERVAL="1h",
+            TAKE_PROFIT_TYPE="soft",
+            TAKE_PROFIT_CHECK_INTERVAL="1h",
+            MAX_POSITION_SIZE=0.10,
+            AI_CHART_CANDLE_LIMIT=120,
+            MODEL_VERBOSITY="high",
+            MARKET_TYPE="futures",
+            ENTRY_ORDER_TYPE="limit",
+        )
+        mgr = _make_manager(config=config)
+        rules = mgr.build_decision_rules(dynamic_thresholds={})
+        assert "BREAKOUT CONFIRMATION" in rules
+        assert "EMIT LONG THIS cycle" in rules
 
     def test_response_template_json_example_is_valid(self):
         """The fenced JSON example should be parser-safe, not pseudo-JSON."""

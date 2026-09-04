@@ -866,11 +866,14 @@ class TradingStrategy:
         self.logger.info("Position sizing: Capital=$%s, Size=%.2f%%, Allocation=$%s, Quantity=%.6f", f"{capital:,.2f}", final_size_pct * 100, f"{risk_assessment.quote_amount:,.2f}", quantity)  # type: ignore[reportOptionalMemberAccess]
         self.logger.info("Risk metrics: SL=%.2f%%, TP=%.2f%%, R/R=%.2f", sl_distance_pct * 100, tp_distance_pct * 100, rr_ratio)  # type: ignore[reportOptionalMemberAccess]
 
+        config_min_rr = float(getattr(self.config, "MIN_RR_ENTRY", 1.0) or 1.0)
         brain_thresholds = self.brain_service.get_dynamic_thresholds(choppiness=choppiness_val)
         try:
-            min_rr_for_entry = float(brain_thresholds.get("rr_borderline_min", 1.5))
+            brain_min_rr = float(brain_thresholds.get("rr_borderline_min", config_min_rr))
         except (TypeError, ValueError):
-            min_rr_for_entry = 1.5
+            brain_min_rr = config_min_rr
+        # Config value is the HARD floor; the brain may only loosen it (never tighten above config).
+        min_rr_for_entry = min(brain_min_rr, config_min_rr)
         if rr_ratio < min_rr_for_entry:
             self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
                 "REJECTED entry: R/R %.2f below minimum %.1f. "

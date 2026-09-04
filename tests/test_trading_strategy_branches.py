@@ -494,6 +494,123 @@ class TestClosePosition:
         persistence.async_save_trade_decision.assert_called_once_with(decision)
         cast(MagicMock, strategy.memory_service.add_decision).assert_called_once_with(decision)
 
+    def test_open_new_position_accepts_rr_below_brain_floor_when_config_looser(self):
+        """A valid entry with R/R below the brain-learned 1.5 floor must be ACCEPTED
+        when the config floor (MIN_RR_ENTRY=1.0) is looser — the gate is min(brain, config)."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=None,
+            MIN_RR_ENTRY=1.0,
+        )
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=109.0,   # R/R = (109-100)/(100-95) = 1.8 → above config floor
+            size_pct=0.05,
+            quantity=5.0,
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.09,
+            rr_ratio=1.1,        # above config floor 1.0, below brain 1.5
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=109.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        # Must OPEN, not reject
+        assert decision.action == "BUY"
+        assert strategy.current_position is not None
+        pos: Position = cast(Position, strategy.current_position)
+        assert pos.size == pytest.approx(5.0)
+
+    def test_open_new_position_rejects_rr_below_config_floor(self):
+        """R/R below the hard config floor (1.0) must be REJECTED → HOLD decision."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=None,
+            MIN_RR_ENTRY=1.0,
+        )
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=104.0,   # R/R = (104-100)/(100-95) = 0.8 → below config floor
+            size_pct=0.05,
+            quantity=5.0,
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.04,
+            rr_ratio=0.8,
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=104.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Range bounce",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        assert decision.action == "HOLD"
+        assert strategy.current_position is None
+
+    def test_open_new_position_honors_tighter_brain_floor_when_config_higher(self):
+        """When the config floor is HIGHER than the brain value, the brain floor is the gate
+        (the config floor loosens; it never forces a tighter gate)."""
+        strategy, _, _, _, _, _ = _make_strategy(
+            current_position=None,
+            MIN_RR_ENTRY=1.5,
+        )
+        # _make_strategy sets brain rr_borderline_min=1.5 too → gate = min(1.5,1.5) = 1.5
+        risk_assessment = SimpleNamespace(
+            entry_price=100.0,
+            stop_loss=95.0,
+            take_profit=109.0,
+            size_pct=0.05,
+            quantity=5.0,
+            entry_fee=0.5,
+            sl_distance_pct=0.05,
+            tp_distance_pct=0.09,
+            rr_ratio=1.3,        # below 1.5 → rejected
+            quote_amount=500.0,
+            volatility_level="MEDIUM",
+            regime_profile="neutral",
+        )
+        cast(MagicMock, strategy.risk_manager.calculate_entry_parameters).return_value = risk_assessment
+
+        decision = asyncio.run(strategy._open_new_position(
+            signal="BUY",
+            confidence="HIGH",
+            stop_loss=95.0,
+            take_profit=109.0,
+            position_size=0.05,
+            current_price=100.0,
+            symbol="BTC/USDC",
+            reasoning="Breakout continuation",
+            market_conditions=MarketConditions(adx=30.0),
+        ))
+
+        assert decision.action == "HOLD"
+        assert strategy.current_position is None
+
     def test_open_new_position_clamps_to_executor_max(self):
         """Notional above EXECUTOR_MAX_POSITION_USDC is scaled down, not rejected.
 

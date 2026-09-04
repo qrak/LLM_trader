@@ -587,7 +587,16 @@ class TemplateManager:
         if max_pos <= 0:
             max_pos = 0.10
         min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
-        rr_borderline = thresholds.get("rr_borderline_min", 1.5)
+        try:
+            config_min_rr = float(getattr(self.config, "MIN_RR_ENTRY", 1.0) or 1.0)
+        except (TypeError, ValueError):
+            config_min_rr = 1.0
+        try:
+            rr_borderline = float(thresholds.get("rr_borderline_min", config_min_rr))
+        except (TypeError, ValueError):
+            rr_borderline = config_min_rr
+        # Config value is the HARD floor; the brain may only loosen it (never tighten above config).
+        rr_borderline = min(rr_borderline, config_min_rr)
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         trade_count = thresholds.get("trade_count", 0)
         learned_keys = set(thresholds.get("learned_keys", []))
@@ -638,12 +647,16 @@ SIGNALS:
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
+BREAKOUT CONFIRMATION (act on a confirmed breakout):
+- If you STAGED a conditional/breakout entry in a previous cycle (e.g. an entry_price set above a key resistance, with a "wait for confirmed close" note) and the market has now CLOSED a candle above that trigger level, take it — EMIT {entry_signal_open} THIS cycle with the same pre-defined SL/TP.
+- A confirmed breakout close is a VALID entry: treat it as a strong reason to enter. HOLD only if you can name a concrete contrary reason (conflicting signal, invalidation of the thesis); otherwise take the entry.
+- If the trigger is NOT confirmed (price still below the level, or no candle closed above it), HOLD and keep the staged level for the next cycle.
+
 RISK/REWARD GUIDELINES (authoritative — the only hard gate is below):
-- R/R < 1.2: REJECTED — system blocks entries below this (THE ONLY hard gate)
-- R/R 1.2-1.5: Allowed in RANGING markets — higher-probability mean-reversion setups at range boundaries
-- R/R >= 1.5: Allowed in all regimes — meets standard system minimum
-- Historical winning average: {min_rr:.1f}+ R/R (aspirational target — not enforced, not a gate)
-- R/R >= {rr_strong:.1f}: Exceptional setup
+- R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (THE ONLY hard gate)
+- R/R {rr_borderline:.1f}-{rr_strong:.1f}: Accepted when the setup is real — a staged trigger confirmed by a candle close, or a clearly defined level. Standard edge.
+- R/R >= {rr_strong:.1f}: Preferred / exceptional setup
+- Historical winning average: {min_rr:.1f}+ R/R (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
 
 R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
 

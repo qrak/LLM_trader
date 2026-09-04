@@ -612,6 +612,13 @@ class Config:
         return float(self.get_config("risk_management", "max_position_size", 0.10))
 
     @property
+    def MIN_RR_ENTRY(self) -> float:
+        """Effective hard floor for the risk/reward gate. Entries below this are rejected.
+        The brain-learned threshold can relax the gate further but never tighten it above this value.
+        Lower = more trades (more risk). Default 1.0."""
+        return float(self.get_config("risk_management", "min_rr_entry", 1.0))
+
+    @property
     def POSITION_SIZE_FALLBACK_LOW(self) -> float:
         """Fallback position size for LOW confidence when AI size is missing or invalid."""
         return float(self.get_config("risk_management", "position_size_fallback_low", 0.01))
