@@ -318,16 +318,15 @@ class TestBuildResponseTemplate:
         assert "R/R >= 1.0 (standard minimum for full-confidence entries)" in rules
 
     def test_breakout_confirmation_rule_present(self):
-        """The BREAKOUT CONFIRMATION rule must instruct the model to EMIT the entry signal
-        on a confirmed breakout close instead of re-staging a HOLD forever."""
+        """The decision rule must instruct the model to decide on the LATEST CLOSED candle and
+        NOT stage a conditional/future entry (no carried-forward trigger)."""
         rules = self.mgr.build_decision_rules(dynamic_thresholds={})
-        assert "BREAKOUT CONFIRMATION" in rules
+        assert "DECIDE ON THE LATEST CLOSED CANDLE" in rules
         assert "EMIT BUY THIS cycle" in rules  # spot default → entry_signal_open is BUY
-        assert "HOLD only if you can name a concrete contrary reason" in rules
-        assert "strong reason to enter" in rules
+        assert "Do NOT stage, describe, or carry forward a conditional/future entry" in rules
 
     def test_breakout_confirmation_rule_futures_long(self):
-        """Futures market renders the breakout rule with LONG as the entry signal."""
+        """Futures market renders the closed-candle rule with LONG as the entry signal."""
         config = SimpleNamespace(
             STOP_LOSS_TYPE="soft",
             STOP_LOSS_CHECK_INTERVAL="1h",
@@ -341,7 +340,7 @@ class TestBuildResponseTemplate:
         )
         mgr = _make_manager(config=config)
         rules = mgr.build_decision_rules(dynamic_thresholds={})
-        assert "BREAKOUT CONFIRMATION" in rules
+        assert "DECIDE ON THE LATEST CLOSED CANDLE" in rules
         assert "EMIT LONG THIS cycle" in rules
 
     def test_response_template_json_example_is_valid(self):

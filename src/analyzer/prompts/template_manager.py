@@ -647,14 +647,15 @@ SIGNALS:
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
-BREAKOUT CONFIRMATION (act on a confirmed breakout):
-- If you STAGED a conditional/breakout entry in a previous cycle (e.g. an entry_price set above a key resistance, with a "wait for confirmed close" note) and the market has now CLOSED a candle above that trigger level, take it — EMIT {entry_signal_open} THIS cycle with the same pre-defined SL/TP.
-- A confirmed breakout close is a VALID entry: treat it as a strong reason to enter. HOLD only if you can name a concrete contrary reason (conflicting signal, invalidation of the thesis); otherwise take the entry.
-- If the trigger is NOT confirmed (price still below the level, or no candle closed above it), HOLD and keep the staged level for the next cycle.
+DECIDE ON THE LATEST CLOSED CANDLE (no staged/future entries):
+- Your decision and any confirmation is based on the LATEST CLOSED candle — the same closed candles all indicators are computed on. The current (real-time) price is the incomplete/intraday candle: use it only as the execution reference point for THIS cycle, NEVER as a confirmation or reason to act.
+- Either the setup is valid right now on the latest closed candle, or it is not. If valid — EMIT {entry_signal_open} THIS cycle at the current price with a clear SL/TP.
+- Do NOT stage, describe, or carry forward a conditional/future entry (e.g. "buy stop above resistance", "pre-staged trigger at $X", "wait for a confirmed close to $Y"). The execution layer accepts only market/limit orders placed THIS cycle — a staged/pending trigger can never actually be executed.
+- If the latest closed candle does not confirm the setup, HOLD with no entry and no carried-forward intention. Re-evaluate fresh on the next cycle.
 
 RISK/REWARD GUIDELINES (authoritative — the only hard gate is below):
 - R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (THE ONLY hard gate)
-- R/R {rr_borderline:.1f}-{rr_strong:.1f}: Accepted when the setup is real — a staged trigger confirmed by a candle close, or a clearly defined level. Standard edge.
+- R/R {rr_borderline:.1f}-{rr_strong:.1f}: Accepted when the setup is real — a clearly defined level validated by the latest closed candle. Standard edge.
 - R/R >= {rr_strong:.1f}: Preferred / exceptional setup
 - Historical winning average: {min_rr:.1f}+ R/R (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
 
@@ -830,7 +831,7 @@ JSON rules by signal:
 | Signal | entry_price | stop_loss | take_profit | position_size | quantity | order_type | reduce_only | risk_reward_ratio |
 |--------|-------------|-----------|-------------|---------------|----------|------------|-------------|-------------------|
 | {entry_signal_open}/{entry_signal_close} | number | number | number | 0.0-1.0 | number > 0 | {order_type_label} | false | number |
-| HOLD (no position) | conditional trigger | relative to trigger | relative to trigger | 0.0 | 0.0 | null | false | number |
+| HOLD (no position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | 0.0 | null | false | number (from current) |
 | CLOSE | current price | null | null | 0.0 | 0.0 | "market" | true | null |
@@ -844,7 +845,7 @@ EXECUTION FIELDS (for automated trade execution bots):
 - reduce_only: false (new positions), true (CLOSE only). Prevents position flipping.
 - leverage: 1 for spot, >1 for futures. Use configured leverage. Default: 1.
 
-HOLD semantics: HOLD(no position) may describe a conditional setup; HOLD(open position) means no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
+HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 
 CONFLUENCE (0-100 per factor, 0=opposes, 50=neutral, 100=strong):
 1. trend_alignment  2. momentum_strength  3. volume_support
