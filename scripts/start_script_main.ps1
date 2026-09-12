@@ -50,26 +50,18 @@ Write-Output "Activating virtual environment..."
 
 if (-not $SkipInstall) {
     if (Test-Path $RequirementsPath) {
-        Write-Output "Checking installed packages against requirements.txt..."
-        $reqs = Get-Content $RequirementsPath | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not ($_ -match '^(\s*#)') }
-        $installed = & python -m pip freeze
-        $missing = @()
-        foreach ($req in $reqs) {
-            $name = ($req -split '[=<>!~]')[0].Trim()
-            if ($req -match '==') {
-                $pattern = '^' + [regex]::Escape($req) + '$'
-                if (-not ($installed -match $pattern)) { $missing += $req }
-            }
-            else {
-                $pattern = '^' + [regex]::Escape($name) + '=='
-                if (-not ($installed -match $pattern)) { $missing += $req }
-            }
+        Write-Output "Checking installed packages against requirements.txt (version-aware)..."
+        $missing = @(& python (Join-Path $RepoRoot 'scripts\check_requirements.py') $RequirementsPath)
+        if ($LASTEXITCODE -ne 0) {
+            Write-Output "Requirement check failed (exit $LASTEXITCODE); running pip install to be safe."
+            python -m pip install --upgrade pip
+            python -m pip install -r $RequirementsPath
         }
-        if ($missing.Count -eq 0) {
+        elseif ($missing.Count -eq 0) {
             Write-Output "All requirements satisfied; skipping pip install."
         }
         else {
-            Write-Output "Missing or mismatched requirements detected:`n$missing"
+            Write-Output "Missing or mismatched requirements detected:`n$($missing -join "`n")"
             Write-Output "Installing/updating dependencies from requirements.txt..."
             python -m pip install --upgrade pip
             python -m pip install -r $RequirementsPath

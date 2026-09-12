@@ -61,9 +61,17 @@ fi
 
 if [[ "${SKIP_INSTALL}" != "true" ]]; then
     if [[ -f "${REPO_ROOT}/requirements.txt" ]]; then
-        echo "Installing/updating dependencies from requirements.txt..."
-        "${PIP_BIN}" install --upgrade pip
-        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+        echo "Checking installed packages against requirements.txt (version-aware)..."
+        MISSING="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/check_requirements.py" "${REPO_ROOT}/requirements.txt")" || MISSING="__CHECK_FAILED__"
+        if [[ -z "${MISSING}" ]]; then
+            echo "All requirements satisfied; skipping pip install."
+        else
+            echo "Missing or mismatched requirements detected:"
+            printf '%s\n' "${MISSING}"
+            echo "Installing/updating dependencies from requirements.txt..."
+            "${PIP_BIN}" install --upgrade pip
+            "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+        fi
     else
         echo "No requirements.txt found; skipping pip install."
     fi
