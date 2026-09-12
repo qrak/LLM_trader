@@ -188,6 +188,44 @@ class ModelManager:
             raise ValueError(result.error or "invalid response")
         return await self._process_result(result)
 
+    async def send_contract_repair(
+        self,
+        system_message: str,
+        prompt: str,
+        previous_response: str,
+        provider: str | None = None,
+        model: str | None = None
+    ) -> str:
+        """Continue the conversation once to recover a missing JSON block.
+
+        Used when a model reply omits the required ```json block: the original turn is
+        replayed with the reply appended as an assistant message, and the model is asked
+        for the block only. The caller re-parses the returned text against the contract.
+
+        Args:
+            system_message: Original system instructions
+            prompt: Original user prompt
+            previous_response: The reply that omitted the JSON block
+            provider: Optional provider override
+            model: Optional model override
+
+        Returns:
+            Response text from the AI model
+        """
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": previous_response},
+            {"role": "user", "content": (
+                "Your previous reply omitted the required ```json block. "
+                "Output ONLY the ```json block for the decision described above — valid JSON, no other text."
+            )},
+        ]
+        effective_provider = provider if provider else self.provider
+        self.logger.debug("Sending contract-repair request to recover the missing JSON block")
+        result = await self._orchestrator.get_text_response(effective_provider, messages, model)  # type: ignore[reportOptionalMemberAccess]
+        return await self._process_result(result)
+
     def supports_image_analysis(self, provider_override: str | None = None) -> bool:
         """Check if the selected provider supports image analysis."""
         provider_name = (provider_override or self.provider or "").lower()

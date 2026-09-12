@@ -157,8 +157,10 @@ file_message_expiry = 168  # hours before tracked messages are cleaned up
 enabled = false
 
 # === Social Sentiment (Reddit) ===
-# Fetches hot posts from r/CryptoCurrency, r/Bitcoin, r/ethereum.
-# No API key needed — uses Reddit's free public JSON endpoint.
+# Fetches the latest posts from r/CryptoCurrency, r/Bitcoin, r/ethereum and
+# r/CryptoMarkets via Reddit's public Atom RSS feeds (no API key).
+# Requests are spaced ~20s apart to stay within Reddit's rate limits.
+# Sentiment summary is injected into the LLM prompt as supplementary context.
 [social_sentiment]
 enabled = false
 
@@ -170,9 +172,13 @@ enabled = false
 # Model auto-downloaded from HuggingFace on first use (~1.2 GB disk).
 [rl_training]
 enabled = false
+# HuggingFace model ID for the policy network
 model = Qwen/Qwen3-0.6B-Instruct
+# Training: how many closed trades before a PPO update cycle
 update_interval = 10
+# Path to save fine-tuned checkpoints
 checkpoint_dir = data/rl_checkpoints
+# Training device: cpu | cuda | auto
 device = auto
 
 # === Model Configuration ===

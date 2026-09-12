@@ -7,6 +7,8 @@ import pytest
 from src.analyzer.analysis_result_processor import AnalysisResultProcessor
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.trend_validator import TrendValidator
+from src.parsing.unified_parser import UnifiedParser
+from src.utils.format_utils import FormatUtils
 
 
 def _make_processor(*, supports_image=True, chart_error: Exception | None = None):
@@ -100,4 +102,72 @@ async def test_process_analysis_logs_clean_chart_warning() -> None:
     assert warning_args[0] == "Chart analysis failed: %s. Falling back to text-only analysis."
     assert "Empty response content from Google AI" in str(warning_args[1])
     assert not str(warning_args[1]).startswith("Chart analysis failed:")
+
+
+def _json_block(signal: str = "HOLD") -> str:
+    return (
+        "```json\n"
+        f'{{"analysis": {{"signal": "{signal}", "confidence": 82, "entry_price": 77880, '
+        '"stop_loss": 76500, "take_profit": 80640, "position_size": 0.08, '
+        '"risk_reward_ratio": 2.0, "reasoning": "Valid setup."}}\n'
+        "```"
+    )
+
+
+def _make_repair_processor(first_response: str, repair_response: str):
+    model_manager = MagicMock()
+    model_manager.supports_image_analysis.return_value = False
+    model_manager.send_prompt_streaming = AsyncMock(return_value=first_response)
+    model_manager.send_contract_repair = AsyncMock(return_value=repair_response)
+
+    processor = AnalysisResultProcessor(
+        model_manager=model_manager,
+        logger=MagicMock(),
+        unified_parser=UnifiedParser(logger=MagicMock(), format_utils=FormatUtils()),
+        trend_validator=TrendValidator(),
+        quality_scorer=PatternQualityScorer(),
+    )
+    return processor, model_manager
+
+
+@pytest.mark.asyncio
+async def test_process_analysis_repairs_missing_json_block() -> None:
+    narrative = "1) MARKET STRUCTURE: price below both SMAs; 2) DECISION: HOLD — no edge."
+    processor, model_manager = _make_repair_processor(first_response=narrative, repair_response=_json_block("HOLD"))
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    model_manager.send_contract_repair.assert_awaited_once()
+    repair_kwargs = model_manager.send_contract_repair.await_args.kwargs
+    assert repair_kwargs["system_message"] == "system"
+    assert repair_kwargs["prompt"] == "prompt"
+    assert repair_kwargs["previous_response"] == narrative
+    assert result["analysis"]["signal"] == "HOLD"
+    assert result["response_validation"]["status"] == "valid"
+    assert "parse_error" not in result
+    assert result["raw_response"].startswith(narrative)
+    assert "```json" in result["raw_response"]
+
+
+@pytest.mark.asyncio
+async def test_process_analysis_skips_repair_when_json_block_present() -> None:
+    processor, model_manager = _make_repair_processor(first_response=_json_block("BUY"), repair_response="unused")
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    model_manager.send_contract_repair.assert_not_awaited()
+    assert result["analysis"]["signal"] == "BUY"
+    assert result["response_validation"]["status"] == "valid"
+
+
+@pytest.mark.asyncio
+async def test_process_analysis_keeps_fallback_when_repair_fails() -> None:
+    processor, model_manager = _make_repair_processor(first_response="narrative only", repair_response="still no json here")
+
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+
+    model_manager.send_contract_repair.assert_awaited_once()
+    assert result["parse_error"] == "Failed to parse response"
+    assert result["response_validation"]["status"] == "invalid"
+    assert result["raw_response"] == "narrative only"
 

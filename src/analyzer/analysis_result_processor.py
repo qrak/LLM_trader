@@ -95,6 +95,9 @@ class AnalysisResultProcessor:
         cleaned_response = self._clean_response(complete_response)
 
         parsed_response = self.unified_parser.parse_ai_response(cleaned_response)
+        parsed_response, cleaned_response = await self._repair_missing_json_block(
+            parsed_response, cleaned_response, system_prompt, prompt, provider, model
+        )
 
         if not self.unified_parser.validate_ai_response(parsed_response):
             self.logger.warning("Invalid response format from AI model")
@@ -151,6 +154,47 @@ class AnalysisResultProcessor:
             self.logger.warning("AI response contract validation failed: %s", errors[:3])
             return
         self.logger.debug("AI response contract validation skipped: no trading signal found")
+
+    async def _repair_missing_json_block(
+        self,
+        parsed_response: dict[str, Any],
+        cleaned_response: str,
+        system_prompt: str,
+        prompt: str,
+        provider: str | None,
+        model: str | None
+    ) -> tuple[dict[str, Any], str]:
+        """Recover a reply that omitted the required ```json block.
+
+        Models occasionally return only the narrative. Without the block the parser
+        falls back to defaults (HOLD), silently dropping the decision. Replay the turn
+        as a continuation and ask for the block; if that fails, keep the fallback.
+        """
+        validation = parsed_response.get("response_validation") or {}
+        errors = validation.get("errors") or []
+        if validation.get("status") != "invalid" or not any(
+            error.get("type") == "json_parse_error" for error in errors
+        ):
+            return parsed_response, cleaned_response
+
+        self.logger.warning("AI reply omitted the required JSON block; requesting a contract repair from the same provider.")
+        repaired_text = self._clean_response(
+            await self.model_manager.send_contract_repair(
+                system_message=system_prompt,
+                prompt=prompt,
+                previous_response=cleaned_response,
+                provider=provider,
+                model=model
+            )
+        )
+        repaired = self.unified_parser.parse_ai_response(repaired_text)
+        analysis = repaired.get("analysis") or {}
+        if repaired.get("parse_error") or not analysis.get("signal"):
+            self.logger.error("Contract repair did not return a valid JSON block; keeping the fallback response.")
+            return parsed_response, cleaned_response
+
+        self.logger.info("Contract repair recovered a valid JSON block (signal: %s)", analysis.get("signal"))
+        return repaired, f"{cleaned_response}\n\n{repaired_text}"
 
     def _format_analysis_response(self, parsed_response: dict[str, Any],
                                 cleaned_response: str) -> dict[str, Any]:

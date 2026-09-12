@@ -1,7 +1,11 @@
 """Unit tests for ModelManager._prepare_messages() role separation."""
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.managers.model_manager import ModelManager
+from src.managers.provider_types import InvocationResult
+from src.platforms.ai_providers.response_models import ChatResponseModel
 
 
 def _make_manager() -> ModelManager:
@@ -52,3 +56,61 @@ class TestPrepareMessagesRoles:
     def test_count_tokens_called_once_without_system(self) -> None:
         self.mgr._prepare_messages("only prompt")
         assert self.mgr.token_counter.count_tokens.call_count == 1
+
+
+class TestContractRepairMessages:
+    """Tests for send_contract_repair() message construction."""
+
+    def _make_repair_manager(self, response_text: str, provider: str = "deepseekai"):
+        mgr = _make_manager()
+        mgr.provider = "deepseek"
+        mgr.cost_storage = MagicMock()
+        mgr.model_pricing = MagicMock()
+        orchestrator = MagicMock()
+        orchestrator.get_text_response = AsyncMock(return_value=InvocationResult(
+            success=True,
+            response=ChatResponseModel.from_content(response_text),
+            provider=provider,
+            model="deepseek-flash",
+        ))
+        mgr._orchestrator = orchestrator
+        return mgr, orchestrator
+
+    @pytest.mark.asyncio
+    async def test_contract_repair_replays_turn_and_requests_json_block(self) -> None:
+        json_block = '```json\n{"analysis": {"signal": "HOLD", "confidence": 60}}\n```'
+        mgr, orchestrator = self._make_repair_manager(json_block)
+
+        text = await mgr.send_contract_repair(
+            system_message="system instructions",
+            prompt="original user prompt",
+            previous_response="narrative without the block",
+            provider=None,
+            model=None,
+        )
+
+        assert text == json_block
+        provider_arg, messages, model_arg = orchestrator.get_text_response.await_args.args
+        assert provider_arg == "deepseek"
+        assert model_arg is None
+        assert [message["role"] for message in messages] == ["system", "user", "assistant", "user"]
+        assert messages[0]["content"] == "system instructions"
+        assert messages[1]["content"] == "original user prompt"
+        assert messages[2]["content"] == "narrative without the block"
+        assert "json block" in messages[3]["content"]
+
+    @pytest.mark.asyncio
+    async def test_contract_repair_honors_provider_and_model_override(self) -> None:
+        mgr, orchestrator = self._make_repair_manager("```json\n{}\n```", provider="googleai")
+
+        await mgr.send_contract_repair(
+            system_message="s",
+            prompt="p",
+            previous_response="r",
+            provider="googleai",
+            model="gemini-3.8-flash",
+        )
+
+        provider_arg, _, model_arg = orchestrator.get_text_response.await_args.args
+        assert provider_arg == "googleai"
+        assert model_arg == "gemini-3.8-flash"
