@@ -135,6 +135,12 @@ class TickerManager:
         if self.exchange_manager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
+                if not valid_exchange_symbols:
+                    # Exchanges load lazily; at startup nothing is loaded yet.
+                    # Load the supported exchanges once so the validation below
+                    # runs against live symbol sets.
+                    await self.exchange_manager.ensure_symbols_loaded()
+                    valid_exchange_symbols = self.exchange_manager.get_all_symbols()
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not get exchange symbols for validation: %s", e)
 

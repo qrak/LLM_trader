@@ -220,3 +220,19 @@ class ExchangeManager:
             all_symbols.update(symbols)
         return all_symbols
 
+    async def ensure_symbols_loaded(self) -> None:
+        """Load markets of the first reachable supported exchange.
+
+        Startup symbol validation (ticker candidates) needs a live symbol set
+        before any on-demand lookup has happened. The first exchange in the
+        configured priority order is the one the bot trades on first — loading
+        it is enough to validate news tickers; preloading every supported
+        venue would add ~14s to startup (hyperliquid alone) for marginal
+        coverage. Failures fall through to the next exchange.
+        """
+        if self.symbols_by_exchange:
+            return
+        for exchange_id in self.exchange_names:
+            if await self._ensure_exchange_loaded(exchange_id) is not None:
+                return
+

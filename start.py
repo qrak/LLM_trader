@@ -834,7 +834,7 @@ class CompositionRoot:
             orchestrator=orchestrator,
             provider_clients=provider_clients,
         )
-        primary_provider = getattr(self.config, "AI_PROVIDER", "googleai")
+        primary_provider = self.config.PROVIDER
         self.logger.info(
             "  -> AI Provider fallback chain ready (Primary provider: %s)",
             primary_provider,
@@ -1126,7 +1126,7 @@ class CompositionRoot:
         summary_stats = {
             "Symbols mapped": f"{symbols_count:,}",
             "News articles indexed": f"{news_count:,}",
-            "Primary AI provider": str(getattr(self.config, "AI_PROVIDER", "googleai")),
+            "Primary AI provider": str(self.config.PROVIDER),
             "Vector memory active": "ChromaDB (bge-base-en-v1.5)",
             "Order guard rules": f"{guards_count}",
             "Trading pair / TF": f"{self.config.CRYPTO_PAIR} ({self.config.TIMEFRAME})",

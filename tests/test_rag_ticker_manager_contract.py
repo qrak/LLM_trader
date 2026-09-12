@@ -16,11 +16,19 @@ from src.rag.ticker_manager import TickerManager
 
 
 class _FakeExchangeManager:
-    def __init__(self, symbols: set[str]):
+    def __init__(self, symbols: set[str], symbols_after_load: set[str] | None = None):
         self._symbols = symbols
+        self._symbols_after_load = symbols_after_load
+        self.ensure_calls = 0
 
     def get_all_symbols(self) -> set[str]:
         return set(self._symbols)
+
+    async def ensure_symbols_loaded(self) -> None:
+        """Mirror ExchangeManager lazy preload: optionally populate symbols."""
+        self.ensure_calls += 1
+        if self._symbols_after_load is not None:
+            self._symbols = set(self._symbols_after_load)
 
 
 def _make_manager(
@@ -91,3 +99,25 @@ class TestValidationPolicy:
         assert manager.known_tickers == set()
         warnings = [str(call) for call in logger.warning.call_args_list]
         assert any("Exchange symbol data unavailable" in warning for warning in warnings)
+
+    @pytest.mark.asyncio
+    async def test_lazy_symbols_are_loaded_once_before_validation(self):
+        """At startup nothing is loaded yet — the manager is asked to load first."""
+        exchange = _FakeExchangeManager(symbols=set(), symbols_after_load={"SOL/USDT", "BTC/USDT"})
+        manager = TickerManager(logger=MagicMock(), file_handler=MagicMock(), exchange_manager=exchange)
+
+        await manager.update_known_tickers([{"categories": "SOL|TECHNOLOGY"}])
+
+        assert exchange.ensure_calls == 1
+        assert "SOL" in manager.known_tickers
+        assert "TECHNOLOGY" not in manager.known_tickers
+
+    @pytest.mark.asyncio
+    async def test_preload_not_repeated_when_symbols_already_present(self):
+        exchange = _FakeExchangeManager(symbols={"BTC/USDT"})
+        manager = TickerManager(logger=MagicMock(), file_handler=MagicMock(), exchange_manager=exchange)
+
+        await manager.update_known_tickers([{"categories": "BTC"}])
+
+        assert exchange.ensure_calls == 0
+        assert "BTC" in manager.known_tickers
