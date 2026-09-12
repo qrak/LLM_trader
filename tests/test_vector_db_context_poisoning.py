@@ -51,9 +51,6 @@ def _make_rag_engine() -> RagEngine:
     config.RAG_ARTICLE_MAX_TOKENS = 500
     config.RAG_NEWS_ENRICH_MIN_CHARS = 200
 
-    token_counter = MagicMock()
-    token_counter.count_tokens.return_value = 10
-
     news_manager = MagicMock()
     news_manager.news_database = []
     news_manager.get_database_size.return_value = 0
@@ -68,7 +65,6 @@ def _make_rag_engine() -> RagEngine:
     ticker_manager.get_known_tickers.return_value = ["BTC", "ETH"]
 
     index_manager = MagicMock()
-    index_manager.get_coin_indices.return_value = {"BTC": [0, 1], "ETH": [2]}
     index_manager.search_by_coin.return_value = []
 
     market_data_manager = MagicMock()
@@ -78,7 +74,6 @@ def _make_rag_engine() -> RagEngine:
 
     engine = RagEngine(
         logger=logger,
-        token_counter=token_counter,
         config=config,
         news_manager=news_manager,
         market_data_manager=market_data_manager,

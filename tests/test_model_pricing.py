@@ -55,7 +55,7 @@ def test_config_model_mapping_falls_back_to_legacy_penalty_aliases() -> None:
 
     assert model_config["frequency_penalty"] == 0.1
     assert model_config["presence_penalty"] == 0.2
-    assert config.OPENROUTER_FALLBACK_MODEL == "deepseek/deepseek-r1:free"
+    assert config.OPENROUTER_FALLBACK_MODEL == "deepseek/deepseek-v4.1-flash"
 
 
 def test_config_model_mapping_uses_google_runtime_keys() -> None:

@@ -23,6 +23,10 @@ class VectorMemoryContextMixin:
         _decay_half_life_days: int
         _max_age_days: int
         RETRIEVAL_OVERFETCH_MULTIPLIER: int
+        MIN_EVIDENCE_TRADES: int
+
+        @property
+        def trade_count(self) -> int: ...
 
         def _ensure_initialized(self) -> bool: ...
 
@@ -83,12 +87,12 @@ class VectorMemoryContextMixin:
         volume_state: str = "",
         trend_strength: float | None = None,
         rsi_level: str = "",
-        vwap: float | None = None,
+        bb_percent_b: float | None = None,
+        pfe: float | None = None,
+        vwap_distance: float | None = None,
+        chandelier_distance: float | None = None,
         mfi: float | None = None,
         cmf: float | None = None,
-        bb_percent_b: float | None = None,
-        chandelier_long: float | None = None,
-        pfe: float | None = None,
         supertrend_signal: str = "",
         # --- Social sentiment + EV snapshot from position entry ---
         social_sentiment_reddit: str = "",
@@ -113,6 +117,8 @@ class VectorMemoryContextMixin:
             indicator_parts.append(f"MACD={macd_signal}")
         if bb_position:
             indicator_parts.append(f"BB={bb_position}")
+        if bb_percent_b is not None:
+            indicator_parts.append(f"BB%B={bb_percent_b:.2f}")
         if choppiness is not None and choppiness > 0:
             chop_label = "Trending" if choppiness < 38 else "Choppy" if choppiness > 62 else "Transitional"
             indicator_parts.append(f"Chop={choppiness:.0f} ({chop_label})")
@@ -124,6 +130,8 @@ class VectorMemoryContextMixin:
             indicator_parts.append(f"RSI={rsi_level}")
         if supertrend_signal and supertrend_signal != "NEUTRAL":
             indicator_parts.append(f"STrend={supertrend_signal}")
+        if pfe is not None:
+            indicator_parts.append(f"PFE={pfe:+.2f}")
         indicators_str = " | ".join(indicator_parts)
 
         structure_parts: list[str] = []
@@ -140,8 +148,10 @@ class VectorMemoryContextMixin:
         exit_execution_text = format_exit_execution_context(exit_execution_context)
         if exit_execution_text:
             structure_parts.append(exit_execution_text)
-        if vwap is not None and vwap > 0:
-            structure_parts.append(f"VWAP={vwap:.2f}")
+        if vwap_distance is not None:
+            structure_parts.append(f"VWAPDist={vwap_distance * 100:+.2f}%")
+        if chandelier_distance is not None:
+            structure_parts.append(f"ChandDist={chandelier_distance * 100:+.2f}%")
         if mfi is not None:
             structure_parts.append(f"MFI={mfi:.1f}")
         if cmf is not None:
@@ -290,6 +300,7 @@ class VectorMemoryContextMixin:
         current_context: str,
         k: int = 5,
         display_context: str = "",
+        current_atr_percentage: float | None = None,
     ) -> str:
         """Get formatted context string for prompt injection."""
         display = display_context or current_context
@@ -301,14 +312,31 @@ class VectorMemoryContextMixin:
             return ""
 
         max_similarity = max(exp.similarity for exp in experiences)
+        shown = len(experiences)
+        brain_trades = self.trade_count
         context_header = (
             f"RELEVANT PAST EXPERIENCES (Context: {display}, active window: last {self._max_age_days} days):"
         )
-        if len(experiences) <= 2 and max_similarity < 50:
+        # Evidence gate: a similarity score only means something against a real sample.
+        # Below MIN_EVIDENCE_TRADES closed trades the top hit is an anecdote — flagging it
+        # as LIMITED DATA keeps one past loss from becoming an "anti-pattern" verdict.
+        thin_sample = shown <= 2 and (
+            max_similarity < 50 or brain_trades < self.MIN_EVIDENCE_TRADES
+        )
+        if thin_sample:
+            reason = (
+                f"only {brain_trades} trade(s) closed in total"
+                if brain_trades < self.MIN_EVIDENCE_TRADES
+                else "below 50% similarity"
+            )
             lines = [
                 context_header,
                 "",
-                f"⚠️ LIMITED DATA: Only {len(experiences)} trade(s) with <50% similarity. Standard analysis recommended.",
+                (
+                    f"⚠️ LIMITED DATA: {shown} retrieved trade(s), {reason}. Treat these as ANECDOTES, "
+                    "not as an established pattern — do NOT call an anti-pattern match on this basis. "
+                    "Standard analysis recommended."
+                ),
                 "",
             ]
         else:
@@ -328,7 +356,7 @@ class VectorMemoryContextMixin:
             lines.append(f"   - Result: {outcome} ({pnl:+.2f}%)")
             lines.append(f"   - Context: {raw_context}")
 
-            match_factors = self._build_match_factors(meta, display)
+            match_factors = self._build_match_factors(meta, display, current_atr_percentage)
             if match_factors:
                 lines.append(f"   - Match Factors: {match_factors}")
 
@@ -413,7 +441,12 @@ class VectorMemoryContextMixin:
 
         return " | ".join(parts) if parts else "No additional data"
 
-    def _build_match_factors(self, meta: dict[str, Any], current_context: str) -> str:
+    def _build_match_factors(
+        self,
+        meta: dict[str, Any],
+        current_context: str,
+        current_atr_percentage: float | None = None,
+    ) -> str:
         """Build a match factors line showing stored numeric features vs current context."""
         parts: list[str] = []
         ctx_upper = current_context.upper()
@@ -461,6 +494,10 @@ class VectorMemoryContextMixin:
             flag = " ⚠️" if bb_mismatch else ""
             parts.append(f"BB={bb}{flag}")
 
+        bb_pct_b = meta.get("bb_percent_b")
+        if bb_pct_b is not None:
+            parts.append(f"BB%B={bb_pct_b:.2f}")
+
         ob = meta.get("order_book_bias", "")
         if ob and ob not in ("BALANCED", ""):
             ob_mismatch = f"ORDERBOOK {ob.upper()}" not in ctx_upper
@@ -477,7 +514,23 @@ class VectorMemoryContextMixin:
 
         atr_pct_val = meta.get("atr_percentage_at_entry")
         if atr_pct_val is not None and atr_pct_val > 0:
-            parts.append(f"ATR%={atr_pct_val:.1f}%")
+            # Volatility-regime drift: a trade from a 0.7% ATR tape is not a precedent for a
+            # 1.2% ATR tape just because the labelled bands coincide. Flag the scale gap.
+            atr_scale_mismatch = (
+                current_atr_percentage is not None
+                and current_atr_percentage > 0
+                and (
+                    atr_pct_val > current_atr_percentage * 1.5
+                    or atr_pct_val < current_atr_percentage / 1.5
+                )
+            )
+            if atr_scale_mismatch:
+                parts.append(
+                    f"ATR%={atr_pct_val:.1f}% ⚠️ vs current {current_atr_percentage:.1f}% "
+                    "(different volatility scale)"
+                )
+            else:
+                parts.append(f"ATR%={atr_pct_val:.1f}%")
 
         chop = meta.get("choppiness_at_entry")
         if chop is not None and chop > 0:
@@ -502,6 +555,10 @@ class VectorMemoryContextMixin:
         if st_signal and st_signal != "NEUTRAL":
             parts.append(f"ST={st_signal}")
 
+        pfe_val = meta.get("pfe_at_entry")
+        if pfe_val is not None:
+            parts.append(f"PFE={pfe_val:+.2f}")
+
         mfi_val = meta.get("mfi_at_entry")
         if mfi_val is not None:
             parts.append(f"MFI={mfi_val:.0f}")
@@ -510,9 +567,13 @@ class VectorMemoryContextMixin:
         if cmf_val is not None:
             parts.append(f"CMF={cmf_val:+.2f}")
 
-        vwap_val = meta.get("vwap_at_entry")
-        if vwap_val is not None and vwap_val > 0:
-            parts.append(f"VWAP={vwap_val:.2f}")
+        vwap_dist = meta.get("vwap_distance_pct")
+        if vwap_dist is not None:
+            parts.append(f"VWAPDist={vwap_dist * 100:+.2f}%")
+
+        chand_dist = meta.get("chandelier_distance_pct")
+        if chand_dist is not None:
+            parts.append(f"ChandDist={chand_dist * 100:+.2f}%")
 
         if meta.get("is_weekend", False):
             parts.append("Weekend ⚠️")

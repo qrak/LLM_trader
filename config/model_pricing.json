@@ -1,7 +1,12 @@
 {
-    "_comment": "Model pricing in USD per million tokens. Updated: May 20 2026",
+    "_comment": "Model pricing in USD per million tokens. Updated: Sep 12 2026",
     "_note": "Google AI free tier has no cost, but we track usage for analytics",
     "google": {
+        "gemini-3.8-flash": {
+            "input_per_million": 0.75,
+            "output_per_million": 3.75,
+            "description": "Active Google Studio model (config google_studio_model). Introductory pricing $0.75/$3.75 through Dec 31 2026; $1.50/$7.50 from Jan 1 2027. Source: cloud.google.com Gemini pricing (2026-09-12)"
+        },
         "gemini-3-pro-preview": {
             "input_per_million": 2.00,
             "output_per_million": 12.00,
@@ -15,7 +20,7 @@
         "gemini-3.5-flash": {
             "input_per_million": 1.50,
             "output_per_million": 9.00,
-            "description": "Active Google Studio model. Source: ai.google.dev/pricing (2026-05-19)"
+            "description": "Previous-gen flash (May 2026 rates, ai.google.dev). Kept for historical cost records."
         },
         "gemini-2.5-pro": {
             "input_per_million": 1.25,
@@ -40,6 +45,10 @@
     },
     "openrouter": {
         "_comment": "OpenRouter costs are fetched via API, this is for reference only",
+        "google/gemini-3.8-flash": {
+            "input_per_million": 0.75,
+            "output_per_million": 3.75
+        },
         "google/gemini-3-pro-preview": {
             "input_per_million": 2.00,
             "output_per_million": 12.00
@@ -56,9 +65,27 @@
             "input_per_million": 0.15,
             "output_per_million": 0.60
         },
-        "deepseek/deepseek-r1:free": {
-            "input_per_million": 0.0,
-            "output_per_million": 0.0
+        "deepseek/deepseek-v4.1-flash": {
+            "input_per_million": 0.15,
+            "output_per_million": 0.60
+        }
+    },
+    "deepseek": {
+        "_comment": "Official DeepSeek API (api.deepseek.com). Values are PEAK rates; off-peak is half. Peak = Mon-Fri 01:00-04:00 and 06:00-10:00 UTC. Source: api-docs.deepseek.com (2026-09-12)",
+        "deepseek-flash": {
+            "input_per_million": 0.44,
+            "output_per_million": 1.32,
+            "description": "Active model (deepseek_model) — DeepSeek-V4.1-Flash, native multimodal. Cache-hit input: $0.014/M. Off-peak: $0.22/$0.66"
+        },
+        "deepseek-v4-flash-vision-exp": {
+            "input_per_million": 0.44,
+            "output_per_million": 1.32,
+            "description": "Legacy experimental vision model (not default; deepseek-flash handles images natively). Same rates; images billed as input, max 384 tokens/image"
+        },
+        "deepseek-v4-pro": {
+            "input_per_million": 1.32,
+            "output_per_million": 3.96,
+            "description": "DeepSeek flagship tier. Off-peak: $0.66/$1.98"
         }
     }
 }

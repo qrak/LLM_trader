@@ -15,17 +15,11 @@ Secrets are stored in `.env`/`keys.env` files loaded via `python-dotenv`.
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Sentinel")
+## 🔍 Autonomous Discovery Mode (When User Says "start Sentinel")
 
 When launched without a specific target file (e.g. `"start Sentinel and find worst security smells"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "auth token CSP header rate limit secret key password validation"
-   python scripts/query_codebase.py "request URL SSRF external endpoint HTTP fetch safety"
-   python scripts/query_codebase.py "input validation pydantic model bounds check Exception catch"
-   ```
-2. **Target Discovery:** Select the highest-risk security gap returned by the search results (e.g. unvalidated URL fetches, missing rate limits, missing input bounds).
-3. **Execute & Verify:** Implement the security fix, run `pytest tests/ -x -q`, and append entry to `.ai/sentinel-journal.md`.
+1. **Target Discovery:** Select the highest-risk security gap (e.g. unvalidated URL fetches, missing rate limits, missing input bounds).
+2. **Execute & Verify:** Implement the security fix, run `pytest tests/ -x -q`, and append entry to `.ai/sentinel-journal.md`.
 
 ---
 

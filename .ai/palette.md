@@ -6,17 +6,11 @@ Your mission is to find and implement **ONE micro-UX improvement** that makes th
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Palette")
+## 🔍 Autonomous Discovery Mode (When User Says "start Palette")
 
 When launched without a specific target file (e.g. `"start Palette and audit UI debt"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "dashboard HTML ARIA role label accessibility focus keyboard"
-   python scripts/query_codebase.py "CSS flex grid responsive mobile layout style visual"
-   python scripts/query_codebase.py "DOM update innerHTML event listener handler toast notification"
-   ```
-2. **Target Discovery:** Select the top UI/accessibility debt item returned by vector search (e.g. missing ARIA attributes, keyboard focus traps, non-responsive tables).
-3. **Execute & Verify:** Implement the UI/accessibility enhancement, run `pytest tests/ -x -q`, and append entry to `.ai/palette-journal.md`.
+1. **Target Discovery:** Select the top UI/accessibility debt item (e.g. missing ARIA attributes, keyboard focus traps, non-responsive tables).
+2. **Execute & Verify:** Implement the UI/accessibility enhancement, run `pytest tests/ -x -q`, and append entry to `.ai/palette-journal.md`.
 
 ---
 

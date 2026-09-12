@@ -73,6 +73,7 @@ def _make_position(**overrides):
         "entry_fee": 0.50,
         "adx_at_entry": 35.0,
         "rsi_at_entry": 55.0,
+        "conditions_at_entry": MarketConditions(),
     }
     defaults.update(overrides)
     return Position(**defaults)
@@ -306,7 +307,7 @@ class TestClosePosition:
         strategy, _, _, brain, stats, _ = _make_strategy(current_position=None)
         strategy.current_position = None
 
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
         brain.update_from_closed_trade.assert_not_called()
         stats.recalculate.assert_not_called()
 
@@ -315,7 +316,7 @@ class TestClosePosition:
         pos = _make_position(direction="LONG")
         strategy, _, persistence, brain, stats, _ = _make_strategy(current_position=pos)
 
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
         # Verify decision saved
         persistence.async_save_trade_decision.assert_called_once()
@@ -339,7 +340,7 @@ class TestClosePosition:
         pos = _make_position(direction="SHORT")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
 
-        asyncio.run(strategy.close_position("take_profit", 85.0))
+        asyncio.run(strategy.close_position("take_profit", 85.0, MarketConditions()))
 
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert decision.action == "CLOSE_SHORT"
@@ -366,7 +367,7 @@ class TestClosePosition:
         dashboard_state.mark_brain_rebuild_failed = AsyncMock()
         strategy.set_dashboard_state(dashboard_state)
 
-        asyncio.run(strategy.close_position("take_profit", 110.0))
+        asyncio.run(strategy.close_position("take_profit", 110.0, MarketConditions()))
 
         dashboard_state.mark_brain_rebuild_started.assert_awaited_once_with(
             "Learning from closed LONG trade"
@@ -388,7 +389,7 @@ class TestClosePosition:
         brain.update_from_closed_trade.side_effect = RuntimeError("Brain crash")
 
         # Should not raise
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
         # Position still cleared
         assert strategy.current_position is None
@@ -405,7 +406,7 @@ class TestClosePosition:
         strategy, _, _, _, stats, _ = _make_strategy(current_position=pos)
         stats.recalculate.side_effect = RuntimeError("Stats crash")
 
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
         assert strategy.current_position is None
 
     def test_close_position_passes_row_id_to_post_mortem(self):
@@ -427,7 +428,7 @@ class TestClosePosition:
         pm_service.analyze_closed_trade = AsyncMock(return_value=None)
         strategy.post_mortem_service = pm_service
 
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
         pm_service.analyze_closed_trade.assert_called_once()
         call_kwargs = pm_service.analyze_closed_trade.call_args.kwargs
@@ -446,7 +447,7 @@ class TestClosePosition:
         pm_service.analyze_closed_trade = AsyncMock()
         strategy.post_mortem_service = pm_service
 
-        asyncio.run(strategy.close_position("stop_loss", 90.0))
+        asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
         pm_service.analyze_closed_trade.assert_not_called()
         assert strategy.current_position is None
@@ -456,7 +457,7 @@ class TestClosePosition:
         pos = _make_position(entry_price=100.0, direction="LONG")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
 
-        asyncio.run(strategy.close_position("take_profit", 115.0))
+        asyncio.run(strategy.close_position("take_profit", 115.0, MarketConditions()))
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert "P&L: +15.00%" in decision.reasoning
 
@@ -750,7 +751,7 @@ class TestClosePosition:
         pos = _make_position(entry_price=100.0, direction="SHORT")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
 
-        asyncio.run(strategy.close_position("take_profit", 85.0))
+        asyncio.run(strategy.close_position("take_profit", 85.0, MarketConditions()))
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert "P&L: +15.00%" in decision.reasoning
 
@@ -870,25 +871,47 @@ class TestExtractConfluenceFactors:
 
 
 class TestBuildConditionsFromPosition:
-    """Cover _build_conditions_from_position (lines 652-672)."""
+    """The close path hands back the entry snapshot verbatim — no per-field reconstruction."""
 
-    def test_build_conditions_from_position_defaults(self):
-        """Default position values map to classified conditions."""
-        pos = _make_position()
+    def test_build_conditions_from_position_returns_entry_snapshot(self):
+        snapshot = MarketConditions(trend_direction="BULLISH", adx=26.08, rsi=45.47,
+                                    atr=912.07, atr_percentage=1.17)
+        pos = _make_position(
+            conditions_at_entry=snapshot,
+            trend_direction_at_entry="BEARISH",
+            adx_at_entry=99.0,
+            atr_at_entry=1.0,
+            atr_percentage_at_entry=0.0,
+        )
+
         conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
 
-        assert conditions.trend_direction == "NEUTRAL"
-        assert conditions.adx == 35.0
-        assert conditions.rsi == 55.0
-        assert conditions.rsi_level is not None
-        assert conditions.volatility == "MEDIUM"
-
-    def test_build_conditions_bullish_position(self):
-        """Position with BULLISH trend maps correctly."""
-        pos = _make_position(trend_direction_at_entry="BULLISH", adx_at_entry=45.0)
-        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
         assert conditions.trend_direction == "BULLISH"
-        assert conditions.adx == 45.0
+        assert conditions.adx == 26.08
+        assert conditions.atr == 912.07
+        assert conditions.atr_percentage == 1.17
+
+    def test_build_conditions_from_position_prefers_entry_snapshot(self):
+        """The stored entry snapshot wins over reconstruction — no defaulted condition values."""
+        snapshot = MarketConditions(
+            choppiness=62.7,
+            mfi=38.0,
+            cmf=-0.0559,
+            fear_greed_index=23,
+            atr=451.47,
+            atr_percentage=0.71,
+            is_weekend=True,
+        )
+        pos = _make_position(conditions_at_entry=snapshot)
+
+        conditions = MarketConditionsExtractor.build_conditions_from_position(pos)
+
+        assert conditions is snapshot
+        assert conditions.choppiness == 62.7
+        assert conditions.mfi == 38.0
+        assert conditions.cmf == -0.0559
+        assert conditions.fear_greed_index == 23
+        assert conditions.is_weekend is True
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -945,6 +968,25 @@ class TestExtractMarketConditions:
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.fear_greed_index == 50
         assert conditions.market_sentiment == "NEUTRAL"
+
+    def test_market_conditions_sets_weekend_flag(self, monkeypatch):
+        """Regression: is_weekend was read by the brain matcher and the weekend-vs-weekday
+        analytics but never set anywhere, so every trade looked like a weekday trade."""
+        import src.trading.market_conditions_extractor as extractor_module
+
+        saturday = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
+
+        class _FrozenDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return saturday
+
+        monkeypatch.setattr(extractor_module, "datetime", _FrozenDatetime)
+        strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
+
+        conditions = strategy._conditions.extract_market_conditions({})
+
+        assert conditions.is_weekend is True
 
     def test_market_conditions_fallback_from_raw_response(self):
         """When trend_direction is empty, extract from raw_response."""
@@ -1069,6 +1111,7 @@ class TestHandleExistingPosition:
             signal="CLOSE", confidence="MEDIUM",
             stop_loss=None, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Market reversing",
+            market_conditions=MarketConditions(),
         ))
         assert result is not None
         assert result.action == "CLOSE"
@@ -1082,6 +1125,7 @@ class TestHandleExistingPosition:
             signal="CLOSE_LONG", confidence="HIGH",
             stop_loss=None, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Target reached",
+            market_conditions=MarketConditions(),
         ))
         assert result is not None
         assert result.action == "CLOSE"
@@ -1096,6 +1140,7 @@ class TestHandleExistingPosition:
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=96.0, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Tighten SL",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
 
@@ -1109,6 +1154,7 @@ class TestHandleExistingPosition:
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+            market_conditions=MarketConditions(),
         ))
         assert result is not None
         assert result.action == "UPDATE"
@@ -1122,6 +1168,7 @@ class TestHandleExistingPosition:
             signal="UPDATE", confidence="HIGH",
             stop_loss=95.0, take_profit=120.0,  # must pass SL to avoid format bug @ L434
             current_price=105.0, symbol="BTC/USDC", reasoning="Extended TP",
+            market_conditions=MarketConditions(),
         ))
         assert result is not None
         assert result.action == "UPDATE"
@@ -1136,6 +1183,7 @@ class TestHandleExistingPosition:
             signal="CLOSE", confidence="HIGH",
             stop_loss=None, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
 
@@ -1150,6 +1198,7 @@ class TestHandleExistingPosition:
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
 
@@ -1280,6 +1329,7 @@ class TestExecutorTriState:
             signal="CLOSE", confidence="HIGH",
             stop_loss=None, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
         assert strategy.current_position is None
@@ -1296,6 +1346,7 @@ class TestExecutorTriState:
             signal="CLOSE", confidence="HIGH",
             stop_loss=None, take_profit=None,
             current_price=105.0, symbol="BTC/USDC", reasoning="Reversing",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
         assert strategy.current_position is pos
@@ -1312,6 +1363,7 @@ class TestExecutorTriState:
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
         assert strategy.current_position is None
@@ -1328,6 +1380,7 @@ class TestExecutorTriState:
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=93.0, take_profit=115.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Widen SL",
+            market_conditions=MarketConditions(),
         ))
         assert result is None
         assert strategy.current_position is pos

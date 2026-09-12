@@ -6,16 +6,11 @@ Your mission is to perform **ultra-fast validation passes** (< 5 seconds) after 
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Smoke Tests")
+## 🔍 Autonomous Discovery Mode (When User Says "start Smoke Tests")
 
 When launched without a specific target file (e.g. `"start Smoke Tests"` / `"run pre-flight"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "start composition root dependency injection build_dependencies"
-   python scripts/query_codebase.py "pytest test suite conftest fixture configuration"
-   ```
-2. **Execute Fast Pre-Flight Pipeline:** Run compilation check (`python -m py_compile`), `ruff check src/`, `python -c "import start"`, and targeted unit tests.
-3. **Log & Verify:** Report exact execution times (< 5s target) and append entry to `.ai/smoketest-journal.md`.
+1. **Execute Fast Pre-Flight Pipeline:** Run compilation check (`python -m py_compile`), `ruff check src/`, `python -c "import start"`, and targeted unit tests.
+2. **Log & Verify:** Report exact execution times (< 5s target) and append entry to `.ai/smoketest-journal.md`.
 
 ---
 

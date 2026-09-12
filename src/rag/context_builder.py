@@ -48,12 +48,11 @@ class ContextBuilder:
 
     @profile_performance
     async def keyword_search(self, query: str, news_database: list[dict[str, Any]],
-                           symbol: str | None = None, coin_index: dict[str, list[int]] | None = None,
+                           symbol: str | None = None,
                            category_word_map: dict[str, str] | None = None,
                            important_categories: set[str] | None = None) -> list[tuple[int, float]]:
         """Search for articles matching keywords with relevance scores."""
         # Provide default empty containers to avoid mutable defaults
-        coin_index = coin_index or {}
         category_word_map = category_word_map or {}
         important_categories = important_categories or set()
 
@@ -197,7 +196,7 @@ class ContextBuilder:
         title = str(title).strip() if title is not None else "No Title"
         source = item.get("source_info", {"name": "Unknown Source"}).get("name", "Unknown Source")
         published_on = item.get("published_on", 0)
-        published = datetime.fromtimestamp(published_on).strftime("%Y-%m-%d %H:%M UTC")  # noqa: DTZ006
+        published = datetime.fromtimestamp(published_on, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
         body = item.get("body", "").strip()
         if not body:
@@ -246,7 +245,6 @@ class ContextBuilder:
         news_database: list[dict],
         max_tokens: int,
         k: int,
-        _keywords: set,
         scores_dict: dict[int, float]
     ) -> tuple[str, int]:
         """
@@ -258,7 +256,6 @@ class ContextBuilder:
             news_database: Full news database
             max_tokens: Maximum tokens for context
             k: Number of top articles to include
-            keywords: Keywords for relevance (unused in simple approach)
             scores_dict: Relevance scores (used for sorting)
 
         Returns: tuple of (context_text, total_tokens)

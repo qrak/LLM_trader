@@ -389,17 +389,6 @@ This file documents agent architecture and execution policy only.
 - **Simulated capital:** $10,000 with 0.075% fee model
 - **Fail-closed behavior** if governance/risk validation cannot decide safely
 
-### Codebase Vector Search (All Agents)
-
-- Before performing architectural edits, cross-module refactoring, or searching for implementations across the codebase, query the codebase vector index:
-  ```
-  python scripts/query_codebase.py "<natural language query>"
-  ```
-- Use the returned semantic snippets (file paths + line ranges + relevance scores) to navigate directly to the right code.
-- Prefer this over blind grep for architectural and "where does X happen?" questions.
-- The index auto-updates on bot startup after all provisioning stages succeed. For manual refresh: `--reindex` flag.
-- See the `codebase-vector-search` skill for full CLI reference.
-
 ---
 
 ## 9. Documentation Governance
@@ -428,7 +417,7 @@ This repository employs an 8-agent specialized AI developer roster coordinated b
 
 | # | Agent | Emoji | Prompt File | Primary Scope | Journal File |
 |---|---|---|---|---|---|
-| 1 | **Supervisor** | 🧠 | [`.ai/supervisor.md`](./.ai/supervisor.md) | Routes work, scans codebase via vector search, orchestrates pipelines | — |
+| 1 | **Supervisor** | 🧠 | [`.ai/supervisor.md`](./.ai/supervisor.md) | Routes work, orchestrates pipelines | — |
 | 2 | **Bolt** | ⚡ | [`.ai/bolt.md`](./.ai/bolt.md) | **Performance** — caching, async patterns, I/O, serialization, numpy, hot paths | [`.ai/journal.md`](./.ai/journal.md) |
 | 3 | **Palette** | 🎨 | [`.ai/palette.md`](./.ai/palette.md) | **UX & Accessibility** — dashboard HTML/CSS/JS, ARIA, keyboard nav, responsive | [`.ai/palette-journal.md`](./.ai/palette-journal.md) |
 | 4 | **Sentinel** | 🛡️ | [`.ai/sentinel.md`](./.ai/sentinel.md) | **Security** — auth, CSP headers, rate limiting, input validation, secret handling | [`.ai/sentinel-journal.md`](./.ai/sentinel-journal.md) |
@@ -442,8 +431,6 @@ This repository employs an 8-agent specialized AI developer roster coordinated b
 When executing comprehensive codebase upgrades, multi-domain enhancements, or end-to-end features, agents execute in strict dependency order:
 
 ```
-Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
-   │
    ├─ Stage 1: ⚡ Bolt — Performance & Optimization (caching, async I/O, serialization, hot paths)
    ├─ Stage 2: 🎨 Palette — UX & Accessibility (dashboard HTML/CSS/JS, ARIA, responsive, DOM)
    ├─ Stage 3: 🛡️ Sentinel — Security & Hardening (auth, CSP headers, rate limiting, input validation)
@@ -458,7 +445,6 @@ Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
 1. **Mandatory Journaling:** Every worker agent **must** append a summary entry to its corresponding `.ai/<name>-journal.md` file before completing a turn.
 2. **Context Continuity:** Supervisor and worker agents must read relevant journals before initiating work to prevent regressions or duplicate changes.
 3. **Bugfixer Final Gate:** Always run **Bugfixer** 🐛 as the final verification stage after any agent modifies source files to run full tests and verify project health.
-4. **Autonomous Vector Hunt Queries:** Use domain-specific vector queries (`python scripts/query_codebase.py "<natural language query>"`) to target weakspots autonomously.
 
 
 ## 11. Workspace Customizations (.agents/)
@@ -497,9 +483,6 @@ Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
    - Delete `position_state.json` and `position_state.json.tmp` when running tests or set unique `state_path` to avoid stale state pollution.
    - Known pre-existing failures: 3 admin Playwright tests + 8 collection errors (NumPy/Numba constraint, stale import). These are not caused by code changes.
 
-8. **Vector Database Search First Policy:**
-   - Before making architectural edits, code refactoring, performance tuning, or security updates, ALL agents must execute `.venv\Scripts\python.exe scripts/query_codebase.py "<natural language query>"` to pinpoint exact bottleneck locations, symbol dependencies, and optimal code update targets across the repository.
-
 ---
 
 #### AI Agents (in `.ai/`)
@@ -508,7 +491,7 @@ Eight specialized agents handle different aspects of the codebase. Load any prom
 
 | # | Agent | File | Focus | Journal |
 |---|---|---|---|---|
-| 🧠 | **Supervisor** | `.ai/supervisor.md` | Routes work, scans codebase via vector search, orchestrates full multi-agent pipelines | — |
+| 🧠 | **Supervisor** | `.ai/supervisor.md` | Routes work, orchestrates full multi-agent pipelines | — |
 | ⚡ | **Bolt** | `.ai/bolt.md` | Performance: caching, async patterns, I/O, serialization, numpy, hot paths | `.ai/journal.md` |
 | 🎨 | **Palette** | `.ai/palette.md` | UX & Accessibility: dashboard HTML/CSS/JS, ARIA, keyboard nav, copy buttons, responsive | `.ai/palette-journal.md` |
 | 🛡️ | **Sentinel** | `.ai/sentinel.md` | Security: auth, CSP, rate limiting, input validation, secret handling, XSS, CORS | `.ai/sentinel-journal.md` |
@@ -522,8 +505,6 @@ Eight specialized agents handle different aspects of the codebase. Load any prom
 When executing comprehensive codebase upgrades, multi-domain enhancements, or end-to-end features, Supervisor orchestrates all specialized agents in strict dependency order:
 
 ```
-Phase 0: Vector Search Scan (python scripts/query_codebase.py "<query>")
-   │
    ├─ Stage 1: ⚡ Bolt — Performance (caching, async I/O, serialization, hot paths)
    ├─ Stage 2: 🎨 Palette — UX & Accessibility (dashboard UI, ARIA, responsive, DOM)
    ├─ Stage 3: 🛡️ Sentinel — Security & Hardening (auth, CSP headers, rate limits, validation)

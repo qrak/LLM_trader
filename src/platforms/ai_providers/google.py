@@ -31,7 +31,7 @@ class GoogleAIClient(BaseAIClient):
 
         Args:
             api_key: Google AI API key
-            model: Model name (e.g., 'gemini-2.5-flash')
+            model: Model name (e.g., 'gemini-3.8-flash')
             logger: Logger instance
         """
         super().__init__(logger)

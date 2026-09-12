@@ -78,8 +78,8 @@ class BrainExperienceRecorder:
         position: Position,
         close_price: float,
         close_reason: str,
+        market_conditions: MarketConditions,
         entry_decision: TradeDecision | None = None,
-        market_conditions: MarketConditions | None = None,
     ) -> float:
         """Extract insights from a closed trade and store them in vector memory."""
         pnl_pct = position.calculate_pnl(close_price)
@@ -91,7 +91,7 @@ class BrainExperienceRecorder:
         surprise_ratio = round(
             abs(pnl_pct - expected_pnl_pct) / max(abs(expected_pnl_pct), 0.01), 4
         )
-        conditions = market_conditions or MarketConditions()
+        conditions = market_conditions
         exit_execution_context = build_exit_execution_context_from_position(position).with_defaults(
             self.default_exit_execution_context
         )
@@ -113,6 +113,19 @@ class BrainExperienceRecorder:
         )
         trade_id = f"trade_{position.entry_time.isoformat()}"
         position_id = f"{position.symbol}|{position.entry_time.isoformat()}"
+        # Raw price levels do not survive a change of price epoch ($63k vs $77k), so
+        # store the distance from entry (decimal, like sl_distance_pct). A source level
+        # that was never computed (0/absent) yields None, which the store path drops —
+        # nothing is fabricated.
+        entry_price = position.entry_price
+        vwap_distance_pct = (
+            (entry_price - conditions.vwap) / entry_price if conditions.vwap > 0 else None
+        )
+        chandelier_distance_pct = (
+            (entry_price - conditions.chandelier_long) / entry_price
+            if conditions.chandelier_long > 0
+            else None
+        )
         self.vector_memory.store_experience(
             trade_id=trade_id,
             market_context=condition_str,
@@ -153,6 +166,8 @@ class BrainExperienceRecorder:
                 "rsi_level": conditions.rsi_level,
                 "volume_state": conditions.volume_state,
                 "vwap_at_entry": conditions.vwap,
+                "vwap_distance_pct": vwap_distance_pct,
+                "chandelier_distance_pct": chandelier_distance_pct,
                 "mfi_at_entry": conditions.mfi,
                 "cmf_at_entry": conditions.cmf,
                 "bb_percent_b": conditions.bb_percent_b,
@@ -190,12 +205,12 @@ class BrainExperienceRecorder:
         new_tp: float,
         current_price: float,
         current_pnl_pct: float,
-        market_conditions: MarketConditions | None = None,
+        market_conditions: MarketConditions,
         tightening_evaluation: TighteningEvaluation | None = None,
         timeframe_minutes: int | None = None,
     ) -> None:
         """Track position update decisions for learning."""
-        conditions = market_conditions or MarketConditions()
+        conditions = market_conditions
         exit_execution_context = build_exit_execution_context_from_position(position)
         sl_moved = new_sl != old_sl
         tp_moved = new_tp != old_tp

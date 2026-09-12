@@ -73,6 +73,7 @@ from src.notifiers import ConsoleNotifier, DiscordNotifier
 from src.parsing.unified_parser import UnifiedParser
 from src.platforms.ai_providers import (
     BlockRunClient,
+    DeepSeekClient,
     GoogleAIClient,
     LMStudioClient,
     OpenRouterClient,
@@ -93,7 +94,6 @@ from src.rag import (
     TickerManager,
 )
 from src.rag.article_processor import ArticleProcessor
-from src.rag.code_vector_index import CodebaseVectorIndexer
 from src.rag.collision_resolver import CategoryCollisionResolver
 from src.rag.local_taxonomy import LocalTaxonomyProvider
 from src.rag.market_components import (
@@ -333,29 +333,47 @@ def _show_error_dialog(title: str, message: str) -> bool:
 
 
 def build_startup_banner(project_root: Path) -> Panel:
-    """Styled 'LLM TRADER' banner using rich panel + unicode block drawing."""
-    text = Text()
-
-    logo_lines = [
-        "   ██         ██         ██      ██   ",
-        "   ██         ██         ████  ████   ",
-        "   ██         ██         ██ ████ ██   ",
-        "   ██         ██         ██  ██  ██   ",
-        "   ██         ██         ██      ██   ",
-        "   ████████   ████████   ██      ██   ",
+    """Styled 'LLM TRADER v1.1' banner using rich panel + unicode block drawing."""
+    logo_llm = [
+        "██╗     ██╗     ███╗   ███╗",
+        "██║     ██║     ████╗ ████║",
+        "██║     ██║     ██╔████╔██║",
+        "██║     ██║     ██║╚██╔╝██║",
+        "███████╗███████╗██║ ╚═╝ ██║",
+        "╚══════╝╚══════╝╚═╝     ╚═╝",
     ]
-    for line in logo_lines:
-        text.append("║", style="bright_blue")
-        text.append(line, style="bright_cyan")
-        text.append("║\n", style="bright_blue")
+    logo_trader = [
+        "████████╗██████╗  █████╗ ██████╗ ███████╗██████╗ ",
+        "╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗██╔════╝██╔══██╗",
+        "   ██║   ██████╔╝███████║██║  ██║█████╗  ██████╔╝",
+        "   ██║   ██╔══██╗██╔══██║██║  ██║██╔══╝  ██╔══██╗",
+        "   ██║   ██║  ██║██║  ██║██████╔╝███████╗██║  ██║",
+        "   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝",
+    ]
+    logo_version = [
+        "██╗   ██╗ ██╗   ██╗",
+        "██║   ██║███║  ███║",
+        "██║   ██║╚██║  ╚██║",
+        "╚██╗ ██╔╝ ██║   ██║",
+        " ╚████╔╝  ██║██╗██║",
+        "  ╚═══╝   ╚═╝╚═╝╚═╝",
+    ]
+    canvas_width = max(len(line) for line in [*logo_llm, *logo_trader, *logo_version])
 
+    text = Text()
+    for line in logo_llm:
+        text.append(line.center(canvas_width) + "\n", style="bold bright_cyan")
     text.append("\n")
-    text.append("        AI-Powered Crypto Trading Bot\n", style="bold yellow")
-    text.append("        ────────────────────────────\n", style="dim white")
-    text.append(
-        f"        {project_root.resolve()}\n",
-        style="dim cyan",
-    )
+    for line in logo_trader:
+        text.append(line.center(canvas_width) + "\n", style="bold bright_cyan")
+    text.append("\n")
+    for line in logo_version:
+        text.append(line.center(canvas_width) + "\n", style="bold bright_yellow")
+    text.append("\n")
+    tagline = "AI-Powered Crypto Trading Bot"
+    text.append(tagline.center(canvas_width) + "\n", style="bold yellow")
+    text.append(("─" * len(tagline)).center(canvas_width) + "\n", style="dim white")
+    text.append(str(project_root.resolve()).center(canvas_width) + "\n", style="dim cyan")
 
     return Panel(
         Align.center(text),
@@ -561,7 +579,7 @@ class CompositionRoot:
         os.makedirs(brain_dir, exist_ok=True)
 
     async def _run_maintenance_tasks(self, brain_service: TradingBrainService) -> None:
-        """Run post-provisioning maintenance: journal rotation & codebase vector index."""
+        """Run post-provisioning maintenance: journal rotation."""
         try:
             rotated_count = JournalRotator().rotate_all_journals()
             if rotated_count > 0:
@@ -575,43 +593,6 @@ class CompositionRoot:
                 )
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Journal rotation maintenance skipped: %s", e)
-
-        if self.config.CODEBASE_INDEX_ENABLED:
-            try:
-                index_dir = self.config.CODEBASE_INDEX_DIR
-                os.makedirs(index_dir, exist_ok=True)
-                codebase_client = chromadb.PersistentClient(path=index_dir)
-                codebase_indexer = CodebaseVectorIndexer(
-                    logger=self.logger,
-                    chroma_client=codebase_client,
-                    embedding_model=brain_service.vector_memory.embedding_model,
-                    project_root=Path.cwd(),
-                )
-                self.logger.info("  -> Verifying codebase vector index embeddings...")
-                result = await asyncio.wait_for(
-                    asyncio.to_thread(codebase_indexer.index_codebase),
-                    timeout=10.0,
-                )
-                if result["indexed"] > 0:
-                    self.logger.info(
-                        "  -> Codebase vector index updated: %d files indexed, %d total chunks",
-                        result["indexed"],
-                        result["total_chunks"],
-                    )
-                else:
-                    self.logger.info(
-                        "  -> Codebase vector index up-to-date: %d files verified, %d chunks ready",
-                        result["skipped"],
-                        result["total_chunks"],
-                    )
-            except TimeoutError:
-                self.logger.info(
-                    "  -> Codebase vector index check deferred (startup prioritized)"
-                )
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("Codebase vector indexing skipped: %s", e)
-        else:
-            self.logger.info("  -> Codebase vector index disabled in config.ini")
 
     async def _provision_infrastructure(self) -> dict:
         """Provision base infrastructure components."""
@@ -752,10 +733,8 @@ class CompositionRoot:
         )
         engine = RagEngine(
             logger=self.logger,
-            token_counter=utils["token_counter"],
             config=self.config,
             coingecko_api=apis["coingecko"],
-            file_handler=file_handler,
             news_manager=news_manager,
             market_data_manager=data_manager,
             index_manager=IndexManager(self.logger, article_processor),
@@ -809,6 +788,14 @@ class CompositionRoot:
                 logger=self.logger,
             )
             self.logger.debug("OpenRouter client initialized")
+        deepseek_client: DeepSeekClient | None = None
+        if self.config.DEEPSEEK_API_KEY:
+            deepseek_client = DeepSeekClient(
+                api_key=self.config.DEEPSEEK_API_KEY,
+                base_url=self.config.DEEPSEEK_BASE_URL,
+                logger=self.logger,
+            )
+            self.logger.debug("DeepSeek client initialized")
         lmstudio_client: LMStudioClient | None = None
         if self.config.LM_STUDIO_BASE_URL:
             lmstudio_client = LMStudioClient(
@@ -833,6 +820,7 @@ class CompositionRoot:
             openrouter=openrouter_client,
             lmstudio=lmstudio_client,
             blockrun=blockrun_client,
+            deepseek=deepseek_client,
         )
         orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients)
 
@@ -1290,6 +1278,12 @@ class CompositionRoot:
                 dashboard_running = True
             elif not self.config.DASHBOARD_ENABLED:
                 self.logger.info("Dashboard disabled (config). Press 'd' to start it.")
+
+            # Ctrl+C path: the KeyboardInterrupt skips this coroutine's finally,
+            # so the shutdown manager must stop the dashboard explicitly
+            # (uvicorn no longer captures SIGINT itself).
+            if dashboard_server:
+                self.shutdown_manager.register_shutdown_callback(dashboard_server.stop)
 
             await bot.run(symbol, timeframe)
 

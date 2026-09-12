@@ -106,11 +106,13 @@ class MonitorRouter:
         storage = await asyncio.to_thread(CostStorage)
         openrouter_cost = storage.get_provider_costs("openrouter").total_cost
         google_cost = storage.get_provider_costs("google").total_cost
-        total = openrouter_cost + google_cost
+        deepseek_cost = storage.get_provider_costs("deepseek").total_cost
+        total = openrouter_cost + google_cost + deepseek_cost
         result = {
             "costs_by_provider": {
                 "openrouter": openrouter_cost,
-                "google": google_cost
+                "google": google_cost,
+                "deepseek": deepseek_cost
             },
             "total_session_cost": total,
             "last_request_cost": None,

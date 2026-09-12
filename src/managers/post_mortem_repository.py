@@ -177,13 +177,3 @@ class PostMortemRepository:
                 return []
             finally:
                 conn.close()
-
-    def get_post_mortem_count(self) -> int:
-        """Return total number of stored post-mortems."""
-        with self._lock:
-            conn = self._get_conn()
-            try:
-                row = conn.execute("SELECT COUNT(*) FROM trade_post_mortem").fetchone()
-                return row[0] if row else 0
-            finally:
-                conn.close()

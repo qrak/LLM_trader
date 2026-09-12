@@ -215,7 +215,7 @@ class TradingStrategy:
         self,
         reason: str,
         current_price: float,
-        market_conditions: MarketConditions | None = None
+        market_conditions: MarketConditions,
     ) -> None:
         """Close the current position and update trading brain.
 
@@ -360,7 +360,7 @@ class TradingStrategy:
                 return await self._open_new_position(
                     signal, confidence, stop_loss, take_profit,
                     position_size, current_price, symbol, reasoning,
-                    confluence_factors, market_conditions
+                    market_conditions, confluence_factors
                 )
 
             if reasoning:
@@ -382,7 +382,7 @@ class TradingStrategy:
         current_price: float,
         symbol: str,
         reasoning: str,
-        market_conditions: MarketConditions | None = None,
+        market_conditions: MarketConditions,
     ) -> TradeDecision | None:
         """Handle trading decision when position exists.
 
@@ -732,12 +732,11 @@ class TradingStrategy:
         current_price: float,
         symbol: str,
         reasoning: str,
+        market_conditions: MarketConditions,
         confluence_factors: tuple = (),
-        market_conditions: MarketConditions | None = None,
     ) -> TradeDecision:
         """Open a new trading position with guard-governed lifecycle."""
         direction = "LONG" if signal in ("BUY", "LONG") else "SHORT"
-        market_conditions = market_conditions or {}  # type: ignore
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
 
         intent = OrderIntent(
@@ -788,13 +787,7 @@ class TradingStrategy:
         capital = self.statistics_service.get_current_capital(self.config.DEMO_QUOTE_CAPITAL)
 
         # Extract choppiness early — used for both regime risk profile and R/R threshold
-        choppiness_val: float | None = None
-        if market_conditions is not None:
-            if isinstance(market_conditions, dict):
-                raw = market_conditions.get("choppiness")
-                choppiness_val = float(raw) if raw is not None else None
-            elif hasattr(market_conditions, "choppiness"):
-                choppiness_val = getattr(market_conditions, "choppiness", None)
+        choppiness_val: float | None = market_conditions.choppiness
 
         risk_assessment = self.risk_manager.calculate_entry_parameters(
             signal=signal,
@@ -918,7 +911,7 @@ class TradingStrategy:
             min_rr_for_entry=min_rr_for_entry,
         )
 
-        _mc = market_conditions or MarketConditions()
+        _mc = market_conditions
         _ec = build_exit_execution_context_from_config(self.config, self.config.TIMEFRAME)
         self.current_position = Position(
             entry_price=risk_assessment.entry_price,
@@ -934,6 +927,8 @@ class TradingStrategy:
             quote_amount=quote_amount,
             size_pct=final_size_pct,
             atr_at_entry=_mc.atr,
+            atr_percentage_at_entry=_mc.atr_percentage,
+            conditions_at_entry=_mc,
             volatility_level=risk_assessment.volatility_level,
             sl_distance_pct=risk_assessment.sl_distance_pct,
             tp_distance_pct=risk_assessment.tp_distance_pct,

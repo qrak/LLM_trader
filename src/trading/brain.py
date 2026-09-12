@@ -120,8 +120,8 @@ class TradingBrainService:
         position: Position,
         close_price: float,
         close_reason: str,
+        market_conditions: "MarketConditions",
         entry_decision: TradeDecision | None = None,
-        market_conditions: "MarketConditions | None" = None
     ) -> None:
         """Extract insights from a closed trade and update brain.
 
@@ -367,7 +367,7 @@ class TradingBrainService:
         new_tp: float,
         current_price: float,
         current_pnl_pct: float,
-        market_conditions: "MarketConditions | None" = None,
+        market_conditions: "MarketConditions",
         tightening_evaluation: TighteningEvaluation | None = None,
     ) -> None:
         """Track position update decisions for learning.

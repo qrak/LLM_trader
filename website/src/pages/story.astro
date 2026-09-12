@@ -7,7 +7,7 @@ import Layout from '../layouts/Layout.astro';
 		<header class="article-header">
 			<div class="meta">Published July 2026 • By @qrak</div>
 			<h1>I Built a Trading Bot That Doesn't Just Calculate — It Sees, Remembers, and Learns from Its Failures</h1>
-			<p class="subtitle">The complete 7-month engineering journey of an open-source, vision-capable crypto bot.</p>
+			<p class="subtitle">The complete 9-month engineering journey of an open-source, vision-capable crypto bot.</p>
 		</header>
 
 		<hr class="divider" />
@@ -106,7 +106,7 @@ def _ema_numba(prices: np.ndarray, period: int) -> np.ndarray:
 			<pre><code>git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp keys.env.example keys.env  # Add GOOGLE_STUDIO_API_KEY (free tier works)
+cp keys.env.example keys.env  # Add your API key (DEEPSEEK_API_KEY or GOOGLE_STUDIO_API_KEY)
 python start.py               # Dashboard launches at http://localhost:8000</code></pre>
 		</section>
 	</article>

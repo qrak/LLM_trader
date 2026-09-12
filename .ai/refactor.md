@@ -14,17 +14,11 @@ Your mission is to identify and implement **ONE small refactoring** that reduces
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Refactor")
+## 🔍 Autonomous Discovery Mode (When User Says "start Refactor")
 
 When launched without a specific target file (e.g. `"start Refactor and find worst code smells"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "isinstance getattr hasattr type introspection known class"
-   python scripts/query_codebase.py "dependency injection __init__ constructor instantiation app.py"
-   python scripts/query_codebase.py "except Exception wide catch swallowed error pass"
-   ```
-2. **Target Discovery:** Select the worst code smell returned by vector search (e.g. isinstance chain on known dataclass, constructor DI violation, wide exception catch).
-3. **Execute & Verify:** Implement the clean code refactoring, run `ruff check src/` and `pytest tests/ -x -q`, and append entry to `.ai/refactor-journal.md`.
+1. **Target Discovery:** Select the worst code smell (e.g. isinstance chain on known dataclass, constructor DI violation, wide exception catch).
+2. **Execute & Verify:** Implement the clean code refactoring, run `ruff check src/` and `pytest tests/ -x -q`, and append entry to `.ai/refactor-journal.md`.
 
 ---
 

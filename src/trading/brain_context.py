@@ -549,7 +549,10 @@ class BrainContextProvider:
             supertrend_direction=supertrend_direction,
         )
         vector_context = self.vector_memory.get_context_for_prompt(
-            query_document, k, display_context=context_query
+            query_document,
+            k,
+            display_context=context_query,
+            current_atr_percentage=atr_percentage or None,
         )
         if not vector_context:
             return ""

@@ -65,6 +65,8 @@ class ModelManager:
         """Async context manager entry."""
         if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
             await self._clients.openrouter.__aenter__()  # type: ignore[reportOptionalMemberAccess]
+        if self._clients.deepseek:  # type: ignore[reportOptionalMemberAccess]
+            await self._clients.deepseek.__aenter__()  # type: ignore[reportOptionalMemberAccess]
         if self._clients.google:  # type: ignore[reportOptionalMemberAccess]
             await self._clients.google.__aenter__()  # type: ignore[reportOptionalMemberAccess]
         if self._clients.google_paid:  # type: ignore[reportOptionalMemberAccess]
@@ -82,6 +84,8 @@ class ModelManager:
         try:
             if self._clients.openrouter:  # type: ignore[reportOptionalMemberAccess]
                 await self._clients.openrouter.close()  # type: ignore[reportOptionalMemberAccess]
+            if self._clients.deepseek:  # type: ignore[reportOptionalMemberAccess]
+                await self._clients.deepseek.close()  # type: ignore[reportOptionalMemberAccess]
             if self._clients.google:  # type: ignore[reportOptionalMemberAccess]
                 await self._clients.google.close()  # type: ignore[reportOptionalMemberAccess]
             if self._clients.google_paid:  # type: ignore[reportOptionalMemberAccess]
@@ -200,12 +204,15 @@ class ModelManager:
         provider_name = (provider_override or self.provider or "unknown").lower()
         if model_override:
             return provider_name, model_override
-        if provider_name in ("googleai", "openrouter", "local"):
+        if provider_name in ("googleai", "openrouter", "local", "deepseek"):
             return provider_name, self._orchestrator.resolve_model(provider_name)  # type: ignore[reportOptionalMemberAccess]
         if provider_name == "all":
             chain: list[str] = []
             if self.config.GOOGLE_STUDIO_MODEL:
                 chain.append(self.config.GOOGLE_STUDIO_MODEL)
+            deepseek_model = self.config.DEEPSEEK_MODEL
+            if deepseek_model:
+                chain.append(deepseek_model)
             if chart:
                 if self.config.OPENROUTER_BASE_MODEL:
                     chain.append(self.config.OPENROUTER_BASE_MODEL)
@@ -279,6 +286,8 @@ class ModelManager:
             is_free_tier = "flash" in result.model.lower() and not result.used_paid_tier
             if not is_free_tier:
                 cost = self.model_pricing.get_cost("google", result.model, prompt_tokens, completion_tokens)  # type: ignore
+        elif result.provider == "deepseek" and result.model:
+            cost = self.model_pricing.get_cost("deepseek", result.model, prompt_tokens, completion_tokens)  # type: ignore
         self.token_counter.process_response_usage(  # type: ignore[reportOptionalMemberAccess]
             usage={"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "cost": cost},
             provider=result.provider,

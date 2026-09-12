@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.trading.data_models import Position
+from src.trading.data_models import MarketConditions, Position
 from src.trading.exit_monitor import ExitMonitor
 from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.position_status_monitor import PositionStatusMonitor
@@ -42,6 +42,7 @@ def _make_position(direction="LONG"):
         confidence="HIGH",
         direction=direction,
         symbol="BTC/USDC",
+        conditions_at_entry=MarketConditions(),
     )
 
 

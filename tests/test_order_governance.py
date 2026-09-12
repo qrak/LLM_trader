@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.trading.audit import AuditTrail
+from src.trading.data_models import MarketConditions
 from src.trading.guards import GuardResult
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.guards.cooldown_window import CooldownWindowGuard
@@ -263,6 +264,7 @@ async def test_strategy_rejected_guard_records_audit_and_skips_risk_calculation(
         current_price=100.0,
         symbol="BTC/USDC",
         reasoning="test",
+        market_conditions=MarketConditions(),
     )
 
     assert decision.action == "HOLD"
@@ -300,6 +302,7 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
         current_price=100.0,
         symbol="BTC/USDC",
         reasoning="test",
+        market_conditions=MarketConditions(),
     )
 
     assert decision.action == "HOLD"
@@ -327,6 +330,7 @@ async def test_strategy_without_guards_records_approval_and_execution_audit() ->
         current_price=100.0,
         symbol="BTC/USDC",
         reasoning="test",
+        market_conditions=MarketConditions(),
     )
 
     assert decision.action == "BUY"
@@ -360,6 +364,7 @@ async def test_strategy_invalidates_cooldown_cache_after_execution() -> None:
         current_price=100.0,
         symbol="BTC/USDC",
         reasoning="test",
+        market_conditions=MarketConditions(),
     )
 
     assert decision.action == "BUY"

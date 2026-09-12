@@ -76,7 +76,6 @@ def test_add_articles_to_context_prefers_full_body_even_if_score_is_lower():
         news_database=news_database,
         max_tokens=1000,
         k=2,
-        _keywords={"btc"},
         scores_dict={1: 10.0, 0: 5.0},
     )
 
@@ -114,7 +113,6 @@ def test_add_articles_to_context_limits_article_count_to_k():
         news_database=news_database,
         max_tokens=1000,
         k=2,
-        _keywords={"btc"},
         scores_dict={0: 5.0, 1: 4.0, 2: 3.0},
     )
 

@@ -178,6 +178,23 @@ class TestBuildSystemPrompt:
         assert "HOLD only when invalidation is genuinely unclear" in prompt
         assert "CLOSE when original thesis is invalidated" in prompt
 
+    def test_decision_protocol_covers_transitional_regime(self):
+        """Choppiness 38.2-61.8 has its own branch — without it the model had no playbook
+        between 'trending' and 'ranging' and HOLD was the only expressible decision."""
+        prompt = self.mgr.build_system_prompt("BTC/USDT")
+        assert "TRANSITIONAL (Choppiness 38.2-61.8)" in prompt
+        assert "NOT an automatic HOLD" in prompt
+        assert "DI dominance" in prompt
+
+    def test_stop_loss_rule_permits_tighter_structural_stop(self):
+        """The SL rule must not contradict the ranging rule ('Tighter SL at boundary'):
+        a validated structural boundary closer than the profile ATR multiple is allowed,
+        otherwise the 2x ATR floor makes R/R >= 1.0 unreachable inside a range."""
+        rules = self.mgr.build_decision_rules()
+        assert "is the NORM, not a floor on how far it may sit" in rules
+        assert "Never tighten SL below the profile multiple" not in rules
+        assert "place the SL just beyond THAT boundary instead" in rules
+
     def test_deterministic_time_check_with_previous(self):
         prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response="test analysis")
         assert "DETERMINISTIC TIME CHECK" in prompt

@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.trading.data_models import Position
+from src.trading.data_models import MarketConditions, Position
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 
 # ─────────────────────────────────────────────────────────────────
@@ -25,6 +25,7 @@ def _make_position(
         size=0.01,
         entry_time="2024-01-01T00:00:00+00:00",
         confidence="MEDIUM",
+        conditions_at_entry=MarketConditions(),
     )
 
 

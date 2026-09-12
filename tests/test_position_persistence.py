@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.managers.persistence_manager import PersistenceManager
-from src.trading.data_models import Position, TradeDecision
+from src.trading.data_models import MarketConditions, Position, TradeDecision
 
 
 def test_position_persistence_round_trips_exit_execution_snapshot(tmp_path):
@@ -28,6 +28,7 @@ def test_position_persistence_round_trips_exit_execution_snapshot(tmp_path):
         take_profit_type_at_entry="soft",
         take_profit_check_interval_at_entry="4h",
         order_book_bias_at_entry="BUY_PRESSURE",
+        conditions_at_entry=MarketConditions(),
     )
 
     manager.save_position(position)
@@ -39,6 +40,103 @@ def test_position_persistence_round_trips_exit_execution_snapshot(tmp_path):
     assert loaded.take_profit_type_at_entry == "soft"
     assert loaded.take_profit_check_interval_at_entry == "4h"
     assert loaded.order_book_bias_at_entry == "BUY_PRESSURE"
+
+
+def test_position_persistence_round_trips_atr_percentage_at_entry(tmp_path):
+    """Regression: ATR% at entry must survive save/load or SL/TP closes lose the scale."""
+    manager = PersistenceManager(MagicMock(), data_dir=str(tmp_path))
+    position = Position(
+        entry_price=63408.99,
+        stop_loss=62720.0,
+        take_profit=64000.0,
+        size=1.0,
+        entry_time=datetime(2026, 8, 13, 12, 6, tzinfo=timezone.utc),
+        confidence="HIGH",
+        direction="LONG",
+        symbol="BTC/USDC",
+        atr_at_entry=451.47,
+        atr_percentage_at_entry=0.71,
+        conditions_at_entry=MarketConditions(),
+    )
+
+    manager.save_position(position)
+    loaded = PersistenceManager(MagicMock(), data_dir=str(tmp_path)).load_position()
+
+    assert loaded is not None
+    assert loaded.atr_at_entry == 451.47
+    assert loaded.atr_percentage_at_entry == 0.71
+
+
+def test_position_persistence_round_trips_entry_conditions_snapshot(tmp_path):
+    """The full entry-time snapshot must survive save/load — the close path returns it verbatim
+    instead of rebuilding (and defaulting) the condition fields."""
+    manager = PersistenceManager(MagicMock(), data_dir=str(tmp_path))
+    snapshot = MarketConditions(
+        trend_direction="BULLISH",
+        adx=24.78,
+        rsi=40.78,
+        volatility="LOW",
+        atr=451.47,
+        atr_percentage=0.71,
+        choppiness=62.7,
+        mfi=38.0,
+        cmf=-0.0559,
+        vwap=63120.5,
+        fear_greed_index=23,
+        is_weekend=True,
+        social_sentiment_reddit="BEARISH",
+        portfolio_pnl_pct=-1.3,
+    )
+    position = Position(
+        entry_price=63408.99,
+        stop_loss=62720.0,
+        take_profit=64000.0,
+        size=1.0,
+        entry_time=datetime(2026, 8, 13, 12, 6, tzinfo=timezone.utc),
+        confidence="HIGH",
+        direction="LONG",
+        symbol="BTC/USDC",
+        conditions_at_entry=snapshot,
+    )
+
+    manager.save_position(position)
+    loaded = PersistenceManager(MagicMock(), data_dir=str(tmp_path)).load_position()
+
+    assert loaded is not None
+    assert loaded.conditions_at_entry is not None
+    assert loaded.conditions_at_entry.choppiness == 62.7
+    assert loaded.conditions_at_entry.mfi == 38.0
+    assert loaded.conditions_at_entry.cmf == -0.0559
+    assert loaded.conditions_at_entry.social_sentiment_reddit == "BEARISH"
+    assert loaded.conditions_at_entry.is_weekend is True
+    # The persisted file must not trip the unknown-field warning
+    assert manager.validate_loaded_position() == []
+
+
+def test_position_persistence_rejects_file_without_conditions_snapshot(tmp_path):
+    """A positions.json lacking the entry snapshot is refused — no silent rebuild.
+
+    The snapshot is required on Position now, so a file without it cannot be turned into a
+    valid position (loud failure instead of fabricated condition values).
+    """
+    manager = PersistenceManager(MagicMock(), data_dir=str(tmp_path))
+    manager.positions_file.write_text(
+        json.dumps(
+            {
+                "entry_price": 100.0,
+                "stop_loss": 95.0,
+                "take_profit": 110.0,
+                "size": 1.0,
+                "entry_time": "2026-04-30T00:00:00+00:00",
+                "confidence": "HIGH",
+                "direction": "LONG",
+                "symbol": "BTC/USDC",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert manager.load_position() is None
 
 
 def test_position_persistence_defaults_missing_exit_execution_snapshot_to_unknown(tmp_path):
@@ -54,6 +152,7 @@ def test_position_persistence_defaults_missing_exit_execution_snapshot_to_unknow
                 "confidence": "HIGH",
                 "direction": "LONG",
                 "symbol": "BTC/USDC",
+                "conditions_at_entry": MarketConditions().to_dict(),
             }
         ),
         encoding="utf-8",
@@ -118,6 +217,7 @@ def test_failed_position_write_does_not_mark_cache_valid(tmp_path):
         confidence="HIGH",
         direction="LONG",
         symbol="BTC/USDC",
+        conditions_at_entry=MarketConditions(),
     )
 
     with patch("src.managers.persistence_manager.os.replace", side_effect=OSError("disk full")):

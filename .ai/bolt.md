@@ -14,17 +14,11 @@ Disk file I/O in hot loops is expensive — every extra `stat()` or `open()` cos
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Bolt")
+## 🔍 Autonomous Discovery Mode (When User Says "start Bolt")
 
 When launched without a specific target file (e.g. `"start Bolt and find worst bottlenecks"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "async sync blocking file I/O open json load sleep delay latency"
-   python scripts/query_codebase.py "vector search similarity embedding query database slow bottleneck"
-   python scripts/query_codebase.py "dict serialization numpy array traversal loop copy memory"
-   ```
-2. **Target Discovery:** Select the worst performance bottleneck returned by vector search (e.g. sync file read in async loop, un-cached vector search, redundant JSON serialization).
-3. **Execute & Verify:** Implement the performance optimization, run `pytest tests/ -x -q`, and append entry to `.ai/journal.md`.
+1. **Target Discovery:** Select the worst performance bottleneck (e.g. sync file read in async loop, un-cached vector search, redundant JSON serialization).
+2. **Execute & Verify:** Implement the performance optimization, run `pytest tests/ -x -q`, and append entry to `.ai/journal.md`.
 
 ---
 

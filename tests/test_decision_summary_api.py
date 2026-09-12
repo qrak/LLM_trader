@@ -14,7 +14,7 @@ from src.dashboard.routers.brain import (
     _build_decision_graph,
     _build_decision_synopsis,
 )
-from src.trading.data_models import Position
+from src.trading.data_models import MarketConditions, Position
 
 
 @pytest.fixture
@@ -200,6 +200,7 @@ async def test_decision_summary_includes_open_position_fields(config):
         stop_loss_check_interval_at_entry="15m",
         take_profit_type_at_entry="hard",
         take_profit_check_interval_at_entry="15m",
+        conditions_at_entry=MarketConditions(),
     )
     persistence = MagicMock()
     persistence.load_position.return_value = position

@@ -30,12 +30,9 @@ def _make_mock_rag_engine() -> RagEngine:
     config.RAG_NEWS_ENRICH_MIN_CHARS = 200
     config.RAG_RETRIEVAL_TIMEOUT = 5
 
-    token_counter = MagicMock()
-
     # Build the engine with DI
     engine = RagEngine(
         logger=logger,
-        token_counter=token_counter,
         config=config,
         news_manager=MagicMock(),
         market_data_manager=MagicMock(),
@@ -106,7 +103,7 @@ class TestLatencyInjection:
         # so TimeoutError is captured as a return value, not propagated.
         try:
             await engine.refresh_market_data()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pytest.fail("refresh_market_data should not propagate exceptions from gather tasks")
 
 

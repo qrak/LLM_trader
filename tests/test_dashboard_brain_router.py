@@ -14,7 +14,7 @@ from src.dashboard.routers.brain import (
     _build_current_market_context,
     _extract_market_status,
 )
-from src.trading.data_models import Position, VectorSearchResult
+from src.trading.data_models import MarketConditions, Position, VectorSearchResult
 
 
 def test_build_current_market_context_uses_legacy_response_indicators(tmp_path):
@@ -291,6 +291,7 @@ async def test_get_current_position_recomputes_missing_distance_percentages():
         stop_loss_check_interval_at_entry="15m",
         take_profit_type_at_entry="hard",
         take_profit_check_interval_at_entry="15m",
+        conditions_at_entry=MarketConditions(),
     )
     dashboard_state = DashboardState(current_price=68366.03)
     persistence = MagicMock()
@@ -414,6 +415,7 @@ async def test_get_vector_details_sorts_legacy_pnl_metadata_safely():
     dashboard_state = DashboardState()
     vector_memory = MagicMock()
     vector_memory.trade_count = 3
+    vector_memory.MIN_EVIDENCE_TRADES = 3
     vector_memory.semantic_rule_count = 0
     vector_memory.compute_confidence_stats.return_value = {}
     vector_memory.compute_adx_performance.return_value = {}
@@ -438,6 +440,70 @@ async def test_get_vector_details_sorts_legacy_pnl_metadata_safely():
     result = await router.get_vector_details(request, query="BULLISH", limit=3)
 
     assert [item["id"] for item in result["experiences"]] == ["high", "missing", "low"]
+
+
+async def test_get_vector_details_includes_evidence_gate_and_match_factors():
+    dashboard_state = DashboardState()
+    vector_memory = MagicMock()
+    vector_memory.trade_count = 2
+    vector_memory.MIN_EVIDENCE_TRADES = 3
+    vector_memory.semantic_rule_count = 0
+    vector_memory.compute_confidence_stats.return_value = {}
+    vector_memory.compute_adx_performance.return_value = {}
+    vector_memory.compute_factor_performance.return_value = {}
+    vector_memory._build_match_factors.return_value = "ADX=26 | BB%B=0.40"
+    vector_memory.retrieve_similar_experiences.return_value = [
+        VectorSearchResult("x1", "doc", 90.0, 0.0, 90.0, {"outcome": "LOSS"}),
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=vector_memory,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+    )
+    request = MagicMock()
+    request.query_params = {}
+
+    result = await router.get_vector_details(request, query="BULLISH", limit=5)
+
+    assert result["evidence_gate"] == {"trade_count": 2, "min_trades": 3, "limited": True}
+    assert result["experiences"][0]["match_factors"] == "ADX=26 | BB%B=0.40"
+    vector_memory._build_match_factors.assert_called_once_with({"outcome": "LOSS"}, "BULLISH", None)
+
+
+async def test_get_vector_details_omits_match_factors_without_current_context():
+    dashboard_state = DashboardState()
+    vector_memory = MagicMock()
+    vector_memory.trade_count = 0
+    vector_memory.MIN_EVIDENCE_TRADES = 3
+    vector_memory.semantic_rule_count = 0
+    vector_memory.compute_confidence_stats.return_value = {}
+    vector_memory.compute_adx_performance.return_value = {}
+    vector_memory.compute_factor_performance.return_value = {}
+    vector_memory.get_all_experiences.return_value = [
+        VectorSearchResult("x1", "doc", 0.0, 0.0, 0.0, {"outcome": "LOSS"}),
+    ]
+    router = BrainRouter(
+        config=SimpleNamespace(DATA_DIR="unused"),
+        logger=MagicMock(),
+        dashboard_state=dashboard_state,
+        vector_memory=vector_memory,
+        unified_parser=None,
+        persistence=MagicMock(),
+        exchange_manager=None,
+    )
+    request = MagicMock()
+    request.query_params = {}
+
+    result = await router.get_vector_details(request, query="", limit=5)
+
+    assert result["evidence_gate"]["limited"] is True
+    assert result["current_context"] is None
+    assert result["experiences"][0]["match_factors"] is None
+    vector_memory._build_match_factors.assert_not_called()
 
 
 

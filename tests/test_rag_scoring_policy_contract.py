@@ -22,45 +22,6 @@ def _policy() -> ArticleScoringPolicy:
     return ArticleScoringPolicy(config=config)
 
 
-def test_market_overview_receives_bonus_boost():
-    policy = _policy()
-    current_time = 1000.0
-    pub_time = 1000.0
-
-    content = ArticleContent(
-        title="market update",
-        body="macro outlook",
-        categories="macro",
-        tags="overview",
-        detected_coins="",
-    )
-
-    base_score = policy.calculate_article_relevance(
-        article={"id": "article_1", "body": "macro outlook"},
-        content=content,
-        keywords={"market"},
-        coin=None,
-        current_time=current_time,
-        relevant_categories=[],
-        important_categories=set(),
-        pub_time=pub_time,
-        coin_patterns=None,
-    )
-    boosted_score = policy.calculate_article_relevance(
-        article={"id": "market_overview", "body": "macro outlook"},
-        content=content,
-        keywords={"market"},
-        coin=None,
-        current_time=current_time,
-        relevant_categories=[],
-        important_categories=set(),
-        pub_time=pub_time,
-        coin_patterns=None,
-    )
-
-    assert boosted_score > base_score
-
-
 def test_symbol_relevance_demotes_non_coin_articles():
     policy = _policy()
     current_time = 1000.0

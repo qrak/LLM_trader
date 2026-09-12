@@ -5,7 +5,7 @@ import hashlib
 import os
 import time as time_module
 from collections import defaultdict
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 
 import uvicorn
 from fastapi import FastAPI
@@ -530,6 +530,9 @@ class DashboardServer:
             loop="asyncio",
             ws="wsproto",
             proxy_headers=True,
+            # Bound the graceful drain: without a timeout uvicorn waits forever
+            # for connections/tasks to finish during shutdown.
+            timeout_graceful_shutdown=5,
             # Cloudflare IPv4 & IPv6 ranges — verified 2026-03-02
             # Source: https://www.cloudflare.com/ips-v4/ and /ips-v6/
             # Update periodically: Cloudflare rarely changes these but does occasionally add ranges.
@@ -544,8 +547,13 @@ class DashboardServer:
         )
         self._server = uvicorn.Server(config)
 
-        # Disable uvicorn's own signal handling since we handle it ourselves
-        self._server.install_signal_handlers = lambda: None  # type: ignore
+        # uvicorn >=0.29 removed Server.install_signal_handlers(); serve() now
+        # swaps SIGINT/SIGTERM itself via capture_signals(). Neutralise that
+        # swap so the bot keeps signal ownership: Ctrl+C must reach start.py
+        # immediately (confirmation popup + graceful shutdown). Otherwise the
+        # dashboard swallows the first Ctrl+C and only stops after it drains
+        # its connections — needing a second press to stop the bot.
+        self._server.capture_signals = nullcontext  # type: ignore
 
         # Uvicorn logs shutdown noise (GeneratorExit, RuntimeError from
         # starlette lifespan) through logging.getLogger("uvicorn.error").

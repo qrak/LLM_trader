@@ -55,7 +55,7 @@ jobs:
         run: |
           pip install hermes-agent
           hermes config set model.provider deepseek
-          hermes config set model.default deepseek-v4-flash
+          hermes config set model.default deepseek-flash
           hermes config set approvals.mode off
 
       - name: Announce investigation (issues only)

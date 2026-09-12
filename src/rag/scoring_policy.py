@@ -41,12 +41,9 @@ class ArticleScoringPolicy:
 
         density_mult = self.calculate_density_modifier(article)
         cooc_mult = self.calculate_cooccurrence_modifier(keywords, content)
-        coin_relevance_mult = self._calculate_coin_relevance_multiplier(article, coin, coin_score, content, coin_patterns)
+        coin_relevance_mult = self._calculate_coin_relevance_multiplier(coin, coin_score, content, coin_patterns)
 
         final_score = base_score * density_mult * cooc_mult * coin_relevance_mult * (0.3 + 0.7 * recency)
-
-        if article.get("id") == "market_overview":
-            final_score += 10
 
         return final_score
 
@@ -148,14 +145,13 @@ class ArticleScoringPolicy:
 
     @staticmethod
     def _calculate_coin_relevance_multiplier(
-        article: dict[str, Any],
         coin: str | None,
         coin_score: float,
         content: Any,
         coin_patterns: dict[str, Any] | None,
     ) -> float:
         """Demote low-coin-relevance items for symbol-specific analysis."""
-        if not coin or article.get("id") == "market_overview":
+        if not coin:
             return 1.0
         if coin_score == 0:
             return 0.1

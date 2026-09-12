@@ -36,7 +36,7 @@ class RSSCrawl4AINewsProvider:
     This class satisfies the implicit ``news_client`` protocol expected by
     :class:`src.rag.news_manager.NewsManager`:
 
-    * ``async fetch_news(session, api_categories) -> list[dict]``
+    * ``async fetch_news(session) -> list[dict]``
     * ``filter_by_age(articles, max_age_hours) -> list[dict]``
     """
 
@@ -52,12 +52,10 @@ class RSSCrawl4AINewsProvider:
     async def fetch_news(
         self,
         session: aiohttp.ClientSession | None = None,
-        api_categories: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch, deduplicate, and enrich articles from configured RSS sources.
 
-        *api_categories* is accepted for interface compatibility but is not used;
-        category detection is handled by ArticleProcessor after ingestion.
+        Category detection is handled by ArticleProcessor after ingestion.
         """
         enabled_names = self._enabled_source_names()
         sources = get_sources(enabled_names, self.config.RAG_NEWS_SOURCE_URLS)

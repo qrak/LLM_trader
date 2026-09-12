@@ -59,19 +59,19 @@ User asks for improvement
 
 ---
 
-## Autonomous Vector Hunt Trigger Commands
+## Autonomous Hunt Trigger Commands
 
 Users can trigger any agent directly to hunt down and fix the worst bottlenecks, security smells, or code bloat — even when the user doesn't specify a target file or method!
 
 | User Command | Triggered Agent | Autonomous Action |
 |---|---|---|
-| `"start Bolt"` / `"Bolt hunt bottlenecks"` | ⚡ **Bolt** | Runs vector queries for sync I/O, slow DB calls, serialization loops $\rightarrow$ fixes top bottleneck |
-| `"start Sentinel"` / `"Sentinel hunt security smells"` | 🛡️ **Sentinel** | Runs vector queries for auth, CSP, rate limits, input validation $\rightarrow$ hardens top security risk |
-| `"start Refactor"` / `"Refactor hunt code smells"` | ✨ **Refactor** | Runs vector queries for isinstance chains, DI breaks, wide exceptions $\rightarrow$ cleans top code smell |
-| `"start Concise"` / `"Concise hunt verbosity"` | ✂️ **Concise** | Runs vector queries for if/elif ladders, duplicate formatters, LOC bloat $\rightarrow$ shrinks top verbose file |
-| `"start Palette"` / `"Palette audit UI"` | 🎨 **Palette** | Runs vector queries for ARIA gaps, focus traps, CSS bugs $\rightarrow$ enhances top UI/accessibility debt |
-| `"start Smoke Tests"` / `"Smoke pre-flight"` | 🔥 **Smoke Tests** | Runs vector queries for CompositionRoot startup, compiles syntax, checks linter (< 5s) |
-| `"start Bugfixer"` / `"Bugfixer audit regressions"` | 🐛 **Bugfixer** | Runs vector queries for silent error swallows, position state corruption $\rightarrow$ verifies test suite |
+| `"start Bolt"` / `"Bolt hunt bottlenecks"` | ⚡ **Bolt** | Hunts sync I/O, slow DB calls, serialization loops $\rightarrow$ fixes top bottleneck |
+| `"start Sentinel"` / `"Sentinel hunt security smells"` | 🛡️ **Sentinel** | Hunts auth, CSP, rate limits, input validation $\rightarrow$ hardens top security risk |
+| `"start Refactor"` / `"Refactor hunt code smells"` | ✨ **Refactor** | Hunts isinstance chains, DI breaks, wide exceptions $\rightarrow$ cleans top code smell |
+| `"start Concise"` / `"Concise hunt verbosity"` | ✂️ **Concise** | Hunts if/elif ladders, duplicate formatters, LOC bloat $\rightarrow$ shrinks top verbose file |
+| `"start Palette"` / `"Palette audit UI"` | 🎨 **Palette** | Hunts ARIA gaps, focus traps, CSS bugs $\rightarrow$ enhances top UI/accessibility debt |
+| `"start Smoke Tests"` / `"Smoke pre-flight"` | 🔥 **Smoke Tests** | Hunts CompositionRoot startup, compiles syntax, checks linter (< 5s) |
+| `"start Bugfixer"` / `"Bugfixer audit regressions"` | 🐛 **Bugfixer** | Hunts silent error swallows, position state corruption $\rightarrow$ verifies test suite |
 
 ---
 
@@ -96,8 +96,6 @@ Every time an agent makes a change, they **must** write a journal entry. These f
 When executing comprehensive codebase upgrades, multi-domain enhancements, or end-to-end features, Supervisor orchestrates all specialized agents in strict dependency order:
 
 ```
-Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
-   │
    ├─ Stage 1: ⚡ Bolt — Performance & Optimization (caching, async I/O, serialization, hot paths)
    │
    ├─ Stage 2: 🎨 Palette — UX & Accessibility (dashboard HTML/CSS/JS, ARIA, responsive, DOM)
@@ -115,37 +113,11 @@ Phase 0: 🔍 Vector Search Scan (python scripts/query_codebase.py "<query>")
 
 ### Multi-Agent Pipeline Execution Rules
 
-1. **Phase 0 Vector Scan First:** Always run `python scripts/query_codebase.py "<query>"` before starting to locate affected symbols and optimal update locations.
-2. **Sequential Execution:** Run agents in stage order (1 $\rightarrow$ 7). Each agent operates within its scope and appends an entry to its mandatory `.ai/<agent>-journal.md`.
-3. **Refactor After Implementations:** Always run **Refactor** ✨ after Bolt, Palette, and Sentinel have implemented their features/optimizations to clean up type guards and enforce DI patterns.
-4. **Concise for LOC Reduction:** Run **Concise** ✂️ after Refactor if line count can be shrunk using mixins or dispatch tables without altering logic.
-5. **Smoke Test Gate:** Run **Smoke Tests** 🔥 for immediate compilation and linter validation (< 5s) before kicking off long test suites.
-6. **Bugfixer Last:** Always run **Bugfixer** 🐛 as the final gate to verify zero regressions across all modified files and confirm all journals are updated.
-
----
-
-## Vector Search Weakspot Discovery & Delegation Protocol
-
-Supervisor actively uses codebase vector search (`scripts/query_codebase.py`) to discover latent weakspots across the codebase and delegate targeted tasks to specialized agents.
-
-### Domain-Specific Vector Queries for Weakspot Audits
-
-| Weakspot Category | Natural Language Vector Query | Target Agent | Expected Remediation |
-|---|---|---|---|
-| **I/O & Latency Hotspots** | `"async sync blocking open json read sleep"` | ⚡ **Bolt** | ThreadPool offloading, `ORJSONResponse`, in-memory caching |
-| **UX & Dashboard Debt** | `"dashboard DOM ARIA button CSS role event listener"` | 🎨 **Palette** | ARIA attributes, semantic HTML, keyboard focus traps, responsive layout |
-| **Security & Auth Vulnerabilities** | `"auth token CORS CSP rate limit secret header validation"` | 🛡️ **Sentinel** | CSP headers, rate limiting, SSRF guards, pydantic input bounds |
-| **Clean Code & Type Introspection** | `"isinstance getattr hasattr isinstance chain duplicate helper"` | ✨ **Refactor** | O(1) type dispatch tables, direct attribute access on known types, DI enforcement |
-| **Verbosity & LOC Bloat** | `"if elif ladder branch dispatch table duplicate format"` | ✂️ **Concise** | Mixins, base classes, dispatch tables, ternary range bucketing, LOC reduction |
-| **Startup & Compilation Health** | `"start composition root import compile pytest"` | 🔥 **Smoke Tests** | Ultra-fast pre-flight pass (< 5s), syntax compilation, DI startup validation |
-| **Silent Failures & Edge Cases** | `"except Exception pass queue full position state"` | 🐛 **Bugfixer** | Fail-closed error handling, queue overflow logging, regression verification |
-
-### Delegation & Execution Protocol
-
-1. **Scan:** Run `python scripts/query_codebase.py "<query>"` to locate weakspot candidate files and line ranges.
-2. **Decompose & Delegate:** Pass the query results and target line ranges to the specialized agent prompt (`.ai/<agent>.md`).
-3. **Execute & Journal:** Agent performs focused remediation and appends entry to `.ai/<agent>-journal.md`.
-4. **Smoke Check & Verify:** Run **Smoke Tests** 🔥 for instant sanity check, followed by **Bugfixer** 🐛 for regression suite verification.
+1. **Sequential Execution:** Run agents in stage order (1 $\rightarrow$ 7). Each agent operates within its scope and appends an entry to its mandatory `.ai/<agent>-journal.md`.
+2. **Refactor After Implementations:** Always run **Refactor** ✨ after Bolt, Palette, and Sentinel have implemented their features/optimizations to clean up type guards and enforce DI patterns.
+3. **Concise for LOC Reduction:** Run **Concise** ✂️ after Refactor if line count can be shrunk using mixins or dispatch tables without altering logic.
+4. **Smoke Test Gate:** Run **Smoke Tests** 🔥 for immediate compilation and linter validation (< 5s) before kicking off long test suites.
+5. **Bugfixer Last:** Always run **Bugfixer** 🐛 as the final gate to verify zero regressions across all modified files and confirm all journals are updated.
 
 ---
 

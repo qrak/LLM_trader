@@ -1,14 +1,14 @@
 """
-OpenRouter client implementation using the official OpenRouter SDK.
+OpenRouter client implementation using the raw OpenAI SDK (AsyncOpenAI).
 Supports text-only and multimodal (text + image) requests with cost tracking.
 """
 import asyncio
 import base64
-import inspect
 import io
 from typing import Any
 
-from openrouter import OpenRouter
+import httpx
+from openai import AsyncOpenAI
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
@@ -17,19 +17,30 @@ from src.utils.decorators import retry_api_call
 
 
 class OpenRouterClient(BaseAIClient):
-    """Client for handling OpenRouter API requests using the official SDK."""
+    """Client for handling OpenRouter API requests via its OpenAI-compatible endpoint."""
 
     def __init__(self, api_key: str, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.api_key = api_key
         self.base_url = base_url
-        self._client: OpenRouter | None = None
-        # OpenRouter SDK 0.11+ removed presence_penalty; filter it out
+        self._client: AsyncOpenAI | None = None
+        # presence_penalty is never forwarded to OpenRouter — kept filtered for parity
+        # with the pre-consolidation dedicated-SDK client (SDK 0.11+ dropped it)
         self._known_unsupported_params.add("presence_penalty")
 
     async def _initialize_client(self) -> None:
-        """Initialize the OpenRouter SDK client."""
+        """Initialize the OpenRouter API client."""
         self._client = self._create_client()
+
+    def _create_client(self) -> AsyncOpenAI:
+        """Create an OpenAI-compatible client pointed at the OpenRouter API."""
+        return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+
+    def _ensure_client(self) -> AsyncOpenAI:
+        """Ensure a client exists and return it."""
+        if not self._client:
+            self._client = self._create_client()
+        return self._client
 
     async def close(self) -> None:
         """Close the SDK client."""
@@ -38,63 +49,31 @@ class OpenRouterClient(BaseAIClient):
             return
         try:
             self.logger.debug("Closing OpenRouterClient SDK session")
-            async_exit = getattr(client, "__aexit__", None)
-            if callable(async_exit):
-                try:
-                    result = async_exit(None, None, None)  # pylint: disable=not-callable
-                    if inspect.isawaitable(result):
-                        await result
-                except Exception as exc: # pylint: disable=broad-exception-caught  # noqa: BLE001
-                    self.logger.warning("OpenRouter async client cleanup failed: %s", exc)
-            sync_exit = getattr(client, "__exit__", None)
-            if callable(sync_exit):
-                try:
-                    sync_exit(None, None, None)  # pylint: disable=not-callable
-                except Exception as exc: # pylint: disable=broad-exception-caught  # noqa: BLE001
-                    self.logger.warning("OpenRouter sync client cleanup failed: %s", exc)
+            await client.close()
         finally:
             self._client = None
-
-    def _create_client(self) -> OpenRouter:
-        """Create an OpenRouter SDK client with SDK-version-compatible base URL handling."""
-        try:
-            return OpenRouter(api_key=self.api_key, server_url=self.base_url)
-        except TypeError as exc:
-            message = str(exc).lower()
-            if "server_url" not in message or not any(term in message for term in ("keyword", "argument", "unsupported", "unexpected")):
-                raise
-            self.logger.warning(
-                "Installed OpenRouter SDK does not support server_url; using SDK default API endpoint"
-            )
-            return OpenRouter(api_key=self.api_key)
-
-    def _ensure_client(self) -> OpenRouter:
-        """Ensure a client exists and return it."""
-        if not self._client:
-            self._client = self._create_client()
-        return self._client
-
-
 
     @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
-        """Send a chat completion request to the OpenRouter API using the SDK."""
+        """Send a chat completion request to the OpenRouter API."""
         client = self._ensure_client()
         try:
-            self.logger.debug("Sending request to OpenRouter SDK with model: %s", model)
+            self.logger.debug("Sending request to OpenRouter API with model: %s", model)
 
-            # Extract reasoning effort from config (pop so it isn't unpacked as flat param)
-            reasoning_effort = model_config.pop("openrouter_reasoning_effort", None)
+            # Extract reasoning effort from a copy (the config dict is shared across calls);
+            # `reasoning` is not a standard openai-SDK field — it travels via extra_body
+            call_config = dict(model_config)
+            reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}
             if reasoning_effort:
-                extra_kwargs["reasoning"] = {"effort": reasoning_effort}
+                extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
 
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
-                client.chat.send_async,
-                model_config,
+                client.chat.completions.create,
+                call_config,
                 model=model,
                 messages=messages,
                 **extra_kwargs
@@ -135,24 +114,26 @@ class OpenRouterClient(BaseAIClient):
             multimodal_messages = self._prepare_multimodal_messages(
                 messages, multimodal_content
             )
-            self.logger.debug("Sending chart analysis request to OpenRouter SDK (%s bytes)", len(img_data))
+            self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
 
-            # Extract reasoning effort from config (pop so it isn't unpacked as flat param)
-            reasoning_effort = model_config.pop("openrouter_reasoning_effort", None)
+            # Extract reasoning effort from a copy (the config dict is shared across calls);
+            # `reasoning` is not a standard openai-SDK field — it travels via extra_body
+            call_config = dict(model_config)
+            reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}
             if reasoning_effort:
-                extra_kwargs["reasoning"] = {"effort": reasoning_effort}
+                extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
 
             # Use base class shared retry logic
             response = await self._execute_with_param_retry(
-                client.chat.send_async,
-                model_config,
+                client.chat.completions.create,
+                call_config,
                 model=model,
                 messages=multimodal_messages,
                 **extra_kwargs
             )
             if response:
-                self.logger.debug("Received successful chart analysis response from OpenRouter SDK")
+                self.logger.debug("Received successful chart analysis response from OpenRouter API")
             return self.convert_pydantic_response(response)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error during OpenRouter chart analysis request: %s", str(e))
@@ -160,7 +141,7 @@ class OpenRouterClient(BaseAIClient):
 
     async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> dict[str, Any] | None:
         """
-        Retrieve cost and stats for a specific generation.
+        Retrieve cost and stats for a specific generation via the REST endpoint.
 
         Args:
             generation_id: The generation ID from completion response
@@ -170,85 +151,34 @@ class OpenRouterClient(BaseAIClient):
             Dictionary with token counts and costs
         """
         await asyncio.sleep(retry_delay)
-        client = self._ensure_client()
         try:
-            # Offload synchronous SDK call to thread pool to avoid blocking event loop
-            generation = await asyncio.to_thread(
-                client.generations.get_generation,
-                id=generation_id
-            )
-            if generation and generation.data:
-                data = generation.data
-                try:
-                    model = data.model
-                except AttributeError:
-                    model = "unknown"
-                try:
-                    total_cost = data.total_cost
-                except AttributeError:
-                    total_cost = 0
-                try:
-                    prompt_tokens = data.tokens_prompt
-                except AttributeError:
-                    prompt_tokens = 0
-                try:
-                    completion_tokens = data.tokens_completion
-                except AttributeError:
-                    completion_tokens = 0
-                try:
-                    native_prompt_tokens = data.native_tokens_prompt
-                except AttributeError:
-                    native_prompt_tokens = 0
-                try:
-                    native_completion_tokens = data.native_tokens_completion
-                except AttributeError:
-                    native_completion_tokens = 0
-
-                return {
-                    "model": model,
-                    "total_cost": total_cost,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "native_prompt_tokens": native_prompt_tokens,
-                    "native_completion_tokens": native_completion_tokens,
-                }
-            return None
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    f"{self.base_url.rstrip('/')}/generation",
+                    params={"id": generation_id},
+                    headers={"Authorization": f"Bearer {self.api_key}"},
+                )
+            if response.status_code == 404:
+                self.logger.debug(
+                    "Generation stats not yet available for %s... (will be indexed shortly)",
+                    generation_id[:20]
+                )
+                return None
+            response.raise_for_status()
+            data = response.json().get("data")
+            if not data:
+                return None
+            return {
+                "model": data.get("model", "unknown"),
+                "total_cost": data.get("total_cost", 0),
+                "prompt_tokens": data.get("tokens_prompt", 0),
+                "completion_tokens": data.get("tokens_completion", 0),
+                "native_prompt_tokens": data.get("native_tokens_prompt", 0),
+                "native_completion_tokens": data.get("native_tokens_completion", 0),
+            }
         except Exception as e:  # noqa: BLE001
-            error_msg = str(e)
-            if "not found" in error_msg.lower():
-                self.logger.debug("Generation stats not yet available for %s... (will be indexed shortly)", generation_id[:20])
-            else:
-                self.logger.warning("Could not retrieve generation stats: %s", error_msg)
+            self.logger.warning("Could not retrieve generation stats: %s", e)
             return None
-
-    def _extract_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
-        """Extract text content from the last user message."""
-        for message in reversed(messages):
-            if message["role"] == "user":
-                return message["content"]
-        return ""
-
-    def _prepare_multimodal_messages(
-        self,
-        messages: list[dict[str, Any]],
-        multimodal_content: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """Convert messages to OpenRouter multimodal format."""
-        multimodal_messages = []
-        for message in messages:
-            if message["role"] == "system":
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": f"System instructions: {message['content']}"
-                })
-            elif message["role"] == "user" and message == messages[-1]:
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": multimodal_content
-                })
-            else:
-                multimodal_messages.append(message)
-        return multimodal_messages
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle OpenRouter specific exceptions, falling back to common handler."""
@@ -257,5 +187,3 @@ class OpenRouterClient(BaseAIClient):
             return result
         self.logger.error("Unexpected OpenRouter error: %s", exception)
         return None
-
-

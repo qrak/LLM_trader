@@ -8,7 +8,7 @@
 
 🌐 **[Public Landing Page](https://semanticsignal.qrak.org/landing.html)** — Interactive architecture overview & system showcase  
 📊 **[Live Dashboard](https://semanticsignal.qrak.org)** — Watch the neural trading brain in action  
-📖 **[Interactive Web Story & Tech](https://semanticsignal.qrak.org/story)** | **[GitHub Article Document](articles/architecture_and_journey.md)** — Read the 7-month development story  
+📖 **[Interactive Web Story & Tech](https://semanticsignal.qrak.org/story)** | **[GitHub Article Document](articles/architecture_and_journey.md)** — Read the 9-month development story  
 💬 **[Join the Discord](https://discord.gg/ZC48aTTqR2)**  
 
 
@@ -25,7 +25,7 @@
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
 pip install -r requirements.txt
-cp keys.env.example keys.env  # add your API keys (Google Gemini free tier works)
+cp keys.env.example keys.env  # add your API keys (DEEPSEEK_API_KEY / GOOGLE_STUDIO_API_KEY / OPENROUTER_API_KEY)
 python start.py               # dashboard at http://localhost:8000
 ```
 
@@ -41,29 +41,8 @@ python start.py               # dashboard at http://localhost:8000
 | `scripts/start_script_main_macos.sh` | Start the bot (macOS) |
 | `scripts/run_all_tests.sh` | Run full test suite in `.venv` |
 | `scripts/query_trade_history.py` | CLI utility to inspect SQLite trade history |
-| `scripts/query_codebase.py` | **Semantic codebase search** via ChromaDB vector index |
 | `scripts/rotate_journals.py` | Auto-rotate AI agent journal files (runs on startup) |
 </details>
-
-### Semantic Codebase Search
-
-Query the entire codebase using natural language — the AST-level vector index finds relevant classes, functions, and modules:
-
-```bash
-# Search all indexed symbols
-python scripts/query_codebase.py "how does the risk manager calculate position size"
-
-# Filter by symbol type
-python scripts/query_codebase.py --type function "RSI calculation"
-
-# Force re-index before searching
-python scripts/query_codebase.py --reindex "vector memory retrieval"
-
-# Show index statistics
-python scripts/query_codebase.py --stats
-```
-
-The index auto-updates on bot startup. Currently indexes **160 files → 2,306 semantic chunks** across all Python source and Markdown documentation.
 
 ### Runtime Controls
 
@@ -100,13 +79,11 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 
 - **🧠 Brain with Memory** — ChromaDB vector store retains trade experiences, semantic rules, system rejections, and confidence statistics. Past outcomes are retrieved by similarity to current market conditions and injected into every LLM prompt.
 
-- **📈 Vision AI Chart Analysis** — Generates 4K PNG candlestick charts with indicators, sends them to a multimodal LLM (Gemini 3.6 Flash) for visual pattern recognition. Chart-pattern code was dropped because the AI reads charts better than hardcoded rules.
+- **📈 Vision AI Chart Analysis** — Generates 4K PNG candlestick charts with indicators, sends them to a multimodal LLM (DeepSeek V4.1 Flash) for visual pattern recognition. Chart-pattern code was dropped because the AI reads charts better than hardcoded rules.
 
 - **🔄 Reflection Engine** — After every `N` closed trades, the system synthesizes best-practice rules, anti-patterns, and AI-mistake rules with **surprise ratio** annotation — high-surprise outcomes are flagged so the LLM discounts lucky/unlucky noise. Rules persist in vector memory and influence future decisions. The bot learns from its own outcomes.
 
 - **🧠 VectorMemoryRulesMixin** — Semantic rule lifecycle management with decay scoring, evidence-weighted ranking, contradiction tracking, and surprise-ratio annotation. Rules are soft-ranked by similarity, evidence quality, timeframe freshness, and contradiction count — no hard pruning on age alone.
-
-- **🔍 AST Codebase Vector Index** — Parses every Python source file at the AST level into ChromaDB (`data/codebase_index/`). Enables natural-language queries against the entire codebase via `scripts/query_codebase.py`. Auto-updates on bot startup. Zero secrets or sensitive files indexed (verified by security audit).
 
 - **✅ Claim Validation** — Every LLM response is cross-checked against computed indicators. Reported trend strength is compared against actual ADX; pattern quality is replaced by a deterministic scorer. No blind trust in AI numeric claims.
 
@@ -116,9 +93,9 @@ The index auto-updates on bot startup. Currently indexes **160 files → 2,306 s
 
 - **🛡️ Risk Pipeline** — Pre-execution guard chain (symbol whitelist, max position size, cooldown) + dynamic SL/TP scaling with minimum 1.5 R:R enforced. Soft exits at candle close, hard exits at configurable intervals against live ticker price.
 
-- **🔄 Multi-Provider AI Routing** — Primary: Google Gemini 3.6 Flash (free tier). Fallback chain through OpenRouter and LM Studio. Chart vision support on every provider that allows it.
+- **🔄 Multi-Provider AI Routing** — Primary: DeepSeek V4.1 Flash (`deepseek-flash`, native chart vision). Fallback chain through Google Gemini / OpenRouter / LM Studio. Chart vision support on every provider that allows it.
 
-- **🧪 1,300+ Tests** — Fully mocked test suite covering LLM output corruption, async races, rate-limit backoff, vector-DB boundaries, friction-reporting, closed-loop feedback, AST code indexing, and positional market types (spot / perpetual futures).
+- **🧪 1,380+ Tests** — Fully mocked test suite covering LLM output corruption, async races, rate-limit backoff, vector-DB boundaries, friction-reporting, closed-loop feedback, AST code indexing, and positional market types (spot / perpetual futures).
 
 - **🤖 Multi-Agent AI Development** — Eight specialized AI agents (Supervisor 🧠 + Bolt ⚡, Palette 🎨, Sentinel 🛡️, Refactor ✨, Concise ✂️, Smoke Tests 🔥, Bugfixer 🐛) coordinate via a Supervisor 🧠. Each agent writes journal entries to `.ai/` — the project's collective memory. Journals auto-rotate on startup.
 
@@ -140,13 +117,9 @@ flowchart TB
         RAG["RAG Engine<br/>News relevance scoring"]
     end
     subgraph Brain["🧠 Brain Layer"]
-        VM["Vector Memory<br/>ChromaDB (4 collections)<br/>Experiences + Rules +<br/>Blocked Trades + Codebase Index"]
+        VM["Vector Memory<br/>ChromaDB (3 collections)<br/>Experiences + Rules +<br/>Blocked Trades"]
         REFL["Reflection Engine<br/>Rules from closed trades"]
         CTX["Context Builder<br/>Similarity retrieval +<br/>surprise ratio + confidence calibration"]
-    end
-    subgraph Search["🔍 Codebase Index"]
-        CVI["AST Codebase Indexer<br/>160 files · 2,306 chunks<br/>Types: class/function/method/docs"]
-        QUERY["query_codebase.py CLI<br/>Semantic code search<br/>by type, re-index, stats"]
     end
     subgraph Execution["Paper Execution"]
         RP["Risk Manager<br/>SL/TP, sizing, R:R,<br/>friction tracking"]
@@ -155,7 +128,7 @@ flowchart TB
     end
     Data --> Analysis
     Analysis --> Brain
-    Brain --> AI["AI Provider<br/>(Gemini / OpenRouter / LM Studio)"]
+    Brain --> AI["AI Provider<br/>(DeepSeek / Gemini / OpenRouter / LM Studio)"]
     AI --> RP --> GP --> STRAT
     STRAT -.->|Closed trade feedback| Brain
     CVI -.->|Indexes source| Analysis
@@ -167,12 +140,11 @@ flowchart TB
 
 | Path | Role |
 |------|------|
-| `start.py` | Entry point — 8-stage dependency injection, ChromaDB + CoinGecko cache + journal rotation + codebase index auto-update |
+| `start.py` | Entry point — 8-stage dependency injection, ChromaDB + CoinGecko cache + journal rotation |
 | `src/app.py` | `CryptoTradingBot` — main async loop, ticker fetch, analysis orchestration |
 | `src/trading/brain.py` | `TradingBrainService` — context assembly, experience recording, reflection triggers |
 | `src/trading/vector_memory.py` | ChromaDB interface — trade experiences, semantic rules, blocked trades, embedding cache |
 | `src/trading/vector_memory_rules.py` | `VectorMemoryRulesMixin` — semantic rule lifecycle: decay scoring, evidence ranking, surprise ratio |
-| `src/rag/code_vector_index.py` | AST codebase indexer — parses Python source → ChromaDB chunks via SentenceTransformer |
 | `src/analyzer/analysis_engine.py` | Market analysis orchestration — indicators, chart, RAG, LLM call |
 | `src/managers/provider_orchestrator.py` | AI provider fallback chain with retry logic |
 | `src/managers/risk_manager.py` | Dynamic SL/TP, position sizing, friction tracking |
@@ -182,7 +154,6 @@ flowchart TB
 | `src/analyzer/trend_validator.py` | Cross-checks LLM-reported trend strength against computed ADX |
 | `src/analyzer/pattern_quality_scorer.py` | Deterministic pattern quality scoring replacing LLM's self-reported score |
 | `src/notifiers/notifier.py` | Discord notifications with message expiration tracking |
-| `scripts/query_codebase.py` | CLI tool for natural-language semantic codebase search |
 | `scripts/rotate_journals.py` | Auto-rotation of AI agent journal files |
 
 ---
@@ -190,11 +161,11 @@ flowchart TB
 ## Testing
 
 ```bash
-# Full suite (1,300+ tests)
+# Full suite (1,380+ tests)
 pytest tests/ -q
 
 # Focused
-pytest tests/test_ticker_retry.py tests/test_brain_integration.py tests/test_code_vector_index.py -q
+pytest tests/test_ticker_retry.py tests/test_brain_integration.py -q
 
 # Linting
 ruff check src tests start.py
@@ -205,7 +176,6 @@ ruff check src tests start.py
 | Core trading | ~500 | Signals, orders, exits, risk, post-mortem |
 | Vector memory | ~180 | ChromaDB operations, rules, scoring, embedding cache |
 | Dashboard / brain router | ~120 | Decision pathways, admin endpoints, WS streaming |
-| AST codebase index | ~80 | Chunking, search, re-index, type filtering |
 | RAG / news / fundamentals | ~160 | RSS, Crawl4AI, news database, market data |
 | Provider orchestration | ~100 | Fallback chain, retries, model pricing |
 | Executor bridge | ~60 | Decision forwarding, dead letters, HTTP client |
@@ -220,21 +190,20 @@ Key settings in `config/config.ini`:
 |---------|---------|-------------|
 | `crypto_pair` | BTC/USDC | Trading pair |
 | `timeframe` | 4h | Analysis candle timeframe |
-| `provider` | googleai | AI provider (googleai, openrouter, lmstudio) |
+| `provider` | googleai | AI provider (googleai, openrouter, deepseek, lmstudio) |
 | `demo_quote_capital` | 10000 | Simulated capital |
 | `max_position_size` | 0.10 | Max position as fraction of capital |
 | `stop_loss_type` | hard | hard (interval check) or soft (candle close) |
 | `stop_loss_interval_minutes` | 15 | Hard exit check interval |
-| `codebase_index_enabled` | true | Auto-build AST codebase vector index on startup |
-| `codebase_index_dir` | data/codebase_index | ChromaDB persistent directory for codebase index |
 
 Required API keys in `keys.env`:
 
 | Variable | Required | For |
 |----------|----------|-----|
-| `GOOGLE_STUDIO_API_KEY` | Yes | Primary AI provider (free tier) |
+| `GOOGLE_STUDIO_API_KEY` | Yes | Google AI Studio provider |
 | `GOOGLE_STUDIO_PAID_API_KEY` | If used | Paid tier Google AI |
 | `OPENROUTER_API_KEY` | If used | Secondary AI provider |
+| `DEEPSEEK_API_KEY` | If used | DeepSeek official API provider |
 | `BOT_TOKEN_DISCORD` | If used | Discord notifications |
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate limit boost) |

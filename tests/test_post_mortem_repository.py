@@ -37,7 +37,7 @@ class TestPostMortemRepository:
         data = self._make_data()
         pm_id = repo.insert_post_mortem(**data)
         assert pm_id == 1
-        assert repo.get_post_mortem_count() == 1
+        assert len(repo.get_recent_post_mortems()) == 1
 
     def test_get_recent_post_mortems_returns_newest_first(self, tmp_path):
         """Recent post-mortems should be ordered by created_at DESC."""
@@ -98,15 +98,6 @@ class TestPostMortemRepository:
         self._make_repo(tmp_path, logger=logger)
         self._make_repo(tmp_path, logger=logger)
         # No assertion — just verifying no exception raised
-
-    def test_get_post_mortem_count(self, tmp_path):
-        """Count should reflect inserted records."""
-        repo = self._make_repo(tmp_path)
-        assert repo.get_post_mortem_count() == 0
-        repo.insert_post_mortem(**self._make_data())
-        assert repo.get_post_mortem_count() == 1
-        repo.insert_post_mortem(**self._make_data(trade_id=2))
-        assert repo.get_post_mortem_count() == 2
 
     def test_get_recent_returns_correct_fields(self, tmp_path):
         """get_recent_post_mortems should return expected fields including llm_analysis."""

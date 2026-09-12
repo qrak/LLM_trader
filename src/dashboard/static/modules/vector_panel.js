@@ -63,10 +63,17 @@ function renderVectorPanel(data, rulesData, blockedData) {
            </div>`
         : '';
 
+    const gate = data.evidence_gate;
+    const gateHtml = gate
+        ? `<span style="color: ${gate.limited ? 'var(--accent-warning)' : 'var(--text-muted)'};" title="The brain treats its recall as evidence only after ${escapeHtml(String(gate.min_trades))} closed trades; below that, matches are flagged as anecdotes.">${gate.limited
+            ? `⚠ Evidence ${escapeHtml(String(gate.trade_count))}/${escapeHtml(String(gate.min_trades))} trades — limited inference`
+            : `✓ Evidence ${escapeHtml(String(gate.trade_count))} trades — full inference`}</span>`
+        : '';
     const freshnessHtml = `
         <div class="vector-freshness" aria-live="polite">
             <span>${escapeHtml(String(data.experience_count || 0))} experiences</span>
             <span>${escapeHtml(String(data.rule_count || 0))} active rules</span>
+            ${gateHtml}
             <span>Refreshed ${new Intl.DateTimeFormat(navigator.language, { timeStyle: 'medium' }).format(new Date())}</span>
         </div>
     `;
@@ -110,6 +117,15 @@ function renderVectorPanel(data, rulesData, blockedData) {
                 }
             });
         }
+    });
+
+    container.querySelectorAll('tr.exp-row[data-expandable]').forEach(row => {
+        row.addEventListener('click', () => {
+            const detail = row.nextElementSibling;
+            if (detail && detail.classList.contains('exp-detail')) {
+                detail.style.display = detail.style.display === 'none' ? '' : 'none';
+            }
+        });
     });
 
     // Restore focus if it was on a sort header
@@ -430,10 +446,12 @@ function renderExperienceTable(experiences) {
             : '';
 
         const contextDisplay = formatContextPills(exp.document || '');
+        const expandable = Boolean(exp.match_factors);
+        const toggleMarker = expandable ? '▸ ' : '';
 
         return `
-            <tr title="${escapeHtml(exp.document || '')}">
-                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">${escapeHtml((exp.id || '').substring(0, 8))}...</td>
+            <tr class="exp-row${expandable ? ' exp-expandable' : ''}"${expandable ? ' data-expandable="1"' : ''}${expandable ? ' style="cursor: pointer;"' : ''} title="${escapeHtml(exp.document || '')}">
+                <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.9em;">${toggleMarker}${escapeHtml((exp.id || '').substring(0, 8))}...</td>
                 <td style="font-size:0.85em;">${symbol}</td>
                 <td class="context">${contextDisplay}</td>
                 <td class="${outcomeClass}">${escapeHtml(outcome)}${closeBadge}</td>
@@ -443,6 +461,7 @@ function renderExperienceTable(experiences) {
                 <td>${similarity}</td>
                 <td>${timestamp}</td>
             </tr>
+            ${expandable ? `<tr class="exp-detail" style="display: none;"><td colspan="9" style="padding: 6px 10px; color: var(--text-muted); font-size: 0.82em; white-space: normal;"><strong>Match Factors (vs current context):</strong> ${escapeHtml(exp.match_factors)}</td></tr>` : ''}
         `;
     }).join('');
 

@@ -40,6 +40,7 @@ def _make_position(**overrides):
         confidence="HIGH",
         direction="LONG",
         symbol="BTC/USDC",
+        conditions_at_entry=MarketConditions(),
     )
     defaults.update(overrides)
     return Position(**defaults)
@@ -143,6 +144,7 @@ class TestUpdateFromClosedTrade:
             stop_loss_check_interval_at_entry="15m",
             take_profit_type_at_entry="soft",
             take_profit_check_interval_at_entry="4h",
+            conditions_at_entry=MarketConditions(),
         )
 
         self.brain.update_from_closed_trade(
@@ -186,6 +188,46 @@ class TestUpdateFromClosedTrade:
         assert call_kwargs["metadata"]["take_profit_type"] == "hard"
         assert call_kwargs["metadata"]["take_profit_check_interval"] == "15m"
 
+    def test_closed_trade_stores_normalised_vwap_and_chandelier_distances(self):
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
+        position = _make_position()
+
+        brain.update_from_closed_trade(
+            position=position,
+            close_price=110.0,
+            close_reason="take_profit",
+            market_conditions=MarketConditions(vwap=99.0, chandelier_long=98.5),
+        )
+
+        metadata = brain.vector_memory.store_experience.call_args.kwargs["metadata"]
+        assert metadata["vwap_distance_pct"] == pytest.approx(0.01)
+        assert metadata["chandelier_distance_pct"] == pytest.approx(0.015)
+
+    def test_closed_trade_omits_distances_when_source_levels_were_never_computed(self):
+        brain = _make_brain(ExitExecutionContext(
+            stop_loss_type="hard",
+            stop_loss_check_interval="15m",
+            take_profit_type="hard",
+            take_profit_check_interval="15m",
+        ))
+        position = _make_position()
+
+        brain.update_from_closed_trade(
+            position=position,
+            close_price=110.0,
+            close_reason="take_profit",
+            market_conditions=MarketConditions(adx=30.0, trend_direction="BULLISH"),
+        )
+
+        metadata = brain.vector_memory.store_experience.call_args.kwargs["metadata"]
+        assert metadata["vwap_distance_pct"] is None
+        assert metadata["chandelier_distance_pct"] is None
+
     def test_closed_trade_stores_original_ai_decision_snapshot(self):
         position = Position(
             entry_price=100.0,
@@ -196,6 +238,7 @@ class TestUpdateFromClosedTrade:
             confidence="MEDIUM",
             direction="LONG",
             symbol="BTC/USDC",
+            conditions_at_entry=MarketConditions(),
         )
         entry_decision = TradeDecision(
             timestamp=datetime(2026, 4, 30, tzinfo=timezone.utc),
@@ -426,6 +469,7 @@ class TestTrackPositionUpdateWithPolicy:
             current_price=105.0,
             current_pnl_pct=5.0,
             tightening_evaluation=evaluation,
+            market_conditions=MarketConditions(),
         )
 
         call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs
@@ -445,6 +489,7 @@ class TestTrackPositionUpdateWithPolicy:
             new_tp=110.0,
             current_price=105.0,
             current_pnl_pct=5.0,
+            market_conditions=MarketConditions(),
         )
 
         call_kwargs = brain.experience_recorder.track_position_update.call_args.kwargs

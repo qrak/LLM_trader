@@ -4,7 +4,6 @@ Index Management Module for RAG Engine
 Handles building and maintaining search indices for news articles.
 """
 
-import re
 from collections import defaultdict
 from typing import Any
 
@@ -19,51 +18,26 @@ class IndexManager:
         self.logger = logger
         self.article_processor = article_processor
 
-        # Search indices
-        self.category_index: dict[str, list[int]] = defaultdict(list)
-        self.tag_index: dict[str, list[int]] = defaultdict(list)
+        # Coin index: maps lowercased coin symbols to article positions.
         self.coin_index: dict[str, list[int]] = defaultdict(list)
-        self.keyword_index: dict[str, list[int]] = defaultdict(list)
 
     def build_indices(self, news_database: list[dict[str, Any]],
-                     known_crypto_tickers: set[str],
-                     category_word_map: dict[str, str]) -> None:
-        """Build search indices from news database."""
-        self._clear_indices()
+                     known_crypto_tickers: set[str]) -> None:
+        """Build the coin search index from the news database."""
+        self.coin_index.clear()
 
         for i, article in enumerate(news_database):
-            self._index_article_categories(article, i, known_crypto_tickers)
-            self._index_article_tags(article, i)
+            self._index_ticker_categories(article, i, known_crypto_tickers)
             self._index_article_coins(article, i, known_crypto_tickers)
-            self._index_article_keywords(article, i, category_word_map)
 
-    def _clear_indices(self) -> None:
-        """Clear all search indices."""
-        self.category_index.clear()
-        self.tag_index.clear()
-        self.coin_index.clear()
-        self.keyword_index.clear()
-
-    def _index_article_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
-        """Index article categories."""
-        categories = article.get("categories", "").split("|")
-        for category in categories:
-            if not category:
+    def _index_ticker_categories(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
+        """Index ticker-named categories so coin lookups find their articles."""
+        for category in article.get("categories", "").split("|"):
+            stripped = category.strip()
+            if not stripped:
                 continue
-
-            category_lower = category.lower()
-            self.category_index[category_lower].append(index)
-
-            # Use consistent case-insensitive comparison
-            if category.strip().upper() in known_crypto_tickers:
-                self.coin_index[category_lower].append(index)
-
-    def _index_article_tags(self, article: dict[str, Any], index: int) -> None:
-        """Index article tags."""
-        tags = article.get("tags", "").split("|")
-        for tag in tags:
-            if tag:
-                self.tag_index[tag.lower()].append(index)
+            if stripped.upper() in known_crypto_tickers:
+                self.coin_index[stripped.lower()].append(index)
 
     def _index_article_coins(self, article: dict[str, Any], index: int, known_crypto_tickers: set[str]) -> None:
         """Detect and index coins mentioned in the article."""
@@ -81,47 +55,8 @@ class IndexManager:
         for coin in coins_mentioned:
             self.coin_index[coin.lower()].append(index)
 
-    def _index_article_keywords(self, article: dict[str, Any], index: int, category_word_map: dict[str, str]) -> None:
-        """Index keywords from article title and body with consistent case normalization."""
-        title = article.get("title", "").lower()
-        body = article.get("body", "").lower()
-
-        # Index category-associated words
-        self._index_category_words(title, body, index, category_word_map)
-
-        # Index important title words
-        self._index_title_words(title, index)
-
-    def _index_category_words(self, title: str, body: str, index: int, category_word_map: dict[str, str]) -> None:
-        """Index words associated with categories with consistent lowercase normalization."""
-        for word in category_word_map:
-            # Ensure word is already lowercase (should be from the mapping)
-            word_lower = word.lower()
-            word_pattern = rf"\b{re.escape(word_lower)}\b"
-            if re.search(word_pattern, title) or re.search(word_pattern, body):  # noqa: SIM102
-                # Prevent duplicates
-                if index not in self.keyword_index[word_lower]:
-                    self.keyword_index[word_lower].append(index)
-
-    def _index_title_words(self, title: str, index: int) -> None:
-        """Index important words from article title with consistent lowercase normalization."""
-        title_words = set(re.findall(r"\b[a-z0-9]{3,15}\b", title))
-        stop_words = {"the", "and", "for", "with"}
-
-        for word in title_words:
-            if len(word) > 2 and word not in stop_words:
-                # Ensure consistent lowercase normalization and prevent duplicates
-                word_lower = word.lower()
-                if index not in self.keyword_index[word_lower]:
-                    self.keyword_index[word_lower].append(index)
-
-
     def search_by_coin(self, coin: str) -> list[int]:
         """Search for articles mentioning a specific coin."""
         coin_lower = coin.lower()
         return self.coin_index.get(coin_lower, [])
-
-    def get_coin_indices(self) -> dict[str, list[int]]:
-        """Get the coin index."""
-        return dict(self.coin_index)
 

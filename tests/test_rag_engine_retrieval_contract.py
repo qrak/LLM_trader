@@ -59,7 +59,6 @@ def base_components(logger: MagicMock):
     category_processor.process_api_categories.return_value = None
 
     index_manager = MagicMock()
-    index_manager.get_coin_indices.return_value = {}
     index_manager.search_by_coin.return_value = []
 
     context_builder = MagicMock()
@@ -74,9 +73,7 @@ def base_components(logger: MagicMock):
 
     engine = RagEngine(
         logger=logger,
-        token_counter=MagicMock(),
         config=cast(Any, _Config()),
-        file_handler=MagicMock(),
         news_manager=news_manager,
         market_data_manager=market_data_manager,
         index_manager=index_manager,
@@ -137,9 +134,7 @@ async def test_retrieve_context_returns_empty_for_empty_news_db(logger: MagicMoc
 
     engine = RagEngine(
         logger=logger,
-        token_counter=MagicMock(),
         config=cast(Any, _Config()),
-        file_handler=MagicMock(),
         news_manager=news_manager,
         market_data_manager=MagicMock(),
         index_manager=MagicMock(),

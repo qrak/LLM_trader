@@ -1,6 +1,6 @@
 """Tests for vector_memory.py changes: classify_rsi_label integration and _adx_label."""
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
 
@@ -72,6 +72,18 @@ class TestBuildExperienceDocument:
     def test_rsi_strong_label(self):
         doc = self._build_doc(rsi=65)
         assert "RSI=65.0 (STRONG)" in doc
+
+    def test_bb_percent_b_and_pfe_embedded(self):
+        """Stored-but-unread entry fields must reach the embedded document."""
+        doc = self._build_doc(bb_percent_b=0.12, pfe=0.31)
+        assert "BB%B=0.12" in doc
+        assert "PFE=+0.31" in doc
+
+    def test_normalised_price_distances_embedded(self):
+        """VWAP/Chandelier travel as % distances, not raw levels from another epoch."""
+        doc = self._build_doc(vwap_distance=0.0083, chandelier_distance=-0.0059)
+        assert "VWAPDist=+0.83%" in doc
+        assert "ChandDist=-0.59%" in doc
 
     def test_rsi_weak_label(self):
         doc = self._build_doc(rsi=35)
@@ -594,25 +606,6 @@ class TestSemanticRules:
         assert avoid_meta["contradiction_count"] == 3
         assert "last_contradicted_at" in avoid_meta
 
-    def test_deactivate_semantic_rules_marks_existing_rules_inactive(self):
-        svc = _make_service()
-        svc._initialized = True
-        svc._semantic_rules_collection = MagicMock()
-        svc._semantic_rules_collection.get.return_value = {
-            "ids": ["rule-stale"],
-            "metadatas": [{"active": True, "rule_type": "best_practice"}],
-        }
-
-        deactivated_count = svc.deactivate_semantic_rules(["rule-stale"])
-
-        assert deactivated_count == 1
-        update_kwargs = svc._semantic_rules_collection.update.call_args.kwargs
-        assert update_kwargs["ids"] == ["rule-stale"]
-        metadata = update_kwargs["metadatas"][0]
-        assert metadata["active"] is False
-        assert metadata["rule_type"] == "best_practice"
-        assert "deactivated_at" in metadata
-
     def test_get_anti_patterns_for_prompt_only_includes_anti_pattern_rules(self):
         svc = _make_service()
         with patch.object(
@@ -911,4 +904,97 @@ class TestPromptSanitization:
         assert "System:" not in cleaned
         assert "<USER_REQUEST>" not in cleaned
         assert "BUY!" in cleaned
+
+
+class TestExperienceEvidenceGate:
+    """A high similarity score against a 1-2 trade brain must stay an anecdote.
+
+    Regression: one stored loss came back as "[SIMILARITY 90%]" every cycle and the
+    prompt turned it into an anti-pattern verdict, freezing the bot into HOLD.
+    """
+
+    @staticmethod
+    def _experience(similarity: float) -> VectorSearchResult:
+        return VectorSearchResult(
+            id="exp-1",
+            document="doc-1",
+            similarity=similarity,
+            recency=85.0,
+            hybrid_score=similarity,
+            metadata={
+                "outcome": "LOSS",
+                "pnl_pct": -1.28,
+                "direction": "LONG",
+                "market_context": "NEUTRAL + Medium ADX + LOW Volatility + MACD BEARISH",
+                "reasoning": "Mean-reversion buy at range support",
+            },
+        )
+
+    def _prompt(self, svc, experiences, brain_trades, atr_pct=None):
+        with patch.object(
+            VectorMemoryService, "trade_count", new_callable=PropertyMock,
+            return_value=brain_trades,
+        ), patch.object(
+            svc, "retrieve_similar_experiences", return_value=experiences
+        ), patch.object(
+            svc, "get_anti_patterns_for_prompt", return_value=""
+        ):
+            return svc.get_context_for_prompt(
+                "BULLISH", k=3, display_context="BULLISH + High ADX",
+                current_atr_percentage=atr_pct,
+            )
+
+    def test_high_similarity_with_thin_brain_is_flagged_limited_data(self):
+        svc = _make_service()
+        prompt = self._prompt(svc, [self._experience(90.0)], brain_trades=1)
+
+        assert "LIMITED DATA" in prompt
+        assert "only 1 trade(s) closed in total" in prompt
+        assert "ANECDOTES" in prompt
+        assert "do NOT call an anti-pattern match on this basis" in prompt
+
+    def test_high_similarity_with_evidence_base_keeps_full_context(self):
+        svc = _make_service()
+        prompt = self._prompt(svc, [self._experience(90.0)], brain_trades=3)
+
+        assert "LIMITED DATA" not in prompt
+        assert "[SIMILARITY 90%] LONG trade" in prompt
+
+    def test_low_similarity_still_reports_limited_data(self):
+        svc = _make_service()
+        prompt = self._prompt(svc, [self._experience(35.0)], brain_trades=8)
+
+        assert "LIMITED DATA" in prompt
+        assert "below 50% similarity" in prompt
+
+    def test_match_factors_flag_volatility_scale_drift(self):
+        """A precedent from a 0.7% ATR tape must not pass as a match for a 1.2% ATR tape."""
+        svc = _make_service()
+        meta = {"outcome": "LOSS", "direction": "LONG", "atr_percentage_at_entry": 0.7}
+
+        drift = svc._build_match_factors(meta, "BULLISH + High ADX", 1.2)
+        same = svc._build_match_factors(meta, "BULLISH + High ADX", 0.8)
+
+        assert "ATR%=0.7% ⚠️ vs current 1.2%" in drift
+        assert "different volatility scale" in drift
+        assert "⚠️" not in same
+        assert "ATR%=0.7%" in same
+
+    def test_match_factors_include_previously_unread_entry_fields(self):
+        """bb_percent_b / pfe / normalised distances were stored but never surfaced."""
+        svc = _make_service()
+        meta = {
+            "outcome": "LOSS",
+            "bb_percent_b": 0.12,
+            "pfe_at_entry": 0.31,
+            "vwap_distance_pct": 0.0083,
+            "chandelier_distance_pct": -0.0059,
+        }
+
+        line = svc._build_match_factors(meta, "BULLISH + High ADX")
+
+        assert "BB%B=0.12" in line
+        assert "PFE=+0.31" in line
+        assert "VWAPDist=+0.83%" in line
+        assert "ChandDist=-0.59%" in line
 

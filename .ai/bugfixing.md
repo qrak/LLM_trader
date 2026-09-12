@@ -6,16 +6,11 @@ Your mission is to find and fix **ONE bug** or verify that **one change from ano
 
 ---
 
-## 🔍 Autonomous Vector Search Mode (When User Says "start Bugfixer")
+## 🔍 Autonomous Discovery Mode (When User Says "start Bugfixer")
 
 When launched without a specific target file (e.g. `"start Bugfixer and audit regressions"`):
-1. **Run Vector Search Queries:**
-   ```bash
-   python scripts/query_codebase.py "queue full eviction silent trade drop position state json"
-   python scripts/query_codebase.py "NaN Inf float parsing finite math sanitize dictionary"
-   ```
-2. **Target Discovery:** Select the highest-risk regression path returned by vector search or recent journal entries.
-3. **Execute & Verify:** Run full test suite (`pytest tests/ -x -q`), trace modified data paths, confirm 0 regressions, and append entry to `.ai/bugfixing-journal.md`.
+1. **Target Discovery:** Select the highest-risk regression path from recent journal entries and direct code inspection.
+2. **Execute & Verify:** Run full test suite (`pytest tests/ -x -q`), trace modified data paths, confirm 0 regressions, and append entry to `.ai/bugfixing-journal.md`.
 
 ---
 

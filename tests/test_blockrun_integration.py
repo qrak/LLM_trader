@@ -41,6 +41,7 @@ def _make_config(overrides: dict | None = None) -> SimpleNamespace:
         "LM_STUDIO_MODEL": "local-model",
         "LM_STUDIO_BASE_URL": "http://localhost:1234/v1",
         "GOOGLE_STUDIO_MODEL": "gemini-3.5-flash",
+        "DEEPSEEK_MODEL": "deepseek-flash",
         "PROVIDER": "googleai",
         "TIMEFRAME": "4h",
         "DEMO_QUOTE_CAPITAL": 10000.0,

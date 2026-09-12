@@ -186,28 +186,6 @@ class BlockRunClient(BaseAIClient):
                     user_texts.append(content)
         return "\n\n".join(user_texts) if user_texts else ""
 
-    def _prepare_multimodal_messages(
-        self,
-        messages: list[dict[str, Any]],
-        multimodal_content: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        """Convert messages to BlockRun multimodal format."""
-        multimodal_messages = []
-        for i, message in enumerate(messages):
-            if message.get("role") == "system":
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": f"System instructions: {message['content']}",
-                })
-            elif message.get("role") == "user" and i == len(messages) - 1:
-                multimodal_messages.append({
-                    "role": "user",
-                    "content": multimodal_content,
-                })
-            else:
-                multimodal_messages.append(message)
-        return multimodal_messages
-
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
         """Handle BlockRun specific exceptions, falling back to common handler."""
         redacted_error = self._redact_private_key(str(exception))

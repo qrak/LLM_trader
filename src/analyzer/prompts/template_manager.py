@@ -386,8 +386,9 @@ class TemplateManager:
             _output_rule,
             "",
             "## Decision Protocol",
-            "- Classify regime first: trending, ranging, breakout, reversal, or unclear.",
+            "- Classify regime first: trending, ranging, transitional, breakout, reversal, or unclear.",
             "- TRENDING (ADX >= 25, Choppiness < 38.2): trade with trend. HOLD only on weak R/R or invalidation.",
+            "- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness alone. (a) ADX >= 25 with one DI clearly leading the other and price closing on the leader's side of the 20 SMA: treat it as an early/developing trend and trade WITH it (standard R/R floor applies). (b) ADX < 25 with no directional dominance: the tape is undecided — HOLD in the middle of the recent range, but at a range boundary a mean-reversion entry against that boundary is valid (SL just beyond the boundary, TP at the opposite boundary).",
             "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. R/R >= 1.2 acceptable here (higher-probability setups). When price is in range middle: HOLD (no edge).",
             "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
@@ -679,7 +680,7 @@ State "365D MACRO CONFLICT: [direction]" in analysis.
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section). LONG: SL below the swing low, at least the profile multiple × ATR from entry; SHORT: SL above the swing high, at least the profile multiple × ATR from entry. Never tighten SL below the profile multiple — structural levels may be wider, not narrower. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
+- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
 

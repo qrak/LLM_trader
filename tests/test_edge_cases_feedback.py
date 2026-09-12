@@ -241,6 +241,7 @@ class TestAsyncRaceConditions:
             stop_loss=95.0, take_profit=115.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
         elapsed = time.monotonic() - start
         assert elapsed < 1.0  # should be well under 1 second

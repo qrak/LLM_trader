@@ -70,8 +70,8 @@ class TickerManager:
 
         for article in news_database:
             categories = article.get("categories", "")
-            # Look for ticker-like categories
-            category_parts = categories.split(",")
+            # Canonical categories are pipe-separated (schema_mapper.to_article_schema)
+            category_parts = categories.split("|")
             for category in category_parts:
                 category = category.strip()
                 if self._is_valid_ticker_category(category):
@@ -121,17 +121,29 @@ class TickerManager:
         return coin.upper() not in skip_terms
 
     async def _validate_and_add_coins(self, filtered_coins: set) -> None:
-        """Validate coins against exchange data and add valid ones."""
+        """Validate coins against exchange data and add valid ones.
+
+        Validation against live exchange symbols is mandatory: candidates
+        that cannot be validated are skipped. The previous "add by default,
+        filter later" fallback had no later filter and let RSS feed section
+        names persist in data/known_tickers.json.
+        """
         if not filtered_coins:
             return
 
-        # Get valid exchange symbols for validation
         valid_exchange_symbols = set()
         if self.exchange_manager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Could not get exchange symbols for validation: %s", e)
+
+        if not valid_exchange_symbols:
+            self.logger.warning(
+                "Exchange symbol data unavailable; skipping %d unvalidated candidate tickers",
+                len(filtered_coins),
+            )
+            return
 
         new_coins_added = 0
         for coin in filtered_coins:
@@ -142,19 +154,18 @@ class TickerManager:
         self.logger.debug("Added %s new tickers", new_coins_added)
 
     def _should_add_coin(self, coin: str, valid_exchange_symbols: set) -> bool:
-        """Determine if a coin should be added to known tickers."""
+        """Determine if a coin should be added to known tickers.
+
+        Only exact base-asset matches against live exchange symbols count
+        (e.g. BTC matches the pair BTC/USDT). Unvalidated candidates are
+        never added - see _validate_and_add_coins.
+        """
         # Don't add if already known
         if coin in self.known_tickers:
             return False
 
-        # If we have exchange data, validate against it
-        if valid_exchange_symbols:
-            # Check if coin appears in any trading pair
-            coin_in_pairs = any(coin in symbol for symbol in valid_exchange_symbols)
-            return coin_in_pairs
-
-        # If no exchange data, add by default (will be filtered later if invalid)
-        return True
+        # Match the pair's base asset; exchange symbols look like "BTC/USDT"
+        return any(symbol.split("/")[0].upper() == coin for symbol in valid_exchange_symbols)
 
     async def save_tickers(self) -> None:
         """Save known tickers to disk."""

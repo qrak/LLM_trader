@@ -1,4 +1,4 @@
-# 📖 Semantic Signal: The Complete 7-Month Engineering Journey & System Architecture
+# 📖 Semantic Signal: The Complete 9-Month Engineering Journey & System Architecture
 
 *By [@qrak](https://github.com/qrak) — Self-taught developer from Wrocław, Poland*
 
@@ -6,7 +6,7 @@
 
 > 💡 **Abstract:** Most commercial and open-source "AI trading bots" are rigid strategy calculators wrapped in subscriptions. They execute simple moving average crossovers, flatten charts into text floats, have zero memory of past mistakes, and hallucinate trends.
 > 
-> **Semantic Signal** is an open-source, asyncio-first cognitive trading bot built over 7 months (December 2025 – July 2026) to treat LLM cognitive constraints as core software engineering problems.
+> **Semantic Signal** is an open-source, asyncio-first cognitive trading bot built over 9 months (December 2025 – September 2026) to treat LLM cognitive constraints as core software engineering problems.
 
 ---
 
@@ -53,12 +53,12 @@ Decoupled the engine into Semantic Signal (reasoning, vision, news RAG, vector m
 
 ```
 OHLCV Data (999 candles, 5 exchanges) → 50+ Indicators (Numba JIT)
-→ 1080p Chart Image (Gemini visual analysis)
+→ 1080p Chart Image (multimodal AI visual analysis)
 → Reddit Sentiment → 5 RSS Articles (RAG)
 → Vector Memory Query (ChromaDB, top-5 similar trades)
 → Brain Context (semantic rules + confidence stats)
 → LLM Prompt (self-debate + falsification check)
-→ Gemini 3.6 Flash Analysis
+→ Multimodal AI Analysis
 → TrendValidator (cross-check ADX) → PatternQualityScorer (deterministic score)
 → EV Calculation → Risk Profile Selection
 → Guard Pipeline (symbol → size → cooldown → R:R)
@@ -104,7 +104,7 @@ Calculates historical win rates of matching vector setups, enforces Kelly Criter
 
 ## 4. Verification & Testing
 
-The codebase features **1,300+ automated unit and integration tests** covering:
+The codebase features **1,380+ automated unit and integration tests** covering:
 - LLM output corruption & malformed JSON
 - Async concurrency race conditions
 - Rate-limiting backoff & exponential retries

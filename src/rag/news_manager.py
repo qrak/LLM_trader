@@ -145,9 +145,6 @@ class NewsManager:
     def get_database_size(self) -> int:
         return len(self.news_database)  # type: ignore[reportOptionalMemberAccess]
 
-    def clear_database(self) -> None:
-        self.news_database.clear()  # type: ignore[reportOptionalMemberAccess]
-
     # ── Private ───────────────────────────────────────────────────────────────
 
     def _fallback(self) -> list[dict[str, Any]]:

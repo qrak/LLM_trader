@@ -219,7 +219,7 @@ class TestDataModelSerialization:
             HasDatetime.from_dict({"ts": "not-a-date", "name": "test"})
 
     def test_position_full_roundtrip(self):
-        from src.trading.data_models import Position
+        from src.trading.data_models import MarketConditions, Position
         from src.utils.data_utils import serialize_for_json
 
         pos = Position(
@@ -236,6 +236,7 @@ class TestDataModelSerialization:
             tp_distance_pct=4.0,
             sl_distance_pct=2.0,
             confluence_factors=(("trend", 0.8), ("momentum", 0.6)),
+            conditions_at_entry=MarketConditions(),
         )
 
         raw = pos.to_dict()
@@ -279,7 +280,7 @@ class TestDataModelSerialization:
 
     def test_confluence_factors_deserialization_preserves_tuple(self):
         """FIXED: plain tuple without type args now converts list→tuple."""
-        from src.trading.data_models import Position
+        from src.trading.data_models import MarketConditions, Position
 
         pos_data = {
             "symbol": "BTC/USDC",
@@ -291,6 +292,7 @@ class TestDataModelSerialization:
             "size": 0.001,
             "entry_time": "2026-05-25T12:00:00",
             "confluence_factors": [["trend", 0.8], ["momentum", 0.6]],
+            "conditions_at_entry": MarketConditions().to_dict(),
         }
 
         pos = Position.from_dict(pos_data)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import re
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.utils.indicator_classifier import (
@@ -157,6 +158,7 @@ class MarketConditionsExtractor:
             conditions["market_sentiment"] = classify_market_sentiment(sentiment_data)
             conditions["fear_greed_index"] = sentiment_data.get("fear_greed_index", 50) if sentiment_data else 50
             conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
+            conditions["is_weekend"] = datetime.now(timezone.utc).weekday() >= 5
 
             # Social sentiment from Reddit (injected by app.py)
             conditions["social_sentiment_reddit"] = result.get("_social_sentiment_reddit", "NEUTRAL")
@@ -238,23 +240,9 @@ class MarketConditionsExtractor:
 
     @staticmethod
     def build_conditions_from_position(position: Position) -> MarketConditions:
-        """Reconstruct market conditions from Position's stored entry fields.
+        """Return the position's entry-time market snapshot.
 
         Used when closing via SL/TP hit where no fresh analysis is available.
         """
-        rsi = position.rsi_at_entry
-        rsi_level = classify_rsi_label(rsi)
-
-        return MarketConditions(
-            trend_direction=position.trend_direction_at_entry,
-            adx=position.adx_at_entry,
-            rsi=rsi,
-            rsi_level=rsi_level,
-            volatility=position.volatility_level,
-            macd_signal=position.macd_signal_at_entry,
-            bb_position=position.bb_position_at_entry,
-            volume_state=position.volume_state_at_entry,
-            market_sentiment=position.market_sentiment_at_entry,
-            order_book_bias=position.order_book_bias_at_entry,
-        )
+        return position.conditions_at_entry
 

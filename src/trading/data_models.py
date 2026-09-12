@@ -8,6 +8,44 @@ from src.utils.data_utils import SerializableMixin
 
 
 @dataclass(slots=True)
+class MarketConditions(SerializableMixin):
+    """Market state snapshot passed between trading, brain, and risk modules.
+
+    Declared before Position on purpose: Position keeps the entry-time snapshot
+    verbatim (conditions_at_entry) so the close path never has to rebuild it.
+    """
+    trend_direction: str = "NEUTRAL"
+    adx: float = 0.0
+    rsi: float = 50.0
+    rsi_level: str = "NEUTRAL"
+    volatility: str = "MEDIUM"
+    atr: float = 0.0
+    atr_percentage: float = 0.0
+    macd_signal: str = "NEUTRAL"
+    bb_position: str = "MIDDLE"
+    volume_state: str = "NORMAL"
+    is_weekend: bool = False
+    market_sentiment: str = "NEUTRAL"
+    order_book_bias: str = "BALANCED"
+    fear_greed_index: int = 50
+    trend_strength: float = 0.0
+    timeframe_alignment: str | None = None
+    choppiness: float | None = None
+    # --- NEW: indicators enriched for vector DB learning (July 2026) ---
+    vwap: float = 0.0
+    mfi: float = 50.0
+    cmf: float = 0.0
+    bb_percent_b: float = 0.5
+    chandelier_long: float = 0.0
+    pfe: float = 0.0
+    supertrend_direction: str = "NEUTRAL"
+    # --- Social sentiment at position entry (for vector DB similarity) ---
+    social_sentiment_reddit: str = "NEUTRAL"     # BULLISH, SLIGHTLY_BULLISH, NEUTRAL, SLIGHTLY_BEARISH, BEARISH, NO_DATA
+    # --- Portfolio EV snapshot at position entry ---
+    portfolio_pnl_pct: float = 0.0                # portfolio P&L % at entry time
+
+
+@dataclass(slots=True)
 class Position(SerializableMixin):
 
     """Represents an active trading position.
@@ -22,6 +60,9 @@ class Position(SerializableMixin):
     confidence: str  # HIGH, MEDIUM, LOW
     direction: str   # LONG, SHORT
     symbol: str
+    # Full entry-time market snapshot. Required: the brain must never match on
+    # reconstructed or defaulted condition values at close.
+    conditions_at_entry: MarketConditions
     # Confluence factors at entry time for factor performance learning
     # Stored as tuple of (name, score) pairs for frozen dataclass compatibility
     confluence_factors: tuple = field(default_factory=tuple)
@@ -32,6 +73,7 @@ class Position(SerializableMixin):
     size_pct: float = 0.0
     # Market conditions at entry for Brain learning
     atr_at_entry: float = 0.0           # ATR value when position opened
+    atr_percentage_at_entry: float = 0.0  # ATR as % of price at entry (brain volatility matching)
     volatility_level: str = "MEDIUM"    # HIGH, MEDIUM, LOW (derived from ATR%)
     sl_distance_pct: float = 0.0        # abs(entry - SL) / entry as decimal
     tp_distance_pct: float = 0.0        # abs(TP - entry) / entry as decimal
@@ -305,40 +347,6 @@ class ExitExecutionContext:
 
 
 @dataclass(slots=True)
-class MarketConditions:
-    """Market state snapshot passed between trading, brain, and risk modules."""
-    trend_direction: str = "NEUTRAL"
-    adx: float = 0.0
-    rsi: float = 50.0
-    rsi_level: str = "NEUTRAL"
-    volatility: str = "MEDIUM"
-    atr: float = 0.0
-    atr_percentage: float = 0.0
-    macd_signal: str = "NEUTRAL"
-    bb_position: str = "MIDDLE"
-    volume_state: str = "NORMAL"
-    is_weekend: bool = False
-    market_sentiment: str = "NEUTRAL"
-    order_book_bias: str = "BALANCED"
-    fear_greed_index: int = 50
-    trend_strength: float = 0.0
-    timeframe_alignment: str | None = None
-    choppiness: float | None = None
-    # --- NEW: indicators enriched for vector DB learning (July 2026) ---
-    vwap: float = 0.0
-    mfi: float = 50.0
-    cmf: float = 0.0
-    bb_percent_b: float = 0.5
-    chandelier_long: float = 0.0
-    pfe: float = 0.0
-    supertrend_direction: str = "NEUTRAL"
-    # --- Social sentiment at position entry (for vector DB similarity) ---
-    social_sentiment_reddit: str = "NEUTRAL"     # BULLISH, SLIGHTLY_BULLISH, NEUTRAL, SLIGHTLY_BEARISH, BEARISH, NO_DATA
-    # --- Portfolio EV snapshot at position entry ---
-    portfolio_pnl_pct: float = 0.0                # portfolio P&L % at entry time
-
-
-@dataclass(slots=True)
 class RiskAssessment(SerializableMixin):
     """Represents the calculated risk parameters for a trade."""
     direction: str
@@ -373,11 +381,12 @@ class SessionCosts(SerializableMixin):
     openrouter: float = 0.0
     google: float = 0.0
     lmstudio: float = 0.0
+    deepseek: float = 0.0
 
     @property
     def total(self) -> float:
         """Get total cost across all providers."""
-        return self.openrouter + self.google + self.lmstudio
+        return self.openrouter + self.google + self.lmstudio + self.deepseek
 
 
 @dataclass(slots=True)

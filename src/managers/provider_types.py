@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from src.platforms.ai_providers import (
         BlockRunClient,
+        DeepSeekClient,
         GoogleAIClient,
         LMStudioClient,
         OpenRouterClient,
@@ -65,3 +66,4 @@ class ProviderClients:
     openrouter: OpenRouterClient | None = None
     lmstudio: LMStudioClient | None = None
     blockrun: BlockRunClient | None = None
+    deepseek: DeepSeekClient | None = None

@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.managers.risk_manager import RiskManager
+from src.trading.data_models import MarketConditions
 from src.trading.trading_strategy import TradingStrategy
 
 # ── Fixture builders ─────────────────────────────────────────────
@@ -121,6 +122,7 @@ class TestFrictionCaptureFromRiskManager:
             stop_loss=95.0, take_profit=110.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         brain_vm = strategy.brain_service.vector_memory
@@ -144,6 +146,7 @@ class TestFrictionCaptureFromRiskManager:
             stop_loss=80.0, take_profit=110.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         brain_vm = strategy.brain_service.vector_memory
@@ -164,6 +167,7 @@ class TestFrictionCaptureFromRiskManager:
             stop_loss=95.0, take_profit=110.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         call = strategy.brain_service.vector_memory.store_blocked_trade.call_args_list[0]
@@ -184,6 +188,7 @@ class TestFrictionCaptureFromRiskManager:
             stop_loss=80.0, take_profit=110.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         call_count = strategy.brain_service.vector_memory.store_blocked_trade.call_count
@@ -207,6 +212,7 @@ class TestRRMinimumGuard:
             stop_loss=95.0, take_profit=100.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Weak setup",
+            market_conditions=MarketConditions(),
         )
 
         assert decision.action == "HOLD"
@@ -234,6 +240,7 @@ class TestRRMinimumGuard:
             stop_loss=95.0, take_profit=115.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Good setup",
+            market_conditions=MarketConditions(),
         )
 
         assert decision.action != "HOLD"
@@ -254,6 +261,7 @@ class TestRRMinimumGuard:
             stop_loss=95.0, take_profit=100.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="I think this will rebound strongly from support",
+            market_conditions=MarketConditions(),
         )
 
         rr_calls = [
@@ -284,6 +292,7 @@ class TestFrictionStorageGracefulDegradation:
             stop_loss=95.0, take_profit=110.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         # Position should still be opened
@@ -303,6 +312,7 @@ class TestFrictionStorageGracefulDegradation:
             stop_loss=95.0, take_profit=100.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         assert decision.action == "HOLD"  # Still returns HOLD despite storage failure
@@ -329,6 +339,7 @@ class TestBlockedTradeParameterPropagation:
             stop_loss=80.0, take_profit=110.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         # Find a friction call
@@ -351,6 +362,7 @@ class TestBlockedTradeParameterPropagation:
             stop_loss=105.0, take_profit=90.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Bearish thesis",
+            market_conditions=MarketConditions(),
         )
 
         friction_calls = [
@@ -371,6 +383,7 @@ class TestBlockedTradeParameterPropagation:
             stop_loss=80.0, take_profit=130.0,
             position_size=0.05, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         friction_calls = [
@@ -395,6 +408,7 @@ class TestBlockedTradeParameterPropagation:
             stop_loss=95.0, take_profit=110.0,
             position_size=0.30, current_price=100.0,
             symbol="BTC/USDC", reasoning="Test",
+            market_conditions=MarketConditions(),
         )
 
         friction_calls = [

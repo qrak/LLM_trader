@@ -33,6 +33,10 @@ class VectorMemoryService(
     MAX_DECAY_HALF_LIFE_DAYS = 30
     MAX_AGE_MULTIPLIER = 4
     RETRIEVAL_OVERFETCH_MULTIPLIER = 5
+    # Evidence gate: a similarity score is only meaningful against a real sample.
+    # With fewer closed trades than this in the brain, the top retrieved hit is an
+    # anecdote, not a statistical pattern — it must never drive an anti-pattern verdict.
+    MIN_EVIDENCE_TRADES = 3
     # Safety margin for collection pruning: documents must be this many times
     # older than _max_age_days before they are eligible for removal.
     # At 3×, a 4h timeframe (_max_age=56d) keeps ~168 days of history.
@@ -267,12 +271,12 @@ class VectorMemoryService(
                 volume_state=meta.get("volume_state", ""),
                 trend_strength=meta.get("trend_strength"),
                 rsi_level=meta.get("rsi_level", ""),
-                vwap=meta.get("vwap_at_entry"),
+                bb_percent_b=meta.get("bb_percent_b"),
+                pfe=meta.get("pfe_at_entry"),
+                vwap_distance=meta.get("vwap_distance_pct"),
+                chandelier_distance=meta.get("chandelier_distance_pct"),
                 mfi=meta.get("mfi_at_entry"),
                 cmf=meta.get("cmf_at_entry"),
-                bb_percent_b=meta.get("bb_percent_b"),
-                chandelier_long=meta.get("chandelier_long"),
-                pfe=meta.get("pfe_at_entry"),
                 supertrend_signal=meta.get("supertrend_signal", ""),
                 social_sentiment_reddit=meta.get("social_sentiment_reddit", ""),
                 portfolio_pnl_pct=meta.get("portfolio_pnl_pct"),

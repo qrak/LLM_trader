@@ -1,6 +1,6 @@
 # === AI Providers ===
 [ai_providers]
-# local | googleai | openrouter | blockrun | all
+# local | googleai | openrouter | deepseek | blockrun | all
 provider = googleai
 
 # LM Studio (local)
@@ -11,10 +11,15 @@ lm_studio_streaming = false
 # OpenRouter
 openrouter_base_url = https://openrouter.ai/api/v1
 openrouter_base_model = google/gemini-3-flash-preview
-openrouter_fallback_model = deepseek/deepseek-r1:free
+openrouter_fallback_model = deepseek/deepseek-v4.1-flash
+
+# DeepSeek (official API, OpenAI-compatible) — requires DEEPSEEK_API_KEY in keys.env
+deepseek_base_url = https://api.deepseek.com
+# One model for text + chart analysis (flash accepts images natively)
+deepseek_model = deepseek-flash
 
 # Google AI Studio
-google_studio_model = gemini-3.5-flash
+google_studio_model = gemini-3.8-flash
 
 # BlockRun.AI (x402 micropayments)
 # Base URL for BlockRun AI API
@@ -52,12 +57,6 @@ logger_debug = true
 [directories]
 log_dir = logs
 data_dir = data
-
-# === Codebase Vector Index (AI Agents) ===
-[codebase_index]
-# Enable local vector semantic search across the codebase for AI agents
-enabled = true
-index_dir = data/codebase_index
 
 # === RAG / News ===
 [rag]
@@ -190,6 +189,11 @@ model_verbosity = high
 # OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
 # xhigh and max both map to DeepSeek's max reasoning level
 openrouter_reasoning_effort = max
+
+# DeepSeek thinking effort: low | high | max (thinking mode is enabled by default)
+deepseek_reasoning_effort = max
+# Optional DeepSeek max output override (falls back to max_tokens when absent)
+deepseek_max_tokens = 32768
 
 # === Dashboard ===
 [dashboard]

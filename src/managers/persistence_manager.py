@@ -20,7 +20,7 @@ from typing import Any
 
 from src.logger.logger import Logger
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
-from src.trading.data_models import Position, TradeDecision
+from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.statistics_calculator import TradingStatistics
 from src.utils.data_utils import serialize_for_json
 
@@ -106,6 +106,8 @@ class PersistenceManager:
                 "size_pct": position.size_pct,
                 "quote_amount": position.quote_amount,
                 "atr_at_entry": position.atr_at_entry,
+                "atr_percentage_at_entry": position.atr_percentage_at_entry,
+                "conditions_at_entry": position.conditions_at_entry.to_dict(),
                 "volatility_level": position.volatility_level,
                 "sl_distance_pct": position.sl_distance_pct,
                 "tp_distance_pct": position.tp_distance_pct,
@@ -173,6 +175,8 @@ class PersistenceManager:
                     quote_amount=data.get("quote_amount", 0.0),
                     size_pct=data.get("size_pct", 0.0),
                     atr_at_entry=data.get("atr_at_entry", 0.0),
+                    atr_percentage_at_entry=data.get("atr_percentage_at_entry", 0.0),
+                    conditions_at_entry=MarketConditions.from_dict(data["conditions_at_entry"]),
                     volatility_level=data.get("volatility_level", "MEDIUM"),
                     sl_distance_pct=data.get("sl_distance_pct", 0.0),
                     tp_distance_pct=data.get("tp_distance_pct", 0.0),
@@ -245,6 +249,7 @@ class PersistenceManager:
             "entry_price", "stop_loss", "take_profit", "size", "entry_time",
             "confidence", "direction", "symbol", "confluence_factors",
             "entry_fee", "quote_amount", "size_pct", "atr_at_entry",
+            "atr_percentage_at_entry", "conditions_at_entry",
             "volatility_level", "sl_distance_pct", "tp_distance_pct",
             "rr_ratio_at_entry", "adx_at_entry", "rsi_at_entry",
             "trend_direction_at_entry", "macd_signal_at_entry",

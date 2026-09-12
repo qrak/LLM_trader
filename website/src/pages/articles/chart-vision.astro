@@ -4,7 +4,7 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 
 <ArticleLayout
 	title="How the Bot Reads Charts: From Candles to Conviction — Semantic Signal"
-	description="The full Semantic Signal pipeline: CCXT market data, 50+ Numba JIT indicators, a 1080p chart image for Gemini, and a falsification check before any signal is accepted."
+	description="The full Semantic Signal pipeline: CCXT market data, 50+ Numba JIT indicators, a 1080p chart image for multimodal AI, and a falsification check before any signal is accepted."
 	meta="Article · August 2026 · By @qrak"
 >
 	<span slot="title">How the Bot Reads Charts: From Candles to Conviction</span>
@@ -24,7 +24,7 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 
 	<section class="section">
 		<h2>The Chart Image: Seeing Like a Human Trader</h2>
-		<p>Plotly renders a <strong>Full HD (1080p) candlestick chart</strong> with SMA, RSI, and volume overlays. That image is sent to Google Gemini alongside the raw indicator values.</p>
+		<p>Plotly renders a <strong>Full HD (1080p) candlestick chart</strong> with SMA, RSI, and volume overlays. That image is sent to the multimodal AI alongside the raw indicator values.</p>
 		<p>Why an image at all? Because geometry carries information: the shape of a wick, a volume spike at support, a wedge breakout — patterns a human trader sees at a glance but that are awkward to express as floats. The LLM reads both channels: the picture <em>and</em> the numbers, and every numeric claim it makes is checked against the computed values. Nothing is taken on faith.</p>
 	</section>
 
@@ -36,7 +36,7 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 
 	<section class="section">
 		<h2>The Debate: Bull vs Bear</h2>
-		<p>Gemini argues the <strong>bull case</strong>, then the <strong>bear case</strong>, then evaluates expected value against the bot's own trade history:</p>
+		<p>The multimodal AI argues the <strong>bull case</strong>, then the <strong>bear case</strong>, then evaluates expected value against the bot's own trade history:</p>
 		<div class="formula-box">
 			EV = (Win Rate × Average Win) − ((1 − Win Rate) × Average Loss) − Fees
 		</div>

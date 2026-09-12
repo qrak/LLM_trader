@@ -75,6 +75,52 @@ class BaseAIClient(ABC):
                 return f.read()
         return chart_image
 
+    def _extract_user_text_from_messages(self, messages: list[dict[str, Any]]) -> str:
+        """Extract text content from the last user message."""
+        for message in reversed(messages):
+            if message["role"] == "user":
+                return message["content"]
+        return ""
+
+    def _prepare_multimodal_messages(
+        self,
+        messages: list[dict[str, Any]],
+        multimodal_content: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Rewrite system prompts as a user prefix and attach the multimodal block to the last user message.
+
+        Shared by the OpenRouter and BlockRun chart flows.
+        """
+        multimodal_messages = []
+        for index, message in enumerate(messages):
+            if message.get("role") == "system":
+                multimodal_messages.append({
+                    "role": "user",
+                    "content": f"System instructions: {message['content']}",
+                })
+            elif message.get("role") == "user" and index == len(messages) - 1:
+                multimodal_messages.append({
+                    "role": "user",
+                    "content": multimodal_content,
+                })
+            else:
+                multimodal_messages.append(message)
+        return multimodal_messages
+
+    def _attach_multimodal_content(
+        self,
+        messages: list[dict[str, Any]],
+        multimodal_content: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Replace the last user message content with a multimodal content block.
+
+        Shared by the DeepSeek and LM Studio chart flows.
+        """
+        last_user_index = max(index for index, message in enumerate(messages) if message["role"] == "user")
+        prepared = list(messages)
+        prepared[last_user_index] = {"role": "user", "content": multimodal_content}
+        return prepared
+
     def _sanitize_error_message(self, message: str) -> str:
         """
         Sanitize error message by redaction of sensitive information like API keys.
@@ -132,26 +178,18 @@ class BaseAIClient(ABC):
             return ChatResponseModel.from_error(f"connection: {error_message_sanitized}")
         return None
 
-    def convert_pydantic_response(
-        self,
-        response: Any,
-        unwrap_response: bool = False
-    ) -> ChatResponseModel:
+    def convert_pydantic_response(self, response: Any) -> ChatResponseModel:
         """
         Convert any Pydantic SDK response to ChatResponseModel.
         Used by: providers that return pydantic SDK responses.
-        
+
         Args:
             response: SDK response (Pydantic model)
-            unwrap_response: Whether to unwrap a ChatResponseWithCost response field
         """
         if response is None:
             return ChatResponseModel.from_error("Empty response from SDK")
 
-        try:
-            inner = response.response if unwrap_response else response
-        except AttributeError:
-            inner = response
+        inner = response
 
         try:
             choices_data = []

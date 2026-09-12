@@ -77,6 +77,13 @@ class ProviderOrchestrator:
                 default_model=self.config.BLOCKRUN_MODEL,
                 config=self.config.get_model_config(self.config.BLOCKRUN_MODEL),
                 supports_chart=True,
+            ),
+            "deepseek": ProviderMetadata(
+                name="DeepSeek",
+                client=self.clients.deepseek,
+                default_model=self.config.DEEPSEEK_MODEL,
+                config=self.config.get_model_config(self.config.DEEPSEEK_MODEL),
+                supports_chart=True,
             )
         }
 
@@ -89,7 +96,9 @@ class ProviderOrchestrator:
         if model_override:
             return model_override
         metadata = self._providers.get(provider)
-        return metadata.default_model if metadata else "unknown-model"
+        if not metadata:
+            return "unknown-model"
+        return metadata.default_model
 
     def is_available(self, provider: str) -> bool:
         """Check if a provider is available."""
@@ -99,7 +108,12 @@ class ProviderOrchestrator:
     def supports_chart(self, provider: str) -> bool:
         """Check if provider supports chart analysis."""
         if provider == "all":
-            return self.is_available("googleai") or self.is_available("openrouter") or self.is_available("blockrun")
+            return (
+                self.is_available("googleai")
+                or self.is_available("deepseek")
+                or self.is_available("openrouter")
+                or self.is_available("blockrun")
+            )
         metadata = self._providers.get(provider)
         return metadata.supports_chart if metadata and metadata.is_available() else False
 
@@ -150,6 +164,8 @@ class ProviderOrchestrator:
             )
         if provider == "blockrun":
             return await self._invoke_blockrun(metadata, messages, effective_model, chart, chart_image)
+        if provider == "deepseek":
+            return await self._invoke_deepseek(metadata, messages, effective_model, chart, chart_image)
         return InvocationResult(
             success=False,
             response=ChatResponseModel.from_error(f"Unknown provider '{provider}'"),
@@ -216,7 +232,7 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             result = await self.invoke_with_fallback(
-                ["googleai", "local", "openrouter", "blockrun"], messages, model=model
+                ["googleai", "deepseek", "local", "openrouter", "blockrun"], messages, model=model
             )
             return result
         if self.is_available(effective_provider):
@@ -252,7 +268,7 @@ class ProviderOrchestrator:
         """
         if effective_provider == "all":
             return await self.invoke_with_fallback(
-                ["googleai", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
+                ["googleai", "deepseek", "openrouter", "blockrun"], messages, chart=True, chart_image=chart_image, model=model
             )
         if effective_provider == "local":
             return InvocationResult(
@@ -488,6 +504,8 @@ class ProviderOrchestrator:
                 self.logger.error("LM Studio client not initialized. Check LM_STUDIO_BASE_URL in config.ini")
             elif provider == "blockrun":
                 self.logger.error("BlockRun client not initialized. Check BLOCKRUN_WALLET_KEY in keys.env")
+            elif provider == "deepseek":
+                self.logger.error("DeepSeek client not initialized. Check DEEPSEEK_API_KEY in keys.env")
         elif provider == "local":
             self.logger.error("Local models don't support image analysis")
 
@@ -513,5 +531,29 @@ class ProviderOrchestrator:
             provider="blockrun",
             model=effective_model,
             error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from BlockRun")
+        )
+
+    async def _invoke_deepseek(
+        self,
+        metadata: ProviderMetadata,
+        messages: list[dict[str, str]],
+        effective_model: str,
+        chart: bool,
+        chart_image: "io.BytesIO | bytes | str | None",
+    ) -> InvocationResult:
+        """Invoke DeepSeek provider."""
+        if chart and chart_image:
+            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
+                effective_model, messages, chart_image, metadata.config
+            )
+        else:
+            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
+        success = self._is_valid_response(response)
+        return InvocationResult(
+            success=success,
+            response=response,
+            provider="deepseek",
+            model=effective_model,
+            error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from DeepSeek")
         )
 

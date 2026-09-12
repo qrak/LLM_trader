@@ -428,10 +428,11 @@ def _normalize_title(title: str) -> str:
 
 
 def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Secondary dedup by normalized title, keeping the entry with the longest body.
+    """Secondary dedup by normalized title, keeping the entry with the longest raw body.
 
-    Catches the same story ingested from different URLs (e.g., RSS summary link
-    vs Crawl4AI-enriched canonical link), which URL-only dedup misses.
+    Catches the same story arriving under different URLs from multiple feeds,
+    which URL-only dedup misses. Raw items carry ``body_text`` at this stage -
+    the canonical ``body`` field only exists after ``to_article_schema``.
     """
     best: dict[str, dict[str, Any]] = {}
     for item in items:
@@ -442,8 +443,8 @@ def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, An
         if current is None:
             best[title] = item
             continue
-        # Prefer the item with the longer body (enriched full text over RSS summary)
-        if len(item.get("body") or "") > len(current.get("body") or ""):
+        # Prefer the item with the longer raw body text
+        if len(item.get("body_text") or "") > len(current.get("body_text") or ""):
             best[title] = item
     return list(best.values())
 

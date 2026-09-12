@@ -77,6 +77,24 @@ def _extract_persisted_technical_data(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_current_atr_percentage(config) -> float | None:
+    """Current ATR% from the latest persisted analysis (drift flags in panel match factors).
+
+    Mirrors market_conditions_extractor: prefers ``atr_percent``, accepts ``atr_percentage``.
+    ``_read_json_file`` yields None for a missing file — that means "no data yet", not an error.
+    """
+    prev_response_file = Path(config.DATA_DIR) / "trading" / "previous_response.json"
+    try:
+        data = _read_json_file(prev_response_file)
+        if data is None:
+            return None
+        technical_data = _extract_persisted_technical_data(data)
+        raw = technical_data.get("atr_percent", technical_data.get("atr_percentage"))
+        return float(raw) if raw is not None else None
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+
+
 def _distance_pct_or_fallback(stored_pct: float | None, entry_price: float, target_price: float) -> float:
     """Return stored distance percent or derive it from entry and target prices."""
     if stored_pct and stored_pct > 0:
@@ -707,6 +725,7 @@ class BrainRouter:
             "factor_stats": {},
             "rule_count": 0,
             "current_context": None,
+            "evidence_gate": None,
         }
 
     @staticmethod
@@ -729,6 +748,14 @@ class BrainRouter:
         result["confidence_stats"] = self.vector_memory.compute_confidence_stats()
         result["adx_stats"] = self.vector_memory.compute_adx_performance()
         result["factor_stats"] = self.vector_memory.compute_factor_performance()
+
+        min_evidence_trades = self.vector_memory.MIN_EVIDENCE_TRADES
+        trade_count = self.vector_memory.trade_count
+        result["evidence_gate"] = {
+            "trade_count": trade_count,
+            "min_trades": min_evidence_trades,
+            "limited": trade_count < min_evidence_trades,
+        }
 
         where_filter = {"outcome": {"$ne": "UPDATE"}}
         embed_query = query
@@ -765,6 +792,7 @@ class BrainRouter:
             return 0
 
         experiences.sort(key=get_sort_key, reverse=order == "desc")
+        current_atr_percentage = _extract_current_atr_percentage(self.config)
         result["experiences"] = [
             {
                 "id": exp.id,
@@ -773,6 +801,13 @@ class BrainRouter:
                 "recency": exp.recency,
                 "hybrid_score": exp.hybrid_score,
                 "metadata": exp.metadata,
+                "match_factors": (
+                    self.vector_memory._build_match_factors(
+                        exp.metadata, display_context, current_atr_percentage
+                    )
+                    if display_context
+                    else None
+                ),
             }
             for exp in experiences[:limit]
         ]
