@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-12 — Website dependency security (9 Dependabot alerts cleared)
+
+### Security
+- npm tree in `website/` refreshed to clear all 9 open Dependabot alerts: astro 7.1.3 → 7.3.2 (CRITICAL GHSA-26w7-cxv4-gfx2 + MEDIUM GHSA-376h-93r7-7g6f), plus overrides for transitive deps — sharp ^0.35.4, svgo ^4.1.0, browserslist ^4.28.7, js-yaml 4.3.2, smol-toml ^1.7.1, baseline-browser-mapping ^2.11.0. `npm audit` after refresh: 0 vulnerabilities; `npm run build` OK (10 pages).
+
 ## 2026-09-12 — Startup fixes: ticker validation, provider name, launcher dependency check
 
 ### Fixed

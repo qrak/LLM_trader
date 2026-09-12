@@ -9,7 +9,7 @@
         "preview": "astro preview"
     },
     "dependencies": {
-        "astro": "^7.1.0"
+        "astro": "^7.2.8"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.20",
@@ -18,8 +18,13 @@
         "typescript": "^5.6.3"
     },
     "overrides": {
-        "js-yaml": "4.3.1",
+        "js-yaml": "4.3.2",
         "nanoid": "^3.3.17",
+        "sharp": "^0.35.4",
+        "svgo": "^4.1.0",
+        "browserslist": "^4.28.7",
+        "smol-toml": "^1.7.1",
+        "baseline-browser-mapping": "^2.11.0",
         "esbuild": "0.28.1",
         "@esbuild/aix-ppc64": "0.28.1",
         "@esbuild/android-arm": "0.28.1",
