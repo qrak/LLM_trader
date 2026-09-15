@@ -3,6 +3,11 @@
 Builds a dynamic EV-thinking section that addresses Optiver's finding:
 LLMs understand EV conceptually but default to conservative/heuristic decisions.
 This module injects a structured EV decision framework with live capital tracking.
+
+Fee model: round trip = 2 × fee_percent × POSITION notional (0.075% per side on
+Binance spot). The worked example anchors on the standard (NEUTRAL profile)
+position cap — fees must never be computed off the whole portfolio, or every EV
+estimate looks ~6× costlier than the trade it describes.
 """
 
 from __future__ import annotations
@@ -16,6 +21,11 @@ if TYPE_CHECKING:
 class EVFrameworkFormatter:
     """Builds the Expected Value framework section for the system prompt."""
 
+    # Standard position cap used to anchor the worked fee example — the NEUTRAL
+    # regime profile cap held in RegimeRiskProfileSelector._PROFILE_PARAMS.
+    # tests/test_ev_formatter.py pins this against the trading-side constant.
+    STANDARD_POSITION_PCT = 0.08
+
     def __init__(self, config: Config) -> None:
         self._config = config
 
@@ -25,7 +35,12 @@ class EVFrameworkFormatter:
 
     @property
     def fee_percent(self) -> float:
+        """Per-side fee rate as a fraction of the position notional."""
         return float(self._config.TRANSACTION_FEE_PERCENT)
+
+    def round_trip_fee(self, position_notional: float) -> float:
+        """Round-trip fee in dollars for a position of the given notional."""
+        return position_notional * self.fee_percent * 2
 
     def build_ev_framework_section(self, current_capital: float) -> str:
         """Build the EV framework block injected into the system prompt.
@@ -35,8 +50,12 @@ class EVFrameworkFormatter:
         """
         pnl = current_capital - self.starting_capital
         pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
-        fee_per_trade = self.starting_capital * self.fee_percent
-        breakeven_ev = fee_per_trade * 1.5  # must exceed 1.5× fee to be +EV
+        side_fee_pct = self.fee_percent * 100
+        round_trip_pct = side_fee_pct * 2
+        standard_pct = self.STANDARD_POSITION_PCT * 100
+        example_notional = current_capital * self.STANDARD_POSITION_PCT
+        example_fee = self.round_trip_fee(example_notional)
+        breakeven_ev = example_fee * 1.5  # EV must exceed 1.5× the fee to be worth taking
 
         lines = [
             "",
@@ -49,7 +68,11 @@ class EVFrameworkFormatter:
             f"- Starting Capital: ${self.starting_capital:,.2f}",
             f"- Current Capital: ${current_capital:,.2f}",
             f"- Realized P&L: ${pnl:+,.2f} ({pnl_pct:+.2f}%)",
-            f"- Fee per round-trip trade: ${fee_per_trade:,.2f} ({self.fee_percent*100:.3f}%)",
+            (
+                f"- Round-trip trading fee: {round_trip_pct:.3f}% of the position size "
+                f"({side_fee_pct:.3f}% per side) — e.g. ${example_fee:,.2f} on a standard "
+                f"{standard_pct:.0f}% position (${example_notional:,.2f})"
+            ),
             "",
             "### EV Decision Rule",
             "For every BUY or SELL decision, explicitly estimate:",
@@ -57,11 +80,18 @@ class EVFrameworkFormatter:
             "  2. avg_win — expected profit in dollars if TP is hit",
             "  3. P(lose) — probability the trade hits SL first (≈ 1 − P(win))",
             "  4. avg_loss — expected loss in dollars if SL is hit",
-            f"  5. EV = P(win) × avg_win + (1−P(win)) × (−avg_loss) − ${fee_per_trade:.2f}",
+            (
+                f"  5. EV = P(win) × avg_win + (1−P(win)) × (−avg_loss) − round-trip fee "
+                f"({round_trip_pct:.3f}% of the position size)"
+            ),
             "",
             "### EV Thresholds",
-            f"- **Take the trade if EV > ${breakeven_ev:.2f}** (1.5× round-trip fee)",
-            f"- **HOLD if EV is negative or below ${breakeven_ev:.2f}**",
+            (
+                f"- **Take the trade if EV > 1.5× the round-trip fee of your position** "
+                f"(fee ${example_fee:,.2f} on a standard {standard_pct:.0f}% position → "
+                f"EV must exceed ${breakeven_ev:,.2f})"
+            ),
+            "- **HOLD if EV is negative or below the 1.5× fee threshold**",
             "- **Never reject a positive EV trade purely due to fear of loss**",
             "- A trade that loses money with good EV reasoning is a GOOD DECISION — luck is not strategy",
             "",
@@ -79,15 +109,3 @@ class EVFrameworkFormatter:
             "",
         ]
         return "\n".join(lines)
-
-    def build_ev_quick_section(self, current_capital: float) -> str:
-        """Lightweight EV snapshot for the user prompt (changes every cycle)."""
-        pnl = current_capital - self.starting_capital
-        pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
-
-        return (
-            f"## PORTFOLIO STATUS\n"
-            f"Starting: ${self.starting_capital:,.0f} | "
-            f"Current: ${current_capital:,.0f} | "
-            f"P&L: ${pnl:+,.0f} ({pnl_pct:+.1f}%)\n"
-        )
