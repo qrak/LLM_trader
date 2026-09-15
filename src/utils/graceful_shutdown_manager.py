@@ -30,11 +30,27 @@ class GracefulShutdownManager:
         self.confirmation_callback = confirmation_callback
         self._callbacks = []
         self._shutting_down = False
+        self._reload_requested = False
 
     @property
     def is_shutting_down(self) -> bool:
         """Return whether graceful shutdown is already in progress."""
         return self._shutting_down
+
+    @property
+    def reload_requested(self) -> bool:
+        """Return whether the shutdown was requested as an in-place reload."""
+        return self._reload_requested
+
+    def request_reload(self) -> bool:
+        """Mark this shutdown as an in-place reload (the launcher restarts the bot).
+
+        Returns False when shutdown already started - a reload must not hijack it.
+        """
+        if self._shutting_down:
+            return False
+        self._reload_requested = True
+        return True
 
     def setup_signal_handlers(self):
         if sys.platform == "win32":

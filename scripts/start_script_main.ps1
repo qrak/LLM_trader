@@ -28,6 +28,7 @@ $StartPath = Join-Path $RepoRoot 'start.py'
 
 Write-Output "== scripts/start_script_main.ps1 (main) =="
 Write-Output "Graceful stop: use Ctrl+C (app shows confirmation popup)."
+Write-Output "In-place reload: press SHIFT+R in the app console (auto-restarts, no manual restart)."
 Write-Output "Closing the terminal window/tab with X terminates host process immediately."
 Write-Output "Repository root: $RepoRoot"
 
@@ -89,9 +90,22 @@ if (Test-Path $StartPath) {
         Write-Output "Running start.py with default settings..."
     }
 
-    & python $StartPath @startArgs
+    # In-place reload: the bot exits with code 42 on SHIFT+R; restart it here so
+    # no manual stop/start is needed. LLM_TRADER_RELOAD_SUPPORTED tells the bot
+    # this launcher can restart it (otherwise SHIFT+R is politely refused).
+    $ReloadExitCode = 42
+    $env:LLM_TRADER_RELOAD_SUPPORTED = "1"
+    while ($true) {
+        & python $StartPath @startArgs
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -eq $ReloadExitCode) {
+            Write-Output "`n=== Reload requested - restarting start.py in place... ===`n"
+            Start-Sleep -Seconds 1
+            continue
+        }
+        break
+    }
 
-    $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
         Write-Output "`n=== Process exited with error code: $exitCode ===`n"
     }

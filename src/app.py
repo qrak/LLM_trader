@@ -5,6 +5,7 @@ between various components like the market analyzer, trading strategy, and exter
 """
 import asyncio
 import io
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -183,6 +184,9 @@ class CryptoTradingBot:
         self.keyboard_handler.register_command("a", self._force_analysis_now, "Force immediate analysis")
         self.keyboard_handler.register_command("h", self._show_help, "Show available keyboard commands")
         self.keyboard_handler.register_command("q", self._request_shutdown, "Quit the application")
+        self.keyboard_handler.register_command(
+            "R", self._request_reload, "Reload (in-place restart)"
+        )
 
         # Start keyboard handler task
         keyboard_task = asyncio.create_task(
@@ -737,4 +741,25 @@ class CryptoTradingBot:
             for task in self.tasks:
                 if not task.done():
                     task.cancel()
+
+    async def _request_reload(self):
+        """Request an in-place reload: graceful shutdown, then the launcher restarts the bot.
+
+        Only available when the bot was started by a launcher that supports it
+        (scripts/start_script_*.ps1 set LLM_TRADER_RELOAD_SUPPORTED=1).
+        """
+        if not self.shutdown_manager:
+            self.logger.warning("Reload unavailable: shutdown manager missing")
+            return
+        if os.environ.get("LLM_TRADER_RELOAD_SUPPORTED") != "1":
+            self.logger.warning(
+                "Reload requested, but this launch cannot restart in place "
+                "(start the bot via scripts/start_script_main.ps1). Use 'q' to quit."
+            )
+            return
+        if not self.shutdown_manager.request_reload():
+            self.logger.info("Reload ignored - shutdown already in progress")
+            return
+        self.logger.info("Reload requested - shutting down for in-place restart...")
+        self.running = False
 

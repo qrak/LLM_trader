@@ -408,6 +408,11 @@ def print_summary_table(
     console.print(Panel(table, border_style="green"))
 
 
+# Exit code the launcher scripts (scripts/start_script_*.ps1) interpret as
+# "restart the bot in place" - set when the user requests a reload with SHIFT+R.
+RELOAD_EXIT_CODE = 42
+
+
 class CompositionRoot:
     """Composition Root for the trading bot application.
 
@@ -1137,7 +1142,8 @@ class CompositionRoot:
         self.console.print()
         self.console.print(
             "  [dim]Keyboard commands:[/] [bold]'a'[/] force analysis  "
-            "[bold]'d'[/] toggle dashboard  [bold]'h'[/] help  [bold]'q'[/] quit",
+            "[bold]'d'[/] toggle dashboard  [bold]'h'[/] help  [bold]'q'[/] quit  "
+            "[bold]'Shift+R'[/] reload",
         )
         self.console.print(
             f"  [bold green]Dashboard →[/] [link={dashboard_url}]{dashboard_url}[/]"
@@ -1293,8 +1299,12 @@ class CompositionRoot:
             if dashboard_server:
                 await dashboard_server.stop()
 
-    def start(self):
-        """Main entry point with clean shutdown delegation."""
+    def start(self) -> int:
+        """Main entry point with clean shutdown delegation.
+
+        Returns the process exit code: RELOAD_EXIT_CODE when the user requested
+        an in-place reload (SHIFT+R), 0 otherwise.
+        """
         single_instance_lock = SingleInstanceLock(logger=self.logger)
 
         if not single_instance_lock.acquire():
@@ -1324,6 +1334,7 @@ class CompositionRoot:
         )
         self.shutdown_manager.setup_signal_handlers()
 
+        exit_code = 0
         try:
             while True:
                 try:
@@ -1346,6 +1357,21 @@ class CompositionRoot:
                         self.shutdown_manager.shutdown_gracefully()
                     )
                     break
+
+            # In-place reload (keyboard 'R'): finish the full graceful shutdown
+            # here - awaited to completion, like the Ctrl+C path - then exit with
+            # the reload code so the launcher restarts the bot.
+            if self.shutdown_manager.reload_requested:
+                self.logger.info(
+                    "Reload requested - completing graceful shutdown for in-place restart..."
+                )
+                try:
+                    self.loop.run_until_complete(
+                        self.shutdown_manager.shutdown_gracefully()
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.error("Error during reload shutdown: %s", exc)
+                exit_code = RELOAD_EXIT_CODE
         finally:
             # Give any remaining threads time to clean up before closing the loop
             # This prevents RuntimeError when Discord or other background threads try to access the closed loop
@@ -1355,10 +1381,12 @@ class CompositionRoot:
             except Exception as e:  # noqa: BLE001
                 self.logger.error("Error closing event loop: %s", e)
 
+        return exit_code
+
 
 if __name__ == "__main__":
     try:
-        CompositionRoot().start()
+        exit_code = CompositionRoot().start()
     except BaseException:
         import traceback
 
@@ -1373,3 +1401,4 @@ if __name__ == "__main__":
         except (EOFError, KeyboardInterrupt):
             pass
         raise
+    sys.exit(exit_code)
