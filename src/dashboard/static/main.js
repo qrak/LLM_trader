@@ -67,20 +67,19 @@ async function fetchCosts() {
 }
 
 function updateCostDisplay(data) {
-    const total = data.total_session_cost || 0;
-    document.getElementById('overview-cost').textContent = formatCost(total);
+    const el = document.getElementById('overview-cost');
+    if (!el) return;
+    el.textContent = formatCost(data.total_session_cost || 0);
 }
 
-
-
-
-
 async function fetchBrainStatus() {
+    // Looked up once before the request: the catch branch below drives the same
+    // two indicators, so it needs them too.
+    const connStatus = document.getElementById('connection-status');
+    const statusDot = document.querySelector('.status-dot');
     try {
         const response = await fetch('/api/brain/status');
         const data = await response.json();
-        const connStatus = document.getElementById('connection-status');
-        const statusDot = document.querySelector('.status-dot');
 
         if (connStatus) {
             connStatus.textContent = 'Connected';
@@ -122,8 +121,7 @@ async function fetchBrainStatus() {
         state.lastUpdateTime = new Date();
         updateLastUpdated();
     } catch (e) {
-        const connStatus = document.getElementById('connection-status');
-        const statusDot = document.querySelector('.status-dot');
+        console.warn('Brain status fetch failed', e);
 
         if (connStatus) {
             connStatus.textContent = 'Disconnected';
@@ -265,49 +263,52 @@ function initApp() {
 
     // Panel initializers — each isolated so one failure doesn't cascade
     const _safeInit = (name, fn) => { try { fn(); } catch (e) { console.error(name + ' init failed:', e); } };
+    // Pollers and event listeners are fire-and-forget: without a catch here a
+    // rejection inside a lane stays an unhandled promise rejection.
+    const _runSafely = (name, fn) => { Promise.resolve().then(fn).catch((e) => console.error(name + ' failed:', e)); };
 
     _safeInit('initPerformanceChart', initPerformanceChart);
-    try { initDecisionPathwaysPanel(); } catch (e) { console.error('initDecisionPathwaysPanel failed:', e); }
-    try { initVectorPanel(); } catch (e) { console.error('initVectorPanel failed:', e); }
+    _safeInit('initDecisionPathwaysPanel', initDecisionPathwaysPanel);
+    _safeInit('initVectorPanel', initVectorPanel);
     _safeInit('initFullscreen', initFullscreen);
     _safeInit('initPositionPanel', initPositionPanel);
-    try { initStatisticsPanel(); } catch (e) { console.error('initStatisticsPanel failed:', e); }
-    try { initNewsPanel(); } catch (e) { console.error('initNewsPanel failed:', e); }
-    try { initPostMortemPanel(); } catch (e) { console.error('initPostMortemPanel failed:', e); }
+    _safeInit('initStatisticsPanel', initStatisticsPanel);
+    _safeInit('initNewsPanel', initNewsPanel);
+    _safeInit('initPostMortemPanel', initPostMortemPanel);
     _safeInit('initConsolePanel', initConsolePanel);
     _safeInit('initWebSocket', initWebSocket);
     _safeInit('initUI', initUI);
     _safeInit('startCountdownLoop', startCountdownLoop);
 
     // Initial update
-    try { updateAll(); } catch (e) { console.error('updateAll failed:', e); }
+    _runSafely('updateAll', updateAll);
 
     // Start polling lanes: fast for critical status/position, slow for heavier panels.
-    setInterval(updateFastLane, state.fastPollInterval);
-    setInterval(updateSlowLane, state.slowPollInterval);
+    setInterval(() => _runSafely('updateFastLane', updateFastLane), state.fastPollInterval);
+    setInterval(() => _runSafely('updateSlowLane', updateSlowLane), state.slowPollInterval);
 
     // Listen for WS analysis complete
     document.addEventListener('analysis-complete', () => {
         console.log('Analysis complete, refreshing...');
-        updateFastLane();
-        updateSlowLane();
+        _runSafely('updateFastLane', updateFastLane);
+        _runSafely('updateSlowLane', updateSlowLane);
     });
 
     document.addEventListener('brain-lifecycle-update', (event) => {
         updateLifecycleDisplay(event.detail);
         if (event.detail && ['rebuilt', 'error'].includes(event.detail.status)) {
-            updateFastLane();
-            updateSlowLane();
+            _runSafely('updateFastLane', updateFastLane);
+            _runSafely('updateSlowLane', updateSlowLane);
         }
     });
 
     document.addEventListener('brain-state-updated', () => {
-        updateFastLane();
-        updateSlowLane();
+        _runSafely('updateFastLane', updateFastLane);
+        _runSafely('updateSlowLane', updateSlowLane);
     });
 
     document.addEventListener('trade-closed-detected', () => {
-        refreshBrainPanels();
+        _runSafely('refreshBrainPanels', refreshBrainPanels);
     });
 
     console.log('Dashboard App Initialized');
