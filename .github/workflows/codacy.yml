@@ -85,11 +85,19 @@ jobs:
           sarif_file: results.sarif
 
       - name: Upload results to Codacy
-        if: always() && hashFiles('results.sarif') != '' && secrets.CODACY_PROJECT_TOKEN != ''
+        # No `secrets.*` in `if` - GitHub forbids it and the whole workflow fails
+        # to load. Export the token as env and gate on that instead.
+        if: always() && hashFiles('results.sarif') != ''
         continue-on-error: true
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
         run: |
+          if [ -z "$CODACY_PROJECT_TOKEN" ]; then
+            echo "CODACY_PROJECT_TOKEN not set - skipping the Codacy upload."
+            exit 0
+          fi
           codacy-cli-v2 upload \
-            --project-token "${{ secrets.CODACY_PROJECT_TOKEN }}" \
+            --project-token "$CODACY_PROJECT_TOKEN" \
             --sarif-path results.sarif \
             --commit-uuid "${{ github.sha }}"
 
