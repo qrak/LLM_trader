@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-16 — Log levels: a transient provider overload is a warning, not an error
+
+### Fixed
+- `src/platforms/ai_providers/base.py` and `google.py`: an `overloaded` / `503 UNAVAILABLE` response is now logged at **warning**. The condition is already handled downstream — `ProviderOrchestrator` retries on the paid key (logged as a warning) and reports a genuine failure at error level when the paid client also fails — so the provider-side `error` level only added two benign lines to `errors.log` on every cycle and buried real failures. `rate_limit`/quota, `authentication`, `timeout`, `connection` and unexpected errors stay at **error**. A healthy `errors.log` is now empty on a normal day; the overload still shows in `Bot.log` at warning level.
+
 ## 2026-09-16 — Refactor pass: 1000-line cap, god-class splits, comment/docstring sweep
 
 ### Changed
