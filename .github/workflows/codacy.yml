@@ -1,22 +1,45 @@
 name: Codacy Security Scan
 
+# Runs the Codacy CLI v2 locally on the runner and uploads the SARIF report to
+# GitHub Code Scanning (and, when a token is configured, to Codacy itself).
+#
+# NOTE: this deliberately does NOT use codacy's official one-liner installer
+# (codacy-cli.sh). That script calls an undefined `fatal` function on several
+# error paths, so any problem surfaces as "fatal: command not found" / exit 1
+# with no explanation. Here the release is pinned and fetched directly, which
+# fails loudly and reproducibly.
+
 on:
   push:
     branches: [ "master" ]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - '.github/workflows/codacy.yml'
   pull_request:
     branches: [ "master" ]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
   schedule:
-    - cron: '15 6 * * 4'
+    - cron: '15 6 * * 4'          # weekly, Thursday 06:15 UTC
+  workflow_dispatch: {}            # manual trigger from the Actions tab
 
 permissions:
   contents: read
+
+env:
+  # Bump deliberately: the release tag of codacy/codacy-cli-v2 to run.
+  # GET /repos/codacy/codacy-cli-v2/releases/latest -> .tag_name
+  CODACY_CLI_VERSION: 1.0.0-main.382.sha.473b61c
 
 jobs:
   codacy-security-scan:
     permissions:
       contents: read
-      security-events: write
+      security-events: write       # required to upload SARIF to Code Scanning
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,38 +49,55 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Download Codacy CLI v2
+      - name: Install Codacy CLI v2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -Ls https://raw.githubusercontent.com/codacy/codacy-cli-v2/main/codacy-cli.sh -o /tmp/codacy-cli.sh
-          chmod +x /tmp/codacy-cli.sh
+          set -euo pipefail
+          mkdir -p "$HOME/.cache/codacy/bin"
+          asset="codacy-cli-v2_${CODACY_CLI_VERSION}_linux_amd64.tar.gz"
+          url="https://github.com/codacy/codacy-cli-v2/releases/download/${CODACY_CLI_VERSION}/${asset}"
+          curl -fsSL "$url" -o /tmp/codacy.tar.gz
+          tar xzf /tmp/codacy.tar.gz -C "$HOME/.cache/codacy/bin"
+          echo "$HOME/.cache/codacy/bin" >> "$GITHUB_PATH"
+          "$HOME/.cache/codacy/bin/codacy-cli-v2" version
 
-      - name: Initialize Codacy configuration
+      - name: Run Codacy analysis
+        id: analyze
         run: |
-          /tmp/codacy-cli.sh init
-
-      - name: Install tools
-        run: |
-          /tmp/codacy-cli.sh install
-
-      - name: Codacy Security Scan
-        run: |
-          /tmp/codacy-cli.sh analyze --format sarif -o results.sarif
+          set -euo pipefail
+          codacy-cli-v2 init
+          codacy-cli-v2 install
+          codacy-cli-v2 analyze --format sarif -o results.sarif
+          test -s results.sarif || { echo "::error::Codacy produced an empty SARIF file"; exit 1; }
 
       - name: Fix SARIF for GitHub Code Scanning
+        if: always() && hashFiles('results.sarif') != ''
         run: python3 scripts/fix_sarif.py results.sarif --output results.sarif
 
       - name: Upload SARIF results to GitHub Code Scanning
-        uses: github/codeql-action/upload-sarif@v4
+        # Tolerated: this needs Code Scanning enabled on the repo; a private repo
+        # without GHAS rejects the upload. We do not fail the job over it.
+        if: always() && hashFiles('results.sarif') != ''
         continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 
       - name: Upload results to Codacy
+        if: always() && hashFiles('results.sarif') != '' && secrets.CODACY_PROJECT_TOKEN != ''
         continue-on-error: true
         run: |
-          /tmp/codacy-cli.sh upload --project-token ${{ secrets.CODACY_PROJECT_TOKEN }} --sarif-path results.sarif --commit-uuid ${{ github.sha }}
+          codacy-cli-v2 upload \
+            --project-token "${{ secrets.CODACY_PROJECT_TOKEN }}" \
+            --sarif-path results.sarif \
+            --commit-uuid "${{ github.sha }}"
+
+      - name: Upload SARIF as build artifact
+        # Keeps the report downloadable even if both uploads are rejected.
+        if: always() && hashFiles('results.sarif') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: codacy-sarif
+          path: results.sarif
+          retention-days: 14
