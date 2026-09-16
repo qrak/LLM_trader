@@ -8,6 +8,7 @@ to stream logs to the browser in real-time.
 import asyncio
 import logging
 from collections import deque
+from typing import Any
 from uuid import uuid4
 
 
@@ -76,6 +77,22 @@ class LogStreamHandler(logging.Handler):
                 queue.put_nowait(None)  # sentinel
             except asyncio.QueueFull:
                 pass
+
+    async def stream_to(self, queue: asyncio.Queue[str | None], websocket: Any) -> None:
+        """Forward queued log lines to a websocket until the None sentinel arrives.
+
+        Sends a keepalive ping after 30s of silence. Callers own accept /
+        disconnect handling and must still call unsubscribe().
+        """
+        while True:
+            try:
+                line = await asyncio.wait_for(queue.get(), timeout=30.0)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"type": "ping"})
+                continue
+            if line is None:
+                return
+            await websocket.send_json({"type": "log", "line": line})
 
     @property
     def subscriber_count(self) -> int:

@@ -54,7 +54,6 @@ class MarketDataManager:
     async def fetch_market_overview(self) -> dict[str, Any] | None:
         """Fetch overall market data from various sources concurrently."""
         try:
-            # Bolt: fetch global market data, macro data, and DeFi fundamentals concurrently using asyncio.gather (~700ms latency reduction)
             coingecko_data, macro_data, defi_fundamentals = await asyncio.gather(
                 self.fetcher.fetch_global_market_data(),  # type: ignore
                 self.fetcher.fetch_macro_data(),  # type: ignore

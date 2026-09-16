@@ -3,12 +3,12 @@ Template management for prompt building system.
 Handles system prompts, response templates, and analysis steps for TRADING DECISIONS.
 """
 
-import json
 import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
+from src.parsing.unified_parser import UnifiedParser
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
@@ -103,7 +103,7 @@ class TemplateManager:
                 timeframe_minutes = self.timeframe_validator.to_minutes(timeframe)
             else:
                 timeframe_minutes = TimeframeValidator.to_minutes(timeframe)
-        except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+        except (ValueError, TypeError) as e:
             if self.logger:
                 self.logger.warning("Failed to derive timeframe context for %s: %s", timeframe, e)
 
@@ -138,21 +138,13 @@ class TemplateManager:
         ])
 
     def _extract_previous_analysis(self, previous_response: str) -> dict[str, Any] | None:
-        """Extract the analysis dict from a previous AI response JSON block.
+        """Extract the analysis dict from a previous AI response JSON block (shared parser).
 
         Returns the unwrapped analysis dict, or None if parsing fails or analysis key is absent.
         """
-        blocks = re.findall(r"```json\s*(.*?)\s*```", previous_response, re.DOTALL | re.IGNORECASE)
-        for block in reversed(blocks):
-            try:
-                data = json.loads(block)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                continue
-            analysis = data.get("analysis") or {}
-            return analysis if analysis else None
-        if blocks and self.logger:
-            self.logger.debug("Previous response JSON could not be parsed for snapshot")
-        return None
+        data = UnifiedParser.extract_json_block(previous_response)
+        analysis = (data or {}).get("analysis") or {}
+        return analysis or None
 
     def _normalize_model_verbosity(self, value: str | None = None) -> str:
         """Normalize verbosity value with safe fallback."""
@@ -407,7 +399,7 @@ class TemplateManager:
                 "",
             ])
 
-        # Bull/Bear Debate — structured adversarial reasoning (single LLM call, no extra cost)
+        # Bull/Bear debate - single LLM call
         if getattr(self.config, "RESEARCH_TEAM_ENABLED", False):
             header_lines.extend([
                 "## Bull vs Bear Debate Protocol",
@@ -518,7 +510,7 @@ class TemplateManager:
                 if self.timeframe_validator:
                     try:
                         window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
-                    except Exception as e:  # pylint: disable=broad-exception-caught  # noqa: BLE001
+                    except (ValueError, TypeError) as e:
                         if self.logger:
                             self.logger.warning("Failed to calculate relevance window for %s: %s", timeframe, e)
 
@@ -596,7 +588,7 @@ class TemplateManager:
             rr_borderline = float(thresholds.get("rr_borderline_min", config_min_rr))
         except (TypeError, ValueError):
             rr_borderline = config_min_rr
-        # Config value is the HARD floor; the brain may only loosen it (never tighten above config).
+        # config value is the hard floor; the brain may only loosen it
         rr_borderline = min(rr_borderline, config_min_rr)
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         trade_count = thresholds.get("trade_count", 0)

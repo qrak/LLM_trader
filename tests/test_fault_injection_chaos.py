@@ -4,13 +4,16 @@ Tests system resilience against unhandled exceptions, malformed payloads,
 corrupted numbers (NaN/Inf), and fail-closed security properties.
 """
 
+import json
 import unittest
 from unittest.mock import MagicMock
 
 from src.logger.logger import Logger
+from src.parsing.unified_parser import UnifiedParser
 from src.trading.guards import GuardProtocol, GuardResult
 from src.trading.guards.pipeline import GuardPipeline
 from src.trading.position_extractor import PositionExtractor
+from src.utils.format_utils import FormatUtils
 
 
 class FaultyGuard(GuardProtocol):
@@ -49,22 +52,28 @@ class TestFaultInjectionChaos(unittest.TestCase):
         self.assertFalse(results[1].passed)
         self.assertIn("failed closed due to error", results[1].reason)
 
-    def test_position_extractor_handles_corrupted_floats_and_nan(self):
-        """Verify PositionExtractor handles NaN, Inf, and malformed types safely."""
-        extractor = PositionExtractor(logger=MagicMock(spec=Logger))
-        analysis = {
-            "signal": "BUY",
-            "confidence": "HIGH",
-            "entry_price": float("nan"),
-            "stop_loss": float("inf"),
-            "take_profit": "not_a_number",
-            "position_size": float("-inf"),
-            "reasoning": "Corrupted text test",
+    def test_position_extractor_reads_corrupted_floats_and_nan_as_none(self):
+        """Verify the parser normalizes corrupted numerics to None before extraction."""
+        parser = UnifiedParser(logger=MagicMock(spec=Logger), format_utils=FormatUtils())
+        extractor = PositionExtractor()
+        payload = {
+            "analysis": {
+                "signal": "BUY",
+                "confidence": "HIGH",
+                "entry_price": float("nan"),
+                "stop_loss": float("inf"),
+                "take_profit": "not_a_number",
+                "position_size": float("-inf"),
+                "reasoning": "Corrupted text test",
+            }
         }
-        signal, confidence, sl, tp, pos_size, reasoning = extractor._extract_from_dict(analysis)
+        analysis = parser.parse_ai_response(f"```json\n{json.dumps(payload)}\n```")["analysis"]
+
+        signal, confidence, sl, tp, pos_size, reasoning = extractor.extract_trading_info(analysis)
 
         self.assertEqual(signal, "BUY")
-        self.assertEqual(confidence, "HIGH")
+        # off-contract string confidence ("HIGH") normalizes to the numeric default 50
+        self.assertEqual(confidence, "MEDIUM")
         self.assertIsNone(sl)
         self.assertIsNone(tp)
         self.assertIsNone(pos_size)

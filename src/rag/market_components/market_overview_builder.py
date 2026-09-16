@@ -23,7 +23,7 @@ class MarketOverviewBuilder:
         }
 
         try:
-            # 1. Add CoinGecko global data if available (flattened for formatter compatibility)
+            # 1. CoinGecko global data (flattened for the formatter)
             if coingecko_data:
                 # Handle both direct global data and wrapped data
                 if "data" in coingecko_data:
@@ -34,7 +34,7 @@ class MarketOverviewBuilder:
                 else:
                     self.logger.warning("Unexpected CoinGecko data format: %s", list(coingecko_data.keys()))
 
-            # 2. Add price data if available (Process BEFORE top_coins to use it for enrichment)
+            # 2. price data - before top_coins, which it enriches
             overview["coin_data"] = {}
             if price_data:
                 for symbol, values in price_data.items():
@@ -43,8 +43,6 @@ class MarketOverviewBuilder:
                         overview["coin_data"][symbol] = processed_coin
 
             # 3. Add top coins list if available
-            # Strategy: Prefer existing rich data from CoinGecko, update with fresh prices if available.
-            # If no CoinGecko data, build from scratch using the symbols list.
 
             existing_top_coins = overview.get("top_coins", [])
 
@@ -61,8 +59,6 @@ class MarketOverviewBuilder:
                             break
 
                     if fresh_data:
-                        # Only update if we have valid non-zero data, or if we really trust the fresh source
-                        # Here we prioritize the fresh source if it has a price
                         fresh_price = fresh_data.get("price", 0)
                         if fresh_price > 0:
                             coin["current_price"] = fresh_price
@@ -112,16 +108,12 @@ class MarketOverviewBuilder:
             return overview
 
     def build_overview(self, coingecko_data: dict | None, price_data: dict | None, top_coins: list | None = None) -> dict[str, Any]:
-        """Build market overview from fetched data - main entry point."""
-        try:
-            return self.build_overview_structure(price_data, coingecko_data, top_coins)
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error building market overview: %s", e)
-            return {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "summary": "CRYPTO MARKET OVERVIEW - Error occurred",
-                "published_on": datetime.now(timezone.utc).timestamp()
-            }
+        """Build market overview from fetched data - main entry point.
+
+        ``build_overview_structure`` already returns a partial overview instead of
+        raising, so there is nothing for a second guard to catch here.
+        """
+        return self.build_overview_structure(price_data, coingecko_data, top_coins)
 
     def _finalize_overview(self, overview: dict) -> dict[str, Any]:
         """Finalize and validate the overview structure."""

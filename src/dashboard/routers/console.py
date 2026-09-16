@@ -7,8 +7,6 @@ Provides:
 - REST /api/console/page/{n} — specific day page
 """
 
-import asyncio
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
@@ -67,14 +65,7 @@ class ConsoleRouter:
             sid, queue = self._handler.subscribe()
 
             try:
-                while True:
-                    try:
-                        line = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if line is None:
-                            break
-                        await websocket.send_json({"type": "log", "line": line})
-                    except asyncio.TimeoutError:
-                        await websocket.send_json({"type": "ping"})
+                await self._handler.stream_to(queue, websocket)
             except WebSocketDisconnect:
                 pass
             except Exception:  # noqa: BLE001, S110

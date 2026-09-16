@@ -145,7 +145,7 @@ class ModelManager:
                     effective_model, messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback  # type: ignore[reportOptionalMemberAccess]
                 )
                 if response_json is not None:
-                    result = InvocationResult(  # type: ignore[arg-type]
+                    result = InvocationResult(
                         success=True,
                         response=response_json,  # type: ignore
                         provider="lmstudio",

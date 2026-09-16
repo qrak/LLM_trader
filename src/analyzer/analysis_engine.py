@@ -12,8 +12,8 @@ import numpy as np
 
 from src.analyzer.data_fetcher import DataFetcher
 from src.logger.logger import Logger
+from src.trading.data_models import MarketSnapshot
 from src.utils.indicator_classifier import (
-    _resolve_scalar,
     build_exit_execution_context_from_config,
     classify_bb_position,
     classify_macd_signal,
@@ -23,6 +23,7 @@ from src.utils.indicator_classifier import (
     classify_trend_direction,
     classify_volatility_level,
     classify_volume_state,
+    resolve_scalar,
 )
 from src.utils.profiler import profile_performance
 from src.utils.timeframe_validator import TimeframeValidator
@@ -53,25 +54,7 @@ class AnalysisEngine:
         result_processor=None,
         chart_generator=None
     ) -> None:
-        """
-        Initialize AnalysisEngine with injected dependencies (DI pattern).
-
-        Args:
-            logger: Logger instance
-            rag_engine: RAG engine for news and context
-            model_manager: AI model manager (Protocol-based)
-            market_api: Market metadata API client
-            format_utils: Formatting utilities
-            data_processor: Data processing utilities
-            config: Configuration instance
-            technical_calculator: TechnicalCalculator instance (injected from app.py)
-            pattern_analyzer: PatternAnalyzer instance (injected from app.py)
-            prompt_builder: PromptBuilder instance (injected from app.py)
-            data_collector: MarketDataCollector instance (injected from app.py)
-            metrics_calculator: MarketMetricsCalculator instance (injected from app.py)
-            result_processor: AnalysisResultProcessor instance (injected from app.py)
-            chart_generator: ChartGenerator instance (injected from app.py)
-        """
+        """Initialize the engine with the injected DI dependencies."""
         # pylint: disable=too-many-arguments, too-many-locals
         self.logger = logger
 
@@ -189,27 +172,12 @@ class AnalysisEngine:
         current_ticker: dict[str, Any] | None = None,
         dynamic_thresholds: dict[str, Any] | None = None,
         ev_context: str | None = None,
-        rl_policy = None,
     ) -> dict[str, Any]:
-        """
-        Orchestrate the complete market analysis workflow.
+        """Run the full market analysis workflow and return the result dict.
 
-        Args:
-            provider: Optional AI provider override (admin only)
-            model: Optional AI model override (admin only)
-            additional_context: Additional context to append to prompt (e.g., extra instructions)
-            previous_response: Optional previous AI response for continuity
-            previous_indicators: Optional previous technical indicator values for trend comparison
-            position_context: Current position details and unrealized P&L (goes to system prompt)
-            performance_context: Recent trading history and performance (goes to system prompt)
-            brain_service: TradingBrainService instance to generate context from CURRENT indicators
-            last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
-            current_ticker: Optional dict containing current ticker data to avoid redundant API calls
-            dynamic_thresholds: Optional dict containing brain-learned thresholds for response template
-            ev_context: Expected Value framework section text (dynamic capital tracking)
-
-        Returns:
-            Dictionary containing analysis results
+        provider/model are admin-only overrides. position_context and
+        performance_context go into the system prompt; last_analysis_time is a
+        formatted timestamp; current_ticker avoids a redundant API call.
         """
         try:
             # Step 1: Collect all required data
@@ -273,7 +241,7 @@ class AnalysisEngine:
             else:
                 self.logger.warning("No market context available for %s", self.symbol)
 
-            # Step 3.5: Generate brain context from CURRENT indicators (after technical analysis)
+            # Step 3.5: brain context from current indicators
             brain_context = None
             if brain_service and self.context.technical_data:  # type: ignore[reportOptionalMemberAccess]
                 brain_context = await self._generate_brain_context_from_current_indicators(
@@ -287,7 +255,6 @@ class AnalysisEngine:
                 brain_context, last_analysis_time, dynamic_thresholds,
                 precomputed_chart=(chart_image, has_chart_analysis),
                 ev_context=ev_context,
-                rl_policy=rl_policy,
             )
 
             # Reset custom instructions for next run
@@ -363,8 +330,8 @@ class AnalysisEngine:
 
         assert self.context is not None
         self.context.market_overview = market_overview  # type: ignore[assignment]
-        self.context.market_microstructure = microstructure  # type: ignore[assignment]
-        self.context.coin_details = coin_details  # type: ignore[assignment]
+        self.context.market_microstructure = microstructure
+        self.context.coin_details = coin_details
 
     def _copy_comparison_bucket(self, bucket: dict[str, Any]) -> dict[str, float]:
         """Copy only numeric fields needed for snapshot-to-snapshot comparisons."""
@@ -440,7 +407,7 @@ class AnalysisEngine:
         """Attach snapshot metadata and previous-cycle deltas to microstructure data."""
         snapshot_context = {
             "is_live_snapshot": True,
-            "configured_timeframe": self.context.timeframe if self.context else self.timeframe,  # type: ignore[union-attr]
+            "configured_timeframe": self.context.timeframe if self.context else self.timeframe,
             "comparison_basis": "previous_analysis_cycle_snapshot",
             "comparison_available": False
         }
@@ -482,14 +449,14 @@ class AnalysisEngine:
             self.pattern_analyzer.detect_patterns,
             self.context.ohlcv_candles,
             self.context.technical_history,
-            self.context.long_term_data,  # type: ignore[reportOptionalMemberAccess]
+            self.context.long_term_data,
             self.context.timestamps
         )
 
         if any(technical_patterns.values()):
             self.context.technical_patterns = technical_patterns
 
-    async def _generate_ai_analysis(  # type: ignore[reportOptionalMemberAccess]
+    async def _generate_ai_analysis(
         self,
         provider: str | None,
         model: str | None,
@@ -503,13 +470,8 @@ class AnalysisEngine:
         dynamic_thresholds: dict[str, Any] | None = None,
         precomputed_chart: tuple[io.BytesIO | None, bool] | None = None,
         ev_context: str | None = None,
-        rl_policy = None,
     ) -> dict[str, Any]:
-        """Generate AI analysis using prompt builder and result processor.
-
-        When rl_policy is enabled and loaded, the local Qwen3-0.6B model
-        replaces the external LLM call entirely — zero API cost.
-        """
+        """Generate AI analysis using prompt builder and result processor."""
 
         if precomputed_chart:
             chart_image, has_chart_analysis = precomputed_chart
@@ -568,14 +530,14 @@ class AnalysisEngine:
         analysis_result["prompt_lint"] = prompt_lint
 
         assert self.context is not None
-        if self.context.technical_data:  # type: ignore[reportOptionalMemberAccess]
-            analysis_result["technical_data"] = self.context.technical_data  # type: ignore[reportOptionalMemberAccess]
+        if self.context.technical_data:
+            analysis_result["technical_data"] = self.context.technical_data
 
-        if self.context.sentiment:  # type: ignore[reportOptionalMemberAccess]
-            analysis_result["sentiment"] = self.context.sentiment  # type: ignore[reportOptionalMemberAccess]
+        if self.context.sentiment:
+            analysis_result["sentiment"] = self.context.sentiment
 
-        if self.context.market_microstructure:  # type: ignore[reportOptionalMemberAccess]
-            analysis_result["market_microstructure"] = self.context.market_microstructure  # type: ignore[reportOptionalMemberAccess]
+        if self.context.market_microstructure:
+            analysis_result["market_microstructure"] = self.context.market_microstructure
 
         if self.last_generated_prompt:
             analysis_result["generated_prompt"] = self.last_generated_prompt
@@ -607,9 +569,8 @@ class AnalysisEngine:
 
         # Give result processor access to context for current_price
         assert self.result_processor is not None
-        self.result_processor.context = self.context  # type: ignore[assignment]
+        self.result_processor.context = self.context
 
-        # Pass chart image to result processor (it will use chart analysis if image provided)
 
         # Dashboard: Store both prompts for monitoring
         self.last_generated_prompt = prompt
@@ -668,7 +629,7 @@ class AnalysisEngine:
 
     async def _calculate_technical_indicators(self) -> None:
         """Calculate technical indicators using the technical calculator"""
-        # Offload CPU-bound technical analysis to a separate thread to avoid blocking the event loop
+        # to_thread: CPU-bound TA must not block the event loop
         assert self.technical_calculator is not None
         assert self.context is not None
         indicators = await asyncio.to_thread(
@@ -691,11 +652,11 @@ class AnalysisEngine:
                     technical_data[key] = [float(values[i, -1]) for i in range(values.shape[0])]
 
                 elif isinstance(values, tuple) and all(isinstance(item, np.ndarray) for item in values):
-                    technical_data[key] = [float(array[-1]) for array in values]  # type: ignore[arg-type]
+                    technical_data[key] = [float(array[-1]) for array in values]
 
                 elif isinstance(values, list):
                     if all(isinstance(item, np.ndarray) for item in values):
-                        technical_data[key] = [float(array[-1]) for array in values]  # type: ignore[arg-type]
+                        technical_data[key] = [float(array[-1]) for array in values]
                     else:
                         technical_data[key] = values
 
@@ -706,7 +667,7 @@ class AnalysisEngine:
                 self.logger.warning("Could not process indicator '%s': %s", key, e)
                 continue
 
-        self.context.technical_data = technical_data  # type: ignore[reportOptionalMemberAccess]
+        self.context.technical_data = technical_data
 
     async def _process_long_term_data(self) -> None:
         """Process long-term historical data and calculate metrics"""
@@ -777,13 +738,13 @@ class AnalysisEngine:
         volume_state = classify_volume_state(technical_data)
 
         assert self.context is not None
-        bb_position = classify_bb_position(technical_data, self.context.current_price)  # type: ignore[reportOptionalMemberAccess]
+        bb_position = classify_bb_position(technical_data, self.context.current_price)
 
         is_weekend = datetime.now(timezone.utc).weekday() >= 5
 
-        market_sentiment = classify_market_sentiment(self.context.sentiment)  # type: ignore[reportOptionalMemberAccess]
+        market_sentiment = classify_market_sentiment(self.context.sentiment)
 
-        order_book_bias = classify_order_book_bias(self.context.market_microstructure)  # type: ignore[reportOptionalMemberAccess]
+        order_book_bias = classify_order_book_bias(self.context.market_microstructure)
 
         rsi_value = technical_data.get("rsi", 50.0)
         exit_execution_context = build_exit_execution_context_from_config(
@@ -795,18 +756,17 @@ class AnalysisEngine:
         # Real values from current indicators — without these the risk profile
         # selector silently falls back to (choppiness=None, atr_percentage=0.0)
         # and always reports NEUTRAL with "ATR 0.0%".
-        choppiness = _resolve_scalar(technical_data.get("choppiness"))
-        atr_percentage = _resolve_scalar(technical_data.get("atr_percent"))
-        mfi = _resolve_scalar(technical_data.get("mfi"))
-        cmf = _resolve_scalar(technical_data.get("cmf"))
-        vwap = _resolve_scalar(technical_data.get("vwap"))
-        _st_dir = _resolve_scalar(technical_data.get("supertrend_direction"))
+        choppiness = resolve_scalar(technical_data.get("choppiness"))
+        atr_percentage = resolve_scalar(technical_data.get("atr_percent"))
+        mfi = resolve_scalar(technical_data.get("mfi"))
+        cmf = resolve_scalar(technical_data.get("cmf"))
+        vwap = resolve_scalar(technical_data.get("vwap"))
+        _st_dir = resolve_scalar(technical_data.get("supertrend_direction"))
         supertrend_direction = (
             "Bullish" if _st_dir > 0 else "Bearish" if _st_dir < 0 else "NEUTRAL"
         )
 
-        return await asyncio.to_thread(
-            brain_service.get_context,
+        snapshot = MarketSnapshot(
             trend_direction=trend_direction,
             adx=adx_value,
             rsi=rsi_value,
@@ -826,6 +786,8 @@ class AnalysisEngine:
             vwap=vwap,
             supertrend_direction=supertrend_direction,
         )
+
+        return await asyncio.to_thread(brain_service.get_context, snapshot)
 
 
 

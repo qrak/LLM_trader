@@ -115,13 +115,11 @@ from src.trading import (
     TradingStatisticsService,
     TradingStrategy,
 )
-from src.trading.audit import AuditTrail
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
 from src.trading.guards.cooldown_window import CooldownWindowGuard
 from src.trading.guards.max_position_size import MaxPositionSizeGuard
 from src.trading.guards.pipeline import GuardPipeline
 from src.trading.post_mortem import PostMortemService
-from src.trading.rl_policy import RLPolicyNetwork
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.vector_memory import VectorMemoryService
 from src.utils.format_utils import FormatUtils
@@ -429,7 +427,7 @@ class CompositionRoot:
         )
         self.logger.install_crash_handler()
         self.loop = None
-        self.shutdown_manager = None
+        self.shutdown_manager: GracefulShutdownManager | None = None
 
     # pylint: disable=too-many-statements
     async def build_dependencies(self) -> dict:
@@ -550,10 +548,6 @@ class CompositionRoot:
             "memory_service": trading["memory_service"],
             "exit_monitor": trading["exit_monitor"],
             "sentiment_analyst": RedditSentimentAnalyst(
-                logger=self.logger,
-            ),
-            "rl_policy": RLPolicyNetwork(
-                config=self.config,
                 logger=self.logger,
             ),
             "ev_formatter": analyzer["ev_formatter"],
@@ -734,7 +728,7 @@ class CompositionRoot:
         )
 
         category_processor = CategoryProcessor(
-            self.logger, utils["collision_resolver"], file_handler
+            self.logger, utils["collision_resolver"], utils["parser"], file_handler
         )
         engine = RagEngine(
             logger=self.logger,
@@ -1009,7 +1003,6 @@ class CompositionRoot:
         statistics_service = TradingStatisticsService(self.logger, persistence)
         exit_monitor = ExitMonitor(self.config, timeframe, POSITION_UPDATE_INTERVAL)
         exit_monitor.validate()
-        audit_trail = AuditTrail()
         guard_pipeline = GuardPipeline(
             [
                 ConfiguredSymbolGuard(),
@@ -1036,11 +1029,10 @@ class CompositionRoot:
             memory_service,
             risk_manager,
             self.config,
-            PositionExtractor(self.logger, utils["parser"]),
+            PositionExtractor(),
             conditions_extractor=MarketConditionsExtractor(self.logger),
             tightening_policy=tightening_policy,
             guard_pipeline=guard_pipeline,
-            audit_trail=audit_trail,
             post_mortem_service=post_mortem_service,
         )
 
@@ -1081,7 +1073,7 @@ class CompositionRoot:
                     cleanup_interval=7200,
                 )
 
-                notifier = DiscordNotifier(  # type: ignore[reportAbstractUsage]
+                notifier = DiscordNotifier(
                     self.logger,
                     self.config,
                     utils["parser"],
@@ -1235,7 +1227,7 @@ class CompositionRoot:
                 active_tasks=bot.active_tasks,
                 is_running=lambda: bot.running,
                 fetch_current_ticker=bot.fetch_current_ticker,
-                interruptible_sleep=bot.interruptible_sleep,  # type: ignore[reportAttributeAccessIssue]
+                interruptible_sleep=bot.interruptible_sleep,
                 get_symbol=lambda: bot.current_symbol,
             )
 
@@ -1288,7 +1280,7 @@ class CompositionRoot:
             # Ctrl+C path: the KeyboardInterrupt skips this coroutine's finally,
             # so the shutdown manager must stop the dashboard explicitly
             # (uvicorn no longer captures SIGINT itself).
-            if dashboard_server:
+            if dashboard_server and self.shutdown_manager:
                 self.shutdown_manager.register_shutdown_callback(dashboard_server.stop)
 
             await bot.run(symbol, timeframe)

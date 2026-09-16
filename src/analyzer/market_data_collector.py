@@ -128,7 +128,6 @@ class MarketDataCollector:
 
             self._warn_if_insufficient_history(len(context.ohlcv_candles))
 
-            # Bolt: fetch long-term daily, weekly macro, and sentiment data concurrently with asyncio.gather (~370ms latency reduction per cycle)
             # Isolated: a residual exception in one secondary fetcher (e.g. changed
             # API payload shape) must not mark the whole data collection failed.
             secondary_results = await asyncio.gather(
@@ -226,7 +225,7 @@ class MarketDataCollector:
 
             self.logger.info("Fetching weekly macro data for %s", self.symbol)
 
-            result = await self.data_fetcher.fetch_weekly_historical_data(self.symbol, target_weeks)  # type: ignore[reportCallIssue]
+            result = await self.data_fetcher.fetch_weekly_historical_data(self.symbol, target_weeks)
 
             if result["data"] is None:
                 self.logger.warning("Weekly data unavailable: %s", result.get("error", "Unknown"))

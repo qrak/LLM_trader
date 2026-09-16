@@ -84,12 +84,13 @@ def test_unified_parser_parses_compact_response_with_json_block() -> None:
     assert analysis["risk_reward_ratio"] == 2.58
 
 
-def test_position_extractor_uses_json_for_compact_response() -> None:
+def test_position_extractor_reads_parsed_analysis_for_compact_response() -> None:
     parser = UnifiedParser(logger=MagicMock())
-    extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)
+    extractor = PositionExtractor()
+    analysis = parser.parse_ai_response(_build_compact_response())["analysis"]
 
     signal, confidence, stop_loss, take_profit, position_size, reasoning = extractor.extract_trading_info(
-        _build_compact_response()
+        analysis
     )
 
     assert signal == "HOLD"
@@ -100,12 +101,13 @@ def test_position_extractor_uses_json_for_compact_response() -> None:
     assert reasoning == "Wait for confirmation before entry."
 
 
-def test_position_extractor_remains_compatible_with_verbose_response() -> None:
+def test_position_extractor_reads_parsed_analysis_for_verbose_response() -> None:
     parser = UnifiedParser(logger=MagicMock())
-    extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)
+    extractor = PositionExtractor()
+    analysis = parser.parse_ai_response(_build_verbose_response())["analysis"]
 
     signal, confidence, stop_loss, take_profit, position_size, reasoning = extractor.extract_trading_info(
-        _build_verbose_response()
+        analysis
     )
 
     assert signal == "HOLD"

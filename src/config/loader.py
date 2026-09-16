@@ -11,7 +11,7 @@ from dotenv import dotenv_values
 
 from src.utils.timeframe_validator import TimeframeValidator
 
-# Get the root directory (where keys.env is located) and config directory (where config.ini is located)
+# ROOT_DIR holds keys.env; CONFIG_DIR holds config.ini
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
 CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
@@ -264,11 +264,6 @@ class Config:
         return self.get_env("COINGECKO_API_KEY")
 
     @property
-    def ADMIN_USER_IDS(self):
-        """Get list of admin user IDs from environment."""
-        return self.get_env("ADMIN_USER_IDS", [])
-
-    @property
     def ADMIN_USERNAME(self):
         """Admin console username from keys.env."""
         return self.get_env("ADMIN_USERNAME", "")
@@ -448,40 +443,10 @@ class Config:
         """Whether Reddit social sentiment fetching is enabled."""
         return bool(self.get_config("social_sentiment", "enabled", False))
 
-    # RL Training Configuration
-    @property
-    def RL_TRAINING_ENABLED(self) -> bool:
-        """Whether PPO fine-tuning of local policy model is enabled."""
-        return bool(self.get_config("rl_training", "enabled", False))
-
-    @property
-    def RL_TRAINING_MODEL(self) -> str:
-        """HuggingFace model ID for the policy network."""
-        return self.get_config("rl_training", "model", "Qwen/Qwen3-0.6B-Instruct")
-
-    @property
-    def RL_TRAINING_UPDATE_INTERVAL(self) -> int:
-        """Number of closed trades between PPO update cycles."""
-        return int(self.get_config("rl_training", "update_interval", 10))
-
-    @property
-    def RL_TRAINING_CHECKPOINT_DIR(self) -> str:
-        """Directory for saving fine-tuned model checkpoints."""
-        return self.get_config("rl_training", "checkpoint_dir", "data/rl_checkpoints")
-
-    @property
-    def RL_TRAINING_DEVICE(self) -> str:
-        """Training device: cpu, cuda, or auto."""
-        return self.get_config("rl_training", "device", "auto")
-
     # RAG Configuration
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self):
         return self.get_config("rag", "update_interval_hours", 4)
-
-    @property
-    def RAG_CATEGORIES_UPDATE_INTERVAL_HOURS(self):
-        return self.get_config("rag", "categories_update_interval_hours", 24)
 
     @property
     def RAG_COINGECKO_UPDATE_INTERVAL_HOURS(self):

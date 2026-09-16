@@ -55,9 +55,6 @@ def sma_numba(arr, length):
     # Numba's sum propagates NaNs correctly (returns NaN).
     # But removing a NaN from sum is tricky (NaN - NaN is NaN).
     # For performance, we assume clean data or let NaN propagate.
-    # If we need to handle NaNs robustly like pandas (ignoring them), it's O(N*L) or complex O(N).
-    # Standard technical analysis libraries usually propagate NaN or assume filled data.
-    # The existing implementation assumes standard behavior.
 
     window_sum = 0.0
     for i in range(length):

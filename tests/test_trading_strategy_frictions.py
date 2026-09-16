@@ -30,6 +30,8 @@ def _make_config(**overrides) -> SimpleNamespace:
         "TRANSACTION_FEE_PERCENT": 0.001,
         "DEMO_QUOTE_CAPITAL": 10000.0,
         "TIMEFRAME": "4h",
+        # Produkcyjny default z loader.MIN_RR_ENTRY - twarda podloga bramki R/R.
+        "MIN_RR_ENTRY": 1.0,
         "STOP_LOSS_TYPE": "hard",
         "STOP_LOSS_CHECK_INTERVAL": "4h",
         "TAKE_PROFIT_TYPE": "hard",
@@ -72,6 +74,7 @@ def _make_strategy(
     stop_loss: float | None = 95.0,
     take_profit: float | None = 110.0,
     rr_borderline_min: float = 1.5,
+    min_rr_entry: float = 1.0,
 ) -> TradingStrategy:
     """Build a TradingStrategy with all dependencies mocked."""
     logger = MagicMock()
@@ -86,7 +89,7 @@ def _make_strategy(
     statistics = _make_mock_statistics()
     memory_service = MagicMock()
     risk_mgr = risk_manager or RiskManager(logger=MagicMock(), config=_make_config())
-    config = _make_config()
+    config = _make_config(MIN_RR_ENTRY=min_rr_entry)
 
     extractor = _make_mock_extractor()
     extractor.extract_trading_info.return_value = (
@@ -204,7 +207,7 @@ class TestRRMinimumGuard:
     @pytest.mark.asyncio
     async def test_poor_rr_stores_blocked_trade(self):
         """R/R below brain threshold stores blocked trade before returning HOLD."""
-        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=3.0)
+        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=3.0, min_rr_entry=3.0)
         # SL=5%, TP=0% → R/R near 0, blocked
 
         decision = await strategy._open_new_position(
@@ -254,7 +257,7 @@ class TestRRMinimumGuard:
     @pytest.mark.asyncio
     async def test_rr_blocked_trade_includes_reasoning_snippet(self):
         """Blocked trade stores the AI reasoning snippet for LLM feedback."""
-        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=10.0)
+        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=10.0, min_rr_entry=3.0)
 
         await strategy._open_new_position(
             signal="BUY", confidence="HIGH",
@@ -304,7 +307,7 @@ class TestFrictionStorageGracefulDegradation:
     @pytest.mark.asyncio
     async def test_rr_blocked_trade_exception_does_not_block_hold(self):
         """store_blocked_trade raising during R/R block doesn't crash."""
-        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=10.0)
+        strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=10.0, min_rr_entry=3.0)
         strategy.brain_service.vector_memory.store_blocked_trade.side_effect = RuntimeError("DB down")
 
         decision = await strategy._open_new_position(

@@ -10,7 +10,13 @@ from src.utils.indicator_classifier import (
 )
 
 from .brain_patterns import TradePatternAnalyzer
-from .data_models import ExitExecutionContext, MarketConditions, Position, TradeDecision
+from .data_models import (
+    ExitExecutionContext,
+    MarketConditions,
+    MarketSnapshot,
+    Position,
+    TradeDecision,
+)
 from .stop_loss_tightening_policy import TighteningEvaluation
 from .vector_memory import VectorMemoryService
 
@@ -44,35 +50,6 @@ class BrainExperienceRecorder:
             return "swing"
         return "position"
 
-    @staticmethod
-    def build_rich_context_string(
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: ExitExecutionContext | None = None,
-    ) -> str:
-        """Build rich semantic context string for vector storage and retrieval."""
-        return build_context_string_from_classified_values(
-            trend_direction=trend_direction,
-            adx=adx,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-        )
-
     def record_closed_trade(
         self,
         position: Position,
@@ -98,18 +75,8 @@ class BrainExperienceRecorder:
         entry_confidence = entry_decision.confidence if entry_decision else position.confidence
         entry_action = entry_decision.action if entry_decision else position.direction
         reasoning = entry_decision.reasoning if entry_decision else "N/A"
-        condition_str = self.build_rich_context_string(
-            trend_direction=conditions.trend_direction,
-            adx=float(conditions.adx),
-            volatility_level=conditions.volatility,
-            rsi_level=conditions.rsi_level,
-            macd_signal=conditions.macd_signal,
-            volume_state=conditions.volume_state,
-            bb_position=conditions.bb_position,
-            is_weekend=conditions.is_weekend,
-            market_sentiment=conditions.market_sentiment,
-            order_book_bias=conditions.order_book_bias,
-            exit_execution_context=exit_execution_context,
+        condition_str = build_context_string_from_classified_values(
+            MarketSnapshot.from_conditions(conditions, exit_execution_context)
         )
         trade_id = f"trade_{position.entry_time.isoformat()}"
         position_id = f"{position.symbol}|{position.entry_time.isoformat()}"
@@ -222,18 +189,8 @@ class BrainExperienceRecorder:
             action_type = "BOTH"
         else:
             return
-        market_context = self.build_rich_context_string(
-            trend_direction=conditions.trend_direction,
-            adx=float(conditions.adx),
-            volatility_level=conditions.volatility,
-            rsi_level=conditions.rsi_level,
-            macd_signal=conditions.macd_signal,
-            volume_state=conditions.volume_state,
-            bb_position=conditions.bb_position,
-            is_weekend=conditions.is_weekend,
-            market_sentiment=conditions.market_sentiment,
-            order_book_bias=conditions.order_book_bias,
-            exit_execution_context=exit_execution_context,
+        market_context = build_context_string_from_classified_values(
+            MarketSnapshot.from_conditions(conditions, exit_execution_context)
         )
         update_id = f"update_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
         reasoning_str = f"Moved {action_type}: SL {old_sl:.2f}→{new_sl:.2f}, TP {old_tp:.2f}→{new_tp:.2f}"

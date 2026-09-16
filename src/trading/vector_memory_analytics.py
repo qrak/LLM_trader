@@ -13,29 +13,29 @@ class VectorMemoryAnalyticsMixin:
     _ensure_initialized: Any
     _collection: Any
     logger: Any
-    FACTOR_NAMES: Any = None  # type: ignore[assignment]
-    FACTOR_BUCKETS: Any = None  # type: ignore[assignment]
-    RR_THRESHOLDS: Any = None  # type: ignore[assignment]
+    FACTOR_NAMES: Any = None
+    FACTOR_BUCKETS: Any = None
+    RR_THRESHOLDS: Any = None
 
     """Statistics, reporting, and threshold-learning behavior."""
 
     @property
     def experience_count(self) -> int:
         """Get total number of stored entries (includes UPDATE)."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return 0
-        return self._collection.count()  # type: ignore[reportOptionalMemberAccess]
+        return self._collection.count()
 
     @property
     def trade_count(self) -> int:
         """Get count of actual trades (excludes UPDATE entries)."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return 0
         try:
-            results = self._collection.get(where={"outcome": {"$ne": "UPDATE"}})  # type: ignore[reportOptionalMemberAccess]
+            results = self._collection.get(where={"outcome": {"$ne": "UPDATE"}})
             return len(results["ids"]) if results and results["ids"] else 0
         except Exception:  # noqa: BLE001
-            return self._collection.count()  # type: ignore[reportOptionalMemberAccess]
+            return self._collection.count()
 
     def get_direction_bias(self) -> dict[str, Any] | None:
         """Get count of LONG vs SHORT trades for bias detection."""
@@ -63,12 +63,12 @@ class VectorMemoryAnalyticsMixin:
         where: dict[str, Any] | None = None,
     ) -> list[VectorSearchResult]:
         """Retrieve all experiences without vector similarity search."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return []
 
         try:
             query_where = where if where else {"outcome": {"$ne": "UPDATE"}}
-            results = self._collection.get(  # type: ignore[reportOptionalMemberAccess]
+            results = self._collection.get(
                 where=query_where,
                 limit=limit,
                 include=["metadatas", "documents"],
@@ -91,15 +91,15 @@ class VectorMemoryAnalyticsMixin:
             return experiences
 
         except Exception as e:  # noqa: BLE001
-            self.logger.error("Failed to retrieve all experiences: %s", e)  # type: ignore[reportOptionalMemberAccess]
+            self.logger.error("Failed to retrieve all experiences: %s", e)
             return []
 
     def get_trade_metadatas(self, exclude_updates: bool = True) -> list[dict[str, Any]]:
         """Retrieve metadatas for all stored trades, handling filtering."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return []
 
-        all_experiences = self._collection.get(include=["metadatas"])  # type: ignore[reportOptionalMemberAccess]
+        all_experiences = self._collection.get(include=["metadatas"])
         if not all_experiences or not all_experiences["ids"] or not all_experiences["metadatas"]:
             return []
 
@@ -424,8 +424,8 @@ class VectorMemoryAnalyticsMixin:
             return {}
 
         factors: dict[str, dict[str, Any]] = {}
-        for name in self.FACTOR_NAMES:  # type: ignore[reportOptionalMemberAccess]
-            for bucket in self.FACTOR_BUCKETS:  # type: ignore[reportOptionalMemberAccess]
+        for name in self.FACTOR_NAMES:
+            for bucket in self.FACTOR_BUCKETS:
                 key = f"{name}_{bucket}"
                 factors[key] = {
                     "factor_name": name,
@@ -438,7 +438,7 @@ class VectorMemoryAnalyticsMixin:
             pnl = meta.get("pnl_pct", 0)
             is_win = meta.get("outcome") == "WIN"
 
-            for name in self.FACTOR_NAMES:  # type: ignore[reportOptionalMemberAccess]
+            for name in self.FACTOR_NAMES:
                 score = meta.get(f"{name}_score", 0)
                 bucket = self._factor_bucket_for_score(score)
                 if bucket is None:
@@ -491,7 +491,7 @@ class VectorMemoryAnalyticsMixin:
 
     def compute_optimal_thresholds(self, min_sample_size: int = 5) -> dict[str, Any]:
         """Compute optimal thresholds from vector store data."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return {}
 
         thresholds: dict[str, Any] = {}
@@ -515,7 +515,7 @@ class VectorMemoryAnalyticsMixin:
             elif low_win_rate > 55:
                 thresholds["adx_weak_threshold"] = 18
 
-        all_experiences_raw = self._collection.get()  # type: ignore[reportOptionalMemberAccess]
+        all_experiences_raw = self._collection.get()
         all_experiences = {"ids": [], "metadatas": []}
         if all_experiences_raw and all_experiences_raw.get("metadatas"):
             raw_ids = all_experiences_raw.get("ids") or []
@@ -545,7 +545,7 @@ class VectorMemoryAnalyticsMixin:
 
             # Compute rr_borderline_min FIRST so min_rr_recommended can clamp against it
             if rr_wins and rr_losses:
-                for test_rr in self.RR_THRESHOLDS:  # type: ignore[reportOptionalMemberAccess]
+                for test_rr in self.RR_THRESHOLDS:
                     wins = sum(1 for rr in rr_wins if rr < test_rr)
                     losses = sum(1 for rr in rr_losses if rr < test_rr)
                     total = wins + losses

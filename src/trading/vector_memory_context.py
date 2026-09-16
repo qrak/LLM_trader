@@ -318,8 +318,7 @@ class VectorMemoryContextMixin:
             f"RELEVANT PAST EXPERIENCES (Context: {display}, active window: last {self._max_age_days} days):"
         )
         # Evidence gate: a similarity score only means something against a real sample.
-        # Below MIN_EVIDENCE_TRADES closed trades the top hit is an anecdote — flagging it
-        # as LIMITED DATA keeps one past loss from becoming an "anti-pattern" verdict.
+        # below MIN_EVIDENCE_TRADES the top hit is an anecdote - flag as LIMITED DATA
         thin_sample = shown <= 2 and (
             max_similarity < 50 or brain_trades < self.MIN_EVIDENCE_TRADES
         )
@@ -514,8 +513,7 @@ class VectorMemoryContextMixin:
 
         atr_pct_val = meta.get("atr_percentage_at_entry")
         if atr_pct_val is not None and atr_pct_val > 0:
-            # Volatility-regime drift: a trade from a 0.7% ATR tape is not a precedent for a
-            # 1.2% ATR tape just because the labelled bands coincide. Flag the scale gap.
+            # volatility drift: a 0.7% ATR trade is not a precedent for a 1.2% ATR tape
             atr_scale_mismatch = (
                 current_atr_percentage is not None
                 and current_atr_percentage > 0

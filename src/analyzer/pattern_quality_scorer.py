@@ -17,7 +17,7 @@ WEIGHT_PATTERN_CONFIRMATION = 0.30  # Multiple patterns agreeing on direction
 WEIGHT_PATTERN_RECENCY = 0.20       # How recently patterns formed
 WEIGHT_INDICATOR_ALIGNMENT = 0.20   # ADX/RSI alignment with pattern direction
 
-# Maximum allowed delta between LLM-reported and computed quality before flagging
+# Max |LLM-reported - computed| before flagging
 QUALITY_DISCREPANCY_THRESHOLD: float = 25.0
 
 

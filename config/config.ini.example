@@ -1,10 +1,25 @@
+# ==============================================================================
+# config.ini.example - TEMPLATE. Copy it to config/config.ini and edit the copy.
+#
+# Secrets do NOT belong here: API keys, admin credentials and Discord channel
+# IDs go into keys.env (repo root, see keys.env.example). The bot reads both.
+#
+# Only the keys marked REQUIRED have to be present; delete any other key and the
+# loader falls back to its own default in src/config/loader.py.
+# ==============================================================================
+
 # === AI Providers ===
 [ai_providers]
 # local | googleai | openrouter | deepseek | blockrun | all
+# "all" builds a fallback chain: the providers below are tried in order and the
+# first one that answers wins. Only the entries belonging to the ACTIVE provider
+# matter - the rest are ignored (e.g. nothing in deepseek_* is used while
+# provider = googleai).
 provider = googleai
 
 # LM Studio (local)
 lm_studio_base_url = http://localhost:1234/v1
+# Empty = LM Studio disabled; otherwise the model name loaded in the LM Studio app
 lm_studio_model =
 lm_studio_streaming = false
 
@@ -18,7 +33,8 @@ deepseek_base_url = https://api.deepseek.com
 # One model for text + chart analysis (flash accepts images natively)
 deepseek_model = deepseek-flash
 
-# Google AI Studio
+# Google AI Studio - the model must exist in the Google docs; its thinking
+# level and output cap live in [model_config] below
 google_studio_model = gemini-3.8-flash
 
 # BlockRun.AI (x402 micropayments)
@@ -39,8 +55,10 @@ crypto_pair = BTC/USDC
 timeframe = 4h
 candle_limit = 999
 ai_chart_candle_limit = 125
+# Discord notifications (analysis posts + old-message cleanup)
 discord_bot = false
 
+# Adds the CoinGecko project description to the prompt (costs extra tokens)
 include_coin_description = false
 # spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
 market_type = spot
@@ -49,24 +67,29 @@ entry_order_type = market
 
 # === Debug ===
 [debug]
+# Save the generated chart PNGs to disk (debugging only)
 save_chart_images = false
+# Folder for those PNGs, relative to the working directory (repo root)
 chart_save_path = chart_images
+# DEBUG-level logging - very noisy, for troubleshooting only
 logger_debug = true
 
 # === Paths ===
 [directories]
+# Both relative to the repo root
 log_dir = logs
 data_dir = data
 
 # === RAG / News ===
 [rag]
 update_interval_hours = 4               # hours between RAG rebuilds
-categories_update_interval_hours = 168  # hours between taxonomy refreshes
 coingecko_update_interval_hours = 24    # hours between coin-list refreshes
 defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
 coingecko_global_api_url = https://api.coingecko.com/api/v3/global
 news_limit = 5                          # max articles in AI context
 article_max_tokens = 1000               # max tokens per article
+# Empty = use all four feeds below; otherwise a comma-separated subset of
+# coindesk, cointelegraph, decrypt, cryptoslate
 news_sources =
 news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
 news_source_cointelegraph_url = https://cointelegraph.com/rss
@@ -80,11 +103,14 @@ news_fetch_total_timeout_seconds = 45
 news_enrichment_timeout_seconds = 120
 news_max_concurrency = 6                # parallel Crawl4AI fetches
 news_max_items_per_source = 100
-# Article scoring weights
+# Article scoring weights - the thresholds are CHARACTER counts of the article body
+# body shorter than this -> score x penalty_multiplier
 density_penalty_threshold = 300
+# body longer than this -> score x boost_multiplier
 density_boost_threshold = 1000
 density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
+# bonus when ALL query keywords appear in the article title + body
 cooccurrence_multiplier = 1.5
 news_crawl4ai_enabled = true
 news_crawl_timeout = 20
@@ -96,6 +122,7 @@ market_refresh_hours = 24
 
 # === Paper Trading ===
 [demo_trading]
+# Paper-trading capital (USDC) and the fee used in EV / profit calculations
 demo_quote_capital = 10000
 transaction_fee_percent = 0.00075
 
@@ -104,6 +131,8 @@ transaction_fee_percent = 0.00075
 # SL/TP execution mode: soft (candle-close only) | hard (intra-candle polling)
 stop_loss_type = hard
 take_profit_type = hard
+# How often "hard" mode polls the price for an exit. Format: number + m/h/d/w
+# (1m, 15m, 1h, 4h); must not exceed the timeframe. Unused in "soft" mode.
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
 max_position_size = 0.10
@@ -153,6 +182,7 @@ file_message_expiry = 168  # hours before tracked messages are cleaned up
 # When true, the prompt instructs the model to argue both sides before deciding.
 # This reduces confirmation bias at the cost of slightly longer prompts.
 # No additional LLM call — both perspectives are generated in ONE response.
+# (this template ships it disabled - set to true to enable)
 [research_team]
 enabled = false
 
@@ -161,36 +191,36 @@ enabled = false
 # r/CryptoMarkets via Reddit's public Atom RSS feeds (no API key).
 # Requests are spaced ~20s apart to stay within Reddit's rate limits.
 # Sentiment summary is injected into the LLM prompt as supplementary context.
+# (this template ships it disabled so the first run makes no Reddit requests)
 [social_sentiment]
 enabled = false
 
-# === RL Policy Training (Optional) ===
-# Fine-tune a small LLM (Qwen3-0.6B-Instruct) with PPO on trading outcomes.
-# When enabled, closed trades feed into a local policy network that replaces
-# the external LLM call with a free, locally-trained model.
-# Minimum: 8 GB RAM, 2 CPU cores. GPU optional (CPU inference viable at 0.6B).
-# Model auto-downloaded from HuggingFace on first use (~1.2 GB disk).
-[rl_training]
-enabled = false
-# HuggingFace model ID for the policy network
-model = Qwen/Qwen3-0.6B-Instruct
-# Training: how many closed trades before a PPO update cycle
-update_interval = 10
-# Path to save fine-tuned checkpoints
-checkpoint_dir = data/rl_checkpoints
-# Training device: cpu | cuda | auto
-device = auto
-
 # === Model Configuration ===
+# Which keys apply depends on the provider set in [ai_providers].
+# OpenAI-compatible providers (openrouter, local, blockrun) get temperature,
+# top_p, top_k, max_tokens and the penalties. Google gets ONLY
+# google_max_tokens + google_thinking_level + google_code_execution, so those
+# sampling keys are ignored while provider = googleai.
 [model_config]
 temperature = 1.0
 top_p = 0.9
 top_k = 40
+# REQUIRED - the bot refuses to start without it. Used by every provider except Google.
 max_tokens = 32768
-# fre*q*uency_penalty and pres*ence*_penalty also accepted
-google_max_tokens = 32768
+# frequency_penalty and presence_penalty are also accepted (0.0 = off)
+# REQUIRED while provider = googleai. Output cap and it INCLUDES thought tokens.
+# gemini-3.8-flash allows up to 65536; with thinking = high a low cap can cut
+# the answer off mid-sentence (and a cut answer means no parsed decision).
+google_max_tokens = 65536
+# How deep the model thinks before answering: low | medium | high.
+# Google's own default for gemini-3.8-flash is medium; high = maximum depth
+# (slower and more output tokens, but the most thorough analysis).
+# NOTE: "minimal" is not supported by this model and returns an API error.
 google_thinking_level = high
+# Let the model run Python code while answering (off = plain text answer)
 google_code_execution = false
+# NOT the model's chattiness - how much of the PREVIOUS analysis is carried into
+# the next prompt: low = 1500 chars, medium = 3000, high = 4500
 model_verbosity = high
 # OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
 # xhigh and max both map to DeepSeek's max reasoning level
@@ -206,5 +236,8 @@ deepseek_max_tokens = 32768
 enabled = true
 host = 0.0.0.0
 port = 8000
+# CORS lets OTHER websites call the dashboard API from a browser. Leave it off
+# unless you need it; with enable_cors = true, origins "*" means ANY page on the
+# internet is allowed to talk to your dashboard.
 enable_cors = false
 cors_origins = *

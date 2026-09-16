@@ -79,27 +79,13 @@ class IndicatorPatternEngine:
         long_term_sma_values: dict[int, float] | None = None,
         timestamps: list | None = None
     ) -> dict[str, list[dict[str, Any]]]:
-        """
-        Detect all indicator patterns from technical history.
+        """Detect every indicator pattern from the technical history.
 
-        Args:
-            technical_history: dict of indicator name -> numpy array
-                Expected keys: rsi, macd_line, macd_signal, macd_hist, stoch_k,
-                              atr, bb_upper, bb_lower, kc_upper, kc_lower
-            ohlcv_data: Optional OHLCV array for price data (for divergences)
-            long_term_sma_values: Optional dict of SMA period -> value for MA crossovers
-            timestamps: Optional list of datetime objects for timestamp formatting
-
-        Returns: dict with pattern categories:
-            {
-                'rsi': [...],
-                'macd': [...],
-                'divergence': [...],
-                'volatility': [...],
-                'stochastic': [...],
-                'ma_crossover': [...],
-                'volume': [...]
-            }
+        technical_history maps indicator name -> array (rsi, macd_line, macd_signal,
+        macd_hist, stoch_k, atr, bb_upper, bb_lower, kc_upper, kc_lower); ohlcv_data
+        enables divergences, long_term_sma_values the MA crossovers, timestamps
+        formatting. Returns {rsi, macd, divergence, volatility, stochastic,
+        ma_crossover, volume} -> list of patterns.
         """
         patterns = {
             "rsi": [],
@@ -514,8 +500,7 @@ class IndicatorPatternEngine:
             if found:
                 pattern_index = len(bb_upper) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-                # Confidence based on how extreme the squeeze is (lower percentile = higher confidence)
-                # percentile_width of 0.1 -> 90%, 0.2 -> 80%, etc.
+                # tighter squeeze (lower percentile_width) = higher confidence
                 confidence = min(100, int(100 - percentile_width * 100))
                 patterns.append({
                     "type": "bb_squeeze",
@@ -661,12 +646,10 @@ class IndicatorPatternEngine:
         """Detect Moving Average crossover patterns using arrays from technical_history"""
         patterns = []
 
-        # Try to use SMA arrays from technical_history first (preferred for crossover detection)
         sma_20_array = technical_history.get("sma_20")
         sma_50_array = technical_history.get("sma_50")
         sma_200_array = technical_history.get("sma_200")
 
-        # If sma_values not provided but we have arrays, populate from current array values
         if (sma_values is None or len(sma_values) == 0) and (sma_50_array is not None or sma_200_array is not None):
             sma_values = {}
             if sma_20_array is not None and len(sma_20_array) > 0:
@@ -684,7 +667,6 @@ class IndicatorPatternEngine:
                 pattern_index = len(sma_50_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
 
-                # Confidence based on percentage distance between SMAs (stronger separation = higher confidence)
                 pct_separation = abs((sma_50_val - sma_200_val) / sma_200_val) * 100 if sma_200_val != 0 else 0
                 confidence = min(100, int(50 + pct_separation * 10))
 
@@ -706,7 +688,6 @@ class IndicatorPatternEngine:
                 pattern_index = len(sma_50_array) - 1 - periods_ago
                 timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
 
-                # Confidence based on percentage distance between SMAs
                 pct_separation = abs((sma_200_val - sma_50_val) / sma_200_val) * 100 if sma_200_val != 0 else 0
                 confidence = min(100, int(50 + pct_separation * 10))
 
@@ -867,7 +848,6 @@ class IndicatorPatternEngine:
         if is_climax:
             pattern_index = len(volume) - 1
             timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-            # Climax volume is extreme - confidence based on ratio: 3x -> 60%, 4x -> 80%, 5x+ -> 100%
             confidence = min(100, int(40 + climax_ratio * 12))
             patterns.append({
                 "type": "climax_volume",

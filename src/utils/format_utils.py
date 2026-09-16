@@ -62,22 +62,9 @@ class FormatUtils:
         self.default_precision = default_precision
 
     def parse_value(self, value: Any, default: Any = None) -> float:
-        """Parse various numeric formats into a clean float.
+        """Parse '$1,234.50'-style input into a float, or return `default` on failure.
 
-        Handles:
-        - Currency symbols ($, €, £, etc.)
-        - Percentages (%)
-        - Commas (1,000.00)
-        - Whitespace
-        - Strings containing only numbers
-        - Already numeric values
-
-        Args:
-            value: The input value to parse (str, int, float, or None)
-            default: Value to return if parsing fails (defaults to None)
-
-        Returns:
-            Float representation of the value, or default if parsing fails
+        Strips currency symbols, '%', commas and whitespace; accepts int/float/None.
         """
         if isinstance(value, (int, float)):
             return float(value)

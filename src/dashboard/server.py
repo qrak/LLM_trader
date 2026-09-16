@@ -82,8 +82,6 @@ class DashboardServer:
 
     def _create_app(self) -> FastAPI:
         """Create and configure the FastAPI application."""
-        # pylint: disable=too-many-statements
-
         @asynccontextmanager
         async def lifespan(_app: FastAPI):
             # Startup logic
@@ -111,270 +109,17 @@ class DashboardServer:
         app = FastAPI(title="LLM Trader Brain", lifespan=lifespan)
 
         app.add_middleware(GZipMiddleware, minimum_size=500)
+        _register_cache_and_security_middleware(app)
+        request_counts = _register_rate_limit_middleware(app)
+        self._add_cors_middleware(app)
+        self._wire_app_state(app, request_counts)
+        self._register_routers(app)
+        self._register_pages(app)
 
-        def _set_cache_headers(response, browser_policy, edge_policy):
-            response.headers["Cache-Control"] = browser_policy
-            response.headers["CDN-Cache-Control"] = edge_policy
-            response.headers["Cloudflare-CDN-Cache-Control"] = edge_policy
+        return app
 
-        def _is_no_store_response(response):
-            cache_control = response.headers.get("Cache-Control", "")
-            edge_control = response.headers.get("Cloudflare-CDN-Cache-Control", "")
-            return "no-store" in cache_control or "no-store" in edge_control
-
-        def _build_etag(request, response, path):
-            try:
-                body = response.body
-            except AttributeError:
-                body = b""
-            if body:
-                digest = hashlib.sha256(body).hexdigest()
-                return f'W/"{digest}"'
-
-            # GZip/streaming responses may not expose `body` at middleware stage.
-            # Use short time-bucketed weak ETags aligned to cache windows.
-            if path.startswith("/api/"):
-                bucket_seconds = 15
-            elif path.endswith(".html") or path == "/":
-                bucket_seconds = 30
-            else:
-                return None
-
-            bucket = int(time_module.time() // bucket_seconds)
-            seed = f"{path}?{request.url.query}|{bucket}|{response.headers.get('Content-Type', '')}"
-            digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-            return f'W/"{digest}"'
-
-        def _is_not_modified(if_none_match_header, etag):
-            if not if_none_match_header or not etag:
-                return False
-            if if_none_match_header.strip() == "*":
-                return True
-            candidates = [part.strip() for part in if_none_match_header.split(",")]
-            return etag in candidates
-
-        def _is_static_asset(path):
-            return path.endswith(
-                (
-                    ".css",
-                    ".js",
-                    ".mjs",
-                    ".png",
-                    ".jpg",
-                    ".jpeg",
-                    ".svg",
-                    ".webp",
-                    ".ico",
-                    ".gif",
-                    ".woff",
-                    ".woff2",
-                    ".ttf",
-                    ".eot",
-                )
-            )
-
-        def _api_cache_policies(path, query_params):
-            """Return browser/edge cache policy pair for API routes."""
-            # Always bypass CDN cache for highly volatile or user-driven high-cardinality APIs.
-            if path.endswith("/refresh-price"):
-                return (
-                    "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "no-store",
-                )
-
-            if path.endswith(("/brain/refresh", "/brain/lifecycle")):
-                return (
-                    "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "no-store",
-                )
-
-            if path.endswith("/vectors") and query_params.get("query"):
-                return (
-                    "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "no-store",
-                )
-
-            # Keep realtime countdown fresher than the rest of the API surface.
-            if path.endswith("/status/countdown"):
-                return (
-                    "public, max-age=5",
-                    "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
-                )
-
-            # Default policy for cache-safe GET APIs (<= 60 seconds staleness budget).
-            return (
-                "public, max-age=15",
-                "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
-            )
-
-        # Security Headers Middleware
-        @app.middleware("http")
-        async def add_security_headers(request, call_next):
-            response = await call_next(request)
-            response.headers["X-Content-Type-Options"] = "nosniff"
-            response.headers["X-Frame-Options"] = "DENY"
-            response.headers["X-XSS-Protection"] = "1; mode=block"
-
-            # Conditionally add HSTS if the request originated over HTTPS.
-            # Uvicorn's ProxyHeadersMiddleware processes X-Forwarded-Proto,
-            # so request.url.scheme will correctly reflect 'https' if Cloudflare sent it.
-            if (
-                request.url.scheme == "https"
-                or request.headers.get("x-forwarded-proto") == "https"
-            ):
-                response.headers["Strict-Transport-Security"] = (
-                    "max-age=31536000; includeSubDomains"
-                )
-
-            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Permissions-Policy"] = (
-                "geolocation=(), microphone=(), camera=()"
-            )
-
-            # Content Security Policy (CSP)
-            # - script-src: 'self' (dashboard logic), CDNs
-            # - style-src: 'self' 'unsafe-inline' (for dashboard styles), CDNs
-            # - connect-src: 'self' (for internal API), CDNs if needed
-            # - img-src: 'self' data: https: (for content/news images)
-            # Cloudflare support: *.cloudflare.com added
-            csp = (
-                "default-src 'self'; "
-                "frame-ancestors 'none'; "
-                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
-                "https://cdn.tailwindcss.com "
-                "https://*.cloudflare.com https://ajax.cloudflare.com "
-                "https://static.cloudflareinsights.com; "
-                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
-                "font-src 'self' https://fonts.gstatic.com; "
-                "img-src 'self' data: https:; "
-                "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
-                "https://cdn.jsdelivr.net;"
-            )
-            response.headers["Content-Security-Policy"] = csp
-            path = request.url.path
-
-            # Restrict caching entirely for non-GET/HEAD methods (e.g. POST, PUT, DELETE)
-            if request.method not in ("GET", "HEAD"):
-                _set_cache_headers(
-                    response,
-                    "no-store, no-cache, must-revalidate, proxy-revalidate",
-                    "no-store",
-                )
-                return response
-
-            if _is_static_asset(path):
-                if request.query_params.get("v"):
-                    _set_cache_headers(
-                        response,
-                        "public, max-age=31536000, immutable",
-                        "public, max-age=31536000, stale-while-revalidate=86400, stale-if-error=604800",
-                    )
-                else:
-                    _set_cache_headers(
-                        response,
-                        "public, max-age=3600",
-                        "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
-                    )
-            elif path.startswith("/api/"):
-                browser_policy, edge_policy = _api_cache_policies(
-                    path, request.query_params
-                )
-                _set_cache_headers(
-                    response,
-                    browser_policy,
-                    edge_policy,
-                )
-            elif path.endswith(".html") or path == "/":
-                _set_cache_headers(
-                    response,
-                    "public, max-age=30, must-revalidate",
-                    "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
-                )
-
-            # Add conditional ETag handling for cacheable API/HTML responses.
-            # Skip static assets because FileResponse already manages validators.
-            if (
-                request.method in ("GET", "HEAD")
-                and response.status_code == 200
-                and not _is_static_asset(path)
-                and not _is_no_store_response(response)
-                and (path.startswith("/api/") or path.endswith(".html") or path == "/")
-            ):
-                etag = response.headers.get("ETag") or _build_etag(
-                    request, response, path
-                )
-                if etag:
-                    response.headers["ETag"] = etag
-                    if _is_not_modified(request.headers.get("if-none-match"), etag):
-                        headers = dict(response.headers)
-                        headers.pop("content-length", None)
-                        return Response(status_code=304, headers=headers)
-            return response
-
-        # Simple Rate Limiting (in-memory, per-IP)
-        request_counts = defaultdict(list)
-        rate_limit = 300  # requests per minute
-        rate_window = 60  # seconds
-        max_unique_ips = (
-            10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
-        )
-
-        # Security: State for rate limit cleanup
-        state = {"last_cleanup_time": 0.0}
-        cleanup_interval = 10.0  # Seconds between full scans
-
-        @app.middleware("http")
-        async def rate_limit_middleware(request, call_next):
-            # Skip rate limiting for static files
-            if request.url.path.startswith(
-                "/static"
-            ) or not request.url.path.startswith("/api"):
-                return await call_next(request)
-
-            current_time = time_module.monotonic()
-
-            # Security: Prevent memory exhaustion from too many IPs
-            if len(request_counts) > max_unique_ips:
-                # Optimized cleanup: Only scan at most once every CLEANUP_INTERVAL
-                if current_time - state["last_cleanup_time"] > cleanup_interval:
-                    # Remove inactive IPs
-                    keys_to_remove = [
-                        ip
-                        for ip, timestamps in request_counts.items()
-                        if not timestamps or current_time - timestamps[-1] > rate_window
-                    ]
-                    for key in keys_to_remove:
-                        del request_counts[key]
-                    state["last_cleanup_time"] = current_time
-
-                # If still too large (active attack), drop the oldest entry (FIFO)
-                # This degrades gracefully rather than clearing everything (DoS risk)
-                while len(request_counts) > max_unique_ips:
-                    try:
-                        # defaultdict preserves insertion order in Python 3.7+
-                        oldest_ip = next(iter(request_counts))
-                        del request_counts[oldest_ip]
-                    except StopIteration:
-                        break
-
-            client_ip = request.client.host if request.client else "unknown"
-
-            # Clean old requests for current IP
-            if client_ip in request_counts:
-                request_counts[client_ip] = [
-                    t
-                    for t in request_counts[client_ip]
-                    if current_time - t < rate_window
-                ]
-
-            if len(request_counts[client_ip]) >= rate_limit:
-                return JSONResponse(
-                    status_code=429,
-                    content={"error": "Rate limit exceeded. Try again later."},
-                )
-            request_counts[client_ip].append(current_time)
-            return await call_next(request)
-
+    def _add_cors_middleware(self, app: FastAPI) -> None:
+        """Add CORS middleware when the dashboard config enables it."""
         # CORS Configuration
         # Defaults to False for security. Can be enabled in config.ini.
         enable_cors = self.config.DASHBOARD_ENABLE_CORS
@@ -396,6 +141,8 @@ class DashboardServer:
                 allow_headers=["*"],
             )
 
+    def _wire_app_state(self, app: FastAPI, request_counts: dict[str, list[float]]) -> None:
+        """Publish the shared services on app.state for routers and tests."""
         app.state.brain_service = self.brain_service
         app.state.vector_memory = self.vector_memory
         app.state.analysis_engine = self.analysis_engine
@@ -410,6 +157,8 @@ class DashboardServer:
         # Expose for testing/monitoring
         app.state.request_counts = request_counts
 
+    def _register_routers(self, app: FastAPI) -> None:
+        """Build every dashboard router and mount it (plus the admin auth middleware)."""
         brain_router = brain.BrainRouter(
             config=self.config,
             logger=self.logger,
@@ -477,6 +226,8 @@ class DashboardServer:
         # Admin auth middleware (protects /api/admin/* except login and health)
         app.add_middleware(AdminAuthMiddleware)
 
+    def _register_pages(self, app: FastAPI) -> None:
+        """Serve the story/landing pages and mount the static frontend."""
         # Story page route (Astro generated development story)
         @app.get("/story", include_in_schema=False)
         async def story_page():
@@ -514,7 +265,6 @@ class DashboardServer:
         else:
             print(f"WARNING: Static directory not found at {static_dir}")
 
-        return app
 
     async def start(self):
         """Start the uvicorn server in an asyncio loop."""
@@ -535,7 +285,7 @@ class DashboardServer:
             timeout_graceful_shutdown=5,
             # Cloudflare IPv4 & IPv6 ranges — verified 2026-03-02
             # Source: https://www.cloudflare.com/ips-v4/ and /ips-v6/
-            # Update periodically: Cloudflare rarely changes these but does occasionally add ranges.
+            # Cloudflare ranges change occasionally - update periodically
             forwarded_allow_ips=(
                 "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
                 "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
@@ -605,3 +355,273 @@ class DashboardServer:
         # Clear references so start() can create fresh instances
         self._server = None
         self.server_task = None
+
+
+def _set_cache_headers(response, browser_policy, edge_policy):
+    response.headers["Cache-Control"] = browser_policy
+    response.headers["CDN-Cache-Control"] = edge_policy
+    response.headers["Cloudflare-CDN-Cache-Control"] = edge_policy
+
+def _is_no_store_response(response):
+    cache_control = response.headers.get("Cache-Control", "")
+    edge_control = response.headers.get("Cloudflare-CDN-Cache-Control", "")
+    return "no-store" in cache_control or "no-store" in edge_control
+
+def _build_etag(request, response, path):
+    try:
+        body = response.body
+    except AttributeError:
+        body = b""
+    if body:
+        digest = hashlib.sha256(body).hexdigest()
+        return f'W/"{digest}"'
+
+    # GZip/streaming responses may not expose `body` at middleware stage.
+    # Use short time-bucketed weak ETags aligned to cache windows.
+    if path.startswith("/api/"):
+        bucket_seconds = 15
+    elif path.endswith(".html") or path == "/":
+        bucket_seconds = 30
+    else:
+        return None
+
+    bucket = int(time_module.time() // bucket_seconds)
+    seed = f"{path}?{request.url.query}|{bucket}|{response.headers.get('Content-Type', '')}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return f'W/"{digest}"'
+
+def _is_not_modified(if_none_match_header, etag):
+    if not if_none_match_header or not etag:
+        return False
+    if if_none_match_header.strip() == "*":
+        return True
+    candidates = [part.strip() for part in if_none_match_header.split(",")]
+    return etag in candidates
+
+def _is_static_asset(path):
+    return path.endswith(
+        (
+            ".css",
+            ".js",
+            ".mjs",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".svg",
+            ".webp",
+            ".ico",
+            ".gif",
+            ".woff",
+            ".woff2",
+            ".ttf",
+            ".eot",
+        )
+    )
+
+def _api_cache_policies(path, query_params):
+    """Return browser/edge cache policy pair for API routes."""
+    # bypass CDN cache for volatile / user-driven APIs
+    if path.endswith("/refresh-price"):
+        return (
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "no-store",
+        )
+
+    if path.endswith(("/brain/refresh", "/brain/lifecycle")):
+        return (
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "no-store",
+        )
+
+    if path.endswith("/vectors") and query_params.get("query"):
+        return (
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "no-store",
+        )
+
+    # Keep realtime countdown fresher than the rest of the API surface.
+    if path.endswith("/status/countdown"):
+        return (
+            "public, max-age=5",
+            "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
+        )
+
+    # Default policy for cache-safe GET APIs (<= 60 seconds staleness budget).
+    return (
+        "public, max-age=15",
+        "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
+    )
+
+def _register_cache_and_security_middleware(app: FastAPI) -> None:
+    """Install the security-header plus HTTP cache-policy middleware stack."""
+
+    # Security Headers Middleware
+    @app.middleware("http")
+    async def add_security_headers(request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Conditionally add HSTS if the request originated over HTTPS.
+        # Uvicorn's ProxyHeadersMiddleware processes X-Forwarded-Proto,
+        # so request.url.scheme will correctly reflect 'https' if Cloudflare sent it.
+        if (
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto") == "https"
+        ):
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(), microphone=(), camera=()"
+        )
+
+        # Content Security Policy (CSP)
+        # - script-src: 'self' (dashboard logic), CDNs
+        # - style-src: 'self' 'unsafe-inline' (for dashboard styles), CDNs
+        # - connect-src: 'self' (for internal API), CDNs if needed
+        # - img-src: 'self' data: https: (for content/news images)
+        # Cloudflare support: *.cloudflare.com added
+        csp = (
+            "default-src 'self'; "
+            "frame-ancestors 'none'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com "
+            "https://cdn.tailwindcss.com "
+            "https://*.cloudflare.com https://ajax.cloudflare.com "
+            "https://static.cloudflareinsights.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://*.cloudflare.com https://unpkg.com "
+            "https://cdn.jsdelivr.net;"
+        )
+        response.headers["Content-Security-Policy"] = csp
+        path = request.url.path
+
+        # Restrict caching entirely for non-GET/HEAD methods (e.g. POST, PUT, DELETE)
+        if request.method not in ("GET", "HEAD"):
+            _set_cache_headers(
+                response,
+                "no-store, no-cache, must-revalidate, proxy-revalidate",
+                "no-store",
+            )
+            return response
+
+        if _is_static_asset(path):
+            if request.query_params.get("v"):
+                _set_cache_headers(
+                    response,
+                    "public, max-age=31536000, immutable",
+                    "public, max-age=31536000, stale-while-revalidate=86400, stale-if-error=604800",
+                )
+            else:
+                _set_cache_headers(
+                    response,
+                    "public, max-age=3600",
+                    "public, max-age=86400, stale-while-revalidate=3600, stale-if-error=86400",
+                )
+        elif path.startswith("/api/"):
+            browser_policy, edge_policy = _api_cache_policies(
+                path, request.query_params
+            )
+            _set_cache_headers(
+                response,
+                browser_policy,
+                edge_policy,
+            )
+        elif path.endswith(".html") or path == "/":
+            _set_cache_headers(
+                response,
+                "public, max-age=30, must-revalidate",
+                "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
+            )
+
+        # Add conditional ETag handling for cacheable API/HTML responses.
+        # Skip static assets because FileResponse already manages validators.
+        if (
+            request.method in ("GET", "HEAD")
+            and response.status_code == 200
+            and not _is_static_asset(path)
+            and not _is_no_store_response(response)
+            and (path.startswith("/api/") or path.endswith(".html") or path == "/")
+        ):
+            etag = response.headers.get("ETag") or _build_etag(
+                request, response, path
+            )
+            if etag:
+                response.headers["ETag"] = etag
+                if _is_not_modified(request.headers.get("if-none-match"), etag):
+                    headers = dict(response.headers)
+                    headers.pop("content-length", None)
+                    return Response(status_code=304, headers=headers)
+        return response
+
+def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
+    """Install the per-IP rate limiter and return its request-count store."""
+    # Simple Rate Limiting (in-memory, per-IP)
+    request_counts = defaultdict(list)
+    rate_limit = 300  # requests per minute
+    rate_window = 60  # seconds
+    max_unique_ips = (
+        10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
+    )
+
+    # Security: State for rate limit cleanup
+    state = {"last_cleanup_time": 0.0}
+    cleanup_interval = 10.0  # Seconds between full scans
+
+    @app.middleware("http")
+    async def rate_limit_middleware(request, call_next):
+        # Skip rate limiting for static files
+        if request.url.path.startswith(
+            "/static"
+        ) or not request.url.path.startswith("/api"):
+            return await call_next(request)
+
+        current_time = time_module.monotonic()
+
+        # Security: Prevent memory exhaustion from too many IPs
+        if len(request_counts) > max_unique_ips:
+            # Optimized cleanup: Only scan at most once every CLEANUP_INTERVAL
+            if current_time - state["last_cleanup_time"] > cleanup_interval:
+                # Remove inactive IPs
+                keys_to_remove = [
+                    ip
+                    for ip, timestamps in request_counts.items()
+                    if not timestamps or current_time - timestamps[-1] > rate_window
+                ]
+                for key in keys_to_remove:
+                    del request_counts[key]
+                state["last_cleanup_time"] = current_time
+
+            # If still too large (active attack), drop the oldest entry (FIFO)
+            # This degrades gracefully rather than clearing everything (DoS risk)
+            while len(request_counts) > max_unique_ips:
+                try:
+                    # defaultdict preserves insertion order in Python 3.7+
+                    oldest_ip = next(iter(request_counts))
+                    del request_counts[oldest_ip]
+                except StopIteration:
+                    break
+
+        client_ip = request.client.host if request.client else "unknown"
+
+        # Clean old requests for current IP
+        if client_ip in request_counts:
+            request_counts[client_ip] = [
+                t
+                for t in request_counts[client_ip]
+                if current_time - t < rate_window
+            ]
+
+        if len(request_counts[client_ip]) >= rate_limit:
+            return JSONResponse(
+                status_code=429,
+                content={"error": "Rate limit exceeded. Try again later."},
+            )
+        request_counts[client_ip].append(current_time)
+        return await call_next(request)
+    return request_counts

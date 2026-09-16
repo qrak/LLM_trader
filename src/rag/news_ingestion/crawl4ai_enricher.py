@@ -147,7 +147,7 @@ class Crawl4AIEnricher:
         if isinstance(markdown_obj, str):
             candidates.append(markdown_obj)
         elif markdown_obj is not None:
-            # MarkdownGenerationResult — attributes present when DefaultMarkdownGenerator is used
+            # attributes present when DefaultMarkdownGenerator is used
             fit = markdown_obj.fit_markdown
             raw = markdown_obj.raw_markdown
             cited = markdown_obj.markdown_with_citations
@@ -271,16 +271,16 @@ class Crawl4AIEnricher:
         that Playwright raises when the event loop tears down mid-close.
         """
         try:
-            from crawl4ai import (  # type: ignore[import]
+            from crawl4ai import (
                 AsyncWebCrawler,
                 BrowserConfig,
                 CrawlerRunConfig,
             )
             from crawl4ai.content_filter_strategy import (
-                PruningContentFilter,  # type: ignore[import]
+                PruningContentFilter,
             )
             from crawl4ai.markdown_generation_strategy import (
-                DefaultMarkdownGenerator,  # type: ignore[import]
+                DefaultMarkdownGenerator,
             )
         except ImportError:
             self.logger.warning(

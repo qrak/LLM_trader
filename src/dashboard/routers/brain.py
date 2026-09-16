@@ -483,12 +483,9 @@ def _extract_market_status(data: dict[str, Any], unified_parser=None) -> dict[st
         status["rsi"] = technical_data.get("rsi", status["rsi"])
         status["trend"] = classify_trend_direction(technical_data)
 
-    parsed_analysis = None
-    if unified_parser:
-        try:
-            parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis")
-        except Exception:  # noqa: BLE001
-            parsed_analysis = None
+    # extract_json_block returns None (never raises) when no block parses: the
+    # panel then falls back to the text scan below.
+    parsed_analysis = unified_parser.extract_json_block(text, unwrap_key="analysis") if unified_parser else None
 
     if parsed_analysis:
         signal = parsed_analysis.get("signal")
@@ -1016,6 +1013,55 @@ class BrainRouter:
         if cached:
             return cached
 
+        now, last_decision, position = await self._collect_decision_state()
+        memory = await self._memory_summary(experience_limit, rule_limit, blocked_limit)
+        journal = await self._journal_summary(journal_limit)
+
+        pos_dict = position if isinstance(position, dict) else {"has_position": False}
+        synopsis = _build_decision_synopsis(
+            now=now,
+            position=pos_dict,
+            memory=memory,
+            journal=journal,
+            last_decision=last_decision,
+        )
+        synopsis_data = _build_decision_synopsis_data(
+            now=now,
+            last_decision=last_decision,
+            position=pos_dict,
+            memory=memory,
+            journal=journal,
+        )
+        graph = _build_decision_graph(
+            now=now,
+            last_decision=last_decision,
+            position=pos_dict,
+            memory=memory,
+            journal=journal,
+        )
+
+        result = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "synopsis": synopsis,
+            "synopsis_data": synopsis_data,
+            "now": now,
+            "last_decision": last_decision,
+            "position": pos_dict,
+            "memory": memory,
+            "journal": journal,
+            "counts": {
+                "experiences": memory.get("experience_count") or 0,
+                "rules": memory.get("rule_count") or 0,
+                "journal": journal.get("count") or 0,
+                "blocked": (memory.get("blocked") or {}).get("blocked_count") or 0,
+            },
+            "graph": graph,
+        }
+        self.dashboard_state.set_cached("decision_summary", result)
+        return result
+
+    async def _collect_decision_state(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
+        """Read the latest decision files, exit config, and live position for the summary."""
         now: dict[str, Any] = {
             "trend": "--",
             "action": "--",
@@ -1079,6 +1125,12 @@ class BrainRouter:
             self.logger.error("Failed to load position for decision-summary", exc_info=True)  # noqa: G201
             position = {"has_position": False}
 
+        return now, last_decision, position
+
+    async def _memory_summary(
+        self, experience_limit: int, rule_limit: int, blocked_limit: int
+    ) -> dict[str, Any]:
+        """Collect vector-memory experiences, learned rules, and blocked-trade feedback."""
         memory: dict[str, Any] = {
             "current_context": None,
             "experience_count": 0,
@@ -1088,77 +1140,82 @@ class BrainRouter:
             "blocked": {"blocked_count": 0, "items": []},
             "confidence_stats": {},
         }
+        if not self.vector_memory:
+            return memory
 
-        if self.vector_memory:
-            try:
-                vector_details = await asyncio.to_thread(
-                    self._build_vector_details_result,
-                    None,
-                    experience_limit,
-                    "similarity",
-                    "desc",
+        try:
+            vector_details = await asyncio.to_thread(
+                self._build_vector_details_result,
+                None,
+                experience_limit,
+                "similarity",
+                "desc",
+            )
+            experiences_raw = vector_details.get("experiences") or []
+            top_experiences: list[dict[str, Any]] = []
+            for exp in experiences_raw[:experience_limit]:
+                meta = exp.get("metadata") or {}
+                document = exp.get("document") or ""
+                top_experiences.append(
+                    {
+                        "id": exp.get("id"),
+                        "similarity": exp.get("similarity"),
+                        "outcome": meta.get("outcome"),
+                        "direction": meta.get("direction"),
+                        "pnl_pct": meta.get("pnl_pct"),
+                        "confidence": meta.get("confidence"),
+                        "document_excerpt": _excerpt_text(document, 180),
+                        "timestamp": meta.get("timestamp"),
+                        "symbol": meta.get("symbol"),
+                    }
                 )
-                experiences_raw = vector_details.get("experiences") or []
-                top_experiences: list[dict[str, Any]] = []
-                for exp in experiences_raw[:experience_limit]:
-                    meta = exp.get("metadata") or {}
-                    document = exp.get("document") or ""
-                    top_experiences.append(
-                        {
-                            "id": exp.get("id"),
-                            "similarity": exp.get("similarity"),
-                            "outcome": meta.get("outcome"),
-                            "direction": meta.get("direction"),
-                            "pnl_pct": meta.get("pnl_pct"),
-                            "confidence": meta.get("confidence"),
-                            "document_excerpt": _excerpt_text(document, 180),
-                            "timestamp": meta.get("timestamp"),
-                            "symbol": meta.get("symbol"),
-                        }
-                    )
-                memory["current_context"] = vector_details.get("current_context")
-                memory["experience_count"] = vector_details.get("experience_count") or 0
-                memory["rule_count"] = vector_details.get("rule_count") or 0
-                memory["top_experiences"] = top_experiences
-                memory["confidence_stats"] = vector_details.get("confidence_stats") or {}
-            except Exception:
-                self.logger.error("Failed to load vector details for decision-summary", exc_info=True)  # noqa: G201
-                try:
-                    memory["experience_count"] = self.vector_memory.trade_count
-                    memory["rule_count"] = self.vector_memory.semantic_rule_count
-                except Exception as exc:  # noqa: BLE001
-                    self.logger.warning("Failed to read fallback vector_memory counters: %s", exc)
-
+            memory["current_context"] = vector_details.get("current_context")
+            memory["experience_count"] = vector_details.get("experience_count") or 0
+            memory["rule_count"] = vector_details.get("rule_count") or 0
+            memory["top_experiences"] = top_experiences
+            memory["confidence_stats"] = vector_details.get("confidence_stats") or {}
+        except Exception:
+            self.logger.error("Failed to load vector details for decision-summary", exc_info=True)  # noqa: G201
             try:
-                rules = await self.get_active_rules()
-                top_rules: list[dict[str, Any]] = []
-                for i, rule in enumerate(rules[:rule_limit]):
-                    top_rules.append(
-                        {
-                            "id": rule.get("rule_id") or f"rule_{i}",
-                            "rule_text": rule.get("rule_text") or rule.get("text") or "",
-                            "rule_type": rule.get("rule_type") or "best_practice",
-                            "win_rate": rule.get("win_rate"),
-                            "final_score": rule.get("final_score"),
-                            "recommended_adjustment": rule.get("recommended_adjustment"),
-                        }
-                    )
-                memory["top_rules"] = top_rules
-                if not memory.get("rule_count"):
-                    memory["rule_count"] = len(rules)
-            except Exception:
-                self.logger.error("Failed to load rules for decision-summary", exc_info=True)  # noqa: G201
+                memory["experience_count"] = self.vector_memory.trade_count
+                memory["rule_count"] = self.vector_memory.semantic_rule_count
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning("Failed to read fallback vector_memory counters: %s", exc)
 
-            try:
-                blocked_payload = await self.get_blocked_trades(limit=blocked_limit)
-                items = blocked_payload.get("blocked_trades") or []
-                memory["blocked"] = {
-                    "blocked_count": blocked_payload.get("blocked_count") or len(items),
-                    "items": items[:blocked_limit],
-                }
-            except Exception:
-                self.logger.error("Failed to load blocked trades for decision-summary", exc_info=True)  # noqa: G201
+        try:
+            rules = await self.get_active_rules()
+            top_rules: list[dict[str, Any]] = []
+            for i, rule in enumerate(rules[:rule_limit]):
+                top_rules.append(
+                    {
+                        "id": rule.get("rule_id") or f"rule_{i}",
+                        "rule_text": rule.get("rule_text") or rule.get("text") or "",
+                        "rule_type": rule.get("rule_type") or "best_practice",
+                        "win_rate": rule.get("win_rate"),
+                        "final_score": rule.get("final_score"),
+                        "recommended_adjustment": rule.get("recommended_adjustment"),
+                    }
+                )
+            memory["top_rules"] = top_rules
+            if not memory.get("rule_count"):
+                memory["rule_count"] = len(rules)
+        except Exception:
+            self.logger.error("Failed to load rules for decision-summary", exc_info=True)  # noqa: G201
 
+        try:
+            blocked_payload = await self.get_blocked_trades(limit=blocked_limit)
+            items = blocked_payload.get("blocked_trades") or []
+            memory["blocked"] = {
+                "blocked_count": blocked_payload.get("blocked_count") or len(items),
+                "items": items[:blocked_limit],
+            }
+        except Exception:
+            self.logger.error("Failed to load blocked trades for decision-summary", exc_info=True)  # noqa: G201
+
+        return memory
+
+    async def _journal_summary(self, journal_limit: int) -> dict[str, Any]:
+        """Collect the post-mortem journal entries shown next to the decision graph."""
         journal: dict[str, Any] = {"count": 0, "items": []}
         try:
             pm_payload = await self.get_post_mortems(limit=journal_limit)
@@ -1177,46 +1234,4 @@ class BrainRouter:
         except Exception:
             self.logger.error("Failed to load post-mortems for decision-summary", exc_info=True)  # noqa: G201
 
-        pos_dict = position if isinstance(position, dict) else {"has_position": False}
-        synopsis = _build_decision_synopsis(
-            now=now,
-            position=pos_dict,
-            memory=memory,
-            journal=journal,
-            last_decision=last_decision,
-        )
-        synopsis_data = _build_decision_synopsis_data(
-            now=now,
-            last_decision=last_decision,
-            position=pos_dict,
-            memory=memory,
-            journal=journal,
-        )
-        graph = _build_decision_graph(
-            now=now,
-            last_decision=last_decision,
-            position=pos_dict,
-            memory=memory,
-            journal=journal,
-        )
-
-        result = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "synopsis": synopsis,
-            "synopsis_data": synopsis_data,
-            "now": now,
-            "last_decision": last_decision,
-            "position": pos_dict,
-            "memory": memory,
-            "journal": journal,
-            "counts": {
-                "experiences": memory.get("experience_count") or 0,
-                "rules": memory.get("rule_count") or 0,
-                "journal": journal.get("count") or 0,
-                "blocked": (memory.get("blocked") or {}).get("blocked_count") or 0,
-            },
-            "graph": graph,
-        }
-        self.dashboard_state.set_cached("decision_summary", result)
-        return result
-
+        return journal

@@ -303,7 +303,6 @@ LLM_trader/
 │   │   ├── vector_memory.py     # ChromaDB interface
 │   │   ├── vector_memory_*.py   # Analytics, rules, context (3 collaborators)
 │   │   ├── regime_risk_profile.py # Regime-aware risk profile selector (Risk Manager)
-│   │   ├── rl_policy.py         # RL policy network (experimental)
 │   │   ├── statistics.py        # P&L tracking
 │   │   └── guards/              # 🛡️ Governance Pipeline
 │   ├── analyzer/                # 🔬 Analysis Engine
@@ -1136,7 +1135,6 @@ Persistence Manager is the **single persistence facade for trading runtime state
 - WAL journal mode and `synchronous=NORMAL` are enabled per connection.
 - Inserts coerce `TradeDecision` fields into stable SQLite column types.
 - Queries validate sort direction (`ASC`/`DESC`) and clamp pagination.
-- `get_stats()` provides aggregate dashboard data without scanning JSON files.
 
 ##### Edge Cases
 

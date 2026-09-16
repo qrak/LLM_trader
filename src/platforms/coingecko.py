@@ -10,10 +10,10 @@ from os.path import exists, getsize
 from typing import Any
 
 from aiohttp_client_cache.backends.sqlite import (
-    SQLiteBackend,  # type: ignore[reportPrivateImportUsage]  # type: ignore[reportPrivateImportUsage], SQLiteBackend
+    SQLiteBackend,
 )
 from aiohttp_client_cache.session import (
-    CachedSession,  # type: ignore[reportPrivateImportUsage]
+    CachedSession,
 )
 
 from src.logger.logger import Logger
@@ -184,7 +184,7 @@ class CoinGeckoAPI:
         }
 
         try:
-            async with self.session.get(  # type: ignore[reportOptionalMemberAccess]
+            async with self.session.get(
                 self.COINS_MARKETS_URL,
                 params=params
             ) as response:
@@ -207,7 +207,7 @@ class CoinGeckoAPI:
             self.session = CachedSession(cache=self.cache_backend)
 
         try:
-            async with self.session.get(self.GLOBAL_DEFI_URL) as response:  # type: ignore[reportOptionalMemberAccess]
+            async with self.session.get(self.GLOBAL_DEFI_URL) as response:
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
@@ -264,7 +264,7 @@ class CoinGeckoAPI:
             cached = await self._get_cached_global_data()
             return cached if cached else {}
 
-        dominance_data = processed_global.get("dominance", {})  # type: ignore[reportOptionalMemberAccess]
+        dominance_data = processed_global.get("dominance", {})
 
         dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
 
@@ -342,16 +342,16 @@ class CoinGeckoAPI:
 
         return {
             "market_cap": {
-                "total_usd": data.get("total_market_cap", {}).get("usd", 0),  # type: ignore[reportOptionalMemberAccess]
-                "change_24h": data.get("market_cap_change_percentage_24h_usd", 0)  # type: ignore[reportOptionalMemberAccess]
+                "total_usd": data.get("total_market_cap", {}).get("usd", 0),
+                "change_24h": data.get("market_cap_change_percentage_24h_usd", 0)
             },
             "volume": {
-                "total_usd": data.get("total_volume", {}).get("usd", 0)  # type: ignore[reportOptionalMemberAccess]
+                "total_usd": data.get("total_volume", {}).get("usd", 0)
             },
-            "dominance": data.get("market_cap_percentage", {}),  # type: ignore[reportOptionalMemberAccess]
+            "dominance": data.get("market_cap_percentage", {}),
             "stats": {
-                "active_coins": data.get("active_cryptocurrencies", 0),  # type: ignore[reportOptionalMemberAccess]
-                "active_markets": data.get("markets", 0)  # type: ignore[reportOptionalMemberAccess]
+                "active_coins": data.get("active_cryptocurrencies", 0),
+                "active_markets": data.get("markets", 0)
             }
         }
 
@@ -359,7 +359,7 @@ class CoinGeckoAPI:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
-        async with self.session.get(self.COINS_LIST_URL) as response:  # type: ignore[reportOptionalMemberAccess]
+        async with self.session.get(self.COINS_LIST_URL) as response:
             if response.status == 200:
                 return await response.json()
             self.logger.error("Failed to fetch coin list. Status: %s", response.status)

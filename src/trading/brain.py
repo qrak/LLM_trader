@@ -12,7 +12,7 @@ from .brain_exit_profiles import ExitProfileResolver
 from .brain_experience import BrainExperienceRecorder
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
-from .data_models import ExitExecutionContext, Position, TradeDecision
+from .data_models import ExitExecutionContext, MarketSnapshot, Position, TradeDecision
 from .stop_loss_tightening_policy import StopLossTighteningPolicy, TighteningEvaluation
 from .vector_memory import VectorMemoryService
 
@@ -112,7 +112,7 @@ class TradingBrainService:
         )
 
         # Initialize trade count from persistent storage
-        # This ensures reflection triggers consistently across restarts
+        # persisted so reflection triggers survive restarts
         self._trade_count: int = self.vector_memory.trade_count
 
     def update_from_closed_trade(
@@ -142,80 +142,13 @@ class TradingBrainService:
         )
         self._trade_count += 1
         if self._trade_count % self._reflection_interval == 0:
-            self._trigger_reflection()
-            self._trigger_loss_reflection()
-            self._trigger_ai_mistake_reflection()
+            self.trigger_reflection()
+            self.trigger_loss_reflection()
+            self.trigger_ai_mistake_reflection()
 
-    def get_context(
-        self,
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        rsi: float = 50.0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: "ExitExecutionContext | None" = None,
-        # --- NEW: enriched context fields (July 2026) ---
-        choppiness: float | None = None,
-        trend_strength: float = 0.0,
-        atr_percentage: float = 0.0,
-        mfi: float | None = None,
-        cmf: float | None = None,
-        vwap: float = 0.0,
-        supertrend_direction: str = "NEUTRAL",
-    ) -> str:
-        """Generate formatted brain context for prompt injection using vector retrieval.
-
-        Args:
-            trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
-            adx: Current ADX value
-            rsi: Current RSI numeric value
-            volatility_level: Current volatility (HIGH/MEDIUM/LOW)
-            rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
-            macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
-            volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
-            bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
-            is_weekend: Whether current day is Saturday or Sunday
-            market_sentiment: Fear & Greed state (EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED)
-            order_book_bias: Order book pressure (BUY_PRESSURE/SELL_PRESSURE/BALANCED)
-            exit_execution_context: Exit execution configuration
-            choppiness: Choppiness index (0-100) for regime risk profile selection
-            trend_strength: Current trend strength value
-            atr_percentage: ATR as % of current price (for regime risk profile)
-            mfi: Money Flow Index
-            cmf: Chaikin Money Flow
-            vwap: Volume-weighted average price
-            supertrend_direction: Supertrend direction (Bullish/Bearish/NEUTRAL)
-
-        Returns:
-            Formatted string with vector-retrieved experiences and confidence calibration.
-        """
-        return self.context_provider.get_context(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-            choppiness=choppiness,
-            trend_strength=trend_strength,
-            atr_percentage=atr_percentage,
-            mfi=mfi,
-            cmf=cmf,
-            vwap=vwap,
-            supertrend_direction=supertrend_direction,
-        )
+    def get_context(self, snapshot: MarketSnapshot) -> str:
+        """Generate formatted brain context for prompt injection using vector retrieval."""
+        return self.context_provider.get_context(snapshot)
 
     def get_dynamic_thresholds(self, choppiness: float | None = None) -> dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
@@ -240,98 +173,12 @@ class TradingBrainService:
         sl_payload["source"] = source
         thresholds["sl_tightening"] = sl_payload
 
-        # Ranging market: relax R/R minimum for higher-probability mean-reversion setups
+        # ranging market: relax R/R floor for mean-reversion setups
         if choppiness is not None and choppiness > 61.8:
             current_min = thresholds.get("rr_borderline_min", 1.5)
             thresholds["rr_borderline_min"] = min(current_min, 1.2)
 
         return thresholds
-
-    def _build_rich_context_string(
-        self,
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: "ExitExecutionContext | None" = None,
-    ) -> str:
-        """Build rich semantic context string for vector storage and retrieval.
-
-        This unified method ensures that the context stored in memory matches
-        the format of the context used for querying, maximizing vector similarity.
-        """
-        return self.context_provider.build_rich_context_string(
-            trend_direction=trend_direction,
-            adx=adx,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-        )
-
-    def get_vector_context(
-        self,
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        rsi: float = 50.0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: "ExitExecutionContext | None" = None,
-        k: int = 5
-    ) -> str:
-        """Get context from similar past experiences via vector retrieval.
-
-        Uses semantic search to find trades in similar market conditions.
-
-        Args:
-            trend_direction: Current trend (BULLISH/BEARISH/NEUTRAL)
-            adx: Current ADX value
-            rsi: Current RSI numeric value
-            volatility_level: Current volatility (HIGH/MEDIUM/LOW)
-            rsi_level: RSI state (OVERBOUGHT/STRONG/NEUTRAL/WEAK/OVERSOLD)
-            macd_signal: MACD signal (BULLISH/BEARISH/NEUTRAL)
-            volume_state: Volume state (ACCUMULATION/NORMAL/DISTRIBUTION)
-            bb_position: Bollinger Band position (UPPER/MIDDLE/LOWER)
-            is_weekend: Whether current day is Saturday or Sunday
-            market_sentiment: Fear & Greed state
-            order_book_bias: Order book pressure
-            k: Number of experiences to retrieve
-
-        Returns:
-            Formatted string with similar past trades for prompt injection.
-        """
-        return self.context_provider.get_vector_context(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-            k=k,
-        )
 
     def trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize best-practice semantic rules.
@@ -352,11 +199,6 @@ class TradingBrainService:
     def trigger_ai_mistake_reflection(self) -> None:
         """Reflect on cases where the AI's confidence or premise was wrong."""
         self.reflection_engine.trigger_ai_mistake_reflection()
-
-    # Public aliases for backward compatibility with private methods
-    _trigger_reflection = trigger_reflection
-    _trigger_loss_reflection = trigger_loss_reflection
-    _trigger_ai_mistake_reflection = trigger_ai_mistake_reflection
 
     def track_position_update(
         self,

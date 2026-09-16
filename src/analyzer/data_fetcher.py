@@ -393,31 +393,10 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_order_book_depth(self, pair: str, limit: int = 100) -> dict[str, Any] | None:
-        """
-        Fetch order book depth for liquidity and support/resistance analysis.
+        """Order book depth: bid/ask walls, spread and imbalance.
 
-        Provides real-time market depth showing bid/ask walls and liquidity zones.
-        Useful for identifying:
-        - Strong support/resistance levels (large order concentrations)
-        - Market depth and liquidity
-        - Buy/sell pressure imbalance
-        - Potential manipulation (spoofing via large fake walls)
-
-        Args:
-            pair: Trading pair symbol (e.g., "BTC/USDT")
-            limit: Maximum number of order book levels to fetch (default: 100)
-
-        Returns: dict containing:
-                'bids': list of [price, amount] bid orders (buy side)
-                'asks': list of [price, amount] ask orders (sell side)
-                'timestamp': Unix timestamp in milliseconds
-                'spread': Absolute spread between best bid and ask
-                'spread_percent': Spread as percentage of best bid price
-                'bid_depth': Total volume on bid side (base currency)
-                'ask_depth': Total volume on ask side (base currency)
-                'imbalance': Buy/sell pressure ratio (-1 to +1, positive = more bids)
-                'mid_price': Midpoint between best bid and ask
-            Returns None if fetch fails or exchange doesn't support order books
+        Returns dict(bids, asks, timestamp, spread, spread_percent, bid_depth,
+        ask_depth, imbalance, mid_price), or None when the venue has no order book.
         """
         try:
             if not self.exchange.has.get("fetchOrderBook", False):
@@ -491,31 +470,11 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_recent_trades(self, pair: str, limit: int = 1000) -> dict[str, Any] | None:
-        """
-        Fetch recent trades for order flow and momentum analysis.
+        """Recent executed trades for order-flow analysis.
 
-        Provides actual executed trades showing real market activity.
-        Useful for identifying:
-        - Order flow direction (aggressive buyers vs sellers)
-        - Trade velocity and market activity
-        - Average trade sizes (retail vs institutional flow)
-        - Buy/sell pressure trends
-
-        Args:
-            pair: Trading pair symbol (e.g., "BTC/USDT")
-            limit: Maximum number of recent trades to fetch (default: 1000)
-
-        Returns: dict containing:
-                'trades': list of trade dicts with timestamp, price, amount, side
-                'buy_volume': Total volume from buy-side trades (base currency)
-                'sell_volume': Total volume from sell-side trades (base currency)
-                'buy_sell_ratio': Ratio of buy to sell volume (>1 = more buying)
-                'buy_pressure_percent': Percentage of volume from buys (50 = balanced)
-                'avg_trade_size': Average trade size across all trades
-                'trade_velocity': Trades per minute
-                'total_trades': Total number of trades returned
-                'time_span_minutes': Time span covered by trades
-            Returns None if fetch fails or exchange doesn't support trades
+        Returns dict(trades, buy_volume, sell_volume, buy_sell_ratio,
+        buy_pressure_percent, avg_trade_size, trade_velocity, total_trades,
+        time_span_minutes), or None when the fetch fails / the venue has no trade feed.
         """
         try:
             if not self.exchange.has.get("fetchTrades", False):
@@ -560,31 +519,10 @@ class DataFetcher:
 
     @retry_async()
     async def fetch_funding_rate(self, pair: str) -> dict[str, Any] | None:
-        """
-        Fetch current funding rate for perpetual futures contracts.
+        """Current funding rate for a perpetual contract (None for spot/unsupported).
 
-        Funding rates represent periodic payments between long and short positions.
-        Useful for identifying:
-        - Market sentiment (positive rate = longs pay shorts = bullish sentiment)
-        - Overleveraged positions (extreme rates signal potential reversals)
-        - Cost of holding leveraged positions
-
-        Args:
-            pair: Trading pair symbol for perpetual futures (e.g., "BTC/USDT:USDT")
-
-        Returns: dict containing:
-                'funding_rate': Current funding rate (decimal, e.g., 0.0001 = 0.01%)
-                'funding_rate_percent': Funding rate as percentage
-                'funding_timestamp': Next funding time (Unix timestamp in ms)
-                'annualized_rate': Annualized funding rate percentage (assumes 3x daily)
-                'sentiment': Sentiment interpretation ('Bullish'/'Bearish'/'Neutral')
-            Returns None if not a perpetual contract or exchange doesn't support funding rates
-
-        Note:
-            - Only applicable to perpetual futures contracts (not spot markets)
-            - Positive rate: Longs pay shorts (bullish sentiment)
-            - Negative rate: Shorts pay longs (bearish sentiment)
-            - Typical funding occurs every 8 hours (3 times per day)
+        Returns dict(funding_rate, funding_rate_percent, funding_timestamp,
+        annualized_rate, sentiment). Positive rate = longs pay shorts.
         """
         try:
             # Check exchange support
@@ -630,30 +568,10 @@ class DataFetcher:
             return None
 
     async def fetch_market_microstructure(self, pair: str, cached_ticker: dict | None = None) -> dict[str, Any]:
-        """
-        Fetch comprehensive market microstructure data for a trading pair.
+        """Ticker + order book + recent trades + funding rate in one snapshot.
 
-        Combines ticker statistics, order book depth, recent trades, and funding rate
-        (for futures) into a single comprehensive market snapshot. This provides AI
-        models with rich context about current market conditions, liquidity, and
-        order flow dynamics.
-
-        Args:
-            pair: Trading pair symbol (e.g., "BTC/USDT")
-            cached_ticker: Optional pre-fetched ticker data to avoid redundant API calls
-
-        Returns: dict containing:
-                'ticker': 24h ticker statistics (price, volume, changes)
-                'order_book': Order book depth analysis (liquidity, spread, imbalance)
-                'recent_trades': Recent trade flow analysis (buy/sell pressure, velocity)
-                'funding_rate': Funding rate data (futures only, None for spot)
-                'available_data': list of successfully fetched data types
-                'timestamp': Collection timestamp
-
-        Note:
-            - Not all data may be available depending on exchange capabilities
-            - Spot markets will have None for funding_rate
-            - Failures in individual fetches are logged but don't fail the entire call
+        Returns dict(ticker, order_book, recent_trades, funding_rate, available_data,
+        timestamp); a failing sub-fetch is logged and simply omitted.
         """
         result = {
             "ticker": None,

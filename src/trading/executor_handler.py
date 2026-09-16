@@ -102,7 +102,6 @@ class ExecutorHandler:
             await self._write_dead_letter(payload)
             forward_success = False
 
-        # Bolt: skip disk file write when HTTP primary path succeeds (executor reachable)
         if not forward_success:
             self._persist(payload)
         else:

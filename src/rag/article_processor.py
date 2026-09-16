@@ -20,7 +20,7 @@ class ArticleProcessor:
 
         self.logger = logger
         self.parser = unified_parser
-        self.format_utils = format_utils  # type: ignore[reportOptionalMemberAccess]
+        self.format_utils = format_utils
         self.symbol_name_map = {
             str(symbol).upper(): str(name).lower().strip()
             for symbol, name in (symbol_name_map or {}).items()

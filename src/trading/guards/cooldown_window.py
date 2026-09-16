@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from src.utils.timeframe_validator import TimeframeValidator
+
 from . import GuardResult
 
 if TYPE_CHECKING:
@@ -138,9 +140,8 @@ class CooldownWindowGuard:
         """Derive cooldown duration from configured timeframe."""
         timeframe = config.TIMEFRAME
         try:
-            from src.utils.timeframe_validator import TimeframeValidator
             tf_minutes = TimeframeValidator.to_minutes(timeframe)
-        except Exception:  # noqa: BLE001
+        except (ValueError, TypeError):
             # Fallback: parse common formats
             tf_minutes = _fallback_tf_to_minutes(timeframe)
 

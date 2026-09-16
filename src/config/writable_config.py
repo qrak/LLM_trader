@@ -338,7 +338,6 @@ class WritableConfig:
     - Reads config.ini via configparser.
     - Validates values against schema before writing.
     - Writes to a temp file then os.replace() for crash safety.
-    - Provides a reload event that the main loop can await.
     """
 
     def __init__(self, config_path: str | Path):
@@ -349,7 +348,6 @@ class WritableConfig:
         )
         self._parser.optionxform = str  # type: ignore[assignment]  # preserve key case
         self._parser.read(self.config_path, encoding="utf-8")
-        self.reload_event = asyncio.Event()
         self._lock = asyncio.Lock()
 
     def get_value(self, section: str, key: str) -> str | None:
@@ -359,12 +357,13 @@ class WritableConfig:
         except (configparser.NoSectionError, configparser.NoOptionError):
             return None
 
-    def get_section(self, section: str) -> dict[str, str]:
-        """Return all key-value pairs for a section."""
-        try:
-            return dict(self._parser.items(section))
-        except configparser.NoSectionError:
-            return {}
+
+    def _resolve_meta(self, section: str, key: str, value: Any) -> tuple[SettingMeta, str]:
+        """Return the key metadata and the coerced value; raises for an unknown key."""
+        meta = self._get_meta(section, key)
+        if meta is None:
+            raise ValueError(f"Unknown config key: [{section}] {key}")
+        return meta, _validate_and_coerce(value, meta)
 
     async def set_value(self, section: str, key: str, value: Any) -> str:
         """Validate, update in-memory, write to disk atomically.
@@ -372,11 +371,7 @@ class WritableConfig:
         Returns the change category ("hot", "cycle", or "restart").
         Raises ValueError on validation failure.
         """
-        meta = self._get_meta(section, key)
-        if meta is None:
-            raise ValueError(f"Unknown config key: [{section}] {key}")
-
-        coerced = _validate_and_coerce(value, meta)
+        meta, coerced = self._resolve_meta(section, key, value)
 
         async with self._lock:
             # Ensure section exists
@@ -387,8 +382,6 @@ class WritableConfig:
             # Atomic write to disk
             await self._write_to_disk()
 
-        # Signal reload
-        self.reload_event.set()
         return meta.category
 
     async def set_values(self, updates: list[tuple[str, str, Any]]) -> list[dict[str, str]]:
@@ -403,10 +396,7 @@ class WritableConfig:
         validated = []
 
         for section, key, value in updates:
-            meta = self._get_meta(section, key)
-            if meta is None:
-                raise ValueError(f"Unknown config key: [{section}] {key}")
-            coerced = _validate_and_coerce(value, meta)
+            meta, coerced = self._resolve_meta(section, key, value)
             validated.append((section, key, coerced, meta))
 
         async with self._lock:
@@ -418,7 +408,6 @@ class WritableConfig:
 
             await self._write_to_disk()
 
-        self.reload_event.set()
         return results
 
     def get_full_schema(self) -> dict[str, Any]:
@@ -465,7 +454,7 @@ class WritableConfig:
 
     async def _write_to_disk(self) -> None:
         """Write the current config to disk atomically using temp file + os.replace."""
-        # Write to a temp file in the same directory (same filesystem for atomic replace)
+        # temp file in the same dir -> atomic os.replace
         config_dir = self.config_path.parent
         fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=str(config_dir), prefix=".config_")
         try:
@@ -484,11 +473,4 @@ class WritableConfig:
         """Re-read config.ini from disk (for external edits)."""
         async with self._lock:
             self._parser.read(self.config_path, encoding="utf-8")
-        self.reload_event.set()
 
-    def read_reload_event(self) -> bool:
-        """Check and clear the reload event. Returns True if a reload was signaled."""
-        was_set = self.reload_event.is_set()
-        if was_set:
-            self.reload_event.clear()
-        return was_set

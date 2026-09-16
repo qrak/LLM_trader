@@ -102,7 +102,7 @@ class PositionStatusMonitor:
     async def handle_position_closed(self, close_reason: str) -> None:
         """Clear monitor state, stop the loop, and send performance stats."""
         self.logger.info("Position closed: %s", close_reason)
-        await self.clear_state()
+        await self.exit_monitor.clear_state(self.persistence)
         if asyncio.current_task() is not self._task:
             await self.stop()
 
@@ -140,10 +140,6 @@ class PositionStatusMonitor:
             self._task = None
             self.logger.debug("Stopped position status and exit monitor")
 
-    async def load_state(self) -> dict[str, Any]:
-        """Load persisted position monitor state."""
-        return await self.exit_monitor.load_state(self.persistence)
-
     async def save_state(self, **timestamps: datetime) -> None:
         """Persist monitor config metadata plus timestamp updates."""
         symbol = self.get_symbol()
@@ -151,10 +147,6 @@ class PositionStatusMonitor:
             self.logger.warning("Skipping position monitor state save because current symbol is unset")
             return
         await self.exit_monitor.save_state(self.persistence, symbol, **timestamps)
-
-    async def clear_state(self) -> None:
-        """Clear persisted position monitor state."""
-        await self.exit_monitor.clear_state(self.persistence)
 
     async def run_hard_exit_checks(
         self,
@@ -182,7 +174,7 @@ class PositionStatusMonitor:
         """Send position status updates and evaluate configured hard exits."""
         try:
             while self.is_running():
-                state = await self.load_state()
+                state = await self.exit_monitor.load_state(self.persistence)
                 delay_seconds = self.exit_monitor.seconds_until_next_tick(state, datetime.now(timezone.utc))
                 if delay_seconds > 0:
                     await self.interruptible_sleep(delay_seconds, respect_force_analysis=False)
@@ -196,7 +188,7 @@ class PositionStatusMonitor:
 
                 try:
                     now = datetime.now(timezone.utc)
-                    state = await self.load_state()
+                    state = await self.exit_monitor.load_state(self.persistence)
                     ticker = await self.fetch_current_ticker()
                     current_price = float(ticker.get("last", ticker.get("close", 0))) if ticker else None
 

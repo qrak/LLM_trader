@@ -218,10 +218,6 @@ class TestWritableConfigEdgeCases:
         )
         return WritableConfig(str(cfg))
 
-    def test_read_nonexistent_section(self, wc):
-        """Reading a nonexistent section returns empty dict."""
-        assert wc.get_section("nonexistent") == {}
-
     def test_read_nonexistent_key(self, wc):
         """Reading a nonexistent key returns None."""
         assert wc.get_value("general", "nonexistent") is None
@@ -239,18 +235,6 @@ class TestWritableConfigEdgeCases:
         """Setting a key in an unknown section raises ValueError."""
         with pytest.raises(ValueError, match="Unknown config key"):
             await wc.set_value("nonexistent", "key", "value")
-
-    async def test_reload_event_set_on_write(self, wc):
-        """Writing a value sets the reload event."""
-        assert not wc.reload_event.is_set()
-        await wc.set_value("general", "timeframe", "1d")
-        assert wc.reload_event.is_set()
-
-    def test_reload_event_cleared_on_read(self, wc):
-        """read_reload_event clears the event."""
-        wc.reload_event.set()
-        assert wc.read_reload_event() is True
-        assert wc.read_reload_event() is False
 
     def test_schema_covers_all_config_sections(self, wc):
         """Schema covers all sections in the actual config.ini."""

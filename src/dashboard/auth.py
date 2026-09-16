@@ -292,7 +292,7 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
             )
 
         # Static admin files (HTML, CSS, JS) — no auth required, just LAN gate.
-        # The login form and SPA shell live here and must be loadable without a session.
+        # login form + SPA shell must load without a session
         if not path.startswith("/api/admin/"):
             return await call_next(request)
 

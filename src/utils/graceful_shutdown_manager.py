@@ -175,7 +175,7 @@ class GracefulShutdownManager:
         #    chart export spawns a subprocess that leaks a BaseSubprocessTransport
         #    on Python 3.13+).
         try:
-            import kaleido as _kl  # type: ignore[import-untyped]
+            import kaleido as _kl
 
             _kl.stop_sync_server(silence_warnings=True)
             if self.logger:
@@ -183,10 +183,8 @@ class GracefulShutdownManager:
         except (ImportError, AttributeError, Exception):  # noqa: S110, BLE001
             pass
 
-        # 2) Run the event loop a few extra iterations so pending transport
-        #    __del__ callbacks (aiohttp, kaleido subprocess, chromadb) are
-        #    drained before the loop is closed. This avoids
-        #    _ProactorBasePipeTransport / BaseSubprocessTransport ResourceWarning.
+        # 2) pump the loop so pending transport __del__ callbacks drain before close;
+        #    avoids _ProactorBasePipeTransport / BaseSubprocessTransport ResourceWarning
         try:
             for _ in range(5):
                 self.loop.call_soon(lambda: None)

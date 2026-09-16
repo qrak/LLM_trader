@@ -7,6 +7,7 @@ import math
 import numpy as np
 
 from src.logger.logger import Logger
+from src.utils.data_utils import last_or_scalar
 from src.utils.timeframe_validator import TimeframeValidator
 
 
@@ -59,7 +60,7 @@ class MarketMetricsCalculator:
                 "7D": TimeframeValidator.calculate_period_candles(timeframe, "7d"),
                 "30D": TimeframeValidator.calculate_period_candles(timeframe, "30d")
             }
-        except Exception as e:  # noqa: BLE001
+        except (ValueError, TypeError) as e:
             self.logger.error("Failed to calculate dynamic periods for timeframe %s: %s", timeframe, e)
             periods = {
                 "1D": 24,
@@ -118,20 +119,8 @@ class MarketMetricsCalculator:
             adv_support = td.get("advanced_support", np.nan)
             adv_resistance = td.get("advanced_resistance", np.nan)
 
-            # Handle array indicators - take the last value, following promptt_builder.py pattern
-            try:
-                if len(adv_support) > 0:
-                    adv_support = adv_support[-1]
-            except TypeError:
-                # adv_support is already a scalar value
-                pass
-
-            try:
-                if len(adv_resistance) > 0:
-                    adv_resistance = adv_resistance[-1]
-            except TypeError:
-                # adv_resistance is already a scalar value
-                pass
+            adv_support = last_or_scalar(adv_support)
+            adv_resistance = last_or_scalar(adv_resistance)
 
             # Use valid values or fallback to already-calculated values from basic_metrics
             if not math.isnan(adv_support):

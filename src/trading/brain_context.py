@@ -10,16 +10,14 @@ from src.utils.indicator_classifier import (
 )
 
 from .brain_exit_profiles import ExitProfileResolver
-from .data_models import ExitExecutionContext
+from .data_models import MarketSnapshot
 from .vector_memory import VectorMemoryService
 
 
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
-    # Maximum characters for the full brain context block injected into the system prompt.
-    # Prevents token bloat as trade count grows; sections are truncated tail-first
-    # (journal → rules → experiences) while preserving headers and calibration stats.
+    # cap for the brain context block; sections are truncated tail-first
     BRAIN_CONTEXT_MAX_CHARS = 12000
 
     def __init__(
@@ -41,29 +39,7 @@ class BrainContextProvider:
         """Invalidate cached vector-memory statistics."""
         self._stats_cache = {}
 
-    def get_context(
-        self,
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        rsi: float = 50.0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: ExitExecutionContext | None = None,
-        # --- NEW: enriched context fields (July 2026) ---
-        choppiness: float | None = None,
-        trend_strength: float = 0.0,
-        atr_percentage: float = 0.0,
-        mfi: float | None = None,
-        cmf: float | None = None,
-        vwap: float = 0.0,
-        supertrend_direction: str = "NEUTRAL",
-    ) -> str:
+    def get_context(self, snapshot: MarketSnapshot) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval."""
         lines = []
         exp_count = self.vector_memory.trade_count
@@ -109,28 +85,7 @@ class BrainContextProvider:
         except Exception as exc:  # noqa: BLE001
             if self.logger:
                 self.logger.warning("Failed to fetch blocked trade feedback: %s", exc)
-        vector_context = self.get_vector_context(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-            choppiness=choppiness,
-            trend_strength=trend_strength,
-            atr_percentage=atr_percentage,
-            mfi=mfi,
-            cmf=cmf,
-            vwap=vwap,
-            supertrend_direction=supertrend_direction,
-            k=3,
-        )
+        vector_context = self.get_vector_context(snapshot, k=3)
         if vector_context:
             vector_context = self.exit_profiles.replace_unknown_exit_profile_text(vector_context)
             lines.extend(["", vector_context])
@@ -151,8 +106,8 @@ class BrainContextProvider:
                     "do not use it as a confidence prior without explaining the mismatch."
                 ),
                 (
-                    "- CHOPPINESS MISMATCH: If a stored trade had low choppiness (Trending) but the current market "
-                    "shows high choppiness (Choppy), treat this as a ⚠️ regime mismatch — a trade that worked in "
+                    "- CHOPPINESS MISMATCH: If a stored trade had low snapshot.choppiness (Trending) but the current market "
+                    "shows high snapshot.choppiness (Choppy), treat this as a ⚠️ regime mismatch — a trade that worked in "
                     "a clean trend may fail in noise. Reduce confidence accordingly."
                 ),
                 (
@@ -176,8 +131,8 @@ class BrainContextProvider:
                 "NOTE: Limited historical data available. Rely on standard technical analysis for this decision.",
                 "",
             ])
-        adx_label = classify_adx_label(adx)
-        rule_context = f"{trend_direction} + {adx_label} + {volatility_level} Volatility"
+        adx_label = classify_adx_label(snapshot.adx)
+        rule_context = f"{snapshot.trend_direction} + {adx_label} + {snapshot.volatility_level} Volatility"
         semantic_rules = self.vector_memory.get_relevant_rules(
             current_context=rule_context,
             n_results=3,
@@ -228,7 +183,7 @@ class BrainContextProvider:
             ])
 
         # --- Risk Profile (adaptive, regime-driven) ---
-        risk_profile_text = self._build_regime_risk_profile_context(choppiness, atr_percentage)
+        risk_profile_text = self._build_regime_risk_profile_context(snapshot.choppiness, snapshot.atr_percentage)
         if risk_profile_text:
             lines.extend(["", risk_profile_text])
 
@@ -415,144 +370,24 @@ class BrainContextProvider:
         }
 
     @staticmethod
-    def build_rich_context_string(
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: ExitExecutionContext | None = None,
-    ) -> str:
+    def build_rich_context_string(snapshot: MarketSnapshot) -> str:
         """Build rich semantic context string for vector storage and retrieval."""
-        return build_context_string_from_classified_values(
-            trend_direction=trend_direction,
-            adx=adx,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-        )
+        return build_context_string_from_classified_values(snapshot)
 
     @staticmethod
-    def build_query_document(
-        trend_direction: str,
-        adx: float,
-        rsi: float,
-        volatility_level: str,
-        rsi_level: str,
-        macd_signal: str,
-        volume_state: str,
-        bb_position: str,
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: ExitExecutionContext | None = None,
-        # --- NEW: enriched fields (July 2026) ---
-        choppiness: float | None = None,
-        trend_strength: float = 0.0,
-        atr_percentage: float = 0.0,
-        mfi: float | None = None,
-        cmf: float | None = None,
-        vwap: float = 0.0,
-        supertrend_direction: str = "NEUTRAL",
-    ) -> str:
+    def build_query_document(snapshot: MarketSnapshot) -> str:
         """Build a query document that mirrors stored experience document format."""
-        return build_query_document_from_classified_values(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-            choppiness=choppiness,
-            trend_strength=trend_strength,
-            atr_percentage=atr_percentage,
-            mfi=mfi,
-            cmf=cmf,
-            vwap=vwap,
-            supertrend_direction=supertrend_direction,
-        )
+        return build_query_document_from_classified_values(snapshot)
 
-    def get_vector_context(
-        self,
-        trend_direction: str = "NEUTRAL",
-        adx: float = 0,
-        rsi: float = 50.0,
-        volatility_level: str = "MEDIUM",
-        rsi_level: str = "NEUTRAL",
-        macd_signal: str = "NEUTRAL",
-        volume_state: str = "NORMAL",
-        bb_position: str = "MIDDLE",
-        is_weekend: bool = False,
-        market_sentiment: str = "NEUTRAL",
-        order_book_bias: str = "BALANCED",
-        exit_execution_context: ExitExecutionContext | None = None,
-        # --- NEW: enriched query fields (July 2026) ---
-        choppiness: float | None = None,
-        trend_strength: float = 0.0,
-        atr_percentage: float = 0.0,
-        mfi: float | None = None,
-        cmf: float | None = None,
-        vwap: float = 0.0,
-        supertrend_direction: str = "NEUTRAL",
-        k: int = 5,
-    ) -> str:
+    def get_vector_context(self, snapshot: MarketSnapshot, k: int = 5) -> str:
         """Get context from similar past experiences via vector retrieval."""
-        context_query = self.build_rich_context_string(
-            trend_direction=trend_direction,
-            adx=adx,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-        )
-        query_document = self.build_query_document(
-            trend_direction=trend_direction,
-            adx=adx,
-            rsi=rsi,
-            volatility_level=volatility_level,
-            rsi_level=rsi_level,
-            macd_signal=macd_signal,
-            volume_state=volume_state,
-            bb_position=bb_position,
-            is_weekend=is_weekend,
-            market_sentiment=market_sentiment,
-            order_book_bias=order_book_bias,
-            exit_execution_context=exit_execution_context,
-            choppiness=choppiness,
-            trend_strength=trend_strength,
-            atr_percentage=atr_percentage,
-            mfi=mfi,
-            cmf=cmf,
-            vwap=vwap,
-            supertrend_direction=supertrend_direction,
-        )
+        context_query = self.build_rich_context_string(snapshot)
+        query_document = self.build_query_document(snapshot)
         vector_context = self.vector_memory.get_context_for_prompt(
             query_document,
             k,
             display_context=context_query,
-            current_atr_percentage=atr_percentage or None,
+            current_atr_percentage=snapshot.atr_percentage or None,
         )
         if not vector_context:
             return ""

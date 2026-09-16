@@ -192,7 +192,7 @@ class RiskManager:
             else:
                 final_sl = current_price * 1.01
 
-        # Clamp TP: max 50% from entry (prevents absurd distances like 250% on high-ATR coins)
+        # TP clamp: max 50% from entry
         tp_distance_raw = abs(final_tp - current_price) / current_price
         if tp_distance_raw > 0.50:
             self.logger.warning("TP distance %s exceeds 50%% max, clamping", f"{tp_distance_raw:.1%}")

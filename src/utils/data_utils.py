@@ -42,8 +42,7 @@ def get_last_valid_value(
         except (ValueError, TypeError):
             return default
 
-    # Bolt: search backward from the end to find the last non-NaN value without allocating
-    # full index arrays (~6x faster)
+    # scan backwards for the last non-NaN (no index-array allocation)
     n = len(arr)  # type: ignore
     for idx in range(n - 1, -1, -1):
         val = arr[idx]  # type: ignore
@@ -51,6 +50,21 @@ def get_last_valid_value(
             return float(val)
 
     return default
+
+
+def last_or_scalar(value: Any) -> Any:
+    """Return the last element of a sized value (array/list), or the value itself.
+
+    Advanced support/resistance indicators arrive either as arrays — take the
+    latest reading — or as plain scalars. NaN/empty values are passed through
+    untouched so callers keep their own validity checks.
+    """
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        return value[-1] if len(value) > 0 else value
+    except TypeError:
+        return value
 
 
 def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
@@ -63,7 +77,7 @@ def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
     Returns:
         Array containing up to n valid values from the end.
     """
-    if arr is None or len(arr) == 0 or n <= 0:  # type: ignore[arg-type]
+    if arr is None or len(arr) == 0 or n <= 0:
         return np.array([], dtype=float)
 
     # Handle object array
@@ -192,8 +206,6 @@ def _dataclass_dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def serialize_for_json(obj: Any) -> Any:
     """Recursively convert NumPy objects to JSON-serializable types."""
-    # Bolt: fast exact-type checks for primitives & Python floats avoid expensive isinstance
-    # chains and np.isinf overhead (~4x faster)
     obj_type = type(obj)
     if obj_type in _PRIMITIVE_TYPES:
         return obj
@@ -204,11 +216,7 @@ def serialize_for_json(obj: Any) -> Any:
     if isinstance(obj, (list, tuple)):
         return [serialize_for_json(v) for v in obj]
     if isinstance(obj, np.ndarray):
-        try:
-            return obj.tolist()
-        except Exception:  # noqa: BLE001
-            # Fallback for complex/mixed arrays
-            return [serialize_for_json(v) for v in obj]
+        return obj.tolist()
     if obj_type is datetime or isinstance(obj, datetime):
         return obj.isoformat()
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
@@ -216,18 +224,11 @@ def serialize_for_json(obj: Any) -> Any:
             return serialize_for_json(obj.to_dict())  # type: ignore[reportAttributeAccessIssue]
         return serialize_for_json(dataclasses.asdict(obj))
     if isinstance(obj, np.generic):
-        try:
-            val = obj.item()
-            if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-                return None
-            return val
-        except Exception:  # noqa: BLE001
-            return str(obj)
-    # Last resort fallback
-    try:
-        return str(obj)
-    except Exception:  # noqa: BLE001
-        return None
+        val = obj.item()
+        if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+            return None
+        return val
+    return str(obj)
 
 
 class SerializableMixin:
@@ -240,25 +241,23 @@ class SerializableMixin:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary with ISO format dates."""
-        # Bolt: module-level _dataclass_dict_factory avoids closure allocation per to_dict call (~1.1x faster)
         return dataclasses.asdict(self, dict_factory=_dataclass_dict_factory)  # type: ignore
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """Create dataclass instance from dictionary, handling types."""
-        # Bolt: pre-analyzed field metadata cached via _get_dataclass_field_meta speeds up from_dict by ~2.5x
         fields_meta = _get_dataclass_field_meta(cls)
         init_args = {}
 
         for key, value in data.items():
             meta = fields_meta.get(key)
             if meta is not None:
-                init_args[key] = cls._convert_value_fast(value, meta)  # type: ignore[reportAttributeAccessIssue]
+                init_args[key] = cls._convert_value_fast(value, meta)
 
         return cls(**init_args)
 
     @classmethod
-    def _convert_value_fast(cls, value: Any, meta: _DataclassFieldMeta) -> Any:  # type: ignore[reportAttributeAccessIssue]
+    def _convert_value_fast(cls, value: Any, meta: _DataclassFieldMeta) -> Any:
         if value is None:
             if not meta.is_optional and meta.unwrapped_type in _PRIMITIVE_DEFAULTS:
                 return _PRIMITIVE_DEFAULTS[meta.unwrapped_type]

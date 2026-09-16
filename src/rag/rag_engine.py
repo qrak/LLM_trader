@@ -108,31 +108,29 @@ class RagEngine:
             self.ticker_manager.get_known_tickers(),  # type: ignore
         )
 
+    async def _refresh_market_knowledge(self) -> bool:
+        """Refresh market data and stamp the update time; False when the refresh fails."""
+        try:
+            await self.refresh_market_data()
+            self.last_update = datetime.now(timezone.utc)
+            return True
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Failed to update market knowledge: %s", e)
+            return False
+
     async def update_if_needed(self, force_update: bool = False) -> bool:
         """Update market data if needed based on time intervals or forced update"""
         self._last_update_attempt = datetime.now(timezone.utc)
         async with self._update_lock:
             if not self.last_update:
                 self.logger.debug("No previous update, refreshing market knowledge base")
-                try:
-                    await self.refresh_market_data()
-                    self.last_update = datetime.now(timezone.utc)
-                    return True
-                except Exception as e:  # noqa: BLE001
-                    self.logger.error("Failed to update market knowledge: %s", e)
-                    return False
+                return await self._refresh_market_knowledge()
 
             time_since_update = datetime.now(timezone.utc) - self.last_update
             if force_update or time_since_update > self.update_interval:
                 reason = "forced update" if force_update else f"{time_since_update.total_seconds()/60:.1f} minutes since last update"
                 self.logger.debug("Refreshing market knowledge: %s", reason)
-                try:
-                    await self.refresh_market_data()
-                    self.last_update = datetime.now(timezone.utc)
-                    return True
-                except Exception as e:  # noqa: BLE001
-                    self.logger.error("Failed to update market knowledge: %s", e)
-                    return False
+                return await self._refresh_market_knowledge()
 
             try:
                 categories_updated = await self._ensure_categories_updated()
@@ -153,7 +151,7 @@ class RagEngine:
             return_exceptions=True
         )
 
-        # Process articles if any were fetched (gather converts exceptions to values with return_exceptions=True)
+        # gather(return_exceptions=True): failures arrive as values - filter here
         if isinstance(articles, list) and articles:
             # update_news_database does sync JSON file I/O — keep it off the event loop
             updated = await asyncio.to_thread(self.news_manager.update_news_database, articles)  # type: ignore

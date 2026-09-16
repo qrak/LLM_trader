@@ -13,6 +13,7 @@ Validates:
 from unittest.mock import MagicMock
 
 from src.trading.brain import TradingBrainService
+from src.trading.data_models import MarketSnapshot
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -97,10 +98,12 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
 """
 
     def test_critical_feedback_appears_in_context(self):
-        """When feedback is available, it is included in get_context()."""
+        """When feedback is available, it is included in get_context(MarketSnapshot())."""
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK_SAMPLE)
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         assert "CRITICAL FEEDBACK" in ctx
         assert "System Rejections" in ctx
@@ -111,7 +114,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         """Empty feedback → CRITICAL FEEDBACK section is omitted."""
         brain = _make_brain_with_feedback(feedback="")
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         assert "CRITICAL FEEDBACK" not in ctx
         assert "System Rejections" not in ctx
@@ -120,7 +125,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         """Brain calls get_blocked_trade_feedback with n=5, max_age_hours=168."""
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK_SAMPLE)
 
-        brain.get_context(adx=25)
+        brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         brain.vector_memory.get_blocked_trade_feedback.assert_called_once_with(
             n=5, max_age_hours=168
@@ -131,7 +138,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK_SAMPLE)
         brain.vector_memory.get_context_for_prompt.return_value = "## Vector Context: ..."
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         # Find the section order
         lines = ctx.split("\n")
@@ -146,7 +155,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         """When feedback is present, the section has actual content."""
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK_SAMPLE)
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         # The feedback section should not just be a header — should have bullet points
         assert "- Your R/R:" in ctx
 
@@ -185,7 +196,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_markdown_headers_are_well_formed(self):
         """All markdown headers start with ## or ### followed by a space."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         # Extract all lines that look like headers
         header_lines = [line for line in ctx.split("\n") if line.startswith("#")]
@@ -197,7 +210,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_no_trailing_whitespace_on_bullets(self):
         """Bullet points should not have trailing whitespace."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         for line in ctx.split("\n"):
             if line.startswith("- "):
@@ -207,7 +222,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_rr_format_is_parseable(self):
         """R/R lines follow 'Your R/R: X.XX | Required: Y.YY (gap: +/-Z.ZZ)' format."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         import re
         rr_pattern = re.compile(r"Your R/R: \d+\.\d+ \| Required: \d+\.\d+ \(gap: [+-]\d+\.\d+\)")
@@ -217,7 +234,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_percentage_format_consistent(self):
         """SL/TP percentages use consistent 'X.XX% from entry' format."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         import re
         pct_pattern = re.compile(r"Your (SL|TP): \d+\.\d+% from entry")
@@ -227,7 +246,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_pre_flight_checklist_has_five_items(self):
         """PRE-FLIGHT CHECKLIST has exactly 5 mandatory items."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         # Count checklist items after the PRE-FLIGHT header
         in_checklist = False
@@ -246,7 +267,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_no_broken_parentheses(self):
         """No unclosed parentheses in the prompt."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         open_count = ctx.count("(")
         close_count = ctx.count(")")
@@ -256,7 +279,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
     def test_thesis_line_uses_quoted_format(self):
         """AI thesis appears in double-quoted format."""
         brain = _make_brain_with_feedback(feedback=self.SAMPLE)
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         assert "Your thesis:" in ctx
         assert "bounce off support" in ctx
@@ -291,7 +316,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             "long_count": 4, "short_count": 0,  # no shorts triggers warning
         }
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         assert "CRITICAL FEEDBACK" in ctx
         assert "Direction Bias Check" in ctx
@@ -304,7 +331,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             "## Similar Past Trades\n- Trade 1: WIN\n- Trade 2: LOSS\n"
         )
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         assert "CRITICAL FEEDBACK" in ctx
         assert "Similar Past Trades" in ctx
@@ -316,7 +345,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             {"similarity": 85, "metadata": {"rule_type": "anti_pattern"}, "text": "Avoid longs into resistance"},
         ]
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         assert "CRITICAL FEEDBACK" in ctx
         assert "Learned Trading Rules" in ctx
@@ -326,7 +357,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK)
         brain.vector_memory.get_context_for_prompt.return_value = "## Similar Past Trades\n..."
 
-        ctx = brain.get_context(adx=25, trend_direction="BULLISH")
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25, trend_direction="BULLISH",
+        ))
 
         # Should not have 3+ consecutive blank lines
         lines = ctx.split("\n")
@@ -347,7 +380,9 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         brain = _make_brain_no_trades()
         brain.vector_memory.get_blocked_trade_feedback.return_value = self.FEEDBACK
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         # Feedback should appear even without trades
         assert "CRITICAL FEEDBACK" in ctx
@@ -365,7 +400,9 @@ class TestFeedbackResilience:
         brain = _make_brain_with_feedback(feedback="")
         brain.vector_memory.get_context_for_prompt.return_value = "## Context section"
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         # Should not have "CRITICAL FEEDBACK" anywhere
         assert "CRITICAL FEEDBACK" not in ctx
@@ -376,7 +413,9 @@ class TestFeedbackResilience:
         brain.vector_memory.get_blocked_trade_feedback.side_effect = RuntimeError("crash")
 
         # Should not raise
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         assert "CRITICAL FEEDBACK" not in ctx
         # Other sections should still be present
@@ -387,7 +426,9 @@ class TestFeedbackResilience:
         brain = _make_brain_with_feedback(feedback="\n\n\n")
         brain.vector_memory.get_context_for_prompt.return_value = "## Context"
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         # Empty-ish strings are falsy in Python (but "\n\n\n" is truthy)
         # Verify it doesn't crash regardless
@@ -398,7 +439,9 @@ class TestFeedbackResilience:
         feedback = "## CRITICAL FEEDBACK: System Rejections\n\nUnicode: émoji ✓ • ★\n"
         brain = _make_brain_with_feedback(feedback=feedback)
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
 
         assert "émoji" in ctx
         assert "CRITICAL FEEDBACK" in ctx

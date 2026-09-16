@@ -62,8 +62,7 @@ class OpenRouterClient(BaseAIClient):
         try:
             self.logger.debug("Sending request to OpenRouter API with model: %s", model)
 
-            # Extract reasoning effort from a copy (the config dict is shared across calls);
-            # `reasoning` is not a standard openai-SDK field — it travels via extra_body
+            # shared config dict: copy before popping reasoning; sent via extra_body
             call_config = dict(model_config)
             reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}
@@ -116,8 +115,7 @@ class OpenRouterClient(BaseAIClient):
             )
             self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
 
-            # Extract reasoning effort from a copy (the config dict is shared across calls);
-            # `reasoning` is not a standard openai-SDK field — it travels via extra_body
+            # shared config dict: copy before popping reasoning; sent via extra_body
             call_config = dict(model_config)
             reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}

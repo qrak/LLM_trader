@@ -83,7 +83,6 @@ def stochastic_numba(high, low, close, period_k, smooth_k, period_d):
     d_values = np.full(n, np.nan)
 
     for i in range(period_k - 1, n):
-        # Optimization: Avoid creating slice arrays in the loop
         start_idx = i - period_k + 1
         end_idx = i + 1
 
@@ -184,7 +183,6 @@ def williams_r_numba(high, low, close, length):
     n = len(close)
     williams_r = np.full(n, np.nan)
 
-    # Optimization: Manual max/min finding to avoid slice allocation in loop
     for i in range(length - 1, n):
         start_idx = i - length + 1
         end_idx = i + 1
@@ -248,7 +246,7 @@ def tsi_numba(close, long_length, short_length):
 
     # Now we need to calculate EMA2.
     # EMA2 is the EMA of EMA1.
-    # Its initial value is the mean of EMA1 from long_length to long_length + short_length - 1
+    # initial value = mean of EMA1 over [long_length, long_length+short_length-1]
 
     # Accumulate sums for EMA2 initialization
     ema1_sum = curr_ema1
@@ -292,8 +290,7 @@ def tsi_numba(close, long_length, short_length):
     if curr_abs_ema2 != 0:
         tsi[end_ema2_init] = (curr_ema2 / curr_abs_ema2) * 100.0
     else:
-        # If it's the very first point and denominator is 0, we can't use previous value.
-        # Default to 0.0 or keep NaN? Usually 0.0 is safer than NaN for indicators.
+        # first point with a zero denominator has no previous value to fall back on
         tsi[end_ema2_init] = 0.0
 
     prev_ema2 = curr_ema2
@@ -505,26 +502,9 @@ def kst_numba(
     sma3_length: int = 7,
     sma4_length: int = 9
 ) -> np.ndarray:
-    """
-    Know Sure Thing (KST) indicator - Optimized single-pass implementation.
+    """Know Sure Thing - single pass, sliding-window SMAs/ROCs, no temp arrays.
 
-    Computes ROC for 4 periods, smooths each with SMA, and combines with weights.
-    Uses sliding window sums to calculate SMAs and ROCs on-the-fly, avoiding
-    intermediate array allocations.
-
-    Args:
-        close: Close prices
-        roc1_length: First ROC period (default 5)
-        roc2_length: Second ROC period (default 10)
-        roc3_length: Third ROC period (default 15)
-        roc4_length: Fourth ROC period (default 20)
-        sma1_length: SMA period for first ROC (default 3)
-        sma2_length: SMA period for second ROC (default 5)
-        sma3_length: SMA period for third ROC (default 7)
-        sma4_length: SMA period for fourth ROC (default 9)
-
-    Returns:
-        KST values (weighted sum of smoothed ROCs)
+    Default ROC periods 5/10/15/20 smoothed by SMA 3/5/7/9; returns the weighted sum.
     """
     n = len(close)
     kst = np.full(n, np.nan)
@@ -599,34 +579,10 @@ def uo_numba(
     close: np.ndarray,
     config: Any
 ) -> np.ndarray:
-    """
-    Ultimate Oscillator (UO) - Simple interface using the local config dictionary.
+    """Ultimate Oscillator over 7/14/28 periods, weights from the config dict.
 
-    Ultimate Oscillator using three timeframes: 7, 14 and 28 periods.
-
-    Sources:
-        https://www.tradingview.com/wiki/Ultimate_Oscillator_(UO)
-
-    Calculation:
-        Default Inputs:
-            fast=7, medium=14, slow=28, fast_w=4.0, medium_w=2.0, slow_w=1.0
-        SUM = Summation
-        BP = Buying Pressure = close - low(min(low, previous_close))
-        TR = True Range = high(max(high, previous_close)) - low(min(low, previous_close))
-        Average7 = SUM(BP, 7) / SUM(TR, 7)
-        Average14 = SUM(BP, 14) / SUM(TR, 14)
-        Average28 = SUM(BP, 28) / SUM(TR, 28)
-
-        UO = 100 * (4 * Average7 + 2 * Average14 + Average28) / (4 + 2 + 1)
-
-    Args:
-        high (pd.Series): Series of 'high's
-        low (pd.Series): Series of 'low's
-        close (pd.Series): Series of 'close's
-        config (Any): Configuration dictionary containing all parameters
-
-    Returns:
-        pd.Series: New feature generated.
+    UO = 100 * (4*Avg7 + 2*Avg14 + Avg28) / 7, where AvgN = SUM(BP,N)/SUM(TR,N)
+    uses the previous close. Source: tradingview.com/wiki/Ultimate_Oscillator_(UO).
     """
     return _uo_numba(
         high, low, close,

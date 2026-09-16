@@ -31,24 +31,24 @@ class NewsManager:
         self.article_processor = article_processor
         self.news_repository = news_repository or NewsRepository(logger=logger, file_handler=file_handler)
 
-        self.news_database: list[dict[str, Any]] = []  # type: ignore[reportOptionalMemberAccess]
+        self.news_database: list[dict[str, Any]] = []
 
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def load_cached_news(self) -> None:
         """Load cached news articles from disk (off the event loop)."""
         try:
-            self.news_database = await asyncio.to_thread(  # type: ignore[reportOptionalMemberAccess]
-                self.news_repository.load_recent_articles,  # type: ignore[reportOptionalMemberAccess]
+            self.news_database = await asyncio.to_thread(
+                self.news_repository.load_recent_articles,
                 max_age_seconds=86400,
             )
-            for article in self.news_database:  # type: ignore[reportOptionalMemberAccess]
+            for article in self.news_database:
                 if "title_lower" not in article:
                     self._normalize(article)
-            self.logger.debug("Loaded %s cached news articles", len(self.news_database))  # type: ignore[reportOptionalMemberAccess]
+            self.logger.debug("Loaded %s cached news articles", len(self.news_database))
         except Exception:
             self.logger.exception("Error loading cached news")
-            self.news_database = []  # type: ignore[reportOptionalMemberAccess]
+            self.news_database = []
 
     async def fetch_fresh_news(self, known_crypto_tickers: set[str]) -> list[dict[str, Any]]:
         """Fetch fresh articles from the news provider; fall back to cache on failure."""
@@ -101,7 +101,7 @@ class NewsManager:
         min_body = 400  # mirror news_min_body_chars default
         url_to_existing: dict[str, dict[str, Any]] = {}
         existing_ids: set[str] = set()
-        for article_item in self.news_database:  # type: ignore[reportOptionalMemberAccess]
+        for article_item in self.news_database:
             url_val = article_item.get("url")
             if url_val:
                 url_to_existing[url_val] = article_item
@@ -134,16 +134,16 @@ class NewsManager:
         for article in unique:
             self._normalize(article)
 
-        combined = self.news_database + unique  # type: ignore[reportOptionalMemberAccess]
+        combined = self.news_database + unique
         combined.sort(key=self.article_processor.get_article_timestamp, reverse=True)  # type: ignore
-        self.news_database = self.news_repository.filter_recent_articles(combined, max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
-        self.news_repository.save_recent_articles(self.news_database, max_age_seconds=86400)  # type: ignore[reportOptionalMemberAccess]
+        self.news_database = self.news_repository.filter_recent_articles(combined, max_age_seconds=86400)
+        self.news_repository.save_recent_articles(self.news_database, max_age_seconds=86400)
 
-        self.logger.debug("Updated news database with %s recent articles", len(self.news_database))  # type: ignore[reportOptionalMemberAccess]
+        self.logger.debug("Updated news database with %s recent articles", len(self.news_database))
         return True
 
     def get_database_size(self) -> int:
-        return len(self.news_database)  # type: ignore[reportOptionalMemberAccess]
+        return len(self.news_database)
 
     # ── Private ───────────────────────────────────────────────────────────────
 

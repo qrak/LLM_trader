@@ -153,7 +153,6 @@ def vhf_numba(close, length=28, drift=1):
     vhf = np.full(n, np.nan)
 
     for i in range(length - 1 + drift, n):
-        # Optimization: Manual max/min finding and diff summing
         # to avoid slice allocations inside the loop
         start_idx = i - length + 1
         end_idx = i + 1

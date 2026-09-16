@@ -76,16 +76,6 @@ class TradingMemoryService:
             self._cached_trade_count = current_count
         return self._cached_context_summary
 
-    def get_recent_decisions(self, n: int = 5) -> list[TradeDecision]:
-        """Get recent decisions from memory.
-
-        Args:
-            n: Number of recent decisions to retrieve
-
-        Returns: list of recent trade decisions
-        """
-        return self.memory.get_recent_decisions(n)
-
     def _build_memory_from_history(self) -> TradingMemory:
         """Build TradingMemory from recent trade history.
 
@@ -104,7 +94,7 @@ class TradingMemoryService:
             try:
                 decision = TradeDecision.from_dict(trade_data)
                 memory.add_decision(decision)
-            except Exception as e:  # noqa: BLE001
+            except (KeyError, TypeError, ValueError) as e:
                 self.logger.warning("Could not load decision from history: %s", e)
 
         self.logger.info("Built memory with %s decisions from history", len(memory.decisions))

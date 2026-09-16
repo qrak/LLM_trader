@@ -79,11 +79,10 @@ def test_unified_parser_sanitizes_nonfinite_ai_numeric_fields() -> None:
     assert parsed["response_validation"]["status"] == "invalid"
 
 
-def test_position_extractor_rejects_nonfinite_json_trade_fields() -> None:
+def test_position_extractor_reads_nonfinite_json_trade_fields_as_none() -> None:
     parser = UnifiedParser(logger=MagicMock(), format_utils=FormatUtils())
-    extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)
-
-    signal, confidence, stop_loss, take_profit, position_size, reasoning = extractor.extract_trading_info(
+    extractor = PositionExtractor()
+    analysis = parser.parse_ai_response(
         """```json
 {
   "analysis": {
@@ -96,7 +95,9 @@ def test_position_extractor_rejects_nonfinite_json_trade_fields() -> None:
   }
 }
 ```"""
-    )
+    )["analysis"]
+
+    signal, confidence, stop_loss, take_profit, position_size, reasoning = extractor.extract_trading_info(analysis)
 
     assert signal == "BUY"
     assert confidence == "MEDIUM"

@@ -114,7 +114,7 @@ class ExchangeManager:
             await exchange.load_markets()
 
             self.exchanges[exchange_id] = exchange
-            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)  # type: ignore[arg-type]
+            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
             self.exchange_last_loaded[exchange_id] = datetime.now(timezone.utc)
             self.logger.debug("Loaded %s with %s symbols", exchange_id, len(exchange.symbols))
 
@@ -146,9 +146,9 @@ class ExchangeManager:
         try:
             self.logger.debug("Refreshing %s markets", exchange_id)
             await exchange.load_markets(reload=True)
-            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)  # type: ignore[arg-type]
+            self.symbols_by_exchange[exchange_id] = set(exchange.symbols)
             self.exchange_last_loaded[exchange_id] = datetime.now(timezone.utc)
-            self.logger.info("Refreshed %s with %s symbols", exchange_id, len(exchange.symbols))  # type: ignore
+            self.logger.info("Refreshed %s with %s symbols", exchange_id, len(exchange.symbols))
         except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to refresh %s markets: %s", exchange_id, e)
             # Try to reconnect if refresh fails
@@ -215,7 +215,7 @@ class ExchangeManager:
 
     def get_all_symbols(self) -> set[str]:
         """Get all unique symbols across all loaded exchanges"""
-        all_symbols = set()  # type: ignore[arg-type]
+        all_symbols = set()
         for symbols in self.symbols_by_exchange.values():
             all_symbols.update(symbols)
         return all_symbols

@@ -10,6 +10,13 @@ from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.position_extractor import PositionExtractor
 from src.trading.trading_strategy import TradingStrategy
 
+_PARSER = UnifiedParser(logger=MagicMock())
+
+
+def _parsed_analysis(raw_response: str) -> dict:
+    """Analysis payload exactly as the live pipeline produces it (parsed once)."""
+    return _PARSER.parse_ai_response(raw_response)["analysis"]
+
 
 def _make_compact_buy_response() -> str:
     return """1) MARKET STRUCTURE: ALIGNED uptrend.
@@ -97,10 +104,8 @@ def _build_strategy() -> TradingStrategy:
     )
     strategy.current_position = None
     strategy.guard_pipeline = None
-    strategy.audit_trail = MagicMock()
 
-    parser = UnifiedParser(logger=MagicMock())
-    strategy.extractor = PositionExtractor(logger=MagicMock(), unified_parser=parser)
+    strategy.extractor = PositionExtractor()
     strategy._conditions = MarketConditionsExtractor(MagicMock())
     return strategy
 
@@ -128,17 +133,7 @@ async def test_process_analysis_compact_buy_uses_json_fields_for_risk_inputs() -
     analysis_result = {
         "raw_response": _make_compact_buy_response(),
         "current_price": 77880.0,
-        "analysis": {
-            "trend": {
-                "direction": "BULLISH",
-                "strength_4h": 68,
-                "timeframe_alignment": "ALIGNED",
-            },
-            "confluence_factors": {
-                "trend_alignment": 80,
-                "momentum_strength": 77,
-            },
-        },
+        "analysis": _parsed_analysis(_make_compact_buy_response()),
         "technical_data": {
             "adx": 26,
             "rsi": 62,
@@ -197,18 +192,7 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
     analysis_result = {
         "raw_response": _make_compact_buy_response(),
         "current_price": 99.0,
-        "analysis": {
-            "trend": {
-                "direction": "BULLISH",
-                "strength_4h": 68,
-                "timeframe_alignment": "ALIGNED",
-            },
-            "confluence_factors": {
-                "trend_alignment": 80,
-                "momentum_strength": 77,
-                "volume_support": 71,
-            },
-        },
+        "analysis": _parsed_analysis(_make_compact_buy_response()),
         "technical_data": {
             "adx": 28.0,
             "rsi": 61.0,
@@ -244,6 +228,8 @@ async def test_process_analysis_passes_real_technical_data_to_brain_conditions()
         ("trend_alignment", 80.0),
         ("momentum_strength", 77.0),
         ("volume_support", 71.0),
+        ("pattern_quality", 64.0),
+        ("support_resistance_strength", 73.0),
     )
 
 
@@ -255,13 +241,7 @@ async def test_process_analysis_compact_hold_does_not_open_position() -> None:
     analysis_result = {
         "raw_response": _make_compact_hold_response(),
         "current_price": 77910.0,
-        "analysis": {
-            "trend": {
-                "direction": "NEUTRAL",
-                "strength_4h": 32,
-                "timeframe_alignment": "MIXED",
-            }
-        },
+        "analysis": _parsed_analysis(_make_compact_hold_response()),
     }
 
     decision = await strategy.process_analysis(analysis_result, "BTC/USDC")

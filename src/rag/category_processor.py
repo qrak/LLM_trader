@@ -10,8 +10,9 @@ from src.rag.collision_resolver import CategoryCollisionResolver
 class CategoryProcessor:
     """Handles processing and normalization of cryptocurrency categories."""
 
-    def __init__(self, logger: Logger, collision_resolver: CategoryCollisionResolver, file_handler=None):
+    def __init__(self, logger: Logger, collision_resolver: CategoryCollisionResolver, unified_parser, file_handler=None):
         self.logger = logger
+        self.parser = unified_parser
         self.file_handler = file_handler
 
         # Category data storage
@@ -117,7 +118,6 @@ class CategoryProcessor:
                 # Skip single-character tokens
                 continue
             if len(word_stripped) == 2:  # noqa: SIM102
-                # Allow 2-character tokens if they are uppercase (likely tickers) or contain digits
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
                     continue
 
@@ -149,27 +149,6 @@ class CategoryProcessor:
         )
 
     def extract_base_coin(self, symbol: str) -> str:
-        """Extract base coin from trading pair symbol."""
-        if not symbol:
-            return ""
-
-        # Handle different formats
-        if "/" in symbol:
-            return symbol.split("/")[0].upper()
-        if "-" in symbol:
-            return symbol.split("-")[0].upper()
-        # Try to extract base from common pairs
-        # NOTE: Order matters! Longer quotes must come before shorter ones (e.g., BUSD before USD)
-        common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "BNB"]
-        symbol_upper = symbol.upper()
-
-        for quote in common_quotes:
-            if symbol_upper.endswith(quote):
-                base = symbol_upper[:-len(quote)]
-                # Special handling for BNB/BUSD ambiguity: BNBUSD -> BN (via BUSD) is wrong, should be BNB (via USD)
-                if quote == "BUSD" and base == "BN":
-                    continue
-                return base
-
-        return symbol_upper
+        """Extract base coin from trading pair symbol (single implementation: UnifiedParser)."""
+        return self.parser.extract_base_coin(symbol)
 

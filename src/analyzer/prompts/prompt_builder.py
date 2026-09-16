@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.logger.logger import Logger
+from src.utils.data_utils import last_or_scalar
 
 from ..analysis_context import AnalysisContext
 from ..formatters import (
@@ -110,13 +111,11 @@ class PromptBuilder:
             self.build_trading_context(context),
         ]
 
-        # Add position context early in user query (adjacent to current price for context)
         if position_context:
             sections.append(f"## CURRENT POSITION & PERFORMANCE\n{position_context.strip()}")
 
         sections.append(self.build_sentiment_section(context.sentiment))
 
-        # Add market overview first before technical analysis to give it more prominence
         if context.market_overview:
             sections.append(self.overview_formatter.format_market_overview(
                 context.market_overview,
@@ -678,20 +677,8 @@ class PromptBuilder:
         adv_support = td.get("advanced_support", np.nan)
         adv_resistance = td.get("advanced_resistance", np.nan)
 
-        # Handle array indicators - take the last value
-        try:
-            if len(adv_support) > 0:
-                adv_support = adv_support[-1]
-        except TypeError:
-            # adv_support is already a scalar value
-            pass
-
-        try:
-            if len(adv_resistance) > 0:
-                adv_resistance = adv_resistance[-1]
-        except TypeError:
-            # adv_resistance is already a scalar value
-            pass
+        adv_support = last_or_scalar(adv_support)
+        adv_resistance = last_or_scalar(adv_resistance)
 
         # Both values must be valid (not NaN)
         return not math.isnan(adv_support) and not math.isnan(adv_resistance)

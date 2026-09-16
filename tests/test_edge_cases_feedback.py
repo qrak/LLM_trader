@@ -21,7 +21,7 @@ from sentence_transformers import SentenceTransformer
 
 from src.managers.risk_manager import RiskManager
 from src.trading.brain import TradingBrainService
-from src.trading.data_models import MarketConditions
+from src.trading.data_models import MarketConditions, MarketSnapshot
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 
@@ -34,7 +34,7 @@ class TestEmptyStateBrain:
     """Brain behavior when no rejections exist."""
 
     def test_get_context_does_not_include_feedback_when_no_blocks(self):
-        """get_context() should not inject CRITICAL FEEDBACK when no blocks."""
+        """get_context(MarketSnapshot()) should not inject CRITICAL FEEDBACK when no blocks."""
         brain = _make_minimal_brain()
         brain.vector_memory.get_blocked_trade_feedback.return_value = ""
         brain.vector_memory.get_context_for_prompt.return_value = ""
@@ -43,12 +43,14 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_confidence_recommendation.return_value = ""
         brain.vector_memory.get_direction_bias.return_value = None
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         assert "CRITICAL FEEDBACK" not in ctx
         assert "System Rejections" not in ctx
 
     def test_get_context_survives_feedback_exception(self):
-        """get_context() handles vector_memory.get_blocked_trade_feedback raising."""
+        """get_context(MarketSnapshot()) handles vector_memory.get_blocked_trade_feedback raising."""
         brain = _make_minimal_brain()
         brain.vector_memory.get_blocked_trade_feedback.side_effect = RuntimeError("DB crash")
         brain.vector_memory.get_context_for_prompt.return_value = ""
@@ -58,7 +60,9 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_direction_bias.return_value = None
 
         # Should not raise — should silently skip feedback section
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         assert "CRITICAL FEEDBACK" not in ctx
 
     def test_zero_trade_count_shows_no_trading_brain_section(self):
@@ -72,7 +76,9 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_confidence_recommendation.return_value = ""
         brain.vector_memory.get_direction_bias.return_value = None
 
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         assert "Trading Brain" not in ctx
 
     def test_get_blocked_trade_feedback_called_even_with_zero_trades(self):
@@ -86,7 +92,9 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_confidence_recommendation.return_value = ""
         brain.vector_memory.get_direction_bias.return_value = None
 
-        brain.get_context(adx=25)
+        brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         brain.vector_memory.get_blocked_trade_feedback.assert_called_once()
 
 
@@ -145,7 +153,9 @@ class TestSaturationHighVolume:
             persistence=persistence,
             vector_memory=mock_vm,
         )
-        ctx = brain.get_context(adx=25)
+        ctx = brain.get_context(MarketSnapshot(
+            adx=25,
+        ))
         assert "CRITICAL FEEDBACK" in ctx
         # Should still be a valid string (not too large for a prompt)
         assert len(ctx) < 10000  # reasonable prompt size

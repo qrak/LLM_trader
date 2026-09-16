@@ -179,8 +179,8 @@ class PostMortemService:
             try:
                 hold_duration = exit_timestamp - entry_time
                 lines.append(f"- Hold Duration: {hold_duration}")
-            except Exception:  # noqa: BLE001, S110
-                # best-effort hold duration formatting
+            except TypeError:
+                # naive vs aware datetime from mixed sources - hold duration omitted
                 pass
 
         # Market conditions at exit (if available)

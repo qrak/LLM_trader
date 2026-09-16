@@ -54,7 +54,7 @@ class DiscordNotifier(BaseNotifier):
         self.bot.event(self.on_ready)
         self.file_handler = file_handler
 
-        # Small pacing gap between Discord API sends to reduce burst rate-limit pressure.
+        # pacing gap between Discord sends (burst rate limits)
         self._send_lock = asyncio.Lock()
         self._last_send_timestamp = 0.0
         self._discord_send_interval_seconds = 0.4

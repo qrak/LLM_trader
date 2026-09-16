@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 from src.trading.brain_context import BrainContextProvider
+from src.trading.data_models import MarketSnapshot
 
 
 class TestTradeJournalContext:
@@ -37,7 +38,7 @@ class TestTradeJournalContext:
         )
 
     def test_journal_section_appears_when_post_mortems_exist(self):
-        """get_context() should include '### Trade Journal' when post-mortems exist."""
+        """get_context(MarketSnapshot()) should include '### Trade Journal' when post-mortems exist."""
         repo = self._make_repo(post_mortems=[
             {
                 "verdict": "overestimated_breakout",
@@ -48,31 +49,31 @@ class TestTradeJournalContext:
             },
         ])
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "### Trade Journal (Recent Post-Mortem Lessons):" in context
         assert "overestimated_breakout" in context
         assert "BTC/USDC" in context
         assert "Wait for confirmation" in context
 
     def test_journal_section_absent_when_no_post_mortems(self):
-        """get_context() should NOT include journal section when empty."""
+        """get_context(MarketSnapshot()) should NOT include journal section when empty."""
         repo = self._make_repo(post_mortems=[])
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "### Trade Journal (Recent Post-Mortem Lessons):" not in context
 
     def test_journal_section_absent_when_repo_is_none(self):
-        """get_context() should NOT include journal section when repo not configured."""
+        """get_context(MarketSnapshot()) should NOT include journal section when repo not configured."""
         provider = self._make_provider(post_mortem_repo=None)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "### Trade Journal (Recent Post-Mortem Lessons):" not in context
 
     def test_journal_section_absent_on_repo_exception(self):
-        """get_context() should gracefully skip journal on repo error."""
+        """get_context(MarketSnapshot()) should gracefully skip journal on repo error."""
         repo = self._make_repo()
         repo.get_recent_post_mortems.side_effect = RuntimeError("DB error")
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "### Trade Journal (Recent Post-Mortem Lessons):" not in context
 
     def test_multiple_post_mortems_rendered(self):
@@ -94,7 +95,7 @@ class TestTradeJournalContext:
             },
         ])
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "Lesson A" in context
         assert "Lesson B" in context
         assert "good_exit" in context
@@ -112,7 +113,7 @@ class TestTradeJournalContext:
             },
         ])
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "P&L: +5.5%" in context
 
     def test_pnl_omitted_when_none(self):
@@ -127,5 +128,5 @@ class TestTradeJournalContext:
             },
         ])
         provider = self._make_provider(post_mortem_repo=repo)
-        context = provider.get_context()
+        context = provider.get_context(MarketSnapshot())
         assert "P&L:" not in context

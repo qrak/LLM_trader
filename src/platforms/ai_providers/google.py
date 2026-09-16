@@ -175,7 +175,7 @@ class GoogleAIClient(BaseAIClient):
             completion = getattr(metadata, "candidates_token_count", 0) or 0
             thoughts = getattr(metadata, "thoughts_token_count", 0) or 0
 
-            # Google bills thinking tokens as output ("Output price including thinking tokens").
+            # Google bills thinking tokens as output tokens
             output_tokens = completion + thoughts
 
             # Log per-modality breakdown from SDK for transparency

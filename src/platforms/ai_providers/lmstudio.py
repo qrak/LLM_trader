@@ -22,7 +22,7 @@ class LMStudioClient(BaseAIClient):
         self.base_url = base_url
         self._client: AsyncOpenAI | None = None
         self._cached_model: str | None = None
-        # OpenRouter-specific key leaks in from the shared default model config — never sent to LM Studio
+        # OpenRouter-only key leaking in from the shared model config
         self._known_unsupported_params.add("openrouter_reasoning_effort")
 
     async def _initialize_client(self) -> None:

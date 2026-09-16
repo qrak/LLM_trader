@@ -28,13 +28,12 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
     if len(volume) < lookback + 1:
         return False, 0.0, 0
 
-    # Use last closed candle (volume[-1]) - incomplete candle already excluded at fetch
+    # volume[-1] = last CLOSED candle (unclosed one dropped at fetch)
     current_vol = volume[-1]
 
     if math.isnan(current_vol) or current_vol < 0:
         return False, 0.0, 0
 
-    # Calculate average volume from closed candles (excluding current closed candle)
     recent_volume = volume[-(lookback + 1):-1]
 
     # Skip if any NaN values
@@ -57,20 +56,18 @@ def _calculate_average_volume_numba(volume: np.ndarray, lookback: int) -> tuple:
 
 
 @njit
-def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookback: int = 20) -> tuple:
+def _detect_volume_ratio_numba(volume: np.ndarray, threshold: float, lookback: int, above: bool) -> tuple:
     """
-    Detect volume spike: last closed candle volume significantly above average.
-    Data already excludes incomplete candle at fetch time.
-
-    Strong confirmation signal for breakouts when volume > multiplier * avg_volume.
+    Compare the last closed candle's volume with the lookback average (shared core).
 
     Args:
         volume: Volume array (incomplete candle already excluded)
-        multiplier: Spike threshold multiplier (default 2.5 = 250% of average)
-        lookback: Periods for average calculation (default 20)
+        threshold: Ratio boundary (multiplier when above=True, fraction when False)
+        lookback: Periods for the average
+        above: True flags an extreme (spike/climax), False flags a dry-up
 
     Returns:
-        (is_spike: bool, current_volume: float, avg_volume: float, spike_ratio: float)
+        (triggered: bool, current_volume: float, avg_volume: float, ratio: float)
     """
     is_valid, avg_vol, _ = _calculate_average_volume_numba(volume, lookback)
 
@@ -79,43 +76,56 @@ def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookb
 
     # Use last closed candle - incomplete candle already excluded at fetch
     current_vol = volume[-1]
-    spike_ratio = current_vol / avg_vol
+    ratio = current_vol / avg_vol
 
-    if spike_ratio >= multiplier:
-        return True, float(current_vol), float(avg_vol), float(spike_ratio)
+    if above:
+        triggered = ratio >= threshold
+    else:
+        triggered = ratio <= threshold
 
-    return False, float(current_vol), float(avg_vol), float(spike_ratio)
+    if triggered:
+        return True, float(current_vol), float(avg_vol), float(ratio)
+
+    return False, float(current_vol), float(avg_vol), float(ratio)
+
+
+@njit
+def detect_volume_spike_numba(volume: np.ndarray, multiplier: float = 2.5, lookback: int = 20) -> tuple:
+    """
+    Detect volume spike: last closed candle volume significantly above average.
+
+    Strong confirmation signal for breakouts when volume > multiplier * avg_volume.
+
+    Returns:
+        (is_spike, current_volume, avg_volume, spike_ratio)
+    """
+    return _detect_volume_ratio_numba(volume, multiplier, lookback, True)
 
 
 @njit
 def detect_volume_dryup_numba(volume: np.ndarray, threshold: float = 0.5, lookback: int = 20) -> tuple:
     """
     Detect volume dry-up: last closed candle volume significantly below average.
-    Data already excludes incomplete candle at fetch time.
 
     Often precedes major moves - low volume indicates consolidation.
 
-    Args:
-        volume: Volume array (incomplete candle already excluded)
-        threshold: Dry-up threshold (default 0.5 = 50% of average)
-        lookback: Periods for average calculation (default 20)
+    Returns:
+        (is_dryup, current_volume, avg_volume, dryup_ratio)
+    """
+    return _detect_volume_ratio_numba(volume, threshold, lookback, False)
+
+
+@njit
+def detect_climax_volume_numba(volume: np.ndarray, multiplier: float = 3.0, lookback: int = 50) -> tuple:
+    """
+    Detect climax volume: extreme volume spike indicating potential exhaustion.
+
+    Very high volume often marks trend reversals (buying/selling climax).
 
     Returns:
-        (is_dryup: bool, current_volume: float, avg_volume: float, dryup_ratio: float)
+        (is_climax, current_volume, avg_volume, climax_ratio)
     """
-    is_valid, avg_vol, _ = _calculate_average_volume_numba(volume, lookback)
-
-    if not is_valid:
-        return False, 0.0, 0.0, 0.0
-
-    # Use last closed candle - incomplete candle already excluded at fetch
-    current_vol = volume[-1]
-    dryup_ratio = current_vol / avg_vol
-
-    if dryup_ratio <= threshold:
-        return True, float(current_vol), float(avg_vol), float(dryup_ratio)
-
-    return False, float(current_vol), float(avg_vol), float(dryup_ratio)
+    return _detect_volume_ratio_numba(volume, multiplier, lookback, True)
 
 
 @njit
@@ -236,34 +246,3 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
         return True, False, strength, float(up_volume_ratio)
 
     return False, False, 0.0, float(up_volume_ratio)
-
-
-@njit
-def detect_climax_volume_numba(volume: np.ndarray, multiplier: float = 3.0, lookback: int = 50) -> tuple:
-    """
-    Detect climax volume: extreme volume spike indicating potential exhaustion.
-    Data already excludes incomplete candle at fetch time.
-
-    Very high volume often marks trend reversals (buying/selling climax).
-
-    Args:
-        volume: Volume array (incomplete candle already excluded)
-        multiplier: Climax threshold (default 3.0 = 300% of average)
-        lookback: Periods for average calculation (default 50)
-
-    Returns:
-        (is_climax: bool, current_volume: float, avg_volume: float, climax_ratio: float)
-    """
-    is_valid, avg_vol, _ = _calculate_average_volume_numba(volume, lookback)
-
-    if not is_valid:
-        return False, 0.0, 0.0, 0.0
-
-    # Use last closed candle - incomplete candle already excluded at fetch
-    current_vol = volume[-1]
-    climax_ratio = current_vol / avg_vol
-
-    if climax_ratio >= multiplier:
-        return True, float(current_vol), float(avg_vol), float(climax_ratio)
-
-    return False, float(current_vol), float(avg_vol), float(climax_ratio)

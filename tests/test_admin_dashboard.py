@@ -289,9 +289,6 @@ class TestWritableConfig:
         await writable_config.reload_from_disk()
         assert writable_config.get_value("general", "crypto_pair") == "SOL/USDC"
 
-    def test_reload_event(self, writable_config):
-        assert not writable_config.read_reload_event()
-
 
 class TestValidation:
     def test_validate_bool(self):

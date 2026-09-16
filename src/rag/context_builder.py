@@ -120,7 +120,7 @@ class ContextBuilder:
 
     def _extract_article_content(self, article: dict[str, Any]):
         """Extract and normalize article content for scoring."""
-        # Use pre-computed lowercase fields if available (from NewsManager), otherwise compute on the fly
+        # prefer pre-computed lowercase fields from NewsManager
         return ArticleContent(
             title=article.get("title_lower") or article.get("title", "").lower(),
             body=article.get("body_lower") or article.get("body", "").lower(),
@@ -150,7 +150,6 @@ class ContextBuilder:
         current_tokens = 0
 
         # Use configured article_max_tokens to limit each article strictly
-        # This ensures uniform article quality and control over content distribution
         article_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS
         resolved_max_tokens = max_tokens
         if resolved_max_tokens is None:

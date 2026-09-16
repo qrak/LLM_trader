@@ -16,47 +16,62 @@ from numba import njit
 
 
 @njit(cache=True)
-def detect_rsi_oversold_numba(
+def _detect_rsi_threshold_numba(
     rsi: np.ndarray,
-    threshold: float = 30.0,
-    min_periods: int = 1
+    threshold: float,
+    min_periods: int,
+    above: bool
 ) -> tuple[bool, int, float]:
     """
-    Detect oversold conditions in RSI.
+    Detect a sustained RSI breach of ``threshold`` (single shared implementation).
 
     Args:
         rsi: RSI values (most recent last)
-        threshold: Oversold threshold (default 30)
-        min_periods: Minimum consecutive periods below threshold
+        threshold: Breach level (overbought above it, oversold below it)
+        min_periods: Minimum consecutive periods beyond the threshold
+        above: True for overbought (RSI above threshold), False for oversold
 
     Returns:
-        (is_oversold, periods_ago, rsi_value)
-        - is_oversold: True if currently oversold
-        - periods_ago: How many periods ago oversold started (0 = current)
-        - rsi_value: Current RSI value
+        (is_in_zone, periods_ago, rsi_value)
     """
     if len(rsi) < 1:
         return (False, -1, 0.0)
 
     current_rsi = rsi[-1]
 
-    # Check if currently oversold
-    if current_rsi >= threshold:
+    if above:
+        still_in_zone = current_rsi > threshold
+    else:
+        still_in_zone = current_rsi < threshold
+    if not still_in_zone:
         return (False, -1, current_rsi)
 
-    # Find how long it's been oversold
-    periods_oversold = 0
+    # How long has RSI stayed beyond the threshold?
+    periods_in_zone = 0
     for i in range(len(rsi) - 1, -1, -1):
-        if rsi[i] < threshold:
-            periods_oversold += 1
+        if above:
+            in_zone = rsi[i] > threshold
+        else:
+            in_zone = rsi[i] < threshold
+        if in_zone:
+            periods_in_zone += 1
         else:
             break
 
-    # Check if minimum period requirement met
-    if periods_oversold >= min_periods:
+    if periods_in_zone >= min_periods:
         return (True, 0, current_rsi)  # periods_ago = 0 means current
 
     return (False, -1, current_rsi)
+
+
+@njit(cache=True)
+def detect_rsi_oversold_numba(
+    rsi: np.ndarray,
+    threshold: float = 30.0,
+    min_periods: int = 1
+) -> tuple[bool, int, float]:
+    """Detect oversold conditions in RSI (RSI below threshold)."""
+    return _detect_rsi_threshold_numba(rsi, threshold, min_periods, False)
 
 
 @njit(cache=True)
@@ -65,42 +80,8 @@ def detect_rsi_overbought_numba(
     threshold: float = 70.0,
     min_periods: int = 1
 ) -> tuple[bool, int, float]:
-    """
-    Detect overbought conditions in RSI.
-
-    Args:
-        rsi: RSI values (most recent last)
-        threshold: Overbought threshold (default 70)
-        min_periods: Minimum consecutive periods above threshold
-
-    Returns:
-        (is_overbought, periods_ago, rsi_value)
-        - is_overbought: True if currently overbought
-        - periods_ago: How many periods ago overbought started (0 = current)
-        - rsi_value: Current RSI value
-    """
-    if len(rsi) < 1:
-        return (False, -1, 0.0)
-
-    current_rsi = rsi[-1]
-
-    # Check if currently overbought
-    if current_rsi <= threshold:
-        return (False, -1, current_rsi)
-
-    # Find how long it's been overbought
-    periods_overbought = 0
-    for i in range(len(rsi) - 1, -1, -1):
-        if rsi[i] > threshold:
-            periods_overbought += 1
-        else:
-            break
-
-    # Check if minimum period requirement met
-    if periods_overbought >= min_periods:
-        return (True, 0, current_rsi)  # periods_ago = 0 means current
-
-    return (False, -1, current_rsi)
+    """Detect overbought conditions in RSI (RSI above threshold)."""
+    return _detect_rsi_threshold_numba(rsi, threshold, min_periods, True)
 
 
 @njit(cache=True)
@@ -111,24 +92,11 @@ def detect_rsi_w_bottom_numba(
     similarity_threshold: float = 5.0,
     lookback: int = 14
 ) -> tuple[bool, int, int, float, float]:
-    """
-    Detect W-Bottom pattern in RSI (bullish reversal confirmation).
+    """W-bottom in RSI (bullish reversal confirmation).
 
-    W-Bottom = Double bottom in RSI where:
-    - Both bottoms are below threshold (oversold)
-    - Second bottom is HIGHER than first (RSI making higher low)
-    - Price is making equal or lower low (divergence)
-    - Bottoms are within similarity_threshold of each other
-
-    Args:
-        rsi: RSI values (most recent last)
-        prices: Price values (close prices, same length as rsi)
-        threshold: Oversold threshold (default 30)
-        similarity_threshold: Max difference between bottoms (default 5)
-        lookback: Periods to look back for first bottom
-
-    Returns:
-        (pattern_found, first_bottom_idx, second_bottom_idx, first_rsi, second_rsi)
+    Both bottoms oversold, the second higher in RSI while price makes an equal or
+    lower low, bottoms within similarity_threshold.
+    Returns (found, first_idx, second_idx, first_rsi, second_rsi).
     """
     if len(rsi) < lookback or len(prices) < lookback:
         return (False, -1, -1, 0.0, 0.0)
@@ -197,24 +165,11 @@ def detect_rsi_m_top_numba(
     similarity_threshold: float = 5.0,
     lookback: int = 14
 ) -> tuple[bool, int, int, float, float]:
-    """
-    Detect M-Top pattern in RSI (bearish reversal confirmation).
+    """M-top in RSI (bearish reversal confirmation).
 
-    M-Top = Double top in RSI where:
-    - Both tops are above threshold (overbought)
-    - Second top is LOWER than first (RSI making lower high)
-    - Price is making equal or higher high (divergence)
-    - Tops are within similarity_threshold of each other
-
-    Args:
-        rsi: RSI values (most recent last)
-        prices: Price values (close prices, same length as rsi)
-        threshold: Overbought threshold (default 70)
-        similarity_threshold: Max difference between tops (default 5)
-        lookback: Periods to look back for first top
-
-    Returns:
-        (pattern_found, first_top_idx, second_top_idx, first_rsi, second_rsi)
+    Mirror of the W-bottom: both peaks overbought, the second lower in RSI while
+    price makes an equal or higher high.
+    Returns (found, first_idx, second_idx, first_rsi, second_rsi).
     """
     if len(rsi) < lookback or len(prices) < lookback:
         return (False, -1, -1, 0.0, 0.0)

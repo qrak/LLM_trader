@@ -22,6 +22,7 @@ from ..auth import (
     COOKIE_NAME,
     _get_real_client_ip,
     _sign_token,
+    _verify_token,
     check_credentials,
     check_login_rate_limit,
     create_session,
@@ -98,6 +99,17 @@ class AdminRouter:
         self._bot_start_time = time.time()
 
         self._register_routes()
+
+    async def _authenticate_ws(self, websocket: WebSocket) -> bool:
+        """Close the socket with a policy violation unless ?token= carries a valid session."""
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Authentication required")
+            return False
+        if not _verify_token(token):
+            await websocket.close(code=1008, reason="Invalid token")
+            return False
+        return True
 
     def _register_routes(self) -> None:
         """Register all admin routes."""
@@ -283,30 +295,14 @@ class AdminRouter:
             Auth: Requires ?token=<session_token> query param.
             """
             # Verify auth via query param
-            token = websocket.query_params.get("token")
-            if not token:
-                await websocket.close(code=1008, reason="Authentication required")
-                return
-
-            from ..auth import _verify_token
-            username = _verify_token(token)
-            if not username:
-                await websocket.close(code=1008, reason="Invalid token")
+            if not await self._authenticate_ws(websocket):
                 return
 
             # Accept and subscribe
             await websocket.accept()
             sid, queue = self.log_stream_manager.handler.subscribe()
             try:
-                while True:
-                    try:
-                        line = await asyncio.wait_for(queue.get(), timeout=30.0)
-                        if line is None:
-                            break
-                        await websocket.send_json({"type": "log", "line": line})
-                    except asyncio.TimeoutError:
-                        # Send keepalive ping
-                        await websocket.send_json({"type": "ping"})
+                await self.log_stream_manager.handler.stream_to(queue, websocket)
             except WebSocketDisconnect:
                 pass
             except Exception as exc:  # noqa: BLE001
@@ -329,15 +325,7 @@ class AdminRouter:
 
             Auth: Requires ?token=<session_token> query param.
             """
-            token = websocket.query_params.get("token")
-            if not token:
-                await websocket.close(code=1008, reason="Authentication required")
-                return
-
-            from ..auth import _verify_token
-            username = _verify_token(token)
-            if not username:
-                await websocket.close(code=1008, reason="Invalid token")
+            if not await self._authenticate_ws(websocket):
                 return
 
             await websocket.accept()

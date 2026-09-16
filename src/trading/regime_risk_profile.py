@@ -21,7 +21,7 @@ class RegimeRiskProfile(Enum):
     CONSERVATIVE = "conservative"   # high volatility or unclear regime
 
 
-# Multiplier tables: SL (ATR multiple), TP (ATR multiple), position cap (fraction)
+# (SL atr_mult, TP atr_mult, position cap fraction) per profile
 _PROFILE_PARAMS: dict[RegimeRiskProfile, tuple[float, float, float]] = {
     RegimeRiskProfile.AGGRESSIVE:   (1.5, 3.0, 0.10),   # tighter SL + wider TP + 10% max
     RegimeRiskProfile.NEUTRAL:      (2.0, 4.0, 0.08),   # standard

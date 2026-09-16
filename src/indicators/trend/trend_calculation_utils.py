@@ -162,7 +162,7 @@ def calculate_ichimoku_spans(high: np.ndarray, low: np.ndarray,
             leading_span_a[i + displacement] = (conversion_line[i] + base_line[i]) / 2
 
     # Calculate Leading Span B (Senkou Span B)
-    # Span B = (Max(High, lagging_span2_length) + Min(Low, lagging_span2_length)) / 2, shifted forward
+    # Span B = (Max(High, n) + Min(Low, n)) / 2, shifted forward
     span_b_mid_line = get_donchian_channels_o1(high, low, lagging_span2_length)
 
     for i in range(lagging_span2_length - 1, n - displacement):

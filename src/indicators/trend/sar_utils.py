@@ -30,23 +30,31 @@ def get_initial_sar_state(high: np.ndarray, low: np.ndarray, step: float) -> tup
 
 
 @njit(cache=True)
-def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
-                      sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
-                      step: float, max_step: float) -> int:
-    """Update SAR values for bullish trend."""
+def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
+                 sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
+                 step: float, max_step: float, is_bullish: bool) -> int:
+    """
+    Advance the Parabolic SAR by one bar (single shared implementation).
+
+    Constraints use low/high of the PRIOR two periods only (no lookahead bias).
+    Returns the trend after the update: 1 bullish, -1 bearish.
+    """
     new_sar = sar[i - 1] + af[i - 1] * (ep[i - 1] - sar[i - 1])
 
-    # Apply constraints FIRST before checking against low[i]
-    # Use low[i-1] and low[i-2] (prior period constraints) to avoid lookahead bias
-    if i > 1:
-        new_sar = min(new_sar, low[i - 1], low[i - 2])
+    # Apply constraints FIRST, before checking the current bar
+    if is_bullish:
+        if i > 1:
+            new_sar = min(new_sar, low[i - 1], low[i - 2])
+        else:
+            new_sar = min(new_sar, low[i - 1])
+    elif i > 1:
+        new_sar = max(new_sar, high[i - 1], high[i - 2])
     else:
-        new_sar = min(new_sar, low[i - 1])
+        new_sar = max(new_sar, high[i - 1])
 
-    if low[i] > new_sar:
+    if is_bullish and low[i] > new_sar:
         # Continue bullish trend
         sar[i] = new_sar
-
         if high[i] > ep[i - 1]:
             ep[i] = high[i]
             af[i] = min(af[i - 1] + step, max_step)
@@ -54,31 +62,10 @@ def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
             ep[i] = ep[i - 1]
             af[i] = af[i - 1]
         return 1
-    # Trend reversal to bearish
-    sar[i] = ep[i - 1]
-    ep[i] = low[i]
-    af[i] = step
-    return -1
 
-
-@njit(cache=True)
-def update_bearish_sar(i: int, high: np.ndarray, low: np.ndarray,
-                      sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
-                      step: float, max_step: float) -> int:
-    """Update SAR values for bearish trend."""
-    new_sar = sar[i - 1] + af[i - 1] * (ep[i - 1] - sar[i - 1])
-
-    # Apply constraints FIRST before checking against high[i]
-    # Use high[i-1] and high[i-2] (prior period constraints) to avoid lookahead bias
-    if i > 1:
-        new_sar = max(new_sar, high[i - 1], high[i - 2])
-    else:
-        new_sar = max(new_sar, high[i - 1])
-
-    if high[i] < new_sar:
+    if not is_bullish and high[i] < new_sar:
         # Continue bearish trend
         sar[i] = new_sar
-
         if low[i] < ep[i - 1]:
             ep[i] = low[i]
             af[i] = min(af[i - 1] + step, max_step)
@@ -86,8 +73,28 @@ def update_bearish_sar(i: int, high: np.ndarray, low: np.ndarray,
             ep[i] = ep[i - 1]
             af[i] = af[i - 1]
         return -1
-    # Trend reversal to bullish
+
+    # Trend reversal
     sar[i] = ep[i - 1]
-    ep[i] = high[i]
     af[i] = step
+    if is_bullish:
+        ep[i] = low[i]
+        return -1
+    ep[i] = high[i]
     return 1
+
+
+@njit(cache=True)
+def update_bullish_sar(i: int, high: np.ndarray, low: np.ndarray,
+                      sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
+                      step: float, max_step: float) -> int:
+    """Update SAR values for bullish trend."""
+    return _advance_sar(i, high, low, sar, ep, af, step, max_step, True)
+
+
+@njit(cache=True)
+def update_bearish_sar(i: int, high: np.ndarray, low: np.ndarray,
+                      sar: np.ndarray, ep: np.ndarray, af: np.ndarray,
+                      step: float, max_step: float) -> int:
+    """Update SAR values for bearish trend."""
+    return _advance_sar(i, high, low, sar, ep, af, step, max_step, False)

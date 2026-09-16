@@ -256,7 +256,7 @@ class TestPositionMonitorSkipOnNoPrice:
         monitor.exit_monitor.seconds_until_next_tick = MagicMock(return_value=0)
         monitor.exit_monitor.check_hard_exits = AsyncMock(return_value=(None, {}))
         monitor.exit_monitor.due_hard_exits = MagicMock(return_value=[])
-        monitor.load_state = AsyncMock(return_value={})
+        monitor.exit_monitor.load_state = AsyncMock(return_value={})
         monitor.save_state = AsyncMock()
 
         # Run one iteration by calling _loop

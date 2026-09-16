@@ -270,7 +270,7 @@ class BaseAIClient(ABC):
         match = re.search(r"unknown (parameter|argument)[:\s]+['\"]?(\w+)['\"]?", error_msg, re.IGNORECASE)
         if match:
             return match.group(2)
-        # API error message format 2 (e.g. "Additional properties are not allowed ('top_k' was unexpected)")
+        # error format 2: "Additional properties are not allowed ('x' was unexpected)"
         match = re.search(r"Additional properties are not allowed \('(\w+)' was unexpected\)", error_msg)
         if match:
             return match.group(1)

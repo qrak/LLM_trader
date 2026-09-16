@@ -104,7 +104,7 @@ def support_resistance_numba_advanced(high, low, close, volume, length):
         return strong_support, strong_resistance
 
     # O(N) running sum replaces O(N*K) volume slice scans.
-    # NaN-safe: track nan_count so vol_sum recovers once NaN scrolls out of the window.
+    # nan_count lets the rolling volume sum recover after NaN leaves the window
     vol_sum = 0.0
     nan_count = 0
     for j in range(length):
@@ -167,7 +167,7 @@ def advanced_support_resistance_numba(high, low, close, volume, length=50, stren
         return strong_support, strong_resistance
 
     # O(N) running sum replaces O(N*K) volume slice scans.
-    # NaN-safe: track nan_count so vol_sum recovers once NaN scrolls out of the window.
+    # nan_count lets the rolling volume sum recover after NaN leaves the window
     vol_sum = 0.0
     nan_count = 0
     for j in range(length):

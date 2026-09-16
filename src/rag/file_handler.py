@@ -115,7 +115,7 @@ class RagFileHandler:
         if not articles:
             return
 
-        # Prevent saving more than once per second to avoid duplicate writes during shutdown
+        # at most one save per second (duplicate writes during shutdown)
         current_time = time.time()
         if current_time - self._last_news_save_time < 1:
             self.logger.debug("Skipping news save, too soon after previous save")

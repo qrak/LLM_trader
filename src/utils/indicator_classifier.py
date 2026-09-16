@@ -1,7 +1,7 @@
 """Pure-function indicator classification utilities.
 
 Converts raw technical indicator values into categorical labels used
-by TradingBrainService to build context query strings. These functions
+by the trading brain to build context query strings. These functions
 are the single source of truth for classification thresholds, shared
 between the AnalysisEngine (live trading) and the dashboard router.
 """
@@ -9,18 +9,20 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.loader import Config
-    from src.trading.data_models import ExitExecutionContext
+    from src.trading.data_models import (
+        ExitExecutionContext,
+        MarketSnapshot,
+    )
 
 
 EXIT_EXECUTION_UNKNOWN = "unknown"
 EXIT_EXECUTION_TYPES = {"soft", "hard", EXIT_EXECUTION_UNKNOWN}
 
-# Bolt: module-level frozenset constants enable O(1) membership check without allocation
 _NEUTRAL_SENTIMENTS = frozenset({"NEUTRAL", ""})
 _BALANCED_BIASES = frozenset({"BALANCED", ""})
 
 
-def _resolve_scalar(value: Any, default: float = 0.0) -> float:
+def resolve_scalar(value: Any, default: float = 0.0) -> float:
     """Extract scalar float from potentially array-like value (numpy, list)."""
     if value is None:
         return default
@@ -224,7 +226,7 @@ def build_context_string_from_technical_data(
 ) -> str:
     """Build the rich context string from raw technical indicators.
 
-    Produces the exact same format as TradingBrainService._build_rich_context_string
+    Produces the exact same format as BrainContextProvider.build_rich_context_string
     so that dashboard similarity queries are semantically identical to those
     issued during live trading.
 
@@ -249,55 +251,47 @@ def build_context_string_from_technical_data(
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
 
+    # Lazy import: importing src.trading.data_models at module level would pull
+    # src.trading.__init__ -> brain -> brain_context -> this module (cycle).
+    from src.trading.data_models import MarketSnapshot
     return build_context_string_from_classified_values(
-        trend_direction=trend_direction,
-        adx=adx,
-        volatility_level=volatility_level,
-        rsi_level=rsi_level,
-        macd_signal=macd_signal,
-        volume_state=volume_state,
-        bb_position=bb_position,
-        is_weekend=is_weekend,
-        market_sentiment=market_sentiment,
-        order_book_bias=order_book_bias,
-        exit_execution_context=exit_execution_context,
+        MarketSnapshot(
+            trend_direction=trend_direction,
+            adx=adx,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=volume_state,
+            bb_position=bb_position,
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+        )
     )
 
 
-def build_context_string_from_classified_values(
-    trend_direction: str,
-    adx: float,
-    volatility_level: str,
-    rsi_level: str,
-    macd_signal: str,
-    volume_state: str,
-    bb_position: str,
-    is_weekend: bool = False,
-    market_sentiment: str = "NEUTRAL",
-    order_book_bias: str = "BALANCED",
-    exit_execution_context: "ExitExecutionContext | None" = None,
-) -> str:
-    """Build the rich context string from already classified market values."""
-    adx_label = classify_adx_label(adx)
+def build_context_string_from_classified_values(snapshot: "MarketSnapshot") -> str:
+    """Build the rich context string from classified market values."""
+    adx_label = classify_adx_label(snapshot.adx)
 
-    context_parts = [trend_direction, adx_label, f"{volatility_level} Volatility"]
+    context_parts = [snapshot.trend_direction, adx_label, f"{snapshot.volatility_level} Volatility"]
 
-    if rsi_level != "NEUTRAL":
-        context_parts.append(f"RSI {rsi_level}")
-    if macd_signal != "NEUTRAL":
-        context_parts.append(f"MACD {macd_signal}")
-    if volume_state != "NORMAL":
-        context_parts.append(f"Volume {volume_state}")
-    if bb_position != "MIDDLE":
-        context_parts.append(f"Price at BB {bb_position}")
-    if is_weekend:
+    if snapshot.rsi_level != "NEUTRAL":
+        context_parts.append(f"RSI {snapshot.rsi_level}")
+    if snapshot.macd_signal != "NEUTRAL":
+        context_parts.append(f"MACD {snapshot.macd_signal}")
+    if snapshot.volume_state != "NORMAL":
+        context_parts.append(f"Volume {snapshot.volume_state}")
+    if snapshot.bb_position != "MIDDLE":
+        context_parts.append(f"Price at BB {snapshot.bb_position}")
+    if snapshot.is_weekend:
         context_parts.append("Weekend Low Volume")
-    # Bolt: O(1) frozenset lookup avoids set/tuple allocation on every context string build
-    if market_sentiment not in _NEUTRAL_SENTIMENTS:
-        context_parts.append(f"Sentiment {market_sentiment}")
-    if order_book_bias not in _BALANCED_BIASES:
-        context_parts.append(f"OrderBook {order_book_bias}")
-    exit_execution_text = format_exit_execution_context(exit_execution_context)
+    if snapshot.market_sentiment not in _NEUTRAL_SENTIMENTS:
+        context_parts.append(f"Sentiment {snapshot.market_sentiment}")
+    if snapshot.order_book_bias not in _BALANCED_BIASES:
+        context_parts.append(f"OrderBook {snapshot.order_book_bias}")
+    exit_execution_text = format_exit_execution_context(snapshot.exit_execution_context)
     if exit_execution_text:
         context_parts.append(exit_execution_text)
 
@@ -314,7 +308,7 @@ def build_query_document_from_technical_data(
 ) -> str:
     """Build an enriched query document for vector similarity search.
 
-    Produces the same format as TradingBrainService._build_query_document so
+    Produces the same format as BrainContextProvider.build_query_document so
     that dashboard similarity queries use the richer embedding format that
     mirrors stored experience documents.
 
@@ -338,100 +332,72 @@ def build_query_document_from_technical_data(
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
 
+    # Lazy import: importing src.trading.data_models at module level would pull
+    # src.trading.__init__ -> brain -> brain_context -> this module (cycle).
+    from src.trading.data_models import MarketSnapshot
     return build_query_document_from_classified_values(
-        trend_direction=classify_trend_direction(technical_data),
-        adx=adx,
-        rsi=rsi,
-        volatility_level=volatility_level,
-        rsi_level=rsi_level,
-        macd_signal=macd_signal,
-        volume_state=classify_volume_state(technical_data),
-        bb_position=bb_position,
-        is_weekend=is_weekend,
-        market_sentiment=market_sentiment,
-        order_book_bias=order_book_bias,
-        exit_execution_context=exit_execution_context,
-        choppiness=_resolve_scalar(technical_data.get("choppiness")),
-        trend_strength=_resolve_scalar(technical_data.get("trend_strength")),
-        atr_percentage=_resolve_scalar(technical_data.get("atr_percent")),
-        mfi=_resolve_scalar(technical_data.get("mfi")),
-        cmf=_resolve_scalar(technical_data.get("cmf")),
-        vwap=_resolve_scalar(technical_data.get("vwap")),
-        supertrend_direction=_classify_st_dir(_resolve_scalar(technical_data.get("supertrend_direction"))),
+        MarketSnapshot(
+            trend_direction=classify_trend_direction(technical_data),
+            adx=adx,
+            rsi=rsi,
+            volatility_level=volatility_level,
+            rsi_level=rsi_level,
+            macd_signal=macd_signal,
+            volume_state=classify_volume_state(technical_data),
+            bb_position=bb_position,
+            is_weekend=is_weekend,
+            market_sentiment=market_sentiment,
+            order_book_bias=order_book_bias,
+            exit_execution_context=exit_execution_context,
+            choppiness=resolve_scalar(technical_data.get("choppiness")),
+            trend_strength=resolve_scalar(technical_data.get("trend_strength")),
+            atr_percentage=resolve_scalar(technical_data.get("atr_percent")),
+            mfi=resolve_scalar(technical_data.get("mfi")),
+            cmf=resolve_scalar(technical_data.get("cmf")),
+            vwap=resolve_scalar(technical_data.get("vwap")),
+            supertrend_direction=_classify_st_dir(resolve_scalar(technical_data.get("supertrend_direction"))),
+        )
     )
 
 
-def build_query_document_from_classified_values(
-    trend_direction: str,
-    adx: float,
-    rsi: float,
-    volatility_level: str,
-    rsi_level: str,
-    macd_signal: str,
-    volume_state: str,
-    bb_position: str,
-    is_weekend: bool = False,
-    market_sentiment: str = "NEUTRAL",
-    order_book_bias: str = "BALANCED",
-    exit_execution_context: "ExitExecutionContext | None" = None,
-    # --- NEW: enriched query fields for better semantic matching (July 2026) ---
-    choppiness: float | None = None,
-    trend_strength: float = 0.0,
-    atr_percentage: float = 0.0,
-    mfi: float | None = None,
-    cmf: float | None = None,
-    vwap: float = 0.0,
-    supertrend_direction: str = "NEUTRAL",
-) -> str:
-    """Build an enriched vector query document from already classified values."""
-    context_str = build_context_string_from_classified_values(
-        trend_direction=trend_direction,
-        adx=adx,
-        volatility_level=volatility_level,
-        rsi_level=rsi_level,
-        macd_signal=macd_signal,
-        volume_state=volume_state,
-        bb_position=bb_position,
-        is_weekend=is_weekend,
-        market_sentiment=market_sentiment,
-        order_book_bias=order_book_bias,
-        exit_execution_context=exit_execution_context,
-    )
-    adx_label = classify_adx_label(adx)
+def build_query_document_from_classified_values(snapshot: "MarketSnapshot") -> str:
+    """Build an enriched vector query document from classified market values."""
+    context_str = build_context_string_from_classified_values(snapshot)
+    adx_label = classify_adx_label(snapshot.adx)
 
     indicator_parts = [
-        f"ADX={adx:.1f} ({adx_label})",
-        f"RSI={rsi:.1f} ({rsi_level})",
-        f"Vol={volatility_level}",
-        f"MACD={macd_signal}",
-        f"BB={bb_position}",
+        f"ADX={snapshot.adx:.1f} ({adx_label})",
+        f"RSI={snapshot.rsi:.1f} ({snapshot.rsi_level})",
+        f"Vol={snapshot.volatility_level}",
+        f"MACD={snapshot.macd_signal}",
+        f"BB={snapshot.bb_position}",
     ]
-    if choppiness is not None and choppiness > 0:
-        chop_label = "Trending" if choppiness < 38 else "Choppy" if choppiness > 62 else "Transitional"
-        indicator_parts.append(f"Chop={choppiness:.0f} ({chop_label})")
-    if volume_state and volume_state != "NORMAL":
-        indicator_parts.append(f"VolState={volume_state}")
-    if trend_strength > 0:
-        indicator_parts.append(f"TrendStr={trend_strength:.0f}")
-    if rsi_level != "NEUTRAL":
-        indicator_parts.append(f"RSI={rsi_level}")
-    if supertrend_direction not in ("NEUTRAL", ""):
-        indicator_parts.append(f"STrend={supertrend_direction}")
+    if snapshot.choppiness is not None and snapshot.choppiness > 0:
+        chop_label = "Trending" if snapshot.choppiness < 38 else "Choppy" if snapshot.choppiness > 62 else "Transitional"
+        indicator_parts.append(f"Chop={snapshot.choppiness:.0f} ({chop_label})")
+    if snapshot.volume_state and snapshot.volume_state != "NORMAL":
+        indicator_parts.append(f"VolState={snapshot.volume_state}")
+    if snapshot.trend_strength > 0:
+        indicator_parts.append(f"TrendStr={snapshot.trend_strength:.0f}")
+    if snapshot.rsi_level != "NEUTRAL":
+        indicator_parts.append(f"RSI={snapshot.rsi_level}")
+    if snapshot.supertrend_direction not in ("NEUTRAL", ""):
+        indicator_parts.append(f"STrend={snapshot.supertrend_direction}")
 
     structure_parts: list[str] = []
-    if market_sentiment not in ("NEUTRAL", ""):
-        structure_parts.append(f"Sentiment={market_sentiment}")
-    if order_book_bias not in ("BALANCED", ""):
-        structure_parts.append(f"OB={order_book_bias}")
-    exit_execution_text = format_exit_execution_context(exit_execution_context)
+    if snapshot.market_sentiment not in ("NEUTRAL", ""):
+        structure_parts.append(f"Sentiment={snapshot.market_sentiment}")
+    if snapshot.order_book_bias not in ("BALANCED", ""):
+        structure_parts.append(f"OB={snapshot.order_book_bias}")
+    exit_execution_text = format_exit_execution_context(snapshot.exit_execution_context)
     if exit_execution_text:
         structure_parts.append(exit_execution_text)
-    if vwap > 0:
-        structure_parts.append(f"VWAP={vwap:.2f}")
-    if mfi is not None:
-        structure_parts.append(f"MFI={mfi:.1f}")
-    if cmf is not None:
-        structure_parts.append(f"CMF={cmf:+.3f}")
+    if snapshot.vwap > 0:
+        structure_parts.append(f"VWAP={snapshot.vwap:.2f}")
+    if snapshot.mfi is not None:
+        structure_parts.append(f"MFI={snapshot.mfi:.1f}")
+    if snapshot.cmf is not None:
+        structure_parts.append(f"CMF={snapshot.cmf:+.3f}")
 
     lines = [context_str, f"Indicators: {' | '.join(indicator_parts)}"]
     if structure_parts:

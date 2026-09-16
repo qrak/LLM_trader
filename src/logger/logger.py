@@ -17,7 +17,7 @@ from rich.traceback import install as install_rich_traceback
 install_rich_traceback()
 
 # Module-level fallback crash log path (set by install_crash_handler).
-# Written to directly when the logging system may be unavailable (shutdown/unraisable).
+# direct write path when logging is unavailable (shutdown/unraisable)
 _CRASH_LOG_PATH: str = ""
 
 
@@ -116,7 +116,7 @@ class Logger(logging.Logger):
         self,
         logger_name: str = "",
         log_filename_prefix: str = "",
-        log_dir: str | None = None,  # type: ignore[arg-type]
+        log_dir: str | None = None,
         logger_debug: bool = False,
         console: Console | None = None,
     ) -> None:
@@ -199,7 +199,6 @@ class Logger(logging.Logger):
         self.addHandler(file_handler)
 
     def _add_error_file_handler(self, error_log_dir):
-        # We manually specify errors.log here, though the handler logic also enforces it
         error_log_filename = os.path.join(error_log_dir, "errors.log")
         error_file_handler = DailyRotatingFileHandler(
             error_log_filename,

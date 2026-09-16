@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.trading.audit import AuditTrail
 from src.trading.data_models import MarketConditions
 from src.trading.guards import GuardResult
 from src.trading.guards.configured_symbol import ConfiguredSymbolGuard
@@ -57,7 +56,6 @@ def _make_intent() -> OrderIntent:
 def _make_strategy(
     *,
     guard_pipeline: GuardPipeline | None = None,
-    audit_trail: AuditTrail | None = None,
     config_overrides: dict | None = None,
 ) -> TradingStrategy:
     persistence = MagicMock()
@@ -114,7 +112,6 @@ def _make_strategy(
         config=config,
         position_extractor=MagicMock(),
         guard_pipeline=guard_pipeline,
-        audit_trail=audit_trail,
     )
 
 
@@ -126,7 +123,7 @@ def test_order_intent_can_be_rejected_from_initial_intent_state() -> None:
     assert intent.state is OrderLifecycle.REJECTED
 
 
-def test_guard_pipeline_returns_fail_fast_check_results_without_audit_side_effects() -> None:
+def test_guard_pipeline_returns_fail_fast_check_results() -> None:
     pipeline = GuardPipeline([PassingGuard(), RejectingGuard()])
 
     results = pipeline.evaluate(_make_intent(), capital=10000.0, config=SimpleNamespace())
@@ -248,12 +245,8 @@ def test_configured_symbol_guard_only_allows_configured_pair() -> None:
 
 
 @pytest.mark.asyncio
-async def test_strategy_rejected_guard_records_audit_and_skips_risk_calculation() -> None:
-    audit_trail = AuditTrail()
-    strategy = _make_strategy(
-        guard_pipeline=GuardPipeline([RejectingGuard()]),
-        audit_trail=audit_trail,
-    )
+async def test_strategy_rejected_guard_skips_risk_calculation() -> None:
+    strategy = _make_strategy(guard_pipeline=GuardPipeline([RejectingGuard()]))
 
     decision = await strategy._open_new_position(
         signal="BUY",
@@ -268,18 +261,15 @@ async def test_strategy_rejected_guard_records_audit_and_skips_risk_calculation(
     )
 
     assert decision.action == "HOLD"
+    assert "rejecting_guard: blocked by test guard" in decision.reasoning
     strategy.risk_manager.calculate_entry_parameters.assert_not_called()
-    assert [record.event_type for record in audit_trail.all_records] == [
-        "intent_created",
-        "guard_check",
-        "rejection",
-    ]
-    assert audit_trail.all_records[-1].result == "rejected"
+    strategy.logger.warning.assert_any_call(
+        "Order REJECTED by guard pipeline: %s", "rejecting_guard: blocked by test guard"
+    )
 
 
 @pytest.mark.asyncio
 async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp_path) -> None:
-    audit_trail = AuditTrail()
     pipeline = GuardPipeline(
         [
             ConfiguredSymbolGuard(),
@@ -289,7 +279,6 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
     )
     strategy = _make_strategy(
         guard_pipeline=pipeline,
-        audit_trail=audit_trail,
         config_overrides={"DATA_DIR": str(tmp_path)},
     )
 
@@ -306,20 +295,13 @@ async def test_strategy_with_production_guard_pipeline_rejects_over_cap_size(tmp
     )
 
     assert decision.action == "HOLD"
+    assert "max_position_size" in decision.reasoning
     strategy.risk_manager.calculate_entry_parameters.assert_not_called()
-    assert [record.actor for record in audit_trail.all_records] == [
-        "TradingStrategy",
-        "configured_symbol",
-        "max_position_size",
-        "GuardPipeline",
-    ]
-    assert audit_trail.all_records[-1].result == "rejected"
 
 
 @pytest.mark.asyncio
-async def test_strategy_without_guards_records_approval_and_execution_audit() -> None:
-    audit_trail = AuditTrail()
-    strategy = _make_strategy(audit_trail=audit_trail)
+async def test_strategy_without_guards_executes_and_persists_the_entry() -> None:
+    strategy = _make_strategy()
 
     decision = await strategy._open_new_position(
         signal="BUY",
@@ -334,12 +316,7 @@ async def test_strategy_without_guards_records_approval_and_execution_audit() ->
     )
 
     assert decision.action == "BUY"
-    assert [record.event_type for record in audit_trail.all_records] == [
-        "intent_created",
-        "approval",
-        "execution",
-    ]
-    assert audit_trail.all_records[-1].result == "executed"
+    strategy.persistence.async_save_position.assert_awaited_once()
 
 
 @pytest.mark.asyncio

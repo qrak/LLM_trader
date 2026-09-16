@@ -104,22 +104,17 @@ def _find_matching_indicator_extrema(
 
 
 @njit(cache=True)
-def detect_bullish_divergence_numba(
+def _detect_divergence_numba(
     prices: np.ndarray,
     indicator: np.ndarray,
-    min_spacing: int = 5
+    min_spacing: int,
+    bullish: bool
 ) -> tuple[bool, int, int, float, float, float, float]:
     """
-    Detect bullish divergence between price and indicator.
+    Detect price/indicator divergence (single shared implementation).
 
-    Bullish divergence = Price making lower low, indicator making higher low
-    This suggests weakening bearish momentum and potential reversal up.
-    Scans ENTIRE array for the most recent divergence pattern.
-
-    Args:
-        prices: Price values (most recent last)
-        indicator: Indicator values (RSI, MACD, Stoch, etc.)
-        min_spacing: Minimum periods between the two lows
+    bullish=True:  price makes a lower low while the indicator makes a higher low.
+    bullish=False: price makes a higher high while the indicator makes a lower high.
 
     Returns:
         (divergence_found, first_idx, second_idx,
@@ -128,70 +123,78 @@ def detect_bullish_divergence_numba(
     if len(prices) < 10 or len(indicator) < 10:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
 
-    # Scan ENTIRE array for divergences with conservative lookback for 4h timeframe
-    # Lookback of 10 reduces false positives from minor price fluctuations
-    # Find local minima in both price and indicator
-    price_low_indices, price_low_values = _find_local_extrema_numba(
-        prices, lookback=10, find_maxima=False
-    )
-    indicator_low_indices, indicator_low_values = _find_local_extrema_numba(
-        indicator, lookback=10, find_maxima=False
-    )
+    # Scan ENTIRE array with a conservative lookback for the 4h timeframe:
+    # 10 periods reduces false positives from minor price fluctuations.
+    price_ext_idx, price_ext_values = _find_local_extrema_numba(prices, 10, not bullish)
+    indicator_ext_idx, indicator_ext_values = _find_local_extrema_numba(indicator, 10, not bullish)
 
-    if len(price_low_indices) < 2 or len(indicator_low_indices) < 2:
+    if len(price_ext_idx) < 2 or len(indicator_ext_idx) < 2:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
 
-    # Check most recent pair of lows
-    # Price: second low should be lower than first low
-    # Indicator: second low should be higher than first low
+    for i in range(len(price_ext_idx) - 1, 0, -1):
+        second_price_idx = price_ext_idx[i]
+        first_price_idx = price_ext_idx[i - 1]
 
-    for i in range(len(price_low_indices) - 1, 0, -1):
-        second_price_idx = price_low_indices[i]
-        first_price_idx = price_low_indices[i - 1]
-
-        # Check spacing
         if second_price_idx - first_price_idx < min_spacing:
             continue
 
-        second_price = price_low_values[i]
-        first_price = price_low_values[i - 1]
+        second_price = price_ext_values[i]
+        first_price = price_ext_values[i - 1]
 
-        # Price must make lower low
-        if second_price >= first_price:
+        # Price must make the lower low (bullish) / higher high (bearish)
+        if bullish:
+            if second_price >= first_price:
+                continue
+            move_pct = (first_price - second_price) / first_price * 100
+        else:
+            if second_price <= first_price:
+                continue
+            move_pct = (second_price - first_price) / first_price * 100
+
+        # Require a significant price move (min 0.5%) to filter trivial divergences
+        if move_pct < 0.5:
             continue
 
-        # Require significant price drop (min 0.5%) to filter trivial divergences
-        price_drop_pct = (first_price - second_price) / first_price * 100
-        if price_drop_pct < 0.5:
-            continue
-
-        # Find corresponding indicator lows around same times
         first_indicator_idx, first_indicator_value = _find_matching_indicator_extrema(
-            indicator_low_indices, indicator_low_values, first_price_idx
+            indicator_ext_idx, indicator_ext_values, first_price_idx
         )
         if first_indicator_idx == -1:
             continue
 
         second_indicator_idx, second_indicator_value = _find_matching_indicator_extrema(
-            indicator_low_indices, indicator_low_values, second_price_idx
+            indicator_ext_idx, indicator_ext_values, second_price_idx
         )
         if second_indicator_idx == -1:
             continue
 
-        # Indicator must make higher low (divergence!)
-        if second_indicator_value > first_indicator_value:
-            # Bullish divergence detected!
-            return (
-                True,
-                first_price_idx,
-                second_price_idx,
-                first_price,
-                second_price,
-                first_indicator_value,
-                second_indicator_value
-            )
+        # Indicator must move the opposite way — that is the divergence
+        if bullish:
+            if second_indicator_value <= first_indicator_value:
+                continue
+        elif second_indicator_value >= first_indicator_value:
+            continue
+
+        return (
+            True,
+            first_price_idx,
+            second_price_idx,
+            first_price,
+            second_price,
+            first_indicator_value,
+            second_indicator_value
+        )
 
     return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
+
+
+@njit(cache=True)
+def detect_bullish_divergence_numba(
+    prices: np.ndarray,
+    indicator: np.ndarray,
+    min_spacing: int = 5
+) -> tuple[bool, int, int, float, float, float, float]:
+    """Detect bullish divergence (price lower low, indicator higher low)."""
+    return _detect_divergence_numba(prices, indicator, min_spacing, True)
 
 
 @njit(cache=True)
@@ -200,86 +203,5 @@ def detect_bearish_divergence_numba(
     indicator: np.ndarray,
     min_spacing: int = 5
 ) -> tuple[bool, int, int, float, float, float, float]:
-    """
-    Detect bearish divergence between price and indicator.
-
-    Bearish divergence = Price making higher high, indicator making lower high
-    This suggests weakening bullish momentum and potential reversal down.
-    Scans ENTIRE array for the most recent divergence pattern.
-
-    Args:
-        prices: Price values (most recent last)
-        indicator: Indicator values (RSI, MACD, Stoch, etc.)
-        min_spacing: Minimum periods between the two highs
-
-    Returns:
-        (divergence_found, first_idx, second_idx,
-         first_price, second_price, first_indicator, second_indicator)
-    """
-    if len(prices) < 10 or len(indicator) < 10:
-        return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
-
-    # Scan ENTIRE array for divergences with conservative lookback for 4h timeframe
-    # Lookback of 10 reduces false positives from minor price fluctuations
-    # Find local maxima in both price and indicator
-    price_high_indices, price_high_values = _find_local_extrema_numba(
-        prices, lookback=10, find_maxima=True
-    )
-    indicator_high_indices, indicator_high_values = _find_local_extrema_numba(
-        indicator, lookback=10, find_maxima=True
-    )
-
-    if len(price_high_indices) < 2 or len(indicator_high_indices) < 2:
-        return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
-
-    # Check most recent pair of highs
-    # Price: second high should be higher than first high
-    # Indicator: second high should be lower than first high
-
-    for i in range(len(price_high_indices) - 1, 0, -1):
-        second_price_idx = price_high_indices[i]
-        first_price_idx = price_high_indices[i - 1]
-
-        # Check spacing
-        if second_price_idx - first_price_idx < min_spacing:
-            continue
-
-        second_price = price_high_values[i]
-        first_price = price_high_values[i - 1]
-
-        # Price must make higher high
-        if second_price <= first_price:
-            continue
-
-        # Require significant price rise (min 0.5%) to filter trivial divergences
-        price_rise_pct = (second_price - first_price) / first_price * 100
-        if price_rise_pct < 0.5:
-            continue
-
-        # Find corresponding indicator highs around same times
-        first_indicator_idx, first_indicator_value = _find_matching_indicator_extrema(
-            indicator_high_indices, indicator_high_values, first_price_idx
-        )
-        if first_indicator_idx == -1:
-            continue
-
-        second_indicator_idx, second_indicator_value = _find_matching_indicator_extrema(
-            indicator_high_indices, indicator_high_values, second_price_idx
-        )
-        if second_indicator_idx == -1:
-            continue
-
-        # Indicator must make lower high (divergence!)
-        if second_indicator_value < first_indicator_value:
-            # Bearish divergence detected!
-            return (
-                True,
-                first_price_idx,
-                second_price_idx,
-                first_price,
-                second_price,
-                first_indicator_value,
-                second_indicator_value
-            )
-
-    return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
+    """Detect bearish divergence (price higher high, indicator lower high)."""
+    return _detect_divergence_numba(prices, indicator, min_spacing, False)

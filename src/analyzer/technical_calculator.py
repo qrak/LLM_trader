@@ -242,7 +242,6 @@ class TechnicalCalculator:
         }
 
         # Ensure we're not returning numpy types that might not be recognized properly
-        # Optimization: math.isnan is ~13x faster than np.isnan for scalar values
         result = {k: float(v) if isinstance(v, (np.floating, float)) and not math.isnan(v) else v
                   for k, v in result.items() if k not in ("sma_values", "volume_sma_values")}
 
@@ -258,7 +257,7 @@ class TechnicalCalculator:
         weekly_price_change, weekly_volume_change = self._compute_change_metrics(ti_weekly, available_weeks)
         weekly_volatility = self._compute_volatility(ti_weekly, available_weeks)
 
-        # Pre-calculate SMA arrays for crossover detection (avoid redundant calculation in macro analysis)
+        # SMA arrays reused by macro/crossover analysis
         sma_arrays = {}
         if available_weeks >= 50:
             sma_arrays["sma_50"] = ti_weekly.sma(ti_weekly.close, 50)
@@ -288,7 +287,7 @@ class TechnicalCalculator:
     def _compute_weekly_macro_trend_analysis(
         self, ti: TechnicalIndicators, available_weeks: int,
         weekly_sma_values: dict[int, float], ohlcv_data: np.ndarray, price_change_pct: float,
-        sma_arrays: dict[str, np.ndarray] | None = None  # type: ignore
+        sma_arrays: dict[str, np.ndarray] | None = None
     ) -> dict[str, Any]:
         """Weekly macro trend using 200W SMA methodology with timestamps.
 
@@ -422,7 +421,7 @@ class TechnicalCalculator:
                 # Use technical indicators directly instead of extracted arrays
                 sma = ti.sma(ti.close, period)
                 vol_sma = ti.sma(ti.volume, period)
-                # Optimization: math.isnan is significantly faster than np.isnan for scalar values (like sma[-1])
+                # math.isnan is much faster than np.isnan on scalars
                 if not math.isnan(sma[-1]):
                     sma_values[period] = float(sma[-1])
                 if not math.isnan(vol_sma[-1]):

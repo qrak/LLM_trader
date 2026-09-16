@@ -237,51 +237,6 @@ class SQLiteTradeHistory:
             finally:
                 conn.close()
 
-    def get_stats(self) -> dict[str, Any]:
-        """Return aggregate statistics for dashboard display."""
-        with self._lock:
-            conn = self._get_conn()
-            try:
-                total = conn.execute(
-                    "SELECT COUNT(*) FROM trade_history"
-                ).fetchone()[0]
-
-                by_action = {
-                    r["action"]: r["cnt"]
-                    for r in conn.execute(
-                        "SELECT action, COUNT(*) as cnt FROM trade_history GROUP BY action"
-                    ).fetchall()
-                }
-
-                pnl = conn.execute(
-                    "SELECT "
-                    "  COALESCE(SUM(CASE WHEN action LIKE 'CLOSE%' THEN "
-                    "    CAST(SUBSTR(reasoning, INSTR(reasoning, 'P&L: ') + 5, "
-                    "      INSTR(SUBSTR(reasoning, INSTR(reasoning, 'P&L: ') + 5), '%') - 1) "
-                    "  AS REAL) ELSE 0 END), 0) as total_pnl "
-                    "FROM trade_history"
-                ).fetchone()["total_pnl"] or 0.0
-
-                first_ts = conn.execute(
-                    "SELECT MIN(timestamp) FROM trade_history"
-                ).fetchone()[0]
-                last_ts = conn.execute(
-                    "SELECT MAX(timestamp) FROM trade_history"
-                ).fetchone()[0]
-
-                return {
-                    "total_trades": total,
-                    "by_action": by_action,
-                    "total_pnl_pct": round(pnl, 2),
-                    "first_trade": first_ts,
-                    "last_trade": last_ts,
-                }
-            except Exception as e:  # noqa: BLE001
-                self._logger.error("Stats query failed: %s", e)
-                return {"total_trades": 0, "error": str(e)}
-            finally:
-                conn.close()
-
     def export_json(self) -> list[dict[str, Any]]:
         """Export full history as a JSON-serializable list."""
         with self._lock:

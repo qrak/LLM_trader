@@ -18,7 +18,6 @@ from src.utils.timeframe_validator import TimeframeValidator
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
-# Bolt: module-level constant avoids allocating dictionary on every staleness calculation
 _STALENESS_TARGET_HOURS: dict[str, int] = {
     "rsi": 40,           # Momentum: ~40h
     "macd": 40,          # Momentum: ~40h
@@ -83,81 +82,72 @@ class TechnicalFormatter:
         - Volatility expansion/contraction (High/Low range)
         - Volume confirmation (Volume trend)
         """
-        try:
-
-            # Get OHLCV data from context
-            ohlcv_data = context.ohlcv_candles
-            if ohlcv_data is None or len(ohlcv_data) < 2:
-                # Fallback to simple format
-                return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
-
-            # Extract last 24 candles (or all available)
-            lookback = 24
-            ohlcv_slice = ohlcv_data[-lookback:] if len(ohlcv_data) >= lookback else ohlcv_data
-
-            # Extract OHLCV columns (timestamp, open, high, low, close, volume)
-            opens = ohlcv_slice[:, 1]
-            highs = ohlcv_slice[:, 2]
-            lows = ohlcv_slice[:, 3]
-            closes = ohlcv_slice[:, 4]
-            volumes = ohlcv_slice[:, 5]
-
-            # Calculate close trend
-            close_delta = float(closes[-1] - closes[0])
-            close_delta_pct = (close_delta / closes[0] * 100) if closes[0] != 0 else 0
-
-            # Count green/red candles vectorially
-            green_candles = int(np.count_nonzero(closes >= opens))
-            red_candles = len(closes) - green_candles
-
-            # Determine close trend text
-            if abs(close_delta_pct) < 1.0:
-                close_trend = f"→FLAT ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
-            elif close_delta_pct > 0:
-                close_trend = f"↑RISING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
-            else:
-                close_trend = f"↓FALLING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
-
-            # Calculate volume trend
-            volume_delta = float(volumes[-1] - volumes[0])
-            volume_delta_pct = (volume_delta / volumes[0] * 100) if volumes[0] != 0 else 0
-
-            if abs(volume_delta_pct) < 10.0:
-                volume_trend = f"→STABLE ({volume_delta_pct:+.0f}%)"
-            elif volume_delta_pct > 0:
-                volume_trend = f"↑INCREASING ({volume_delta_pct:+.0f}%)"
-            else:
-                volume_trend = f"↓DECLINING ({volume_delta_pct:+.0f}%)"
-
-            # Calculate High-Low range evolution (volatility indicator)
-            hl_ranges = highs - lows
-            hl_range_current = float(hl_ranges[-1])
-            hl_range_avg = float(np.mean(hl_ranges))
-            range_expansion = ((hl_range_current - hl_range_avg) / hl_range_avg * 100) if hl_range_avg != 0 else 0
-
-            # Volatility assessment
-            if abs(range_expansion) < 15.0:
-                volatility_text = "NORMAL"
-            elif range_expansion > 0:
-                volatility_text = f"EXPANDING (+{range_expansion:.0f}%)"
-            else:
-                volatility_text = f"CONTRACTING ({range_expansion:.0f}%)"
-
-            # Build OHLCV section with text-based descriptions
-            price_action = (
-                "## Price Action:\n"
-                f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend: {close_trend}\n"
-                f"- Range: {self.format_utils.fmt(hl_range_current)} ({volatility_text}) | H:{self.format_utils.fmt(float(highs[-1]))} L:{self.format_utils.fmt(float(lows[-1]))}\n"
-                f"- Volume: {volume_trend} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
-            )
-
-            return price_action
-
-        except Exception as e:  # noqa: BLE001
-            if self.logger:
-                self.logger.debug("Error formatting price action with OHLCV: %s", e)
+        ohlcv_data = context.ohlcv_candles
+        if ohlcv_data is None or len(ohlcv_data) < 2:
             # Fallback to simple format
             return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+
+        # Extract last 24 candles (or all available)
+        lookback = 24
+        ohlcv_slice = ohlcv_data[-lookback:] if len(ohlcv_data) >= lookback else ohlcv_data
+
+        # Extract OHLCV columns (timestamp, open, high, low, close, volume)
+        opens = ohlcv_slice[:, 1]
+        highs = ohlcv_slice[:, 2]
+        lows = ohlcv_slice[:, 3]
+        closes = ohlcv_slice[:, 4]
+        volumes = ohlcv_slice[:, 5]
+
+        # Calculate close trend
+        close_delta = float(closes[-1] - closes[0])
+        close_delta_pct = (close_delta / closes[0] * 100) if closes[0] != 0 else 0
+
+        # Count green/red candles vectorially
+        green_candles = int(np.count_nonzero(closes >= opens))
+        red_candles = len(closes) - green_candles
+
+        # Determine close trend text
+        if abs(close_delta_pct) < 1.0:
+            close_trend = f"→FLAT ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
+        elif close_delta_pct > 0:
+            close_trend = f"↑RISING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
+        else:
+            close_trend = f"↓FALLING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
+
+        # Calculate volume trend
+        volume_delta = float(volumes[-1] - volumes[0])
+        volume_delta_pct = (volume_delta / volumes[0] * 100) if volumes[0] != 0 else 0
+
+        if abs(volume_delta_pct) < 10.0:
+            volume_trend = f"→STABLE ({volume_delta_pct:+.0f}%)"
+        elif volume_delta_pct > 0:
+            volume_trend = f"↑INCREASING ({volume_delta_pct:+.0f}%)"
+        else:
+            volume_trend = f"↓DECLINING ({volume_delta_pct:+.0f}%)"
+
+        # Calculate High-Low range evolution (volatility indicator)
+        hl_ranges = highs - lows
+        hl_range_current = float(hl_ranges[-1])
+        hl_range_avg = float(np.mean(hl_ranges))
+        range_expansion = ((hl_range_current - hl_range_avg) / hl_range_avg * 100) if hl_range_avg != 0 else 0
+
+        # Volatility assessment
+        if abs(range_expansion) < 15.0:
+            volatility_text = "NORMAL"
+        elif range_expansion > 0:
+            volatility_text = f"EXPANDING (+{range_expansion:.0f}%)"
+        else:
+            volatility_text = f"CONTRACTING ({range_expansion:.0f}%)"
+
+        # Build OHLCV section with text-based descriptions
+        price_action = (
+            "## Price Action:\n"
+            f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend: {close_trend}\n"
+            f"- Range: {self.format_utils.fmt(hl_range_current)} ({volatility_text}) | H:{self.format_utils.fmt(float(highs[-1]))} L:{self.format_utils.fmt(float(lows[-1]))}\n"
+            f"- Volume: {volume_trend} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
+        )
+
+        return price_action
 
     def format_momentum_section(self, td: dict) -> str:
         """Format the momentum indicators section with temporal context (last 12 candles)."""
@@ -268,99 +258,86 @@ class TechnicalFormatter:
             str: Formatted patterns section
         """
         if context.technical_patterns:
-            try:
-                pattern_summaries = []
-                last_candle_index = len(context.ohlcv_candles) - 1 if context.ohlcv_candles is not None else None
-                # Deduplication: track most recent pattern per (category, base_type)
-                # This prevents showing redundant signals like:
-                #   - Stochastic bull × 2 bars ago + Stochastic bear × 3 bars ago
-                # Instead, only the most recent crossover per indicator is shown.
-                dedup_tracker: dict[tuple[str, str], dict] = {}
-                for category, patterns_list in context.technical_patterns.items():
-                    if patterns_list:  # Only process non-empty pattern lists
-                        for pattern_dict in patterns_list:
-                            # Filter patterns based on recency relative to total candles analyzed
-                            # Strategy: Show patterns from most recent 20% of data (e.g., last 200 of 999 candles)
-                            # This makes filtering adaptive to different timeframes and candle counts
-                            pattern_index = pattern_dict.get("index", None)
-                            # Determine recency threshold based on pattern type and data size
-                            if last_candle_index is not None and pattern_index is not None:
-                                total_candles = last_candle_index + 1
-                                periods_ago = last_candle_index - pattern_index
+            pattern_summaries = []
+            last_candle_index = len(context.ohlcv_candles) - 1 if context.ohlcv_candles is not None else None
+            # dedup: keep only the most recent pattern per (category, base_type)
+            dedup_tracker: dict[tuple[str, str], dict] = {}
+            for category, patterns_list in context.technical_patterns.items():
+                if patterns_list:  # Only process non-empty pattern lists
+                    for pattern_dict in patterns_list:
+                        # Filter patterns based on recency relative to total candles analyzed
+                        pattern_index = pattern_dict.get("index", None)
+                        # Determine recency threshold based on pattern type and data size
+                        if last_candle_index is not None and pattern_index is not None:
+                            total_candles = last_candle_index + 1
+                            periods_ago = last_candle_index - pattern_index
 
-                                # Category-specific ABSOLUTE thresholds (in bars) based on timeframe
-                                # These ensure stale patterns are filtered regardless of data window size
-                                abs_threshold = self._calculate_staleness_threshold(category, timeframe)
+                            # Category-specific ABSOLUTE thresholds (in bars) based on timeframe
+                            # These ensure stale patterns are filtered regardless of data window size
+                            abs_threshold = self._calculate_staleness_threshold(category, timeframe)
 
-                                # Calculate percentage-based threshold (existing logic)
-                                if category == "ma_crossover":
-                                    pct_threshold = int(total_candles * 0.3)
-                                elif category in ["volatility", "volume"]:
-                                    pct_threshold = max(10, int(total_candles * 0.05))
-                                elif category == "divergence":
-                                    pct_threshold = max(20, int(total_candles * 0.10))
-                                else:
-                                    pct_threshold = max(20, int(total_candles * 0.15))
-
-                                # Use the MORE RESTRICTIVE of the two thresholds
-                                recency_threshold = min(abs_threshold, pct_threshold)
-
-                                is_recent = periods_ago <= recency_threshold
+                            # Calculate percentage-based threshold (existing logic)
+                            if category == "ma_crossover":
+                                pct_threshold = int(total_candles * 0.3)
+                            elif category in ["volatility", "volume"]:
+                                pct_threshold = max(10, int(total_candles * 0.05))
+                            elif category == "divergence":
+                                pct_threshold = max(20, int(total_candles * 0.10))
                             else:
-                                # If no index info, include the pattern
-                                is_recent = True
+                                pct_threshold = max(20, int(total_candles * 0.15))
 
-                            if is_recent:
-                                # Extract base type for deduplication
-                                # e.g., 'stoch_bullish_crossover' -> 'stoch_crossover'
-                                # This groups bullish/bearish variants together
-                                pattern_type = pattern_dict.get("type", "")
-                                base_type = self._get_dedup_key(category, pattern_type)
-                                dedup_key = (category, base_type)
-                                periods_ago_val = pattern_dict.get("details", {}).get("periods_ago", 999)
-                                # Keep only the most recent pattern per dedup key
-                                if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]["periods"]:
-                                    dedup_tracker[dedup_key] = {
-                                        "pattern": pattern_dict,
-                                        "periods": periods_ago_val,
-                                        "category": category
-                                    }
-                # Convert dedup_tracker to pattern_summaries
-                for dedup_key, entry in dedup_tracker.items():
-                    pattern_dict = entry["pattern"]
-                    category = entry["category"]
-                    description = pattern_dict.get("description", f"Unknown {category} pattern")
-                    compressed_desc = self._compress_pattern_description(description)
-                    pattern_summaries.append(f"- {compressed_desc}")
-                if pattern_summaries:
-                    if self.logger:
-                        self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
-                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
-            except Exception as e:  # noqa: BLE001
+                            # Use the MORE RESTRICTIVE of the two thresholds
+                            recency_threshold = min(abs_threshold, pct_threshold)
+
+                            is_recent = periods_ago <= recency_threshold
+                        else:
+                            # If no index info, include the pattern
+                            is_recent = True
+
+                        if is_recent:
+                            # Extract base type for deduplication
+                            # e.g., 'stoch_bullish_crossover' -> 'stoch_crossover'
+                            # This groups bullish/bearish variants together
+                            pattern_type = pattern_dict.get("type", "")
+                            base_type = self._get_dedup_key(category, pattern_type)
+                            dedup_key = (category, base_type)
+                            periods_ago_val = pattern_dict.get("details", {}).get("periods_ago", 999)
+                            # Keep only the most recent pattern per dedup key
+                            if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]["periods"]:
+                                dedup_tracker[dedup_key] = {
+                                    "pattern": pattern_dict,
+                                    "periods": periods_ago_val,
+                                    "category": category
+                                }
+            # Convert dedup_tracker to pattern_summaries
+            for dedup_key, entry in dedup_tracker.items():
+                pattern_dict = entry["pattern"]
+                category = entry["category"]
+                description = pattern_dict.get("description", f"Unknown {category} pattern")
+                compressed_desc = self._compress_pattern_description(description)
+                pattern_summaries.append(f"- {compressed_desc}")
+            if pattern_summaries:
                 if self.logger:
-                    self.logger.debug("Error using stored technical_patterns: %s", e)
+                    self.logger.debug("Including %s recent patterns in technical analysis (dedup + recency filter)", len(pattern_summaries))
+                return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries[-25:])
 
-        try:
-            ohlcv_data = context.ohlcv_candles
-            technical_history = context.technical_data.get("history", {})
+        ohlcv_data = context.ohlcv_candles
+        technical_history = context.technical_data.get("history", {})
 
-            patterns = self.technical_calculator.get_all_patterns(ohlcv_data, technical_history)
+        patterns = self.technical_calculator.get_all_patterns(ohlcv_data, technical_history)
 
-            if self.logger:
-                self.logger.debug("Using fallback pattern detection, found %s patterns", len(patterns))
+        if self.logger:
+            self.logger.debug("Using fallback pattern detection, found %s patterns", len(patterns))
 
-            if patterns:
-                pattern_summaries = []
-                for pattern in patterns[-5:]:  # Show last 5 patterns
-                    description = pattern.get("description", "Unknown pattern")
-                    compressed_desc = self._compress_pattern_description(description)
-                    pattern_summaries.append(f"- {compressed_desc}")
+        if patterns:
+            pattern_summaries = []
+            for pattern in patterns[-5:]:  # Show last 5 patterns
+                description = pattern.get("description", "Unknown pattern")
+                compressed_desc = self._compress_pattern_description(description)
+                pattern_summaries.append(f"- {compressed_desc}")
 
-                if pattern_summaries:
-                    return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries)
-        except Exception as e:  # noqa: BLE001
-            if self.logger:
-                self.logger.debug("Could not use fallback pattern detection: %s", e)
+            if pattern_summaries:
+                return "\n\n## Detected Patterns:\n" + "\n".join(pattern_summaries)
 
         return ""
 
@@ -462,46 +439,40 @@ class TechnicalFormatter:
         - Death Cross (50 < 200, bearish)
         - Price position relative to SMAs
         """
-        try:
-            sma_20 = td.get("sma_20")
-            sma_50 = td.get("sma_50")
-            sma_200 = td.get("sma_200")
+        sma_20 = td.get("sma_20")
+        sma_50 = td.get("sma_50")
+        sma_200 = td.get("sma_200")
 
-            # Extract last values from arrays using shared utility
-            sma_20_val = get_last_valid_value(sma_20)
-            sma_50_val = get_last_valid_value(sma_50)
-            sma_200_val = get_last_valid_value(sma_200)
+        # Extract last values from arrays using shared utility
+        sma_20_val = get_last_valid_value(sma_20)
+        sma_50_val = get_last_valid_value(sma_50)
+        sma_200_val = get_last_valid_value(sma_200)
 
-            # Build SMA line
-            sma_parts = []
-            if sma_20_val is not None:
-                sma_parts.append(f"20:{self.format_utils.fmt(sma_20_val, 8)}")
-            if sma_50_val is not None:
-                sma_parts.append(f"50:{self.format_utils.fmt(sma_50_val, 8)}")
-            if sma_200_val is not None:
-                sma_parts.append(f"200:{self.format_utils.fmt(sma_200_val, 8)}")
+        # Build SMA line
+        sma_parts = []
+        if sma_20_val is not None:
+            sma_parts.append(f"20:{self.format_utils.fmt(sma_20_val, 8)}")
+        if sma_50_val is not None:
+            sma_parts.append(f"50:{self.format_utils.fmt(sma_50_val, 8)}")
+        if sma_200_val is not None:
+            sma_parts.append(f"200:{self.format_utils.fmt(sma_200_val, 8)}")
 
-            if not sma_parts:
-                return ""
-
-            # Detect 50/200 SMA relationship (macro trend structure)
-            # NOTE: "Golden Cross" = 50 crossing ABOVE 200 (event), "Death Cross" = 50 crossing BELOW 200 (event)
-            # Here we show CURRENT STATE, not crossover events
-            cross_signal = ""
-            if sma_50_val is not None and sma_200_val is not None:
-                pct_diff = ((sma_50_val - sma_200_val) / sma_200_val) * 100
-                if sma_50_val > sma_200_val:
-                    # 50 is ABOVE 200 = bullish macro structure (Golden Cross configuration)
-                    cross_signal = f" | 50>200 (+{pct_diff:.1f}%)"
-                else:
-                    # 50 is BELOW 200 = bearish macro structure (Death Cross configuration)
-                    cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
-
-            return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
-        except Exception as e:  # noqa: BLE001
-            if self.logger:
-                self.logger.debug("Error formatting SMA structure: %s", e)
+        if not sma_parts:
             return ""
+
+        # Detect 50/200 SMA relationship (macro trend structure)
+        # Golden/Death Cross here = current 50/200 state, not the crossover event
+        cross_signal = ""
+        if sma_50_val is not None and sma_200_val is not None:
+            pct_diff = ((sma_50_val - sma_200_val) / sma_200_val) * 100
+            if sma_50_val > sma_200_val:
+                # 50 is ABOVE 200 = bullish macro structure (Golden Cross configuration)
+                cross_signal = f" | 50>200 (+{pct_diff:.1f}%)"
+            else:
+                # 50 is BELOW 200 = bearish macro structure (Death Cross configuration)
+                cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
+
+        return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
 
     def _format_ichimoku_signal(self, td: dict) -> str:
         """Format Ichimoku cloud position signal.
@@ -509,35 +480,30 @@ class TechnicalFormatter:
         Shows whether price is above cloud (bullish), below cloud (bearish), or in cloud (neutral).
         Calculates signal on-demand from raw span data.
         """
-        try:
-            span_a = td.get("ichimoku_span_a")
-            span_b = td.get("ichimoku_span_b")
-            close_data = td.get("close")
+        span_a = td.get("ichimoku_span_a")
+        span_b = td.get("ichimoku_span_b")
+        close_data = td.get("close")
 
-            if span_a is None or span_b is None or close_data is None:
-                return ""
-
-            span_a_val = get_last_valid_value(span_a)
-            span_b_val = get_last_valid_value(span_b)
-            current_price = safe_array_to_scalar(close_data, -1)
-
-            if span_a_val is None or span_b_val is None or current_price is None:
-                return ""
-
-            # Calculate cloud boundaries
-            cloud_top = max(span_a_val, span_b_val)
-            cloud_bottom = min(span_a_val, span_b_val)
-
-            # Determine signal based on price position relative to cloud
-            if current_price > cloud_top:
-                return " | Ichi:☁️↑"
-            if current_price < cloud_bottom:
-                return " | Ichi:☁️↓"
-            return " | Ichi:☁️="
-        except Exception as e:  # noqa: BLE001
-            if self.logger:
-                self.logger.debug("Error calculating ichimoku signal: %s", e)
+        if span_a is None or span_b is None or close_data is None:
             return ""
+
+        span_a_val = get_last_valid_value(span_a)
+        span_b_val = get_last_valid_value(span_b)
+        current_price = safe_array_to_scalar(close_data, -1)
+
+        if span_a_val is None or span_b_val is None or current_price is None:
+            return ""
+
+        # Calculate cloud boundaries
+        cloud_top = max(span_a_val, span_b_val)
+        cloud_bottom = min(span_a_val, span_b_val)
+
+        # Determine signal based on price position relative to cloud
+        if current_price > cloud_top:
+            return " | Ichi:☁️↑"
+        if current_price < cloud_bottom:
+            return " | Ichi:☁️↓"
+        return " | Ichi:☁️="
 
     BOUNDED_OSCILLATORS = frozenset([
         "rsi", "stoch_k", "stoch_d", "mfi", "williams_r",

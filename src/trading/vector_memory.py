@@ -75,9 +75,9 @@ class VectorMemoryService(
             embedding_model: SentenceTransformer instance (injected)
             timeframe_minutes: Active analysis timeframe in minutes.
         """
-        self.logger = logger  # type: ignore[reportOptionalMemberAccess]
+        self.logger = logger
         self._client = chroma_client
-        self._collection: Any | None = None  # type: ignore[reportOptionalMemberAccess]
+        self._collection: Any | None = None
         self._semantic_rules_collection: Any | None = None
         self._blocked_collection: Any | None = None
         self._embedding_model = embedding_model
@@ -132,7 +132,7 @@ class VectorMemoryService(
             except Exception as err:
                 err_msg = str(err).lower()
                 if any(kw in err_msg for kw in ("dimension", "expect", "incompatible", "invalid")):
-                    self.logger.warning(  # type: ignore[reportOptionalMemberAccess]
+                    self.logger.warning(
                         "Embedding dimension mismatch in collection '%s' (%s). "
                         "Re-creating collection for new model dimensions...",
                         name, err
@@ -159,26 +159,26 @@ class VectorMemoryService(
             return True
 
         try:
-            self.logger.info("Setting up VectorMemoryService collections...")  # type: ignore[reportOptionalMemberAccess]
+            self.logger.info("Setting up VectorMemoryService collections...")
 
-            self._collection = self._get_or_create_clean_collection(self.COLLECTION_NAME)  # type: ignore[reportOptionalMemberAccess]
+            self._collection = self._get_or_create_clean_collection(self.COLLECTION_NAME)
             self._semantic_rules_collection = self._get_or_create_clean_collection(self.SEMANTIC_RULES_COLLECTION)
             self._blocked_collection = self._get_or_create_clean_collection(self.BLOCKED_TRADES_COLLECTION)
 
             self._initialized = True
-            collection = self._collection  # type: ignore[reportOptionalMemberAccess]
+            collection = self._collection
             if collection is None:
-                self.logger.error("VectorMemoryService collection setup returned None")  # type: ignore[reportOptionalMemberAccess]
+                self.logger.error("VectorMemoryService collection setup returned None")
                 self._initialized = False
                 return False
-            self.logger.info("VectorMemoryService collections ready: %s experiences stored", collection.count())  # type: ignore[reportOptionalMemberAccess]
+            self.logger.info("VectorMemoryService collections ready: %s experiences stored", collection.count())
             return True
 
         except ImportError as e:
-            self.logger.warning("VectorMemoryService unavailable (missing dependency): %s", e)  # type: ignore[reportOptionalMemberAccess]
+            self.logger.warning("VectorMemoryService unavailable (missing dependency): %s", e)
             return False
         except Exception as e:
-            self.logger.error("Failed to initialize VectorMemoryService: %s", e, exc_info=True)  # type: ignore[reportOptionalMemberAccess]  # noqa: G201
+            self.logger.error("Failed to initialize VectorMemoryService: %s", e, exc_info=True)# noqa: G201
             return False
 
     def _sanitize_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
@@ -197,9 +197,9 @@ class VectorMemoryService(
                     if math.isfinite(value):
                         sanitized[key] = value
                     else:
-                        self.logger.debug("Dropping non-finite metadata value: %s=%s", key, value)  # type: ignore[reportOptionalMemberAccess]
+                        self.logger.debug("Dropping non-finite metadata value: %s=%s", key, value)
                 case _:
-                    self.logger.debug("Dropping unsupported metadata value: %s=%r", key, value)  # type: ignore[reportOptionalMemberAccess]
+                    self.logger.debug("Dropping unsupported metadata value: %s=%r", key, value)
         return sanitized
 
     def store_experience(
@@ -232,14 +232,14 @@ class VectorMemoryService(
         Returns:
             True if stored successfully, False otherwise.
         """
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
-            self.logger.warning("VectorMemoryService not initialized, cannot store experience.")  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
+            self.logger.warning("VectorMemoryService not initialized, cannot store experience.")
             return False
 
         try:
-            collection = self._collection  # type: ignore[reportOptionalMemberAccess]
+            collection = self._collection
             if collection is None:
-                self.logger.warning("VectorMemoryService collection missing after initialization.")  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("VectorMemoryService collection missing after initialization.")
                 return False
 
             meta = dict(metadata or {})
@@ -317,11 +317,11 @@ class VectorMemoryService(
                 metadatas=[trade_metadata]
             )
 
-            self.logger.info("Stored experience: %s (%s, %s%%)", trade_id, outcome, f"{pnl_pct:+.2f}")  # type: ignore[reportOptionalMemberAccess]
+            self.logger.info("Stored experience: %s (%s, %s%%)", trade_id, outcome, f"{pnl_pct:+.2f}")
             return True
 
         except Exception as e:  # noqa: BLE001
-            self.logger.error("Failed to store experience: %s", e)  # type: ignore[reportOptionalMemberAccess]
+            self.logger.error("Failed to store experience: %s", e)
             return False
 
     def store_blocked_trade(
@@ -342,32 +342,19 @@ class VectorMemoryService(
     ) -> bool:
         """Store a blocked/rejected trade event for closed-loop LLM feedback.
 
-        Args:
-            guard_type: Which guard blocked the trade (e.g. 'rr_minimum', 'sl_clamp', 'tp_clamp')
-            direction: LONG, SHORT, or N/A
-            confidence: HIGH, MEDIUM, LOW
-            suggested_rr: R/R ratio the LLM suggested
-            required_rr: Minimum R/R required by the guard
-            suggested_sl_pct: SL distance as decimal of entry
-            suggested_tp_pct: TP distance as decimal of entry
-            suggested_sl: Absolute SL price
-            suggested_tp: Absolute TP price
-            current_price: Price at rejection time
-            volatility_level: HIGH, MEDIUM, LOW
-            reasoning_snippet: First 200 chars of AI reasoning
-            metadata: Additional metadata
-
-        Returns:
-            True if stored successfully, False otherwise.
+        Fields: guard_type ('rr_minimum', 'sl_clamp', 'tp_clamp', ...), direction,
+        confidence, suggested_rr / required_rr, suggested_sl_pct / suggested_tp_pct,
+        absolute suggested_sl / suggested_tp, current_price, volatility_level,
+        reasoning_snippet (first 200 chars), metadata. True on success.
         """
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
-            self.logger.warning("VectorMemoryService not initialized, cannot store blocked trade.")  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
+            self.logger.warning("VectorMemoryService not initialized, cannot store blocked trade.")
             return False
 
         try:
             collection = self._blocked_collection
             if collection is None:
-                self.logger.warning("Blocked trades collection missing after initialization.")  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Blocked trades collection missing after initialization.")
                 return False
 
             rr_delta = suggested_rr - required_rr if (math.isfinite(suggested_rr) and math.isfinite(required_rr)) else 0.0
@@ -415,14 +402,14 @@ class VectorMemoryService(
                 metadatas=[block_metadata],
             )
 
-            self.logger.info(  # type: ignore[reportOptionalMemberAccess]
+            self.logger.info(
                 "Stored blocked trade: %s | guard=%s | LLM R/R=%.2f vs Required=%.2f",
                 block_id, guard_type, suggested_rr, required_rr,
             )
             return True
 
         except Exception as e:  # noqa: BLE001
-            self.logger.error("Failed to store blocked trade: %s", e)  # type: ignore[reportOptionalMemberAccess]
+            self.logger.error("Failed to store blocked trade: %s", e)
             return False
 
     def get_recent_blocked_trades(
@@ -441,7 +428,7 @@ class VectorMemoryService(
         Returns:
             List of blocked trade dicts sorted by recency (newest first).
         """
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return []
 
         try:
@@ -490,12 +477,12 @@ class VectorMemoryService(
             return blocked[:n]
 
         except Exception as e:  # noqa: BLE001
-            self.logger.error("Failed to retrieve blocked trades: %s", e)  # type: ignore[reportOptionalMemberAccess]
+            self.logger.error("Failed to retrieve blocked trades: %s", e)
             return []
 
     def get_blocked_trade_count(self) -> int:
         """Get total number of blocked trade events."""
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return 0
         try:
             return self._blocked_collection.count()  # type: ignore
@@ -603,7 +590,7 @@ class VectorMemoryService(
         Returns:
             Dict mapping collection name → number of documents removed.
         """
-        if not self._ensure_initialized():  # type: ignore[reportOptionalMemberAccess]
+        if not self._ensure_initialized():
             return {}
 
         from datetime import timedelta
@@ -613,7 +600,7 @@ class VectorMemoryService(
         )
 
         collections = [
-            (self._collection, "trading_experiences"),  # type: ignore[reportOptionalMemberAccess]
+            (self._collection, "trading_experiences"),
             (self._semantic_rules_collection, "semantic_rules"),
             (self._blocked_collection, "system_constraints_rejections"),
         ]
@@ -653,7 +640,7 @@ class VectorMemoryService(
                     coll.delete(ids=aged_ids)
                     after = coll.count()
                     removed[name] = before - after
-                    self.logger.info(  # type: ignore[reportOptionalMemberAccess]
+                    self.logger.info(
                         "Pruned %d documents from %s (cutoff: %s, removed: %d → %d)",
                         len(aged_ids), name,
                         prune_cutoff.strftime("%Y-%m-%d"),
@@ -661,12 +648,12 @@ class VectorMemoryService(
                     )
                 else:
                     removed[name] = 0
-                    self.logger.debug(  # type: ignore[reportOptionalMemberAccess]
+                    self.logger.debug(
                         "No prunable documents in %s (cutoff: %s, total: %d)",
                         name, prune_cutoff.strftime("%Y-%m-%d"), before,
                     )
             except Exception as e:  # noqa: BLE001
-                self.logger.warning("Collection prune failed for %s: %s", name, e)  # type: ignore[reportOptionalMemberAccess]
+                self.logger.warning("Collection prune failed for %s: %s", name, e)
                 removed[name] = 0
 
         return removed

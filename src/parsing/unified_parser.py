@@ -112,36 +112,50 @@ class UnifiedParser:
             }
         return {**validation, "status": "valid", "valid": True}
 
-    def extract_json_block(self, text: str, unwrap_key: str | None = None) -> dict[str, Any] | None:
-        """Extract JSON block from markdown-formatted text.
+    @staticmethod
+    def _iter_json_blocks(text: str) -> list[str]:
+        """Return every ```json ... ``` block body in order of appearance."""
+        blocks: list[str] = []
+        text_lower = text.lower()
+        index = 0
+        while True:
+            start = text_lower.find("```json", index)
+            if start == -1:
+                return blocks
+            body_start = start + 7
+            end = text_lower.find("```", body_start)
+            if end == -1:
+                return blocks
+            blocks.append(text[body_start:end].strip())
+            index = end + 3
 
-        Reusable utility for extracting ```json ... ``` blocks from AI responses.
-        Used by notifiers, position extractors, and other components.
+    @staticmethod
+    def extract_json_block(text: str, unwrap_key: str | None = None) -> dict[str, Any] | None:
+        """Extract JSON from markdown-formatted text.
+
+        The LAST parseable ```json block wins: a repaired response carries the
+        contract block appended at the end, so an earlier broken block must not
+        shadow it.
 
         Args:
-            text: Raw text containing JSON block
+            text: Raw text containing the JSON block(s)
             unwrap_key: If specified, unwrap this key from the result (e.g., 'analysis')
 
         Returns:
-            Parsed JSON dict or None if extraction fails
+            Parsed JSON dict or None if no block parses
         """
         if not text:
             return None
-        try:
-            # Bolt: fast C-string find instead of regex engine traversal for ```json ... ``` blocks
-            text_lower = text.lower()
-            start = text_lower.find("```json")
-            if start != -1:
-                json_start = start + 7
-                end = text_lower.find("```", json_start)
-                if end != -1:
-                    json_str = text[json_start:end].strip()
-                    data = json.loads(json_str)
-                    if unwrap_key and isinstance(data, dict) and isinstance(data.get(unwrap_key), dict):
-                        return data[unwrap_key]
-                    return data
-        except (json.JSONDecodeError, Exception) as e:  # noqa: BLE001
-            self.logger.debug("JSON block extraction failed: %s", e)
+        for block in reversed(UnifiedParser._iter_json_blocks(text)):
+            try:
+                data = json.loads(block)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if unwrap_key and isinstance(data.get(unwrap_key), dict):
+                return data[unwrap_key]
+            return data
         return None
 
     def extract_text_before_json(self, text: str) -> str:
@@ -157,7 +171,6 @@ class UnifiedParser:
         """
         if not text:
             return ""
-        # Bolt: fast C-string find instead of regex for ```json boundary
         start = text.lower().find("```json")
         if start != -1:
             return text[:start].strip()
@@ -195,7 +208,7 @@ class UnifiedParser:
             return symbol.split("-")[0].upper()
 
         # Handle concatenated symbols by removing common quote currencies
-        # Check longer quotes first to avoid partial matches (e.g. matching USD in BUSD)
+        # longest quotes first - otherwise USD matches inside BUSD
         common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "BNB"]
         symbol_upper = symbol.upper()
 
@@ -289,8 +302,17 @@ class UnifiedParser:
         if numeric_value is None:
             return default_value
         if field == "position_size":
-            explicit_percent = isinstance(value, str) and value.strip().endswith("%")
-            return numeric_value / 100 if explicit_percent or numeric_value > 1 else numeric_value
+            # Contract: a decimal fraction of capital (0.0-1.0). "5%" is an explicit
+            # percentage; a bare value > 1 is ambiguous (50 = 50%? 50x?) — drop it
+            # instead of guessing, so the risk manager falls back to profile sizing.
+            if isinstance(value, str) and value.strip().endswith("%"):
+                return numeric_value / 100
+            if numeric_value > 1:
+                self.logger.warning(
+                    "position_size %s is outside the 0.0-1.0 contract; treating it as unset", value
+                )
+                return None
+            return numeric_value
         if isinstance(default_value, int) and float(numeric_value).is_integer():
             return int(numeric_value)
         return numeric_value
