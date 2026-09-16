@@ -1,3 +1,4 @@
+/* eslint-env browser, es2022 */
 
 
 /**

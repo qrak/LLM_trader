@@ -1,3 +1,4 @@
+/* eslint-env browser, es2022 */
 /**
  * Fullscreen panel module - Opens panels in modal overlay.
  * 

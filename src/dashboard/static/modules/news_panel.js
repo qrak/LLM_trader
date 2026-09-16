@@ -1,3 +1,4 @@
+/* eslint-env browser, es2022 */
 /* global DOMPurify */
 /**
  * News panel module - Displays latest crypto news articles.

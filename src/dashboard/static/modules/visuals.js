@@ -1,3 +1,4 @@
+/* eslint-env browser, es2022 */
 export async function updateVisuals() {
     const img = document.getElementById('analysis-chart');
     const noChartMsg = document.getElementById('no-chart-msg');

@@ -1,3 +1,4 @@
+/* eslint-env browser, es2022 */
 /* global vis, DOMPurify */
 /**
  * Decision Pathways panel — multi-source hierarchical graph + synopsis + detail.
