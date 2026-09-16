@@ -25,8 +25,6 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import aiohttp
 
-# Source registry – default values; callers may supply a filtered subset.
-
 _DEFAULT_RSS_SOURCES: list[dict[str, str]] = [
     {"name": "coindesk",      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
     {"name": "cointelegraph", "url": "https://cointelegraph.com/rss"},
@@ -61,8 +59,6 @@ def get_sources(
     return [s for s in registry if s["name"].lower() in names]
 
 
-# URL normalisation
-
 _TRACKING_PARAMS: frozenset[str] = frozenset({
     "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
     "gclid", "fbclid", "mc_cid", "mc_eid",
@@ -93,8 +89,6 @@ def normalize_url(raw_url: str) -> str:
     cleaned = parsed._replace(query=new_query, fragment="", path=normalized_path)
     return urlunparse(cleaned)
 
-
-# HTML text extraction
 
 _RE_HTML_TAGS = re.compile(r"<[^>]+>")
 _RE_WHITESPACE = re.compile(r"\s+")
@@ -236,8 +230,6 @@ def _text_from_soup_node(node: Any) -> str:
     return "\n\n".join(parts).strip()
 
 
-# Date parsing
-
 def parse_pub_date_to_epoch(raw_date: str | None) -> float:
     """Convert an RFC-2822 or ISO-8601 date string to a UTC epoch float.
 
@@ -252,7 +244,6 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
         return parsed.astimezone(timezone.utc).timestamp()
     except (TypeError, ValueError):
         pass
-    # Try ISO-8601 fallback
     try:
         parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
         if parsed.tzinfo is None:
@@ -261,8 +252,6 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
     except (TypeError, ValueError):
         return 0.0
 
-
-# RSS XML parsing
 
 def _first_text(parent: ET.Element, path: str) -> str:  # type: ignore
     node = parent.find(path)
@@ -336,8 +325,6 @@ def parse_rss_items(
     return results
 
 
-# Async source fetching
-
 @dataclass
 class FetchResult:
     """Outcome of fetching one news source."""
@@ -403,8 +390,6 @@ async def fetch_source(
         )
 
 
-# Deduplication
-
 def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate items by canonical URL, keeping the most recent version."""
     best: dict[str, dict[str, Any]] = {}
@@ -416,7 +401,6 @@ def dedupe_by_url(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if current is None:
             best[url] = item
             continue
-        # Keep the item with the newer published_at_epoch
         if item.get("published_at_epoch", 0.0) > current.get("published_at_epoch", 0.0):
             best[url] = item
     return list(best.values())
@@ -443,7 +427,6 @@ def dedupe_by_normalized_title(items: list[dict[str, Any]]) -> list[dict[str, An
         if current is None:
             best[title] = item
             continue
-        # Prefer the item with the longer raw body text
         if len(item.get("body_text") or "") > len(current.get("body_text") or ""):
             best[title] = item
     return list(best.values())

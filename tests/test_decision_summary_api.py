@@ -9,11 +9,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.dashboard.dashboard_state import DashboardState
-from src.dashboard.routers.brain import (
-    BrainRouter,
-    _build_decision_graph,
-    _build_decision_synopsis,
+from src.dashboard.decision_presenter import (
+    build_decision_graph,
+    build_decision_synopsis,
 )
+from src.dashboard.routers.brain import BrainRouter
 from src.trading.data_models import MarketConditions, Position
 
 
@@ -225,7 +225,7 @@ async def test_decision_summary_cache_invalidation(config):
 
 
 def test_build_decision_graph_pure():
-    graph = _build_decision_graph(
+    graph = build_decision_graph(
         now={"action": "HOLD", "confidence": 80, "trend": "BEARISH", "adx": 20, "rsi": 40},
         last_decision={"signal": "HOLD", "confidence": 80, "reasoning_excerpt": "Wait"},
         position={"has_position": False},
@@ -264,7 +264,7 @@ def test_build_decision_graph_pure():
 
 
 def test_build_decision_synopsis_flat():
-    text = _build_decision_synopsis(
+    text = build_decision_synopsis(
         now={"action": "HOLD", "confidence": 75, "trend": "BEARISH"},
         position={"has_position": False},
         memory={"current_context": "BEARISH + Low ADX", "top_rules": [], "blocked": {}},

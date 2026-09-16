@@ -8,7 +8,6 @@ _LOG2: float = math.log(2)
 _LOG1P_FULL_SAMPLE: float = math.log1p(20)
 
 
-
 class VectorMemoryRulesMixin:
     """Semantic rule storage and retrieval behavior."""
 
@@ -115,7 +114,6 @@ class VectorMemoryRulesMixin:
             math.log1p(max(0, support_count)) / _LOG1P_FULL_SAMPLE
         )
 
-        # Refactor: Python 3.10 pattern matching dispatches rule quality calculation
         match str(metadata.get("rule_type", "best_practice")):
             case "anti_pattern" | "ai_mistake":
                 quality = self._as_float(metadata.get("loss_rate"), 50.0) / 100.0

@@ -61,7 +61,6 @@ class DashboardServer:
         self._server = None
         self.dashboard_state = DashboardState(connection_manager=connection_manager)
 
-        # Admin console dependencies
         self._force_analysis_event = force_analysis_event
         _config_path = config_path or os.path.join(
             os.path.dirname(__file__), "..", "..", "config", "config.ini"
@@ -70,7 +69,6 @@ class DashboardServer:
         self.log_stream_manager = LogStreamManager()
         self.console_buffer = ConsoleBuffer(max_days=7, max_lines_per_day=10000)
 
-        # Initialize auth if credentials provided
         if admin_credentials:
             init_auth(
                 signing_key=admin_credentials.get("signing_key", ""),
@@ -84,10 +82,8 @@ class DashboardServer:
         """Create and configure the FastAPI application."""
         @asynccontextmanager
         async def lifespan(_app: FastAPI):
-            # Startup logic
             print(f"DTO: Dashboard live at http://localhost:{self.port}")
 
-            # Start console buffer consumer (subscribes to log stream)
             self.log_stream_manager.attach_to_logger(self.logger)
             _sid, _queue = self.log_stream_manager.handler.subscribe()
             _consumer_task = asyncio.create_task(
@@ -97,7 +93,6 @@ class DashboardServer:
 
             yield
 
-            # Shutdown logic — stop buffer consumer and unsubscribe
             self.log_stream_manager.handler.unsubscribe(_sid)
             _consumer_task.cancel()
             try:
@@ -120,14 +115,11 @@ class DashboardServer:
 
     def _add_cors_middleware(self, app: FastAPI) -> None:
         """Add CORS middleware when the dashboard config enables it."""
-        # CORS Configuration
-        # Defaults to False for security. Can be enabled in config.ini.
         enable_cors = self.config.DASHBOARD_ENABLE_CORS
 
         if enable_cors:
             allowed_origins = self.config.DASHBOARD_CORS_ORIGINS
 
-            # If enabled but empty, log a warning and default to strict (empty list)
             if not allowed_origins:
                 print(
                     "WARNING: CORS enabled but no origins specified. CORS will effectively be disabled."
@@ -136,7 +128,7 @@ class DashboardServer:
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=allowed_origins,
-                allow_credentials=False,  # Wildcard origins are incompatible with credentials
+                allow_credentials=False,
                 allow_methods=["GET"],
                 allow_headers=["*"],
             )
@@ -154,7 +146,6 @@ class DashboardServer:
         app.state.dashboard_state = self.dashboard_state
         app.state.writable_config = self.writable_config
         app.state.log_stream_manager = self.log_stream_manager
-        # Expose for testing/monitoring
         app.state.request_counts = request_counts
 
     def _register_routers(self, app: FastAPI) -> None:
@@ -200,7 +191,6 @@ class DashboardServer:
         app.include_router(performance_router.router)
         app.include_router(websocket_router.router)
 
-        # Admin console router
         admin_router = AdminRouter(
             writable_config=self.writable_config,
             log_stream_manager=self.log_stream_manager,
@@ -213,22 +203,18 @@ class DashboardServer:
             force_analysis_event=self._force_analysis_event,
         )
         app.include_router(admin_router.router)
-        # Expose admin_router on app.state for testing and cross-router access
         app.state.admin_router = admin_router
 
-        # Public read-only Live Console
         console_router = ConsoleRouter(
             buffer=self.console_buffer,
             log_stream_handler=self.log_stream_manager.handler,
         )
         app.include_router(console_router.router)
 
-        # Admin auth middleware (protects /api/admin/* except login and health)
         app.add_middleware(AdminAuthMiddleware)
 
     def _register_pages(self, app: FastAPI) -> None:
         """Serve the story/landing pages and mount the static frontend."""
-        # Story page route (Astro generated development story)
         @app.get("/story", include_in_schema=False)
         async def story_page():
             story_path = os.path.abspath(
@@ -246,7 +232,6 @@ class DashboardServer:
                 return FileResponse(story_path, media_type="text/html")
             return PlainTextResponse("Story page not found. Run 'npm run build' inside website/ directory.", status_code=404)
 
-        # Landing page route (for Google AdSense content requirements)
         @app.get("/landing", include_in_schema=False)
         async def landing_page():
             landing_path = os.path.join(
@@ -257,8 +242,6 @@ class DashboardServer:
             return PlainTextResponse("Landing page not found", status_code=404)
 
 
-        # Mount Static Files (Frontend)
-        # We assume the static folder is in the same directory as this file
         static_dir = os.path.join(os.path.dirname(__file__), "static")
         if os.path.exists(static_dir):
             app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
@@ -268,7 +251,6 @@ class DashboardServer:
 
     async def start(self):
         """Start the uvicorn server in an asyncio loop."""
-        # Guard against double-start: if already running, do nothing
         if self.server_task and not self.server_task.done():
             return self.server_task
 
@@ -280,12 +262,7 @@ class DashboardServer:
             loop="asyncio",
             ws="wsproto",
             proxy_headers=True,
-            # Bound the graceful drain: without a timeout uvicorn waits forever
-            # for connections/tasks to finish during shutdown.
             timeout_graceful_shutdown=5,
-            # Cloudflare IPv4 & IPv6 ranges — verified 2026-03-02
-            # Source: https://www.cloudflare.com/ips-v4/ and /ips-v6/
-            # Cloudflare ranges change occasionally - update periodically
             forwarded_allow_ips=(
                 "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,"
                 "141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,"
@@ -297,18 +274,8 @@ class DashboardServer:
         )
         self._server = uvicorn.Server(config)
 
-        # uvicorn >=0.29 removed Server.install_signal_handlers(); serve() now
-        # swaps SIGINT/SIGTERM itself via capture_signals(). Neutralise that
-        # swap so the bot keeps signal ownership: Ctrl+C must reach start.py
-        # immediately (confirmation popup + graceful shutdown). Otherwise the
-        # dashboard swallows the first Ctrl+C and only stops after it drains
-        # its connections — needing a second press to stop the bot.
         self._server.capture_signals = nullcontext  # type: ignore
 
-        # Uvicorn logs shutdown noise (GeneratorExit, RuntimeError from
-        # starlette lifespan) through logging.getLogger("uvicorn.error").
-        # With propagate=False on our custom Logger, this goes to the root
-        # logger → stderr via lastResort. Route it to a NullHandler instead.
         import logging as _logging
 
         for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
@@ -316,7 +283,6 @@ class DashboardServer:
             _uv_logger.handlers = [_logging.NullHandler()]
             _uv_logger.propagate = False
 
-        # Store reference to task
         self.server_task = asyncio.create_task(self._run_server())
         return self.server_task
 
@@ -336,23 +302,19 @@ class DashboardServer:
         if not self._server and not self.server_task:
             return
 
-        # Signal uvicorn's serve() loop to exit cleanly
         if self._server:
             self._server.should_exit = True
 
-        # Wait for the server task to finish naturally (socket release)
         if self.server_task and not self.server_task.done():
             try:
                 await asyncio.wait_for(self.server_task, timeout=5.0)
             except asyncio.TimeoutError:
-                # Force-cancel if it doesn't stop within 5 seconds
                 self.server_task.cancel()
                 try:
                     await self.server_task
                 except asyncio.CancelledError:
                     pass
 
-        # Clear references so start() can create fresh instances
         self._server = None
         self.server_task = None
 
@@ -376,8 +338,6 @@ def _build_etag(request, response, path):
         digest = hashlib.sha256(body).hexdigest()
         return f'W/"{digest}"'
 
-    # GZip/streaming responses may not expose `body` at middleware stage.
-    # Use short time-bucketed weak ETags aligned to cache windows.
     if path.startswith("/api/"):
         bucket_seconds = 15
     elif path.endswith(".html") or path == "/":
@@ -420,7 +380,6 @@ def _is_static_asset(path):
 
 def _api_cache_policies(path, query_params):
     """Return browser/edge cache policy pair for API routes."""
-    # bypass CDN cache for volatile / user-driven APIs
     if path.endswith("/refresh-price"):
         return (
             "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -439,14 +398,12 @@ def _api_cache_policies(path, query_params):
             "no-store",
         )
 
-    # Keep realtime countdown fresher than the rest of the API surface.
     if path.endswith("/status/countdown"):
         return (
             "public, max-age=5",
             "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
         )
 
-    # Default policy for cache-safe GET APIs (<= 60 seconds staleness budget).
     return (
         "public, max-age=15",
         "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",
@@ -455,7 +412,6 @@ def _api_cache_policies(path, query_params):
 def _register_cache_and_security_middleware(app: FastAPI) -> None:
     """Install the security-header plus HTTP cache-policy middleware stack."""
 
-    # Security Headers Middleware
     @app.middleware("http")
     async def add_security_headers(request, call_next):
         response = await call_next(request)
@@ -463,9 +419,6 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
 
-        # Conditionally add HSTS if the request originated over HTTPS.
-        # Uvicorn's ProxyHeadersMiddleware processes X-Forwarded-Proto,
-        # so request.url.scheme will correctly reflect 'https' if Cloudflare sent it.
         if (
             request.url.scheme == "https"
             or request.headers.get("x-forwarded-proto") == "https"
@@ -479,12 +432,6 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
             "geolocation=(), microphone=(), camera=()"
         )
 
-        # Content Security Policy (CSP)
-        # - script-src: 'self' (dashboard logic), CDNs
-        # - style-src: 'self' 'unsafe-inline' (for dashboard styles), CDNs
-        # - connect-src: 'self' (for internal API), CDNs if needed
-        # - img-src: 'self' data: https: (for content/news images)
-        # Cloudflare support: *.cloudflare.com added
         csp = (
             "default-src 'self'; "
             "frame-ancestors 'none'; "
@@ -501,7 +448,6 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
         response.headers["Content-Security-Policy"] = csp
         path = request.url.path
 
-        # Restrict caching entirely for non-GET/HEAD methods (e.g. POST, PUT, DELETE)
         if request.method not in ("GET", "HEAD"):
             _set_cache_headers(
                 response,
@@ -539,8 +485,6 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
                 "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
             )
 
-        # Add conditional ETag handling for cacheable API/HTML responses.
-        # Skip static assets because FileResponse already manages validators.
         if (
             request.method in ("GET", "HEAD")
             and response.status_code == 200
@@ -561,21 +505,18 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
 
 def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
     """Install the per-IP rate limiter and return its request-count store."""
-    # Simple Rate Limiting (in-memory, per-IP)
     request_counts = defaultdict(list)
-    rate_limit = 300  # requests per minute
-    rate_window = 60  # seconds
+    rate_limit = 300
+    rate_window = 60
     max_unique_ips = (
-        10000  # Prevent memory exhaustion (Defense in Depth behind Cloudflare)
+        10000
     )
 
-    # Security: State for rate limit cleanup
     state = {"last_cleanup_time": 0.0}
-    cleanup_interval = 10.0  # Seconds between full scans
+    cleanup_interval = 10.0
 
     @app.middleware("http")
     async def rate_limit_middleware(request, call_next):
-        # Skip rate limiting for static files
         if request.url.path.startswith(
             "/static"
         ) or not request.url.path.startswith("/api"):
@@ -583,11 +524,8 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
 
         current_time = time_module.monotonic()
 
-        # Security: Prevent memory exhaustion from too many IPs
         if len(request_counts) > max_unique_ips:
-            # Optimized cleanup: Only scan at most once every CLEANUP_INTERVAL
             if current_time - state["last_cleanup_time"] > cleanup_interval:
-                # Remove inactive IPs
                 keys_to_remove = [
                     ip
                     for ip, timestamps in request_counts.items()
@@ -597,11 +535,8 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
                     del request_counts[key]
                 state["last_cleanup_time"] = current_time
 
-            # If still too large (active attack), drop the oldest entry (FIFO)
-            # This degrades gracefully rather than clearing everything (DoS risk)
             while len(request_counts) > max_unique_ips:
                 try:
-                    # defaultdict preserves insertion order in Python 3.7+
                     oldest_ip = next(iter(request_counts))
                     del request_counts[oldest_ip]
                 except StopIteration:
@@ -609,7 +544,6 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
 
         client_ip = request.client.host if request.client else "unknown"
 
-        # Clean old requests for current IP
         if client_ip in request_counts:
             request_counts[client_ip] = [
                 t

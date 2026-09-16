@@ -5,10 +5,6 @@ import pytest
 from src.trading.data_models import MarketConditions, Position
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 
-# ─────────────────────────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────────────────────────
-
 
 def _make_position(
     entry_price: float = 100.0,
@@ -45,11 +41,6 @@ def _make_config(**overrides):
     return SimpleNamespace(**defaults)
 
 
-# ─────────────────────────────────────────────────────────────────
-# Timeframe bucket thresholds
-# ─────────────────────────────────────────────────────────────────
-
-
 class TestGetBaseThreshold:
     def test_scalping_bucket(self):
         policy = StopLossTighteningPolicy()
@@ -70,11 +61,6 @@ class TestGetBaseThreshold:
         policy = StopLossTighteningPolicy()
         assert policy.get_base_threshold(1440) == 0.10
         assert policy.get_base_threshold(10080) == 0.10
-
-
-# ─────────────────────────────────────────────────────────────────
-# from_config classmethod
-# ─────────────────────────────────────────────────────────────────
 
 
 class TestFromConfig:
@@ -109,11 +95,6 @@ class TestFromConfig:
         assert policy._min_brain_samples == 10
 
 
-# ─────────────────────────────────────────────────────────────────
-# Non-tightening moves
-# ─────────────────────────────────────────────────────────────────
-
-
 class TestNonTighteningMoves:
     def test_long_sl_widening_always_allowed(self):
         pos = _make_position(stop_loss=95.0, direction="LONG")
@@ -137,14 +118,8 @@ class TestNonTighteningMoves:
         assert result.allowed is True
 
 
-# ─────────────────────────────────────────────────────────────────
-# LONG tightening
-# ─────────────────────────────────────────────────────────────────
-
-
 class TestLongTightening:
     def test_rejected_when_progress_below_threshold(self):
-        # progress = (101.0 - 100) / (115 - 100) = 1/15 ≈ 0.067  <  0.15
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
         policy = StopLossTighteningPolicy(swing_threshold=0.15)
         result = policy.evaluate_update(pos, proposed_sl=97.0, current_price=101.0, tf_minutes=240)
@@ -153,14 +128,12 @@ class TestLongTightening:
         assert result.price_progress == pytest.approx(1 / 15)
 
     def test_allowed_when_progress_at_threshold(self):
-        # progress = (102.25 - 100) / (115 - 100) = 2.25/15 = 0.15 == threshold
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
         policy = StopLossTighteningPolicy(swing_threshold=0.15)
         result = policy.evaluate_update(pos, proposed_sl=97.0, current_price=102.25, tf_minutes=240)
         assert result.allowed is True
 
     def test_allowed_when_progress_above_threshold(self):
-        # progress = (103 - 100) / (115 - 100) = 3/15 = 0.20  >  0.15
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=115.0, direction="LONG")
         policy = StopLossTighteningPolicy(swing_threshold=0.15)
         result = policy.evaluate_update(pos, proposed_sl=97.0, current_price=103.0, tf_minutes=240)
@@ -168,15 +141,8 @@ class TestLongTightening:
         assert result.allowed is True
 
 
-# ─────────────────────────────────────────────────────────────────
-# SHORT tightening
-# ─────────────────────────────────────────────────────────────────
-
-
 class TestShortTightening:
     def test_rejected_when_progress_below_threshold(self):
-        # entry=100, sl=105, tp=85 (SHORT), current=99
-        # progress = (100 - 99) / (100 - 85) = 1/15 ≈ 0.067  <  0.15
         pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
         policy = StopLossTighteningPolicy(swing_threshold=0.15)
         result = policy.evaluate_update(pos, proposed_sl=103.0, current_price=99.0, tf_minutes=240)
@@ -184,17 +150,11 @@ class TestShortTightening:
         assert result.allowed is False
 
     def test_allowed_when_progress_sufficient(self):
-        # progress = (100 - 97) / (100 - 85) = 3/15 = 0.20  >  0.15
         pos = _make_position(entry_price=100.0, stop_loss=105.0, take_profit=85.0, direction="SHORT")
         policy = StopLossTighteningPolicy(swing_threshold=0.15)
         result = policy.evaluate_update(pos, proposed_sl=103.0, current_price=97.0, tf_minutes=240)
         assert result.is_tightening is True
         assert result.allowed is True
-
-
-# ─────────────────────────────────────────────────────────────────
-# Edge cases
-# ─────────────────────────────────────────────────────────────────
 
 
 class TestEdgeCases:
@@ -213,7 +173,6 @@ class TestEdgeCases:
         assert result.allowed is False
 
     def test_zero_tp_distance_rejects_tightening(self):
-        # entry == take_profit → tp_distance_total == 0
         pos = _make_position(entry_price=100.0, stop_loss=95.0, take_profit=100.0, direction="LONG")
         policy = StopLossTighteningPolicy()
         result = policy.evaluate_update(pos, proposed_sl=97.0, current_price=102.0, tf_minutes=240)
@@ -222,18 +181,11 @@ class TestEdgeCases:
         assert "entry equals take-profit" in result.reason
 
 
-# ─────────────────────────────────────────────────────────────────
-# Brain override
-# ─────────────────────────────────────────────────────────────────
-
-
 class TestBrainOverride:
     def _long_pos(self) -> Position:
         return _make_position(entry_price=100.0, stop_loss=95.0, take_profit=120.0, direction="LONG")
 
     def test_brain_override_applied_when_samples_sufficient(self):
-        # progress = (108 - 100) / (120 - 100) = 8/20 = 0.40
-        # config swing = 0.50 (would reject), brain learned = 0.35 (would accept)
         pos = self._long_pos()
         policy = StopLossTighteningPolicy(swing_threshold=0.50, min_brain_samples=5)
         brain = {"sl_tightening": {"sample_count": 10, "learned_threshold": 0.35}}
@@ -243,7 +195,6 @@ class TestBrainOverride:
         assert result.allowed is True
 
     def test_brain_override_ignored_below_min_samples(self):
-        # same scenario but only 3 samples → config threshold used (0.50 → reject)
         pos = self._long_pos()
         policy = StopLossTighteningPolicy(swing_threshold=0.50, min_brain_samples=5)
         brain = {"sl_tightening": {"sample_count": 3, "learned_threshold": 0.35}}
@@ -271,7 +222,7 @@ class TestBrainOverride:
     def test_brain_missing_sl_tightening_key_falls_back_to_config(self):
         pos = self._long_pos()
         policy = StopLossTighteningPolicy(swing_threshold=0.15, min_brain_samples=1)
-        brain = {"rr_borderline_min": 1.5}  # no sl_tightening key
+        brain = {"rr_borderline_min": 1.5}
         result = policy.evaluate_update(pos, proposed_sl=97.0, current_price=103.0, tf_minutes=240, brain_thresholds=brain)
         assert result.source == "config"
 

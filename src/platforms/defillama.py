@@ -59,7 +59,7 @@ class OptionsData(BaseModel):
 
 class DeFiFundamentalsData(BaseModel):
     """Aggregated on-chain fundamentals."""
-    macro: "MacroMarketData"  # existing: stablecoins, TVL
+    macro: "MacroMarketData"
     dex_volumes: DexVolumeData | None = None
     fees: FeesData | None = None
     options: OptionsData | None = None
@@ -87,16 +87,13 @@ class DefiLlamaClient:
         self._external_session = session is not None
         self.session = session
 
-        # Caching setup
         self.cache_dir = cache_dir
         self.update_interval = timedelta(hours=update_interval_hours)
         self.cache_file_path = f"{cache_dir}/{self.DEFILLAMA_CACHE_FILE}"
         self.last_update: datetime | None = None
 
-        # Ensure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
 
-        # Try to load last update time from cache
         self._load_cache_metadata()
 
     def _load_cache_metadata(self):
@@ -122,9 +119,6 @@ class DefiLlamaClient:
         temp_path = f"{self.cache_file_path}.tmp"
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(cache_payload, f, ensure_ascii=False, indent=2)
-        # os.replace is atomic AND cross-platform (removes the destination on
-        # Windows); remove-then-rename left a window where the cache file did
-        # not exist and two concurrent writers could corrupt each other.
         os.replace(temp_path, self.cache_file_path)
 
     async def _get_session(self) -> aiohttp.ClientSession:

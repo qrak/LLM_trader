@@ -48,11 +48,10 @@ class TestCalculateNextCheck:
     @patch("src.app.TimeframeValidator")
     def test_returns_delay_and_next_check_time(self, mock_validator, mock_time, bot):
         """_calculate_next_check returns delay_seconds and next_check_time UTC."""
-        # Source is 100s ago, next candle is 200s from now → delay ~200s + buffer
         now_seconds = 1_000_000.0
         mock_time.return_value = now_seconds
-        source_ms = int((now_seconds - 100) * 1000)  # 100s ago
-        next_candle_ms = int((now_seconds + 200) * 1000)  # 200s from now
+        source_ms = int((now_seconds - 100) * 1000)
+        next_candle_ms = int((now_seconds + 200) * 1000)
         mock_validator.calculate_next_candle_time.return_value = next_candle_ms
 
         delay_seconds, next_check_time = bot._calculate_next_check(source_ms)
@@ -64,7 +63,7 @@ class TestCalculateNextCheck:
     @patch("src.app.TimeframeValidator")
     def test_clamps_negative_delay_to_zero(self, mock_validator, bot):
         """Delay is clamped to 0 when next candle has already started."""
-        mock_validator.calculate_next_candle_time.return_value = 1_747_000_000_000  # in the past
+        mock_validator.calculate_next_candle_time.return_value = 1_747_000_000_000
 
         delay_seconds, _ = bot._calculate_next_check(1_746_000_000_000)
 
@@ -125,7 +124,7 @@ class TestWaitForNextTimeframe:
         bot._interruptible_sleep.assert_awaited_once()
         bot.logger.info.assert_called()
         assert "Next check" in bot.logger.info.call_args[0][0]
-        assert result is False  # _interruptible_sleep returned False
+        assert result is False
 
     @pytest.mark.asyncio
     @patch("src.app.TimeframeValidator")
@@ -142,13 +141,13 @@ class TestWaitForNextTimeframe:
     @pytest.mark.asyncio
     async def test_handles_error_gracefully(self, bot):
         """Sleeps ERROR_WAIT_LONG on calculation error and returns False."""
-        bot.current_timeframe = None  # triggers ValueError
+        bot.current_timeframe = None
 
         with patch("src.app.ERROR_WAIT_LONG", 1):
             result = await bot._wait_for_next_timeframe()
 
         assert result is False
-        bot._interruptible_sleep.assert_awaited_with(1)  # ERROR_WAIT_LONG
+        bot._interruptible_sleep.assert_awaited_with(1)
 
 
 class TestWaitUntilNextTimeframeAfter:
@@ -196,18 +195,18 @@ class TestWaitUntilNextTimeframeAfter:
     @patch("src.app.TimeframeValidator")
     async def test_returns_early_when_candle_already_passed(self, mock_validator, bot):
         """Returns immediately when current time is past the next candle time."""
-        mock_validator.calculate_next_candle_time.return_value = 1  # very old candle (1ms epoch)
+        mock_validator.calculate_next_candle_time.return_value = 1
 
         result = await bot._wait_until_next_timeframe_after(self._make_last_time())
 
-        assert result is None  # early return
+        assert result is None
         bot._interruptible_sleep.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("src.app.TimeframeValidator")
     async def test_waits_when_candle_not_yet_passed(self, mock_validator, bot):
         """Sleeps when the next candle hasn't started yet."""
-        mock_validator.calculate_next_candle_time.return_value = 9_999_999_999_999_999  # far future
+        mock_validator.calculate_next_candle_time.return_value = 9_999_999_999_999_999
         mock_validator.is_same_candle.return_value = True
 
         await bot._wait_until_next_timeframe_after(self._make_last_time())
@@ -217,9 +216,9 @@ class TestWaitUntilNextTimeframeAfter:
     @pytest.mark.asyncio
     async def test_handles_error_gracefully(self, bot):
         """Sleeps ERROR_WAIT_SHORT on calculation error."""
-        bot.current_timeframe = None  # triggers ValueError
+        bot.current_timeframe = None
 
         with patch("src.app.ERROR_WAIT_SHORT", 1):
             await bot._wait_until_next_timeframe_after(self._make_last_time())
 
-        bot._interruptible_sleep.assert_awaited_with(1)  # ERROR_WAIT_SHORT
+        bot._interruptible_sleep.assert_awaited_with(1)

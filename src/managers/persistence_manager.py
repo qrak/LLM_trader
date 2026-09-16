@@ -43,12 +43,7 @@ class PersistenceManager:
         return dt
 
     def __init__(self, logger: Logger, data_dir: str = "trading_data"):
-        """Initialize trading persistence.
-
-        Args:
-            logger: Logger instance
-            data_dir: Directory for trading data files
-        """
+        """Initialize trading persistence."""
         self.logger = logger
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -59,18 +54,11 @@ class PersistenceManager:
         self.statistics_file = self.data_dir / "statistics.json"
         self.position_monitor_file = self.data_dir / "position_monitor.json"
 
-        # In-memory caches to prevent blocking I/O on hot paths.
-        # Cache contract: every cache entry is write-through — set on load AND on
-        # every save.  ``save_position(None)`` sets _position_cache = None and
-        # _position_cache_valid = True.  There is no external invalidation path.
-        # If the position file is modified by another process, the cache will be
-        # stale until the next save or a process restart.
         self._position_cache: Position | None = None
         self._position_cache_valid: bool = False
         self._last_analysis_time_cache: datetime | None = None
         self._last_analysis_time_cache_valid: bool = False
 
-        # SQLite trade history store.
         sqlite_db_path = self.data_dir / "trade_history.db"
         self._sqlite = SQLiteTradeHistory(
             logger=self.logger,
@@ -197,7 +185,6 @@ class PersistenceManager:
                     max_profit_pct=data.get("max_profit_pct", 0.0),
                 )
 
-                # Update cache
                 self._position_cache = position
                 self._position_cache_valid = True
 
@@ -211,12 +198,6 @@ class PersistenceManager:
 
         Call after load_position() to detect stale or misconfigured state.
         Does NOT modify the position file — only reports issues.
-
-        Args:
-            expected_symbol: The trading pair from the current config. If
-                             provided and the loaded position's symbol doesn't
-                             match, a conflict warning is generated.
-
         Returns:
             List of human-readable warning strings (empty if no issues found).
         """
@@ -294,10 +275,6 @@ class PersistenceManager:
 
     def get_last_execution_timestamp(self, actions: tuple[str, ...] = ("BUY", "SELL")) -> datetime | None:
         """Return the newest execution timestamp from trade history.
-
-        Args:
-            actions: Action labels used to identify execution entries.
-
         Returns:
             UTC-aware datetime if found, else None.
         """
@@ -319,11 +296,6 @@ class PersistenceManager:
 
         Uses SQLite's indexed timestamp query for O(log n) lookup instead of
         scanning all JSON records.
-
-        Args:
-            entry_time: The entry_time of the position to find.
-            symbol: Optional symbol used to disambiguate rapid entries.
-
         Returns:
             TradeDecision with the original entry reasoning, or None if not found
         """
@@ -456,13 +428,7 @@ class PersistenceManager:
         technical_data: dict[str, Any] | None = None,
         prompt: str | None = None
     ) -> None:
-        """Save the previous AI response, technical indicator values, and prompt.
-
-        Args:
-            response: The AI response text
-            technical_data: Dictionary of technical indicator values (RSI, MACD, ADX, etc.)
-            prompt: The prompt that was sent to the AI
-        """
+        """Save the previous AI response, technical indicator values, and prompt."""
         try:
             response_dict = {"text_analysis": response}
 
@@ -475,7 +441,6 @@ class PersistenceManager:
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
-            # Add prompt if provided
             if prompt:
                 data_to_save["prompt"] = prompt
 
@@ -504,9 +469,6 @@ class PersistenceManager:
 
         Writes to a temp file first, then atomically renames to prevent
         the reader getting a partial write.
-
-        Args:
-            decision_data: Dict with CCXT-ready trade parameters
         """
         decision_path = self.data_dir / "latest_decision.json"
         decision_path.parent.mkdir(parents=True, exist_ok=True)
@@ -578,11 +540,7 @@ class PersistenceManager:
             return None
 
     def save_last_analysis_time(self, timestamp: datetime | None = None) -> None:
-        """Save the timestamp of the last successful analysis.
-
-        Args:
-            timestamp: Timestamp to save (defaults to now)
-        """
+        """Save the timestamp of the last successful analysis."""
         try:
             if timestamp is None:
                 timestamp = datetime.now(timezone.utc)

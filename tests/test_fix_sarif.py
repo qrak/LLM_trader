@@ -21,7 +21,7 @@ def test_fix_sarif_rules_null_and_levels():
                 "tool": {
                     "driver": {
                         "name": None,
-                        "rules": None  # Null rules array
+                        "rules": None
                     }
                 },
                 "results": [
@@ -51,7 +51,7 @@ def test_fix_sarif_rules_null_and_levels():
 
     driver = fixed["runs"][0]["tool"]["driver"]
     assert driver["name"] == "Codacy"
-    assert isinstance(driver["rules"], list)  # Must be an array, not null
+    assert isinstance(driver["rules"], list)
     assert driver["rules"] == []
 
     results = fixed["runs"][0]["results"]

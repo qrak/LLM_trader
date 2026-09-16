@@ -36,7 +36,6 @@ class StopLossTighteningPolicy:
     as the safety floor/ceiling.  The policy is deterministic and side-effect free.
     """
 
-    # Timeframe bucket boundaries in minutes
     _SCALPING_CEILING = 60
     _INTRADAY_CEILING = 240
     _SWING_CEILING = 1440
@@ -51,17 +50,7 @@ class StopLossTighteningPolicy:
         ceiling: float = 0.40,
         min_brain_samples: int = 10,
     ) -> None:
-        """Initialise policy with per-timeframe thresholds and safety clamps.
-
-        Args:
-            scalping_threshold: Minimum progress for sub-1h timeframes.
-            intraday_threshold: Minimum progress for 1h–4h timeframes.
-            swing_threshold: Minimum progress for 4h–1d timeframes.
-            position_threshold: Minimum progress for daily+ timeframes.
-            floor: Lower clamp — brain cannot push below this.
-            ceiling: Upper clamp — brain cannot push above this.
-            min_brain_samples: Minimum paired samples before brain override is trusted.
-        """
+        """Initialise policy with per-timeframe thresholds and safety clamps."""
         self._scalping = scalping_threshold
         self._intraday = intraday_threshold
         self._swing = swing_threshold
@@ -102,14 +91,6 @@ class StopLossTighteningPolicy:
         brain_thresholds: dict[str, Any] | None = None,
     ) -> TighteningEvaluation:
         """Evaluate whether the proposed SL change is a premature tightening.
-
-        Args:
-            position: Active position (must not be None).
-            proposed_sl: Requested new stop-loss price.
-            current_price: Current market price.
-            tf_minutes: Analysis timeframe in minutes.
-            brain_thresholds: Optional learned thresholds from TradingBrainService.
-
         Returns:
             TighteningEvaluation with all decision metadata.
         """

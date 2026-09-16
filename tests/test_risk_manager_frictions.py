@@ -15,8 +15,6 @@ import pytest
 from src.managers.risk_manager import RiskManager
 from src.trading.data_models import MarketConditions
 
-# ── Helpers ──────────────────────────────────────────────────────
-
 
 def _make_config(
     max_position_size: float = 0.10,
@@ -57,9 +55,6 @@ def _entry(
     )
 
 
-# ── Friction Accumulation and Clearing ───────────────────────────
-
-
 class TestFrictionAccumulationAndClearing:
     """Verify _last_frictions buffer lifecycle."""
 
@@ -74,7 +69,7 @@ class TestFrictionAccumulationAndClearing:
     def test_frictions_cleared_after_get(self):
         """get_and_clear_frictions clears the buffer after returning."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config(max_position_size=0.02))
-        _entry(mgr, position_size=0.50)  # triggers position_size_clamp
+        _entry(mgr, position_size=0.50)
 
         first = mgr.get_and_clear_frictions()
         assert len(first) == 1
@@ -85,8 +80,8 @@ class TestFrictionAccumulationAndClearing:
     def test_multiple_frictions_accumulate_across_calls(self):
         """Multiple guarded entries accumulate until cleared."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config(max_position_size=0.02))
-        _entry(mgr, position_size=0.50)  # size clamp (NEUTRAL profile cap = 0.08)
-        _entry(mgr, signal="BUY", stop_loss=99.5, current_price=100.0)  # SL min (0.5% < 1%)
+        _entry(mgr, position_size=0.50)
+        _entry(mgr, signal="BUY", stop_loss=99.5, current_price=100.0)
 
         frictions = mgr.get_and_clear_frictions()
         assert len(frictions) >= 2
@@ -105,9 +100,6 @@ class TestFrictionAccumulationAndClearing:
         assert f2 == []
 
 
-# ── Guard: position_size_clamp ───────────────────────────────────
-
-
 class TestGuardPositionSizeClamp:
     """Verify position_size_clamp friction structure."""
 
@@ -122,7 +114,7 @@ class TestGuardPositionSizeClamp:
         assert f["guard_type"] == "position_size_clamp"
         assert f["direction"] == "N/A"
         assert f["suggested_size"] == pytest.approx(0.30)
-        assert f["max_size"] == pytest.approx(0.08)  # NEUTRAL regime profile cap
+        assert f["max_size"] == pytest.approx(0.08)
         assert f["detail"].startswith("Position size")
         assert assessment.size_pct == pytest.approx(0.08)
 
@@ -142,9 +134,6 @@ class TestGuardPositionSizeClamp:
         assert mgr.get_and_clear_frictions() == []
 
 
-# ── Guard: sl_distance_max ───────────────────────────────────────
-
-
 class TestGuardSlTooFar:
     """SL distance >10% gets clamped."""
 
@@ -153,7 +142,6 @@ class TestGuardSlTooFar:
         assessment = _entry(mgr, signal="BUY", stop_loss=80.0, current_price=100.0)
 
         frictions = mgr.get_and_clear_frictions()
-        # 20% distance triggers sl_distance_max
         assert any(f["guard_type"] == "sl_distance_max" for f in frictions)
         f = next(f for f in frictions if f["guard_type"] == "sl_distance_max")
 
@@ -162,7 +150,6 @@ class TestGuardSlTooFar:
         assert f["corrected_sl_pct"] == pytest.approx(0.10)
         assert f["volatility_level"] in ("HIGH", "MEDIUM", "LOW")
         assert "clamped to max 10%" in f["detail"]
-        # Clamped SL should be 10% below entry for LONG
         assert assessment.stop_loss == pytest.approx(90.0)
 
     def test_sl_too_far_short(self):
@@ -174,10 +161,7 @@ class TestGuardSlTooFar:
         f = next(f for f in frictions if f["guard_type"] == "sl_distance_max")
 
         assert f["direction"] == "SHORT"
-        assert assessment.stop_loss == pytest.approx(110.0)  # 10% above entry for SHORT
-
-
-# ── Guard: sl_distance_min ───────────────────────────────────────
+        assert assessment.stop_loss == pytest.approx(110.0)
 
 
 class TestGuardSlTooTight:
@@ -208,16 +192,12 @@ class TestGuardSlTooTight:
         assert assessment.stop_loss == pytest.approx(101.0)
 
 
-# ── Guard: sl_below_entry / tp_below_entry ───────────────────────
-
-
 class TestGuardInvalidSlTp:
     """SL/TP on the wrong side of entry triggers logical correction."""
 
     def test_sl_above_entry_for_long(self):
         """LONG with SL >= entry_price is nonsensical."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
-        # Provide a clearly invalid SL, with no ATR to override the default dynamic calc
         _entry(mgr, signal="BUY", stop_loss=102.0, current_price=100.0,
                market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
 
@@ -231,7 +211,6 @@ class TestGuardInvalidSlTp:
                market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
 
         frictions = mgr.get_and_clear_frictions()
-        # TP 5% below entry for LONG should be caught
         assert len(frictions) >= 1
 
     def test_sl_below_entry_for_short(self):
@@ -251,9 +230,6 @@ class TestGuardInvalidSlTp:
 
         frictions = mgr.get_and_clear_frictions()
         assert len(frictions) >= 1
-
-
-# ── Friction Dict Schema Contract ────────────────────────────────
 
 
 class TestFrictionDictContract:
@@ -310,14 +286,11 @@ class TestFrictionDictContract:
         _entry(mgr, signal="LONG", take_profit=95.0, current_price=100.0, stop_loss=None,
                market_conditions=MarketConditions(atr=2.0, atr_percentage=2.0))
         tp_frictions = [f for f in mgr.get_and_clear_frictions() if f["guard_type"] == "tp_below_entry"]
-        if tp_frictions:  # only if AI TP was used (prevailed over dynamic for LONG)
+        if tp_frictions:
             f = tp_frictions[0]
             assert self.MANDATORY_KEYS.issubset(f.keys())
             assert "suggested_tp" in f
             assert "dynamic_tp" in f
-
-
-# ── Volatility Level Propagation ─────────────────────────────────
 
 
 class TestVolatilityLevelInFrictions:
@@ -340,9 +313,6 @@ class TestVolatilityLevelInFrictions:
         assert f["volatility_level"] == "LOW"
 
 
-# ── Default ATR Fallback ─────────────────────────────────────────
-
-
 class TestDefaultAtrFallback:
     """When no market_conditions ATR is provided, uses 2% of price."""
 
@@ -352,13 +322,8 @@ class TestDefaultAtrFallback:
         assessment = _entry(mgr, signal="BUY", stop_loss=95.0, take_profit=110.0,
                             market_conditions=MarketConditions())
 
-        # Dynamic SL = 100 - 2*2 = 96, TP = 100 + 4*2 = 108
-        # But AI SL 95 is used since it's provided
         assert assessment.stop_loss == pytest.approx(95.0)
         assert assessment.take_profit == pytest.approx(110.0)
-
-
-# ── R/R Ratio in Assessment ──────────────────────────────────────
 
 
 class TestRiskRewardRatio:
@@ -368,7 +333,6 @@ class TestRiskRewardRatio:
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
         assessment = _entry(mgr, signal="BUY", stop_loss=95.0, take_profit=110.0)
 
-        # SL distance = 5%, TP distance = 10%, R/R = 10/5 = 2.0
         assert assessment.sl_distance_pct == pytest.approx(0.05)
         assert assessment.tp_distance_pct == pytest.approx(0.10)
         assert assessment.rr_ratio == pytest.approx(2.0)
@@ -376,7 +340,6 @@ class TestRiskRewardRatio:
     def test_rr_ratio_zero_when_sl_at_entry(self):
         """Zero SL distance gives rr_ratio 0 (guard: division by zero)."""
         mgr = RiskManager(logger=MagicMock(), config=_make_config())
-        # SL at 100 when price is 100 → sl_distance 0
         assessment = _entry(mgr, signal="BUY", stop_loss=100.0, current_price=100.0,
                             market_conditions=MarketConditions(atr=1.0, atr_percentage=1.0))
         assert assessment.rr_ratio >= 0

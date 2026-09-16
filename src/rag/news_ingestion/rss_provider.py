@@ -45,9 +45,6 @@ class RSSCrawl4AINewsProvider:
         self.config = config
         self._enricher = enricher
 
-    # ------------------------------------------------------------------
-    # Public API expected by NewsManager
-    # ------------------------------------------------------------------
 
     async def fetch_news(
         self,
@@ -88,9 +85,6 @@ class RSSCrawl4AINewsProvider:
             if own_session:
                 await session.close()
 
-    # ------------------------------------------------------------------
-    # Stage helpers (split from fetch_news for readability)
-    # ------------------------------------------------------------------
 
     async def _fetch_raw_items(
         self,
@@ -162,7 +156,6 @@ class RSSCrawl4AINewsProvider:
     ) -> list[dict[str, Any]]:
         """Enrich bodies, deduplicate, sort, and map to canonical article schema."""
         deduped = dedupe_by_url(merged)
-        # 2nd pass: same story, different URL (RSS summary vs enriched canonical)
         deduped = dedupe_by_normalized_title(deduped)
         sorted_items = sort_by_date(deduped)
 
@@ -219,9 +212,6 @@ class RSSCrawl4AINewsProvider:
         recent.sort(key=lambda a: a.get("published_on", 0), reverse=True)
         return recent
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def _enabled_source_names(self) -> list[str] | None:
         """Return enabled source-name filter, or None to use all configured URLs."""

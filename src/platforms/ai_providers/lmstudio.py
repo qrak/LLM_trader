@@ -22,7 +22,6 @@ class LMStudioClient(BaseAIClient):
         self.base_url = base_url
         self._client: AsyncOpenAI | None = None
         self._cached_model: str | None = None
-        # OpenRouter-only key leaking in from the shared model config
         self._known_unsupported_params.add("openrouter_reasoning_effort")
 
     async def _initialize_client(self) -> None:
@@ -108,13 +107,6 @@ class LMStudioClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
-
-        Args:
-            model: Model name to use
-            messages: list of OpenAI-style messages
-            chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters for the model
-
         Returns:
             ChatResponseModel or None if failed
         """

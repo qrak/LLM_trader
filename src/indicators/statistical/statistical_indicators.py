@@ -43,19 +43,14 @@ def _eot(closeprices, lpperiod, k):
 @njit(cache=True)
 def _auto_dom_imp(source, minlen, maxlen, avelen):
     """Simplified auto-dominant impulse using extracted utilities"""
-    # Apply filtering
     filt = f_ess(f_hp(source, maxlen), minlen)
 
-    # Calculate correlation matrix
     corr = calculate_correlation_matrix(filt, maxlen, avelen)
 
-    # Calculate spectral components
     sqsum = calculate_spectral_components(corr, minlen, maxlen, avelen)
 
-    # Smooth power spectrum
     r1 = smooth_power_spectrum(sqsum, minlen, maxlen)
 
-    # Calculate dominant cycle
     return calculate_dominant_cycle(r1, minlen, maxlen, avelen)
 
 @njit(cache=True)
@@ -69,7 +64,6 @@ def kurtosis_numba(arr, length):
 
     length_reciprocal = 1.0 / length
 
-    # Constants for unbiased estimator (matching original implementation)
     n_val = float(length)
     factor1 = (n_val * (n_val + 1)) / ((n_val - 1) * (n_val - 2) * (n_val - 3))
     factor2 = 3 * (n_val - 1) / ((n_val - 2) * (n_val - 3))
@@ -80,7 +74,6 @@ def kurtosis_numba(arr, length):
     s3 = 0.0
     s4 = 0.0
 
-    # Initialize first window
     for i in range(length):
         val = arr[i] - offset
         val2 = val * val
@@ -89,7 +82,6 @@ def kurtosis_numba(arr, length):
         s3 += val2 * val
         s4 += val2 * val2
 
-    # Compute for first window
     mean = s1 * length_reciprocal
     sum_sq_diff = s2 - length * mean * mean
     if sum_sq_diff < 0:
@@ -103,14 +95,11 @@ def kurtosis_numba(arr, length):
         kurtosis = factor1 * kurtosis_sum - factor2
         kurtosis_values[length - 1] = kurtosis
 
-    # Sliding window
     for i in range(length, n):
         old_val = arr[i - length] - offset
         new_val = arr[i] - offset
 
-        # Re-calculate every 1000 steps to maintain precision
         if i % 1000 == 0:
-            # Update offset to current window start to ensure numerical stability
             offset = arr[i - length + 1]
             window = arr[i - length + 1: i + 1] - offset
             s1 = 0.0
@@ -259,19 +248,16 @@ def zscore_numba(close, length=30, std=1.0):
     if n < length:
         return zscore_values
 
-    # To avoid precision loss on large values, shift by the first value
     offset = close[0]
 
     sum_x = 0.0
     sum_x2 = 0.0
 
-    # Initial window setup
     for i in range(length):
         val = close[i] - offset
         sum_x += val
         sum_x2 += val * val
 
-    # Calculate initial values
     if length > 0:
         mean = sum_x / length
         var = (sum_x2 - (sum_x * sum_x) / length) / (length - 1)
@@ -286,7 +272,6 @@ def zscore_numba(close, length=30, std=1.0):
         new_val = close[i] - offset
 
         if i % 1000 == 0:
-            # Recalculate to prevent drift
             window = close[i - length + 1 : i + 1] - offset
             sum_x = np.sum(window)
             sum_x2 = np.sum(window * window)
@@ -314,7 +299,6 @@ def mad_numba(close, length=30):
         return mad_values
 
     for i in range(length - 1, n):
-        # Calculate mean manually to avoid np.mean on slices which allocates arrays
         sum_val = 0.0
         for j in range(i - length + 1, i + 1):
             sum_val += close[j]
@@ -389,43 +373,32 @@ def hurst_numba(ts: np.ndarray, max_lag: int = 20) -> np.ndarray:
     n = len(ts)
     hurst_values = np.full(n, np.nan, dtype=np.float64)
 
-    # Initialize state for O(N) update
-    # sum_diff_sq[k] will store sum of squared diffs for lag k
     sum_diff_sq = np.zeros(max_lag)
 
-    # Iterate through the time series once
     for i in range(n):
-        # incremental update for all lags
-        # lags are 2, 3, ..., max_lag-1 (since range(2, max_lag) excludes max_lag)
         for lag in range(2, max_lag):
             if i >= lag:
                 diff = ts[i] - ts[i - lag]
                 sum_diff_sq[lag] += diff * diff
 
-        # Calculate Hurst if we have enough data (matching original loop start)
         if i >= max_lag + 2:
             lags = np.arange(2, max_lag)
             tau = np.zeros(len(lags))
 
             for j, lag in enumerate(lags):
-                # count is the number of diffs accumulated so far
-                # terms are at indices: lag, lag+1, ..., i
                 count = i - lag + 1
                 if count > 0:
                     tau[j] = np.sqrt(sum_diff_sq[lag] / count)
                 else:
                     tau[j] = 0.0
 
-            # Filter out zero values
             non_zero_tau = tau[tau > 0]
             if len(non_zero_tau) < 2:
                 continue
 
-            # Calculate slope using valid values
             log_lags = np.log(lags[tau > 0])
             log_tau = np.log(non_zero_tau)
 
-            # Linear regression using method of moments
             n_points = len(log_lags)
             sum_xy = np.sum(log_lags * log_tau)
             sum_x = np.sum(log_lags)

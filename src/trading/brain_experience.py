@@ -61,9 +61,6 @@ class BrainExperienceRecorder:
         """Extract insights from a closed trade and store them in vector memory."""
         pnl_pct = position.calculate_pnl(close_price)
         is_win = pnl_pct > 0
-        # Surprise ratio: |realized P&L - expected P&L at entry| / expected P&L
-        # Measures how much the outcome differed from the TP thesis at entry.
-        # High surprise on a win = lucky outcome, not evidence of correct reasoning.
         expected_pnl_pct = position.tp_distance_pct * 100
         surprise_ratio = round(
             abs(pnl_pct - expected_pnl_pct) / max(abs(expected_pnl_pct), 0.01), 4
@@ -80,10 +77,6 @@ class BrainExperienceRecorder:
         )
         trade_id = f"trade_{position.entry_time.isoformat()}"
         position_id = f"{position.symbol}|{position.entry_time.isoformat()}"
-        # Raw price levels do not survive a change of price epoch ($63k vs $77k), so
-        # store the distance from entry (decimal, like sl_distance_pct). A source level
-        # that was never computed (0/absent) yields None, which the store path drops —
-        # nothing is fabricated.
         entry_price = position.entry_price
         vwap_distance_pct = (
             (entry_price - conditions.vwap) / entry_price if conditions.vwap > 0 else None

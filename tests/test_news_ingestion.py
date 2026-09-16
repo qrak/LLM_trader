@@ -33,9 +33,6 @@ from src.rag.news_ingestion.rss_primitives import (
 )
 from src.rag.news_ingestion.schema_mapper import make_article_id, to_article_schema
 
-# ---------------------------------------------------------------------------
-# URL normalisation
-# ---------------------------------------------------------------------------
 
 class TestNormalizeUrl:
     def test_strips_utm_params(self):
@@ -66,13 +63,8 @@ class TestNormalizeUrl:
         assert normalize_url(url) == "https://example.com/post"
 
 
-# ---------------------------------------------------------------------------
-# Publish-date parsing
-# ---------------------------------------------------------------------------
-
 class TestParsePubDateToEpoch:
     def test_rfc2822(self):
-        # Wed, 02 Apr 2025 12:00:00 GMT
         raw = "Wed, 02 Apr 2025 12:00:00 GMT"
         epoch = parse_pub_date_to_epoch(raw)
         assert isinstance(epoch, float)
@@ -95,10 +87,6 @@ class TestParsePubDateToEpoch:
     def test_invalid_returns_zero(self):
         assert parse_pub_date_to_epoch("not-a-date") == 0.0
 
-
-# ---------------------------------------------------------------------------
-# HTML extraction
-# ---------------------------------------------------------------------------
 
 class TestStripHtml:
     def test_removes_tags(self):
@@ -130,10 +118,6 @@ class TestExtractHtmlBodyText:
         assert "alert" not in result
         assert "Content" in result
 
-
-# ---------------------------------------------------------------------------
-# RSS parsing
-# ---------------------------------------------------------------------------
 
 _SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
@@ -201,10 +185,6 @@ class TestParseRssItems:
         assert items[0]["title"] == "Valid"
 
 
-# ---------------------------------------------------------------------------
-# Deduplication
-# ---------------------------------------------------------------------------
-
 class TestDedupeByUrl:
     def _make_item(self, url: str, epoch: float, title: str = "T") -> dict[str, Any]:
         return {"url": url, "published_at_epoch": epoch, "title": title}
@@ -235,10 +215,6 @@ class TestDedupeByUrl:
         result = dedupe_by_url(items)
         assert len(result) == 1
 
-
-# ---------------------------------------------------------------------------
-# Schema mapping and deterministic ID
-# ---------------------------------------------------------------------------
 
 class TestMakeArticleId:
     def test_deterministic(self):
@@ -385,10 +361,6 @@ class TestToArticleSchema:
         assert "Top Stories in derivatives" in article["body"]
 
 
-# ---------------------------------------------------------------------------
-# NewsManager.update_news_database() - URL-first dedup
-# ---------------------------------------------------------------------------
-
 class TestNewsManagerUrlDedup:
     """Verify that update_news_database uses URL-first deduplication."""
 
@@ -435,7 +407,6 @@ class TestNewsManagerUrlDedup:
         }
         mgr.update_news_database([article])
 
-        # Same URL, different ID (as would happen if ID scheme changed)
         duplicate = {
             "id": "xyz999",
             "url": "https://coindesk.com/btc",
@@ -444,10 +415,6 @@ class TestNewsManagerUrlDedup:
         result = mgr.update_news_database([duplicate])
         assert result is False
 
-
-# ---------------------------------------------------------------------------
-# LocalTaxonomyProvider
-# ---------------------------------------------------------------------------
 
 _SAMPLE_CATEGORIES = [
     {
@@ -515,7 +482,6 @@ class TestLocalTaxonomyProvider:
         try:
             provider = LocalTaxonomyProvider(logger, categories_file=tmp_path)
             await provider.fetch_categories()
-            # Remove file; second call should still succeed from cache
             os.unlink(tmp_path)
             categories = await provider.fetch_categories()
             assert len(categories) == 2
@@ -542,7 +508,6 @@ class TestLocalTaxonomyProvider:
             cats1 = await provider.fetch_categories()
             assert len(cats1) == 1
 
-            # Overwrite file
             with open(tmp_path, "w", encoding="utf-8") as fh:
                 json.dump(updated, fh)
 

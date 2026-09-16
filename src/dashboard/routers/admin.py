@@ -31,7 +31,6 @@ from ..auth import (
 )
 from ..log_stream import LogStreamManager
 
-# ─── Pydantic request models ────────────────────────────────────────
 
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
@@ -60,8 +59,6 @@ class HumanInputRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000, description="User's iteration goal or instruction")
 
 
-# ─── Admin Router ────────────────────────────────────────────────────
-
 class AdminRouter:
     """Admin control console router.
 
@@ -76,7 +73,7 @@ class AdminRouter:
         self,
         writable_config: WritableConfig,
         log_stream_manager: LogStreamManager,
-        config: Any,           # Bot's Config object (read-only reference)
+        config: Any,
         logger: Any,
         brain_service: Any = None,
         analysis_engine: Any = None,
@@ -114,7 +111,6 @@ class AdminRouter:
     def _register_routes(self) -> None:
         """Register all admin routes."""
 
-        # ── Auth ──────────────────────────────────────────────────────
 
         @self.router.post("/login")
         async def login(body: LoginRequest, response: Response, request: Request):
@@ -129,13 +125,11 @@ class AdminRouter:
 
             if check_credentials(body.username, body.password):
                 reset_login_rate_limit(client_ip)
-                # Detect HTTPS (direct or via Cloudflare proxy)
                 is_https = (
                     request.url.scheme == "https"
                     or request.headers.get("x-forwarded-proto") == "https"
                 )
                 create_session(body.username, response, secure=is_https)
-                # Generate a WS token for the frontend using top-level imports
                 ws_token = _sign_token(body.username, time.time())
                 return {"status": "ok", "username": body.username, "token": ws_token}
 
@@ -172,7 +166,6 @@ class AdminRouter:
             token = _sign_token(username, time.time())
             return {"status": "ok", "username": username, "token": token}
 
-        # ── Config ────────────────────────────────────────────────────
 
         @self.router.get("/config")
         async def get_config():
@@ -212,7 +205,6 @@ class AdminRouter:
             await self.writable_config.reload_from_disk()
             return {"status": "ok"}
 
-        # ── System Control ────────────────────────────────────────────
 
         @self.router.post("/system/trigger-analysis")
         async def trigger_analysis():
@@ -234,7 +226,6 @@ class AdminRouter:
             state = "enabled" if self._dashboard_feed_enabled else "disabled"
             if self.logger:
                 self.logger.info("Admin: Dashboard feed %s via web console", state)
-            # Broadcast state change to all WS clients
             if self.dashboard_state:
                 try:
                     await self.dashboard_state.broadcast({
@@ -257,7 +248,6 @@ class AdminRouter:
                 "force_analysis_available": self._force_analysis is not None,
             }
 
-        # ── Human-in-the-Loop Input ──────────────────────────────────
 
         @self.router.post("/system/human-input")
         async def set_human_input(body: HumanInputRequest):
@@ -278,7 +268,6 @@ class AdminRouter:
             self._human_input = ""
             return {"status": "ok"}
 
-        # ── Log Streaming (REST) ─────────────────────────────────────
 
         @self.router.get("/logs/recent")
         async def recent_logs(count: int = 200):
@@ -286,7 +275,6 @@ class AdminRouter:
             lines = self.log_stream_manager.get_recent_logs(count=min(count, 1000))
             return {"lines": lines, "count": len(lines)}
 
-        # ── Log Streaming (WebSocket) ────────────────────────────────
 
         @self.router.websocket("/logs/stream")
         async def log_stream_ws(websocket: WebSocket):
@@ -294,11 +282,9 @@ class AdminRouter:
 
             Auth: Requires ?token=<session_token> query param.
             """
-            # Verify auth via query param
             if not await self._authenticate_ws(websocket):
                 return
 
-            # Accept and subscribe
             await websocket.accept()
             sid, queue = self.log_stream_manager.handler.subscribe()
             try:
@@ -311,7 +297,6 @@ class AdminRouter:
             finally:
                 self.log_stream_manager.handler.unsubscribe(sid)
 
-        # ── Control Console WS (commands + state) ────────────────────
 
         @self.router.websocket("/console")
         async def console_ws(websocket: WebSocket):

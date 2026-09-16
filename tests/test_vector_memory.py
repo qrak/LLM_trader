@@ -22,9 +22,6 @@ def _make_service():
     )
 
 
-# ── _build_experience_document uses classify_rsi_label ───────────
-
-
 class TestBuildExperienceDocument:
     """Verify _build_experience_document embeds RSI label via classify_rsi_label."""
 
@@ -127,9 +124,6 @@ class TestBuildExperienceDocument:
             )
         )
         assert "Exit Execution: SL hard/15m | TP hard/15m" in doc
-
-
-# ── _adx_label finer granularity ────────────────────────────────
 
 
 class TestAdxLabel:
@@ -470,7 +464,6 @@ class TestRetrievalAndPromptContext:
 
         assert emb1 == [0.1, 0.2, 0.3]
         assert emb2 == [0.1, 0.2, 0.3]
-        # Neural model encode() should only be called ONCE for identical text
         svc._embedding_model.encode.assert_called_once_with("test query text")
 
 
@@ -735,7 +728,7 @@ class TestAnalyticsAndThresholds:
 
         assert thresholds["adx_strong_threshold"] == 25
         assert thresholds["adx_weak_threshold"] == 22
-        assert thresholds["min_rr_recommended"] == 1.0  # clamped: 1.5 >= borderline(1.3) → 1.3-0.3=1.0
+        assert thresholds["min_rr_recommended"] == 1.0
         assert thresholds["rr_strong_setup"] == 2.0
         assert thresholds["rr_borderline_min"] == 1.3
 
@@ -746,7 +739,6 @@ class TestAnalyticsAndThresholds:
         svc.compute_adx_performance = MagicMock(return_value={})
         svc.compute_confidence_stats = MagicMock(return_value={})
 
-        # Keep threshold learners focused on RR logic for this test.
         svc._learn_position_size_threshold = MagicMock()
         svc._learn_confluence_thresholds = MagicMock()
         svc._learn_alignment_thresholds = MagicMock()
@@ -766,7 +758,6 @@ class TestAnalyticsAndThresholds:
         assert thresholds["min_rr_recommended"] == 1.6
         assert "rr_borderline_min" not in thresholds
 
-    # ── _learn_sl_tightening_threshold ──────────────────────────
 
     def _make_raw_snapshot(self, update_records, close_records):
         """Build a raw Chroma snapshot with UPDATE + WIN/LOSS records."""

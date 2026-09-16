@@ -20,13 +20,7 @@ class RagFileHandler:
     MARKET_DATA_DIR = "market_data"
 
     def __init__(self, logger: Logger, config: "Config", unified_parser=None):
-        """Initialize RagFileHandler with logger and config.
-
-        Args:
-            logger: Logger instance
-            config: Config instance for data directory path
-            unified_parser: UnifiedParser instance (must be injected from app.py)
-        """
+        """Initialize RagFileHandler with logger and config."""
 
         self.logger = logger
         self.config = config
@@ -36,7 +30,6 @@ class RagFileHandler:
         self.news_file_path = os.path.join(self.data_dir, self.NEWS_FILE)
         self.tickers_file = os.path.join(self.data_dir, "known_tickers.json")
 
-        # RAG priorities are configuration, not data - store in config directory
         config_dir = os.path.join(self.base_dir, "config")
         self.rag_priorities_file = os.path.join(config_dir, "rag_priorities.json")
         self._last_news_save_time = 0
@@ -52,12 +45,10 @@ class RagFileHandler:
     def _resolve_base_dir(self) -> str:
         if getattr(sys, "frozen", False):
             return os.path.dirname(sys.executable)
-        # __file__ is inside src/rag/; go up three levels to reach project root
         return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     def load_json_file(self, file_path: str) -> dict | None:
         try:
-            # Security: Prevent path traversal including symlink resolution
             abs_path = os.path.realpath(file_path)
             abs_base_dir = os.path.realpath(self.base_dir)
             if os.path.commonpath([abs_path, abs_base_dir]) != abs_base_dir:
@@ -74,22 +65,18 @@ class RagFileHandler:
 
     def save_json_file(self, file_path: str, data: dict):
         try:
-            # Security: Prevent path traversal including symlink resolution
             abs_path = os.path.realpath(file_path)
             abs_base_dir = os.path.realpath(self.base_dir)
             if os.path.commonpath([abs_path, abs_base_dir]) != abs_base_dir:
                 self.logger.error("Path traversal attempt detected: %s", file_path)
                 return
 
-            # Atomic write: write to temporary file first, then rename
             temp_path = f"{abs_path}.tmp"
             with open(temp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            # Atomic operation: rename temp file to target
             os.replace(temp_path, abs_path)
         except Exception as e:  # noqa: BLE001
-            # Clean up temp file if it exists
             temp_path = f"{os.path.abspath(file_path)}.tmp"
             if os.path.exists(temp_path):
                 try:
@@ -115,7 +102,6 @@ class RagFileHandler:
         if not articles:
             return
 
-        # at most one save per second (duplicate writes during shutdown)
         current_time = time.time()
         if current_time - self._last_news_save_time < 1:
             self.logger.debug("Skipping news save, too soon after previous save")

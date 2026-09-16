@@ -30,15 +30,7 @@ class TradingMemoryService:
         vector_memory: Any | None = None,
         initial_capital: float | None = None,
     ):
-        """Initialize trading memory service.
-
-        Args:
-            logger: Logger instance
-            persistence: Persistence service for loading trade history
-            max_memory: Maximum number of decisions to keep in memory
-            vector_memory: VectorMemoryService instance (injected)
-            initial_capital: Starting quote capital used for total P&L percentage
-        """
+        """Initialize trading memory service."""
         self.logger = logger
         self.persistence = persistence
         self.max_memory = max_memory
@@ -49,13 +41,9 @@ class TradingMemoryService:
         self._cached_trade_count: int = -1
 
     def add_decision(self, decision: TradeDecision) -> None:
-        """Add a trading decision to memory.
-
-        Args:
-            decision: Trade decision to add
-        """
+        """Add a trading decision to memory."""
         self.memory.add_decision(decision)
-        self._cached_trade_count = -1  # invalidate cache
+        self._cached_trade_count = -1
 
     def get_context_summary(self) -> str:
         """Get formatted memory context for prompt injection.

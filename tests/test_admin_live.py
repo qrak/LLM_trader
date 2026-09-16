@@ -19,7 +19,6 @@ from playwright.sync_api import expect, sync_playwright
 LIVE_URL = os.environ.get("LLM_TRADER_URL", "https://semanticsignal.qrak.org")
 ADMIN_URL = f"{LIVE_URL}/admin"
 
-# Use env vars for credentials — NEVER hardcode
 ADMIN_USER = os.environ.get("LLM_ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("LLM_ADMIN_PASS", "")
 
@@ -48,8 +47,6 @@ def page(ctx):
     yield pg
     pg.close()
 
-
-# ─── Security ────────────────────────────────────────────────────────
 
 class TestSecurityHeaders:
     """Verify security headers on all responses."""
@@ -98,7 +95,6 @@ class TestSecurityHeaders:
             assert result in (404, 403, 502), f"{path} returned {result} — may be accessible!"
 
 
-# ─── Admin Login Flow ────────────────────────────────────────────────
 
 class TestAdminLoginFlow:
     """Test the complete login flow."""
@@ -151,8 +147,6 @@ class TestAdminLoginFlow:
         expect(page.locator("#login-screen")).to_be_visible(timeout=5000)
 
 
-# ─── Admin Dashboard ─────────────────────────────────────────────────
-
 @pytest.mark.skipif(not ADMIN_PASS, reason="LLM_ADMIN_PASS not set")
 class TestAdminDashboard:
     """Test dashboard features after login."""
@@ -179,7 +173,6 @@ class TestAdminDashboard:
         self._login(page)
         page.click("#btn-force-analysis")
         page.wait_for_timeout(2000)
-        # Should see console log entry
         console = page.locator("#console-log")
         text = console.inner_text()
         assert "force_analysis" in text.lower() or "analysis" in text.lower()
@@ -201,8 +194,6 @@ class TestAdminDashboard:
         status = page.locator("#human-input-status").inner_text()
         assert "Submitted" in status
 
-
-# ─── Config Editor ───────────────────────────────────────────────────
 
 @pytest.mark.skipif(not ADMIN_PASS, reason="LLM_ADMIN_PASS not set")
 class TestConfigEditor:
@@ -236,8 +227,6 @@ class TestConfigEditor:
             headers.first.click()
             page.wait_for_timeout(500)
 
-
-# ─── API Endpoints ───────────────────────────────────────────────────
 
 @pytest.mark.skipif(not ADMIN_PASS, reason="LLM_ADMIN_PASS not set")
 class TestAdminAPI:
@@ -279,7 +268,6 @@ class TestAdminAPI:
         assert isinstance(result["lines"], list)
 
 
-# ─── Navigation ──────────────────────────────────────────────────────
 
 @pytest.mark.skipif(not ADMIN_PASS, reason="LLM_ADMIN_PASS not set")
 class TestNavigation:

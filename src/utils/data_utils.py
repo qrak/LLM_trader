@@ -17,32 +17,24 @@ def get_last_valid_value(
     default: float | None = None
 ) -> float | None:
     """Extract the last non-NaN value from a numpy array.
-
-    Args:
-        arr: Numpy array (float or object dtype) or scalar.
-        default: Value to return if no valid value found.
-
     Returns:
         Last valid (non-NaN) float value, or default if none found.
     """
     if arr is None:
         return default
 
-    # Handle scalar values directly
     if isinstance(arr, (int, float)):
         return float(arr) if not math.isnan(arr) else default
 
     if len(arr) == 0:
         return default
 
-    # If it's an object array, ensure we try to convert to float
     if arr.dtype == object:
         try:
             arr = arr.astype(float)
         except (ValueError, TypeError):
             return default
 
-    # scan backwards for the last non-NaN (no index-array allocation)
     n = len(arr)  # type: ignore
     for idx in range(n - 1, -1, -1):
         val = arr[idx]  # type: ignore
@@ -69,25 +61,18 @@ def last_or_scalar(value: Any) -> Any:
 
 def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
     """Extract last N valid (non-NaN) values from array.
-
-    Args:
-        arr: Numpy array with potential NaN values.
-        n: Number of valid values to extract from the end.
-
     Returns:
         Array containing up to n valid values from the end.
     """
     if arr is None or len(arr) == 0 or n <= 0:
         return np.array([], dtype=float)
 
-    # Handle object array
     if arr.dtype == object:
         try:
             arr = arr.astype(float)
         except (ValueError, TypeError):
             return np.array([], dtype=float)
 
-    # Collect matching values working backwards
     valid_vals = []
     for idx in range(len(arr) - 1, -1, -1):  # type: ignore
         val = arr[idx]  # type: ignore
@@ -99,18 +84,12 @@ def get_last_n_valid(arr: NDArray | Any | None, n: int) -> NDArray:
     if not valid_vals:
         return np.array([], dtype=float)
 
-    # Reverse back to maintain original order
     valid_vals.reverse()
     return np.array(valid_vals, dtype=arr.dtype)  # type: ignore
 
 
 def safe_array_to_scalar(val: Any, default: float = 0.0) -> float:
     """Safely convert a numpy scalar, array, or float value to float.
-
-    Args:
-        val: Input value (float, int, numpy scalar, 1D/0D numpy array).
-        default: Fallback value if val is NaN, empty, or unconvertible.
-
     Returns:
         Extracted float scalar value.
     """
@@ -130,11 +109,6 @@ def safe_array_to_scalar(val: Any, default: float = 0.0) -> float:
 
 def get_indicator_value(td: dict, key: str) -> float | str:
     """Get indicator value with proper type checking and error handling.
-
-    Args:
-        td: Technical data dictionary
-        key: Indicator key to retrieve
-
     Returns:
         float or str: Indicator value or 'N/A' if invalid
     """
@@ -273,9 +247,6 @@ class SerializableMixin:
     def _convert_value(value: Any, target_type: type) -> Any:
         """Recursively convert values to match target types."""
         if value is None:
-            # For non-Optional primitives, return a safe zero-value instead of
-            # None to prevent silent type corruption when NaN/inf are serialized
-            # to null and then deserialized back.
             origin = get_origin(target_type)
             if origin is not Union and target_type in _PRIMITIVE_DEFAULTS:
                 return _PRIMITIVE_DEFAULTS[target_type]
@@ -284,20 +255,17 @@ class SerializableMixin:
         origin = get_origin(target_type)
         args = get_args(target_type)
 
-        # Handle Optional[T] (Union[T, None])
         if origin is Union and None.__class__ in args:
             non_none_args = [arg for arg in args if arg is not None.__class__]
             if len(non_none_args) == 1:
                 return SerializableMixin._convert_value(value, non_none_args[0])
 
-        # Handle List[T] — also handles plain list (get_origin returns None)
         if (origin is list or target_type is list) and isinstance(value, list):
             if args:
                 item_type = args[0]
                 return [SerializableMixin._convert_value(item, item_type) for item in value]
             return value
 
-        # Handle Tuple[T, ...] — also handles plain tuple (get_origin returns None)
         if (origin is tuple or target_type is tuple) and isinstance(value, (list, tuple)):
             if len(args) == 2 and args[1] is Ellipsis:
                 return tuple(SerializableMixin._convert_value(item, args[0]) for item in value)
@@ -306,14 +274,11 @@ class SerializableMixin:
                     SerializableMixin._convert_value(item, args[index]) if index < len(args) else item
                     for index, item in enumerate(value)
                 )
-            # Plain tuple (no type args) — convert list to tuple and
-            # recursively convert inner lists/tuples too
             return tuple(
                 tuple(item) if isinstance(item, (list, tuple)) else item
                 for item in value
             )
 
-        # Handle datetime
         if target_type is datetime and isinstance(value, str):
             try:
                 value = datetime.fromisoformat(value)
@@ -322,7 +287,6 @@ class SerializableMixin:
                     f"Cannot convert {value!r} to datetime for field of type {target_type}"
                 ) from None
 
-        # Handle nested dataclasses
         if dataclasses.is_dataclass(target_type) and isinstance(value, dict):
             return target_type.from_dict(value) if issubclass(target_type, SerializableMixin) else target_type(**value)
 

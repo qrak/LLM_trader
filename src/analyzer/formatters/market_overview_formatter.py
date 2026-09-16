@@ -15,12 +15,7 @@ class MarketOverviewFormatter:
     """Formatter for market overview data including global metrics, top coins, and DeFi."""
 
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the market overview formatter.
-
-        Args:
-            logger: Optional logger instance
-            format_utils: Format utilities for value formatting (required)
-        """
+        """Initialize the market overview formatter."""
         self.logger = logger
         if format_utils is None:
             raise ValueError("format_utils is required for MarketOverviewFormatter")
@@ -29,26 +24,18 @@ class MarketOverviewFormatter:
     def format_market_overview(self, market_overview: dict, analyzed_symbol: str | None = None) -> str:
         """
         Format market overview data with top coins and DeFi metrics.
-
-        Args:
-            market_overview: Market overview data from CoinGecko
-            analyzed_symbol: Trading pair being analyzed (e.g., "BTC/USDT")
-                           Used to provide comparison context and exclude from top coins list
-
         Returns:
             Formatted market overview string
         """
         if not market_overview:
             return ""
 
-        # Extract base symbol from trading pair (BTC/USDT -> BTC)
         analyzed_coin_symbol = None
         if analyzed_symbol:
             analyzed_coin_symbol = analyzed_symbol.split("/")[0].lower()
 
         sections = []
 
-        # Market cap and dominance
         market_cap_data = market_overview.get("market_cap", {})
         if "total_usd" in market_cap_data:
             market_cap = market_cap_data["total_usd"]
@@ -63,7 +50,6 @@ class MarketOverviewFormatter:
             eth_dom = dominance_data["eth"]
             sections.append(f"Ethereum Dominance: {self.format_utils.fmt(eth_dom)}%")
 
-        # Market metrics
         volume_data = market_overview.get("volume", {})
         total_volume = volume_data.get("total_usd", 0)
         if total_volume:
@@ -74,7 +60,6 @@ class MarketOverviewFormatter:
             direction = "UP" if change >= 0 else "DOWN"
             sections.append(f"Total Market Cap Change 24h ({direction}): {self.format_utils.fmt(change)}%")
 
-        # Find analyzed coin in top_coins if present
         top_coins = market_overview.get("top_coins", [])
         analyzed_coin_data = None
         other_top_coins = []
@@ -88,7 +73,6 @@ class MarketOverviewFormatter:
         else:
             other_top_coins = top_coins
 
-        # Show analyzed coin position if it's in top coins
         if analyzed_coin_data:
             position_summary = self._format_analyzed_coin_position(
                 analyzed_coin_data,
@@ -98,7 +82,6 @@ class MarketOverviewFormatter:
             if position_summary:
                 sections.append(position_summary)
 
-        # Top coins summary (excluding analyzed coin) — skip for major coins (BTC/ETH)
         if other_top_coins and analyzed_coin_symbol not in ("btc", "eth"):
             top_coins_summary = self._format_top_coins_summary(
                 other_top_coins[:5],
@@ -107,7 +90,6 @@ class MarketOverviewFormatter:
             if top_coins_summary:
                 sections.append(top_coins_summary)
 
-        # DeFi metrics — skip for major coins (BTC/ETH) to save tokens
         defi_data = market_overview.get("defi", {})
         if defi_data and analyzed_coin_symbol not in ("btc", "eth"):
             total_market_cap = market_cap_data.get("total_usd", 0)
@@ -115,7 +97,6 @@ class MarketOverviewFormatter:
             if defi_summary:
                 sections.append(defi_summary)
 
-        # Format on-chain fundamentals if available
         fundamentals = market_overview.get("fundamentals")
         if fundamentals:
             fundamentals_summary = self._format_onchain_fundamentals(fundamentals)
@@ -266,7 +247,6 @@ class MarketOverviewFormatter:
                 volume_share = (coin_volume / total_volume * 100)
                 line_parts.append(f"| Vol: {volume_share:.1f}% of market")
 
-            # ATH context
             if ath and ath_pct:
                 ath_info = f"| ATH: ${ath:,.2f}"
                 if ath_date_str:

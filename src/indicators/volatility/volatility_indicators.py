@@ -92,7 +92,6 @@ def chandelier_exit_numba(high, low, close, length, multiplier, mamode="rma"):
     chandelier_exit_long[:] = np.nan
     chandelier_exit_short[:] = np.nan
 
-    # Needs valid ATR to calculate
     for i in range(length, n):
         if not math.isnan(atr_values[i]):
             period_high = np.max(high[i - length + 1:i + 1])
@@ -153,7 +152,6 @@ def vhf_numba(close, length=28, drift=1):
     vhf = np.full(n, np.nan)
 
     for i in range(length - 1 + drift, n):
-        # to avoid slice allocations inside the loop
         start_idx = i - length + 1
         end_idx = i + 1
 
@@ -171,7 +169,6 @@ def vhf_numba(close, length=28, drift=1):
             sum_diff += abs(val - prev_val)
             prev_val = val
 
-        # Handle division by zero
         if sum_diff != 0:
             vhf[i] = abs(hcp - lcp) / sum_diff
         else:
@@ -183,12 +180,6 @@ def vhf_numba(close, length=28, drift=1):
 @njit(cache=True)
 def donchian_channels_numba(high, low, length=20):
     """Calculate Donchian Channels
-
-    Args:
-        high: High prices array
-        low: Low prices array
-        length: Period for calculation (default: 20)
-
     Returns: tuple of (upper_channel, middle_channel, lower_channel)
     """
     n = len(high)
@@ -302,13 +293,6 @@ def choppiness_index_numba(high, low, close, length=14):
     - Values > 61.8: Market is choppy/ranging (low directional movement)
     - Values < 38.2: Market is trending (strong directional movement)
     - Values between: Transitional state
-
-    Args:
-        high: High prices array
-        low: Low prices array
-        close: Close prices array
-        length: Period for calculation (default: 14)
-
     Returns:
         Choppiness Index array (0-100 scale)
     """

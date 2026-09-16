@@ -13,9 +13,6 @@ import pytest
 
 from src.rag.market_components.market_overview_builder import MarketOverviewBuilder
 
-# ---------------------------------------------------------------------------
-# Helpers / fixtures
-# ---------------------------------------------------------------------------
 
 class _StubProcessor:
     """Minimal processor that echoes processed coin data deterministically."""
@@ -34,10 +31,6 @@ class _StubProcessor:
 def builder() -> MarketOverviewBuilder:
     return MarketOverviewBuilder(logger=MagicMock(), processor=_StubProcessor())
 
-
-# ---------------------------------------------------------------------------
-# build_overview_structure – basic contract
-# ---------------------------------------------------------------------------
 
 class TestBuildOverviewStructureBasics:
     def test_always_returns_dict(self, builder):
@@ -80,7 +73,6 @@ class TestBuildOverviewStructurePriceData:
         assert coin["volume"] == 500_000
 
     def test_processor_returning_none_skips_entry(self, builder):
-        # Empty dict triggers None from _StubProcessor
         price_data = {"BAD": {}}
         result = builder.build_overview_structure(price_data, None)
         assert "BAD" not in result["coin_data"]
@@ -98,7 +90,6 @@ class TestBuildOverviewStructureCoinGeckoData:
         assert result.get("market_cap") == 2e12
 
     def test_unexpected_format_does_not_raise(self, builder):
-        # Should log a warning, but not raise
         cg_data = {"unknown_key": "unexpected_value"}
         result = builder.build_overview_structure(None, cg_data)
         assert isinstance(result, dict)
@@ -145,10 +136,6 @@ class TestBuildOverviewStructureTopCoins:
         assert result["top_coins"][0]["symbol"] == "ETH"
 
 
-# ---------------------------------------------------------------------------
-# _finalize_overview contract
-# ---------------------------------------------------------------------------
-
 class TestFinalizeOverview:
     def test_adds_published_on(self, builder):
         before = datetime.now(timezone.utc).timestamp()
@@ -171,16 +158,10 @@ class TestFinalizeOverview:
         assert "2 coins tracked" in result["summary"]
 
     def test_returns_dict_on_exception(self, builder):
-        # Pass something that would blow up iteration – e.g. non-dict coin_data
-        # _finalize_overview has a try/except that should still return overview
         overview = {"summary": "TEST", "coin_data": "not-a-dict"}
         result = builder._finalize_overview(overview)
         assert isinstance(result, dict)
 
-
-# ---------------------------------------------------------------------------
-# build_overview (main entry point) delegates to build_overview_structure
-# ---------------------------------------------------------------------------
 
 class TestBuildOverview:
     def test_returns_dict(self, builder):
@@ -188,7 +169,6 @@ class TestBuildOverview:
         assert isinstance(result, dict)
 
     def test_error_fallback_contains_timestamp(self):
-        # Force an error by making processor raise
         broken_builder = MarketOverviewBuilder(
             logger=MagicMock(),
             processor=MagicMock(process_coin_data=MagicMock(side_effect=RuntimeError("boom"))),

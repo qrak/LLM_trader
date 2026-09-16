@@ -19,7 +19,6 @@ class BaseAIClient(ABC):
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
         self.api_key: str | None = None
-        # Common unsupported parameters to pre-filter
         self._known_unsupported_params = {"thinking_budget", "thinking_config", "top_k", "freq_penalty", "pres_penalty"}
 
     async def __aenter__(self):
@@ -58,10 +57,6 @@ class BaseAIClient(ABC):
     def process_chart_image(self, chart_image: io.BytesIO | bytes | str) -> bytes:
         """
         Process chart image from various input formats to bytes.
-
-        Args:
-            chart_image: Image as BytesIO stream, raw bytes, or file path string
-
         Returns:
             Image data as bytes
         """
@@ -124,15 +119,10 @@ class BaseAIClient(ABC):
     def _sanitize_error_message(self, message: str) -> str:
         """
         Sanitize error message by redaction of sensitive information like API keys.
-
-        Args:
-            message: The raw error message string.
-
         Returns:
             Sanitized string with API keys redacted.
         """
         sanitized = message
-        # If the instance has an api_key attribute, try to redact it
         if self.api_key and len(self.api_key) > 5:
             sanitized = sanitized.replace(self.api_key, "[REDACTED_API_KEY]")
 
@@ -141,18 +131,12 @@ class BaseAIClient(ABC):
     def handle_common_errors(self, exception: Exception) -> ChatResponseModel | None:
         """
         Handle common API errors across all providers.
-
-        Args:
-            exception: The exception that occurred
-
         Returns:
             Error response or None for unhandled errors
         """
-        # Use raw message for logic (classification) to ensure robustness
         error_message_raw = str(exception)
         error_message_lower = error_message_raw.lower()
 
-        # Use sanitized message for logging and output to ensure security
         error_message_sanitized = self._sanitize_error_message(error_message_raw)
 
         if "quota" in error_message_lower or "rate limit" in error_message_lower or (
@@ -182,9 +166,6 @@ class BaseAIClient(ABC):
         """
         Convert any Pydantic SDK response to ChatResponseModel.
         Used by: providers that return pydantic SDK responses.
-
-        Args:
-            response: SDK response (Pydantic model)
         """
         if response is None:
             return ChatResponseModel.from_error("Empty response from SDK")
@@ -262,15 +243,12 @@ class BaseAIClient(ABC):
         Detect which parameter caused the error from error message.
         Shared logic for all providers to handle SDK strictness.
         """
-        # Python keyword argument error
         match = re.search(r"unexpected keyword argument '(\w+)'", error_msg)
         if match:
             return match.group(1)
-        # API error message format 1
         match = re.search(r"unknown (parameter|argument)[:\s]+['\"]?(\w+)['\"]?", error_msg, re.IGNORECASE)
         if match:
             return match.group(2)
-        # error format 2: "Additional properties are not allowed ('x' was unexpected)"
         match = re.search(r"Additional properties are not allowed \('(\w+)' was unexpected\)", error_msg)
         if match:
             return match.group(1)
@@ -284,44 +262,32 @@ class BaseAIClient(ABC):
     ) -> Any:
         """
         Execute an SDK function with automatic retry handling for unsupported parameters.
-
-        Args:
-            func: Async function to call (e.g., client.chat.completions.create)
-            config: Configuration dictionary that might contain unsupported params (will be unpacked)
-            **fixed_args: Fixed named arguments to pass to the function (e.g., model, messages)
-
         Returns:
             The result of the function call
 
         Raises:
             Exception: If the call fails after retries or for non-parameter reasons
         """
-        # Start with a copy of config and pre-filter known unsupported params
         current_config = {k: v for k, v in config.items() if k not in self._known_unsupported_params}
         rejected_params = set()
         max_retries = 3
 
         for attempt in range(max_retries + 1):
             try:
-                # Call function with fixed args AND unpacked config
                 return await func(**fixed_args, **current_config)
             except Exception as e:
-                # Only retry if we haven't exhausted retries
                 if attempt == max_retries:
                     raise
 
                 error_msg = str(e)
                 bad_param = self._detect_unsupported_param(error_msg)
 
-                # If we found a bad parameter that is currently in our config
                 if bad_param and bad_param in current_config:
                     self.logger.warning("Parameter '%s' not supported by provider/model. Retrying without it (Attempt %s/%s)", bad_param, attempt + 1, max_retries)
                     rejected_params.add(bad_param)
-                    # Create new config without the bad parameter
                     current_config = {k: v for k, v in current_config.items() if k not in rejected_params}
                     continue
 
-                # If it's not a parameter error or we can't identify the parameter, re-raise
                 raise
 
     def create_response(
@@ -335,14 +301,6 @@ class BaseAIClient(ABC):
         """
         Create a ChatResponseModel from content.
         Used by: Google, LMStudio (providers with custom extraction logic)
-
-        Args:
-            content: Response text content
-            role: Message role (default: assistant)
-            usage: Optional token usage
-            model: Optional model identifier
-            response_id: Optional response ID
-
         Returns:
             ChatResponseModel instance
         """

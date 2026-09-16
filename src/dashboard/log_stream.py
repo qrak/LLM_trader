@@ -21,10 +21,9 @@ class LogStreamHandler(logging.Handler):
 
     def __init__(self, max_queue_size: int = 500):
         super().__init__()
-        self.setLevel(logging.DEBUG)  # Capture all levels regardless of logger level
+        self.setLevel(logging.DEBUG)
         self.max_queue_size = max_queue_size
         self._subscribers: dict[str, asyncio.Queue[str | None]] = {}
-        # Ring buffer for recent log lines (for late-joining subscribers)
         self._recent: deque[str] = deque(maxlen=200)
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -33,12 +32,10 @@ class LogStreamHandler(logging.Handler):
         try:
             msg = self.format(record)
             self._recent.append(msg)
-            # Push to all subscriber queues
             for queue in list(self._subscribers.values()):
                 try:
                     queue.put_nowait(msg)
                 except asyncio.QueueFull:
-                    # Drop oldest entry to make room
                     try:
                         queue.get_nowait()
                     except asyncio.QueueEmpty:
@@ -60,7 +57,6 @@ class LogStreamHandler(logging.Handler):
         queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=self.max_queue_size)
         self._subscribers[sid] = queue
 
-        # Send recent history so late joiners see context
         for line in self._recent:
             try:
                 queue.put_nowait(line)
@@ -74,7 +70,7 @@ class LogStreamHandler(logging.Handler):
         queue = self._subscribers.pop(subscriber_id, None)
         if queue is not None:
             try:
-                queue.put_nowait(None)  # sentinel
+                queue.put_nowait(None)
             except asyncio.QueueFull:
                 pass
 

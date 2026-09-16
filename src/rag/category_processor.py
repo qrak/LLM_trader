@@ -15,19 +15,15 @@ class CategoryProcessor:
         self.parser = unified_parser
         self.file_handler = file_handler
 
-        # Category data storage
         self.category_word_map: dict[str, str] = {}
         self.general_categories: set[str] = set()
         self.ticker_categories: set[str] = set()
 
-        # Load RAG priorities config once
         rag_config = self._load_rag_config()
 
-        # Load configurations from cached config
         self.important_categories: set[str] = self._load_important_categories(rag_config)
         self.generic_priorities: dict[str, int] = self._load_generic_priorities(rag_config)
 
-        # Injected collision resolver
         self.collision_resolver = collision_resolver
         self._update_collision_resolver()
 
@@ -69,20 +65,15 @@ class CategoryProcessor:
         if not api_categories:
             return
 
-        # Preserve first-write-wins mappings across calls.
 
-        # Categorize the data
         general_categories, ticker_categories = self._categorize_api_data(api_categories)
 
-        # Process category words for mapping
         for category in api_categories:
-            # Handle both camelCase and PascalCase field names
             category_name = category.get("categoryName") or category.get("CategoryName", "")
             category_name = category_name.lower()
             if category_name:
                 self._process_category_words(category_name)
 
-        # Update internal category sets and collision resolver
         self._update_category_sets(general_categories, ticker_categories)
         self._update_collision_resolver()
 
@@ -110,12 +101,10 @@ class CategoryProcessor:
 
     def _process_category_words(self, category_name: str) -> None:
         """Process category words and create mappings with priority-based collision resolution."""
-        # Extract words from category for search mapping
         words = category_name.replace("-", " ").split()
         for word in words:
             word_stripped = word.strip()
             if len(word_stripped) < 2:
-                # Skip single-character tokens
                 continue
             if len(word_stripped) == 2:  # noqa: SIM102
                 if not (word_stripped.isupper() or any(c.isdigit() for c in word_stripped)):
@@ -123,12 +112,10 @@ class CategoryProcessor:
 
             word_lower = word_stripped.lower()
             if word_lower in self.category_word_map:
-                # Use shared collision resolver
                 existing_category = self.category_word_map[word_lower]
                 winner = self.collision_resolver.resolve_collision(existing_category, category_name, word_lower)
 
                 if winner != existing_category:
-                    # New category wins, update mapping
                     self.category_word_map[word_lower] = winner
             else:
                 self.category_word_map[word_lower] = category_name

@@ -86,7 +86,6 @@ def stochastic_numba(high, low, close, period_k, smooth_k, period_d):
         start_idx = i - period_k + 1
         end_idx = i + 1
 
-        # Manual max/min finding to avoid slice allocation
         high_max = high[start_idx]
         low_min = low[start_idx]
 
@@ -190,7 +189,6 @@ def williams_r_numba(high, low, close, length):
         highest_high = high[start_idx]
         lowest_low = low[start_idx]
 
-        # Inner loop over the window - efficient for small windows (default 14)
         for j in range(start_idx + 1, end_idx):
             h_val = high[j]
             l_val = low[j]
@@ -221,16 +219,12 @@ def tsi_numba(close, long_length, short_length):
     n = len(close)
     tsi = np.full(n, np.nan)
 
-    # Pre-calculate alpha values
     alpha_long = 2.0 / (long_length + 1)
     alpha_short = 2.0 / (short_length + 1)
 
-    # Calculate initial window for EMA1 (momentum)
     m_sum = 0.0
     abs_m_sum = 0.0
 
-    # Calculate sum for initial EMA1
-    # We sum m[1]...m[long_length]
     for i in range(1, long_length + 1):
         if i < n:
             val = close[i] - close[i - 1]
@@ -240,83 +234,61 @@ def tsi_numba(close, long_length, short_length):
     if n <= long_length:
         return tsi
 
-    # Initial EMA1 values at index long_length
     curr_ema1 = m_sum / long_length
     curr_abs_ema1 = abs_m_sum / long_length
 
-    # Now we need to calculate EMA2.
-    # EMA2 is the EMA of EMA1.
-    # initial value = mean of EMA1 over [long_length, long_length+short_length-1]
 
-    # Accumulate sums for EMA2 initialization
     ema1_sum = curr_ema1
     abs_ema1_sum = curr_abs_ema1
 
-    # Store previous EMA1 values
     prev_ema1 = curr_ema1
     prev_abs_ema1 = curr_abs_ema1
 
-    # Calculate EMA1 for the window required to initialize EMA2
-    # Range: long_length + 1 to long_length + short_length - 1
     start_ema2_init = long_length + 1
     end_ema2_init = long_length + short_length - 1
 
     if end_ema2_init >= n:
-        # Not enough data for full initialization
         return tsi
 
     for i in range(start_ema2_init, end_ema2_init + 1):
-        # Calculate m
         m = close[i] - close[i - 1]
         abs_m = abs(m)
 
-        # Calculate new EMA1
         curr_ema1 = (m - prev_ema1) * alpha_long + prev_ema1
         curr_abs_ema1 = (abs_m - prev_abs_ema1) * alpha_long + prev_abs_ema1
 
-        # Accumulate for EMA2 initialization
         ema1_sum += curr_ema1
         abs_ema1_sum += curr_abs_ema1
 
-        # Update prev
         prev_ema1 = curr_ema1
         prev_abs_ema1 = curr_abs_ema1
 
-    # Initial EMA2 values at index end_ema2_init
     curr_ema2 = ema1_sum / short_length
     curr_abs_ema2 = abs_ema1_sum / short_length
 
-    # Calculate TSI for the first valid point
     if curr_abs_ema2 != 0:
         tsi[end_ema2_init] = (curr_ema2 / curr_abs_ema2) * 100.0
     else:
-        # first point with a zero denominator has no previous value to fall back on
         tsi[end_ema2_init] = 0.0
 
     prev_ema2 = curr_ema2
     prev_abs_ema2 = curr_abs_ema2
 
-    # Main loop for the rest of the data
     for i in range(end_ema2_init + 1, n):
-        # Calculate m
         m = close[i] - close[i - 1]
         abs_m = abs(m)
 
-        # Calculate new EMA1
         curr_ema1 = (m - prev_ema1) * alpha_long + prev_ema1
         curr_abs_ema1 = (abs_m - prev_abs_ema1) * alpha_long + prev_abs_ema1
 
-        # Calculate new EMA2
         curr_ema2 = (curr_ema1 - prev_ema2) * alpha_short + prev_ema2
         curr_abs_ema2 = (curr_abs_ema1 - prev_abs_ema2) * alpha_short + prev_abs_ema2
 
-        # Calculate TSI
         if curr_abs_ema2 != 0:
             tsi[i] = (curr_ema2 / curr_abs_ema2) * 100.0
         else:
             tsi[i] = tsi[i - 1]
 
-        # Update prev
         prev_ema1 = curr_ema1
         prev_abs_ema1 = curr_abs_ema1
         prev_ema2 = curr_ema2
@@ -387,7 +359,6 @@ def coppock_curve_numba(close, wl1=14, wl2=11, wma_length=10):
     roc_long = roc_numba(close, wl1)
     roc_short = roc_numba(close, wl2)
     coppock_arr = roc_long + roc_short
-    # Use ema_numba to handle NaNs correctly and avoid lookahead bias from np.roll
     ewma_coppock = ema_numba(coppock_arr, wma_length)
     return ewma_coppock
 
@@ -416,19 +387,15 @@ def calculate_relative_strength_numba(pair_close, benchmark_close, window=14):
             rs_array[i] = 0.0
             continue
 
-        # Calculate percentage changes
         pair_return = np.log(pair_close[i] / pair_close[i - window])
         benchmark_return = np.log(benchmark_close[i] / benchmark_close[i - window])
 
-        # Calculate relative strength
         rs_value = pair_return - benchmark_return
 
-        # Cap the value to prevent extreme scores
-        rs_array[i] = min(max(float(rs_value), -0.5), 0.5)  # Cap at ±0.5
+        rs_array[i] = min(max(float(rs_value), -0.5), 0.5)
 
     return rs_array
 
-# Optimized with sliding window sum. ~4.5x speedup for n=100k.
 @njit(cache=True)
 def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, drift):
     n = len(high)
@@ -442,7 +409,6 @@ def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, dr
         bp[i] = close[i] - min(low[i], pc)
         tr[i] = max(high[i], pc) - min(low[i], pc)
 
-    # Helper function to calculate average
     def calc_average(bp_sum, tr_sum):
         return bp_sum / tr_sum if tr_sum != 0 else 0.0
 
@@ -451,7 +417,6 @@ def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, dr
     if start_idx >= n:
         return uo
 
-    # Initialize sums for the first window
     bp_sum_fast = np.sum(bp[start_idx - fast + 1:start_idx + 1])
     tr_sum_fast = np.sum(tr[start_idx - fast + 1:start_idx + 1])
 
@@ -461,7 +426,6 @@ def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, dr
     bp_sum_slow = np.sum(bp[start_idx - slow + 1:start_idx + 1])
     tr_sum_slow = np.sum(tr[start_idx - slow + 1:start_idx + 1])
 
-    # Calculate UO for the first window
     avg_fast = calc_average(bp_sum_fast, tr_sum_fast)
     avg_medium = calc_average(bp_sum_medium, tr_sum_medium)
     avg_slow = calc_average(bp_sum_slow, tr_sum_slow)
@@ -469,7 +433,6 @@ def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, dr
     uo[start_idx] = 100 * ((avg_fast * fast_w) + (avg_medium * medium_w) + (avg_slow * slow_w)) / (
             fast_w + medium_w + slow_w)
 
-    # Use sliding window for the rest
     for i in range(start_idx + 1, n):
         bp_sum_fast += bp[i] - bp[i - fast]
         tr_sum_fast += tr[i] - tr[i - fast]
@@ -509,27 +472,21 @@ def kst_numba(
     n = len(close)
     kst = np.full(n, np.nan)
 
-    # Calculate validity start indices for each component
-    # A component is valid when we have enough data for ROC + SMA window
     start_idx1 = roc1_length + sma1_length - 1
     start_idx2 = roc2_length + sma2_length - 1
     start_idx3 = roc3_length + sma3_length - 1
     start_idx4 = roc4_length + sma4_length - 1
 
-    # KST is valid when all components are valid
     valid_start = max(start_idx1, start_idx2, start_idx3, start_idx4)
 
-    # Running sums for SMAs
     sum1 = 0.0
     sum2 = 0.0
     sum3 = 0.0
     sum4 = 0.0
 
-    # Minimum index to start processing to avoid negative indexing
     min_roc_len = min(roc1_length, roc2_length, roc3_length, roc4_length)
 
     for i in range(min_roc_len, n):
-        # Component 1
         if i >= roc1_length:
             roc = ((close[i] / close[i - roc1_length]) - 1) * 100
             sum1 += roc
@@ -537,7 +494,6 @@ def kst_numba(
                 old_roc = ((close[i - sma1_length] / close[i - sma1_length - roc1_length]) - 1) * 100
                 sum1 -= old_roc
 
-        # Component 2
         if i >= roc2_length:
             roc = ((close[i] / close[i - roc2_length]) - 1) * 100
             sum2 += roc
@@ -545,7 +501,6 @@ def kst_numba(
                 old_roc = ((close[i - sma2_length] / close[i - sma2_length - roc2_length]) - 1) * 100
                 sum2 -= old_roc
 
-        # Component 3
         if i >= roc3_length:
             roc = ((close[i] / close[i - roc3_length]) - 1) * 100
             sum3 += roc
@@ -553,7 +508,6 @@ def kst_numba(
                 old_roc = ((close[i - sma3_length] / close[i - sma3_length - roc3_length]) - 1) * 100
                 sum3 -= old_roc
 
-        # Component 4
         if i >= roc4_length:
             roc = ((close[i] / close[i - roc4_length]) - 1) * 100
             sum4 += roc
@@ -561,7 +515,6 @@ def kst_numba(
                 old_roc = ((close[i - sma4_length] / close[i - sma4_length - roc4_length]) - 1) * 100
                 sum4 -= old_roc
 
-        # Calculate KST if all components are valid
         if i >= valid_start:
             rcma1 = sum1 / sma1_length
             rcma2 = sum2 / sma2_length

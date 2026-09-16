@@ -33,13 +33,6 @@ class ModelPricing:
     def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> float | None:
         """
         Calculate cost for a request based on token counts.
-
-        Args:
-            provider: Provider name (google, openrouter)
-            model: Model name/identifier
-            input_tokens: Number of input tokens
-            output_tokens: Number of output tokens
-
         Returns:
             Cost in USD or None if pricing not available
         """
@@ -70,9 +63,6 @@ class TokenCounter:
     def __init__(self, encoding_name: str = "cl100k_base"):
         """
         Initialize the TokenCounter.
-
-        Args:
-            encoding_name: The tokenizer encoding name to use (default: cl100k_base for OpenAI models)
         """
         self.tokenizer = tiktoken.get_encoding(encoding_name)
         self.session_tokens = {
@@ -86,10 +76,6 @@ class TokenCounter:
     def count_tokens(self, text: str) -> int:
         """
         Count the tokens in the provided text.
-
-        Args:
-            text: The text to count tokens for
-
         Returns:
             Number of tokens
         """
@@ -100,11 +86,6 @@ class TokenCounter:
     def track_prompt_tokens(self, text: str, message_type: str = "prompt") -> int:
         """
         Count tokens in prompt text and track them in session stats.
-
-        Args:
-            text: The prompt text
-            message_type: Type of message ("prompt", "system", or "completion")
-
         Returns:
             Number of tokens
         """
@@ -125,12 +106,6 @@ class TokenCounter:
     ) -> None:
         """
         Record actual token usage from API response (replaces tiktoken estimates).
-
-        Args:
-            provider: Provider name (openrouter, google, lmstudio)
-            prompt_tokens: Actual prompt token count from API
-            completion_tokens: Actual completion token count from API
-            cost: Optional cost from API (only OpenRouter provides this)
         """
         self.session_tokens["prompt"] += prompt_tokens
         self.session_tokens["completion"] += completion_tokens
@@ -167,12 +142,6 @@ class TokenCounter:
     ) -> None:
         """
         Process API response usage data: record and optionally log.
-
-        Args:
-            usage: Usage dict from API response (with prompt_tokens, completion_tokens, cost)
-            provider: Provider name for cost tracking
-            logger: Optional logger instance to output token counts
-            fallback_text: If usage is None, estimate tokens from this text
         """
         if usage:
             prompt_tokens = int(usage.get("prompt_tokens", 0))
@@ -220,9 +189,6 @@ class CostStorage:
     def __init__(self, file_path: str = "data/trading/api_costs.json"):
         """
         Initialize cost storage.
-
-        Args:
-            file_path: Path to the api_costs.json file
         """
         self.file_path = file_path
         self._ensure_directory()
@@ -261,7 +227,7 @@ class CostStorage:
                         self._providers[provider] = ProviderCostStats()
                 return
             except (OSError, json.JSONDecodeError):
-                pass  # file not found or corrupt, use defaults
+                pass
         self._init_defaults()
 
     def _init_defaults(self) -> None:
@@ -280,7 +246,6 @@ class CostStorage:
             for provider, stats in self._providers.items():
                 data[provider] = stats.to_dict()  # type: ignore[reportAttributeAccessIssue]
 
-            # Atomic write using temporary file
             temp_path = None
             try:
                 directory = os.path.dirname(self.file_path)
@@ -294,13 +259,12 @@ class CostStorage:
                 self._last_save_time = time.time()
                 self._dirty = False
             except Exception as e:  # noqa: BLE001
-                # Fallback to direct print if logging is not available here
                 print(f"Error saving cost storage: {e}")
                 if temp_path and os.path.exists(temp_path):
                     try:
                         os.remove(temp_path)
                     except OSError:
-                        pass  # best-effort cleanup
+                        pass
 
     def record_usage(
         self,
@@ -311,12 +275,6 @@ class CostStorage:
     ) -> None:
         """
         Record usage for a provider and save to disk (buffered).
-
-        Args:
-            provider: Provider name
-            prompt_tokens: Input tokens
-            completion_tokens: Output tokens
-            cost: Cost in dollars (for OpenRouter and Google)
         """
         with self._lock:
             if provider not in self._providers:
@@ -329,12 +287,10 @@ class CostStorage:
 
             self._dirty = True
 
-            # Save if enough time has passed
             if time.time() - self._last_save_time >= 5.0:
                 self.save()
 
     def get_provider_costs(self, provider: str) -> ProviderCostStats:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
-
 

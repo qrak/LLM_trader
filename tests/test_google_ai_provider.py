@@ -168,14 +168,13 @@ class TestImageTokenEstimation:
     def test_png_dimensions(self):
         """PNG IHDR header yields correct width/height."""
         client = _make_client()
-        # Minimal PNG: 1x1 white pixel
         png = (
-            b'\x89PNG\r\n\x1a\n'           # signature
-            b'\x00\x00\x00\rIHDR'         # IHDR chunk length (13)
-            b'\x00\x00\x00\x10'           # width: 16
-            b'\x00\x00\x00\x08'           # height: 8
-            b'\x08\x02\x00\x00\x00'       # depth=8, color=2(RGB), rest
-            b'\xaa\xbb\xcc\xdd'           # CRC placeholder
+            b'\x89PNG\r\n\x1a\n'
+            b'\x00\x00\x00\rIHDR'
+            b'\x00\x00\x00\x10'
+            b'\x00\x00\x00\x08'
+            b'\x08\x02\x00\x00\x00'
+            b'\xaa\xbb\xcc\xdd'
         )
         dims = client._get_image_dimensions(png)
         assert dims == (16, 8)
@@ -184,12 +183,12 @@ class TestImageTokenEstimation:
         """JPEG SOF0 marker yields correct width/height."""
         client = _make_client()
         jpeg = (
-            b'\xff\xd8'                   # SOI
-            b'\xff\xe0\x00\x10JFIF\x00'   # APP0
-            b'\xff\xc0\x00\x0b\x08'       # SOF0, length=11, precision=8
-            b'\x00\x20'                   # height: 32
-            b'\x00\x30'                   # width: 48
-            b'\x03\x01\x22\x00\x02\x11'   # components
+            b'\xff\xd8'
+            b'\xff\xe0\x00\x10JFIF\x00'
+            b'\xff\xc0\x00\x0b\x08'
+            b'\x00\x20'
+            b'\x00\x30'
+            b'\x03\x01\x22\x00\x02\x11'
         )
         dims = client._get_image_dimensions(jpeg)
         assert dims == (48, 32)
@@ -212,9 +211,6 @@ class TestImageTokenEstimation:
     def test_estimate_tokens_1080p(self):
         """1080p (1920x1080) image with 75px tiles and 258 tokens/tile."""
         client = _make_client()
-        # Mock _get_image_dimensions
         client._get_image_dimensions = MagicMock(return_value=(1920, 1080))
         tokens = client._estimate_image_tokens(b'fake')
-        # Tiles: ceil(1920/75)=26, ceil(1080/75)=15 → 26*15=390 tiles
-        # 390 * 258 = 100620 tokens
         assert tokens == 100620

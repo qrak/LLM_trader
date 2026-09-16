@@ -52,7 +52,6 @@ class ContextBuilder:
                            category_word_map: dict[str, str] | None = None,
                            important_categories: set[str] | None = None) -> list[tuple[int, float]]:
         """Search for articles matching keywords with relevance scores."""
-        # Provide default empty containers to avoid mutable defaults
         category_word_map = category_word_map or {}
         important_categories = important_categories or set()
 
@@ -74,7 +73,6 @@ class ContextBuilder:
                 re.compile(r"\b" + r"[-\s]+".join(re.escape(p) for p in coin_full_name.split()) + r"\b") if coin_full_name else None
             )
 
-        # Pre-calculate relevant categories based on query
         relevant_categories = []
         if category_word_map:
             for word, category in category_word_map.items():
@@ -120,7 +118,6 @@ class ContextBuilder:
 
     def _extract_article_content(self, article: dict[str, Any]):
         """Extract and normalize article content for scoring."""
-        # prefer pre-computed lowercase fields from NewsManager
         return ArticleContent(
             title=article.get("title_lower") or article.get("title", "").lower(),
             body=article.get("body_lower") or article.get("body", "").lower(),
@@ -133,12 +130,6 @@ class ContextBuilder:
     def build_context(self, news_items: list[dict], max_tokens: int | None = None) -> str:
         """
         Build a context string from news items using simple lead paragraph extraction.
-
-        Args:
-            news_items: list of news dictionaries
-            max_tokens: Maximum tokens for the entire context. When omitted,
-                uses config-derived default: article_max_tokens * news_limit.
-
         Returns:
             Formatted context string
         """
@@ -149,31 +140,26 @@ class ContextBuilder:
         context_parts = []
         current_tokens = 0
 
-        # Use configured article_max_tokens to limit each article strictly
         article_max_tokens = self.config.RAG_ARTICLE_MAX_TOKENS
         resolved_max_tokens = max_tokens
         if resolved_max_tokens is None:
             resolved_max_tokens = article_max_tokens * self.config.RAG_NEWS_LIMIT
 
         for item in news_items:
-            # Stop if we're close to the total context limit
             if current_tokens >= resolved_max_tokens:
                 break
 
-            # Process article with strict per-article token limit
             processed_text = self._process_article_simple(item, article_max_tokens)
 
             if processed_text:
                 token_count = self.token_counter.count_tokens(processed_text)
 
-                # Skip this article if including it would exceed total context limit
                 if current_tokens + token_count > resolved_max_tokens:
                     break
 
                 context_parts.append(processed_text)
                 current_tokens += token_count
 
-                # Track article URL if available
                 if "url" in item:
                     title = item.get("title", "Untitled")
                     self.latest_article_urls[title] = item["url"]
@@ -183,11 +169,6 @@ class ContextBuilder:
     def _process_article_simple(self, item: dict, max_tokens: int) -> str:
         """
         Process a single article: Title + article body (truncated only by budget).
-
-        Args:
-            item: News item dictionary
-            max_tokens: Max tokens for this article chunk
-
         Returns:
             Formatted string: "Title\nSource (Date)\nArticle body..."
         """
@@ -223,7 +204,6 @@ class ContextBuilder:
         max_chars = body_token_budget * 4
         truncated = article_body[:max_chars].rstrip()
 
-        # Backtrack to a paragraph or sentence boundary when possible.
         last_paragraph = truncated.rfind("\n\n")
         last_period = truncated.rfind(".")
         if last_period > len(truncated) * 0.5:
@@ -249,17 +229,8 @@ class ContextBuilder:
         """
         Bridge method for rag_engine compatibility.
         Converts article indices to article dicts and builds context.
-
-        Args:
-            relevant_indices: list of article indices from news_database
-            news_database: Full news database
-            max_tokens: Maximum tokens for context
-            k: Number of top articles to include
-            scores_dict: Relevance scores (used for sorting)
-
         Returns: tuple of (context_text, total_tokens)
         """
-        # Score-sort a wider candidate pool, then prefer full-body items first.
         pool_limit = max(k * 10, 50)
         candidate_sorted = sorted(
             relevant_indices[:pool_limit],

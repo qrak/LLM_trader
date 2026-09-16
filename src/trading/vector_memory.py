@@ -33,13 +33,7 @@ class VectorMemoryService(
     MAX_DECAY_HALF_LIFE_DAYS = 30
     MAX_AGE_MULTIPLIER = 4
     RETRIEVAL_OVERFETCH_MULTIPLIER = 5
-    # Evidence gate: a similarity score is only meaningful against a real sample.
-    # With fewer closed trades than this in the brain, the top retrieved hit is an
-    # anecdote, not a statistical pattern — it must never drive an anti-pattern verdict.
     MIN_EVIDENCE_TRADES = 3
-    # Safety margin for collection pruning: documents must be this many times
-    # older than _max_age_days before they are eligible for removal.
-    # At 3×, a 4h timeframe (_max_age=56d) keeps ~168 days of history.
     PRUNE_AGE_MULTIPLIER = 3
 
     FACTOR_BUCKETS = ("LOW", "MEDIUM", "HIGH")
@@ -67,14 +61,7 @@ class VectorMemoryService(
         embedding_model: Any = None,
         timeframe_minutes: int = 240,
     ):
-        """Initialize vector memory service.
-
-        Args:
-            logger: Logger instance
-            chroma_client: Injected ChromaDB client instance
-            embedding_model: SentenceTransformer instance (injected)
-            timeframe_minutes: Active analysis timeframe in minutes.
-        """
+        """Initialize vector memory service."""
         self.logger = logger
         self._client = chroma_client
         self._collection: Any | None = None
@@ -187,7 +174,6 @@ class VectorMemoryService(
         serialized = serialize_for_json(metadata)
 
         for key, value in serialized.items():
-            # Refactor: Python 3.10 pattern matching replaces sequential isinstance chain
             match value:
                 case None:
                     continue
@@ -216,19 +202,6 @@ class VectorMemoryService(
         close_reason: str = "",
     ) -> bool:
         """Store a completed trade experience.
-
-        Args:
-            trade_id: Unique identifier for the trade.
-            market_context: Categorical market description (used as header).
-            outcome: "WIN", "LOSS", or "UPDATE".
-            pnl_pct: Profit/loss percentage.
-            direction: "LONG" or "SHORT".
-            confidence: "HIGH", "MEDIUM", or "LOW".
-            reasoning: AI reasoning for the trade.
-            metadata: Additional metadata stored alongside the embedding.
-            symbol: Trading pair, e.g. "BTC/USDC".
-            close_reason: How the position closed (e.g. "stop_loss").
-
         Returns:
             True if stored successfully, False otherwise.
         """
@@ -359,7 +332,6 @@ class VectorMemoryService(
 
             rr_delta = suggested_rr - required_rr if (math.isfinite(suggested_rr) and math.isfinite(required_rr)) else 0.0
 
-            # Build discriminative document for semantic retrieval
             document_parts = [
                 f"BLOCKED {direction} trade by {guard_type} guard.",
                 f"Volatility: {volatility_level}.",
@@ -419,12 +391,6 @@ class VectorMemoryService(
         max_age_hours: int = 168,
     ) -> list[dict[str, Any]]:
         """Retrieve recent blocked trade events for feedback injection.
-
-        Args:
-            n: Maximum number of blocked trades to return
-            guard_type: Optional filter by guard type (e.g. 'rr_minimum')
-            max_age_hours: Only return events within this many hours
-
         Returns:
             List of blocked trade dicts sorted by recency (newest first).
         """
@@ -448,11 +414,9 @@ class VectorMemoryService(
                 meta = all_blocks["metadatas"][i] if all_blocks["metadatas"] else {}
                 doc = all_blocks["documents"][i] if all_blocks["documents"] else ""
 
-                # Filter by guard type
                 if guard_type and meta.get("guard_type") != guard_type:
                     continue
 
-                # Filter by age
                 ts = meta.get("timestamp", "")
                 try:
                     event_dt = datetime.fromisoformat(ts)
@@ -498,11 +462,6 @@ class VectorMemoryService(
 
         Groups rejections by guard type and presents deltas between LLM suggestions
         and system requirements so the LLM can self-correct its parameters.
-
-        Args:
-            n: Maximum number of blocked trades to summarize
-            max_age_hours: Only consider events within this many hours
-
         Returns:
             Formatted feedback string, or empty string if no recent blocks.
         """
@@ -518,7 +477,6 @@ class VectorMemoryService(
             "",
         ]
 
-        # Group by guard type for pattern detection
         by_guard: dict[str, list[dict[str, Any]]] = {}
         for b in blocked:
             gt = b.get("guard_type", "unknown")
@@ -614,9 +572,6 @@ class VectorMemoryService(
 
             try:
                 before = coll.count()
-                # ChromaDB's built-in delete does not support timestamp range
-                # queries natively, so we fetch all metadata, identify aged-out
-                # IDs, and delete them in one batch.
                 all_data = coll.get(include=["metadatas"])
                 if not all_data or not all_data.get("ids"):
                     removed[name] = 0
@@ -657,5 +612,4 @@ class VectorMemoryService(
                 removed[name] = 0
 
         return removed
-
 

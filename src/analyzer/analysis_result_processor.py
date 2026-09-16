@@ -42,21 +42,11 @@ class AnalysisResultProcessor:
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         """
         Process analysis by sending prompts to AI model and formatting response.
-
-        Args:
-            system_prompt: System instructions for the AI model
-            prompt: User prompt for analysis
-            chart_image: Optional chart image for visual analysis
-            provider: Optional provider override (admin only)
-            model: Optional model override (admin only)
-
         Returns:
             Dictionary containing formatted analysis results
         """
-        # Send the prompt to the model
         self.logger.debug("Sending prompt to AI model for analysis")
 
-        # Use chart analysis if image is provided and model supports it
         use_chart_analysis = chart_image is not None and self.model_manager.supports_image_analysis(provider)
         if chart_image is not None and use_chart_analysis:
             prov_name, model_name = self.model_manager.describe_provider_and_model(provider, model, chart=True)
@@ -83,7 +73,6 @@ class AnalysisResultProcessor:
                     model=model
                 )
         else:
-            # Use the standard send_prompt_streaming method
             complete_response = await self.model_manager.send_prompt_streaming(
                 prompt=prompt,
                 system_message=system_prompt,
@@ -227,7 +216,6 @@ class AnalysisResultProcessor:
         tech_data = self.context.technical_data or {}
         long_term_data = self.context.long_term_data or {}
 
-        # --- Trend ADX Validation ---
         trend_result = self._trend_validator.validate(
             strength_4h=trend.get("strength_4h"),
             strength_daily=trend.get("strength_daily"),
@@ -236,7 +224,6 @@ class AnalysisResultProcessor:
         )
 
         if trend_result.has_computed_data:
-            # Always overwrite with validated values (computed beats LLM guess)
             self._trend_validator.overwrite_llm_trend(analysis, trend_result)
 
             if not trend_result.passed:
@@ -248,7 +235,6 @@ class AnalysisResultProcessor:
                     trend_result.validated_4h, trend_result.validated_daily,
                 )
 
-        # --- Pattern Quality Validation ---
         llm_quality_raw = analysis.get("pattern_quality")
         try:
             llm_quality = float(llm_quality_raw) if llm_quality_raw is not None else None

@@ -23,12 +23,10 @@ from pathlib import Path
 
 import pytest
 
-# Skip if playwright not available
 pytest.importorskip("playwright")
 
 from playwright.sync_api import expect, sync_playwright
 
-# ─── Test Server ─────────────────────────────────────────────────────
 
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -54,7 +52,6 @@ def _run_test_server(port: int, ready_event: multiprocessing.Event):
     from src.dashboard.log_stream import LogStreamManager
     from src.dashboard.routers.admin import AdminRouter
 
-    # Create temp config
     tmpdir = tempfile.mkdtemp()
     config_path = os.path.join(tmpdir, "config.ini")
     with open(config_path, "w") as f:
@@ -94,16 +91,13 @@ host = 0.0.0.0
 port = 8000
 """)
 
-    # Init auth
     password_hash = hash_password("testpass123")
     init_auth("test-signing-key-for-tests", "admin", password_hash)
 
-    # Create components
     writable_config = WritableConfig(config_path)
     log_stream_manager = LogStreamManager()
     force_analysis_event = asyncio.Event()
 
-    # Create app
     app = FastAPI()
     app.add_middleware(GZipMiddleware, minimum_size=500)
 
@@ -117,7 +111,6 @@ port = 8000
     app.include_router(admin_router.router)
     app.add_middleware(AdminAuthMiddleware)
 
-    # Mount admin static files
     static_dir = Path(__file__).parent.parent / "src" / "dashboard" / "static" / "admin"
     if static_dir.exists():
         app.mount("/admin", StaticFiles(directory=str(static_dir), html=True), name="admin_static")
@@ -134,7 +127,7 @@ def test_server():
     proc = multiprocessing.Process(target=_run_test_server, args=(port, ready), daemon=True)
     proc.start()
     ready.wait(timeout=10)
-    time.sleep(1)  # Let server fully start
+    time.sleep(1)
     yield f"http://127.0.0.1:{port}"
     proc.terminate()
     proc.join(timeout=5)
@@ -159,15 +152,12 @@ def page(browser_context):
     pg.close()
 
 
-# ─── Tests ───────────────────────────────────────────────────────────
-
 class TestLoginScreen:
     """Test the login flow."""
 
     def test_login_page_loads(self, page, test_server):
         """Admin page shows login screen when not authenticated."""
         page.goto(f"{test_server}/admin/")
-        # Should see the login form
         expect(page.locator("#login-screen")).to_be_visible()
         expect(page.locator("#login-user")).to_be_visible()
         expect(page.locator("#login-pass")).to_be_visible()
@@ -179,7 +169,6 @@ class TestLoginScreen:
         page.fill("#login-user", "admin")
         page.fill("#login-pass", "wrongpassword")
         page.click("button[type='submit']")
-        # Should show error
         expect(page.locator("#login-error")).to_be_visible()
         expect(page.locator("#login-error")).to_contain_text("Invalid")
 
@@ -189,7 +178,6 @@ class TestLoginScreen:
         page.fill("#login-user", "admin")
         page.fill("#login-pass", "testpass123")
         page.click("button[type='submit']")
-        # Should hide login screen and show app
         expect(page.locator("#app")).to_be_visible()
         expect(page.locator("#login-screen")).to_be_hidden()
 
@@ -205,11 +193,9 @@ class TestDashboard:
 
     def _login(self, page, test_server):
         page.goto(f"{test_server}/admin/")
-        # Wait for app to become visible (either via auto-login from cookie or manual login)
         try:
             page.wait_for_selector("#app:not(.hidden)", timeout=3000)
         except Exception:
-            # Not auto-logged in, do manual login
             page.fill("#login-user", "admin")
             page.fill("#login-pass", "testpass123")
             page.click("button[type='submit']")
@@ -218,7 +204,6 @@ class TestDashboard:
     def test_dashboard_loads_with_stats(self, page, test_server):
         """Dashboard shows stat cards after login."""
         self._login(page, test_server)
-        # Should see stat cards
         expect(page.locator("#stat-uptime")).to_be_visible()
         expect(page.locator("#stat-feed")).to_be_visible()
         expect(page.locator("#stat-subscribers")).to_be_visible()
@@ -309,9 +294,7 @@ class TestControlPanel:
     def test_force_analysis_click(self, page, test_server):
         """Clicking force analysis sends command via WebSocket."""
         self._login_and_go_to_control(page, test_server)
-        # Click the button - it should send a WS command
         page.click("#ctrl-force-analysis")
-        # Wait for console log to appear
         page.wait_for_timeout(1000)
         console_log = page.locator("#console-log")
         expect(console_log).to_be_visible()
@@ -335,9 +318,7 @@ class TestConfigEditor:
     def test_config_page_loads_sections(self, page, test_server):
         """Config page loads with section headers."""
         self._login_and_go_to_config(page, test_server)
-        # Wait for config to load
         page.wait_for_timeout(2000)
-        # Should have at least one section
         content = page.locator("#config-sections").inner_text()
         assert "AI Providers" in content or "General" in content
 
@@ -345,12 +326,10 @@ class TestConfigEditor:
         """Config sections can be expanded."""
         self._login_and_go_to_config(page, test_server)
         page.wait_for_timeout(2000)
-        # Click on first section header
         section_headers = page.locator("#config-sections button")
         if section_headers.count() > 0:
             section_headers.first.click()
             page.wait_for_timeout(500)
-            # The body should become visible
             assert section_headers.count() > 0
 
 
@@ -372,14 +351,12 @@ class TestHumanInput:
         self._login(page, test_server)
         page.fill("#human-input-text", "Focus on RSI divergence patterns")
         page.click("#btn-submit-input")
-        # Should show success status
         page.wait_for_timeout(1000)
         status = page.locator("#human-input-status")
         expect(status).to_contain_text("Submitted")
 
     def test_human_input_via_api(self, page, test_server):
         """Human input can be set and retrieved via API."""
-        # Login (handle auto-login from cookie)
         page.goto(f"{test_server}/admin/")
         try:
             page.wait_for_selector("#app:not(.hidden)", timeout=3000)
@@ -389,7 +366,6 @@ class TestHumanInput:
             page.click("button[type='submit']")
             expect(page.locator("#app")).to_be_visible()
 
-        # Use API to set input
         result = page.evaluate("""
             fetch('/api/admin/system/human-input', {
                 method: 'POST',
@@ -400,7 +376,6 @@ class TestHumanInput:
         """)
         assert result["status"] == "ok"
 
-        # Verify via GET
         result = page.evaluate("""
             fetch('/api/admin/system/human-input', {
                 credentials: 'same-origin'
@@ -414,7 +389,6 @@ class TestAuthProtection:
 
     def test_unauthenticated_api_returns_401(self, browser_context, test_server):
         """API endpoints return 401 when not authenticated."""
-        # Use a fresh context with no cookies
         ctx = browser_context.browser.new_context()
         pg = ctx.new_page()
         pg.goto(f"{test_server}/admin/")
@@ -459,7 +433,7 @@ class TestAuthProtection:
                 credentials: 'same-origin'
             }).then(r => ({status: r.status}))
         """)
-        assert result["status"] == 401  # Wrong creds, but endpoint is reachable
+        assert result["status"] == 401
 
 
 class TestLogout:
@@ -476,7 +450,6 @@ class TestLogout:
             page.click("button[type='submit']")
             expect(page.locator("#app")).to_be_visible()
 
-        # Click logout
         page.click("#btn-logout")
         expect(page.locator("#login-screen")).to_be_visible()
         expect(page.locator("#app")).to_be_hidden()
@@ -531,7 +504,6 @@ class TestConfigAPI:
         assert result["status"] == "ok"
         assert result["category"] == "cycle"
 
-        # Verify the change
         result = page.evaluate("""
             fetch('/api/admin/config/general', {credentials: 'same-origin'})
                 .then(r => r.json())
@@ -566,14 +538,12 @@ class TestConfigAPI:
         """POST /api/admin/system/toggle-feed toggles state."""
         self._login(page, test_server)
 
-        # Get initial state
         initial = page.evaluate("""
             fetch('/api/admin/system/status', {credentials: 'same-origin'})
                 .then(r => r.json())
         """)
         initial_feed = initial["feed_enabled"]
 
-        # Toggle
         result = page.evaluate("""
             fetch('/api/admin/system/toggle-feed', {
                 method: 'POST',

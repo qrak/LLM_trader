@@ -37,7 +37,6 @@ CREATE INDEX IF NOT EXISTS idx_th_symbol ON trade_history(symbol);
 CREATE INDEX IF NOT EXISTS idx_th_action ON trade_history(action);
 """
 
-# Key fields that map from serialized TradeDecision data to SQLite columns.
 _INSERT_COLS = [
     "timestamp", "symbol", "action", "confidence", "price",
     "stop_loss", "take_profit", "position_size", "quote_amount",
@@ -50,24 +49,15 @@ class SQLiteTradeHistory:
     """Thread-safe SQLite store for trade history."""
 
     def __init__(self, logger: Logger, db_path: str):
-        """Initialize the SQLite store.
-
-        Args:
-            logger: Logger instance for error logging.
-            db_path: Path to the SQLite database file.
-        """
+        """Initialize the SQLite store."""
         self._logger = logger
         self._db_path = Path(db_path)
         self._lock = threading.Lock()
 
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Run schema creation synchronously (called once during DI wiring).
         self._init_schema()
 
-    # ------------------------------------------------------------------
-    # Internal helpers (all assume caller holds self._lock)
-    # ------------------------------------------------------------------
 
     def _get_conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
@@ -98,9 +88,6 @@ class SQLiteTradeHistory:
                 return None
         return value
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     def insert(self, decision_dict: dict[str, Any]) -> int:
         """Insert a trade decision and return its row ID."""
@@ -132,16 +119,6 @@ class SQLiteTradeHistory:
         order: str = "DESC",
     ) -> list[dict[str, Any]]:
         """Query trade history with optional filters.
-
-        Args:
-            limit: Max rows to return.
-            offset: Pagination offset.
-            symbol: Filter by trading pair (e.g. 'BTC/USDC').
-            action: Filter by action type ('BUY', 'SELL', 'CLOSE_LONG', etc.).
-            since: ISO timestamp — return trades on or after this time.
-            until: ISO timestamp — return trades on or before this time.
-            order: Sort direction ('DESC' or 'ASC').
-
         Returns:
             List of trade dicts with all columns.
         """
@@ -186,10 +163,6 @@ class SQLiteTradeHistory:
 
     def get_last_execution_timestamp(self, actions: tuple[str, ...] = ("BUY", "SELL")) -> str | None:
         """Return the newest timestamp for the provided action set.
-
-        Args:
-            actions: Action labels to include in the lookup.
-
         Returns:
             ISO timestamp string if found, else None.
         """

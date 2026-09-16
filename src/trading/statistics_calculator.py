@@ -57,7 +57,6 @@ class StatisticsCalculator:
         if not trades:
             return TradingStatistics()
 
-        # Convert to numpy arrays for vectorized operations
         pnl_percentages = np.array([t.pnl_pct for t in trades])
         pnl_amounts = np.array([t.pnl_quote for t in trades])
 
@@ -75,7 +74,6 @@ class StatisticsCalculator:
         best_trade_pct = float(np.max(pnl_percentages)) if total_trades > 0 else 0.0
         worst_trade_pct = float(np.min(pnl_percentages)) if total_trades > 0 else 0.0
 
-        # Calculate equity curve and drawdowns
         equity_curve = np.zeros(len(pnl_amounts) + 1)
         equity_curve[0] = initial_capital
         equity_curve[1:] = np.cumsum(pnl_amounts) + initial_capital
@@ -121,10 +119,6 @@ class StatisticsCalculator:
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
                 quantity = open_position.get("quantity", 0)
-                # Guard against zero/negative/NaN entry prices that would
-                # produce bogus PnL values (pnl_pct division by zero, pnl_quote
-                # phantom profit, NaN propagation into capital). `entry_price <= 0`
-                # alone is bypassed by NaN (nan <= 0 is False), hence isfinite.
                 if entry_price is None or not math.isfinite(entry_price) or entry_price <= 0:
                     open_position = None
                     continue
@@ -151,10 +145,8 @@ class StatisticsCalculator:
         if len(equity_curve) < 2:
             return 0.0, 0.0
 
-        # Efficient peak calculation using accumulative maximum
         peaks = np.maximum.accumulate(equity_curve)
 
-        # Avoid division by zero
         with np.errstate(divide="ignore", invalid="ignore"):
             drawdowns = np.where(peaks > 0, (equity_curve - peaks) / peaks * 100, 0.0)
 
@@ -177,7 +169,6 @@ class StatisticsCalculator:
         mean_return = np.mean(returns)
         std_dev = np.std(returns)
 
-        # Use isclose to handle floating point precision issues near zero
         if np.isclose(std_dev, 0):
             return 0.0
 
@@ -195,13 +186,9 @@ class StatisticsCalculator:
 
         mean_return = np.mean(returns)
 
-        # Standard Sortino Calculation:
-        # Downside Deviation = sqrt(sum(min(0, r)^2) / N)
-        # We replace positive returns with 0, then calculate Root Mean Square
         negative_returns = np.minimum(returns, 0)
         downside_deviation = np.sqrt(np.mean(negative_returns ** 2))
 
-        # Use isclose to handle floating point precision issues near zero
         if np.isclose(downside_deviation, 0):
             return float("inf") if mean_return > 0 else 0.0
 

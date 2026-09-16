@@ -277,22 +277,18 @@ def td_sequential_numba(close, length=9):
             prev = 0.0
 
         if c > c4:
-            # Bullish
             if prev >= 0:
                 val = prev + 1
             else:
                 val = 1
         elif c < c4:
-            # Bearish
             if prev <= 0:
                 val = prev - 1
             else:
                 val = -1
         else:
-            # Equal - reset
             val = 0.0
 
-        # Cap at length if specified
         if abs(val) > length:
             val = np.sign(val) * length
 

@@ -80,7 +80,7 @@ class CodeAuditor:
             self.venv_python,
             "-m",
             "pylint",
-            "--disable=C,R",  # Disable Convention and Refactor messages to focus on E and W
+            "--disable=C,R",
             "--score=n",
         ] + TARGET_PATHS
 

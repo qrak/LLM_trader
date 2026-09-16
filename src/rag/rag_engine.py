@@ -30,26 +30,12 @@ class RagEngine:
         ticker_manager=None,
         context_builder=None,
     ):
-        """Initialize RagEngine with injected dependencies (DI pattern).
-
-        Args:
-            logger: Logger instance
-            config: Config instance for RAG update intervals
-            coingecko_api: CoinGecko API client (optional)
-            news_manager: NewsManager instance (injected from app.py)
-            market_data_manager: MarketDataManager instance (injected from app.py)
-            index_manager: IndexManager instance (injected from app.py)
-            category_fetcher: LocalTaxonomyProvider instance (injected from start.py)
-            category_processor: CategoryProcessor instance (injected from app.py)
-            ticker_manager: TickerManager instance (injected from app.py)
-            context_builder: ContextBuilder instance (injected from app.py)
-        """
+        """Initialize RagEngine with injected dependencies (DI pattern)."""
 
 
         self.logger = logger
         self.config = config
 
-        # Store injected components
         self.news_manager = news_manager
         self.market_data_manager = market_data_manager
         self.index_manager = index_manager
@@ -68,15 +54,11 @@ class RagEngine:
 
         self._update_lock = asyncio.Lock()
 
-        # Tracks when the last update ATTEMPT was made, even if it failed or timed out.
-        # Used to prevent rapid retries in the retrieve_context hot path when the main
-        # loop's update attempt already failed.
         self._last_update_attempt: datetime | None = None
         self._minimum_retry_interval = timedelta(minutes=5)
 
         self._is_closed = False
 
-        # Last retrieval metadata snapshot for external consumers.
         self._latest_article_urls: dict[str, str] = {}
 
     async def initialize(self) -> None:
@@ -143,7 +125,6 @@ class RagEngine:
 
     async def refresh_market_data(self) -> None:
         """Refresh all market data from external sources in parallel where possible."""
-        # All three operations are independent I/O calls — run concurrently
         _, articles, _ = await asyncio.gather(
             self._ensure_categories_updated(),
             self._safe_fetch_news(),
@@ -151,9 +132,7 @@ class RagEngine:
             return_exceptions=True
         )
 
-        # gather(return_exceptions=True): failures arrive as values - filter here
         if isinstance(articles, list) and articles:
-            # update_news_database does sync JSON file I/O — keep it off the event loop
             updated = await asyncio.to_thread(self.news_manager.update_news_database, articles)  # type: ignore
             if updated:
                 self._build_indices()
@@ -258,15 +237,12 @@ class RagEngine:
                 self._build_indices()
 
             if not self.last_update or datetime.now(timezone.utc) - self.last_update > timedelta(minutes=30):
-                # Avoid retrying if an update was already attempted recently
-                # (e.g., main loop's _execute_market_knowledge_update timed out)
                 if (not self._last_update_attempt
                         or datetime.now(timezone.utc) - self._last_update_attempt > self._minimum_retry_interval):
                     await self.update_if_needed()
                 else:
                     self.logger.debug("Skipping redundant retrieve-path update — last attempt was within backoff window")
 
-            # Use context builder for keyword search
             scores = await self.context_builder.keyword_search(  # type: ignore
                 query, self.news_manager.news_database, symbol,  # type: ignore
                 self.category_processor.category_word_map,  # type: ignore
@@ -278,7 +254,6 @@ class RagEngine:
             relevant_indices = self._expand_candidate_indices_for_symbol(symbol, k, relevant_indices)
             relevant_indices = self._prioritize_full_body_candidates(relevant_indices)
 
-            # Build context using context builder (scores drive candidate selection)
             context_text, total_tokens = self.context_builder.add_articles_to_context(  # type: ignore
                 relevant_indices, self.news_manager.news_database, max_tokens, k, scores_dict  # type: ignore
             )
@@ -289,10 +264,6 @@ class RagEngine:
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error retrieving context: %s", e)
             self._latest_article_urls = {}
-            # Return EMPTY, not an error sentence: the caller's truthiness
-            # check (analysis_engine) would otherwise inject the literal
-            # "Error retrieving market context." into the LLM prompt as if
-            # it were real market data.
             return ""
 
     def get_news_cache_snapshot(self, limit: int | None = None) -> list[dict[str, Any]]:
@@ -313,9 +284,7 @@ class RagEngine:
     async def get_market_overview(self) -> dict[str, Any] | None:
         """Get current market overview data using MarketDataManager (aggregates CoinGecko + DefiLlama)"""
         try:
-            # Delegate to MarketDataManager which handles aggregation of all sources
             if self.market_data_manager:
-                 # Check/Update if needed
                  await self.market_data_manager.update_market_overview_if_needed(max_age_hours=1)
                  return self.market_data_manager.get_current_overview()
 
@@ -331,7 +300,6 @@ class RagEngine:
 
         self._is_closed = True
 
-        # Cancel periodic update task if running
         if self._periodic_update_task and not self._periodic_update_task.done():
             self.logger.debug("Cancelling periodic update task")
             self._periodic_update_task.cancel()
@@ -340,7 +308,6 @@ class RagEngine:
             except asyncio.CancelledError:
                 pass
 
-        # Close API clients if they have close methods
         if self.coingecko_api:
             try:
                 await self.coingecko_api.close()

@@ -10,10 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-# Maximum allowed delta between LLM-reported and computed ADX before flagging
 ADX_DISCREPANCY_THRESHOLD: float = 15.0
 
-# When LLM provides no ADX value, these defaults are used
 DEFAULT_ADX_FALLBACK: int = 25
 
 
@@ -106,19 +104,11 @@ class TrendValidator:
         computed_daily_adx: float | None = None,
     ) -> TrendValidation:
         """Validate LLM-reported ADX values against computed indicators.
-
-        Args:
-            strength_4h: LLM-reported 4H trend strength (0-100).
-            strength_daily: LLM-reported daily trend strength (0-100).
-            computed_adx: Actual ADX from current timeframe technical indicators.
-            computed_daily_adx: Actual daily ADX from long-term data.
-
         Returns:
             TrendValidation with validated values and any discrepancies.
         """
         result = TrendValidation()
 
-        # Store raw inputs
         if self._is_valid_adx(strength_4h):
             result.llm_strength_4h = int(float(strength_4h))
         if self._is_valid_adx(strength_daily):
@@ -172,21 +162,14 @@ class TrendValidator:
         validation: TrendValidation,
     ) -> dict[str, Any]:
         """Overwrite the LLM's trend strengths with validated values in-place.
-
-        Args:
-            analysis: The 'analysis' dict from parsed_response.
-            validation: Result from validate().
-
         Returns:
             The same analysis dict (mutated in-place for convenience).
         """
         trend = analysis.setdefault("trend", {})
 
-        # Replace with validated values
         trend["strength_4h"] = round(validation.validated_4h)
         trend["strength_daily"] = round(validation.validated_daily)
 
-        # Add validation metadata for transparency
         analysis["_trend_validation"] = validation.to_dict()
 
         return analysis

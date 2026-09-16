@@ -20,7 +20,6 @@ from src.rag.context_builder import ContextBuilder
 from src.rag.rag_engine import RagEngine
 from src.trading.vector_memory import VectorMemoryService
 
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def _build_context_builder() -> ContextBuilder:
     """Create a ContextBuilder with all dependencies mocked."""
@@ -29,7 +28,7 @@ def _build_context_builder() -> ContextBuilder:
     config.RAG_NEWS_LIMIT = 10
 
     token_counter = MagicMock()
-    token_counter.count_tokens.return_value = 50  # every string is ~50 tokens
+    token_counter.count_tokens.return_value = 50
 
     scoring_policy = MagicMock()
 
@@ -87,8 +86,6 @@ def _make_rag_engine() -> RagEngine:
     return engine
 
 
-# ── 1. EMPTY RAG VECTOR RETURNS ───────────────────────────────────────────────
-
 class TestEmptyRagReturns:
     """When ChromaDB returns zero results, context must be empty (not crash)."""
 
@@ -99,7 +96,6 @@ class TestEmptyRagReturns:
 
         context = await engine.retrieve_context("BTC price analysis", "BTC/USDC")
 
-        # get_database_size == 0 should trigger immediate empty return
         assert context == ""
 
     @pytest.mark.asyncio
@@ -114,7 +110,6 @@ class TestEmptyRagReturns:
         engine.context_builder.keyword_search = AsyncMock(return_value=[])
 
         context = await engine.retrieve_context("completely unrelated topic", "SOL/USDC")
-        # No matching indices -> scores is empty -> relevant_indices is empty -> empty context
         assert context is not None
         assert context != "Error retrieving market context."
 
@@ -132,10 +127,8 @@ class TestEmptyRagReturns:
             embedding_model=embedding_model,
             timeframe_minutes=240,
         )
-        # Bypass initialization for unit test
         svc._ensure_initialized = lambda: True  # type: ignore[method-assign]
 
-        # Mock collection with no data
         empty_collection = MagicMock()
         empty_collection.count.return_value = 0
         svc._collection = empty_collection
@@ -166,8 +159,6 @@ class TestEmptyRagReturns:
         assert context == ""
 
 
-# ── 2. NOISY / LOW-SIMILARITY EMBEDDING RESULTS ──────────────────────────────
-
 class TestNoisyEmbeddingResults:
     """Very low similarity results must still produce usable context (not crash)."""
 
@@ -188,12 +179,11 @@ class TestNoisyEmbeddingResults:
         )
         svc._ensure_initialized = lambda: True  # type: ignore[method-assign]
 
-        # ChromaDB returns distance=0.0 (perfect match) — similarity = 1.0
         mock_collection = MagicMock()
         mock_collection.count.return_value = 1
         mock_collection.query.return_value = {
             "ids": [["exp-1"]],
-            "distances": [[0.0]],  # very close (distance=0 → similarity=1)
+            "distances": [[0.0]],
             "documents": [["BTC went up. Long trade won +5%."]],
             "metadatas": [[{
                 "outcome": "WIN",
@@ -209,7 +199,7 @@ class TestNoisyEmbeddingResults:
 
         results = svc.retrieve_similar_experiences("BTC analysis", k=5)
         assert len(results) == 1
-        assert results[0].similarity == 100.0  # 1.0 * 100
+        assert results[0].similarity == 100.0
 
     def test_sanitize_metadata_with_nan_and_inf(self):
         """_sanitize_metadata must safely handle NaN, Inf, and None values."""
@@ -227,7 +217,7 @@ class TestNoisyEmbeddingResults:
             "neg_volume": float("-inf"),
             "none_val": None,
             "good_val": 42,
-            "list_val": [1, 2, 3],  # lists are not supported
+            "list_val": [1, 2, 3],
             "bool_val": True,
         }
 
@@ -240,8 +230,6 @@ class TestNoisyEmbeddingResults:
         assert "list_val" not in sanitized, "lists should be dropped"
         assert sanitized["bool_val"] is True
 
-
-# ── 3. CORRUPTED / MISSING METADATA ──────────────────────────────────────────
 
 class TestCorruptedMetadata:
     """ChromaDB metadata blocks with missing or corrupted keys."""
@@ -269,7 +257,6 @@ class TestCorruptedMetadata:
             "distances": [[0.5]],
             "documents": [["some trade description"]],
             "metadatas": [[{
-                # Intentionally missing "outcome" key
                 "pnl_pct": 5.0,
                 "direction": "LONG",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -277,7 +264,6 @@ class TestCorruptedMetadata:
         }
         svc._collection = mock_collection
 
-        # This should not crash — missing "outcome" defaults to "UNKNOWN" in get_context_for_prompt
         context = svc.get_context_for_prompt("BTC analysis", k=5)
         assert isinstance(context, str)
 
@@ -300,13 +286,10 @@ class TestCorruptedMetadata:
         mock_collection = MagicMock()
         mock_collection.count.return_value = 1
 
-        # A valid query response structure with corrupted timestamp
         from src.trading.vector_memory_context import VectorMemoryContextMixin
         parsed = VectorMemoryContextMixin._parse_trade_timestamp("not-a-date")
-        # Must return a valid datetime (min value) not crash
         assert parsed is not None
-        # Year should be the minimum
-        assert parsed.year <= 1  # datetime.min = 0001-01-01
+        assert parsed.year <= 1
 
     def test_missing_timestamp_returns_min_datetime(self):
         """Empty/none timestamp must not crash parser."""
@@ -315,8 +298,6 @@ class TestCorruptedMetadata:
         assert parsed is not None
 
 
-# ── 4. LARGE / OVERWHELMING CONTEXT ──────────────────────────────────────────
-
 class TestExtremeContextBoundaries:
     """Extremely large context, many noisy articles, token budget edge cases."""
 
@@ -324,7 +305,6 @@ class TestExtremeContextBoundaries:
         """When many articles are candidates, context builder must respect max_tokens."""
         builder = _build_context_builder()
 
-        # Create 200 near-identical articles
         articles = [
             {
                 "title": f"Article {i}",
@@ -336,9 +316,6 @@ class TestExtremeContextBoundaries:
         ]
 
         context = builder.build_context(articles, max_tokens=200)
-        # Token counter returns 50 per call, so we should have at most 4 articles (200/50)
-        # But actually the context builder uses token_counter.count_tokens which always returns 50
-        # So each article costs 50 tokens, max 200 tokens = 4 articles max
         article_count = context.count("📰")
         assert article_count <= 5, f"Should be at most ~4 articles with 200 token budget, got {article_count}"
 
@@ -357,7 +334,6 @@ class TestExtremeContextBoundaries:
         ]
 
         context = builder.build_context(articles, max_tokens=500)
-        # Only the article with a body should appear
         assert "Headline Only" not in context, "Articles without body should be skipped"
         assert "With Body" in context
 
@@ -377,8 +353,6 @@ class TestExtremeContextBoundaries:
         context = builder.build_context(articles, max_tokens=500)
         assert "No Title" in context
 
-
-# ── 5. VECTOR MEMORY STORE EDGE CASES ────────────────────────────────────────
 
 class TestVectorMemoryStoreEdgeCases:
     """store_experience with corrupted/pathological data."""
@@ -471,11 +445,8 @@ class TestVectorMemoryStoreEdgeCases:
             volatility_level="MEDIUM",
             reasoning_snippet="bad rr",
         )
-        # The rr_delta calculation uses math.isfinite check, so NaN should be handled
         assert success
 
-
-# ── 6. RAG ENGINE RETRIEVAL EDGE CASES ────────────────────────────────────────
 
 class TestRagEngineRetrievalBoundaries:
     """RagEngine.retrieve_context edge cases with pathological inputs."""
@@ -505,7 +476,4 @@ class TestRagEngineRetrievalBoundaries:
         engine.context_builder.keyword_search = raise_error
 
         context = await engine.retrieve_context("BTC analysis", "BTC/USDC")
-        # The exception is caught; returns EMPTY string so the caller's
-        # truthiness check skips the context instead of injecting an error
-        # sentence into the LLM prompt as if it were market data.
         assert context == ""

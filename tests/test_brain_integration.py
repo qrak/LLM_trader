@@ -47,9 +47,6 @@ def _make_position(**overrides):
     return Position(**defaults)
 
 
-# ── _build_rich_context_string ──────────────────────────────────
-
-
 class TestBuildRichContextString:
     """Verify the context string uses classify_adx_label."""
 
@@ -332,15 +329,11 @@ class TestUpdateFromClosedTrade:
         brain.trigger_ai_mistake_reflection.assert_called_once()
 
 
-# ── get_vector_context ──────────────────────────────────────────
-
-
 class TestGetVectorContext:
     """Verify get_vector_context builds the query and forwards it to vector_memory."""
 
     def setup_method(self):
         self.brain = _make_brain()
-        # Stub the two methods get_vector_context calls after building the query
         self.brain.vector_memory.get_context_for_prompt.return_value = "some context"
         self.brain.vector_memory.get_stats_for_context.return_value = {
             "total_trades": 0, "win_rate": 0, "avg_pnl": 0
@@ -353,7 +346,7 @@ class TestGetVectorContext:
     def test_query_contains_adx_label(self):
         self.brain.context_provider.get_vector_context(MarketSnapshot(adx=30, trend_direction="BULLISH"))
         call_args = self.brain.vector_memory.get_context_for_prompt.call_args
-        query_str = call_args[0][0]  # first positional arg is context_query
+        query_str = call_args[0][0]
         assert "High ADX" in query_str
 
     def test_query_contains_exit_execution_context(self):
@@ -374,9 +367,6 @@ class TestGetVectorContext:
         display_context = call_args.kwargs.get("display_context") or call_args[0][2]
         assert "Exit Execution: SL hard/15m | TP soft/4h" in query_str
         assert "Exit Execution: SL hard/15m | TP soft/4h" in display_context
-
-
-# ── get_dynamic_thresholds ──────────────────────────────────────
 
 
 class TestGetDynamicThresholds:
@@ -440,9 +430,6 @@ class TestGetDynamicThresholds:
         t = self.brain.get_dynamic_thresholds()
         assert t["sl_tightening"]["source"] == "brain"
         assert t["sl_tightening"]["learned_threshold"] == 0.15
-
-
-# ── track_position_update with policy evaluation ──────────────
 
 
 class TestTrackPositionUpdateWithPolicy:
@@ -529,7 +516,6 @@ class TestReflectionRuleFormatting:
         """Matching losses that push win rate below 60% should prevent a best-practice rule."""
         brain = _make_brain()
 
-        # 5 wins + 4 losses on the same pattern → 55.5% win rate
         all_metas = [
             {"outcome": "WIN", "market_regime": "BULLISH", "adx_at_entry": 30, "direction": "LONG"}
             for _ in range(5)

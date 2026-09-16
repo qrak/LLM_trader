@@ -15,9 +15,6 @@ from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
 from src.utils.decorators import retry_api_call
 
-# Gemini charges 258 tokens per 75x75 image tile for flash models.
-# Source: ai.google.dev/gemini-api/docs/tokens and
-# https://ai.google.dev/gemini-api/docs/tokens#image
 _IMAGE_TILE_SIZE = 75
 _IMAGE_TOKENS_PER_TILE = 258
 
@@ -28,11 +25,6 @@ class GoogleAIClient(BaseAIClient):
     def __init__(self, api_key: str, model: str, logger: Logger) -> None:
         """
         Initialize the GoogleAIClient.
-
-        Args:
-            api_key: Google AI API key
-            model: Model name (e.g., 'gemini-3.8-flash')
-            logger: Logger instance
         """
         super().__init__(logger)
         self.api_key = api_key
@@ -114,13 +106,11 @@ class GoogleAIClient(BaseAIClient):
         Returns (width, height) or None if format is unknown.
         """
         if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
-            # PNG: IHDR chunk at offset 16 (4B width, 4B height, big-endian)
             if len(img_bytes) >= 33:
                 w = struct.unpack(">I", img_bytes[16:20])[0]
                 h = struct.unpack(">I", img_bytes[20:24])[0]
                 return w, h
         elif img_bytes[:2] in (b"\xff\xd8",):
-            # JPEG: scan for SOF0 (0xff 0xc0/0xc1/0xc2) marker
             i = 2
             while i < len(img_bytes) - 1:
                 if img_bytes[i] == 0xff and img_bytes[i + 1] in (0xc0, 0xc1, 0xc2):  # noqa: SIM102
@@ -161,10 +151,6 @@ class GoogleAIClient(BaseAIClient):
         Uses prompt_tokens_details (modality breakdown) from the SDK when available
         for transparency in logging. Trusts prompt_token_count as the primary value
         since the SDK docs confirm it includes image tokens.
-
-        Args:
-            response: Google GenAI SDK response object
-            image_bytes: Raw image bytes for diagnostic logging only
         """
         try:
             metadata = response.usage_metadata
@@ -175,10 +161,8 @@ class GoogleAIClient(BaseAIClient):
             completion = getattr(metadata, "candidates_token_count", 0) or 0
             thoughts = getattr(metadata, "thoughts_token_count", 0) or 0
 
-            # Google bills thinking tokens as output tokens
             output_tokens = completion + thoughts
 
-            # Log per-modality breakdown from SDK for transparency
             text_tokens = None
             image_tokens_sdk = None
             prompt_details = getattr(metadata, "prompt_tokens_details", None)
@@ -191,14 +175,12 @@ class GoogleAIClient(BaseAIClient):
                     elif mod == "IMAGE":
                         image_tokens_sdk = count
 
-            # Diagnostic: log the modality breakdown if available
             if image_tokens_sdk is not None:
                 self.logger.info(
                     "Token breakdown: TEXT=%s, IMAGE=%s, prompt=%s, output=%s (incl. thoughts=%s)",
                     text_tokens, image_tokens_sdk, prompt, output_tokens, thoughts,
                 )
             elif image_bytes:
-                # SDK didn't return modality details — estimate for diagnostic
                 est = self._estimate_image_tokens(image_bytes)
                 self.logger.info(
                     "Token breakdown (estimated): text=%s, image(est)=%s, sdk_prompt=%s, output=%s",
@@ -280,12 +262,6 @@ class GoogleAIClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request to the Google AI API.
-
-        Args:
-            model: Model name (overrides default if provided)
-            messages: list of OpenAI-style messages
-            model_config: Configuration parameters for the model
-
         Returns:
             ChatResponseModel or None if failed
         """
@@ -326,13 +302,6 @@ class GoogleAIClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
-
-        Args:
-            model: Model name (overrides default if provided)
-            messages: list of OpenAI-style messages
-            chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters for the model
-
         Returns:
             ChatResponseModel or None if failed
         """
@@ -344,8 +313,6 @@ class GoogleAIClient(BaseAIClient):
         contents = [prompt, image_part]
         include_code_execution = model_config.get("google_code_execution", False)
 
-        # Outer: try with thinking, then without
-        # Inner: try with code_execution (if enabled), then without
         ce_options = (True, False) if include_code_execution else (False,)
         for include_thinking in (True, False):
             for include_ce in ce_options:
@@ -365,8 +332,6 @@ class GoogleAIClient(BaseAIClient):
                         config=generation_config
                     )
                     content_text = self._extract_text_from_response(response)
-                    # Pass raw image bytes so _extract_usage_metadata can estimate image tokens
-                    # when the SDK omits them (known bug googleapis/python-genai#470)
                     usage = self._extract_usage_metadata(response, image_bytes=img_data)
                     self.logger.debug("Received successful chart analysis response from Google AI")
                     return self.create_response(content_text, usage=usage)
@@ -380,7 +345,7 @@ class GoogleAIClient(BaseAIClient):
                         self.logger.warning(
                             "Model may not support thinking_config for chart analysis, retrying without it: %s", e
                         )
-                        break  # break inner loop, go to next thinking iteration
+                        break
                     self.logger.error("Error during Google AI chart analysis request: %s", e)
                     return self._handle_exception(e)
         return None
@@ -393,5 +358,4 @@ class GoogleAIClient(BaseAIClient):
         sanitized_error = self._sanitize_error_message(str(exception))
         self.logger.error("Unexpected Google AI error: %s", sanitized_error)
         return None
-
 

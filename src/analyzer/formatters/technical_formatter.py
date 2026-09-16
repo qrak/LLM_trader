@@ -19,13 +19,13 @@ if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
 _STALENESS_TARGET_HOURS: dict[str, int] = {
-    "rsi": 40,           # Momentum: ~40h
-    "macd": 40,          # Momentum: ~40h
-    "stochastic": 40,    # Momentum: ~40h
-    "ma_crossover": 200, # Trend: ~8 days
-    "divergence": 80,    # Divergence: ~3 days
-    "volatility": 20,    # Volatility: ~20h
-    "volume": 40,        # Volume: ~40h
+    "rsi": 40,
+    "macd": 40,
+    "stochastic": 40,
+    "ma_crossover": 200,
+    "divergence": 80,
+    "volatility": 20,
+    "volume": 40,
 }
 
 
@@ -33,13 +33,7 @@ class TechnicalFormatter:
     """Consolidated formatter for all technical analysis sections."""
 
     def __init__(self, technical_calculator, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the technical analysis formatter.
-
-        Args:
-            technical_calculator: TechnicalCalculator instance for thresholds and calculations
-            logger: Optional logger instance for debugging
-            format_utils: Format utilities for value formatting (required)
-        """
+        """Initialize the technical analysis formatter."""
         self.technical_calculator = technical_calculator
         self.logger = logger
         if format_utils is None:
@@ -48,11 +42,6 @@ class TechnicalFormatter:
 
     def format_technical_analysis(self, context, timeframe: str) -> str:
         """Format complete technical analysis section.
-
-        Args:
-            context: Analysis context containing technical data
-            timeframe: Primary timeframe for analysis
-
         Returns:
             str: Formatted technical analysis section
         """
@@ -84,29 +73,23 @@ class TechnicalFormatter:
         """
         ohlcv_data = context.ohlcv_candles
         if ohlcv_data is None or len(ohlcv_data) < 2:
-            # Fallback to simple format
             return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
 
-        # Extract last 24 candles (or all available)
         lookback = 24
         ohlcv_slice = ohlcv_data[-lookback:] if len(ohlcv_data) >= lookback else ohlcv_data
 
-        # Extract OHLCV columns (timestamp, open, high, low, close, volume)
         opens = ohlcv_slice[:, 1]
         highs = ohlcv_slice[:, 2]
         lows = ohlcv_slice[:, 3]
         closes = ohlcv_slice[:, 4]
         volumes = ohlcv_slice[:, 5]
 
-        # Calculate close trend
         close_delta = float(closes[-1] - closes[0])
         close_delta_pct = (close_delta / closes[0] * 100) if closes[0] != 0 else 0
 
-        # Count green/red candles vectorially
         green_candles = int(np.count_nonzero(closes >= opens))
         red_candles = len(closes) - green_candles
 
-        # Determine close trend text
         if abs(close_delta_pct) < 1.0:
             close_trend = f"→FLAT ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
         elif close_delta_pct > 0:
@@ -114,7 +97,6 @@ class TechnicalFormatter:
         else:
             close_trend = f"↓FALLING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
 
-        # Calculate volume trend
         volume_delta = float(volumes[-1] - volumes[0])
         volume_delta_pct = (volume_delta / volumes[0] * 100) if volumes[0] != 0 else 0
 
@@ -125,13 +107,11 @@ class TechnicalFormatter:
         else:
             volume_trend = f"↓DECLINING ({volume_delta_pct:+.0f}%)"
 
-        # Calculate High-Low range evolution (volatility indicator)
         hl_ranges = highs - lows
         hl_range_current = float(hl_ranges[-1])
         hl_range_avg = float(np.mean(hl_ranges))
         range_expansion = ((hl_range_current - hl_range_avg) / hl_range_avg * 100) if hl_range_avg != 0 else 0
 
-        # Volatility assessment
         if abs(range_expansion) < 15.0:
             volatility_text = "NORMAL"
         elif range_expansion > 0:
@@ -139,7 +119,6 @@ class TechnicalFormatter:
         else:
             volatility_text = f"CONTRACTING ({range_expansion:.0f}%)"
 
-        # Build OHLCV section with text-based descriptions
         price_action = (
             "## Price Action:\n"
             f"- Price:{self.format_utils.fmt(context.current_price)} | Close Trend: {close_trend}\n"
@@ -151,7 +130,6 @@ class TechnicalFormatter:
 
     def format_momentum_section(self, td: dict) -> str:
         """Format the momentum indicators section with temporal context (last 12 candles)."""
-        # Get temporal arrays for critical momentum indicators
         rsi_temporal = self._format_temporal_array(td, "rsi", 12, 1)
         macd_hist_temporal = self._format_temporal_array(td, "macd_hist", 12, 8)
         stoch_k_temporal = self._format_temporal_array(td, "stoch_k", 12, 1)
@@ -165,16 +143,12 @@ class TechnicalFormatter:
         """Format the trend indicators section with temporal context for trend strength evolution."""
         supertrend_direction = self.format_utils.get_supertrend_direction_string(td.get("supertrend_direction", 0))
 
-        # TD Sequential (trend exhaustion indicator)
         td_seq_str = self._format_td_sequential(td)
 
-        # SMA structure and crossovers
         sma_str = self._format_sma_structure(td)
 
-        # Ichimoku cloud position
         ichimoku_str = self._format_ichimoku_signal(td)
 
-        # ADX temporal array to show trend strength evolution
         adx_temporal = self._format_temporal_array(td, "adx", 12, 1)
 
         return (
@@ -202,13 +176,10 @@ class TechnicalFormatter:
         """Format the volatility indicators section with temporal context for volatility evolution."""
         bb_interpretation = self.format_utils.format_bollinger_interpretation(td)
 
-        # ATR temporal array to show volatility expansion/contraction
         atr_temporal = self._format_temporal_array(td, "atr", 12, 8)
 
-        # BB %B temporal array to show price position in bands over time
         bb_percent_b_temporal = self._format_temporal_array(td, "bb_percent_b", 12, 2)
 
-        # Choppiness Index interpretation
         chop_str = self._format_choppiness(td)
 
         return (
@@ -229,13 +200,10 @@ class TechnicalFormatter:
 
     def format_advanced_indicators_section(self, td: dict) -> str:
         """Format advanced indicators section with temporal context for advanced signals."""
-        # CCI temporal array to show commodity channel momentum
         cci_temporal = self._format_temporal_array(td, "cci", 12, 1)
 
-        # Coppock temporal array to show long-term momentum shifts
         coppock_temporal = self._format_temporal_array(td, "coppock", 12, 2)
 
-        # KST temporal array to show know sure thing momentum
         kst_temporal = self._format_temporal_array(td, "kst", 12, 2)
 
         return (
@@ -249,34 +217,23 @@ class TechnicalFormatter:
 
     def _format_patterns_section(self, context, timeframe: str = "4h") -> str:
         """Format patterns section using detected patterns from context.
-
-        Args:
-            context: Analysis context containing technical data
-            timeframe: Timeframe string for dynamic threshold calculation
-
         Returns:
             str: Formatted patterns section
         """
         if context.technical_patterns:
             pattern_summaries = []
             last_candle_index = len(context.ohlcv_candles) - 1 if context.ohlcv_candles is not None else None
-            # dedup: keep only the most recent pattern per (category, base_type)
             dedup_tracker: dict[tuple[str, str], dict] = {}
             for category, patterns_list in context.technical_patterns.items():
-                if patterns_list:  # Only process non-empty pattern lists
+                if patterns_list:
                     for pattern_dict in patterns_list:
-                        # Filter patterns based on recency relative to total candles analyzed
                         pattern_index = pattern_dict.get("index", None)
-                        # Determine recency threshold based on pattern type and data size
                         if last_candle_index is not None and pattern_index is not None:
                             total_candles = last_candle_index + 1
                             periods_ago = last_candle_index - pattern_index
 
-                            # Category-specific ABSOLUTE thresholds (in bars) based on timeframe
-                            # These ensure stale patterns are filtered regardless of data window size
                             abs_threshold = self._calculate_staleness_threshold(category, timeframe)
 
-                            # Calculate percentage-based threshold (existing logic)
                             if category == "ma_crossover":
                                 pct_threshold = int(total_candles * 0.3)
                             elif category in ["volatility", "volume"]:
@@ -286,30 +243,23 @@ class TechnicalFormatter:
                             else:
                                 pct_threshold = max(20, int(total_candles * 0.15))
 
-                            # Use the MORE RESTRICTIVE of the two thresholds
                             recency_threshold = min(abs_threshold, pct_threshold)
 
                             is_recent = periods_ago <= recency_threshold
                         else:
-                            # If no index info, include the pattern
                             is_recent = True
 
                         if is_recent:
-                            # Extract base type for deduplication
-                            # e.g., 'stoch_bullish_crossover' -> 'stoch_crossover'
-                            # This groups bullish/bearish variants together
                             pattern_type = pattern_dict.get("type", "")
                             base_type = self._get_dedup_key(category, pattern_type)
                             dedup_key = (category, base_type)
                             periods_ago_val = pattern_dict.get("details", {}).get("periods_ago", 999)
-                            # Keep only the most recent pattern per dedup key
                             if dedup_key not in dedup_tracker or periods_ago_val < dedup_tracker[dedup_key]["periods"]:
                                 dedup_tracker[dedup_key] = {
                                     "pattern": pattern_dict,
                                     "periods": periods_ago_val,
                                     "category": category
                                 }
-            # Convert dedup_tracker to pattern_summaries
             for dedup_key, entry in dedup_tracker.items():
                 pattern_dict = entry["pattern"]
                 category = entry["category"]
@@ -331,7 +281,7 @@ class TechnicalFormatter:
 
         if patterns:
             pattern_summaries = []
-            for pattern in patterns[-5:]:  # Show last 5 patterns
+            for pattern in patterns[-5:]:
                 description = pattern.get("description", "Unknown pattern")
                 compressed_desc = self._compress_pattern_description(description)
                 pattern_summaries.append(f"- {compressed_desc}")
@@ -343,22 +293,15 @@ class TechnicalFormatter:
 
     def _compress_pattern_description(self, description: str) -> str:
         """Compress pattern descriptions to save tokens (e.g., 'MACD bearish×now' instead of 'MACD bearish crossover now at 2025-12-23 18:00:00').
-
-        Args:
-            description: Original pattern description
-
         Returns:
             str: Compressed pattern description
         """
 
 
-        # Remove full timestamps (keep relative time if present)
         description = re.sub(r" at \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?: UTC)?", "", description)
 
-        # Remove index numbers
         description = re.sub(r" \(index \d+\)", "", description)
 
-        # Compress common words
         replacements = {
             "crossover": "×",
             "bullish": "bull",
@@ -375,7 +318,6 @@ class TechnicalFormatter:
         for old, new in replacements.items():
             description = description.replace(old, new)
 
-        # Compress multiple spaces
         description = re.sub(r"\s+", " ", description).strip()
 
         return description
@@ -387,12 +329,9 @@ class TechnicalFormatter:
         - 'rsi_oversold' -> 'rsi_level' (group with overbought)
         - 'rsi_overbought' -> 'rsi_level'
         """
-        # Remove directional qualifiers to group similar patterns
         base = pattern_type.replace("bullish_", "").replace("bearish_", "")
-        # Group oversold/overbought together
         if "oversold" in base or "overbought" in base:
             return f"{category}_level"
-        # Group divergences by indicator
         if "divergence" in base:
             return base.split("_")[0] + "_divergence"
         return base
@@ -400,14 +339,11 @@ class TechnicalFormatter:
     def _calculate_staleness_threshold(self, category: str, timeframe: str) -> int:
         """Calculate staleness threshold dynamically based on timeframe."""
         try:
-            # Get minutes per candle, defaulting to 4h (240m) on error
             minutes_per_candle = TimeframeValidator.to_minutes(timeframe)
         except (ValueError, TypeError):
             minutes_per_candle = 240
 
-        # Target hours relative to pattern significance (from module constant)
         target_minutes = _STALENESS_TARGET_HOURS.get(category, 40) * 60
-        # Ensure at least 1 bar
         return max(1, target_minutes // minutes_per_candle)
 
     def _format_td_sequential(self, td: dict) -> str:
@@ -443,12 +379,10 @@ class TechnicalFormatter:
         sma_50 = td.get("sma_50")
         sma_200 = td.get("sma_200")
 
-        # Extract last values from arrays using shared utility
         sma_20_val = get_last_valid_value(sma_20)
         sma_50_val = get_last_valid_value(sma_50)
         sma_200_val = get_last_valid_value(sma_200)
 
-        # Build SMA line
         sma_parts = []
         if sma_20_val is not None:
             sma_parts.append(f"20:{self.format_utils.fmt(sma_20_val, 8)}")
@@ -460,16 +394,12 @@ class TechnicalFormatter:
         if not sma_parts:
             return ""
 
-        # Detect 50/200 SMA relationship (macro trend structure)
-        # Golden/Death Cross here = current 50/200 state, not the crossover event
         cross_signal = ""
         if sma_50_val is not None and sma_200_val is not None:
             pct_diff = ((sma_50_val - sma_200_val) / sma_200_val) * 100
             if sma_50_val > sma_200_val:
-                # 50 is ABOVE 200 = bullish macro structure (Golden Cross configuration)
                 cross_signal = f" | 50>200 (+{pct_diff:.1f}%)"
             else:
-                # 50 is BELOW 200 = bearish macro structure (Death Cross configuration)
                 cross_signal = f" | 50<200 ({pct_diff:.1f}%)"
 
         return f"- SMAs: {' '.join(sma_parts)}{cross_signal}"
@@ -494,11 +424,9 @@ class TechnicalFormatter:
         if span_a_val is None or span_b_val is None or current_price is None:
             return ""
 
-        # Calculate cloud boundaries
         cloud_top = max(span_a_val, span_b_val)
         cloud_bottom = min(span_a_val, span_b_val)
 
-        # Determine signal based on price position relative to cloud
         if current_price > cloud_top:
             return " | Ichi:☁️↑"
         if current_price < cloud_bottom:
@@ -513,13 +441,6 @@ class TechnicalFormatter:
 
     def _format_temporal_array(self, td: dict, key: str, lookback: int, decimals: int) -> str:
         """Format temporal array with text-based trend description.
-
-        Args:
-            td: Technical data dictionary
-            key: Indicator key name
-            lookback: Number of historical candles to analyze
-            decimals: Decimal places for formatting
-
         Returns:
             Formatted string with trend direction and delta, e.g., " (↑UP Δ+5.2)"
         """

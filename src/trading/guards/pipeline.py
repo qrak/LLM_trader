@@ -15,12 +15,6 @@ class GuardPipeline:
 
     def evaluate(self, intent, /, *, capital: float, config: Any) -> list[GuardResult]:
         """Evaluate all guards sequentially against an order intent.
-
-        Args:
-            intent: Order intent to validate.
-            capital: Available portfolio capital.
-            config: Runtime configuration mapping or object.
-
         Returns:
             List of GuardResult instances for all executed guards.
         """

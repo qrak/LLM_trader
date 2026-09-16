@@ -23,23 +23,15 @@ def _find_local_extrema_numba(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Find local maxima or minima in data.
-
-    Args:
-        data: Array to search
-        lookback: Window size for local extrema
-        find_maxima: True for maxima, False for minima
-
     Returns:
         (indices, values) of local extrema
     """
     n = len(data)
     if n < lookback * 2 + 1:
-        # Return empty arrays with proper types
         empty_indices = np.empty(0, dtype=np.int64)
         empty_values = np.empty(0, dtype=np.float64)
         return (empty_indices, empty_values)
 
-    # Pre-allocate max possible size
     max_extrema = n - 2 * lookback
     indices_temp = np.empty(max_extrema, dtype=np.int64)
     values_temp = np.empty(max_extrema, dtype=np.float64)
@@ -48,7 +40,6 @@ def _find_local_extrema_numba(
     for i in range(lookback, n - lookback):
         is_extrema = True
 
-        # Check if current point is extrema in window
         for j in range(i - lookback, i + lookback + 1):
             if j == i:
                 continue
@@ -66,7 +57,6 @@ def _find_local_extrema_numba(
             values_temp[count] = data[i]
             count += 1
 
-    # Return only filled portion
     if count == 0:
         empty_indices = np.empty(0, dtype=np.int64)
         empty_values = np.empty(0, dtype=np.float64)
@@ -87,13 +77,6 @@ def _find_matching_indicator_extrema(
 ) -> tuple[int, float]:
     """
     Find indicator extrema near a price extrema.
-
-    Args:
-        indicator_indices: Array of indicator extrema indices
-        indicator_values: Array of indicator extrema values
-        price_idx: Index of price extrema to match
-        tolerance: Maximum periods difference to consider a match
-
     Returns:
         (indicator_idx, indicator_value) or (-1, 0.0) if not found
     """
@@ -123,8 +106,6 @@ def _detect_divergence_numba(
     if len(prices) < 10 or len(indicator) < 10:
         return (False, -1, -1, 0.0, 0.0, 0.0, 0.0)
 
-    # Scan ENTIRE array with a conservative lookback for the 4h timeframe:
-    # 10 periods reduces false positives from minor price fluctuations.
     price_ext_idx, price_ext_values = _find_local_extrema_numba(prices, 10, not bullish)
     indicator_ext_idx, indicator_ext_values = _find_local_extrema_numba(indicator, 10, not bullish)
 
@@ -141,7 +122,6 @@ def _detect_divergence_numba(
         second_price = price_ext_values[i]
         first_price = price_ext_values[i - 1]
 
-        # Price must make the lower low (bullish) / higher high (bearish)
         if bullish:
             if second_price >= first_price:
                 continue
@@ -151,7 +131,6 @@ def _detect_divergence_numba(
                 continue
             move_pct = (second_price - first_price) / first_price * 100
 
-        # Require a significant price move (min 0.5%) to filter trivial divergences
         if move_pct < 0.5:
             continue
 
@@ -167,7 +146,6 @@ def _detect_divergence_numba(
         if second_indicator_idx == -1:
             continue
 
-        # Indicator must move the opposite way — that is the divergence
         if bullish:
             if second_indicator_value <= first_indicator_value:
                 continue

@@ -52,14 +52,7 @@ class PostMortemService:
         unified_parser: Any,
         repository: PostMortemRepository,
     ) -> None:
-        """Initialize post-mortem service dependencies.
-
-        Args:
-            logger: Logger instance.
-            model_manager: ModelManager for LLM calls (reuses config provider chain).
-            unified_parser: UnifiedParser for JSON extraction.
-            repository: PostMortemRepository for storage.
-        """
+        """Initialize post-mortem service dependencies."""
         self.logger = logger
         self.model_manager = model_manager
         self.unified_parser = unified_parser
@@ -76,16 +69,6 @@ class PostMortemService:
         market_conditions: Any | None = None,
     ) -> PostMortemResult | None:
         """Analyze a closed trade and store the post-mortem.
-
-        Args:
-            closed_position: The Position object that was just closed.
-            entry_decision: The original entry TradeDecision (must not be None).
-            exit_decision: The exit TradeDecision just written to SQLite.
-            pnl: P&L percentage of the closed trade.
-            reason: Close reason (stop_loss / take_profit / analysis_signal).
-            trade_id: trade_history.id of the CLOSE row (links journal to trade).
-            market_conditions: Optional MarketConditions at exit time.
-
         Returns:
             PostMortemResult if successful, None on any failure.
         """
@@ -106,7 +89,6 @@ class PostMortemService:
                 self.logger.warning("Post-mortem: failed to parse LLM response")
                 return None
 
-            # Store in SQLite + FTS5 (offload to thread for async safety)
             await asyncio.to_thread(
                 self.repository.insert_post_mortem,
                 trade_id=trade_id,
@@ -160,11 +142,9 @@ class PostMortemService:
             f"- Max Profit During Trade: {closed_position.max_profit_pct:.2f}%",
         ]
 
-        # Entry reasoning (the original AI justification for opening)
         entry_reasoning = entry_decision.reasoning or "(no reasoning recorded)"
         lines.extend(["", "## Original Entry Reasoning:", entry_reasoning])
 
-        # Exit data
         lines.extend([
             "",
             "## Exit Data:",
@@ -172,7 +152,6 @@ class PostMortemService:
             f"- Exit Reasoning: {exit_decision.reasoning}",
         ])
 
-        # Hold duration
         entry_time = closed_position.entry_time
         exit_timestamp = exit_decision.timestamp
         if entry_time is not None and exit_timestamp is not None:
@@ -180,10 +159,8 @@ class PostMortemService:
                 hold_duration = exit_timestamp - entry_time
                 lines.append(f"- Hold Duration: {hold_duration}")
             except TypeError:
-                # naive vs aware datetime from mixed sources - hold duration omitted
                 pass
 
-        # Market conditions at exit (if available)
         if market_conditions is not None:
             lines.extend(["", "## Market Conditions at Exit:", str(market_conditions)])
 
@@ -203,7 +180,6 @@ class PostMortemService:
         except Exception as e:  # noqa: BLE001
             self.logger.debug("Post-mortem markdown parse error: %s", e)
 
-        # Fallback: try raw JSON (LLM may return plain JSON without ``` fences)
         try:
             data = json.loads(response_text.strip())
             return PostMortemResult(**data)

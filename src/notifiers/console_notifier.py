@@ -18,14 +18,7 @@ class ConsoleNotifier(BaseNotifier):
     """Console-based notifier as fallback when Discord is disabled."""
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
-        """Initialize ConsoleNotifier.
-
-        Args:
-            logger: Logger instance
-            config: Config instance
-            unified_parser: UnifiedParser for JSON extraction (DRY)
-            formatter: FormatUtils instance for value formatting
-        """
+        """Initialize ConsoleNotifier."""
         super().__init__(logger, config, unified_parser, formatter)
         self.is_initialized = True
 
@@ -56,22 +49,11 @@ class ConsoleNotifier(BaseNotifier):
             channel_id: int | None = None,
             expire_after: int | None = None
     ) -> None:
-        """Print a text message to console.
-
-        Args:
-            message: Message text
-            channel_id: Ignored for console output
-            expire_after: Ignored for console output
-        """
+        """Print a text message to console."""
         print(f"\n{message}")
 
     async def send_trading_decision(self, decision: Any, channel_id: int | None = None) -> None:
-        """Print a trading decision to console.
-
-        Args:
-            decision: TradingDecision dataclass
-            channel_id: Ignored for console output
-        """
+        """Print a trading decision to console."""
         _, emoji = self.get_action_styling(decision.action)
 
         print("\n" + "=" * 60)
@@ -107,14 +89,7 @@ class ConsoleNotifier(BaseNotifier):
             channel_id: int | None = None,
             chart_image: io.BytesIO | None = None
     ) -> None:
-        """Print full analysis notification with reasoning and JSON data.
-
-        Args:
-            result: Analysis result dict with corrected analysis and raw_response
-            symbol: Trading symbol
-            timeframe: Trading timeframe
-            channel_id: Ignored for console output
-        """
+        """Print full analysis notification with reasoning and JSON data."""
         try:
             analysis = result.get("analysis")
             if not analysis:
@@ -140,13 +115,7 @@ class ConsoleNotifier(BaseNotifier):
             current_price: float,
             channel_id: int | None = None
     ) -> None:
-        """Print current open position status.
-
-        Args:
-            position: Current Position object
-            current_price: Current market price
-            channel_id: Ignored for console output
-        """
+        """Print current open position status."""
         try:
             pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
@@ -187,13 +156,7 @@ class ConsoleNotifier(BaseNotifier):
             symbol: str,
             channel_id: int | None = None
     ) -> None:
-        """Print overall performance statistics.
-
-        Args:
-            trade_history: Full trade history list
-            symbol: Trading symbol
-            channel_id: Ignored for console output
-        """
+        """Print overall performance statistics."""
         try:
             stats = self.calculate_performance_stats(trade_history)
             if not stats:

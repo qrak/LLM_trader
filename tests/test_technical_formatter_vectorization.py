@@ -13,7 +13,6 @@ def test_technical_formatter_price_action_vectorized():
     context = MagicMock()
     context.current_price = 100.0
 
-    # 10 candles: 7 green (closes >= opens), 3 red
     timestamps = np.arange(10) * 60000
     opens = np.array([100, 101, 102, 103, 104, 105, 106, 107, 108, 109], dtype=float)
     highs = opens + 1.0

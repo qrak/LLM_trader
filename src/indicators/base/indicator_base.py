@@ -61,7 +61,7 @@ class IndicatorBase:
 
         if self.timestamp is not None:
             data["timestamp"] = self.timestamp
-        data["open"] = self.open.ravel()  # Ensure 1D array
+        data["open"] = self.open.ravel()
         data["high"] = self.high.ravel()
         data["low"] = self.low.ravel()
         data["close"] = self.close.ravel()

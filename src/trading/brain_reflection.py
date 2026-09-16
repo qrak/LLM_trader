@@ -57,8 +57,6 @@ class BrainReflectionEngine:
                 return
             group_metas = [meta for meta in all_metas if build_win_key(meta) == pattern_key]
             metrics = self.analyzer.compute_group_metrics(group_metas)
-            # Average surprise ratio for the group — high values indicate
-            # outcomes driven by luck rather than thesis accuracy.
             surprise_values = [
                 float(m.get("surprise_ratio", 1.0))
                 for m in group_metas

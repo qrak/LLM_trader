@@ -59,13 +59,7 @@ class TemplateManager:
     )
 
     def __init__(self, config: "Config", logger: Logger | None = None, timeframe_validator: Any = None):
-        """Initialize the template manager.
-
-        Args:
-            config: Configuration module providing prompt defaults
-            logger: Optional logger instance for debugging
-            timeframe_validator: TimeframeValidator instance (injected)
-        """
+        """Initialize the template manager."""
         self.logger = logger
         self.config = config
         self.timeframe_validator = timeframe_validator
@@ -332,18 +326,6 @@ class TemplateManager:
                             model_verbosity: str | None = None) -> str:
         # pylint: disable=too-many-arguments
         """Build the system prompt for trading decision AI.
-
-        Args:
-            symbol: Trading symbol (e.g., "BTC/USDT")
-            timeframe: Timeframe for analysis (e.g., "1h", "4h", "1d")
-            previous_response: Previous AI response for context continuity (JSON stripped)
-            performance_context: Recent trading history and performance metrics
-            brain_context: Distilled trading insights from closed trades
-            last_analysis_time: Formatted timestamp of last analysis (e.g., "2025-12-26 14:30:00")
-            indicator_delta_alert: Alert string when many indicators changed significantly
-            dynamic_thresholds: Brain-learned thresholds for dynamic values
-            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
-
         Returns:
             str: Formatted system prompt
         """
@@ -399,8 +381,7 @@ class TemplateManager:
                 "",
             ])
 
-        # Bull/Bear debate - single LLM call
-        if getattr(self.config, "RESEARCH_TEAM_ENABLED", False):
+        if self.config.RESEARCH_TEAM_ENABLED:
             header_lines.extend([
                 "## Bull vs Bear Debate Protocol",
                 "Before making your final decision, you MUST internally debate both sides:",
@@ -458,14 +439,12 @@ class TemplateManager:
             "",
         ])
 
-        # Add performance context if available
         if performance_context:
             header_lines.extend([
                 "",
                 performance_context.strip(),
             ])
 
-        # Profit Maximization strategy — always present, independent of trade history
         thresholds = dynamic_thresholds or {}
         sl_tightening_pct = thresholds.get("sl_tightening_pct", None)
         sl_tightening_source = thresholds.get("sl_tightening_source", "config")
@@ -494,10 +473,8 @@ class TemplateManager:
                 brain_context.strip(),
             ])
 
-        # Add previous response context if available (strip JSON to save tokens)
         if previous_response:
             text_reasoning = self._sanitize_previous_reasoning(previous_response, _verbosity)
-            # Extract and format structured decision data from the prior JSON block
             prior_analysis = self._extract_previous_analysis(previous_response)
             decision_snapshot = (
                 self._format_previous_decision_snapshot(prior_analysis)
@@ -505,8 +482,7 @@ class TemplateManager:
             )
 
             if decision_snapshot or text_reasoning:
-                # Calculate window duration safely using injected validator
-                window_minutes = 120 # Default fallback
+                window_minutes = 120
                 if self.timeframe_validator:
                     try:
                         window_minutes = self.timeframe_validator.to_minutes(timeframe) * 2
@@ -552,12 +528,6 @@ class TemplateManager:
 
         Separated from Response Format to place decision rules near Decision Protocol
         in the system prompt where they are processed earlier by the model.
-
-        Args:
-            has_chart_analysis: Whether chart image analysis is available
-            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
-            dynamic_thresholds: Brain-learned thresholds for dynamic values
-
         Returns:
             str: Decision Rules block for inclusion in the system prompt
         """
@@ -581,14 +551,13 @@ class TemplateManager:
             max_pos = 0.10
         min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
         try:
-            config_min_rr = float(getattr(self.config, "MIN_RR_ENTRY", 1.0) or 1.0)
+            config_min_rr = float(self.config.MIN_RR_ENTRY or 1.0)
         except (TypeError, ValueError):
             config_min_rr = 1.0
         try:
             rr_borderline = float(thresholds.get("rr_borderline_min", config_min_rr))
         except (TypeError, ValueError):
             rr_borderline = config_min_rr
-        # config value is the hard floor; the brain may only loosen it
         rr_borderline = min(rr_borderline, config_min_rr)
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         trade_count = thresholds.get("trade_count", 0)
@@ -676,7 +645,6 @@ STOP LOSS & TAKE PROFIT:{safe_mae_line}
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
 
-        # Add threshold origin annotations
         if trade_count > 0:
             if learned_keys:
                 origin_parts = [f"recommended_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
@@ -713,12 +681,6 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
         Decision logic (R/R gates, position sizing, SL/TP rules, macro conflict) lives in
         build_decision_rules() instead, which is placed earlier in the system prompt.
-
-        Args:
-            has_chart_analysis: Whether chart image analysis is available
-            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
-            dynamic_thresholds: Brain-learned thresholds for dynamic values
-
         Returns:
             str: Formatted response template (output-format-only)
         """
@@ -727,7 +689,6 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         if has_chart_analysis:
             chart_validation_line = " Include material chart cross-checks from P1-price, P2-RSI, P3-volume, or P4-CMF/OBV when they confirm or contradict numeric indicators."
 
-        # Signal names: spot uses BUY/SELL, futures uses LONG/SHORT
         is_futures = self.config.MARKET_TYPE == "futures"
         entry_signal_open = "LONG" if is_futures else "BUY"
         entry_signal_close = "SHORT" if is_futures else "SELL"
@@ -770,7 +731,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
                 f"5) FINAL DECISION & EXECUTION: actionable signal and immediate next step"
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) market regime/trend, (3) invalidation trigger, (4) what to watch next."
-        else:  # low
+        else:
             _output_header = (
                 "Output: 3 plain-text lines + JSON. JSON is truth. No markdown headings. No commentary."
             )
@@ -853,20 +814,11 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
                              has_chart_analysis: bool = False,
                              available_periods: dict[str, int] | None = None) -> str:
         """Build analysis steps instructions for the AI model.
-
-        Args:
-            symbol: Trading symbol being analyzed
-            has_advanced_support_resistance: Whether advanced S/R indicators are detected
-            has_chart_analysis: Whether chart image analysis is available (Google AI only)
-            available_periods: dict of period names to candle counts (e.g., {"12h": 2, "24h": 4, "3d": 12, "7d": 28})
-
         Returns:
             str: Formatted analysis steps
         """
-        # Get the base asset for market comparisons
         analyzed_base = symbol.split("/")[0] if "/" in symbol else symbol
 
-        # Build dynamic timeframe description based on available periods
         if available_periods:
             period_names = list(available_periods.keys())
             timeframe_desc = f"Analyze the provided Multi-Timeframe Price Summary periods: {', '.join(period_names)}"
@@ -913,7 +865,6 @@ Provide exactly ONE signal. No multi-step signals ("CLOSE then BUY", etc)."""
 
 7. STATISTICAL: Z-Score (extremes revert), Hurst (>0.5 trending), volatility"""
 
-        # Add chart analysis steps only if chart images are available
         step_number = 8
         if has_chart_analysis:
             cfg_limit = int(self.config.AI_CHART_CANDLE_LIMIT)

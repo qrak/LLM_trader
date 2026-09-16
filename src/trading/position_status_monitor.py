@@ -42,9 +42,6 @@ class PositionStatusMonitor:
     async def check_soft_exit_status(self, current_price: float | None, *, is_candle_close: bool = True) -> None:
         """Evaluate soft exits at candle close and handle a closed position."""
         if not (self.trading_strategy.current_position and current_price is not None):
-            # Risk-protection gap: with an open position and a ticker outage,
-            # soft SL/TP evaluation is skipped for this candle. Log it loudly
-            # so the gap is observable instead of silent.
             if self.trading_strategy.current_position and current_price is None:
                 self.logger.warning(
                     "Soft exit check SKIPPED: open %s position but current price unavailable",
@@ -108,8 +105,6 @@ class PositionStatusMonitor:
 
         symbol = self.get_symbol()
         if self.notifier and symbol:
-            # Full SQLite export is sync and unbounded (months of rows) —
-            # keep it off the shared event loop at this live-trading boundary.
             history = await asyncio.to_thread(self.persistence.load_trade_history)
             await self.notifier.send_performance_stats(
                 trade_history=history,

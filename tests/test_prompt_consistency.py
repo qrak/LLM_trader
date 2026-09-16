@@ -20,6 +20,12 @@ def _make_manager() -> TemplateManager:
         MODEL_VERBOSITY="high",
         MARKET_TYPE="spot",
         ENTRY_ORDER_TYPE="market",
+        RESEARCH_TEAM_ENABLED=False,
+        MIN_RR_ENTRY=1.0,
+        EXECUTOR_MAX_POSITION_USDC=0.0,
+        DEMO_QUOTE_CAPITAL=10000.0,
+        SOCIAL_SENTIMENT_ENABLED=False,
+        EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
     )
     return TemplateManager(
         config=config,
@@ -40,6 +46,12 @@ def _make_manager_with_verbosity(level: str) -> TemplateManager:
         MODEL_VERBOSITY=level,
         MARKET_TYPE="spot",
         ENTRY_ORDER_TYPE="market",
+        RESEARCH_TEAM_ENABLED=False,
+        MIN_RR_ENTRY=1.0,
+        EXECUTOR_MAX_POSITION_USDC=0.0,
+        DEMO_QUOTE_CAPITAL=10000.0,
+        SOCIAL_SENTIMENT_ENABLED=False,
+        EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
     )
     return TemplateManager(
         config=config,
@@ -275,7 +287,6 @@ Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
     def test_hold_open_position_contract_is_explicit(self) -> None:
         response_template = self.manager.build_response_template()
 
-        # Aktualne brzmienie: caly kontrakt w jednej linii "HOLD semantics:".
         assert "HOLD(open position) = no execution change and must not repeat stale SL/TP values" in response_template
         assert "UPDATE is for an open position only" in response_template
         assert "HOLD(no position) = no position and no pending/future order" in response_template
@@ -295,6 +306,12 @@ class TestVerbosityParserContract:
             MODEL_VERBOSITY=level,
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="market",
+            RESEARCH_TEAM_ENABLED=False,
+            MIN_RR_ENTRY=1.0,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
 

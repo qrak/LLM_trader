@@ -632,7 +632,6 @@ def current_results() -> dict:
                                        round(float(sar[i]), 6), round(float(ep[i]), 6), round(float(af[i]), 6))
     cases["sar_initial_state"] = tuple(round(float(x), 6) for x in get_initial_sar_state(high, low, 0.02))
 
-    # Crafted series that MUST hit the True paths (bullish/bearish divergence + negatives).
     def _anchored(anchors, n=45):
         xs = [a[0] for a in anchors]
         ys = [a[1] for a in anchors]

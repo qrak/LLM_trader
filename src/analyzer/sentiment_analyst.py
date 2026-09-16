@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from src.logger.logger import Logger
 
 
-# Title keyword lexicons for sentiment scoring (Atom feeds have no scores).
 _BULLISH_TERMS = (
     "bullish", "breakout", "surge", "rally", "pump", "ath", "all-time high",
     "gains", "adoption", "inflow", "etf", "halving", "institutional",
@@ -55,7 +54,6 @@ _ATOM_NS = "{http://www.w3.org/2005/Atom}"
 class RedditSentimentAnalyst:
     """Fetches and analyzes sentiment from crypto subreddits via Atom RSS."""
 
-    # Subreddits to query — ordered by relevance to crypto trading
     SUBREDDITS: ClassVar[list[str]] = [
         "CryptoCurrency",
         "Bitcoin",
@@ -63,42 +61,27 @@ class RedditSentimentAnalyst:
         "CryptoMarkets",
     ]
 
-    # Max posts per subreddit
     POST_LIMIT = 10
 
-    # Official Atom feed endpoint (no auth, no API key)
     BASE_URL = "https://www.reddit.com/r/{subreddit}/.rss"
 
-    # User-Agent to present as a normal browser
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
     )
 
-    # Politeness: Reddit rate-limits bursts from flagged IPs (HTTP 429).
-    # Observed: ~1 request / 20-30s succeeds, bursts get 429 + Retry-After.
     REQUEST_DELAY_SECONDS = 20.0
     RETRY_AFTER_SECONDS = 30.0
     MAX_RETRIES = 3
 
     def __init__(self, logger: Logger, session: Any = None) -> None:
-        """Initialize the sentiment analyst.
-
-        Args:
-            logger: Logger instance.
-            session: Optional aiohttp.ClientSession for HTTP requests.
-                If None, a new session is created per fetch.
-        """
+        """Initialize the sentiment analyst."""
         self.logger = logger
         self._session = session
 
     async def fetch_sentiment(self, limit: int = POST_LIMIT) -> dict[str, Any]:
         """Fetch hot posts from all configured subreddits.
-
-        Args:
-            limit: Max posts per subreddit.
-
         Returns:
             dict with keys: 'posts' (list of post dicts), 'overall_sentiment',
             'top_topics', 'error' (if any).
@@ -241,10 +224,6 @@ class RedditSentimentAnalyst:
     @staticmethod
     def _compute_overall_sentiment(posts: list[dict[str, Any]]) -> str:
         """Compute overall sentiment from bullish/bearish title keywords.
-
-        Args:
-            posts: List of post dicts (from fetch_sentiment).
-
         Returns:
             One of NO_DATA / BULLISH / SLIGHTLY_BULLISH / NEUTRAL /
             SLIGHTLY_BEARISH / BEARISH.
@@ -295,10 +274,6 @@ class RedditSentimentAnalyst:
 
     def format_sentiment_section(self, sentiment_data: dict[str, Any]) -> str:
         """Build a formatted sentiment section for the LLM prompt.
-
-        Args:
-            sentiment_data: Output from fetch_sentiment().
-
         Returns:
             Formatted markdown string, or empty string if no data.
         """
@@ -318,7 +293,6 @@ class RedditSentimentAnalyst:
             lines.append(f"Trending topics: {', '.join(topics[:5])}")
         lines.append("")
 
-        # Newest first — Atom feeds carry no scores to rank by.
         top_posts = sorted(
             posts, key=lambda p: p.get("created_utc", 0), reverse=True
         )[:5]

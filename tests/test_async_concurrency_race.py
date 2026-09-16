@@ -18,7 +18,6 @@ import pytest
 from src.rag.rag_engine import RagEngine
 from src.trading.vector_memory import VectorMemoryService
 
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def _make_mock_rag_engine() -> RagEngine:
     """Build a RagEngine with all dependencies mocked (no real I/O)."""
@@ -30,7 +29,6 @@ def _make_mock_rag_engine() -> RagEngine:
     config.RAG_NEWS_ENRICH_MIN_CHARS = 200
     config.RAG_RETRIEVAL_TIMEOUT = 5
 
-    # Build the engine with DI
     engine = RagEngine(
         logger=logger,
         config=config,
@@ -42,7 +40,6 @@ def _make_mock_rag_engine() -> RagEngine:
         ticker_manager=MagicMock(),
         context_builder=MagicMock(),
     )
-    # Wire up direct mocks
     engine.news_manager.news_database = []
     engine.news_manager.get_database_size.return_value = 0
     engine.ticker_manager.get_known_tickers.return_value = ["BTC", "ETH"]
@@ -53,8 +50,6 @@ def _make_mock_rag_engine() -> RagEngine:
     return engine
 
 
-# ── 1. LATENCY INJECTION ─────────────────────────────────────────────────────
-
 class TestLatencyInjection:
     """Force network/slow operations and verify the system does not deadlock or corrupt state."""
 
@@ -64,11 +59,11 @@ class TestLatencyInjection:
         engine = _make_mock_rag_engine()
 
         async def slow_fetch(*args, **kwargs):
-            await asyncio.sleep(2.0)  # simulated slow network
+            await asyncio.sleep(2.0)
             return [{"title": "BTC rally", "body": "Big rally today", "source": "test"}]
 
         async def fast_overview(*args, **kwargs):
-            return None  # fast completion
+            return None
 
         engine._safe_fetch_news = slow_fetch
         engine.market_data_manager.update_market_overview_if_needed = fast_overview
@@ -78,7 +73,6 @@ class TestLatencyInjection:
         await engine.refresh_market_data()
         elapsed = asyncio.get_event_loop().time() - start
 
-        # refresh_market_data uses asyncio.gather, so wall time ≈ max(slow tasks), not sum
         assert elapsed < 3.0, f"gather took {elapsed:.2f}s but should be ~2s (max of parallel tasks)"
 
     @pytest.mark.asyncio
@@ -87,7 +81,7 @@ class TestLatencyInjection:
         engine = _make_mock_rag_engine()
 
         async def never_completes(*args, **kwargs):
-            await asyncio.sleep(30)  # would timeout
+            await asyncio.sleep(30)
             return []
 
         async def fast_overview(*args, **kwargs):
@@ -99,15 +93,11 @@ class TestLatencyInjection:
             "simulated category timeout"
         )
 
-        # refresh_market_data uses asyncio.gather with return_exceptions=True,
-        # so TimeoutError is captured as a return value, not propagated.
         try:
             await engine.refresh_market_data()
         except Exception:  # noqa: BLE001
             pytest.fail("refresh_market_data should not propagate exceptions from gather tasks")
 
-
-# ── 2. OUT-OF-ORDER COMPLETION ────────────────────────────────────────────────
 
 class TestOutOfOrderCompletion:
     """Tasks completing in unintended order must not corrupt state."""
@@ -133,14 +123,9 @@ class TestOutOfOrderCompletion:
             return "C"
 
         gathered = await asyncio.gather(task_a(), task_b(), task_c())
-        # gather preserves insertion order in the return value,
-        # but the tasks ran concurrently (C finished first)
         assert list(gathered) == ["A", "B", "C"], "gather must preserve insertion order"
-        # Actual execution order should be C, B, A
         assert results == ["C", "B", "A"], f"Internal order was {results}"
 
-
-# ── 3. LOCK CONTENTION (VectorMemoryService embedding_lock) ──────────────────
 
 class TestEmbeddingLockContention:
     """VectorMemoryService._encode_embedding uses a threading.Lock — verify it's safe."""
@@ -159,7 +144,6 @@ class TestEmbeddingLockContention:
             timeframe_minutes=240,
         )
 
-        # Override _ensure_initialized to bypass collection setup for unit test
         svc._ensure_initialized = lambda: True  # type: ignore[method-assign]
 
         import threading
@@ -171,7 +155,7 @@ class TestEmbeddingLockContention:
         def slow_encode(text):
             with call_lock:
                 call_order.append(f"start_{text}")
-            time.sleep(0.05)  # simulate compute
+            time.sleep(0.05)
             with call_lock:
                 call_order.append(f"end_{text}")
             return [0.1, 0.2, 0.3]
@@ -188,8 +172,6 @@ class TestEmbeddingLockContention:
         for t in threads:
             t.join()
 
-        # Verify serialization: each start must be followed by its matching end
-        # (no interleaving like start_A, start_B, end_A)
         for i in range(0, len(call_order), 2):
             if i + 1 < len(call_order):
                 start_text = call_order[i]
@@ -199,8 +181,6 @@ class TestEmbeddingLockContention:
                 assert start_text.replace("start_", "") == end_text.replace("end_", ""), \
                     f"Mismatched pair: {start_text} / {end_text}"
 
-
-# ── 4. STATE TRANSITION SAFETY ───────────────────────────────────────────────
 
 class TestStateTransitionSafety:
     """The update_if_needed method uses asyncio.Lock — verify state safety under cancellation."""
@@ -220,7 +200,6 @@ class TestStateTransitionSafety:
 
         result = await engine.update_if_needed()
         assert not result, "update should have failed"
-        # When update fails inside the lock, last_update is NOT updated (only set on success)
         assert engine.last_update == original_last_update, \
             "last_update should be unchanged on failure"
 
@@ -228,7 +207,7 @@ class TestStateTransitionSafety:
     async def test_double_update_call_serializes_via_lock(self):
         """Two concurrent update_if_needed calls must serialize and not double-update."""
         engine = _make_mock_rag_engine()
-        engine.last_update = None  # force "no previous update" path
+        engine.last_update = None
 
         call_count = 0
 
@@ -240,13 +219,11 @@ class TestStateTransitionSafety:
 
         engine.refresh_market_data = counting_refresh  # type: ignore[method-assign]
 
-        # Fire both concurrently
         results = await asyncio.gather(
             engine.update_if_needed(),
             engine.update_if_needed(),
         )
 
-        # Only one should have succeeded (the other got the lock after and saw last_update set)
         true_count = sum(1 for r in results if r)
         assert true_count <= 2, "Both might have run if lock didn't gate"
         assert call_count <= 2, "refresh_market_data should only run at most twice (serialized)"

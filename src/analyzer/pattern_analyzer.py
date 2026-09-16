@@ -36,7 +36,6 @@ class PatternAnalyzer:
 
         Note: No caching - always runs fresh detection for real-time analysis.
         """
-        # Use provided timestamps or extract from OHLCV data as fallback
         if timestamps is None and ohlcv_data is not None and len(ohlcv_data) > 0:
             try:
                 timestamps = timestamps_from_ms_array(ohlcv_data[:, 0])
@@ -44,12 +43,10 @@ class PatternAnalyzer:
                 if self.logger:
                     self.logger.warning("Could not extract timestamps from OHLCV data: %s", e)
 
-        # Extract SMA values for MA crossover detection
         sma_values = None
         if long_term_data is not None and "sma_values" in long_term_data:
             sma_values = long_term_data["sma_values"]
 
-        # Detect indicator patterns
         patterns = {}
         try:
             patterns = self.indicator_pattern_engine.detect_patterns(
@@ -121,6 +118,4 @@ class PatternAnalyzer:
             "sma_50": close_series.astype(np.float64),
             "sma_200": close_series.astype(np.float64)
         }
-
-
 

@@ -14,12 +14,7 @@ class PostMortemRepository:
     """
 
     def __init__(self, logger: Any, db_path: str) -> None:
-        """Initialize the repository and ensure schema exists.
-
-        Args:
-            logger: Logger instance.
-            db_path: Absolute path to trade_history.db.
-        """
+        """Initialize the repository and ensure schema exists."""
         self.logger = logger
         self._db_path = db_path
         self._lock = threading.Lock()
@@ -75,18 +70,6 @@ class PostMortemRepository:
         close_reason: str | None,
     ) -> int:
         """Insert a post-mortem record into both the table and FTS index.
-
-        Args:
-            trade_id: trade_history.id of the CLOSE row, or None.
-            symbol: Trading symbol (e.g. BTC/USDC).
-            direction: LONG or SHORT.
-            verdict: Short snake_case tag (e.g. overestimated_breakout).
-            llm_analysis: Full LLM analysis text.
-            expected_vs_actual: What was expected vs what happened.
-            lesson_learned: Concise actionable lesson.
-            pnl_pct: P&L percentage of the closed trade.
-            close_reason: stop_loss / take_profit / analysis_signal.
-
         Returns:
             The rowid of the newly inserted post-mortem.
         """
@@ -119,10 +102,6 @@ class PostMortemRepository:
 
     def get_recent_post_mortems(self, limit: int = 5) -> list[dict[str, Any]]:
         """Get the most recent post-mortems for brain context injection.
-
-        Args:
-            limit: Maximum number of records to return.
-
         Returns:
             List of dicts with keys: id, symbol, direction, verdict,
             lesson_learned, llm_analysis, pnl_pct, close_reason, created_at.
@@ -149,11 +128,6 @@ class PostMortemRepository:
 
         Uses FTS5 MATCH syntax. The query is passed as-is to FTS5, which
         supports operators like AND, OR, NOT, and prefix matching (term*).
-
-        Args:
-            query: FTS5 search query (e.g. "breakout AND resistance").
-            limit: Maximum number of results.
-
         Returns:
             List of dicts with all post-mortem columns, ranked by relevance.
         """

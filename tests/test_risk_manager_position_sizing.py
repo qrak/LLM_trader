@@ -45,7 +45,6 @@ def test_ai_position_size_is_clamped_to_configured_cap() -> None:
 
     assessment = _calculate_entry(manager, position_size=0.50)
 
-    # NEUTRAL regime profile cap = 0.08 overrides config MAX_POSITION_SIZE=0.10
     assert assessment.size_pct == pytest.approx(0.08)
     assert assessment.quote_amount == pytest.approx(800.0)
     assert assessment.quantity == pytest.approx(8.0)

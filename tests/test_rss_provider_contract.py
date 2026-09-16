@@ -16,9 +16,6 @@ import pytest
 
 from src.rag.news_ingestion.rss_provider import RSSCrawl4AINewsProvider
 
-# ---------------------------------------------------------------------------
-# Minimal config stub
-# ---------------------------------------------------------------------------
 
 def _make_config(**overrides) -> SimpleNamespace:
     defaults = dict(
@@ -52,10 +49,6 @@ def _article(age_hours: float, **kwargs) -> dict[str, Any]:
     return {"published_on": ts, "url": "https://example.com/a", "title": "t", **kwargs}
 
 
-# ---------------------------------------------------------------------------
-# filter_by_age
-# ---------------------------------------------------------------------------
-
 class TestFilterByAge:
     def test_recent_articles_kept(self):
         provider = _make_provider()
@@ -84,7 +77,7 @@ class TestFilterByAge:
 
     def test_missing_published_on_excluded(self):
         provider = _make_provider()
-        articles = [{"url": "x", "title": "t"}]  # no published_on
+        articles = [{"url": "x", "title": "t"}]
         result = provider.filter_by_age(articles, max_age_hours=24)
         assert result == []
 
@@ -92,10 +85,6 @@ class TestFilterByAge:
         provider = _make_provider()
         assert provider.filter_by_age([], 24) == []
 
-
-# ---------------------------------------------------------------------------
-# _enabled_source_names
-# ---------------------------------------------------------------------------
 
 class TestEnabledSourceNames:
     def test_none_config_returns_none(self):
@@ -118,10 +107,6 @@ class TestEnabledSourceNames:
         provider = _make_provider(_make_config(RAG_NEWS_SOURCES=["  coindesk  "]))
         assert provider._enabled_source_names() == ["coindesk"]
 
-
-# ---------------------------------------------------------------------------
-# fetch_news – integration contract via mocked primitives
-# ---------------------------------------------------------------------------
 
 class TestFetchNewsOrchestration:
     """Test fetch_news orchestration by mocking the I/O boundaries."""

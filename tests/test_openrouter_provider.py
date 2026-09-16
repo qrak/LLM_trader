@@ -72,7 +72,6 @@ class TestRequestWiring:
         assert sent_kwargs["model"] == "openrouter/model"
         assert sent_kwargs["messages"] == [{"role": "user", "content": "hello"}]
         assert sent_kwargs["max_tokens"] == 128
-        # reasoning is not a standard openai-SDK field — it must travel via extra_body
         assert sent_kwargs["extra_body"] == {"reasoning": {"effort": "max"}}
         assert "reasoning" not in sent_kwargs
         assert "openrouter_reasoning_effort" not in sent_kwargs
@@ -91,7 +90,6 @@ class TestRequestWiring:
         assert create.await_count == 2
         for call in create.await_args_list:
             assert call.kwargs["extra_body"] == {"reasoning": {"effort": "max"}}
-        # the caller's shared config is not consumed by the call
         assert shared_config["openrouter_reasoning_effort"] == "max"
 
     @pytest.mark.asyncio
@@ -115,8 +113,6 @@ class TestRequestWiring:
         sent_kwargs = create.await_args.kwargs
         assert sent_kwargs["temperature"] == 0.7
         assert sent_kwargs["frequency_penalty"] == 0.1
-        # presence_penalty is never forwarded to OpenRouter (kept filtered for parity
-        # with the pre-consolidation dedicated-SDK client)
         assert "presence_penalty" not in sent_kwargs
         assert "top_k" not in sent_kwargs
         assert "extra_body" not in sent_kwargs

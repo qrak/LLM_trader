@@ -17,8 +17,6 @@ from src.managers.risk_manager import RiskManager
 from src.trading.data_models import MarketConditions
 from src.trading.trading_strategy import TradingStrategy
 
-# ── Fixture builders ─────────────────────────────────────────────
-
 
 def _make_config(**overrides) -> SimpleNamespace:
     """Minimal config stub with only the attrs TradingStrategy accesses."""
@@ -30,12 +28,15 @@ def _make_config(**overrides) -> SimpleNamespace:
         "TRANSACTION_FEE_PERCENT": 0.001,
         "DEMO_QUOTE_CAPITAL": 10000.0,
         "TIMEFRAME": "4h",
-        # Produkcyjny default z loader.MIN_RR_ENTRY - twarda podloga bramki R/R.
         "MIN_RR_ENTRY": 1.0,
         "STOP_LOSS_TYPE": "hard",
         "STOP_LOSS_CHECK_INTERVAL": "4h",
         "TAKE_PROFIT_TYPE": "hard",
         "TAKE_PROFIT_CHECK_INTERVAL": "4h",
+        "RESEARCH_TEAM_ENABLED": False,
+        "EXECUTOR_MAX_POSITION_USDC": 0.0,
+        "SOCIAL_SENTIMENT_ENABLED": False,
+        "EXECUTOR_VERDICT_PATH": "data/trading/executor_verdicts.jsonl",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -108,9 +109,6 @@ def _make_strategy(
     )
 
 
-# ── Friction Capture from RiskManager ────────────────────────────
-
-
 class TestFrictionCaptureFromRiskManager:
     """Verify frictions from RiskManager are captured and persisted."""
 
@@ -130,7 +128,6 @@ class TestFrictionCaptureFromRiskManager:
 
         brain_vm = strategy.brain_service.vector_memory
         brain_vm.store_blocked_trade.assert_called()
-        # First call should contain position_size_clamp
         calls = brain_vm.store_blocked_trade.call_args_list
         size_clamp_calls = [
             c for c in calls
@@ -195,10 +192,7 @@ class TestFrictionCaptureFromRiskManager:
         )
 
         call_count = strategy.brain_service.vector_memory.store_blocked_trade.call_count
-        assert call_count >= 2  # size_clamp + sl_distance_max
-
-
-# ── R/R Minimum Guard (blocked entry) ────────────────────────────
+        assert call_count >= 2
 
 
 class TestRRMinimumGuard:
@@ -208,7 +202,6 @@ class TestRRMinimumGuard:
     async def test_poor_rr_stores_blocked_trade(self):
         """R/R below brain threshold stores blocked trade before returning HOLD."""
         strategy = _make_strategy(stop_loss=95.0, take_profit=100.0, rr_borderline_min=3.0, min_rr_entry=3.0)
-        # SL=5%, TP=0% → R/R near 0, blocked
 
         decision = await strategy._open_new_position(
             signal="BUY", confidence="HIGH",
@@ -221,7 +214,6 @@ class TestRRMinimumGuard:
         assert decision.action == "HOLD"
         assert "blocked" in decision.reasoning.lower()
 
-        # Verify store_blocked_trade was called with rr_minimum
         brain_vm = strategy.brain_service.vector_memory
         rr_calls = [
             c for c in brain_vm.store_blocked_trade.call_args_list
@@ -236,7 +228,6 @@ class TestRRMinimumGuard:
     async def test_good_rr_bypasses_blocked_trade(self):
         """R/R above threshold → no rr_minimum block."""
         strategy = _make_strategy(stop_loss=95.0, take_profit=115.0, rr_borderline_min=1.5)
-        # SL=5%, TP=15% → R/R = 3.0, well above minimum
 
         decision = await strategy._open_new_position(
             signal="BUY", confidence="HIGH",
@@ -276,9 +267,6 @@ class TestRRMinimumGuard:
         assert "rebound" in snippet
 
 
-# ── Graceful Degradation ─────────────────────────────────────────
-
-
 class TestFrictionStorageGracefulDegradation:
     """Friction storage failures must not crash the trading loop."""
 
@@ -289,7 +277,6 @@ class TestFrictionStorageGracefulDegradation:
         strategy = _make_strategy(risk_manager=rm, position_size=0.30)
         strategy.brain_service.vector_memory.store_blocked_trade.side_effect = RuntimeError("DB down")
 
-        # Should NOT raise — should catch and log
         decision = await strategy._open_new_position(
             signal="BUY", confidence="HIGH",
             stop_loss=95.0, take_profit=110.0,
@@ -298,7 +285,6 @@ class TestFrictionStorageGracefulDegradation:
             market_conditions=MarketConditions(),
         )
 
-        # Position should still be opened
         assert decision is not None
         strategy.logger.warning.assert_any_call(
             "Failed to store friction event from RiskManager", exc_info=True
@@ -318,13 +304,10 @@ class TestFrictionStorageGracefulDegradation:
             market_conditions=MarketConditions(),
         )
 
-        assert decision.action == "HOLD"  # Still returns HOLD despite storage failure
+        assert decision.action == "HOLD"
         strategy.logger.warning.assert_any_call(
             "Failed to store blocked trade event", exc_info=True
         )
-
-
-# ── Parameter Propagation ────────────────────────────────────────
 
 
 class TestBlockedTradeParameterPropagation:
@@ -345,7 +328,6 @@ class TestBlockedTradeParameterPropagation:
             market_conditions=MarketConditions(),
         )
 
-        # Find a friction call
         friction_calls = [
             c for c in strategy.brain_service.vector_memory.store_blocked_trade.call_args_list
             if c.kwargs.get("guard_type") != "rr_minimum"
@@ -395,7 +377,6 @@ class TestBlockedTradeParameterPropagation:
         ]
         assert len(friction_calls) >= 1
         call = friction_calls[0]
-        # suggested_rr should be from the RiskAssessment
         assert "suggested_rr" in call.kwargs
         assert "suggested_sl_pct" in call.kwargs
         assert "suggested_tp_pct" in call.kwargs

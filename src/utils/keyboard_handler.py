@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable
 
 from src.logger.logger import Logger
 
-# Platform-specific imports
 if sys.platform == "win32":
     import msvcrt
 else:
@@ -21,29 +20,18 @@ class KeyboardHandler:
     """Handles keyboard input for console commands"""
 
     def __init__(self, logger: Logger | None = None):
-        """Initialize the keyboard handler
-
-        Args:
-            logger: Optional logger instance
-        """
+        """Initialize the keyboard handler"""
         self.logger = logger
         self.running = False
         self._commands: dict[str, tuple[Callable, str]] = {}
         self._listening_task = None
-        self._old_settings = None  # To store terminal settings on Linux/Mac
+        self._old_settings = None
 
     def register_command(self, key: str, callback: Callable[[], Awaitable], description: str) -> None:
-        """Register a keyboard command
-
-        Args:
-            key: Single character key that triggers the command (case-sensitive for SHIFT detection)
-            callback: Async function to call when key is pressed
-            description: Description of what the command does
-        """
+        """Register a keyboard command"""
         if len(key) != 1:
             raise ValueError("Key must be a single character")
 
-        # Store command with its original case to support SHIFT+key detection
         self._commands[key] = (callback, description)
 
     async def start_listening(self) -> None:
@@ -53,12 +41,11 @@ class KeyboardHandler:
 
         self.running = True
 
-        # Linux/macOS: Switch to non-canonical mode
         if sys.platform != "win32":
             try:
                 fd = sys.stdin.fileno()
                 self._old_settings = termios.tcgetattr(fd)
-                tty.setcbreak(fd)  # cbreak allows handling keys immediately but keeps signals like Ctrl+C
+                tty.setcbreak(fd)
             except (OSError, AttributeError) as e:
                 if self.logger:
                     self.logger.warning("Failed to set terminal mode: %s", e)
@@ -69,7 +56,7 @@ class KeyboardHandler:
         while self.running:
             try:
                 await self._process_keyboard_input()
-                await asyncio.sleep(0.1)  # Prevent CPU hogging
+                await asyncio.sleep(0.1)
 
             except asyncio.CancelledError:
                 if self.logger:
@@ -86,19 +73,15 @@ class KeyboardHandler:
         while self._has_input():
             key = self._read_key()
             if key:
-                # Check for exact match first (supports SHIFT+R as uppercase 'R')
                 if key in self._commands:
                     await self._execute_command(key)
-                # Also check lowercase version for regular keys
                 elif key.lower() in self._commands:
                     await self._execute_command(key.lower())
-                # Silently ignore unrecognized keys (prevents log spam)
 
     def _has_input(self) -> bool:
         """Check if keyboard input is available."""
         if sys.platform == "win32":
             return msvcrt.kbhit()
-        # Linux/Unix implementation using select
         return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
     def _read_key(self) -> str | None:
@@ -109,11 +92,8 @@ class KeyboardHandler:
         try:
             if sys.platform == "win32":
                 char = msvcrt.getch()
-                # Decode and return as-is (preserves uppercase/lowercase)
                 decoded = char.decode("utf-8", errors="ignore")
                 return decoded if decoded else None
-            # Linux/Unix implementation
-            # We are already in cbreak mode, so just read
             if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
                 return sys.stdin.read(1)
             return None
@@ -133,7 +113,7 @@ class KeyboardHandler:
         """Handle errors in keyboard processing."""
         if self.logger:
             self.logger.error("Error in keyboard handler: %s", error)
-        await asyncio.sleep(1)  # Longer sleep on error
+        await asyncio.sleep(1)
 
     async def stop_listening(self) -> None:
         """Stop listening for keyboard input"""
@@ -146,7 +126,6 @@ class KeyboardHandler:
             except asyncio.CancelledError:
                 pass
 
-        # Linux/macOS: Restore terminal settings
         if sys.platform != "win32" and self._old_settings:
             try:
                 fd = sys.stdin.fileno()
@@ -166,5 +145,4 @@ class KeyboardHandler:
                 self.logger.info("  '%s' - %s", key, description)
             else:
                 print(f"  '{key}' - {description}")
-
 

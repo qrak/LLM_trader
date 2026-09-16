@@ -17,7 +17,6 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
-    # cap for the brain context block; sections are truncated tail-first
     BRAIN_CONTEXT_MAX_CHARS = 12000
 
     def __init__(
@@ -172,7 +171,6 @@ class BrainContextProvider:
                     lines.append(f"  → Apply: {recommended}")
             lines.append("")
 
-        # --- Trade Journal (Post-Mortem Lessons) ---
         journal_context = self._build_trade_journal_context()
         if journal_context:
             lines.extend([
@@ -182,19 +180,16 @@ class BrainContextProvider:
                 "",
             ])
 
-        # --- Risk Profile (adaptive, regime-driven) ---
         risk_profile_text = self._build_regime_risk_profile_context(snapshot.choppiness, snapshot.atr_percentage)
         if risk_profile_text:
             lines.extend(["", risk_profile_text])
 
-        # --- Condition Performance (brain-learned per-condition stats) ---
         condition_text = self._build_condition_performance_context()
         if condition_text:
             lines.extend(["", condition_text])
 
         result = "\n".join(lines)
         if len(result) > self.BRAIN_CONTEXT_MAX_CHARS:
-            # Truncate at entry boundary (\n\n) to keep clean sections
             truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n\n", 1)[0]
             if not truncated:
                 truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n", 1)[0]
@@ -251,7 +246,6 @@ class BrainContextProvider:
         reason_parts.append(f"ATR {atr_percentage:.1f}%")
         reason = "; ".join(reason_parts)
 
-        # Query brain for per-profile historical performance
         brain_stats: dict[str, dict[str, Any]] | None = None
         if self.vector_memory.trade_count >= 3:
             brain_stats = self.vector_memory.compute_per_profile_stats()
@@ -278,7 +272,6 @@ class BrainContextProvider:
         lines = ["### Market Condition Performance (from trade history):"]
         MIN_TRADES = 2
 
-        # RSI buckets
         rsi_lines = []
         for label, data in rsi_stats.items():
             total = data.get("total_trades", 0)
@@ -297,7 +290,6 @@ class BrainContextProvider:
         if rsi_lines:
             lines.extend(rsi_lines)
 
-        # Volume state
         vol_lines = []
         for state, data in vol_stats.items():
             total = data.get("total_trades", 0)
@@ -314,11 +306,10 @@ class BrainContextProvider:
                     f"({wr:.0f}% WR) — {tag}"
                 )
         if vol_lines:
-            if lines:  # add blank line between RSI and volume
+            if lines:
                 lines.append("")
             lines.extend(vol_lines)
 
-        # Weekend split
         wknd_lines = []
         for key in ("weekend", "weekday"):
             data = wknd_stats.get(key, {})
@@ -336,11 +327,11 @@ class BrainContextProvider:
                     f"({wr:.0f}% WR) — {tag}"
                 )
         if wknd_lines:
-            if lines:  # add blank line
+            if lines:
                 lines.append("")
             lines.extend(wknd_lines)
 
-        if len(lines) <= 1:  # only the header, no data
+        if len(lines) <= 1:
             return ""
 
         return "\n".join(lines)

@@ -47,12 +47,7 @@ class RiskManager:
         return self.config.POSITION_SIZE_FALLBACK_MEDIUM
 
     def _resolve_position_size_pct(self, position_size: float | None, confidence: str, profile_cap: float | None = None) -> float:
-        """Resolve final position size from AI request or configured confidence fallback.
-
-        Args:
-            profile_cap: Optional regime-based max position cap (overrides config
-                MAX_POSITION_SIZE when more conservative).
-        """
+        """Resolve final position size from AI request or configured confidence fallback."""
         max_size = profile_cap if profile_cap is not None else self.config.MAX_POSITION_SIZE
         if not math.isfinite(max_size) or max_size <= 0:
             raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
@@ -103,20 +98,14 @@ class RiskManager:
     ) -> "RiskAssessment":
         """
         Calculate all risk parameters for a new position entry.
-
-        Args:
-            choppiness: Choppiness index (0-100). When provided, used to select
-                the regime-based risk profile for SL/TP/size multipliers.
         """
         from src.trading.data_models import RiskAssessment
         mc = market_conditions
         direction = "LONG" if signal == "BUY" else "SHORT"
 
-        # 1. Extract or Default ATR/Volatility
         atr = mc.atr if mc and mc.atr > 0 else current_price * 0.02
         atr_pct = mc.atr_percentage if mc and mc.atr_percentage > 0 else (atr / current_price) * 100
 
-        # Determine volatility level
         if atr_pct > 3:
             volatility_level = "HIGH"
         elif atr_pct < 1.5:
@@ -124,7 +113,6 @@ class RiskManager:
         else:
             volatility_level = "MEDIUM"
 
-        # 2. Select regime risk profile and get adaptive multipliers
         profile = self.regime_profile_selector.select_profile(
             choppiness=choppiness,
             atr_percentage=atr_pct,
@@ -138,11 +126,10 @@ class RiskManager:
         if direction == "LONG":
             dynamic_sl = current_price - dynamic_sl_distance
             dynamic_tp = current_price + dynamic_tp_distance
-        else:  # SHORT
+        else:
             dynamic_sl = current_price + dynamic_sl_distance
             dynamic_tp = current_price - dynamic_tp_distance
 
-        # 3. Resolve Final SL/TP (AI vs Dynamic)
         if stop_loss and stop_loss > 0:
             final_sl = stop_loss
             self.logger.debug("Using AI-provided SL: $%s", f"{final_sl:,.2f}")
@@ -157,10 +144,8 @@ class RiskManager:
             final_tp = dynamic_tp
             self.logger.info("Using dynamic TP (4x ATR): $%s", f"{final_tp:,.2f}")
 
-        # 4. Circuit Breakers (Clamp Extreme Values)
         sl_distance_raw = abs(current_price - final_sl) / current_price
 
-        # Clamp SL: min 1.0%, max 10%
         if sl_distance_raw > 0.10:
             self.logger.warning("SL distance %s exceeds 10%% max, clamping", f"{sl_distance_raw:.1%}")
             self._last_frictions.append({
@@ -192,7 +177,6 @@ class RiskManager:
             else:
                 final_sl = current_price * 1.01
 
-        # TP clamp: max 50% from entry
         tp_distance_raw = abs(final_tp - current_price) / current_price
         if tp_distance_raw > 0.50:
             self.logger.warning("TP distance %s exceeds 50%% max, clamping", f"{tp_distance_raw:.1%}")
@@ -210,7 +194,6 @@ class RiskManager:
             else:
                 final_tp = current_price * 0.50
 
-        # Validate Logical Consistency
         if direction == "LONG":
             if final_sl >= current_price:
                 self.logger.warning("Invalid SL for LONG (%s >= %s), using dynamic", final_sl, current_price)
@@ -236,7 +219,7 @@ class RiskManager:
                     "detail": f"TP ${final_tp:,.2f} was below/at entry ${current_price:,.2f}, using dynamic",
                 })
                 final_tp = dynamic_tp
-        else:  # SHORT
+        else:
             if final_sl <= current_price:
                 self.logger.warning("Invalid SL for SHORT (%s <= %s), using dynamic", final_sl, current_price)
                 self._last_frictions.append({
@@ -262,16 +245,13 @@ class RiskManager:
                 })
                 final_tp = dynamic_tp
 
-        # 5. Position Sizing (with regime-based cap)
         profile_cap = self.regime_profile_selector.get_position_size_cap(profile)
         final_size_pct = self._resolve_position_size_pct(position_size, confidence, profile_cap)
 
-        # 6. Calculate Financials
         allocation = capital * final_size_pct
         quantity = allocation / current_price
         entry_fee = allocation * self.config.TRANSACTION_FEE_PERCENT
 
-        # 7. Metrics
         sl_distance_pct = abs(current_price - final_sl) / current_price
         tp_distance_pct = abs(final_tp - current_price) / current_price
         rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0

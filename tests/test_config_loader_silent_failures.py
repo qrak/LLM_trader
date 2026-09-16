@@ -5,9 +5,6 @@ These tests bypass the conftest.py mock by importing the source module directly.
 
 import pytest
 
-# ═══════════════════════════════════════════════════════════════════════
-# _convert_value unit tests
-# ═══════════════════════════════════════════════════════════════════════
 
 class TestConvertValue:
     """Config._convert_value — the central type-coercion function."""
@@ -85,10 +82,6 @@ class TestConvertValue:
         assert math.isinf(result) and result < 0
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# get_config fallback tests
-# ═══════════════════════════════════════════════════════════════════════
-
 class TestGetConfig:
     """get_config fallback behavior with missing sections/keys."""
 
@@ -96,7 +89,6 @@ class TestGetConfig:
     def cfg(self):
         from src.config.loader import Config
         c = Config.__new__(Config)
-        # _config_data is a dict[section, dict[key, value]] populated from ini
         c._config_data = {}
         return c
 
@@ -187,7 +179,7 @@ class TestExecutorMaxPositionConfig:
         from src.config import loader
 
         cfg = loader.Config.__new__(loader.Config)
-        cfg._config_data = {}  # no executor_api section at all
+        cfg._config_data = {}
         assert cfg.EXECUTOR_MAX_POSITION_USDC == 0.0
 
     def test_non_numeric_value_falls_back_to_zero(self):

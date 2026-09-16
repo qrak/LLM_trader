@@ -15,8 +15,6 @@ from unittest.mock import MagicMock
 from src.trading.brain import TradingBrainService
 from src.trading.data_models import MarketSnapshot
 
-# ── Helpers ──────────────────────────────────────────────────────
-
 
 def _make_brain_with_feedback(feedback: str = "", trade_count: int = 5, **kwargs):
     """Create a TradingBrainService with mocked vector_memory returning given feedback."""
@@ -69,9 +67,6 @@ def _make_brain_no_trades():
         persistence=persistence,
         vector_memory=vector_memory,
     )
-
-
-# ── Contract: CRITICAL FEEDBACK Injection ────────────────────────
 
 
 class TestCriticalFeedbackInjection:
@@ -142,7 +137,6 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             adx=25, trend_direction="BULLISH",
         ))
 
-        # Find the section order
         lines = ctx.split("\n")
         critical_idx = next(i for i, line in enumerate(lines) if "CRITICAL FEEDBACK" in line)
         confidence_idx = next(i for i, line in enumerate(lines) if "Confidence Calibration" in line)
@@ -158,11 +152,7 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         ctx = brain.get_context(MarketSnapshot(
             adx=25,
         ))
-        # The feedback section should not just be a header — should have bullet points
         assert "- Your R/R:" in ctx
-
-
-# ── Contract: LLM Parsability ────────────────────────────────────
 
 
 class TestFeedbackLLMParsability:
@@ -200,10 +190,8 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             adx=25,
         ))
 
-        # Extract all lines that look like headers
         header_lines = [line for line in ctx.split("\n") if line.startswith("#")]
         for line in header_lines:
-            # Must be "## " or "### " (not "####" where '#' and text would merge)
             assert line.startswith("## ") or line.startswith("### "), \
                 f"Malformed header: {line!r}"
 
@@ -250,7 +238,6 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             adx=25,
         ))
 
-        # Count checklist items after the PRE-FLIGHT header
         in_checklist = False
         checklist_items = 0
         for line in ctx.split("\n"):
@@ -287,9 +274,6 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         assert "bounce off support" in ctx
 
 
-# ── Contract: Section Integration ────────────────────────────────
-
-
 class TestSectionIntegration:
     """Feedback integrates with other sections without breakage."""
 
@@ -313,7 +297,7 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
         """Both feedback and direction bias warnings render without overlap."""
         brain = _make_brain_with_feedback(feedback=self.FEEDBACK)
         brain.vector_memory.get_direction_bias.return_value = {
-            "long_count": 4, "short_count": 0,  # no shorts triggers warning
+            "long_count": 4, "short_count": 0,
         }
 
         ctx = brain.get_context(MarketSnapshot(
@@ -361,7 +345,6 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             adx=25, trend_direction="BULLISH",
         ))
 
-        # Should not have 3+ consecutive blank lines
         lines = ctx.split("\n")
         blank_runs = []
         current_run = 0
@@ -384,12 +367,8 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
             adx=25,
         ))
 
-        # Feedback should appear even without trades
         assert "CRITICAL FEEDBACK" in ctx
         brain.vector_memory.get_blocked_trade_feedback.assert_called_once()
-
-
-# ── Contract: Feedback Resilience ────────────────────────────────
 
 
 class TestFeedbackResilience:
@@ -404,7 +383,6 @@ class TestFeedbackResilience:
             adx=25,
         ))
 
-        # Should not have "CRITICAL FEEDBACK" anywhere
         assert "CRITICAL FEEDBACK" not in ctx
 
     def test_feedback_exception_handled_gracefully(self):
@@ -412,14 +390,12 @@ class TestFeedbackResilience:
         brain = _make_brain_with_feedback(feedback="SAMPLE")
         brain.vector_memory.get_blocked_trade_feedback.side_effect = RuntimeError("crash")
 
-        # Should not raise
         ctx = brain.get_context(MarketSnapshot(
             adx=25,
         ))
 
         assert "CRITICAL FEEDBACK" not in ctx
-        # Other sections should still be present
-        assert "Confidence Calibration" in ctx  # has trades
+        assert "Confidence Calibration" in ctx
 
     def test_feedback_with_only_newlines_does_not_crash(self):
         """Feedback that is just newlines is treated as empty."""
@@ -430,8 +406,6 @@ class TestFeedbackResilience:
             adx=25,
         ))
 
-        # Empty-ish strings are falsy in Python (but "\n\n\n" is truthy)
-        # Verify it doesn't crash regardless
         assert isinstance(ctx, str)
 
     def test_feedback_with_unicode_does_not_break(self):

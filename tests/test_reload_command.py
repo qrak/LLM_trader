@@ -33,7 +33,6 @@ class TestReloadFlag:
 
 class TestRequestReloadCommand:
     def _bot(self) -> tuple[CryptoTradingBot, MagicMock]:
-        # Minimal instance: only the attributes _request_reload touches.
         bot = object.__new__(CryptoTradingBot)
         bot.logger = MagicMock()
         bot.running = True

@@ -82,7 +82,6 @@ class TestRequestWiring:
             {"role": "user", "content": "hello"},
         ]
         assert sent_kwargs["max_tokens"] == 64
-        # OpenRouter-specific key is never forwarded to LM Studio
         assert "openrouter_reasoning_effort" not in sent_kwargs
 
     @pytest.mark.asyncio

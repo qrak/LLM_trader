@@ -12,7 +12,6 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ensure the project root is on sys.path
 _proj_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_proj_root))
 
@@ -25,16 +24,13 @@ def test_fallback_writer_works():
     current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
     error_dir = os.path.join(logger.log_dir, logger.name, current_date)
     error_path = os.path.join(error_dir, "errors.log")
-    # Set the global path
     import src.logger.logger as lg_mod
 
     lg_mod._CRASH_LOG_PATH = error_path
-    # Write a test crash
     try:
         raise RuntimeError("TEST: fallback writer")
     except RuntimeError:
         _write_fallback_crash(*sys.exc_info(), "TEST: fallback writer")  # type: ignore[arg-type]
-    # Read back
     if os.path.exists(error_path):
         with open(error_path) as f:
             content = f.read()
@@ -50,11 +46,9 @@ def test_excepthook_catches_cancelled_error():
     logger = Logger(logger_name="TestBot", log_dir="logs")
     logger.install_crash_handler()
     path = _CRASH_LOG_PATH
-    # Clear the file first
     if os.path.exists(path):
         os.remove(path)
 
-    # Simulate CancelledError escaping to sys.excepthook
     old_hook = sys.excepthook
     try:
         exc = asyncio.CancelledError("TEST: cancelled from task")
@@ -92,21 +86,20 @@ def test_asyncio_exception_handler_suppresses_cancelled():
         if exc is not None:
             if isinstance(exc, asyncio.CancelledError):
                 cancelled_handled = True
-                return  # silently swallowed
+                return
             unknown_handled = True
 
     async def task_that_gets_cancelled():
         try:
             await asyncio.sleep(10)
         except asyncio.CancelledError:
-            raise  # re-raise so the task sees it
+            raise
 
     async def main():
         loop = asyncio.get_running_loop()
         loop.set_exception_handler(handler)
         t = asyncio.create_task(task_that_gets_cancelled())
         t.cancel()
-        # Give the loop time to process the cancellation
         await asyncio.sleep(0.1)
         return cancelled_handled, unknown_handled, t
 
@@ -151,17 +144,14 @@ def test_cancelled_error_in_shutdown_gracefully_style():
         loop = asyncio.get_running_loop()
         wait_raised = False
 
-        # Create tasks
         t1 = asyncio.create_task(lifespan_task(), name="starlette-lifespan")
         t2 = asyncio.create_task(normal_task(), name="normal-task")
-        await asyncio.sleep(0.01)  # let tasks start
+        await asyncio.sleep(0.01)
 
-        # Cancel them
         pending = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()]
         for t in pending:
             t.cancel()
 
-        # Wait for them — this is what graceful_shutdown does
         try:
             await asyncio.wait_for(asyncio.wait(pending), timeout=1.0)
         except asyncio.TimeoutError:
@@ -204,13 +194,11 @@ def test_loop_exception_handler_during_shutdown():
 
         if exc is not None:
             if isinstance(exc, asyncio.CancelledError):
-                return  # silently handle
-            # Would log.error here in production
+                return
 
     async def starlette_lifespan_sim():
         """Simulate starlette lifespan → Queue.get() raises CancelledError."""
         q = asyncio.Queue()
-        # This will raise CancelledError when the task is cancelled
         return await q.get()
 
     async def main():
@@ -221,14 +209,12 @@ def test_loop_exception_handler_during_shutdown():
         await asyncio.sleep(0.01)
         t.cancel()
 
-        # Wait for cancellation to propagate
         await asyncio.sleep(0.1)
         return handler_calls, t
 
     loop = asyncio.new_event_loop()
     try:
         calls, task = loop.run_until_complete(main())
-        # If handler got CancelledError and our check worked, no error printed
         had_cancelled = any("CancelledError" in msg for _, msg in calls)
         if had_cancelled:
             print(
@@ -237,8 +223,6 @@ def test_loop_exception_handler_during_shutdown():
         else:
             print(f"❌ Test 5 FAILED: handler calls={calls}  task_cancelled={task.cancelled()}")
 
-        # Also check: has any unhandled exception leaked?
-        # It shouldn't, because the task machinery catches CancelledError
         if task.cancelled():
             print("   (task properly marked as cancelled)")
         else:

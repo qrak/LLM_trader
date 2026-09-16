@@ -20,7 +20,6 @@ class MarketDataCache:
         self.current_market_overview: dict[str, Any] | None = None
 
 
-
     def get_current_overview(self) -> dict[str, Any] | None:
         """Get the current market overview data."""
         return self.current_market_overview
@@ -36,7 +35,6 @@ class MarketDataCache:
         if normalize_timestamp_func:
             timestamp = normalize_timestamp_func(timestamp_field)
         else:
-            # Fallback simple normalization
             try:
                 timestamp = float(timestamp_field)
             except (TypeError, ValueError):

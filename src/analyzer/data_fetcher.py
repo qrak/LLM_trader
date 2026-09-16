@@ -27,7 +27,6 @@ class DataFetcher:
                                      limit: int,
                                      start_time: int | None = None
                                      ) -> tuple[NDArray, float] | None:
-        # Validate timeframe is supported by exchange
         try:
             exchange_timeframes = self.exchange.timeframes
             if exchange_timeframes and timeframe not in exchange_timeframes:
@@ -46,21 +45,18 @@ class DataFetcher:
             self.logger.warning("No data returned for %s on %s", pair, self.exchange.id)
             return None
 
-        # Sanitize data: Replace None with np.nan for float64 conversion
         ohlcv_sanitized = [
             [x if x is not None else np.nan for x in candle]
             for candle in ohlcv
         ]
 
         ohlcv_array = np.array(ohlcv_sanitized, dtype=np.float64)
-        # Use only COMPLETED candles
         if len(ohlcv_array) < 2:
              self.logger.warning("Not enough candles to exclude incomplete one. Received: %s", len(ohlcv_array))
              return None
 
-        closed_candles = ohlcv_array[:-1]  # Exclude last incomplete candle
-        actual_current_price = float(ohlcv_array[-1, 4])  # Real-time price from the unclosed candle
-        # Verify we have enough data
+        closed_candles = ohlcv_array[:-1]
+        actual_current_price = float(ohlcv_array[-1, 4])
         expected_candles = self._expected_closed_candles(timeframe, limit)
         if len(closed_candles) < expected_candles:
             coverage_days = self._coverage_days(timeframe, len(closed_candles))
@@ -98,11 +94,6 @@ class DataFetcher:
                                          ) -> dict[str, Any]:
         """
         Fetch historical daily data for a specified number of days.
-
-        Args:
-            pair: The trading pair to fetch data for
-            days: Number of days of historical data to retrieve (default: 365)
-
         Returns: dict containing:
                 'data': NDArray of OHLCV data if available, or None
                 'available_days': Number of days of data actually available
@@ -127,7 +118,7 @@ class DataFetcher:
 
             ohlcv_data, _ = result
             available_days = len(ohlcv_data)
-            is_complete = (available_days >= days - 1)  # Closed candles only (no incomplete)
+            is_complete = (available_days >= days - 1)
 
             if not is_complete:
                 self.logger.info("Limited historical data for %s: requested %s days, got %s days", pair, days, available_days)
@@ -152,17 +143,11 @@ class DataFetcher:
     async def fetch_weekly_historical_data(self, pair: str, target_weeks: int = 300) -> dict[str, Any]:
         """
         Fetch weekly data for macro analysis. Wraps fetch_candlestick_data with weekly metadata.
-
-        Args:
-            pair: The trading pair to fetch data for
-            target_weeks: Number of weeks of historical data to retrieve (default: 300)
-
         Returns: dict containing:
                 'data': NDArray of OHLCV data if available, or None
                 'error': Error message if fetch failed, None otherwise
         """
         try:
-            # REUSE existing method - already supports '1w'
             result = await self.fetch_candlestick_data(pair=pair, timeframe="1w", limit=target_weeks)  # type: ignore[reportCallIssue]
 
             if result is None:
@@ -188,11 +173,6 @@ class DataFetcher:
     async def fetch_multiple_tickers(self, symbols: list[str] | None = None) -> dict[str, Any]:
         """
         Fetch price data for multiple trading pairs at once using CCXT with caching
-
-        Args:
-            symbols: list of trading pair symbols (e.g., ["BTC/USDT", "ETH/USDT"])
-                    If None, fetches all available tickers
-
         Returns:
             Dictionary with processed ticker data in a RAW/DISPLAY-compatible shape
         """
@@ -263,37 +243,30 @@ class DataFetcher:
     def _create_raw_ticker_data(self, ticker: dict[str, Any]) -> dict[str, Any]:
         """Create raw ticker data structure with comprehensive 24h statistics."""
         return {
-            # Core price data
             "PRICE": ticker.get("last", 0),
             "OPEN24HOUR": ticker.get("open", 0),
             "HIGH24HOUR": ticker.get("high", 0),
             "LOW24HOUR": ticker.get("low", 0),
             "PREVCLOSE": ticker.get("previousClose", 0),
 
-            # Price changes
             "CHANGE24HOUR": ticker.get("change", 0),
             "CHANGEPCT24HOUR": ticker.get("percentage", 0),
 
-            # Volume data
-            "VOLUME24HOUR": ticker.get("baseVolume", 0),  # Volume in base currency (e.g., BTC)
-            "QUOTEVOLUME24HOUR": ticker.get("quoteVolume", 0),  # Volume in quote currency (e.g., USDT)
+            "VOLUME24HOUR": ticker.get("baseVolume", 0),
+            "QUOTEVOLUME24HOUR": ticker.get("quoteVolume", 0),
 
-            # Price metrics
-            "VWAP": ticker.get("vwap", 0),  # Volume-weighted average price
-            "AVERAGE": ticker.get("average", 0),  # Simple average price
+            "VWAP": ticker.get("vwap", 0),
+            "AVERAGE": ticker.get("average", 0),
 
-            # Order book top-of-book
-            "BID": ticker.get("bid", 0),  # Best bid price
-            "ASK": ticker.get("ask", 0),  # Best ask price
-            "BIDVOLUME": ticker.get("bidVolume", 0),  # Size at best bid
-            "ASKVOLUME": ticker.get("askVolume", 0),  # Size at best ask
+            "BID": ticker.get("bid", 0),
+            "ASK": ticker.get("ask", 0),
+            "BIDVOLUME": ticker.get("bidVolume", 0),
+            "ASKVOLUME": ticker.get("askVolume", 0),
 
-            # Metadata
             "LASTUPDATE": ticker.get("timestamp", 0),
-            "MKTCAP": None,  # Market cap not typically available in CCXT ticker
+            "MKTCAP": None,
 
-            # Additional useful fields from CCXT
-            "INFO": ticker.get("info", {}),  # Raw exchange data (for advanced analysis)
+            "INFO": ticker.get("info", {}),
         }
 
     def _create_display_ticker_data(self, ticker: dict[str, Any], quote_currency: str) -> dict[str, Any]:
@@ -525,7 +498,6 @@ class DataFetcher:
         annualized_rate, sentiment). Positive rate = longs pay shorts.
         """
         try:
-            # Check exchange support
             if not self.exchange.has.get("fetchFundingRate", False):
                 self.logger.debug("Exchange %s does not support fetchFundingRate", self.exchange.id)
                 return None
@@ -537,13 +509,11 @@ class DataFetcher:
                 return None
 
             rate = float(funding.get("fundingRate", 0))
-            # Funding typically happens every 8 hours (3x daily), annualize it
             annualized_rate = rate * 3 * 365 * 100
 
-            # Interpret sentiment based on rate
-            if rate > 0.01:  # > 1% per funding
+            if rate > 0.01:
                 sentiment = "Strong Bullish"
-            elif rate > 0.0001:  # > 0.01% per funding
+            elif rate > 0.0001:
                 sentiment = "Bullish"
             elif rate < -0.01:
                 sentiment = "Strong Bearish"

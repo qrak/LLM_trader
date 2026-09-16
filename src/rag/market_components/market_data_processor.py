@@ -23,7 +23,6 @@ class MarketDataProcessor:
                 self.logger.warning("No CoinGecko data provided")
                 return []
 
-            # Check for direct dominance data (current format)
             if "dominance" in coingecko_data:
                 dominance_data = coingecko_data["dominance"]
             elif "data" in coingecko_data and "dominance" in coingecko_data["data"]:
@@ -32,14 +31,12 @@ class MarketDataProcessor:
                 self.logger.warning("No dominance data found in CoinGecko response")
                 return []
 
-            # Sort by dominance percentage and extract top symbols
             sorted_coins = sorted(
                 dominance_data.items(),
                 key=lambda x: x[1],
                 reverse=True
             )
 
-            # Get top 10 coins, excluding stablecoins from top positions
             stablecoins = {"usdt", "usdc", "busd", "dai", "tusd", "usd", "steth"}
             top_coins = []
 
@@ -62,23 +59,19 @@ class MarketDataProcessor:
         try:
             processed_coin = {}
 
-            # Process basic information
             if "symbol" in values:
                 processed_coin["symbol"] = values["symbol"].upper()
 
-            # Process price information
             for price_key in ["close", "last", "price"]:
                 if price_key in values and values[price_key] is not None:
                     processed_coin["price"] = float(values[price_key])
                     break
 
-            # Process volume information
             for volume_key in ["volume", "baseVolume", "quoteVolume"]:
                 if volume_key in values and values[volume_key] is not None:
                     processed_coin["volume"] = float(values[volume_key])
                     break
 
-            # Process percentage change
             for change_key in ["percentage", "change", "percentage_change"]:
                 if change_key in values and values[change_key] is not None:
                     processed_coin["change_24h"] = float(values[change_key])

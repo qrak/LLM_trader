@@ -21,15 +21,10 @@ from src.analyzer.trend_validator import (
     TrendValidator,
 )
 
-# ── Fixtures ─────────────────────────────────────────────────────
-
 
 @pytest.fixture
 def validator():
     return TrendValidator()
-
-
-# ── Unit: _is_valid_adx ─────────────────────────────────────────
 
 
 class TestIsValidAdx:
@@ -61,9 +56,6 @@ class TestIsValidAdx:
         assert not validator._is_valid_adx("forty")
 
 
-# ── Unit: _adx_label ────────────────────────────────────────────
-
-
 class TestAdxLabel:
     def test_absent(self, validator):
         assert "absent" in validator._adx_label(10)
@@ -79,9 +71,6 @@ class TestAdxLabel:
 
     def test_extreme(self, validator):
         assert "extreme" in validator._adx_label(80)
-
-
-# ── Core validation scenarios ───────────────────────────────────
 
 
 class TestValidateAllComputed:
@@ -117,7 +106,7 @@ class TestValidateAllComputed:
         assert not result.passed
         assert len(result.discrepancies) == 1
         assert "4H ADX" in result.discrepancies[0]
-        assert result.validated_4h == 35.0  # computed wins
+        assert result.validated_4h == 35.0
 
     def test_large_delta_flagged_daily(self, validator):
         """Daily ADX discrepancy over threshold is flagged."""
@@ -199,11 +188,8 @@ class TestValidateNeither:
             computed_adx=None, computed_daily_adx=None,
         )
         assert result.passed
-        assert result.validated_4h == 25  # DEFAULT_ADX_FALLBACK
+        assert result.validated_4h == 25
         assert result.validated_daily == 25
-
-
-# ── Edge Cases ──────────────────────────────────────────────────
 
 
 class TestValidateEdgeCases:
@@ -246,9 +232,6 @@ class TestValidateEdgeCases:
         assert result.passed
 
 
-# ── overwrite_llm_trend ─────────────────────────────────────────
-
-
 class TestOverwriteLlmTrend:
     def test_overwrites_strengths(self, validator):
         analysis = {"trend": {"direction": "BULLISH", "strength_4h": 99, "strength_daily": 80}}
@@ -258,8 +241,8 @@ class TestOverwriteLlmTrend:
         )
 
         result = validator.overwrite_llm_trend(analysis, validation)
-        assert result["trend"]["strength_4h"] == 40  # computed
-        assert result["trend"]["strength_daily"] == 45  # computed
+        assert result["trend"]["strength_4h"] == 40
+        assert result["trend"]["strength_daily"] == 45
 
     def test_adds_validation_metadata(self, validator):
         analysis = {"trend": {"direction": "NEUTRAL"}}
@@ -282,9 +265,6 @@ class TestOverwriteLlmTrend:
         assert result["trend"]["strength_4h"] == 40
 
 
-# ── TrendValidation dataclass ───────────────────────────────────
-
-
 class TestTrendValidationDataclass:
     def test_defaults(self):
         tv = TrendValidation()
@@ -302,9 +282,6 @@ class TestTrendValidationDataclass:
         assert d["passed"]
         assert d["validated_4h"] == 35
         assert d["validated_daily"] == 42
-
-
-# ── Integration: AnalysisResultProcessor validation call ────────
 
 
 class TestProcessorIntegration:
@@ -326,7 +303,6 @@ class TestProcessorIntegration:
             quality_scorer=PatternQualityScorer(),
         )
 
-        # Build a minimal context
         proc.context = SimpleNamespace(
             technical_data={"adx": 35.0, "rsi": 55.0},
             long_term_data={"daily_adx": 42.0},
@@ -346,12 +322,10 @@ class TestProcessorIntegration:
 
         proc._validate_llm_claims(parsed)
 
-        # Trend was validated (match → no discrepancy)
         assert parsed["analysis"]["trend"]["strength_4h"] == 35
         assert parsed["analysis"]["trend"]["strength_daily"] == 42
         assert "_trend_validation" in parsed["analysis"]
 
-        # Pattern quality was computed
         assert "pattern_quality" in parsed["analysis"]
         assert "_pattern_validation" in parsed["analysis"]
 
@@ -372,7 +346,6 @@ class TestProcessorIntegration:
 
         parsed = {"analysis": {"trend": {"strength_4h": 80}}}
         proc._validate_llm_claims(parsed)
-        # Should not crash, should not add metadata
         assert "_trend_validation" not in parsed["analysis"]
 
     def test_validate_no_analysis_skips(self):
@@ -396,7 +369,6 @@ class TestProcessorIntegration:
 
         parsed = {"error": "no analysis"}
         proc._validate_llm_claims(parsed)
-        # No crash
 
     def test_validate_logs_warning_on_discrepancy(self):
         """When ADX is way off, logger.warning is called."""
@@ -422,7 +394,7 @@ class TestProcessorIntegration:
 
         parsed = {
             "analysis": {
-                "trend": {"strength_4h": 80, "strength_daily": 90},  # way off
+                "trend": {"strength_4h": 80, "strength_daily": 90},
             }
         }
 

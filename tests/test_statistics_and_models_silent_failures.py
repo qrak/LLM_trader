@@ -9,9 +9,6 @@ from datetime import datetime
 
 import pytest
 
-# ═══════════════════════════════════════════════════════════════════════
-# Statistics calculator edge cases
-# ═══════════════════════════════════════════════════════════════════════
 
 class TestStatisticsEdgeCases:
     """StatisticsCalculator scenarios that silently produce wrong results."""
@@ -64,7 +61,7 @@ class TestStatisticsEdgeCases:
             {"action": "CLOSE", "price": 110.0, "quantity": 1.0},
         ]
         result = calc.calculate_from_history(history)
-        assert result.total_trades == 0  # trade skipped
+        assert result.total_trades == 0
 
     def test_close_before_open_silently_dropped(self, calc):
         history = [
@@ -120,10 +117,6 @@ class TestStatisticsEdgeCases:
         assert result.worst_trade_pct < 0
 
 
-# ═══════════════════════════════════════════════════════════════════════
-# Statistics → JSON persistence round-trip
-# ═══════════════════════════════════════════════════════════════════════
-
 class TestStatisticsPersistenceRoundTrip:
     """Statistics with inf/NaN values survive JSON serialization round-trip."""
 
@@ -145,12 +138,10 @@ class TestStatisticsPersistenceRoundTrip:
         json_str = json.dumps(safe)
         loaded_raw = json.loads(json_str)
 
-        # inf becomes null in JSON
         assert loaded_raw["sortino_ratio"] is None
         assert loaded_raw["profit_factor"] is None
 
         restored = TradingStatistics.from_dict(loaded_raw)
-        # FIXED: non-Optional float fields default to 0.0, not None
         assert restored.sortino_ratio == 0.0
         assert restored.profit_factor == 0.0
 
@@ -165,7 +156,6 @@ class TestStatisticsPersistenceRoundTrip:
         json_str = json.dumps(safe)
         loaded_raw = json.loads(json_str)
         restored = TradingStatistics.from_dict(loaded_raw)
-        # FIXED: non-Optional float fields default to 0.0 instead of None
         assert restored.win_rate == 0.0
         assert restored.sharpe_ratio == 0.0
 
@@ -191,14 +181,9 @@ class TestStatisticsPersistenceRoundTrip:
         json_str = json.dumps(safe)
         loaded = json.loads(json_str)
         restored = TradeDecision.from_dict(loaded)
-        # stop_loss/take_profit are float | None → should stay None
         assert restored.stop_loss is None
         assert restored.take_profit is None
 
-
-# ═══════════════════════════════════════════════════════════════════════
-# Data Model serialization
-# ═══════════════════════════════════════════════════════════════════════
 
 class TestDataModelSerialization:
     """Serialization correctness tests."""
@@ -306,7 +291,6 @@ class TestDataModelSerialization:
         """Non-Optional int/bool/str fields recover from None with zero-values."""
         from src.trading.statistics_calculator import TradingStatistics
 
-        # Simulate corrupted persistence: null for every non-Optional field
         corrupted = {
             "total_trades": None,
             "winning_trades": None,
@@ -327,6 +311,6 @@ class TestDataModelSerialization:
         }
 
         restored = TradingStatistics.from_dict(corrupted)
-        assert restored.total_trades == 0  # int → 0
-        assert restored.win_rate == 0.0    # float → 0.0
+        assert restored.total_trades == 0
+        assert restored.win_rate == 0.0
         assert restored.initial_capital == 0.0

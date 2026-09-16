@@ -72,7 +72,6 @@ class TestFaultInjectionChaos(unittest.TestCase):
         signal, confidence, sl, tp, pos_size, reasoning = extractor.extract_trading_info(analysis)
 
         self.assertEqual(signal, "BUY")
-        # off-contract string confidence ("HIGH") normalizes to the numeric default 50
         self.assertEqual(confidence, "MEDIUM")
         self.assertIsNone(sl)
         self.assertIsNone(tp)

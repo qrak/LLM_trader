@@ -33,7 +33,6 @@ class NewsManager:
 
         self.news_database: list[dict[str, Any]] = []
 
-    # ── Public API ────────────────────────────────────────────────────────────
 
     async def load_cached_news(self) -> None:
         """Load cached news articles from disk (off the event loop)."""
@@ -95,10 +94,7 @@ class NewsManager:
             return False
 
         recent = self.news_repository.filter_recent_articles(new_articles, max_age_seconds=86400)
-        # URL-first dedup with body-length-aware update.
-        # If an existing article was cached with a short body (enrichment may have
-        # failed previously) and the fresh fetch produced a longer body, replace it.
-        min_body = 400  # mirror news_min_body_chars default
+        min_body = 400
         url_to_existing: dict[str, dict[str, Any]] = {}
         existing_ids: set[str] = set()
         for article_item in self.news_database:
@@ -145,7 +141,6 @@ class NewsManager:
     def get_database_size(self) -> int:
         return len(self.news_database)
 
-    # ── Private ───────────────────────────────────────────────────────────────
 
     def _fallback(self) -> list[dict[str, Any]]:
         articles = self.news_repository.load_fallback_articles(max_age_hours=72)

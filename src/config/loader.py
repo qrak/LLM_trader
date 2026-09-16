@@ -11,7 +11,6 @@ from dotenv import dotenv_values
 
 from src.utils.timeframe_validator import TimeframeValidator
 
-# ROOT_DIR holds keys.env; CONFIG_DIR holds config.ini
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
 CONFIG_DIR = ROOT_DIR / "config"
 KEYS_ENV_PATH = ROOT_DIR / "keys.env"
@@ -44,10 +43,8 @@ class Config:
             )
 
         try:
-            # Use dotenv_values to parse the .env file
             env_vars = dotenv_values(KEYS_ENV_PATH)
 
-            # Convert values to appropriate types
             for key, value in env_vars.items():
                 if value is not None:
                     if key == "ADMIN_USER_IDS":
@@ -56,7 +53,6 @@ class Config:
                         except ValueError as exc:
                             raise ValueError("Invalid ADMIN_USER_IDS format in keys.env. Expected comma-separated integers.") from exc
                         continue
-                    # Convert numeric strings to integers
                     if value.isdigit():
                         value = int(value)
                     self._env_vars[key] = value
@@ -82,7 +78,6 @@ class Config:
             for section_name in config.sections():
                 section_data = {}
                 for key, value in config.items(section_name):
-                    # Type conversion
                     converted_value = self._convert_value(value)
                     if section_name == "dashboard" and key == "cors_origins":
                         converted_value = ["*"] if value.strip() == "*" else [origin.strip() for origin in value.split(",") if origin.strip()]
@@ -97,7 +92,6 @@ class Config:
         """Validate that the configured AI provider is supported."""
         provider = self.PROVIDER.lower()
         if provider not in VALID_PROVIDERS:
-            # Create a formatted list of valid options
             valid_options = ", ".join(f'"{p}"' for p in sorted(VALID_PROVIDERS))
             error_msg = (
                 f"Invalid AI provider '{provider}' in config.ini.\n"
@@ -180,7 +174,6 @@ class Config:
             return False
         if value.isdigit():
             return int(value)
-        # Check for float (handles '1.5', '-3.14', '1e5', '2.5e-3')
         try:
             return float(value)
         except ValueError:
@@ -238,7 +231,6 @@ class Config:
         """Get configuration value from INI file."""
         return self._config_data.get(section, {}).get(key, default)
 
-    # Environment variables (private keys and sensitive data)
     @property
     def BOT_TOKEN_DISCORD(self):
         return self.get_env("BOT_TOKEN_DISCORD")
@@ -278,7 +270,6 @@ class Config:
         """Admin session signing key from keys.env (auto-generated if empty)."""
         return self.get_env("ADMIN_SIGNING_KEY", "")
 
-    # AI Provider Configuration
     @property
     def PROVIDER(self):
         return self.get_config("ai_providers", "provider", "googleai")
@@ -342,11 +333,9 @@ class Config:
             "model_verbosity",
         )
 
-    # General Configuration
     @property
     def LOGGER_DEBUG(self):
         return self.get_config("debug", "logger_debug", False)
-
 
 
     @property
@@ -385,7 +374,6 @@ class Config:
         """Whether to include project description in coin details section."""
         return self.get_config("general", "include_coin_description", False)
 
-    # Debug Configuration
     @property
     def DEBUG_SAVE_CHARTS(self):
         return self.get_config("debug", "save_chart_images", False)
@@ -394,7 +382,6 @@ class Config:
     def DEBUG_CHART_SAVE_PATH(self):
         return self.get_config("debug", "chart_save_path", "test_images")
 
-    # Directory Configuration
     @property
     def LOG_DIR(self):
         return self.get_config("directories", "log_dir", "logs")
@@ -403,7 +390,6 @@ class Config:
     def DATA_DIR(self):
         return self.get_config("directories", "data_dir", "data")
 
-    # Dashboard Configuration
     @property
     def DASHBOARD_ENABLED(self):
         return self.get_config("dashboard", "enabled", True)
@@ -425,14 +411,12 @@ class Config:
         origins = self.get_config("dashboard", "cors_origins", [])
         return origins
 
-    # Cooldown Configuration
     @property
     def FILE_MESSAGE_EXPIRY(self):
         """Get file message expiry time in seconds (configured in hours in config.ini)."""
         hours = self.get_config("cooldowns", "file_message_expiry", 168)
         return hours * 3600
 
-    # Research Team Configuration
     @property
     def RESEARCH_TEAM_ENABLED(self) -> bool:
         """Whether bull/bear debate is enabled in the LLM prompt."""
@@ -443,7 +427,6 @@ class Config:
         """Whether Reddit social sentiment fetching is enabled."""
         return bool(self.get_config("social_sentiment", "enabled", False))
 
-    # RAG Configuration
     @property
     def RAG_UPDATE_INTERVAL_HOURS(self):
         return self.get_config("rag", "update_interval_hours", 4)
@@ -495,7 +478,6 @@ class Config:
         """Score multiplier when all query keywords appear in article (default 1.5)."""
         return float(self.get_config("rag", "cooccurrence_multiplier", 1.5))
 
-    # --- RSS / Crawl4AI ingestion settings ---
 
     @property
     def RAG_NEWS_SOURCES(self):
@@ -580,7 +562,6 @@ class Config:
     def MARKET_REFRESH_HOURS(self):
         return self.get_config("exchanges", "market_refresh_hours", 24)
 
-    # Demo Trading Configuration
     @property
     def TRANSACTION_FEE_PERCENT(self):
         """Transaction fee percentage for limit orders (default 0.075%)."""
@@ -591,7 +572,6 @@ class Config:
         """Initial capital for demo trading (default 10000)."""
         return float(self.get_config("demo_trading", "demo_quote_capital", 10000.0))
 
-    # Risk Management
     @property
     def MAX_POSITION_SIZE(self):
         """Maximum allowed position size as decimal (e.g. 0.10 = 10% of capital). Hard cap enforced in RiskManager."""
@@ -694,11 +674,6 @@ class Config:
         """Take-profit monitor interval in seconds."""
         return self.TAKE_PROFIT_CHECK_INTERVAL_MINUTES * 60
 
-    # ── llm_trader_executor integration ─────────────────────────────────────
-    # When enabled, LLM_trader POSTs every trading decision to the separate
-    # llm_trader_executor repo (https://github.com/qrak/llm_trader_executor)
-    # which handles real exchange order execution via CCXT.
-    # The file latest_decision.json is still written as a fallback.
 
     @property
     def EXECUTOR_API_ENABLED(self) -> bool:
@@ -748,11 +723,6 @@ class Config:
     def get_model_config(self, model_name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Get configuration parameters for a specific model.
-
-        Args:
-            model_name: The name of the model
-            overrides: Optional parameter overrides for this specific call
-
         Returns:
             A dictionary with configuration parameters
         """
@@ -778,5 +748,4 @@ class Config:
         return model_name == self.DEEPSEEK_MODEL
 
 
-# Create global config instance
 config = Config()

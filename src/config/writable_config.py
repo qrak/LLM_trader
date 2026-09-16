@@ -23,13 +23,13 @@ from typing import Any
 class SettingMeta:
     """Schema metadata for a single config key."""
     key: str
-    type: str          # "string", "int", "float", "bool", "enum"
-    category: str      # "hot", "cycle", "restart"
+    type: str
+    category: str
     description: str
     min_val: float | None = None
     max_val: float | None = None
     step: float | None = None
-    options: tuple[str, ...] | None = None  # for enum type
+    options: tuple[str, ...] | None = None
 
 
 @dataclass
@@ -39,8 +39,6 @@ class SectionMeta:
     title: str
     settings: dict[str, SettingMeta] = field(default_factory=dict)
 
-
-# ─── Schema definition ───────────────────────────────────────────────
 
 _SCHEMA: dict[str, SectionMeta] = {
     "ai_providers": SectionMeta(
@@ -272,7 +270,6 @@ _SCHEMA: dict[str, SectionMeta] = {
     ),
 }
 
-# ─── Validation helpers ──────────────────────────────────────────────
 
 _BOOL_TRUTHY = {"true", "1", "yes", "on"}
 _BOOL_FALSY = {"false", "0", "no", "off"}
@@ -330,8 +327,6 @@ def _validate_and_coerce(value: Any, meta: SettingMeta) -> str:
     raise ValueError(f"Unknown setting type: {meta.type}")
 
 
-# ─── WritableConfig ──────────────────────────────────────────────────
-
 class WritableConfig:
     """Async-safe read-write access to config.ini with atomic disk writes.
 
@@ -374,22 +369,16 @@ class WritableConfig:
         meta, coerced = self._resolve_meta(section, key, value)
 
         async with self._lock:
-            # Ensure section exists
             if not self._parser.has_section(section):
                 self._parser.add_section(section)
             self._parser.set(section, key, coerced)
 
-            # Atomic write to disk
             await self._write_to_disk()
 
         return meta.category
 
     async def set_values(self, updates: list[tuple[str, str, Any]]) -> list[dict[str, str]]:
         """Batch-update multiple settings atomically.
-
-        Args:
-            updates: List of (section, key, value) tuples.
-
         Returns: List of {"section", "key", "category"} dicts.
         """
         results = []
@@ -454,7 +443,6 @@ class WritableConfig:
 
     async def _write_to_disk(self) -> None:
         """Write the current config to disk atomically using temp file + os.replace."""
-        # temp file in the same dir -> atomic os.replace
         config_dir = self.config_path.parent
         fd, tmp_path = tempfile.mkstemp(suffix=".tmp", dir=str(config_dir), prefix=".config_")
         try:
@@ -462,7 +450,6 @@ class WritableConfig:
                 self._parser.write(f)
             os.replace(tmp_path, str(self.config_path))
         except Exception:
-            # Clean up temp file on failure
             try:
                 os.unlink(tmp_path)
             except OSError:

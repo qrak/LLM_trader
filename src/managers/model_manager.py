@@ -37,17 +37,6 @@ class ModelManager:
     ) -> None:
         """
         Initialize the ModelManager.
-
-        Args:
-            logger: Logger instance for logging
-            config: Config instance for configuration access
-            unified_parser: UnifiedParser instance (must be injected from app.py)
-            token_counter: TokenCounter instance
-            cost_storage: CostStorage instance
-            model_pricing: ModelPricing instance
-            orchestrator: ProviderOrchestrator instance
-            provider_clients: ProviderClients instance
-
         Raises:
             ValueError: If required dependencies are missing
         """
@@ -106,14 +95,6 @@ class ModelManager:
     ) -> str:
         """
         Send a prompt to the model and get a response.
-
-        Args:
-            prompt: User prompt
-            system_message: Optional system instructions
-            prepared_messages: Pre-prepared message list (if None, will be created from prompt)
-            provider: Optional provider override
-            model: Optional model override
-
         Returns:
             Response text from the AI model
         """
@@ -167,14 +148,6 @@ class ModelManager:
     ) -> str:
         """
         Send a prompt with chart image for pattern analysis.
-
-        Args:
-            prompt: User prompt
-            chart_image: Chart image (BytesIO, bytes, or base64 string)
-            system_message: Optional system instructions
-            provider: Optional provider override
-            model: Optional model override
-
         Returns:
             Response text from the AI model
 
@@ -201,14 +174,6 @@ class ModelManager:
         Used when a model reply omits the required ```json block: the original turn is
         replayed with the reply appended as an assistant message, and the model is asked
         for the block only. The caller re-parses the returned text against the contract.
-
-        Args:
-            system_message: Original system instructions
-            prompt: Original user prompt
-            previous_response: The reply that omitted the JSON block
-            provider: Optional provider override
-            model: Optional model override
-
         Returns:
             Response text from the AI model
         """
@@ -284,10 +249,6 @@ class ModelManager:
     async def _process_result(self, result) -> str:
         """
         Process invocation result: extract content, track costs, handle errors.
-
-        Args:
-            result: InvocationResult from orchestrator
-
         Returns:
             Response content string
         """

@@ -18,8 +18,6 @@ from sentence_transformers import SentenceTransformer
 
 from src.trading.vector_memory import VectorMemoryService
 
-# ── Fixtures ─────────────────────────────────────────────────────
-
 
 @pytest.fixture(scope="module")
 def embedding_model():
@@ -47,9 +45,6 @@ def vector_memory(embedding_model):
     initialized = svc._ensure_initialized()
     assert initialized, "VectorMemoryService failed to initialize"
     return svc
-
-
-# ── Helpers ──────────────────────────────────────────────────────
 
 
 def _store_test_block(
@@ -84,9 +79,6 @@ def _store_test_block(
         reasoning_snippet=reasoning_snippet,
         metadata=metadata,
     )
-
-
-# ── Basic Persistence ────────────────────────────────────────────
 
 
 class TestBlockedTradePersistence:
@@ -135,9 +127,6 @@ class TestBlockedTradePersistence:
         assert result["event_type"] == "system_rejection"
 
 
-# ── Collection Name Correctness ──────────────────────────────────
-
-
 class TestBlockedCollectionName:
     """Verify the blocked trades collection uses the correct name."""
 
@@ -152,9 +141,6 @@ class TestBlockedCollectionName:
         assert vector_memory._blocked_collection.count() >= 1
 
 
-# ── Schema Integrity (No None Values) ────────────────────────────
-
-
 class TestBlockedTradeSchemaIntegrity:
     """ChromaDB rejects None values — verify _sanitize_metadata works."""
 
@@ -164,7 +150,7 @@ class TestBlockedTradeSchemaIntegrity:
         assert stored is True
 
         result = vector_memory.get_recent_blocked_trades(n=1)[0]
-        assert "extra_field" not in result  # None should be sanitized out
+        assert "extra_field" not in result
 
     def test_mixed_none_and_valid_metadata(self, vector_memory):
         """Valid metadata persists alongside sanitized None values."""
@@ -179,9 +165,6 @@ class TestBlockedTradeSchemaIntegrity:
         assert result.get("custom_tag") == "important"
         assert result.get("score") == 42
         assert "nullable_field" not in result
-
-
-# ── Multiple Trades ──────────────────────────────────────────────
 
 
 class TestMultipleBlockedTrades:
@@ -207,7 +190,6 @@ class TestMultipleBlockedTrades:
         results = vector_memory.get_recent_blocked_trades(n=3)
         assert len(results) == 3
 
-        # Verify newest-first ordering by timestamp
         timestamps = [r.get("timestamp", "") for r in results]
         assert timestamps == sorted(timestamps, reverse=True)
 
@@ -218,9 +200,6 @@ class TestMultipleBlockedTrades:
 
         results = vector_memory.get_recent_blocked_trades(n=3)
         assert len(results) == 3
-
-
-# ── Filtering by Guard Type ──────────────────────────────────────
 
 
 class TestBlockedTradeFiltering:
@@ -250,19 +229,13 @@ class TestBlockedTradeFiltering:
     def test_max_age_filter_filters_old_entries(self, vector_memory):
         """max_age_hours parameter excludes entries older than threshold."""
 
-        # Store a blocked trade normally (it gets current timestamp)
         _store_test_block(vector_memory)
 
-        # With max_age_hours=0, nothing should be recent enough
         results = vector_memory.get_recent_blocked_trades(n=10, max_age_hours=0)
         assert len(results) == 0
 
-        # With large max_age_hours, everything should be included
         results = vector_memory.get_recent_blocked_trades(n=10, max_age_hours=9999)
         assert len(results) == 1
-
-
-# ── Feedback String Generation ───────────────────────────────────
 
 
 class TestBlockedTradeFeedback:
@@ -309,8 +282,8 @@ class TestBlockedTradeFeedback:
         _store_test_block(vector_memory, suggested_rr=1.2, required_rr=2.5)
 
         feedback = vector_memory.get_blocked_trade_feedback(n=5)
-        assert "1.20" in feedback or "1.2" in feedback  # suggested_rr
-        assert "2.50" in feedback or "2.5" in feedback  # required_rr
+        assert "1.20" in feedback or "1.2" in feedback
+        assert "2.50" in feedback or "2.5" in feedback
         assert "gap:" in feedback
 
     def test_feedback_includes_ai_reasoning(self, vector_memory):
@@ -319,9 +292,6 @@ class TestBlockedTradeFeedback:
 
         feedback = vector_memory.get_blocked_trade_feedback(n=5)
         assert "Expecting breakout" in feedback
-
-
-# ── Edge: Empty State ────────────────────────────────────────────
 
 
 class TestBlockedTradeEmptyState:
@@ -339,9 +309,6 @@ class TestBlockedTradeEmptyState:
     def test_feedback_returns_empty_when_no_data(self, vector_memory):
         """get_blocked_trade_feedback returns '' when empty."""
         assert vector_memory.get_blocked_trade_feedback() == ""
-
-
-# ── Unique IDs ───────────────────────────────────────────────────
 
 
 class TestBlockedTradeUniqueIds:

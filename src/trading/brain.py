@@ -66,17 +66,7 @@ class TradingBrainService:
         tightening_policy: StopLossTighteningPolicy | None = None,
         post_mortem_repo: Any | None = None,
     ):
-        """Initialize trading brain service.
-
-        Args:
-            logger: Logger instance
-            persistence: Persistence service
-            vector_memory: Injected vector memory service (required)
-            exit_execution_context: Configured fallback SL/TP execution context.
-            timeframe_minutes: Active analysis timeframe in minutes.
-            tightening_policy: Stop-loss tightening policy for threshold exposure.
-            post_mortem_repo: Optional PostMortemRepository for trade journal injection.
-        """
+        """Initialize trading brain service."""
         self.logger = logger
         self.persistence = persistence
         self.vector_memory = vector_memory
@@ -111,8 +101,6 @@ class TradingBrainService:
             self._reflection_interval,
         )
 
-        # Initialize trade count from persistent storage
-        # persisted so reflection triggers survive restarts
         self._trade_count: int = self.vector_memory.trade_count
 
     def update_from_closed_trade(
@@ -123,15 +111,7 @@ class TradingBrainService:
         market_conditions: "MarketConditions",
         entry_decision: TradeDecision | None = None,
     ) -> None:
-        """Extract insights from a closed trade and update brain.
-
-        Args:
-            position: Closed position
-            close_price: Exit price
-            close_reason: Reason for closing
-            entry_decision: Original entry decision (for reasoning)
-            market_conditions: Market state at close (or from entry if preferred)
-        """
+        """Extract insights from a closed trade and update brain."""
         self.context_provider.clear_stats_cache()
         self.experience_recorder.record_closed_trade(
             position=position,
@@ -152,11 +132,6 @@ class TradingBrainService:
 
     def get_dynamic_thresholds(self, choppiness: float | None = None) -> dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
-
-        Args:
-            choppiness: Choppiness index value (0-100). When > 61.8 (ranging),
-                the R/R minimum is relaxed to 1.2 for mean-reversion setups.
-
         Returns: dict with learned thresholds. Defaults used when insufficient data.
         """
         thresholds = self.context_provider.get_dynamic_thresholds()
@@ -173,7 +148,6 @@ class TradingBrainService:
         sl_payload["source"] = source
         thresholds["sl_tightening"] = sl_payload
 
-        # ranging market: relax R/R floor for mean-reversion setups
         if choppiness is not None and choppiness > 61.8:
             current_min = thresholds.get("rr_borderline_min", 1.5)
             thresholds["rr_borderline_min"] = min(current_min, 1.2)
@@ -212,19 +186,7 @@ class TradingBrainService:
         market_conditions: "MarketConditions",
         tightening_evaluation: TighteningEvaluation | None = None,
     ) -> None:
-        """Track position update decisions for learning.
-
-        Args:
-            position: Active position
-            old_sl: Previous stop loss
-            old_tp: Previous take profit
-            new_sl: New stop loss
-            new_tp: New take profit
-            current_price: Current market price
-            current_pnl_pct: Current unrealized P&L
-            market_conditions: Market state at time of update
-            tightening_evaluation: Policy evaluation from StopLossTighteningPolicy (optional)
-        """
+        """Track position update decisions for learning."""
         self.experience_recorder.track_position_update(
             position=position,
             old_sl=old_sl,

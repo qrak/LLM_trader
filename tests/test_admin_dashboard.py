@@ -34,8 +34,6 @@ def _has_numpy() -> bool:
     return importlib.util.find_spec("numpy") is not None
 
 
-# ─── Fixtures ────────────────────────────────────────────────────────
-
 @pytest.fixture
 def tmp_config(tmp_path):
     """Create a temporary config.ini for testing."""
@@ -128,20 +126,18 @@ def client(admin_app):
     return TestClient(admin_app, raise_server_exceptions=False, client=("192.168.1.100", 54321))
 
 
-# ─── Auth Tests ──────────────────────────────────────────────────────
-
 class TestPasswordHashing:
     def test_hash_and_verify(self):
         h = hash_password("mypassword")
         assert ":" in h
         salt_hex, hash_hex = h.split(":")
-        assert len(salt_hex) == 32  # 16 bytes = 32 hex chars
-        assert len(hash_hex) == 64  # 32 bytes = 64 hex chars
+        assert len(salt_hex) == 32
+        assert len(hash_hex) == 64
 
     def test_different_salts(self):
         h1 = hash_password("same_password")
         h2 = hash_password("same_password")
-        assert h1 != h2  # Different salts
+        assert h1 != h2
 
     def test_verify_correct_password(self, auth_env):
         assert check_credentials("admin", "testpass123")
@@ -188,7 +184,7 @@ class TestLoginEndpoint:
 
     def test_login_missing_fields(self, client):
         resp = client.post("/api/admin/login", json={"username": "admin"})
-        assert resp.status_code == 422  # Pydantic validation
+        assert resp.status_code == 422
 
 
 class TestAuthMiddleware:
@@ -201,7 +197,6 @@ class TestAuthMiddleware:
         assert resp.status_code == 200
 
     def test_authenticated_request_succeeds(self, client, auth_env):
-        # Login first
         client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"})
         resp = client.get("/api/admin/config")
         assert resp.status_code == 200
@@ -221,8 +216,6 @@ class TestWsToken:
         assert data["username"] == "admin"
         assert _verify_token(data["token"]) == "admin"
 
-
-# ─── Config Tests ────────────────────────────────────────────────────
 
 class TestWritableConfig:
     def test_get_full_schema(self, writable_config):
@@ -265,7 +258,6 @@ class TestWritableConfig:
     @pytest.mark.asyncio
     async def test_set_value_persists_to_disk(self, writable_config, tmp_config):
         await writable_config.set_value("general", "crypto_pair", "ETH/USDC")
-        # Re-read from disk
         wc2 = WritableConfig(tmp_config)
         assert wc2.get_value("general", "crypto_pair") == "ETH/USDC"
 
@@ -281,7 +273,6 @@ class TestWritableConfig:
 
     @pytest.mark.asyncio
     async def test_reload_from_disk(self, writable_config, tmp_config):
-        # Modify file externally
         tmp_config.write_text("[general]\ncrypto_pair = SOL/USDC\n")
         await writable_config.reload_from_disk()
         assert writable_config.get_value("general", "crypto_pair") == "SOL/USDC"
@@ -324,8 +315,6 @@ class TestValidation:
         with pytest.raises(ValueError, match="too long"):
             _validate_and_coerce("x" * 256, meta)
 
-
-# ─── API Endpoint Tests ─────────────────────────────────────────────
 
 class TestConfigAPI:
     def test_get_config(self, client, auth_env):
@@ -405,21 +394,17 @@ class TestSystemControlAPI:
     def test_human_input_crud(self, client, auth_env):
         client.post("/api/admin/login", json={"username": "admin", "password": "testpass123"})
 
-        # Set input
         resp = client.post("/api/admin/system/human-input", json={"text": "Focus on RSI"})
         assert resp.status_code == 200
         assert resp.json()["text"] == "Focus on RSI"
 
-        # Get input
         resp = client.get("/api/admin/system/human-input")
         assert resp.status_code == 200
         assert resp.json()["text"] == "Focus on RSI"
 
-        # Clear input
         resp = client.delete("/api/admin/system/human-input")
         assert resp.status_code == 200
 
-        # Verify cleared
         resp = client.get("/api/admin/system/human-input")
         assert resp.json()["text"] == ""
 
@@ -432,8 +417,6 @@ class TestLogAPI:
         data = resp.json()
         assert "lines" in data
 
-
-# ─── LogStreamManager Tests ─────────────────────────────────────────
 
 class TestLogStreamManager:
     def test_handler_subscribe(self, log_manager):
@@ -449,7 +432,6 @@ class TestLogStreamManager:
         record = logging.LogRecord("test", logging.INFO, "", 0, "Hello world", (), None)
         log_manager.handler.emit(record)
 
-        # Should have the line in the queue
         assert not queue.empty()
         line = queue.get_nowait()
         assert "Hello world" in line
@@ -473,8 +455,6 @@ class TestLogStreamManager:
         log_manager.handler.unsubscribe(sid)
         assert log_manager.subscriber_count == 0
 
-
-# ─── Integration: Full Dashboard Server ──────────────────────────────
 
 class TestDashboardServerIntegration:
     """Test that DashboardServer correctly initializes admin components."""
@@ -507,7 +487,6 @@ class TestDashboardServerIntegration:
             },
         )
 
-        # Verify admin components exist
         assert hasattr(server, 'writable_config')
         assert hasattr(server, 'log_stream_manager')
         assert server.app.state.admin_router is not None

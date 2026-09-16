@@ -27,8 +27,6 @@ class MonitorRouter:
         self.router.add_api_route("/system_prompt", self.get_system_prompt, methods=["GET"])
         self.router.add_api_route("/costs", self.get_api_costs, methods=["GET"])
         self.router.add_api_route("/news", self.get_news, methods=["GET"])
-        # Lightweight health check for local watchdogs, Docker healthchecks,
-        # and systemd ExecStartPost probes without touching Cloudflare routing.
         self.router.add_api_route("/health", self.get_health, methods=["GET"])
 
     def _load_prev_response_sync(self) -> dict[str, Any]:

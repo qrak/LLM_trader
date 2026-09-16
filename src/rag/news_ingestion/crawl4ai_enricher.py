@@ -92,9 +92,6 @@ class Crawl4AIEnricher:
             self._check_crawl4ai() if resolved_use_crawl4ai is None else resolved_use_crawl4ai
         )
 
-    # ------------------------------------------------------------------
-    # Encapsulated Helper Methods
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _clean_markdown_text(markdown_text: str) -> str:
@@ -147,7 +144,6 @@ class Crawl4AIEnricher:
         if isinstance(markdown_obj, str):
             candidates.append(markdown_obj)
         elif markdown_obj is not None:
-            # attributes present when DefaultMarkdownGenerator is used
             fit = markdown_obj.fit_markdown
             raw = markdown_obj.raw_markdown
             cited = markdown_obj.markdown_with_citations
@@ -220,9 +216,6 @@ class Crawl4AIEnricher:
         except Exception:  # noqa: BLE001
             return None
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     async def enrich_items(
         self,
@@ -246,9 +239,6 @@ class Crawl4AIEnricher:
             return await self._enrich_crawl4ai(targets)
         return await self._enrich_aiohttp(targets, session)
 
-    # ------------------------------------------------------------------
-    # Crawl4AI path
-    # ------------------------------------------------------------------
 
     async def _enrich_crawl4ai(self, targets: list[dict[str, Any]]) -> int:
         if self._requires_dedicated_crawl_loop():
@@ -396,14 +386,10 @@ class Crawl4AIEnricher:
             try:
                 loop.run_until_complete(loop.shutdown_asyncgens())
             except Exception:  # noqa: BLE001,S110
-                # best-effort loop async generator shutdown cleanup
                 pass
             asyncio.set_event_loop(None)
             loop.close()
 
-    # ------------------------------------------------------------------
-    # aiohttp fallback path
-    # ------------------------------------------------------------------
 
     async def _enrich_aiohttp(
         self,

@@ -29,12 +29,11 @@ if TYPE_CHECKING:
     from src.managers.model_manager import ModelManager
 
 
-# Configuration Constants
-POSITION_UPDATE_INTERVAL = 3600  # 1 hour
-SLEEP_CHUNK_SIZE = 1.0  # Check for interruptions every second
-CANDLE_BUFFER_SECONDS = 2  # Seconds to wait after candle start
-ERROR_WAIT_SHORT = 60   # Seconds to wait after minor error
-ERROR_WAIT_LONG = 300   # Seconds to wait after major error
+POSITION_UPDATE_INTERVAL = 3600
+SLEEP_CHUNK_SIZE = 1.0
+CANDLE_BUFFER_SECONDS = 2
+ERROR_WAIT_SHORT = 60
+ERROR_WAIT_LONG = 300
 
 
 _MARKET_KNOWLEDGE_FALLBACK_MSG = "continuing with cached/partial market knowledge"
@@ -63,9 +62,9 @@ class BotServices:
     statistics_service: TradingStatisticsService
     memory_service: TradingMemoryService
     exit_monitor: ExitMonitor
-    sentiment_analyst: Any = None  # RedditSentimentAnalyst, injected by composition root
-    executor_handler: Any = None  # ExecutorHandler, wired by composition root
-    ev_formatter: Any = None  # EVFrameworkFormatter, injected by composition root
+    sentiment_analyst: Any = None
+    executor_handler: Any = None
+    ev_formatter: Any = None
     dashboard_state: Any = None
     discord_task: asyncio.Task | None = None
     position_monitor_factory: Callable[[Any], PositionStatusMonitor] | None = None
@@ -92,7 +91,6 @@ class CryptoTradingBot:
         self.config = services.config
         self.shutdown_manager = services.shutdown_manager
 
-        # Injected core components
         self.exchange_manager = services.exchange_manager
         self.market_analyzer = services.market_analyzer
         self.trading_strategy = services.trading_strategy
@@ -100,33 +98,28 @@ class CryptoTradingBot:
         self.keyboard_handler = services.keyboard_handler
         self.rag_engine = services.rag_engine
 
-        # Injected API clients
         self.coingecko_api = services.coingecko_api
         self.market_api = services.market_api
         self.alternative_me_api = services.alternative_me_api
         self.http_session = services.http_session
 
-        # Injected trading services
         self.persistence = services.persistence
         self.model_manager = services.model_manager
         self.brain_service = services.brain_service
         self.statistics_service = services.statistics_service
         self.memory_service = services.memory_service
         self.exit_monitor = services.exit_monitor
-        # Executor pipeline
         self.executor_handler = services.executor_handler
         self.sentiment_analyst = services.sentiment_analyst
         self.ev_formatter = services.ev_formatter
         self.dashboard_state = services.dashboard_state
 
-        # Runtime state
         self.tasks = []
         self.running = False
         self._active_tasks = set()
         self._force_analysis = services.force_analysis_event or asyncio.Event()
         self._discord_task = services.discord_task
 
-        # Trading state
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
         self._reddit_sentiment_label = "NEUTRAL"
@@ -151,7 +144,6 @@ class CryptoTradingBot:
         if self.shutdown_manager:
             self.shutdown_manager.register_shutdown_callback(self.shutdown)
 
-            # Register components for shutdown
             if self.keyboard_handler:
                 self.shutdown_manager.register_shutdown_callback(self.keyboard_handler.stop_listening)
 
@@ -170,7 +162,6 @@ class CryptoTradingBot:
             if self.http_session:
                 self.shutdown_manager.register_shutdown_callback(self.http_session.close)
 
-            # API clients (if they have close method)
             for client in [self.alternative_me_api, self.coingecko_api, self.market_api]:
                 if client:
                     try:
@@ -178,7 +169,6 @@ class CryptoTradingBot:
                     except AttributeError:
                         pass
 
-        # Register keyboard commands
         self.keyboard_handler.register_command("a", self._force_analysis_now, "Force immediate analysis")
         self.keyboard_handler.register_command("h", self._show_help, "Show available keyboard commands")
         self.keyboard_handler.register_command("q", self._request_shutdown, "Quit the application")
@@ -186,7 +176,6 @@ class CryptoTradingBot:
             "R", self._request_reload, "Reload (in-place restart)"
         )
 
-        # Start keyboard handler task
         keyboard_task = asyncio.create_task(
             self.keyboard_handler.start_listening(),
             name="Keyboard-Handler"
@@ -200,7 +189,6 @@ class CryptoTradingBot:
         self.logger.info("Signaling trading loops to stop...")
         self.running = False
 
-        # Cancel active tasks managed by bot
         pending_tasks = list(self._active_tasks)
         if pending_tasks:
             self.logger.info("Cancelling %s bot-specific tasks...", len(pending_tasks))
@@ -212,14 +200,12 @@ class CryptoTradingBot:
             except asyncio.TimeoutError:
                 self.logger.warning("Bot tasks shutdown timed out")
 
-        # Discord notifier cleanup (properly closes the bot)
         if self.discord_notifier:
             try:
                 await self.discord_notifier.shutdown()
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error shutting down Discord notifier: %s", e)
 
-        # Let the Discord start task exit naturally after bot.close().
         if self._discord_task and not self._discord_task.done():
             try:
                 await asyncio.wait_for(asyncio.shield(self._discord_task), timeout=5.0)
@@ -235,12 +221,7 @@ class CryptoTradingBot:
 
 
     async def run(self, symbol: str, timeframe: str | None = None):
-        """Run the trading bot in continuous mode.
-
-        Args:
-            symbol: Trading pair (e.g., "BTC/USDT")
-            timeframe: Optional timeframe override
-        """
+        """Run the trading bot in continuous mode."""
         self.current_symbol = symbol
         requested_timeframe = timeframe or self.config.TIMEFRAME
         try:
@@ -328,9 +309,8 @@ class CryptoTradingBot:
             self.logger.error("Analysis failed: %s", result["error"])
             return
 
-        # extra fields consumed by vector-memory learning on entry
         result["_social_sentiment_reddit"] = self._reddit_sentiment_label
-        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
 
@@ -345,20 +325,15 @@ class CryptoTradingBot:
         if decision is not None and decision.action == "HOLD" and result.get("analysis"):
             self._patch_rejected_signal_in_response(result, decision)
 
-        # Forward to executor FIRST — trade execution is the priority
         analysis = result.get("analysis")
         if self.executor_handler is not None and analysis and decision is not None:
             forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
-            # The executor processes entries asynchronously — verify it actually
-            # opened the position; if it blocked the order, roll back the local
-            # phantom so we never manage a position the exchange doesn't have.
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
                     self.current_symbol, forward_delivered,
-                    order_id=getattr(decision, "order_id", None),
+                    order_id=decision.order_id,
                 )
 
-        # Then notify and persist (best-effort, non-critical)
         await self._send_discord_notification(result)
         await self._save_analysis_data(result)
 
@@ -441,11 +416,10 @@ class CryptoTradingBot:
         last_analysis_time_str = self._get_formatted_last_analysis_time()
         dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
 
-        # Fetch Reddit social sentiment (non-critical — best-effort)
         additional_context = ""
         self._reddit_sentiment_label = "NEUTRAL"
         if (
-            getattr(self.config, "SOCIAL_SENTIMENT_ENABLED", False)
+            self.config.SOCIAL_SENTIMENT_ENABLED
             and self.sentiment_analyst is not None
         ):
             try:
@@ -487,7 +461,7 @@ class CryptoTradingBot:
         """Build the EV framework context string with dynamic capital tracking."""
         if self.ev_formatter is None:
             return ""
-        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         return self.ev_formatter.build_ev_framework_section(current_capital)
 
@@ -631,11 +605,7 @@ class CryptoTradingBot:
             return False
 
     async def _wait_until_next_timeframe_after(self, last_time: datetime):
-        """Wait until the next timeframe candle after a specific timestamp.
-
-        Args:
-            last_time: Timestamp of last analysis
-        """
+        """Wait until the next timeframe candle after a specific timestamp."""
         try:
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
@@ -683,11 +653,6 @@ class CryptoTradingBot:
 
         Uses SLEEP_CHUNK_SIZE to check for interruptions periodically.
         Properly handles cancellation for graceful shutdown.
-
-        Args:
-            seconds: Duration to sleep
-            respect_force_analysis: If True, wake early on force analysis event (main loop only)
-
         Returns:
             bool: True if sleep was interrupted by force_analysis, False otherwise
         """
