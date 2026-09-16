@@ -9,6 +9,7 @@ Covers:
 """
 
 import asyncio
+import importlib.util
 import time
 from unittest.mock import MagicMock
 
@@ -30,11 +31,7 @@ from src.dashboard.log_stream import LogStreamManager
 
 def _has_numpy() -> bool:
     """Check if numpy is available (needed for full DashboardServer import)."""
-    try:
-        import numpy  # noqa: F401
-        return True
-    except ImportError:
-        return False
+    return importlib.util.find_spec("numpy") is not None
 
 
 # ─── Fixtures ────────────────────────────────────────────────────────
