@@ -23,10 +23,6 @@ from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.stop_loss_tightening_policy import StopLossTighteningPolicy
 from src.trading.trading_strategy import TradingStrategy
 
-# ═════════════════════════════════════════════════════════════════
-# Fixtures
-# ═════════════════════════════════════════════════════════════════
-
 
 def _make_config(**overrides):
     defaults = {
@@ -108,7 +104,6 @@ def _make_strategy(*, current_position=None, config=None, tightening_policy=None
     cfg = config or _make_config()
     cfg = SimpleNamespace(**{**cfg.__dict__, **overrides}) if overrides else cfg
 
-    # Patch _tf_minutes to be set from TIMEFRAME
     with patch('src.utils.timeframe_validator.TimeframeValidator') as mock_tfv:
         mock_tfv.to_minutes.return_value = 240
         strategy = TradingStrategy(
@@ -123,7 +118,6 @@ def _make_strategy(*, current_position=None, config=None, tightening_policy=None
             tightening_policy=tightening_policy,
         )
 
-    # Override current_position if needed
     if current_position is not None:
         strategy.current_position = current_position
 
@@ -162,7 +156,6 @@ class TestUpdatePositionParameters:
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=99.0, take_profit=None, current_price=101.5,
         ))
-        # progress = (101.5 - 100) / (110 - 100) = 1.5/10 = 0.15 < 0.20
         assert updated is False
 
     def test_sl_tightening_allowed_when_progress_sufficient(self):
@@ -174,7 +167,6 @@ class TestUpdatePositionParameters:
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=99.0, take_profit=None, current_price=102.0,
         ))
-        # progress = (102 - 100) / (110 - 100) = 2/10 = 0.20 >= 0.15
         assert updated is True
         assert strategy.current_position.stop_loss == 99.0
         persistence.async_save_position.assert_called_once()
@@ -184,8 +176,6 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
-        # Original SL distance = |100-95| = 5, max allowed = 7.5
-        # Proposed: SL 95→93, distance = |100-93| = 7 ≤ 7.5 ✓
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
@@ -197,8 +187,6 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
-        # Original SL distance = |100-105| = 5, max allowed = 7.5
-        # Proposed: SL 105→107, distance = |100-107| = 7 ≤ 7.5 ✓
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=107.0, take_profit=None, current_price=100.0,
         ))
@@ -210,12 +198,11 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
 
-        # Original distance = 5, max = 7.5. Proposed: 95→92, distance = 8 > 7.5
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=92.0, take_profit=None, current_price=105.0,
         ))
         assert updated is False
-        assert strategy.current_position.stop_loss == 95.0  # unchanged
+        assert strategy.current_position.stop_loss == 95.0
         assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
 
     def test_sl_widening_rejected_beyond_cap_short(self):
@@ -223,12 +210,11 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
 
-        # Original distance = 5, max = 7.5. Proposed: 105→108, distance = 8 > 7.5
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=108.0, take_profit=None, current_price=100.0,
         ))
         assert updated is False
-        assert strategy.current_position.stop_loss == 105.0  # unchanged
+        assert strategy.current_position.stop_loss == 105.0
         assert any("REJECTED SL widening" in str(c) for c in logger.warning.call_args_list)
 
     def test_sl_tightening_short_rejected(self):
@@ -236,10 +222,6 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         policy = StopLossTighteningPolicy(swing_threshold=0.20)
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos, tightening_policy=policy)
-        # For SHORT: tightening means stop_loss < old_sl (moving closer to entry)
-        # price_progress = (entry_price - current_price) / tp_distance_total
-        # tp_distance_total = |90 - 100| = 10
-        # progress = (100 - 99) / 10 = 1/10 = 0.10 < 0.20
 
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=103.0, take_profit=None, current_price=99.0,
@@ -278,7 +260,6 @@ class TestUpdatePositionParameters:
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=99.0, take_profit=None, current_price=102.0,
         ))
-        # tp_distance_total = 0 → policy returns allowed=False
         assert updated is False
 
     def test_sl_tightening_no_current_price_rejected(self):
@@ -286,17 +267,10 @@ class TestUpdatePositionParameters:
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
 
-        # LONG: stop_loss=96.0 > old_sl=95.0 is tightening.
-        # Policy rejects when current_price is None/0 as a safety measure.
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=96.0, take_profit=None, current_price=None,
         ))
         assert updated is False
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 2: close_position
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestClosePosition:
@@ -318,20 +292,16 @@ class TestClosePosition:
 
         asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
-        # Verify decision saved
         persistence.async_save_trade_decision.assert_called_once()
         decision = persistence.async_save_trade_decision.call_args[0][0]
         assert decision.action == "CLOSE_LONG"
         assert "stop_loss" in decision.reasoning
         cast(MagicMock, strategy.memory_service.add_decision).assert_called_once_with(decision)
 
-        # Verify brain updated
         brain.update_from_closed_trade.assert_called_once()
 
-        # Verify stats recalculated
         stats.recalculate.assert_called_once_with(10000.0)
 
-        # Verify position cleared
         persistence.async_save_position.assert_called_with(None)
         assert strategy.current_position is None
 
@@ -388,10 +358,8 @@ class TestClosePosition:
         strategy.set_dashboard_state(dashboard_state)
         brain.update_from_closed_trade.side_effect = RuntimeError("Brain crash")
 
-        # Should not raise
         asyncio.run(strategy.close_position("stop_loss", 90.0, MarketConditions()))
 
-        # Position still cleared
         assert strategy.current_position is None
         persistence.async_save_position.assert_called_with(None)
         dashboard_state.mark_brain_rebuild_started.assert_awaited_once()
@@ -417,13 +385,10 @@ class TestClosePosition:
         """
         pos = _make_position(direction="LONG")
         strategy, _, persistence, _, _, _ = _make_strategy(current_position=pos)
-        # Simulate the CLOSE row being persisted and returning its rowid
         persistence.async_save_trade_decision = AsyncMock(return_value=42)
-        # Post-mortem needs the original entry decision to analyze
         entry = MagicMock()
         entry.reasoning = "Expected breakout continuation."
         persistence.get_entry_decision_for_position = MagicMock(return_value=entry)
-        # Wire a post-mortem service
         pm_service = MagicMock()
         pm_service.analyze_closed_trade = AsyncMock(return_value=None)
         strategy.post_mortem_service = pm_service
@@ -505,13 +470,13 @@ class TestClosePosition:
         risk_assessment = SimpleNamespace(
             entry_price=100.0,
             stop_loss=95.0,
-            take_profit=109.0,   # R/R = (109-100)/(100-95) = 1.8 → above config floor
+            take_profit=109.0,
             size_pct=0.05,
             quantity=5.0,
             entry_fee=0.5,
             sl_distance_pct=0.05,
             tp_distance_pct=0.09,
-            rr_ratio=1.1,        # above config floor 1.0, below brain 1.5
+            rr_ratio=1.1,
             quote_amount=500.0,
             volatility_level="MEDIUM",
             regime_profile="neutral",
@@ -530,7 +495,6 @@ class TestClosePosition:
             market_conditions=MarketConditions(adx=30.0),
         ))
 
-        # Must OPEN, not reject
         assert decision.action == "BUY"
         assert strategy.current_position is not None
         pos: Position = cast(Position, strategy.current_position)
@@ -545,7 +509,7 @@ class TestClosePosition:
         risk_assessment = SimpleNamespace(
             entry_price=100.0,
             stop_loss=95.0,
-            take_profit=104.0,   # R/R = (104-100)/(100-95) = 0.8 → below config floor
+            take_profit=104.0,
             size_pct=0.05,
             quantity=5.0,
             entry_fee=0.5,
@@ -580,7 +544,6 @@ class TestClosePosition:
             current_position=None,
             MIN_RR_ENTRY=1.5,
         )
-        # _make_strategy sets brain rr_borderline_min=1.5 too → gate = min(1.5,1.5) = 1.5
         risk_assessment = SimpleNamespace(
             entry_price=100.0,
             stop_loss=95.0,
@@ -590,7 +553,7 @@ class TestClosePosition:
             entry_fee=0.5,
             sl_distance_pct=0.05,
             tp_distance_pct=0.09,
-            rr_ratio=1.3,        # below 1.5 → rejected
+            rr_ratio=1.3,
             quote_amount=500.0,
             volatility_level="MEDIUM",
             regime_profile="neutral",
@@ -628,7 +591,7 @@ class TestClosePosition:
             stop_loss=95.0,
             take_profit=112.0,
             size_pct=0.05,
-            quantity=5.0,           # 5.0 × 100.0 = $500 notional
+            quantity=5.0,
             entry_fee=0.5,
             sl_distance_pct=0.05,
             tp_distance_pct=0.12,
@@ -651,7 +614,6 @@ class TestClosePosition:
             market_conditions=MarketConditions(adx=30.0),
         ))
 
-        # $500 notional clamped to $100 → qty 5.0→1.0, size 5%→1%
         assert decision.quantity == pytest.approx(1.0)
         assert decision.quote_amount == pytest.approx(100.0)
         assert decision.position_size == pytest.approx(0.01)
@@ -660,9 +622,7 @@ class TestClosePosition:
         assert pos.size == pytest.approx(1.0)
         assert pos.quote_amount == pytest.approx(100.0)
         assert pos.size_pct == pytest.approx(0.01)
-        # Fee scales down proportionally too (0.5 × 0.2)
         assert decision.fee == pytest.approx(0.1)
-        # Warning logged so the operator sees the clamp happened
         clamp_logs = [c for c in logger.warning.call_args_list if "Executor notional clamp" in str(c)]
         assert len(clamp_logs) == 1
 
@@ -677,7 +637,7 @@ class TestClosePosition:
             stop_loss=95.0,
             take_profit=112.0,
             size_pct=0.005,
-            quantity=0.5,           # 0.5 × 100.0 = $50 notional
+            quantity=0.5,
             entry_fee=0.05,
             sl_distance_pct=0.05,
             tp_distance_pct=0.12,
@@ -710,7 +670,6 @@ class TestClosePosition:
     def test_open_new_position_no_clamp_when_config_absent(self):
         """EXECUTOR_MAX_POSITION_USDC unset (0) → sizing untouched (backward compat)."""
         strategy, logger, _, _, _, _ = _make_strategy(current_position=None)
-        # Default _make_config has no EXECUTOR_MAX_POSITION_USDC attribute
         risk_assessment = SimpleNamespace(
             entry_price=100.0,
             stop_loss=95.0,
@@ -756,11 +715,6 @@ class TestClosePosition:
         assert "P&L: +15.00%" in decision.reasoning
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 3: _extract_price_from_result
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestExtractPriceFromResult:
     """Cover _extract_price_from_result (lines 631-650)."""
 
@@ -793,11 +747,6 @@ class TestExtractPriceFromResult:
         result = {"context": None}
         price = strategy._conditions.extract_price(result)
         assert price == 0.0
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 4: _extract_confluence_factors
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestExtractConfluenceFactors:
@@ -865,11 +814,6 @@ class TestExtractConfluenceFactors:
         assert factors == (("valid", 42.0),)
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 5: _build_conditions_from_position
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestBuildConditionsFromPosition:
     """The close path hands back the entry snapshot verbatim — no per-field reconstruction."""
 
@@ -912,11 +856,6 @@ class TestBuildConditionsFromPosition:
         assert conditions.cmf == -0.0559
         assert conditions.fear_greed_index == 23
         assert conditions.is_weekend is True
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 6: _extract_market_conditions
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestExtractMarketConditions:
@@ -964,7 +903,6 @@ class TestExtractMarketConditions:
         """Empty result returns default conditions."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
         conditions = strategy._conditions.extract_market_conditions({})
-        # Defaults: NEUTRAL trend + sentiment defaults
         assert conditions.trend_direction == "NEUTRAL"
         assert conditions.fear_greed_index == 50
         assert conditions.market_sentiment == "NEUTRAL"
@@ -1002,14 +940,9 @@ class TestExtractMarketConditions:
     def test_market_conditions_exception_handling(self):
         """Exception during extraction returns empty dict."""
         strategy, _, _, _, _, _ = _make_strategy(current_position=_make_position())
-        result = {"analysis": None}  # .get() on None will fail
+        result = {"analysis": None}
         conditions = strategy._conditions.extract_market_conditions(result)
         assert conditions == MarketConditions()
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 4: check_position — SL/TP hit exit detection
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestCheckPositionHitDetection:
@@ -1062,11 +995,6 @@ class TestCheckPositionHitDetection:
         assert result is None
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 5: _handle_existing_position — CLOSE signal + UPDATE flow
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestHandleExistingPosition:
     """Verify signal handling for existing positions."""
 
@@ -1116,7 +1044,6 @@ class TestHandleExistingPosition:
         pos = _make_position(stop_loss=95.0, take_profit=115.0, direction="LONG")
         strategy, _, _, _, _, _ = _make_strategy(current_position=pos)
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         result = asyncio.run(strategy._handle_existing_position(
             signal="UPDATE", confidence="MEDIUM",
             stop_loss=93.0, take_profit=115.0,
@@ -1133,7 +1060,7 @@ class TestHandleExistingPosition:
         strategy._last_position_update_time = datetime(2020, 1, 1, tzinfo=timezone.utc)
         result = asyncio.run(strategy._handle_existing_position(
             signal="UPDATE", confidence="HIGH",
-            stop_loss=95.0, take_profit=120.0,  # must pass SL to avoid format bug @ L434
+            stop_loss=95.0, take_profit=120.0,
             current_price=105.0, symbol="BTC/USDC", reasoning="Extended TP",
             market_conditions=MarketConditions(),
         ))
@@ -1187,11 +1114,6 @@ class TestHandleExistingPosition:
         )
         result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
         assert result is True
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 5b: executor tri-state — HTTP 200 / HTTP error / network failure
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestExecutorTriState:
@@ -1255,7 +1177,7 @@ class TestExecutorTriState:
 
     def test_position_query_url_base_url_without_suffix(self):
         """EXECUTOR_API_URL without /decision suffix still works (backward compat)."""
-        strategy, _, _, _, _, _ = self._make_executor_strategy()  # url = http://executor:8000
+        strategy, _, _, _, _, _ = self._make_executor_strategy()
         client = self._stub_http_client(strategy, 200, {"open": False})
 
         result = asyncio.run(strategy._executor_has_position("BTC/USDC"))
@@ -1354,11 +1276,6 @@ class TestExecutorTriState:
         persistence.async_save_position.assert_not_called()
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 6: get_position_context — regression guard for SHORT sentinel
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestPositionContextSlTightening:
     """Regression guard for bd4e43b: sentinel must nudge SL toward entry."""
 
@@ -1369,7 +1286,6 @@ class TestPositionContextSlTightening:
         brain.get_dynamic_thresholds = MagicMock(return_value={})
         strategy.brain_service = brain
         ctx = strategy.get_position_context(current_price=95.0)
-        # Progress = (100 - 95) / (100 - 85) = 5/15 = 33.3%
         assert "price progress" in ctx.lower()
         lines = ctx.split("\n")
         progress_line = [line_item for line_item in lines if "progress" in line_item.lower()]
@@ -1385,11 +1301,6 @@ class TestPositionContextSlTightening:
         assert "Status: None" in ctx
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 7: SL widening — directional log branches
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestSlWideningDirectionalLogs:
     """Verify correct log branches for LONG vs SHORT SL widening."""
 
@@ -1397,7 +1308,6 @@ class TestSlWideningDirectionalLogs:
         """SHORT: SL moved higher (wider) logs SHORT-specific message within 150% cap."""
         pos = _make_position(stop_loss=105.0, take_profit=90.0, direction="SHORT")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
-        # SL 105→107: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=107.0, take_profit=None, current_price=100.0,
         ))
@@ -1409,7 +1319,6 @@ class TestSlWideningDirectionalLogs:
         """LONG: SL moved lower (wider) logs LONG-specific message within 150% cap."""
         pos = _make_position(stop_loss=95.0, take_profit=110.0, direction="LONG")
         strategy, logger, _, _, _, _ = _make_strategy(current_position=pos)
-        # SL 95→93: distance 7 ≤ 7.5 (150% of original 5) ✓
         updated = asyncio.run(strategy._update_position_parameters(
             stop_loss=93.0, take_profit=None, current_price=105.0,
         ))
@@ -1442,7 +1351,7 @@ class TestEntryRollback:
             encoding="utf-8",
         )
         strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
 
     @pytest.mark.asyncio
@@ -1455,7 +1364,7 @@ class TestEntryRollback:
             encoding="utf-8",
         )
         strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is False
 
     @pytest.mark.asyncio
@@ -1468,7 +1377,7 @@ class TestEntryRollback:
             encoding="utf-8",
         )
         strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is False
 
     @pytest.mark.asyncio
@@ -1478,8 +1387,8 @@ class TestEntryRollback:
         strategy, *_ = _make_strategy()
         missing = tmp_path / "does_not_exist.jsonl"
         strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(missing))
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
 
     @pytest.mark.asyncio
@@ -1492,7 +1401,6 @@ class TestEntryRollback:
         strategy.config = SimpleNamespace(EXECUTOR_VERDICT_PATH=str(journal))
 
         async def delayed_write():
-            # Simulate executor main loop tick landing after ~2 polls
             await asyncio.sleep(0.005)
             journal.write_text(
                 '{"order_id": "order-abc", "verdict": "executed", "reason": ""}\n',
@@ -1501,8 +1409,8 @@ class TestEntryRollback:
 
         task = asyncio.create_task(delayed_write())
         try:
-            with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
-                 patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.002):
+            with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 10), \
+                 patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.002):
                 assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id="order-abc") is True
         finally:
             task.cancel()
@@ -1511,9 +1419,9 @@ class TestEntryRollback:
     async def test_confirm_false_when_stably_no_position(self):
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(return_value=False)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is False
 
     @pytest.mark.asyncio
@@ -1528,11 +1436,11 @@ class TestEntryRollback:
         reports followed by a confirmed position → True, no rollback."""
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(
-            side_effect=[False, False, False, False, True]  # executor's tick lands on poll 5
+            side_effect=[False, False, False, False, True]
         )
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 10), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
 
     @pytest.mark.asyncio
@@ -1540,9 +1448,9 @@ class TestEntryRollback:
         """True block: position never appears within the 15s window → rollback."""
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(return_value=False)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 10), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 10), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 6), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is False
         assert strategy._executor_has_position.await_count == 6
 
@@ -1550,16 +1458,16 @@ class TestEntryRollback:
     async def test_confirm_fail_open_on_query_errors(self):
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(return_value=None)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
 
     @pytest.mark.asyncio
     async def test_confirm_true_after_transient_errors_then_confirmed(self):
         strategy, *_ = _make_strategy()
         strategy._executor_has_position = AsyncMock(side_effect=[None, None, True])
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 5), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 5), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             assert await strategy.confirm_entry_with_executor("BTC/USDC") is True
 
     @pytest.mark.asyncio
@@ -1574,8 +1482,8 @@ class TestEntryRollback:
         """File-fallback delivery may execute later — never roll back."""
         strategy, _, persistence, *_ = _make_strategy(current_position=_make_position())
         strategy._executor_has_position = AsyncMock(return_value=False)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=False)
         strategy._executor_has_position.assert_not_called()
         persistence.async_save_position.assert_not_called()
@@ -1585,8 +1493,8 @@ class TestEntryRollback:
         pos = _make_position()
         strategy, _, persistence, *_ = _make_strategy(current_position=pos)
         strategy._executor_has_position = AsyncMock(return_value=True)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=True)
         assert strategy.current_position is pos
         persistence.async_save_position.assert_not_called()
@@ -1597,9 +1505,9 @@ class TestEntryRollback:
         pos = _make_position()
         strategy, logger, persistence, *_ = _make_strategy(current_position=pos)
         strategy._executor_has_position = AsyncMock(return_value=False)
-        with patch("src.trading.trading_strategy.ENTRY_CONFIRM_ATTEMPTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
-             patch("src.trading.trading_strategy.ENTRY_CONFIRM_DELAY", 0.001):
+        with patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_ATTEMPTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_MIN_FALSE_REPORTS", 2), \
+             patch("src.trading.executor_reconciliation.ENTRY_CONFIRM_DELAY", 0.001):
             await strategy.rollback_blocked_entry("BTC/USDC", forward_delivered=True)
         assert strategy.current_position is None
         persistence.async_save_position.assert_awaited_once_with(None)

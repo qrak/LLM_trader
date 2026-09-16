@@ -35,7 +35,6 @@ class ArticleProcessor:
 
     def detect_coins_in_article(self, article: dict[str, Any], known_crypto_tickers: set[str]) -> set[str]:
         """Detect cryptocurrency mentions in article content."""
-        # Check categories first
         coins_mentioned = set()
         categories = article.get("categories", "").split("|")
         for category in categories:
@@ -43,7 +42,6 @@ class ArticleProcessor:
             if cat_upper in known_crypto_tickers:
                 coins_mentioned.add(cat_upper)
 
-        # Check title and body for coin mentions
         title = article.get("title", "")
         body = article.get("body", "")
 
@@ -53,8 +51,6 @@ class ArticleProcessor:
         coins_mentioned.update(title_coins)
         coins_mentioned.update(body_coins)
 
-        # Also resolve mentions through configured symbol_name_map entries.
-        # This catches names that parser heuristics do not map yet.
         if self.symbol_name_map:
             combined_text = f"{title}\n{body}".lower()
             for symbol, raw_name in self.symbol_name_map.items():

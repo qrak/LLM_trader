@@ -48,12 +48,6 @@ class GuardProtocol(Protocol):
 
     def check(self, intent: OrderIntent, /, *, capital: float, config: Any) -> GuardResult:
         """Evaluate the intent against this guard's policy.
-
-        Args:
-            intent: OrderIntent instance with current state.
-            capital: Current available capital.
-            config: Configuration protocol providing risk parameters.
-
         Returns:
             GuardResult indicating pass/fail with reasoning.
         """

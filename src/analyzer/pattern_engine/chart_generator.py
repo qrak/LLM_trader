@@ -23,38 +23,30 @@ class ChartGenerator:
     """Generates interactive charts and static images for market data with OHLCV and RSI."""
 
     def __init__(self, logger: Logger | None = None, config: Any | None = None, formatter: Callable | None = None, format_utils=None):
-        """Initialize the chart generator.
-
-        Args:
-            logger: Optional logger instance for debugging
-            config: Optional config instance to avoid circular imports
-            formatter: Optional formatting function for price formatting (e.g., fmt from format_utils)
-        """
+        """Initialize the chart generator."""
         self.logger = logger
         self.config = config
         self.format_utils = format_utils
 
         self.formatter: Callable = formatter or self._default_formatter
 
-        # AI-optimized colors for better pattern recognition
         self.ai_colors = {
-            "background": "#000000",  # Pure black for maximum contrast
-            "grid": "#555555",        # Visible grid for AI readability
-            "text": "#ffffff",        # Pure white text
-            "candle_up": "#00ff00",   # Bright green for bullish candles
-            "candle_down": "#ff0000", # Bright red for bearish candles
-            "volume": "#0080ff",      # Bright blue for volume
-            "volume_up": "#00aa00",   # Green for bullish volume bars
-            "volume_down": "#aa0000", # Red for bearish volume bars
-            "rsi": "#ffff00",         # Bright yellow for RSI
-            "sma_50": "#ff8c00",      # Orange for SMA 50 (short-term)
-            "sma_200": "#9932cc",     # Purple for SMA 200 (long-term)
-            "cmf": "#00ffff",         # Cyan for CMF
-            "obv": "#ff00ff",         # Magenta for OBV
-            "rsi_oversold": "#00ff00",  # Green for oversold line (30)
-            "rsi_overbought": "#ff0000" # Red for overbought line (70)
+            "background": "#000000",
+            "grid": "#555555",
+            "text": "#ffffff",
+            "candle_up": "#00ff00",
+            "candle_down": "#ff0000",
+            "volume": "#0080ff",
+            "volume_up": "#00aa00",
+            "volume_down": "#aa0000",
+            "rsi": "#ffff00",
+            "sma_50": "#ff8c00",
+            "sma_200": "#9932cc",
+            "cmf": "#00ffff",
+            "obv": "#ff00ff",
+            "rsi_oversold": "#00ff00",
+            "rsi_overbought": "#ff0000"
         }
-        # AI chart candle limit from config
         self.ai_candle_limit = config.AI_CHART_CANDLE_LIMIT if config is not None else 200
 
     def _default_formatter(self, val, _precision=8):
@@ -131,27 +123,14 @@ class ChartGenerator:
         technical_history: dict[str, np.ndarray] | None = None,
         pair_symbol: str = "",
         timeframe: str = "1h",
-        height: int = 1080,  # Reduced from 2160p to 1080p to lower image tokens
-        width: int = 1920,   # Reduced from 3840p to 1080p to lower image tokens
+        height: int = 1080,
+        width: int = 1920,
         save_to_disk: bool = False,
         output_path: str | None = None,
-        simple_mode: bool = True,  # Default to simple mode for AI analysis
+        simple_mode: bool = True,
         timestamps: list | None = None
     ) -> io.BytesIO | str:
         """Create a PNG chart image optimized for AI pattern analysis.
-
-        Args:
-            ohlcv: OHLCV data array with columns [timestamp, open, high, low, close, volume]
-            technical_history: Optional technical indicators data
-            pair_symbol: Trading pair symbol (e.g., "BTCUSDT")
-            timeframe: Chart timeframe (e.g., "1h", "4h")
-            height: Image height in pixels
-            width: Image width in pixels
-            save_to_disk: If True, saves image to disk for testing
-            output_path: Optional custom output path for disk save
-            simple_mode: If True, creates simplified chart with only price data (recommended for AI)
-            timestamps: Optional pre-computed timestamps to avoid redundant conversion
-
         Returns:
             BytesIO object containing PNG image data, or file path if saved to disk
         """
@@ -162,20 +141,16 @@ class ChartGenerator:
                 ohlcv, pair_symbol, timeframe, height, width, timestamps, technical_history
             )
 
-            # Generate the image with retry logic to handle kaleido/choreographer issues
             img_bytes = await self._retry_image_export(fig, img_format="png", width=width, height=height, scale=1)
 
             if save_to_disk:
-                # Save to disk for testing purposes
                 if output_path is None:
-                    # Generate timestamp
                     if self.format_utils:
                         timestamp = self.format_utils.format_current_time("%Y%m%d_%H%M%S")
                     else:
                         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
                     chart_type = "simple" if simple_mode else "full"
-                    # Use config path if available
                     base_path = self.config.DEBUG_CHART_SAVE_PATH if self.config else "test_images"
 
                     filename = f"{pair_symbol.replace('/', '')}_{timeframe}_{chart_type}_AI_analysis_{timestamp}.png"
@@ -189,7 +164,6 @@ class ChartGenerator:
 
                 if self.logger:  # noqa: SIM102
                     if len(ohlcv) > 0:
-                        # Parse timestamps with or without format_utils
                         if self.format_utils:
                             first_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[0][0])
                             last_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[-1][0])
@@ -199,11 +173,10 @@ class ChartGenerator:
 
                         first_time = first_time_dt.strftime("%Y-%m-%d %H:%M") if first_time_dt else "N/A"
                         last_time = last_time_dt.strftime("%Y-%m-%d %H:%M") if last_time_dt else "N/A"
-                        current_price = ohlcv[-1][4]  # Close price of last candle
+                        current_price = ohlcv[-1][4]
                         self.logger.info("📈 Data range: %s to %s | Current price: %s", first_time, last_time, current_price)
 
                 return output_path
-            # Return BytesIO for memory efficiency
             img_buffer = io.BytesIO(img_bytes)
             img_buffer.seek(0)
 
@@ -228,16 +201,6 @@ class ChartGenerator:
         technical_history: dict[str, np.ndarray] | None = None
     ) -> go.Figure:
         """Create a multi-panel chart with price, RSI, Volume, and CMF/OBV for AI pattern analysis.
-
-        Args:
-            ohlcv: OHLCV data array
-            pair_symbol: Trading pair symbol
-            timeframe: Chart timeframe
-            height: Chart height
-            width: Chart width
-            timestamps: Optional pre-computed timestamps to avoid redundant conversion
-            technical_history: Optional dict containing indicator arrays (rsi, sma_50, sma_200, cmf, obv)
-
         Returns:
             Plotly figure object with 4 subplots
         """
@@ -291,7 +254,6 @@ class ChartGenerator:
         closes = ohlcv[:, 4].astype(float)
         volumes = ohlcv[:, 5].astype(float) if ohlcv.shape[1] > 5 else np.zeros(len(ohlcv))
 
-        # Slice indicator arrays to match displayed candle count
         def slice_indicator(arr: np.ndarray | None) -> np.ndarray | None:
             if arr is None or len(arr) == 0:
                 return None
@@ -336,7 +298,6 @@ class ChartGenerator:
         )
         fig.add_trace(candle, row=1, col=1)
 
-        # Add SMA 50 overlay (orange) - Short-term trend
         if series.sma_50_data is not None and len(series.sma_50_data) == len(series.timestamps_py):
             fig.add_trace(go.Scatter(
                 x=series.timestamps_py,
@@ -347,7 +308,6 @@ class ChartGenerator:
                 hoverinfo="name+y"
             ), row=1, col=1)
 
-        # Add SMA 200 overlay (purple) - Long-term trend
         if series.sma_200_data is not None and len(series.sma_200_data) == len(series.timestamps_py):
             fig.add_trace(go.Scatter(
                 x=series.timestamps_py,
@@ -358,7 +318,6 @@ class ChartGenerator:
                 hoverinfo="name+y"
             ), row=1, col=1)
 
-        # ROW 2: RSI indicator
         if series.rsi_data is not None and len(series.rsi_data) == len(series.timestamps_py):
             fig.add_trace(go.Scatter(
                 x=series.timestamps_py,
@@ -368,14 +327,10 @@ class ChartGenerator:
                 line={"color": self.ai_colors["rsi"], "width": 1.5},
                 hoverinfo="name+y"
             ), row=2, col=1)
-            # Overbought line (70)
             fig.add_hline(y=70, row=2, col=1, line={"color": self.ai_colors["rsi_overbought"], "width": 1, "dash": "dash"})  # type: ignore[arg-type]
-            # Oversold line (30)
             fig.add_hline(y=30, row=2, col=1, line={"color": self.ai_colors["rsi_oversold"], "width": 1, "dash": "dash"})  # type: ignore[arg-type]
-            # Neutral line (50)
             fig.add_hline(y=50, row=2, col=1, line={"color": "#666666", "width": 0.5, "dash": "dot"})  # type: ignore[arg-type]
 
-        # ROW 3: Volume bars (colored by candle direction)
         volume_colors = [self.ai_colors["volume_up"] if series.closes[i] >= series.opens[i] else self.ai_colors["volume_down"] for i in range(len(series.closes))]
         fig.add_trace(go.Bar(
             x=series.timestamps_py,
@@ -385,7 +340,6 @@ class ChartGenerator:
             opacity=0.7
         ), row=3, col=1)
 
-        # ROW 4: CMF (left y-axis, area) + OBV (right y-axis, line)
         if series.cmf_data is not None and len(series.cmf_data) == len(series.timestamps_py):
             fig.add_trace(go.Scatter(
                 x=series.timestamps_py,
@@ -397,7 +351,6 @@ class ChartGenerator:
                 fillcolor="rgba(0, 255, 255, 0.3)",
                 hoverinfo="name+y"
             ), row=4, col=1, secondary_y=False)
-            # CMF zero line
             fig.add_hline(y=0, row=4, col=1, line={"color": "#888888", "width": 1, "dash": "dash"})  # type: ignore[arg-type]
 
         if series.obv_data is not None and len(series.obv_data) == len(series.timestamps_py):
@@ -461,14 +414,12 @@ class ChartGenerator:
             xaxis_rangeslider_visible=False
         )
 
-        # Calculate x-axis range with small padding (2 candles of future space)
         if len(series.timestamps_py) > 1:
             delta = series.timestamps_py[-1] - series.timestamps_py[-2]
             x_range = [series.timestamps_py[0], series.timestamps_py[-1] + (delta * 2)]
         else:
             x_range = None
 
-        # Configure all 4 x-axes (shared, but show labels on indicator subplots)
         common_xaxis = {
             "showgrid": True,
             "gridwidth": 1.0,
@@ -476,7 +427,7 @@ class ChartGenerator:
             "zeroline": False,
             "tickformat": "%m/%d %H:%M",
             "tickangle": -45,
-            "dtick": 12*60*60*1000,  # 12 hour intervals (in milliseconds)
+            "dtick": 12*60*60*1000,
             "type": "date",
             "range": x_range,
             "tickfont": {"size": 18},
@@ -484,14 +435,11 @@ class ChartGenerator:
             "linewidth": 1,
             "linecolor": self.ai_colors["grid"]
         }
-        # Price chart - no x-axis labels (too cluttered)
         fig.update_xaxes(**common_xaxis, showticklabels=False, row=1, col=1)
-        # RSI, Volume, CMF - show x-axis labels for AI readability
         fig.update_xaxes(**common_xaxis, showticklabels=True, row=2, col=1)
         fig.update_xaxes(**common_xaxis, showticklabels=True, row=3, col=1)
         fig.update_xaxes(**common_xaxis, showticklabels=True, title_text="Date/Time", row=4, col=1)
 
-        # Y-axis configurations
         common_yaxis = {
             "showgrid": True,
             "gridwidth": 1.0,
@@ -500,13 +448,9 @@ class ChartGenerator:
             "side": "right",
             "tickfont": {"size": 20}
         }
-        # Row 1: Price - use dtick=500 for $500 intervals (suitable for BTC prices)
         fig.update_yaxes(**common_yaxis, title_text="Price", tickformat=y_tickformat, dtick=500, row=1, col=1)
-        # Row 2: RSI (0-100 range)
         fig.update_yaxes(**common_yaxis, title_text="RSI", range=[0, 100], nticks=5, row=2, col=1)
-        # Row 3: Volume
         fig.update_yaxes(**common_yaxis, title_text="Vol", nticks=4, row=3, col=1)
-        # Row 4: CMF (primary y-axis, left), OBV (secondary y-axis, right)
         fig.update_yaxes(
             showgrid=True, gridwidth=1.0, gridcolor=self.ai_colors["grid"],
             zeroline=False, tickfont={"size": 20},
@@ -514,7 +458,6 @@ class ChartGenerator:
         )
         fig.update_yaxes(**common_yaxis, title_text="OBV", nticks=4, row=4, col=1, secondary_y=True)
 
-        # Add current price horizontal line on price chart
         fig.add_hline(y=float(series.closes[-1]), row=1, col=1, line={"color": "#666666", "width": 1, "dash": "dot"})  # type: ignore[arg-type]
 
     def _add_swing_annotations(self, fig: go.Figure, series: "ChartSeries", width: int) -> None:
@@ -527,7 +470,6 @@ class ChartGenerator:
                         line={"color": "rgba(80, 80, 80, 0.5)", "width": 1, "dash": "longdash"}
                     )
 
-        # Local swing points (pivot series.highs/series.lows) on price chart
         window = 8
         if len(series.highs) > window * 2:
             for i in range(window, len(series.highs) - window):
@@ -550,7 +492,6 @@ class ChartGenerator:
                         row=1, col=1
                     )
 
-        # Global MAX/MIN annotations
         idx_high = int(np.argmax(series.highs))
         idx_low = int(np.argmin(series.lows))
         fig.add_annotation(
@@ -575,9 +516,8 @@ class ChartGenerator:
     def _add_price_grid_lines(self, fig: go.Figure, series: "ChartSeries", width: int) -> None:
         """Draw horizontal price grid lines at round levels."""
         price_min, price_max = float(np.min(series.lows)), float(np.max(series.highs))
-        # Determine appropriate interval based on price magnitude
         if price_max > 10000:
-            round_interval = 2000  # $2000 intervals for BTC-like prices
+            round_interval = 2000
         elif price_max > 1000:
             round_interval = 500
         elif price_max > 100:
@@ -586,7 +526,6 @@ class ChartGenerator:
             round_interval = 5
         else:
             round_interval = 1
-        # Calculate round price levels within visible range
         start_level = int(price_min // round_interval) * round_interval
         end_level = int(price_max // round_interval + 1) * round_interval
         for level in range(start_level, end_level + round_interval, round_interval):
@@ -602,10 +541,9 @@ class ChartGenerator:
     def _add_ohlc_and_volume_labels(self, fig: go.Figure, series: "ChartSeries") -> None:
         """Label sampled OHLC values and the highest-volume candles."""
         price_min, price_max = float(np.min(series.lows)), float(np.max(series.highs))
-        ohlc_interval = max(12, len(series.closes) // 10)  # At least 12, or ~10 annotations total
+        ohlc_interval = max(12, len(series.closes) // 10)
         for i in range(ohlc_interval, len(series.closes) - 5, ohlc_interval):
             o, h, low, c = series.opens[i], series.highs[i], series.lows[i], series.closes[i]
-            # Position annotation above or below candle based on available space
             is_bullish = c >= o
             y_pos = h + (price_max - price_min) * 0.02 if is_bullish else low - (price_max - price_min) * 0.02
             ay_offset = -40 if is_bullish else 40
@@ -622,12 +560,10 @@ class ChartGenerator:
                 row=1, col=1
             )
 
-        # ENHANCEMENT 3: Volume labels on significant bars (top 5 volume bars)
-        vol_threshold = np.percentile(series.volumes, 85)  # Top 15% volume
+        vol_threshold = np.percentile(series.volumes, 85)
         vol_labeled_count = 0
         for i in range(len(series.volumes)):
             if series.volumes[i] >= vol_threshold and vol_labeled_count < 5:
-                # Format volume (K for thousands, M for millions)
                 vol_val = series.volumes[i]
                 if vol_val >= 1_000_000:
                     vol_str = f"{vol_val/1_000_000:.1f}M"
@@ -653,7 +589,6 @@ class ChartGenerator:
         if series.sma_200_data is not None:
             sma_legend.append(f"<span style='color:{self.ai_colors['sma_200']}'>━</span> SMA 200 (Long-term trend)")
         if sma_legend:
-            # Add golden/death cross hint
             if series.sma_50_data is not None and series.sma_200_data is not None:
                 sma_legend.append("<b>Golden Cross:</b> SMA50 crosses above SMA200 = Bullish")
                 sma_legend.append("<b>Death Cross:</b> SMA50 crosses below SMA200 = Bearish")
@@ -669,7 +604,6 @@ class ChartGenerator:
                 align="left"
             )
 
-        # RSI interpretation annotation
         if series.rsi_data is not None:
             current_rsi = series.rsi_data[-1] if not math.isnan(series.rsi_data[-1]) else 0
             fig.add_annotation(
@@ -681,7 +615,6 @@ class ChartGenerator:
                 bgcolor="rgba(0,0,0,0.7)"
             )
 
-        # CMF/OBV interpretation annotation
         cmf_obv_legend = []
         if series.cmf_data is not None:
             current_cmf = series.cmf_data[-1] if not math.isnan(series.cmf_data[-1]) else 0
@@ -715,5 +648,4 @@ class ChartSeries(NamedTuple):
     sma_200_data: np.ndarray | None
     cmf_data: np.ndarray | None
     obv_data: np.ndarray | None
-
 

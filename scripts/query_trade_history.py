@@ -39,7 +39,6 @@ import argparse
 import sys
 from pathlib import Path
 
-# Resolve the database path relative to the repo root.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "data" / "trading" / "trade_history.db"
 
@@ -199,12 +198,10 @@ def main() -> None:
     )
     sub = parser.add_subparsers(dest="command", help="Command to run")
 
-    # recent
     p_recent = sub.add_parser("recent", help="Show recent trades")
     p_recent.add_argument("--limit", type=int)
     p_recent.add_argument("--order", choices=["DESC", "ASC"])
 
-    # search
     p_search = sub.add_parser("search", help="Search trades")
     p_search.add_argument("--symbol")
     p_search.add_argument("--action")
@@ -214,7 +211,6 @@ def main() -> None:
     p_search.add_argument("--offset", type=int)
     p_search.add_argument("--order", choices=["DESC", "ASC"])
 
-    # stats
     sub.add_parser("stats", help="Show aggregate statistics")
 
     args = parser.parse_args()

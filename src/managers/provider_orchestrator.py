@@ -34,11 +34,6 @@ class ProviderOrchestrator:
     ) -> None:
         """
         Initialize the provider orchestrator.
-
-        Args:
-            logger: Logger instance
-            config: Configuration instance
-            clients: Container with all AI provider clients
         """
         self.logger = logger
         self.config = config
@@ -128,14 +123,6 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Invoke a single provider and return structured result.
-
-        Args:
-            provider: Provider key (googleai, openrouter, local)
-            messages: Chat messages
-            chart: Whether this is a chart analysis request
-            chart_image: Optional chart image for analysis
-            model: Optional model override
-
         Returns:
             InvocationResult with success status, response, and metadata
         """
@@ -184,14 +171,6 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Try providers in order, returning first successful result.
-
-        Args:
-            providers: list of provider keys to try in order
-            messages: Chat messages
-            chart: Whether this is a chart analysis request
-            chart_image: Optional chart image
-            model: Optional model override
-
         Returns:
             InvocationResult from first successful provider, or last failure
         """
@@ -221,12 +200,6 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Get text response using single provider or fallback chain.
-
-        Args:
-            effective_provider: Provider key or 'all' for fallback chain
-            messages: Chat messages
-            model: Optional model override
-
         Returns:
             InvocationResult with response
         """
@@ -256,13 +229,6 @@ class ProviderOrchestrator:
     ) -> InvocationResult:
         """
         Get chart analysis response using single provider or fallback chain.
-
-        Args:
-            effective_provider: Provider key or 'all' for fallback chain
-            messages: Chat messages
-            chart_image: Chart image for analysis
-            model: Optional model override
-
         Returns:
             InvocationResult with response
         """

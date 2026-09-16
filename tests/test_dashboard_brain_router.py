@@ -9,11 +9,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.dashboard.dashboard_state import DashboardState
-from src.dashboard.routers.brain import (
-    BrainRouter,
-    _build_current_market_context,
-    _extract_market_status,
+from src.dashboard.decision_presenter import (
+    build_current_market_context,
+    extract_market_status,
 )
+from src.dashboard.routers.brain import BrainRouter
 from src.trading.data_models import MarketConditions, Position, VectorSearchResult
 
 
@@ -54,7 +54,7 @@ def test_build_current_market_context_uses_legacy_response_indicators(tmp_path):
     )
     logger = MagicMock()
 
-    display_context, query_document = _build_current_market_context(config, logger)
+    display_context, query_document = build_current_market_context(config, logger)
 
     assert display_context.startswith("BEARISH + Low ADX + LOW Volatility")
     assert "MACD BEARISH" in display_context
@@ -90,7 +90,7 @@ def test_build_current_market_context_includes_exit_execution_settings(tmp_path)
         TAKE_PROFIT_CHECK_INTERVAL="4h",
     )
 
-    display_context, query_document = _build_current_market_context(config, MagicMock())
+    display_context, query_document = build_current_market_context(config, MagicMock())
 
     assert "Exit Execution: SL hard/15m | TP soft/4h" in display_context
     assert "Exit Execution: SL hard/15m | TP soft/4h" in query_document
@@ -111,7 +111,7 @@ def test_build_current_market_context_ignores_non_object_previous_response(tmp_p
         TAKE_PROFIT_CHECK_INTERVAL="15m",
     )
 
-    display_context, query_document = _build_current_market_context(config, MagicMock())
+    display_context, query_document = build_current_market_context(config, MagicMock())
 
     assert display_context == ""
     assert query_document == ""
@@ -130,7 +130,7 @@ def test_extract_market_status_uses_text_and_indicators_without_json_parser():
         }
     }
 
-    status = _extract_market_status(data, parser)
+    status = extract_market_status(data, parser)
 
     parser.extract_json_block.assert_called_once()
     assert status["action"] == "UPDATE"
@@ -156,7 +156,7 @@ def test_extract_market_status_parses_json_confidence_with_technical_data_presen
         }
     }
 
-    status = _extract_market_status(data, parser)
+    status = extract_market_status(data, parser)
 
     parser.extract_json_block.assert_called_once()
     assert status["action"] == "UPDATE"
@@ -505,9 +505,6 @@ async def test_get_vector_details_omits_match_factors_without_current_context():
     assert result["experiences"][0]["match_factors"] is None
     vector_memory._build_match_factors.assert_not_called()
 
-
-
-# ── get_post_mortems endpoint tests ──────────────────────────────
 
 @pytest.mark.asyncio
 async def test_get_post_mortems_returns_empty_when_repo_is_none():

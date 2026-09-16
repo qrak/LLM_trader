@@ -44,20 +44,13 @@ def _is_exchange_rate_limit_error(e: ccxt.ExchangeError) -> bool:
 
 
 def retry_async(max_retries: int = -1, initial_delay: float = 1, backoff_factor: float = 2, max_delay: float = 3600):
-    """Generic retry decorator for async instance methods.
-
-    Args:
-        max_retries: -1 for infinite retries, otherwise max attempts before raising.
-        initial_delay: Initial backoff delay seconds.
-        backoff_factor: Multiplier applied each retry.
-        max_delay: Upper bound for backoff delay.
-    """
+    """Generic retry decorator for async instance methods."""
     def decorator(func: Any):
         @functools.wraps(func)
         async def wrapper(self, *args: Any, **kwargs: Any):
             context = _RetryContext(self, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay)
 
-            while True:  # Controlled exit via return or raise
+            while True:
                 try:
                     return await func(self, *args, **kwargs)
                 except _NETWORK_EXCEPTIONS as e:
@@ -150,12 +143,10 @@ class _RetryContext:
 
 def _should_retry_api_error(error_value: Any) -> bool:
     """Check if an API error should trigger a retry."""
-    # Top-level error codes
     if isinstance(error_value, dict):
         error_code = error_value.get("code")
-        if error_code in (500, 502, 503, 504):  # Server errors
+        if error_code in (500, 502, 503, 504):
             return True
-        # Check for retryable flag from OpenRouter
         if error_value.get("metadata", {}).get("raw", {}).get("retryable"):
             return True
     return error_value == "timeout"
@@ -204,13 +195,12 @@ class _ApiRetryContext:
                     attempt += 1
                     continue
 
-                return response  # success or non-retryable error structure
+                return response
 
             except Exception as e:
                 self._log_exception(e)
                 raise
 
-        # Exhausted retries (only reached on retryable error path)
         return last_response
 
     def _is_retryable_response(self, response: Any) -> bool:

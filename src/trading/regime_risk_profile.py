@@ -16,16 +16,15 @@ from typing import Any, ClassVar
 class RegimeRiskProfile(Enum):
     """Risk profiles derived from market regime, not win-rate history."""
 
-    AGGRESSIVE = "aggressive"       # ranging + low vol → tighter SL, wider TP, bigger size
-    NEUTRAL = "neutral"             # transitional / trending / default
-    CONSERVATIVE = "conservative"   # high volatility or unclear regime
+    AGGRESSIVE = "aggressive"
+    NEUTRAL = "neutral"
+    CONSERVATIVE = "conservative"
 
 
-# (SL atr_mult, TP atr_mult, position cap fraction) per profile
 _PROFILE_PARAMS: dict[RegimeRiskProfile, tuple[float, float, float]] = {
-    RegimeRiskProfile.AGGRESSIVE:   (1.5, 3.0, 0.10),   # tighter SL + wider TP + 10% max
-    RegimeRiskProfile.NEUTRAL:      (2.0, 4.0, 0.08),   # standard
-    RegimeRiskProfile.CONSERVATIVE: (2.5, 5.0, 0.05),   # wider SL (survives noise), wider TP for R:R
+    RegimeRiskProfile.AGGRESSIVE:   (1.5, 3.0, 0.10),
+    RegimeRiskProfile.NEUTRAL:      (2.0, 4.0, 0.08),
+    RegimeRiskProfile.CONSERVATIVE: (2.5, 5.0, 0.05),
 }
 
 
@@ -35,7 +34,6 @@ class RegimeRiskProfileSelector:
     Pure regime-driven — no brain/trade-history dependency. Works from day one.
     """
 
-    # Thresholds
     CHOPPINESS_RANGING: ClassVar[float] = 61.8
     CHOPPINESS_TRENDING: ClassVar[float] = 38.2
     HIGH_VOLATILITY_ATR_PCT: ClassVar[float] = 4.0
@@ -47,35 +45,23 @@ class RegimeRiskProfileSelector:
         atr_percentage: float = 2.0,
     ) -> RegimeRiskProfile:
         """Select profile based on regime and volatility.
-
-        Args:
-            choppiness: Choppiness index (0-100). None = assume transitional.
-            atr_percentage: ATR as % of current price.
-
         Returns:
             RegimeRiskProfile enum.
         """
-        # 1. Safety: high volatility → conservative regardless of regime
         if atr_percentage >= self.HIGH_VOLATILITY_ATR_PCT:
             return RegimeRiskProfile.CONSERVATIVE
 
-        # 2. Safety: no choppiness data → neutral
         if choppiness is None:
             return RegimeRiskProfile.NEUTRAL
 
-        # 3. Ranging (high choppiness) + low/medium vol → aggressive mean-reversion
         if choppiness > self.CHOPPINESS_RANGING:
             if atr_percentage < self.LOW_VOLATILITY_ATR_PCT:
-                # Low vol range → highest confidence mean-reversion
                 return RegimeRiskProfile.AGGRESSIVE
-            # Medium vol range → still tradeable with standard params
             return RegimeRiskProfile.NEUTRAL
 
-        # 4. Trending (low choppiness) → standard trend-following
         if choppiness < self.CHOPPINESS_TRENDING:
             return RegimeRiskProfile.NEUTRAL
 
-        # 5. Transitional (38-62) → neutral
         return RegimeRiskProfile.NEUTRAL
 
     @staticmethod
@@ -127,7 +113,6 @@ class RegimeRiskProfileSelector:
             f"Profile reason: {reason}",
         ]
 
-        # --- Brain-learned per-profile performance ---
         if brain_stats:
             profile_key = profile.value
             my_stats = brain_stats.get(profile_key, {})
@@ -154,7 +139,6 @@ class RegimeRiskProfileSelector:
                          f"({wr:.0f}% WR). Standard risk parameters apply.")
                     ])
 
-            # Show other profiles for context
             other_lines = []
             for key, stats in brain_stats.items():
                 if key != profile_key and stats.get("total_trades", 0) >= 3:

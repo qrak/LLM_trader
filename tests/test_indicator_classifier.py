@@ -25,8 +25,6 @@ from src.utils.indicator_classifier import (
     format_exit_execution_context,
 )
 
-# ── classify_adx_label ──────────────────────────────────────────
-
 
 class TestClassifyAdxLabel:
     """classify_adx_label(adx: float) → str"""
@@ -54,9 +52,6 @@ class TestClassifyAdxLabel:
 
     def test_very_high_adx(self):
         assert classify_adx_label(80) == "High ADX"
-
-
-# ── classify_rsi_label ──────────────────────────────────────────
 
 
 class TestClassifyRsiLabel:
@@ -104,9 +99,6 @@ class TestClassifyRsiLevelDelegation:
         for rsi in [10, 30, 40, 50, 60, 70, 90]:
             td = {"rsi": rsi}
             assert classify_rsi_level(td) == classify_rsi_label(rsi)
-
-
-# ── Other classifiers (existing behavior coverage) ──────────────
 
 
 class TestClassifyTrendDirection:
@@ -194,9 +186,6 @@ class TestClassifyOrderBookBias:
 
     def test_balanced_default(self):
         assert classify_order_book_bias(None) == "BALANCED"
-
-
-# ── build_context_string_from_technical_data ─────────────────
 
 
 class TestBuildContextString:

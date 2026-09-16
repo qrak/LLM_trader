@@ -330,7 +330,6 @@ class TestDeadLetter:
         handler = _make_handler()
         handler.logger = MagicMock()
 
-        # Cause open() to fail: path where parent is a file, not a directory
         import tempfile
 
         import src.trading.executor_handler as mod
@@ -365,7 +364,6 @@ class TestForward:
 
         payload = {"timestamp": "t", "symbol": "BTC/USDC", "signal": "BUY"}
 
-        # Patch httpx at module level so @retry_async sees the mock too
         with patch("src.trading.executor_handler.httpx.AsyncClient", return_value=mock_client):
             await handler._forward(payload)
 
@@ -389,7 +387,6 @@ class TestForward:
             await handler._forward(payload)
             await handler._forward(payload)
 
-            # AsyncClient should only be constructed ONCE across multiple forwards
             assert mock_cls.call_count == 1
             assert mock_client.post.call_count == 2
 

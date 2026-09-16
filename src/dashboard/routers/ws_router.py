@@ -18,20 +18,15 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket) -> bool:
         """Accept connection if limits allow."""
-        # Check global limit
         if len(self.active_connections) >= self.max_connections:
-            # 1013: Try Again Later
             await websocket.close(code=1013, reason="Server busy")
             return False
 
-        # Check per-IP limit
         client_ip = websocket.client.host if websocket.client else "unknown"
         if self.ip_counts[client_ip] >= self.max_per_ip:
-            # 1008: Policy Violation
             await websocket.close(code=1008, reason="Rate limit exceeded")
             return False
 
-        # Pre-increment counters to prevent race conditions during await accept()
         self.active_connections.add(websocket)
         self.ip_counts[client_ip] += 1
 
@@ -39,7 +34,6 @@ class ConnectionManager:
             await websocket.accept()
             return True
         except Exception:  # noqa: BLE001
-            # Rollback if accept fails
             self.disconnect(websocket)
             return False
 
@@ -74,15 +68,12 @@ class WebSocketRouter:
 
     async def websocket_endpoint(self, websocket: WebSocket):
         """WebSocket endpoint for real-time dashboard updates."""
-        # Security: Validate Origin to prevent CSWSH
         origin = websocket.headers.get("origin")
         if origin:
             allowed = False
 
-            # 1. Allow if matches Host (Same Origin)
             host = websocket.headers.get("host")
             if host:
-                # Robustly extract host from origin
                 try:
                     parsed = urlparse(origin)
                     origin_host = parsed.netloc
@@ -92,7 +83,6 @@ class WebSocketRouter:
                 if origin_host == host:
                     allowed = True
 
-            # 2. Allow if explicitly configured in CORS
             if not allowed and self.config and self.config.DASHBOARD_ENABLE_CORS:
                 cors_origins = self.config.DASHBOARD_CORS_ORIGINS
                 if "*" in cors_origins or origin in cors_origins:

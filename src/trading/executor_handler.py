@@ -41,7 +41,7 @@ class ExecutorHandler:
     ) -> None:
         self._persistence = persistence
         self._config = config
-        self.logger = logger  # named 'logger' for @retry_async convention
+        self.logger = logger
         self._http_client: httpx.AsyncClient | None = None
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -56,7 +56,6 @@ class ExecutorHandler:
             await self._http_client.aclose()
             self._http_client = None
 
-    # ── public API ────────────────────────────────────────────────────────
 
     async def handle(
         self,
@@ -90,8 +89,6 @@ class ExecutorHandler:
         try:
             forward_success = await self._forward(payload)
         except Exception:  # noqa: BLE001
-            # @retry_async exhausted all retries — executor is unreachable.
-            # Write to dead-letter so we can replay later.
             signal = payload.get("signal")
             symbol_name = payload.get("symbol")
             self.logger.error(
@@ -105,9 +102,6 @@ class ExecutorHandler:
         if not forward_success:
             self._persist(payload)
         else:
-            # HTTP path delivered the decision — remove any stale fallback file
-            # so the executor's file poller doesn't re-read an old decision on
-            # every restart ("Already executed (duplicate content hash)").
             try:
                 self._persistence.clear_latest_decision()
             except Exception:
@@ -117,7 +111,6 @@ class ExecutorHandler:
                 )
         return forward_success
 
-    # ── internal ──────────────────────────────────────────────────────────
 
     def _build(
         self,
@@ -128,8 +121,6 @@ class ExecutorHandler:
         """Produce a CCXT-ready payload dict, or None if suppressed."""
         if not analysis or not symbol:
             return None
-        # NEVER forward when strategy_decision is None — the analysis was
-        # never validated by TradingStrategy (processing error, guard failure, etc.).
         if strategy_decision is None:
             return None
         signal = analysis.get("signal")
@@ -237,7 +228,6 @@ class ExecutorHandler:
 
         if resp.status_code == 200:
             self.logger.info("Executor queued: %s %s", signal, symbol)
-            # Executor is reachable — replay any previously failed forwards
             await self._replay_dead_letters()
             return True
 

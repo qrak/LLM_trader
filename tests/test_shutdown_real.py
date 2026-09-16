@@ -33,7 +33,6 @@ async def test_real_scenario():
 
     errors_before = _count_error_entries()
 
-    # Simulate uvicorn's capture_signals context manager
     captured_signal = None
     old_sigint = signal.signal(signal.SIGINT, lambda s, f: None)
 
@@ -63,11 +62,8 @@ async def test_real_scenario():
         g = capture_signals_ctx()
         await g.__anext__()
         try:
-            # Inside the context manager, run a lifespan-like task
             lifespan_task = asyncio.create_task(starlette_lifespan())
             await asyncio.sleep(0.02)
-            # Now simulate the dashboard server being cancelled
-            # (like what happens during graceful shutdown)
             return lifespan_task
         finally:
             try:
@@ -77,27 +73,20 @@ async def test_real_scenario():
             except Exception as e:
                 print(f"[TEST] capture_signals __exit__ raised: {type(e).__name__}: {e}")
 
-    # --- Run the simulation ---
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     try:
-        # Simulate Ctrl+C
         signal.raise_signal(signal.SIGINT)
 
-        # Run the uvicorn-like server
         loop.run_until_complete(uvicorn_serve())
 
-        # Now simulate what shutdown_gracefully does:
-        # The server task left behind by run_until_complete is cancelled
         remaining = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()]
         print(f"[TEST] Remaining tasks before cancel: {len(remaining)}")
 
-        # Cancel the lifespan task (like the server task)
         for t in remaining:
             t.cancel()
 
-        # Wait for them to finish
         try:
             loop.run_until_complete(
                 asyncio.wait_for(asyncio.wait(remaining), timeout=2.0)
@@ -118,10 +107,8 @@ async def test_real_scenario():
         except Exception:
             pass
 
-    # Restore signal handler
     signal.signal(signal.SIGINT, old_sigint)
 
-    # Check errors.log for any new entries
     errors_after = _count_error_entries()
     new_errors = errors_after - errors_before
     if new_errors > 0:
@@ -145,7 +132,6 @@ def _print_last_errors(n):
         return
     with open(path) as f:
         lines = f.readlines()
-    # Find the last N entries
     traces = []
     for line in lines:
         if "Traceback" in line:

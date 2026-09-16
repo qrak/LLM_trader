@@ -23,7 +23,6 @@ class UnifiedParser:
         self.logger = logger
         self.format_utils = format_utils
 
-        # Numeric fields that should be converted from strings with their defaults
         self._numeric_fields = {
             "risk_ratio": 1.0,
             "risk_reward_ratio": None,
@@ -37,8 +36,6 @@ class UnifiedParser:
             "bullish_scenario": 0.0,
             "bearish_scenario": 0.0
         }
-
-
 
 
     def parse_ai_response(self, raw_text: str) -> dict[str, Any]:
@@ -136,11 +133,6 @@ class UnifiedParser:
         The LAST parseable ```json block wins: a repaired response carries the
         contract block appended at the end, so an earlier broken block must not
         shadow it.
-
-        Args:
-            text: Raw text containing the JSON block(s)
-            unwrap_key: If specified, unwrap this key from the result (e.g., 'analysis')
-
         Returns:
             Parsed JSON dict or None if no block parses
         """
@@ -162,10 +154,6 @@ class UnifiedParser:
         """Extract text content before a JSON block.
 
         Useful for separating reasoning/explanation from structured JSON data.
-
-        Args:
-            text: Raw text potentially containing JSON block
-
         Returns:
             Text before the JSON block, or full text if no JSON found
         """
@@ -177,15 +165,9 @@ class UnifiedParser:
         return text.strip()
 
 
-
-
     @staticmethod
     def format_error_response(error_message: str) -> str:
         """Create a standardized error response in JSON format.
-
-        Args:
-            error_message: Error message to include in the response
-
         Returns:
             Formatted error response with JSON structure and markdown
         """
@@ -201,21 +183,17 @@ class UnifiedParser:
         if not symbol:
             return ""
 
-        # Handle symbols with explicit separators first
         if "/" in symbol:
             return symbol.split("/")[0].upper()
         if "-" in symbol:
             return symbol.split("-")[0].upper()
 
-        # Handle concatenated symbols by removing common quote currencies
-        # longest quotes first - otherwise USD matches inside BUSD
         common_quotes = ["USDT", "USDC", "BUSD", "USD", "BTC", "ETH", "BNB"]
         symbol_upper = symbol.upper()
 
         for quote in common_quotes:
             if symbol_upper.endswith(quote):
                 base = symbol_upper[:-len(quote)]
-                # Special handling for BNB/BUSD ambiguity: BNBUSD -> BN (via BUSD) is wrong, should be BNB (via USD)
                 if quote == "BUSD" and base == "BN":
                     continue
                 return base
@@ -230,15 +208,12 @@ class UnifiedParser:
         coins_mentioned = set()
         text_upper = text.upper()
 
-        # Find potential tickers using regex
         potential_tickers = set(re.findall(r"\b[A-Z]{2,6}\b", text_upper))
 
-        # Validate against known tickers
         for ticker in potential_tickers:
             if ticker in known_tickers:
                 coins_mentioned.add(ticker)
 
-        # Special handling for major cryptocurrencies
         text_lower = text.lower()
         if "bitcoin" in text_lower:
             coins_mentioned.add("BTC")
@@ -248,17 +223,10 @@ class UnifiedParser:
         return coins_mentioned
 
 
-
-
-
-
     def _normalize_numeric_fields(self, data: dict[str, Any]) -> dict[str, Any]:
         """Ensure numeric fields are properly typed at the data source."""
 
-        # Check analysis section
         analysis = data.get("analysis", {})
-        # LLM can emit "analysis": null / list / string — never crash the whole
-        # cycle on a malformed field; degrade to {} (NEUTRAL fallback) instead.
         if not isinstance(analysis, dict):
             analysis = {}
             data["analysis"] = analysis
@@ -266,7 +234,6 @@ class UnifiedParser:
             if field in analysis:
                 analysis[field] = self._parse_numeric_field(field, analysis[field], default_value)
 
-        # Normalize confluence_factors (new Chain-of-Thought scoring)
         confluence_factors = analysis.get("confluence_factors", {})
         if isinstance(confluence_factors, dict):
             for factor_key in ["trend_alignment", "momentum_strength", "volume_support",
@@ -276,7 +243,6 @@ class UnifiedParser:
                         confluence_factors[factor_key], 50.0
                     )
 
-        # Normalize key_levels arrays (support/resistance)
         key_levels = analysis.get("key_levels", {})
         if isinstance(key_levels, dict):
             for level_type in ["support", "resistance"]:
@@ -289,7 +255,6 @@ class UnifiedParser:
                             normalized_levels.append(val)
                     key_levels[level_type] = normalized_levels
 
-        # Check root level
         for field, default_value in self._numeric_fields.items():
             if field in data:
                 data[field] = self._parse_numeric_field(field, data[field], default_value)
@@ -302,9 +267,6 @@ class UnifiedParser:
         if numeric_value is None:
             return default_value
         if field == "position_size":
-            # Contract: a decimal fraction of capital (0.0-1.0). "5%" is an explicit
-            # percentage; a bare value > 1 is ambiguous (50 = 50%? 50x?) — drop it
-            # instead of guessing, so the risk manager falls back to profile sizing.
             if isinstance(value, str) and value.strip().endswith("%"):
                 return numeric_value / 100
             if numeric_value > 1:

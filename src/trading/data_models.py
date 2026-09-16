@@ -31,7 +31,6 @@ class MarketConditions(SerializableMixin):
     trend_strength: float = 0.0
     timeframe_alignment: str | None = None
     choppiness: float | None = None
-    # --- NEW: indicators enriched for vector DB learning (July 2026) ---
     vwap: float = 0.0
     mfi: float = 50.0
     cmf: float = 0.0
@@ -39,10 +38,8 @@ class MarketConditions(SerializableMixin):
     chandelier_long: float = 0.0
     pfe: float = 0.0
     supertrend_direction: str = "NEUTRAL"
-    # --- Social sentiment at position entry (for vector DB similarity) ---
-    social_sentiment_reddit: str = "NEUTRAL"     # BULLISH, SLIGHTLY_BULLISH, NEUTRAL, SLIGHTLY_BEARISH, BEARISH, NO_DATA
-    # --- Portfolio EV snapshot at position entry ---
-    portfolio_pnl_pct: float = 0.0                # portfolio P&L % at entry time
+    social_sentiment_reddit: str = "NEUTRAL"
+    portfolio_pnl_pct: float = 0.0
 
 
 @dataclass(slots=True)
@@ -55,53 +52,42 @@ class Position(SerializableMixin):
     entry_price: float
     stop_loss: float
     take_profit: float
-    size: float  # Quantity in base currency (e.g., BTC)
+    size: float
     entry_time: datetime
-    confidence: str  # HIGH, MEDIUM, LOW
-    direction: str   # LONG, SHORT
+    confidence: str
+    direction: str
     symbol: str
-    # Full entry-time market snapshot. Required: the brain must never match on
-    # reconstructed or defaulted condition values at close.
     conditions_at_entry: MarketConditions
-    # Confluence factors at entry time for factor performance learning
-    # Stored as tuple of (name, score) pairs for frozen dataclass compatibility
     confluence_factors: tuple = field(default_factory=tuple)
-    # Transaction fee paid at entry (in USDT)
     entry_fee: float = 0.0
-    quote_amount: float = 0.0   # Invested annual quote currency (e.g. USDT)
-    # AI's suggested position size as percentage of capital (0.0-1.0)
+    quote_amount: float = 0.0
     size_pct: float = 0.0
-    # Market conditions at entry for Brain learning
-    atr_at_entry: float = 0.0           # ATR value when position opened
-    atr_percentage_at_entry: float = 0.0  # ATR as % of price at entry (brain volatility matching)
-    volatility_level: str = "MEDIUM"    # HIGH, MEDIUM, LOW (derived from ATR%)
-    sl_distance_pct: float = 0.0        # abs(entry - SL) / entry as decimal
-    tp_distance_pct: float = 0.0        # abs(TP - entry) / entry as decimal
-    rr_ratio_at_entry: float = 0.0      # tp_distance / sl_distance
-    adx_at_entry: float = 0.0           # ADX value at entry time
-    rsi_at_entry: float = 50.0          # RSI value at entry time for threshold learning
-    # Extended market snapshot at entry for full brain context reconstruction
-    trend_direction_at_entry: str = "NEUTRAL"      # BULLISH/BEARISH/NEUTRAL
-    macd_signal_at_entry: str = "NEUTRAL"           # BULLISH/BEARISH/NEUTRAL
-    bb_position_at_entry: str = "MIDDLE"            # UPPER/MIDDLE/LOWER
-    volume_state_at_entry: str = "NORMAL"           # ACCUMULATION/NORMAL/DISTRIBUTION
-    market_sentiment_at_entry: str = "NEUTRAL"      # EXTREME_FEAR/FEAR/NEUTRAL/GREED/EXTREME_GREED
-    order_book_bias_at_entry: str = "BALANCED"      # BUY_PRESSURE/SELL_PRESSURE/BALANCED
-    stop_loss_type_at_entry: str = "unknown"        # soft/hard/unknown execution mode snapshot
+    atr_at_entry: float = 0.0
+    atr_percentage_at_entry: float = 0.0
+    volatility_level: str = "MEDIUM"
+    sl_distance_pct: float = 0.0
+    tp_distance_pct: float = 0.0
+    rr_ratio_at_entry: float = 0.0
+    adx_at_entry: float = 0.0
+    rsi_at_entry: float = 50.0
+    trend_direction_at_entry: str = "NEUTRAL"
+    macd_signal_at_entry: str = "NEUTRAL"
+    bb_position_at_entry: str = "MIDDLE"
+    volume_state_at_entry: str = "NORMAL"
+    market_sentiment_at_entry: str = "NEUTRAL"
+    order_book_bias_at_entry: str = "BALANCED"
+    stop_loss_type_at_entry: str = "unknown"
     stop_loss_check_interval_at_entry: str = "unknown"
-    take_profit_type_at_entry: str = "unknown"      # soft/hard/unknown execution mode snapshot
+    take_profit_type_at_entry: str = "unknown"
     take_profit_check_interval_at_entry: str = "unknown"
-    # Performance metrics (MAE/MFE)
-    max_drawdown_pct: float = 0.0       # Max adverse excursion (MAE)
-    max_profit_pct: float = 0.0         # Max favorable excursion (MFE)
-    # Risk profile at entry (for brain learning per-profile performance)
-    regime_profile: str = "NEUTRAL"     # aggressive/neutral/conservative
+    max_drawdown_pct: float = 0.0
+    max_profit_pct: float = 0.0
+    regime_profile: str = "NEUTRAL"
 
     def calculate_pnl(self, current_price: float) -> float:
         """Calculate unrealized P&L percentage."""
         if self.direction == "LONG":
             return ((current_price - self.entry_price) / self.entry_price) * 100
-        # SHORT
         return ((self.entry_price - current_price) / self.entry_price) * 100
 
     def update_metrics(self, current_price: float) -> None:
@@ -116,11 +102,6 @@ class Position(SerializableMixin):
 
     def calculate_closing_fee(self, close_price: float, fee_percent: float) -> float:
         """Calculate the transaction fee for closing this position.
-
-        Args:
-            close_price: Price at which position is closed
-            fee_percent: Fee percentage (default 0.075% for limit orders)
-
         Returns:
             Fee amount in USDT
         """
@@ -144,18 +125,18 @@ class TradeDecision(SerializableMixin):
     """Represents a trading decision from the AI."""
     timestamp: datetime
     symbol: str
-    action: str  # BUY, SELL, HOLD, CLOSE
-    confidence: str  # HIGH, MEDIUM, LOW
+    action: str
+    confidence: str
     price: float
     stop_loss: float | None = None
     take_profit: float | None = None
-    position_size: float = 0.0  # AI's suggested percentage of capital (0.0-1.0)
-    quote_amount: float = 0.0   # Invested quote currency amount (e.g. USDT)
-    quantity: float = 0.0  # Actual quantity in base currency (e.g., BTC)
-    fee: float = 0.0  # Transaction fee in quote currency (e.g. USDT)
+    position_size: float = 0.0
+    quote_amount: float = 0.0
+    quantity: float = 0.0
+    fee: float = 0.0
     reasoning: str = ""
     indicators_json: str | dict[str, Any] | None = None
-    order_id: str | None = None  # Correlation ID shared with the executor
+    order_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -217,11 +198,6 @@ class TradingMemory(SerializableMixin):
         initial_capital: float | None = None,
     ) -> str:
         """Generate a concise summary for prompt injection.
-
-        Args:
-            full_history: Complete trade history for calculating overall performance
-            initial_capital: Optional starting quote capital for total P&L percentage
-
         Returns:
             Formatted summary of last 5 decisions with overall P&L data from all trades
         """
@@ -229,23 +205,16 @@ class TradingMemory(SerializableMixin):
             return ""
 
         recent_source = full_history if full_history else self.decisions
-        recent = recent_source[-5:]  # Last 5 decisions for context
+        recent = recent_source[-5:]
         lines = []
         if recent:
             lines.append("## Recent Trading History (Last 5 Decisions):")
 
-        # Calculate P&L from FULL trade history, not just recent decisions.
-        # Only sort once and only when full_history is provided (it may have
-        # unsorted entries mixed across dates). In-memory decisions are already
-        # append-ordered.  For the common code path where full_history is plain
-        # self.decisions, we skip the sort entirely.
         history_to_analyze = full_history if full_history else self.decisions
-        # Helper to ensure timezone-aware timestamps for sorting
         def _ensure_utc(dt: datetime) -> datetime:
             if dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
             return dt
-        # Only sort when we have a full_history that differs from self.decisions
         if full_history is not None and full_history is not self.decisions:
             history_to_analyze = sorted(history_to_analyze, key=lambda x: _ensure_utc(x.timestamp))
         total_pnl_quote = 0.0
@@ -255,17 +224,15 @@ class TradingMemory(SerializableMixin):
         winning_trades = 0
         close_pnl_by_key: dict[str, float] = {}
 
-        # Track open positions to calculate P&L across entire history
         open_position = None
         for decision in history_to_analyze:
             if decision.action in ["BUY", "SELL"]:
                 open_position = decision
             elif decision.action in ["CLOSE", "CLOSE_LONG", "CLOSE_SHORT"] and open_position:
-                # Calculate P&L for closed trade
                 if open_position.action == "BUY":
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
                     pnl_quote = (decision.price - open_position.price) * open_position.quantity
-                else:  # SELL
+                else:
                     pnl_pct = ((open_position.price - decision.price) / open_position.price) * 100
                     pnl_quote = (open_position.price - decision.price) * open_position.quantity
 
@@ -278,7 +245,6 @@ class TradingMemory(SerializableMixin):
                 close_pnl_by_key[self._decision_key(decision)] = pnl_pct
                 open_position = None
 
-        # Format each recent decision for context
         for decision in recent:
             time_str = decision.timestamp.strftime("%Y-%m-%d %H:%M")
             reasoning = self._format_recent_reasoning(
@@ -290,7 +256,6 @@ class TradingMemory(SerializableMixin):
                 f"(Conf: {decision.confidence}) - {reasoning}"
             )
 
-        # Add overall performance summary from ALL closed trades
         if closed_trades > 0:
             pnl_pct_basis = initial_capital if initial_capital is not None else total_entry_quote
             total_pnl_pct = (total_pnl_quote / pnl_pct_basis) * 100 if pnl_pct_basis > 0 else 0.0
@@ -357,7 +322,7 @@ class RiskAssessment(SerializableMixin):
     tp_distance_pct: float
     rr_ratio: float
     volatility_level: str
-    regime_profile: str = "NEUTRAL"  # active RegimeRiskProfile at entry time
+    regime_profile: str = "NEUTRAL"
 
 
 @dataclass(slots=True)
@@ -368,7 +333,7 @@ class ClosedTradeResult(SerializableMixin):
     pnl_pct: float
     pnl_quote: float
     quantity: float
-    direction: str  # LONG, SHORT
+    direction: str
 
 
 @dataclass(slots=True)

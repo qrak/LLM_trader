@@ -21,9 +21,6 @@ if TYPE_CHECKING:
 class EVFrameworkFormatter:
     """Builds the Expected Value framework section for the system prompt."""
 
-    # Standard position cap used to anchor the worked fee example — the NEUTRAL
-    # regime profile cap held in RegimeRiskProfileSelector._PROFILE_PARAMS.
-    # tests/test_ev_formatter.py pins this against the trading-side constant.
     STANDARD_POSITION_PCT = 0.08
 
     def __init__(self, config: Config) -> None:
@@ -43,11 +40,7 @@ class EVFrameworkFormatter:
         return position_notional * self.fee_percent * 2
 
     def build_ev_framework_section(self, current_capital: float) -> str:
-        """Build the EV framework block injected into the system prompt.
-
-        Args:
-            current_capital: Current portfolio value from statistics tracker.
-        """
+        """Build the EV framework block injected into the system prompt."""
         pnl = current_capital - self.starting_capital
         pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
         side_fee_pct = self.fee_percent * 100
@@ -55,7 +48,7 @@ class EVFrameworkFormatter:
         standard_pct = self.STANDARD_POSITION_PCT * 100
         example_notional = current_capital * self.STANDARD_POSITION_PCT
         example_fee = self.round_trip_fee(example_notional)
-        breakeven_ev = example_fee * 1.5  # EV must exceed 1.5× the fee to be worth taking
+        breakeven_ev = example_fee * 1.5
 
         lines = [
             "",

@@ -259,7 +259,6 @@ class VectorMemoryAnalyticsMixin:
 
         return result
 
-    # RSI bucket labels (consistent with indicator_classifier.classify_rsi_level)
     RSI_BUCKETS: ClassVar[dict[str, tuple[float, float]]] = {
         "OVERSOLD": (0, 30),
         "WEAK": (30, 40),
@@ -543,7 +542,6 @@ class VectorMemoryAnalyticsMixin:
                 if meta.get("outcome") == "WIN" and meta.get("sl_distance_pct", 0) > 0:
                     sl_distances.append(meta["sl_distance_pct"] * 100)
 
-            # Compute rr_borderline_min FIRST so min_rr_recommended can clamp against it
             if rr_wins and rr_losses:
                 for test_rr in self.RR_THRESHOLDS:
                     wins = sum(1 for rr in rr_wins if rr < test_rr)

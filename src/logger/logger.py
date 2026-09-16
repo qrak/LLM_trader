@@ -16,8 +16,6 @@ from rich.traceback import install as install_rich_traceback
 
 install_rich_traceback()
 
-# Module-level fallback crash log path (set by install_crash_handler).
-# direct write path when logging is unavailable (shutdown/unraisable)
 _CRASH_LOG_PATH: str = ""
 
 
@@ -76,18 +74,15 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
     def emit(self, record):
         current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
 
-        # Always use the main logger directory, even for errors
         current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
 
         if self.is_error_handler:
-            # Force filename to be errors.log for error handler
             current_filename = os.path.join(current_log_dir, "errors.log")
         else:
             current_filename = os.path.join(
                 current_log_dir, f"{self.log_filename_prefix}{self.logger_name}.log"
             )
 
-        # Normalize paths for consistent comparison across platforms
         current_filename_norm = os.path.normpath(current_filename)
         try:
             basefilename_norm = os.path.normpath(self.baseFilename)
@@ -95,12 +90,10 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
             basefilename_norm = None
 
         if basefilename_norm != current_filename_norm:
-            # Close previous stream if it exists before opening a new one
             try:
                 if hasattr(self, "stream") and self.stream:
                     self.stream.close()
             except Exception:  # noqa: BLE001, S110
-                # best-effort stream cleanup during daily log file rollover
                 pass
 
             self.baseFilename = current_filename_norm
@@ -141,13 +134,11 @@ class Logger(logging.Logger):
         )
 
     def _get_log_dir(self, current_date: str) -> str:
-        # Simplified: no separate error directory logic needed
         log_dir = os.path.join(self.log_dir, self.name, current_date)
         os.makedirs(log_dir, exist_ok=True)
         return log_dir
 
     def _get_log_filename(self, log_dir: str, suffix: str = "") -> str:
-        # Ensure we have a valid filename even if prefix or name are empty
         prefix = self.log_filename_prefix if self.log_filename_prefix else ""
         name = self.name if self.name else "default"
         return os.path.join(log_dir, f"{prefix}{name}{suffix}.log")
@@ -163,7 +154,6 @@ class Logger(logging.Logger):
     def _setup_logger(self, console: Console | None = None) -> None:
         current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
         log_dir = self._get_log_dir(current_date)
-        # Error log now lives in the same directory, so we reuse log_dir
         error_log_dir = log_dir
 
         if not self.handlers:
@@ -219,7 +209,6 @@ class Logger(logging.Logger):
 
     def _log_rotator(self, source):
         new_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
-        # _get_log_dir no longer accepts is_error, it returns the main directory
         new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
         open(new_file, "a", encoding="utf-8").close()
@@ -231,7 +220,6 @@ class Logger(logging.Logger):
                 handler.close()
                 self.removeHandler(handler)
             except Exception:  # noqa: BLE001, S110
-                # best-effort handler close cleanup
                 pass
 
     def install_crash_handler(self) -> None:
@@ -243,9 +231,6 @@ class Logger(logging.Logger):
           2. threading.excepthook  — background thread crashes
           3. sys.unraisablehook    — __del__ / weakref exceptions at GC time
         """
-        # Resolve the errors.log path this instance would write to, so the
-        # fallback writer can open it directly when the logging system is
-        # partially shut down or unavailable.
         current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
         error_log_dir = self._get_log_dir(current_date)
         global _CRASH_LOG_PATH
@@ -253,9 +238,6 @@ class Logger(logging.Logger):
 
         logger_ref = self
 
-        # ----------------------------------------------------------------
-        # 1. sys.excepthook — main-thread truly-unhandled exceptions
-        # ----------------------------------------------------------------
         def _handle_exception(exc_type, exc_value, exc_tb):
             if issubclass(exc_type, KeyboardInterrupt):
                 sys.__excepthook__(exc_type, exc_value, exc_tb)
@@ -270,9 +252,6 @@ class Logger(logging.Logger):
 
         sys.excepthook = _handle_exception
 
-        # ----------------------------------------------------------------
-        # 2. threading.excepthook — background thread crashes
-        # ----------------------------------------------------------------
         import threading
 
         def _handle_thread_exception(args):
@@ -298,11 +277,6 @@ class Logger(logging.Logger):
 
         threading.excepthook = _handle_thread_exception
 
-        # ----------------------------------------------------------------
-        # 3. sys.unraisablehook — __del__ / weakref at GC time
-        #    Python prints these to stderr by default; we copy them to
-        #    errors.log so they aren't lost when the terminal scrolls away.
-        # ----------------------------------------------------------------
         _orig_unraisable = sys.unraisablehook
 
         def _handle_unraisable(args):

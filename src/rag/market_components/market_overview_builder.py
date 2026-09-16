@@ -23,18 +23,14 @@ class MarketOverviewBuilder:
         }
 
         try:
-            # 1. CoinGecko global data (flattened for the formatter)
             if coingecko_data:
-                # Handle both direct global data and wrapped data
                 if "data" in coingecko_data:
                     overview.update(coingecko_data["data"])
                 elif any(key in coingecko_data for key in ["market_cap", "volume", "dominance", "stats"]):
-                    # Direct global data format
                     overview.update(coingecko_data)
                 else:
                     self.logger.warning("Unexpected CoinGecko data format: %s", list(coingecko_data.keys()))
 
-            # 2. price data - before top_coins, which it enriches
             overview["coin_data"] = {}
             if price_data:
                 for symbol, values in price_data.items():
@@ -42,16 +38,13 @@ class MarketOverviewBuilder:
                     if processed_coin:
                         overview["coin_data"][symbol] = processed_coin
 
-            # 3. Add top coins list if available
 
             existing_top_coins = overview.get("top_coins", [])
 
             if existing_top_coins:
-                # We have rich CoinGecko data. Update it with fresh stats if available.
                 for coin in existing_top_coins:
                     symbol = coin.get("symbol", "").upper()
 
-                    # Find matching fresh data
                     fresh_data = None
                     for key, data in overview.get("coin_data", {}).items():
                         if key.upper().startswith(symbol + "/") or key.upper() == symbol:
@@ -65,23 +58,16 @@ class MarketOverviewBuilder:
                             coin["price_change_percentage_24h"] = fresh_data.get("change_24h", coin.get("price_change_percentage_24h", 0))
                             coin["total_volume"] = fresh_data.get("volume", coin.get("total_volume", 0))
 
-                # Update the overview with the potentially updated list
                 overview["top_coins"] = existing_top_coins
 
             elif top_coins:
-                 # Fallback: We only have a list of symbols or pre-built dicts
-                 # and no rich CoinGecko data. Build objects from scratch for bare strings,
-                 # but pass dict items through directly (they are already rich).
                 rich_top_coins = []
                 for i, item in enumerate(top_coins):
                     if isinstance(item, dict):
-                        # Already a rich coin dict — pass through as-is
                         rich_top_coins.append(item)
                         continue
 
-                    # Bare symbol string — build rich coin from coin_data
                     symbol = item
-                    # Try to find corresponding data in coin_data
                     coin_info = None
                     for key, data in overview.get("coin_data", {}).items():
                         if key.upper().startswith(symbol.upper() + "/") or key.upper() == symbol.upper():
@@ -118,11 +104,6 @@ class MarketOverviewBuilder:
     def _finalize_overview(self, overview: dict) -> dict[str, Any]:
         """Finalize and validate the overview structure."""
         try:
-            # Stamp published_on with the REAL data age, not the build time.
-            # CoinGecko data may come from a 24h file cache; using `now` here
-            # would make is_overview_stale() report ≤1h-fresh data that is
-            # actually up to 24h old. data_timestamp is set by CoinGeckoClient
-            # on both the cache-hit and fresh paths.
             source_ts = overview.get("data_timestamp")
             if source_ts:
                 try:
@@ -133,13 +114,11 @@ class MarketOverviewBuilder:
                 overview["published_on"] = datetime.now(timezone.utc).timestamp()
             overview["data_sources"] = []
 
-            # Track data sources
             if "global_data" in overview:
                 overview["data_sources"].append("coingecko_global")
             if "coin_data" in overview:
                 overview["data_sources"].append("price_data")
 
-            # Add summary statistics
             if "coin_data" in overview:
                 coin_count = len(overview["coin_data"])
                 overview["summary"] += f" - {coin_count} coins tracked"

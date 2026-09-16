@@ -77,13 +77,11 @@ class MarketDataFetcher:
         if not (self.exchange_manager and self.exchange_manager.exchanges):
             return None
 
-        # Select best available exchange
         exchange = self._select_exchange()
         if not exchange:
             return None
 
         try:
-            # Import DataFetcher here to avoid circular dependencies if it's in analyzer
             from src.analyzer.data_fetcher import (
                 DataFetcher,  # pylint: disable=import-outside-toplevel
             )
@@ -101,12 +99,10 @@ class MarketDataFetcher:
 
     def _select_exchange(self):
         """Select the best available exchange for market data."""
-        # Prefer Binance if available
         if "binance" in self.exchange_manager.exchanges:  # type: ignore
             self.logger.debug("Using Binance exchange for market data")
             return self.exchange_manager.exchanges["binance"]  # type: ignore
 
-        # Use first available exchange that supports fetch_tickers
         for exchange_id, exch in self.exchange_manager.exchanges.items():  # type: ignore
             if exch.has.get("fetchTickers", False):
                 self.logger.debug("Using %s exchange for market data", exchange_id)

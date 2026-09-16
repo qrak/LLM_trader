@@ -22,16 +22,7 @@ class MarketFormatter:
         overview_formatter: MarketOverviewFormatter | None = None,
         long_term_formatter: LongTermFormatter | None = None
     ):
-        """Initialize the market formatter.
-
-        Args:
-            logger: Optional logger instance
-            format_utils: Format utilities for value formatting
-            config: Configuration instance
-            token_counter: Utility for counting tokens
-            overview_formatter: MarketOverviewFormatter instance
-            long_term_formatter: LongTermFormatter instance
-        """
+        """Initialize the market formatter."""
         self.logger = logger
         if format_utils is None:
             from src.utils.format_utils import FormatUtils
@@ -89,14 +80,8 @@ class MarketFormatter:
         return "\n".join(lines)
 
 
-
     def format_coin_details_section(self, coin_details: dict[str, Any], max_description_tokens: int = 256) -> str:
         """Format coin details into a compressed section.
-
-        Args:
-            coin_details: Dictionary containing coin details from market metadata provider
-            max_description_tokens: Maximum tokens allowed for description (default: 256)
-
         Returns:
             str: Compressed coin details section
         """
@@ -105,23 +90,19 @@ class MarketFormatter:
 
         section = "## Cryptocurrency Details\n"
 
-        # Basic information only
         if coin_details.get("full_name"):
             section += f"- {coin_details['full_name']}"
             if coin_details.get("coin_name"):
                 section += f" ({coin_details['coin_name']} Project)"
             section += "\n"
 
-        # Project description (optional - based on config)
         include_description = self.config.INCLUDE_COIN_DESCRIPTION if self.config else False
         if include_description:
             description = coin_details.get("description", "")
             if description:
-                # Use token-based truncation instead of character-based
                 description_tokens = self.token_counter.count_tokens(description)  # type: ignore[reportOptionalMemberAccess]
 
                 if description_tokens > max_description_tokens:
-                    # Truncate by sentences to maintain readability
                     description = self._truncate_description_by_tokens(description, max_description_tokens)
 
                 section += f"\nProject Description:\n{description}\n"
@@ -130,37 +111,27 @@ class MarketFormatter:
 
     def _truncate_description_by_tokens(self, description: str, max_tokens: int) -> str:
         """Truncate description by tokens while preserving sentence boundaries
-
-        Args:
-            description: The original description text
-            max_tokens: Maximum tokens allowed
-
         Returns:
             str: Truncated description ending with complete sentences
         """
-        # Split by sentences (simple approach)
         sentences = description.split(". ")
         truncated = ""
 
         for i, sentence in enumerate(sentences):
-            # Add sentence with proper punctuation
             test_text = truncated + (sentence if sentence.endswith(".") else sentence + ".")
             if i < len(sentences) - 1:
                 test_text += " "
 
-            # Check if adding this sentence would exceed token limit
             if self.token_counter.count_tokens(test_text) > max_tokens:  # type: ignore[reportOptionalMemberAccess]
-                # If even the first sentence is too long, truncate it directly
                 if not truncated:
                     words = sentence.split()
                     for j, _ in enumerate(words):
                         test_word_text = " ".join(words[:j+1]) + "..."
                         if self.token_counter.count_tokens(test_word_text) > max_tokens:  # type: ignore[reportOptionalMemberAccess]
-                            if j == 0:  # Even first word is too long
+                            if j == 0:
                                 return sentence[:50] + "..."
                             return " ".join(words[:j]) + "..."
                     return sentence + "..."
-                # Add ellipsis to indicate truncation
                 return truncated.rstrip() + "..."
 
             truncated = test_text
@@ -171,11 +142,6 @@ class MarketFormatter:
         """
         Format ticker data for the analyzed coin.
         Shows VWAP, bid/ask spreads, and volume metrics from CCXT ticker.
-
-        Args:
-            ticker_data: Ticker data dict with VWAP, bid, ask, volumes
-            symbol: Trading pair symbol (e.g., "BTC/USDT")
-
         Returns:
             Formatted ticker string
         """
@@ -184,7 +150,6 @@ class MarketFormatter:
 
         lines = [f"## {symbol} Real-Time Ticker Data:"]
 
-        # Price metrics
         vwap = ticker_data.get("VWAP")
         last = ticker_data.get("LAST")
         if vwap:
@@ -194,7 +159,6 @@ class MarketFormatter:
             direction = "above" if vwap_diff >= 0 else "below"
             lines.append(f"  • Current Price vs VWAP: {vwap_diff:+.2f}% ({direction})")
 
-        # Bid/Ask spread
         bid = ticker_data.get("BID")
         ask = ticker_data.get("ASK")
         if bid and ask:
@@ -206,7 +170,6 @@ class MarketFormatter:
                 f"Best Ask: ${self.format_utils.fmt(ask, precision=2)}"
             )
 
-        # Volume metrics
         volume = ticker_data.get("VOLUME24HOUR")
         quote_volume = ticker_data.get("QUOTEVOLUME24HOUR")
         if volume:
@@ -214,7 +177,6 @@ class MarketFormatter:
         if quote_volume:
             lines.append(f"  • 24h Quote Volume: ${self.format_utils.fmt(quote_volume)}")
 
-        # Bid/Ask volume (liquidity at best levels)
         bid_volume = ticker_data.get("BIDVOLUME")
         ask_volume = ticker_data.get("ASKVOLUME")
         if bid_volume and ask_volume:
@@ -225,7 +187,6 @@ class MarketFormatter:
                 f"({bid_pct:.1f}% bid / {100-bid_pct:.1f}% ask)"
             )
 
-        # 24h Range
         high = ticker_data.get("HIGH24HOUR")
         low = ticker_data.get("LOW24HOUR")
         if high and low and last:
@@ -317,11 +278,6 @@ class MarketFormatter:
         """
         Format order book depth data.
         Shows bid/ask imbalance, liquidity depth, and spread metrics.
-
-        Args:
-            order_book: Order book dict from fetch_order_book_depth
-            symbol: Trading pair symbol
-
         Returns:
             Formatted order book string
         """
@@ -340,7 +296,6 @@ class MarketFormatter:
                 f"(live snapshot, not {timeframe} aggregation)"
             )
 
-        # Spread & Liquidity Depth
         spread = order_book.get("spread")
         spread_pct = order_book.get("spread_percent")
         bid_depth = order_book.get("bid_depth", 0)
@@ -353,7 +308,6 @@ class MarketFormatter:
                 f"({self.format_utils.fmt(bid_depth)} bid / {self.format_utils.fmt(ask_depth)} ask)"
             )
 
-        # Imbalance & Top Level Breakdown
         imbalance = order_book.get("imbalance")
         depth_by_level = order_book.get("depth_by_level", {})
         top_10 = depth_by_level.get("10")
@@ -363,7 +317,6 @@ class MarketFormatter:
                 f"  • Imbalance: {imbalance:+.3f} ({self._format_order_book_sentiment(imbalance)}){top_10_str}"
             )
 
-        # Liquidity Walls
         largest_bid_wall = order_book.get("largest_bid_wall")
         largest_ask_wall = order_book.get("largest_ask_wall")
         if largest_bid_wall or largest_ask_wall:
@@ -380,7 +333,6 @@ class MarketFormatter:
                 )
             lines.append(f"  • Liquidity Walls: {' | '.join(walls)}")
 
-        # Compressed Snapshot Delta
         delta = order_book.get("delta_from_previous_snapshot")
         if delta and delta.get("imbalance") is not None:
             lines.append(
@@ -395,11 +347,6 @@ class MarketFormatter:
         """
         Format recent trade flow analysis.
         Shows buy/sell pressure, trade velocity, and order flow metrics.
-
-        Args:
-            trades: Trade flow dict from fetch_recent_trades
-            symbol: Trading pair symbol
-
         Returns:
             Formatted trade flow string
         """
@@ -410,7 +357,6 @@ class MarketFormatter:
 
         lines = [f"## {symbol} Recent Trade Flow:"]
 
-        # Trade count and velocity (real-time data, independent of analysis timeframe)
         total_trades = trades.get("total_trades", 0)
         velocity = trades.get("trade_velocity")
         time_span = trades.get("time_span_minutes")
@@ -420,7 +366,6 @@ class MarketFormatter:
         if velocity:
             lines.append(f"  • Trade Velocity: {velocity:.2f} trades/minute")
 
-        # Buy/Sell pressure
         buy_volume = trades.get("buy_volume", 0)
         sell_volume = trades.get("sell_volume", 0)
         buy_sell_ratio = trades.get("buy_sell_ratio")
@@ -446,7 +391,6 @@ class MarketFormatter:
                 sentiment = "Balanced"
             lines.append(f"  • Buy Pressure: {buy_pressure:.1f}% ({sentiment})")
 
-        # Average trade size
         avg_trade_size = trades.get("avg_trade_size")
         if avg_trade_size:
             lines.append(f"  • Average Trade Size: {self.format_utils.fmt(avg_trade_size)} {base_currency}")
@@ -457,11 +401,6 @@ class MarketFormatter:
         """
         Format funding rate data for futures/perpetual contracts.
         Shows funding rate, annualized rate, and sentiment.
-
-        Args:
-            funding: Funding rate dict from fetch_funding_rate
-            symbol: Trading pair symbol
-
         Returns:
             Formatted funding rate string
         """
@@ -470,21 +409,17 @@ class MarketFormatter:
 
         lines = [f"## {symbol} Funding Rate (Futures):"]
 
-        # Funding rate
         rate_pct = funding.get("funding_rate_percent")
         if rate_pct is not None:
             lines.append(f"  • Current Funding Rate: {rate_pct:.4f}%")
 
-        # Annualized rate
         annualized = funding.get("annualized_rate")
         if annualized is not None:
             lines.append(f"  • Annualized Rate: {annualized:.2f}%")
 
-        # Sentiment interpretation
         sentiment = funding.get("sentiment", "Unknown")
         lines.append(f"  • Market Sentiment: {sentiment}")
 
-        # Explanation
         if rate_pct is not None:
             if rate_pct > 0.01:
                 lines.append("  • Interpretation: Longs pay shorts (bullish positioning)")

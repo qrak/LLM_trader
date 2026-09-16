@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from src.rag import RagEngine
 
 
-
 class MarketDataCollector:
     """Handles market data collection from various sources"""
 
@@ -33,14 +32,12 @@ class MarketDataCollector:
         self.alternative_me_api = alternative_me_api
         self.session = session
 
-        # Will be set by initialize method
         self.data_fetcher = None
         self.symbol = None
         self.exchange = None
         self.timeframe = "1h"
-        self.limit = None  # Will be calculated dynamically
+        self.limit = None
 
-        # Storage for collected data
         self.article_urls = {}
 
     def initialize(self,
@@ -51,13 +48,6 @@ class MarketDataCollector:
                   limit: int | None = None) -> None:
         """
         Initialize the collector with required parameters.
-
-        Args:
-            data_fetcher: DataFetcher instance for fetching market data
-            symbol: Trading symbol (e.g., "BTC/USDT")
-            exchange: Exchange instance
-            timeframe: Timeframe for candles (e.g., "1h", "4h", "1d")
-            limit: Optional candle limit (auto-calculated if None)
         """
         self.data_fetcher = data_fetcher
         self.symbol = symbol
@@ -128,8 +118,6 @@ class MarketDataCollector:
 
             self._warn_if_insufficient_history(len(context.ohlcv_candles))
 
-            # Isolated: a residual exception in one secondary fetcher (e.g. changed
-            # API payload shape) must not mark the whole data collection failed.
             secondary_results = await asyncio.gather(
                 self.fetch_long_term_historical_data(context),
                 self.fetch_weekly_macro_data(context, target_weeks=300),
@@ -300,7 +288,6 @@ class MarketDataCollector:
             self.logger.warning("AlternativeMeAPI client not available, falling back to direct API call")
             params = {"limit": limit, "format": "json"} if limit > 0 else {}
 
-            # Use provided session or create a temporary one
             if self.session:
                 return await self._fetch_fear_greed_from_api(self.session, params)
 
@@ -317,7 +304,6 @@ class MarketDataCollector:
         params: dict[str, Any]
     ) -> list[dict[str, Any]]:
         """Helper method to fetch Fear & Greed data from API"""
-        # Use ClientTimeout for aiohttp requests
         client_timeout = aiohttp.ClientTimeout(total=10)
         async with session.get(
                 "https://api.alternative.me/fng/",

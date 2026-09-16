@@ -78,13 +78,11 @@ def calculate_dominant_cycle(r1, minlen, maxlen, avelen):
     peakpwr = np.max(pwr[minlen:maxlen])
     spx, sp = 0.0, 0.0
 
-    # First pass: high power periods
     for period in range(minlen, maxlen):
         if pwr[period] >= 0.5:
             spx += period * pwr[period]
             sp += pwr[period]
 
-    # Second pass: medium power periods if peak is significant
     for period in range(minlen, maxlen):
         if peakpwr >= 0.25 and pwr[period] >= 0.25:
             spx += period * pwr[period]

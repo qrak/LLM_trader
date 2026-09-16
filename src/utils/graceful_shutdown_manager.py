@@ -54,8 +54,6 @@ class GracefulShutdownManager:
 
     def setup_signal_handlers(self):
         if sys.platform == "win32":
-            # On Windows, let Ctrl+C propagate as KeyboardInterrupt so start.py can
-            # await shutdown synchronously before the event loop is closed.
             return
 
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -117,7 +115,6 @@ class GracefulShutdownManager:
         else:
             print("Performing graceful shutdown...")
 
-        # Execute registered callbacks first (each cleans up its own tasks)
         if self._callbacks:
             if self.logger:
                 self.logger.info(
@@ -139,11 +136,6 @@ class GracefulShutdownManager:
                     else:
                         print(error_msg)
 
-        # Let remaining tasks (dashboard server, uvicorn) drain naturally
-        # instead of forcefully cancelling them. Cancelling the uvicorn
-        # server task triggers capture_signals().__exit__ which raises
-        # KeyboardInterrupt → chained CancelledError in Py3.13.
-        # The event loop will clean them up on close.
         remaining = [
             t
             for t in asyncio.all_tasks()
@@ -154,11 +146,8 @@ class GracefulShutdownManager:
                 self.logger.info(
                     "Draining %s remaining tasks (no cancellation)...", len(remaining)
                 )
-            # Give server tasks a moment to respond to the shutdown signal
-            # (sent via the callbacks above)
             await asyncio.sleep(0.2)
 
-        # Shut down async generators
         try:
             await asyncio.wait_for(self.loop.shutdown_asyncgens(), timeout=2.0)
         except (asyncio.TimeoutError, Exception) as e:  # noqa: BLE001
@@ -168,12 +157,6 @@ class GracefulShutdownManager:
             else:
                 print(err_msg)
 
-        # ------------------------------------------------------------------
-        # Transport & kaleido cleanup
-        # ------------------------------------------------------------------
-        # 1) Shut down kaleido sync server if it was ever started (Plotly
-        #    chart export spawns a subprocess that leaks a BaseSubprocessTransport
-        #    on Python 3.13+).
         try:
             import kaleido as _kl
 
@@ -183,8 +166,6 @@ class GracefulShutdownManager:
         except (ImportError, AttributeError, Exception):  # noqa: S110, BLE001
             pass
 
-        # 2) pump the loop so pending transport __del__ callbacks drain before close;
-        #    avoids _ProactorBasePipeTransport / BaseSubprocessTransport ResourceWarning
         try:
             for _ in range(5):
                 self.loop.call_soon(lambda: None)
@@ -192,17 +173,12 @@ class GracefulShutdownManager:
         except Exception:  # noqa: S110, BLE001
             pass
 
-        # 3) Suppress asyncio transport ResourceWarning noise from
-        #    dependencies (kaleido, chromadb, discord.py) that may still
-        #    have unclosed transports after explicit cleanup.
         warnings.filterwarnings(
             "ignore",
             category=ResourceWarning,
             message="unclosed transport",
         )
 
-        # Final pause to allow background threads (e.g., Discord keep-alive
-        # handler) to fully terminate before the event loop is closed.
         await asyncio.sleep(0.5)
 
     @staticmethod

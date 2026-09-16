@@ -35,13 +35,11 @@ from src.dashboard.auth import (
 )
 from src.dashboard.log_stream import LogStreamManager
 
-# ─── Auth Edge Cases ─────────────────────────────────────────────────
 
 class TestAuthEdgeCases:
     def test_expired_token_rejected(self):
         """Tokens older than COOKIE_MAX_AGE are rejected."""
         init_auth("testkey", "admin", hash_password("pass"))
-        # Create a token from 9 hours ago (max age is 8 hours)
         old_ts = time.time() - (9 * 3600)
         token = _sign_token("admin", old_ts)
         assert _verify_token(token) is None
@@ -49,7 +47,7 @@ class TestAuthEdgeCases:
     def test_valid_token_within_expiry(self):
         """Tokens within COOKIE_MAX_AGE are accepted."""
         init_auth("testkey", "admin", hash_password("pass"))
-        recent_ts = time.time() - 3600  # 1 hour ago
+        recent_ts = time.time() - 3600
         token = _sign_token("admin", recent_ts)
         assert _verify_token(token) == "admin"
 
@@ -57,15 +55,14 @@ class TestAuthEdgeCases:
         """Garbage tokens return None."""
         assert _verify_token("") is None
         assert _verify_token("not-a-token") is None
-        assert _verify_token("a:b") is None  # only 2 parts
-        assert _verify_token("a:b:c:d") is None  # 4 parts
+        assert _verify_token("a:b") is None
+        assert _verify_token("a:b:c:d") is None
         assert _verify_token(":::") is None
 
     def test_tampered_token_rejected(self):
         """Modified token signature is detected."""
         init_auth("testkey", "admin", hash_password("pass"))
         token = _sign_token("admin", time.time())
-        # Tamper with the signature
         parts = token.split(":")
         parts[2] = "0" * 64
         tampered = ":".join(parts)
@@ -89,7 +86,6 @@ class TestAuthEdgeCases:
 
     def test_uninitialized_auth_rejects_all(self):
         """Before init_auth(), all credentials are rejected."""
-        # Reset module state
         import src.dashboard.auth as auth_mod
         old_init = auth_mod._initialized
         auth_mod._initialized = False
@@ -109,8 +105,7 @@ class TestAuthEdgeCases:
         """Each hash_password call produces a different salt."""
         h1 = hash_password("same_pass")
         h2 = hash_password("same_pass")
-        assert h1 != h2  # different salts
-        # But both verify correctly
+        assert h1 != h2
         assert _verify_password("same_pass", h1) is True
         assert _verify_password("same_pass", h2) is True
 
@@ -120,8 +115,6 @@ class TestAuthEdgeCases:
         assert _verify_password("pass", "") is False
         assert _verify_password("pass", "no-colon") is False
 
-
-# ─── Config Validation Edge Cases ────────────────────────────────────
 
 class TestConfigValidation:
     def test_bool_truthy_values(self):
@@ -174,7 +167,7 @@ class TestConfigValidation:
         """Valid enum options are accepted."""
         meta = SettingMeta(key="test", type="enum", category="hot", description="", options=("a", "b", "c"))
         assert _validate_and_coerce("a", meta) == "a"
-        assert _validate_and_coerce("B", meta) == "b"  # case-insensitive
+        assert _validate_and_coerce("B", meta) == "b"
 
     def test_enum_invalid_option(self):
         """Invalid enum option raises ValueError."""
@@ -205,8 +198,6 @@ class TestConfigValidation:
         with pytest.raises(ValueError, match="Unknown setting type"):
             _validate_and_coerce("value", meta)
 
-
-# ─── WritableConfig Edge Cases ───────────────────────────────────────
 
 class TestWritableConfigEdgeCases:
     @pytest.fixture
@@ -239,7 +230,6 @@ class TestWritableConfigEdgeCases:
     def test_schema_covers_all_config_sections(self, wc):
         """Schema covers all sections in the actual config.ini."""
         schema = wc.get_full_schema()
-        # These sections should always be in the schema
         expected = {"ai_providers", "general", "debug", "rag", "risk_management", "demo_trading", "model_config", "dashboard"}
         assert set(schema.keys()) == expected
 
@@ -257,15 +247,12 @@ class TestWritableConfigEdgeCases:
 
     async def test_batch_update_all_or_nothing(self, wc):
         """If one value in a batch is invalid, none are written."""
-        # First set a known good value
         await wc.set_value("general", "timeframe", "4h")
-        # Try batch with one invalid value
         with pytest.raises(ValueError):
             await wc.set_values([
-                ("general", "timeframe", "1d"),  # valid
-                ("general", "candle_limit", "not_a_number"),  # invalid
+                ("general", "timeframe", "1d"),
+                ("general", "candle_limit", "not_a_number"),
             ])
-        # The first value should NOT have been written (atomicity)
         assert wc.get_value("general", "timeframe") == "4h"
 
     async def test_concurrent_writes_sequentialized(self, wc):
@@ -280,12 +267,9 @@ class TestWritableConfigEdgeCases:
             await asyncio.gather(*tasks)
 
         await run_concurrent()
-        # Should have one of the values (not corrupted)
         val = wc.get_value("general", "timeframe")
         assert val in timeframes
 
-
-# ─── LogStream Edge Cases ────────────────────────────────────────────
 
 class TestLogStreamEdgeCases:
     def test_multiple_subscribers_receive_same_message(self):
@@ -313,7 +297,6 @@ class TestLogStreamEdgeCases:
         sid, q = lsm.handler.subscribe()
         lsm.handler.unsubscribe(sid)
 
-        # Drain the sentinel
         try:
             q.get_nowait()
         except asyncio.QueueEmpty:
@@ -329,18 +312,15 @@ class TestLogStreamEdgeCases:
         lsm = LogStreamManager()
         import logging
 
-        # Emit some messages before subscribing
         for i in range(5):
             record = logging.LogRecord("test", logging.INFO, "", 0, f"Pre-msg {i}", (), None)
             lsm.handler.emit(record)
 
-        # Now subscribe
         sid, q = lsm.handler.subscribe()
         lines = []
         while not q.empty():
             lines.append(q.get_nowait())
 
-        # Should have the recent messages
         assert len(lines) > 0
         assert any("Pre-msg" in line for line in lines)
         lsm.handler.unsubscribe(sid)
@@ -381,8 +361,6 @@ class TestLogStreamEdgeCases:
         assert lsm.subscriber_count == 0
 
 
-# ─── Schema Coverage ─────────────────────────────────────────────────
-
 class TestSchemaCoverage:
     def test_all_schema_sections_have_settings(self):
         """Every section in the schema has at least one setting."""
@@ -417,8 +395,6 @@ class TestSchemaCoverage:
                 if meta.type in ("int", "float") and meta.min_val is not None and meta.max_val is not None:
                     assert meta.min_val < meta.max_val, f"{meta.key}: min {meta.min_val} >= max {meta.max_val}"
 
-
-# ─── Admin Auth Middleware ───────────────────────────────────────────
 
 class TestAdminAuthMiddleware:
     @pytest.fixture
@@ -456,7 +432,7 @@ class TestAdminAuthMiddleware:
     def test_login_route_is_public(self, app_with_middleware):
         client = self._make_client(app_with_middleware)
         resp = client.post("/api/admin/login", json={"username": "admin", "password": "wrong"})
-        assert resp.status_code == 401  # wrong creds, but endpoint is reachable
+        assert resp.status_code == 401
 
     def test_health_route_is_public(self, app_with_middleware):
         client = self._make_client(app_with_middleware)
@@ -465,12 +441,9 @@ class TestAdminAuthMiddleware:
 
     def test_protected_route_with_valid_cookie(self, app_with_middleware):
         client = self._make_client(app_with_middleware)
-        # Login first
         resp = client.post("/api/admin/login", json={"username": "admin", "password": "testpass"})
         assert resp.status_code == 200
-        # Cookie should be set
         assert COOKIE_NAME in resp.cookies
-        # Access protected route with cookie
         resp2 = client.get("/api/admin/config")
         assert resp2.status_code == 200
 
@@ -479,7 +452,6 @@ class TestAdminAuthMiddleware:
         resp = client.post("/api/admin/login", json={"username": "admin", "password": "testpass"})
         token = resp.json().get("token")
         assert token
-        # Access with Bearer header
         resp2 = client.get("/api/admin/config", headers={"Authorization": f"Bearer {token}"})
         assert resp2.status_code == 200
 
@@ -493,8 +465,6 @@ class TestAdminAuthMiddleware:
         resp = client.get("/public")
         assert resp.status_code == 200
 
-
-# ─── LAN Access Control Tests ────────────────────────────────────────
 
 class TestLANAccessControl:
     """Verify that admin routes are restricted to LAN/private IPs only."""
@@ -582,10 +552,8 @@ class TestLANAccessControl:
     def test_admin_allowed_from_lan(self, app_with_middleware):
         """LAN IP can access admin (with auth)."""
         client = TestClient(app_with_middleware, raise_server_exceptions=False, client=("192.168.1.50", 12345))
-        # Login first
         resp = client.post("/api/admin/login", json={"username": "admin", "password": "testpass"})
         assert resp.status_code == 200
-        # Access config
         resp2 = client.get("/api/admin/config")
         assert resp2.status_code == 200
 
@@ -594,10 +562,9 @@ class TestLANAccessControl:
         client = TestClient(
             app_with_middleware, raise_server_exceptions=False,
             client=("127.0.0.1", 54321),
-            headers={"CF-Connecting-IP": "85.23.45.67"},  # Public IP via CF
+            headers={"CF-Connecting-IP": "85.23.45.67"},
         )
         resp = client.get("/api/admin/health")
-        # Health is public, but still LAN-gated. Public CF IP should be blocked.
         assert resp.status_code == 403
 
     def test_cf_connecting_ip_lan_from_tunnel(self, app_with_middleware):
@@ -612,12 +579,10 @@ class TestLANAccessControl:
 
     def test_spoofed_cf_header_on_direct_connection_ignored(self, app_with_middleware):
         """CF-Connecting-IP header is IGNORED on direct (non-tunnel) connections."""
-        # Direct connection from public IP with spoofed CF header claiming LAN
         client = TestClient(
             app_with_middleware, raise_server_exceptions=False,
             client=("203.0.113.1", 12345),
             headers={"CF-Connecting-IP": "192.168.1.1"},
         )
         resp = client.get("/api/admin/config")
-        # Should be blocked because direct IP (203.0.113.1) is not localhost
         assert resp.status_code == 403

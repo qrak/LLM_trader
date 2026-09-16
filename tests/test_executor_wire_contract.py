@@ -104,7 +104,6 @@ class TestExecutorWireContract(unittest.TestCase):
         analysis = {"signal": "BUY"}
         payload = self.handler._build(analysis, decision, "BTC/USDC")
         self.assertIsNotNone(payload)
-        # NaN quantity defaults to 0.0, Inf floats default to None
         self.assertEqual(payload["quantity"], 0.0)
         self.assertIsNone(payload["entry_price"])
         self.assertIsNone(payload["stop_loss"])

@@ -46,9 +46,6 @@ class LocalTaxonomyProvider:
         self._categories_file = categories_file or self._default_categories_path()
         self._cache: list[dict[str, Any]] | None = None
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
 
     async def fetch_categories(
         self,
@@ -78,9 +75,6 @@ class LocalTaxonomyProvider:
 
         return self._cache or []
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
 
     def _load_from_file(self) -> list[dict[str, Any]]:
         """Load and parse the categories JSON file."""
@@ -93,7 +87,6 @@ class LocalTaxonomyProvider:
         try:
             with open(self._categories_file, encoding="utf-8") as fh:
                 data = json.load(fh)
-            # data may be {"timestamp": ..., "categories": [...]} or a plain list
             if isinstance(data, list):
                 return data
             if isinstance(data, dict) and "categories" in data:
@@ -117,7 +110,6 @@ class LocalTaxonomyProvider:
         if getattr(sys, "frozen", False):
             base = os.path.dirname(sys.executable)
         else:
-            # __file__ is src/rag/local_taxonomy.py → up 3 levels
             base = os.path.dirname(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )

@@ -60,12 +60,6 @@ class BlockRunClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request to the BlockRun API using the SDK.
-
-        Args:
-            model: Model name in provider/model format (e.g., openai/gpt-4o, anthropic/claude-sonnet-4)
-            messages: list of OpenAI-style messages
-            model_config: Configuration parameters (temperature, max_tokens, etc.)
-
         Returns:
             ChatResponseModel or None if failed
         """
@@ -74,7 +68,6 @@ class BlockRunClient(BaseAIClient):
             self.logger.debug("Sending request to BlockRun SDK with model: %s", model)
             effective_model = self._ensure_provider_prefix(model)
 
-            # Extract config params — SDK now takes them as kwargs, not a dict
             kwargs = self._build_chat_kwargs(model_config)
             response = await client.chat_completion(
                 model=effective_model,
@@ -95,13 +88,6 @@ class BlockRunClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
-
-        Args:
-            model: Model name in provider/model format
-            messages: list of OpenAI-style messages
-            chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters
-
         Returns:
             ChatResponseModel or None if failed
         """
@@ -148,14 +134,12 @@ class BlockRunClient(BaseAIClient):
         """Convert SDK ChatResponse to our internal ChatResponseModel."""
         if response is None:
             return None
-        # SDK v1.4.7 returns ChatResponse with choices[0].message.content
         content = ""
         if hasattr(response, "choices") and response.choices:
             choice = response.choices[0]
             if hasattr(choice, "message") and choice.message:
                 content = choice.message.content or ""
         else:
-            # Fallback: try dict-like access
             try:
                 content = response["choices"][0]["message"]["content"]
             except (KeyError, TypeError, IndexError):

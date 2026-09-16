@@ -102,11 +102,6 @@ class AnalysisEngine:
     def initialize_for_symbol(self, symbol: str, exchange, timeframe=None) -> None:
         """
         Initialize the analyzer for a specific symbol and exchange.
-
-        Args:
-            symbol: Trading pair symbol (e.g., "BTC/USDT")
-            exchange: Exchange instance
-            timeframe: Optional timeframe override (uses config default if None)
         """
         self.symbol = symbol
         self.exchange = exchange
@@ -180,7 +175,6 @@ class AnalysisEngine:
         formatted timestamp; current_ticker avoids a redundant API call.
         """
         try:
-            # Step 1: Collect all required data
             if not await self._collect_market_data():
                 return {"error": "Failed to collect market data", "details": "Data collection failed"}
 
@@ -209,8 +203,6 @@ class AnalysisEngine:
 
                 return market_context, rag_urls
 
-            # Isolate subtasks: one flaky task (indicator edge case, RAG
-            # hiccup) must not abort the whole cycle and discard healthy results.
             results = await asyncio.gather(
                 self._enrich_market_context(current_ticker=current_ticker),
                 run_tech_and_chart(),
@@ -241,14 +233,12 @@ class AnalysisEngine:
             else:
                 self.logger.warning("No market context available for %s", self.symbol)
 
-            # Step 3.5: brain context from current indicators
             brain_context = None
             if brain_service and self.context.technical_data:  # type: ignore[reportOptionalMemberAccess]
                 brain_context = await self._generate_brain_context_from_current_indicators(
                     brain_service, self.context.technical_data  # type: ignore[reportOptionalMemberAccess]
                 )
 
-            # Step 4: Generate AI analysis
             analysis_result = await self._generate_ai_analysis(
                 provider, model, additional_context, previous_response,
                 previous_indicators, position_context, performance_context,
@@ -257,7 +247,6 @@ class AnalysisEngine:
                 ev_context=ev_context,
             )
 
-            # Reset custom instructions for next run
             assert self.prompt_builder is not None
             self.prompt_builder.custom_instructions = []
 
@@ -275,7 +264,6 @@ class AnalysisEngine:
             self.logger.error("Failed to collect market data: %s", data_result["errors"])
             return False
 
-        # Store article URLs (initial empty set, will be updated by parallel RAG task)
         self.article_urls = self.data_collector.article_urls
 
         return True
@@ -284,9 +272,6 @@ class AnalysisEngine:
         """
         Enrich market context with overview, microstructure, and coin details.
         Uses asyncio.gather to fetch all three data sources in parallel.
-
-        Args:
-            current_ticker: Optional ticker data to reuse
         """
         async def _fetch_overview():
             try:
@@ -553,26 +538,16 @@ class AnalysisEngine:
         chart_image: io.BytesIO | None = None
     ) -> dict[str, Any]:
         """Execute the AI request with optional chart image for visual analysis.
-
-        Args:
-            system_prompt: System instructions for the AI
-            prompt: User prompt with market data
-            provider: Optional provider override
-            model: Optional model override
-            chart_image: Optional chart image for visual analysis
-
         Returns:
             Analysis result dictionary
         """
         if provider and model:
             self.logger.info("Using admin-specified provider: %s, model: %s", provider, model)
 
-        # Give result processor access to context for current_price
         assert self.result_processor is not None
         self.result_processor.context = self.context
 
 
-        # Dashboard: Store both prompts for monitoring
         self.last_generated_prompt = prompt
         self.last_prompt_timestamp = datetime.now(timezone.utc).isoformat()
         self.last_system_prompt = system_prompt
@@ -629,7 +604,6 @@ class AnalysisEngine:
 
     async def _calculate_technical_indicators(self) -> None:
         """Calculate technical indicators using the technical calculator"""
-        # to_thread: CPU-bound TA must not block the event loop
         assert self.technical_calculator is not None
         assert self.context is not None
         indicators = await asyncio.to_thread(
@@ -716,11 +690,6 @@ class AnalysisEngine:
 
         Offloads blocking ChromaDB queries and CPU-bound embedding operations
         to a thread pool via asyncio.to_thread to avoid stalling the event loop.
-
-        Args:
-            brain_service: TradingBrainService instance
-            technical_data: dict of current technical indicators
-
         Returns:
             Formatted brain context string
         """
@@ -752,10 +721,6 @@ class AnalysisEngine:
             self.timeframe,
         )
 
-        # --- NEW: enriched regime/volatility fields (July 2026) ---
-        # Real values from current indicators — without these the risk profile
-        # selector silently falls back to (choppiness=None, atr_percentage=0.0)
-        # and always reports NEUTRAL with "ATR 0.0%".
         choppiness = resolve_scalar(technical_data.get("choppiness"))
         atr_percentage = resolve_scalar(technical_data.get("atr_percent"))
         mfi = resolve_scalar(technical_data.get("mfi"))
@@ -788,6 +753,4 @@ class AnalysisEngine:
         )
 
         return await asyncio.to_thread(brain_service.get_context, snapshot)
-
-
 

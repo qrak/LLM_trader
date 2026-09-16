@@ -18,9 +18,6 @@ from src.managers.provider_types import ProviderClients
 from src.platforms.ai_providers.blockrun import BlockRunClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
 
-# ─────────────────────────────────────────────────────────────────
-# Fixtures
-# ─────────────────────────────────────────────────────────────────
 
 def _make_blockrun_client() -> BlockRunClient:
     return BlockRunClient(
@@ -78,10 +75,6 @@ def _make_orchestrator(
     )
     return orchestrator
 
-
-# ─────────────────────────────────────────────────────────────────
-# 1. Orchestrator: _invoke_blockrun text + chart paths
-# ─────────────────────────────────────────────────────────────────
 
 class TestInvokeBlockrun:
     """Verify the orchestrator dispatches to blockrun client correctly."""
@@ -166,10 +159,6 @@ class TestInvokeBlockrun:
         assert "Rate limit" in result.response.error
 
 
-# ─────────────────────────────────────────────────────────────────
-# 2. Orchestrator: invoke dispatch
-# ─────────────────────────────────────────────────────────────────
-
 class TestInvokeDispatch:
     """Verify the main invoke() method dispatches 'blockrun' to _invoke_blockrun."""
 
@@ -197,10 +186,6 @@ class TestInvokeDispatch:
         assert result.provider == "blockrun"
 
 
-# ─────────────────────────────────────────────────────────────────
-# 3. Availability checks
-# ─────────────────────────────────────────────────────────────────
-
 class TestBlockrunAvailability:
     """Verify is_available, supports_chart, get_metadata for blockrun."""
 
@@ -222,13 +207,11 @@ class TestBlockrunAvailability:
         """When 'all' is specified, blockrun's chart support is considered."""
         client = _make_blockrun_client()
         orch = _make_orchestrator(blockrun_client=client)
-        # blockrun alone should make 'all' chart-capable
         assert orch.supports_chart("all") is True
 
     def test_supports_chart_all_no_blockrun_no_others(self):
         """When no chart-capable providers exist, 'all' returns False."""
         orch = _make_orchestrator(blockrun_client=None)
-        # All providers are None → no chart support
         assert orch.supports_chart("all") is False
 
     def test_get_metadata_returns_correct_default_model(self):
@@ -251,10 +234,6 @@ class TestBlockrunAvailability:
         assert orch.resolve_model("blockrun", "openai/gpt-4o") == "openai/gpt-4o"
 
 
-# ─────────────────────────────────────────────────────────────────
-# 4. Fallback chain integration
-# ─────────────────────────────────────────────────────────────────
-
 class TestBlockrunFallbackChain:
     """Verify blockrun participates correctly in fallback chains."""
 
@@ -266,7 +245,6 @@ class TestBlockrunFallbackChain:
         orch = _make_orchestrator(blockrun_client=client)
 
         result = await orch.get_text_response("all", [{"role": "user", "content": "Test"}])
-        # Should succeed because blockrun is available
         assert result.success is True
 
     @pytest.mark.asyncio
@@ -294,7 +272,6 @@ class TestBlockrunFallbackChain:
             ["blockrun", "local", "openrouter"],
             [{"role": "user", "content": "Test"}],
         )
-        # All three are unavailable → complete failure
         assert result.success is False
 
     @pytest.mark.asyncio
@@ -311,11 +288,6 @@ class TestBlockrunFallbackChain:
         assert result.success is True
         assert result.response.choices[0].message.content == "HOLD"
 
-
-# ─────────────────────────────────────────────────────────────────
-# 5. Config loader properties
-# ─────────────────────────────────────────────────────────────────
-# (tested via _make_config above, but we verify key shape here)
 
 class TestBlockrunConfigProperties:
     """Verify config.ini / keys.env properties for BlockRun."""
@@ -340,10 +312,6 @@ class TestBlockrunConfigProperties:
         assert cfg.BLOCKRUN_MODEL == "anthropic/claude-sonnet-4"
         assert cfg.BLOCKRUN_BASE_URL == "https://custom.blockrun.ai/api"
 
-
-# ─────────────────────────────────────────────────────────────────
-# 6. ProviderClients construction
-# ─────────────────────────────────────────────────────────────────
 
 class TestProviderClientsBlockrun:
     """Verify ProviderClients dataclass can hold blockrun client."""
@@ -370,10 +338,6 @@ class TestProviderClientsBlockrun:
         assert pc.blockrun is br
         assert pc.google is None
 
-
-# ─────────────────────────────────────────────────────────────────
-# 7. Log guidance for unavailable blockrun
-# ─────────────────────────────────────────────────────────────────
 
 class TestBlockrunLogGuidance:
     """Verify proper log messages when blockrun is unavailable."""

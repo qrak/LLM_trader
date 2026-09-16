@@ -117,11 +117,6 @@ class CoinGeckoAPI:
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
         """
         Map dominance symbols to CoinGecko coin IDs dynamically.
-
-        Args:
-            dominance_data: Optional dominance dictionary from API. If not provided,
-                          uses a default mapping for top coins.
-
         Returns: list of CoinGecko coin IDs
         """
         symbol_to_id = {
@@ -159,10 +154,6 @@ class CoinGeckoAPI:
     async def get_top_coins_by_dominance(self, dominance_coins: list[str]) -> list[dict[str, Any]]:
         """
         Fetch market data for top coins by dominance.
-
-        Args:
-            dominance_coins: list of coin IDs (e.g., ['bitcoin', 'ethereum', 'tether'])
-
         Returns: list of coin market data objects
         """
         if not dominance_coins:
@@ -221,10 +212,6 @@ class CoinGeckoAPI:
         """
         Get global market data, top coins, and DeFi metrics from CoinGecko.
         Caches everything in coingecko_global.json every 4h.
-
-        Args:
-            force_refresh: If True, bypass cache and fetch fresh data
-
         Returns:
             Dictionary containing processed market data
         """
@@ -236,8 +223,6 @@ class CoinGeckoAPI:
                 cached_data = await self._read_cache_file()
                 if cached_data and "data" in cached_data:
                     self.logger.debug("Using cached CoinGecko data from %s", self.last_update.isoformat())
-                    # Stamp the REAL data age so downstream staleness checks
-                    # (market overview published_on) can't lie about freshness.
                     data = cached_data["data"]
                     data["data_timestamp"] = cached_data.get("timestamp", current_time.isoformat())
                     return data
@@ -256,9 +241,6 @@ class CoinGeckoAPI:
 
         processed_global = self._process_global_data(global_data)
 
-        # Fail-closed: never cache an EMPTY payload as fresh data. A dead
-        # CoinGecko response must not poison the 24h cache with zeros —
-        # serve the previous cached data instead and keep last_update intact.
         if not processed_global:
             self.logger.error("CoinGecko returned no usable global data — keeping previous cache")
             cached = await self._get_cached_global_data()
@@ -290,7 +272,7 @@ class CoinGeckoAPI:
                         try:
                             defi_dict[key] = round(float(defi_dict[key]), 2)
                         except (ValueError, TypeError):
-                            pass  # skip malformed data
+                            pass
             processed_data["defi"] = defi_dict
         elif isinstance(defi_data, Exception):
             self.logger.warning("Error fetching DeFi data: %s", defi_data)

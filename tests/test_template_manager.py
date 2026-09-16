@@ -26,9 +26,6 @@ def _make_manager(**overrides):
     return TemplateManager(**defaults)
 
 
-# ── build_system_prompt ──────────────────────────────────────────
-
-
 class TestBuildSystemPrompt:
     """Tests for findings implemented in build_system_prompt."""
 
@@ -220,9 +217,6 @@ class TestBuildSystemPrompt:
         assert f"Window: {expected_window} minutes" in prompt
 
 
-# ── build_response_template ──────────────────────────────────────
-
-
 class TestBuildResponseTemplate:
     """Tests for dynamic thresholds in build_response_template."""
 
@@ -231,8 +225,8 @@ class TestBuildResponseTemplate:
 
     def test_default_thresholds(self):
         rules = self.mgr.build_decision_rules()
-        assert "ADX < 20" in rules  # adx_weak default
-        assert "ADX >= 25" in rules  # adx_strong default
+        assert "ADX < 20" in rules
+        assert "ADX >= 25" in rules
 
     def test_custom_thresholds_injected(self):
         config = SimpleNamespace(
@@ -245,7 +239,7 @@ class TestBuildResponseTemplate:
             MODEL_VERBOSITY="high",
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
-            MIN_RR_ENTRY=2.9,  # config floor above brain value → brain value renders
+            MIN_RR_ENTRY=2.9,
         )
         mgr = _make_manager(config=config)
         thresholds = {
@@ -263,12 +257,12 @@ class TestBuildResponseTemplate:
         rules = mgr.build_decision_rules(dynamic_thresholds=thresholds)
         assert "ADX >= 30" in rules
         assert "ADX < 18" in rules
-        assert "R/R >= 1.8" in rules  # rr_borderline_min as standard minimum for full-confidence entries
-        assert "aspirational" in rules  # min_rr_recommended as aspirational, not a gate
+        assert "R/R >= 1.8" in rules
+        assert "aspirational" in rules
         assert "standard minimum" in rules
-        assert "REJECTED" in rules  # hard gate label in R/R guidelines
-        assert "Accepted when the setup is real" in rules  # new rangeless acceptance wording
-        assert "3.0%" in rules  # avg_sl
+        assert "REJECTED" in rules
+        assert "Accepted when the setup is real" in rules
+        assert "3.0%" in rules
         assert "BUY/SELL: 75+ conf" in rules
         assert "strong evidence against entry" in rules
 
@@ -285,7 +279,7 @@ class TestBuildResponseTemplate:
             MODEL_VERBOSITY="high",
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
-            MIN_RR_ENTRY=2.9,  # config floor above brain value → brain value renders
+            MIN_RR_ENTRY=2.9,
         )
         mgr = _make_manager(config=config)
         thresholds = {
@@ -297,11 +291,9 @@ class TestBuildResponseTemplate:
         }
         rules = mgr.build_decision_rules(dynamic_thresholds=thresholds)
 
-        # SIGNALS line: rr_borderline is the standard minimum, NOT labeled as the only hard gate
         assert "R/R >= 1.5 (standard minimum for full-confidence entries)" in rules
         assert "system-enforced minimum — the only hard gate" not in rules
 
-        # R/R GUIDELINES: the hard rejection boundary renders the effective gate (1.5)
         assert "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)" in rules
         assert "R/R >= 2.5: Preferred / exceptional setup" in rules
         assert "Historical winning average: 2.0+ R/R (aspirational" in rules
@@ -324,7 +316,7 @@ class TestBuildResponseTemplate:
         )
         mgr = _make_manager(config=config)
         thresholds = {
-            "rr_borderline_min": 1.5,  # tighter than config floor
+            "rr_borderline_min": 1.5,
             "min_rr_recommended": 2.0,
             "rr_strong_setup": 2.5,
             "trade_count": 0,
@@ -339,7 +331,7 @@ class TestBuildResponseTemplate:
         NOT stage a conditional/future entry (no carried-forward trigger)."""
         rules = self.mgr.build_decision_rules(dynamic_thresholds={})
         assert "DECIDE ON THE LATEST CLOSED CANDLE" in rules
-        assert "EMIT BUY THIS cycle" in rules  # spot default → entry_signal_open is BUY
+        assert "EMIT BUY THIS cycle" in rules
         assert "Do NOT stage, describe, or carry forward a conditional/future entry" in rules
 
     def test_breakout_confirmation_rule_futures_long(self):
@@ -496,9 +488,6 @@ class TestBuildAnalysisSteps:
         assert "HOLD" in steps
 
 
-# ── Previous response JSON snapshot ──────────────────────────────
-
-
 class TestPreviousResponseSnapshot:
     """Tests for structured decision snapshot in PREVIOUS ANALYSIS CONTEXT."""
 
@@ -597,8 +586,8 @@ class TestPreviousResponseSnapshot:
             + "\n```"
         )
         prompt = self.mgr.build_system_prompt("BTC/USDT", previous_response=prev)
-        assert "80.0" not in prompt  # third support level must be excluded
-        assert "120.0" not in prompt  # third resistance level must be excluded
+        assert "80.0" not in prompt
+        assert "120.0" not in prompt
         assert "90.0" in prompt
         assert "110.0" in prompt
 
@@ -616,9 +605,6 @@ class TestPreviousResponseSnapshot:
         assert "Some reasoning text" in prompt
         assert "Prior decision snapshot:" not in prompt
         assert '"signal"' not in prompt
-
-
-# ── Verbosity levels ──────────────────────────────────────────────
 
 
 class TestBuildResponseTemplateVerbosity:

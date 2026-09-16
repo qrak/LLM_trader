@@ -19,11 +19,6 @@ if TYPE_CHECKING:
 class ExchangeManager:
     def __init__(self, logger: Logger, config: "Config"):
         """Initialize ExchangeManager with logger and self.config.
-
-        Args:
-            logger: Logger instance
-            config: Config instance for exchange settings
-
         Raises:
             ValueError: If config is None
         """
@@ -66,7 +61,7 @@ class ExchangeManager:
             try:
                 await self._update_task
             except asyncio.CancelledError:
-                pass  # expected during shutdown
+                pass
             except Exception:
                 self.logger.exception("Error during update task cancellation")
             finally:
@@ -151,7 +146,6 @@ class ExchangeManager:
             self.logger.info("Refreshed %s with %s symbols", exchange_id, len(exchange.symbols))
         except Exception as e:  # noqa: BLE001
             self.logger.error("Failed to refresh %s markets: %s", exchange_id, e)
-            # Try to reconnect if refresh fails
             try:
                 try:
                     await exchange.close()

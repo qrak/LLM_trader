@@ -81,7 +81,6 @@ class VectorMemoryContextMixin:
         max_drawdown_pct: float | None,
         factor_scores: dict[str, float],
         exit_execution_context: ExitExecutionContext | None = None,
-        # --- NEW: enriched indicators (July 2026) ---
         atr_percentage: float | None = None,
         choppiness: float | None = None,
         volume_state: str = "",
@@ -94,7 +93,6 @@ class VectorMemoryContextMixin:
         mfi: float | None = None,
         cmf: float | None = None,
         supertrend_signal: str = "",
-        # --- Social sentiment + EV snapshot from position entry ---
         social_sentiment_reddit: str = "",
         portfolio_pnl_pct: float | None = None,
     ) -> str:
@@ -317,8 +315,6 @@ class VectorMemoryContextMixin:
         context_header = (
             f"RELEVANT PAST EXPERIENCES (Context: {display}, active window: last {self._max_age_days} days):"
         )
-        # Evidence gate: a similarity score only means something against a real sample.
-        # below MIN_EVIDENCE_TRADES the top hit is an anecdote - flag as LIMITED DATA
         thin_sample = shown <= 2 and (
             max_similarity < 50 or brain_trades < self.MIN_EVIDENCE_TRADES
         )
@@ -513,7 +509,6 @@ class VectorMemoryContextMixin:
 
         atr_pct_val = meta.get("atr_percentage_at_entry")
         if atr_pct_val is not None and atr_pct_val > 0:
-            # volatility drift: a 0.7% ATR trade is not a precedent for a 1.2% ATR tape
             atr_scale_mismatch = (
                 current_atr_percentage is not None
                 and current_atr_percentage > 0
@@ -587,7 +582,6 @@ class VectorMemoryContextMixin:
         if exit_execution_text:
             parts.append(exit_execution_text)
 
-        # Social sentiment match factors
         reddit_sent = meta.get("social_sentiment_reddit", "")
         if reddit_sent and reddit_sent not in ("NEUTRAL", "NO_DATA"):
             reddit_mismatch = f"Reddit={reddit_sent}" not in ctx_upper and reddit_sent.upper() not in ctx_upper

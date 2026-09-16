@@ -77,7 +77,7 @@ class TestRedditSentimentFormatting:
         assert "Bitcoin breaks" in section
         assert "ETF inflows" in section
         assert "/u/bull" in section
-        assert "⚠" not in section  # no errors
+        assert "⚠" not in section
 
     def test_format_sentiment_section_empty(self, analyst):
         section = analyst.format_sentiment_section({"posts": [], "overall_sentiment": "NO_DATA"})
@@ -132,7 +132,7 @@ class TestRedditSentimentFormatting:
         ]
         topics = analyst._extract_top_topics(posts)
         assert "approval" in topics or "expected" in topics or "halving" in topics
-        assert "bitcoin" not in topics  # filtered stopword
+        assert "bitcoin" not in topics
 
     def test_extract_top_topics_empty(self, analyst):
         assert analyst._extract_top_topics([]) == []
@@ -144,7 +144,7 @@ class TestRedditSentimentFormatting:
         assert posts[0]["author"] == "/u/satoshi"
         assert posts[0]["subreddit"] == "Bitcoin"
         assert posts[0]["url"].startswith("https://www.reddit.com/")
-        assert posts[0]["created_utc"] > 0  # parsed from <updated>
+        assert posts[0]["created_utc"] > 0
         assert posts[1]["title"] == "ETF outflows spark crash fears"
 
     def test_parse_atom_feed_respects_limit(self, analyst):

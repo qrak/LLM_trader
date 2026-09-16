@@ -33,10 +33,6 @@ def blockrun_client(mock_logger):
     )
 
 
-# ─────────────────────────────────────────────────────────────────
-# Security tests
-# ─────────────────────────────────────────────────────────────────
-
 class TestKeyRedaction:
     """Verify private key is never leaked in logs or error messages."""
 
@@ -57,10 +53,6 @@ class TestKeyRedaction:
         assert client._redact_private_key(msg) == msg
 
 
-# ─────────────────────────────────────────────────────────────────
-# Model prefix tests
-# ─────────────────────────────────────────────────────────────────
-
 class TestModelPrefix:
     """Verify model names get provider prefix when missing."""
 
@@ -70,10 +62,6 @@ class TestModelPrefix:
     def test_keep_custom_prefix(self, blockrun_client):
         assert blockrun_client._ensure_provider_prefix("anthropic/claude-sonnet-4") == "anthropic/claude-sonnet-4"
 
-
-# ─────────────────────────────────────────────────────────────────
-# User message extraction
-# ─────────────────────────────────────────────────────────────────
 
 class TestUserTextExtraction:
     """Verify user text is preserved in multimodal requests."""
@@ -93,10 +81,6 @@ class TestUserTextExtraction:
         result = blockrun_client._extract_all_user_text_from_messages(messages)
         assert result == ""
 
-
-# ─────────────────────────────────────────────────────────────────
-# Multimodal message preparation
-# ─────────────────────────────────────────────────────────────────
 
 class TestMultimodalMessages:
     """Verify messages are converted correctly for multimodal API calls."""
@@ -129,10 +113,6 @@ class TestMultimodalMessages:
         assert result[0]["content"] == "First prompt"
         assert result[1]["content"] == mm
 
-
-# ─────────────────────────────────────────────────────────────────
-# SDK integration tests (mocked)
-# ─────────────────────────────────────────────────────────────────
 
 class TestChatCompletion:
     """Verify chat_completion calls SDK with correct params."""
@@ -222,10 +202,6 @@ class TestChatCompletion:
             assert result is None
 
 
-# ─────────────────────────────────────────────────────────────────
-# Chart analysis tests (mocked)
-# ─────────────────────────────────────────────────────────────────
-
 class TestChartAnalysis:
     """Verify multimodal chart analysis passes images correctly."""
 
@@ -248,7 +224,6 @@ class TestChartAnalysis:
             ],
         )
 
-        # Create a 1x1 PNG pixel
         fake_png = base64.b64decode(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
         )

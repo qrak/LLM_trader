@@ -163,7 +163,7 @@ async def test_retrieve_context_returns_error_message_on_exception(base_componen
         k=2,
     )
 
-    assert result == ""  # empty, not an error sentence — never poison the LLM prompt
+    assert result == ""
 
 
 @pytest.mark.asyncio
@@ -195,7 +195,6 @@ def test_get_news_cache_snapshot_returns_copy(base_components):
 
     assert len(articles_snapshot) == len(base_components.news_manager.news_database)
 
-    # Ensure caller mutations do not alter manager state.
     articles_snapshot[0]["title"] = "mutated"
     assert base_components.news_manager.news_database[0]["title"] == "Long body first"
 

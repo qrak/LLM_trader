@@ -22,10 +22,8 @@ from src.platforms.ai_providers.response_models import (
     MessageModel,
 )
 
-# Import the retry helpers directly for unit testing
 from src.utils.decorators import _RetryContext, retry_api_call, retry_async
 
-# ── 1. HTTP 429 RATE-LIMITED RESPONSES ────────────────────────────────────────
 
 def _make_rate_limited_response() -> ChatResponseModel:
     """Simulate an OpenRouter-style rate-limit error in a response choice."""
@@ -102,7 +100,6 @@ class TestRateLimitInProviderResponse:
             [{"role": "user", "content": "hello"}],
         )
 
-        # Should have fallen through to googleai
         assert result.success
         assert result.provider == "google"
 
@@ -142,8 +139,6 @@ class TestRateLimitInProviderResponse:
         assert not result.success
 
 
-# ── 2. HTTP 5xx SERVER ERRORS ─────────────────────────────────────────────────
-
 class TestServerErrorRetryBehavior:
     """Transient 5xx errors should be retried before falling through."""
 
@@ -163,7 +158,6 @@ class TestServerErrorRetryBehavior:
                 nonlocal call_count
                 call_count += 1
                 if call_count < 3:
-                    # Return 503 error that should be retried
                     return {
                         "error": {
                             "code": 503,
@@ -171,7 +165,6 @@ class TestServerErrorRetryBehavior:
                         },
                         "choices": [],
                     }
-                # Third call succeeds
                 return {
                     "choices": [
                         {
@@ -185,8 +178,6 @@ class TestServerErrorRetryBehavior:
         assert call_count == 3, f"Expected 3 attempts (1 initial + 2 retries), got {call_count}"
         assert response["choices"][0]["message"]["content"] == "ok"
 
-
-# ── 3. EXPONENTIAL BACKOFF WITH JITTER ────────────────────────────────────────
 
 class TestExponentialBackoffJitter:
     """_add_jitter applies ±25% jitter to prevent thundering herd."""
@@ -225,11 +216,10 @@ class TestApiRetryBackoffTiming:
 
         async def tracking_sleep(delay):
             delays.append(delay)
-            return await original_sleep(0)  # don't actually wait
+            return await original_sleep(0)
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(asyncio, "sleep", tracking_sleep)
-            # Use _ApiRetryContext directly with small delays
             from src.utils.decorators import _ApiRetryContext
 
             class FakeInstance:
@@ -247,7 +237,6 @@ class TestApiRetryBackoffTiming:
                 max_delay=60,
             )
 
-            # Manually run retry loop
             for attempt in range(3):
                 should_continue = context._should_retry(attempt)
                 if not should_continue:
@@ -255,13 +244,9 @@ class TestApiRetryBackoffTiming:
                 await context._wait_and_increment(attempt)
 
         assert len(delays) >= 2, "Should have at least 2 delay measurements"
-        # After jitter, delays should generally increase
-        # We check that the delays are in ascending order (with jitter tolerance)
         assert delays[0] < delays[-1] * 1.5, \
             f"Backoff should grow: first={delays[0]:.6f}, last={delays[-1]:.6f}"
 
-
-# ── 4. EXHAUSTED RETRIES & CIRCUIT-BREAKER BEHAVIOR ───────────────────────────
 
 class TestExhaustedRetries:
     """After max_retries, the system must stop retrying and return the last response."""
@@ -287,9 +272,7 @@ class TestExhaustedRetries:
 
         client = FakeClient()
         response = await client.fetch("test-model", [{"role": "user", "content": "hi"}], {})
-        # Should have retried max_retries times (1 initial + 2 retries = 3 total)
         assert call_count == 3, f"Expected 3 calls (2 retries), got {call_count}"
-        # Last response is returned even on failure
         assert response is not None
 
     @pytest.mark.asyncio
@@ -322,8 +305,6 @@ class TestExhaustedRetries:
         assert call_count == 2, f"Expected 2 calls (1 retry), got {call_count}"
         assert response["choices"][0]["message"]["content"] == "recovered"
 
-
-# ── 5. NETWORK ERROR RETRY via retry_async decorator ──────────────────────────
 
 class TestAsyncRetryDecorator:
     """The retry_async decorator handles network-level exceptions."""

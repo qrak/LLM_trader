@@ -22,10 +22,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Prefixes that Codacy's Docker container may prepend to paths.
 STRIP_PREFIXES: list[str] = [
-    "/src/",                     # Codacy Docker default mount
-    "/home/runner/work/LLM_trader/LLM_trader/",  # GitHub Actions runner
+    "/src/",
+    "/home/runner/work/LLM_trader/LLM_trader/",
 ]
 
 VALID_LEVELS = {"none", "note", "warning", "error"}
@@ -55,7 +54,6 @@ def find_sarif() -> Path | None:
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
-    # Prefer results.sarif then codacy.sarif then any *.sarif file
     for name in ("results.sarif", "codacy.sarif"):
         for c in candidates:
             if c.name == name:
@@ -109,7 +107,6 @@ def fix_sarif(data: dict[str, Any]) -> dict[str, Any]:
         if not driver.get("name"):
             driver["name"] = "Codacy"
 
-        # Fix tool.driver.rules: MUST be an array (list), not null/None or non-list
         rules = driver.get("rules")
         if rules is None or not isinstance(rules, list):
             driver["rules"] = []
@@ -129,11 +126,9 @@ def fix_sarif(data: dict[str, Any]) -> dict[str, Any]:
             if not isinstance(result, dict):
                 continue
 
-            # Fix result level if present
             if "level" in result:
                 result["level"] = sanitize_level(result.get("level"))
 
-            # Fix primary locations
             locations = result.get("locations")
             if isinstance(locations, list):
                 for loc in locations:
@@ -147,7 +142,6 @@ def fix_sarif(data: dict[str, Any]) -> dict[str, Any]:
                             if isinstance(uri, str) and uri:
                                 art_loc["uri"] = fix_uri(uri)
 
-            # Fix related locations
             related_locations = result.get("relatedLocations")
             if isinstance(related_locations, list):
                 for rel_loc in related_locations:

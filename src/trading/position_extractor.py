@@ -19,10 +19,6 @@ class PositionExtractor:
         self, analysis: dict[str, Any]
     ) -> tuple[str, str, float | None, float | None, float | None, str]:
         """Extract trading information from a parsed analysis payload.
-
-        Args:
-            analysis: The ``analysis`` object of a UnifiedParser parse result
-
         Returns: tuple of (signal, confidence, stop_loss, take_profit, position_size, reasoning)
         """
         signal = str(analysis.get("signal", "HOLD")).upper()
@@ -57,10 +53,6 @@ class PositionExtractor:
 
     def validate_signal(self, signal: str) -> bool:
         """Validate if signal is a recognized trading action.
-
-        Args:
-            signal: Trading signal to validate
-
         Returns:
             True if valid signal
         """

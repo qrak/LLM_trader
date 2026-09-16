@@ -30,23 +30,18 @@ class TickerManager:
     async def update_known_tickers(self, news_database: list[dict[str, Any]]) -> None:
         """Update known tickers from news database and validation."""
         try:
-            # Extract coins from news database
             detected_coins = self._extract_detected_coins(news_database)
             category_coins = self._extract_category_coins(news_database)
 
-            # Combine all discovered coins
             all_discovered_coins = detected_coins.union(category_coins)
 
-            # Filter and validate coins
             filtered_coins = {coin for coin in all_discovered_coins
                             if self._is_potential_valid_coin(coin)}
 
             self.logger.debug("Found %s potential new tickers", len(filtered_coins))
 
-            # Validate and add new coins
             await self._validate_and_add_coins(filtered_coins)
 
-            # Save updated tickers
             await self.save_tickers()
 
         except Exception:
@@ -70,12 +65,10 @@ class TickerManager:
 
         for article in news_database:
             categories = article.get("categories", "")
-            # Canonical categories are pipe-separated (schema_mapper.to_article_schema)
             category_parts = categories.split("|")
             for category in category_parts:
                 category = category.strip()
                 if self._is_valid_ticker_category(category):
-                    # Extract potential ticker from category
                     ticker = self._extract_ticker_from_category(category)
                     if ticker:
                         category_coins.add(ticker)
@@ -87,7 +80,6 @@ class TickerManager:
         if not category or len(category) < 2:
             return False
 
-        # Skip obviously non-ticker categories
         skip_categories = {
             "bitcoin", "ethereum", "blockchain", "cryptocurrency", "trading",
             "market", "price", "analysis", "news", "defi", "nft"
@@ -98,14 +90,11 @@ class TickerManager:
 
     def _extract_ticker_from_category(self, category: str) -> str | None:
         """Extract ticker symbol from category string."""
-        # Look for patterns that might be tickers
         category_upper = category.upper()
 
-        # Remove common prefixes/suffixes
         for remove in ["-USD", "-USDT", "-BTC", "-ETH"]:
             category_upper = category_upper.removesuffix(remove)
 
-        # Basic validation - should be 2-10 characters, mostly letters
         if 2 <= len(category_upper) <= 10 and category_upper.isalnum():
             return category_upper
 
@@ -116,7 +105,6 @@ class TickerManager:
         if not coin or len(coin) < 2 or len(coin) > 10:
             return False
 
-        # Skip obvious non-tickers
         skip_terms = {"USD", "EUR", "GBP", "JPY", "NEWS", "MARKET", "PRICE"}
         return coin.upper() not in skip_terms
 
@@ -136,9 +124,6 @@ class TickerManager:
             try:
                 valid_exchange_symbols = self.exchange_manager.get_all_symbols()
                 if not valid_exchange_symbols:
-                    # Exchanges load lazily; at startup nothing is loaded yet.
-                    # Load the supported exchanges once so the validation below
-                    # runs against live symbol sets.
                     await self.exchange_manager.ensure_symbols_loaded()
                     valid_exchange_symbols = self.exchange_manager.get_all_symbols()
             except Exception as e:  # noqa: BLE001
@@ -166,11 +151,9 @@ class TickerManager:
         (e.g. BTC matches the pair BTC/USDT). Unvalidated candidates are
         never added - see _validate_and_add_coins.
         """
-        # Don't add if already known
         if coin in self.known_tickers:
             return False
 
-        # Match the pair's base asset; exchange symbols look like "BTC/USDT"
         return any(symbol.split("/")[0].upper() == coin for symbol in valid_exchange_symbols)
 
     async def save_tickers(self) -> None:

@@ -46,8 +46,6 @@ class TestPostMortemRepository:
         repo = PostMortemRepository(logger=MagicMock(), db_path=db_path)
         repo.insert_post_mortem(**self._make_data(trade_id=1, verdict="first", pnl_pct=-1.0))
         repo.insert_post_mortem(**self._make_data(trade_id=2, verdict="second", pnl_pct=-2.0))
-        # Override created_at with explicit distinct timestamps to avoid
-        # relying on datetime('now') 1-second resolution.
         conn = sqlite3.connect(db_path)
         try:
             conn.execute("UPDATE trade_post_mortem SET created_at = '2026-06-17 12:00:00' WHERE verdict = 'first'")
@@ -97,7 +95,6 @@ class TestPostMortemRepository:
         logger = MagicMock()
         self._make_repo(tmp_path, logger=logger)
         self._make_repo(tmp_path, logger=logger)
-        # No assertion — just verifying no exception raised
 
     def test_get_recent_returns_correct_fields(self, tmp_path):
         """get_recent_post_mortems should return expected fields including llm_analysis."""
@@ -111,7 +108,7 @@ class TestPostMortemRepository:
         assert pm["direction"] == "LONG"
         assert pm["verdict"] == "overestimated_breakout"
         assert pm["lesson_learned"]
-        assert pm["llm_analysis"]  # should be present (was missing before fix)
+        assert pm["llm_analysis"]
         assert pm["pnl_pct"] == -3.2
         assert pm["close_reason"] == "stop_loss"
         assert "created_at" in pm

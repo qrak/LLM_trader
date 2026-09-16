@@ -42,21 +42,7 @@ class PromptBuilder:
         timeframe_validator: Any = None,
         template_manager: TemplateManager | None = None,
     ) -> None:
-        """Initialize the PromptBuilder
-
-        Args:
-            timeframe: The primary timeframe for analysis (e.g. "1h")
-            logger: Optional logger instance for debugging
-            config: Configuration instance
-            format_utils: Format utilities (required)
-            overview_formatter: MarketOverviewFormatter instance (required)
-            long_term_formatter: LongTermFormatter instance (required)
-            technical_formatter: TechnicalFormatter instance (required)
-            market_formatter: MarketFormatter instance (required)
-            ev_formatter: EVFrameworkFormatter instance (optional)
-            timeframe_validator: TimeframeValidator instance (injected)
-            template_manager: TemplateManager instance (required)
-        """
+        """Initialize the PromptBuilder"""
         self.timeframe = timeframe
         self.logger = logger
         self.custom_instructions: list[str] = []
@@ -67,11 +53,9 @@ class PromptBuilder:
         self.format_utils = format_utils
         self.timeframe_validator = timeframe_validator
 
-        # Initialize component managers (all required)
         if template_manager is None:
             raise ValueError("template_manager is required for PromptBuilder")
         self.template_manager = template_manager
-        # ev_formatter is optional — only injected when EV framework is enabled
         self.ev_formatter = ev_formatter
         if overview_formatter is None:
             raise ValueError("overview_formatter is required for PromptBuilder")
@@ -94,14 +78,6 @@ class PromptBuilder:
         position_context: str | None = None
     ) -> str:
         """Build the complete prompt using component managers.
-
-        Args:
-            context: Analysis context containing all required data
-            has_chart_analysis: Whether chart image analysis is available
-            additional_context: Additional context to append (e.g., news, memory)
-            previous_indicators: Previous technical indicator values for comparison
-            position_context: Current position details and unrealized P&L (moved from system prompt)
-
         Returns:
             str: Complete formatted prompt
         """
@@ -122,10 +98,8 @@ class PromptBuilder:
                 analyzed_symbol=context.symbol
             ))
 
-            # Add ticker data from coin_data if available
             coin_data = context.market_overview.get("coin_data", {})
             if coin_data and context.symbol:
-                # Extract base symbol (e.g., "BTC" from "BTC/USDT")
                 base_symbol = context.symbol.split("/")[0]
                 ticker_info = coin_data.get(base_symbol)
                 if ticker_info:
@@ -133,7 +107,6 @@ class PromptBuilder:
                     if ticker_section:
                         sections.append(ticker_section)
 
-        # Add market microstructure data (order book, trades, funding rate)
         if context.market_microstructure:
             microstructure = context.market_microstructure
 
@@ -145,7 +118,6 @@ class PromptBuilder:
             if snapshot_notice:
                 sections.append(snapshot_notice)
 
-            # Add order book depth
             if microstructure.get("order_book"):
                 ob_section = self.market_formatter.format_order_book_depth(
                     microstructure["order_book"],
@@ -155,7 +127,6 @@ class PromptBuilder:
                 if ob_section:
                     sections.append(ob_section)
 
-            # Add trade flow
             if microstructure.get("recent_trades"):
                 trades_section = self.market_formatter.format_trade_flow(
                     microstructure["recent_trades"], context.symbol
@@ -163,7 +134,6 @@ class PromptBuilder:
                 if trades_section:
                     sections.append(trades_section)
 
-            # Add funding rate (if futures contract)
             if microstructure.get("funding_rate"):
                 funding_section = self.market_formatter.format_funding_rate(
                     microstructure["funding_rate"], context.symbol
@@ -171,7 +141,6 @@ class PromptBuilder:
                 if funding_section:
                     sections.append(funding_section)
 
-        # Add cryptocurrency details if available
         coin_details_section = self.build_coin_details_section(
             context.coin_details
         )
@@ -182,10 +151,8 @@ class PromptBuilder:
             sections.append(self.build_market_data_section(context.ohlcv_candles))
         sections.append(self.technical_analysis_formatter.format_technical_analysis(context, self.timeframe))
 
-        # Market period metrics
         sections.append(self.build_market_period_metrics_section(context.market_metrics))
 
-        # Add previous indicators comparison section if available
         if previous_indicators:
             prev_section = self.build_previous_indicators_section(
                 previous_indicators,
@@ -194,10 +161,8 @@ class PromptBuilder:
             if prev_section:
                 sections.append(prev_section)
 
-        # Build long-term analysis section (daily + weekly)
         long_term_sections = []
 
-        # Daily macro analysis
         if context.long_term_data:
             daily_section = self.long_term_formatter.format_long_term_analysis(
                 context.long_term_data,
@@ -206,7 +171,6 @@ class PromptBuilder:
             if daily_section:
                 long_term_sections.append(daily_section)
 
-        # Weekly macro analysis (200W SMA)
         if context.weekly_macro_indicators and "weekly_macro_trend" in context.weekly_macro_indicators:
             weekly_section = self.long_term_formatter._format_weekly_macro_section(
                 context.weekly_macro_indicators["weekly_macro_trend"]
@@ -217,11 +181,9 @@ class PromptBuilder:
         if long_term_sections:
             sections.append("\n\n".join(long_term_sections))
 
-        # Add trading context EARLY for visibility (position, P&L, history)
         if additional_context:
             sections.append(additional_context)
 
-        # Add custom instructions if available
         if self.custom_instructions:
             custom_context = "\n".join(self.custom_instructions)
             sections.append(
@@ -587,28 +549,13 @@ class PromptBuilder:
         ev_context: str | None = None,
     ) -> str:
         """Build system prompt using template manager.
-
-        Args:
-            symbol: Trading symbol
-            context: Analysis context containing technical data
-            previous_response: Optional previous AI response for continuity
-            performance_context: Recent trading history and performance metrics
-            brain_context: Distilled trading insights from closed trades
-            last_analysis_time: Formatted timestamp of last analysis
-            has_chart_analysis: Whether chart image analysis is available
-            dynamic_thresholds: Brain-learned thresholds for response template
-            model_verbosity: Override verbosity level; falls back to config.MODEL_VERBOSITY
-            ev_context: EV framework section text (injected when EV formatter enabled)
-
         Returns:
             str: Formatted system prompt with instructions
         """
-        # Set context so _has_advanced_support_resistance can access it
         self.context = context
 
         eff_verbosity = model_verbosity or self.config.MODEL_VERBOSITY
 
-        # Build base system prompt
         base_prompt = self.template_manager.build_system_prompt(
             symbol,
             self.timeframe,
@@ -621,17 +568,13 @@ class PromptBuilder:
             model_verbosity=eff_verbosity,
         )
 
-        # Inject EV framework if available (before decision rules)
         if ev_context:
             base_prompt += ev_context
 
-        # Check if we have advanced support/resistance detected
         advanced_support_resistance_detected = self._has_advanced_support_resistance()
 
-        # Get available periods for dynamic prompt generation
         available_periods = self._calculate_period_candles()
 
-        # Add analysis steps (instructions go in system prompt)
         analysis_steps = self.template_manager.build_analysis_steps(
             symbol,
             advanced_support_resistance_detected,
@@ -639,14 +582,12 @@ class PromptBuilder:
             available_periods
         )
 
-        # Build decision rules section (placed between base prompt and analysis steps)
         decision_rules = self.template_manager.build_decision_rules(
             has_chart_analysis,
             model_verbosity=eff_verbosity,
             dynamic_thresholds=dynamic_thresholds
         )
 
-        # Add response format template (output structure only)
         response_template = self.template_manager.build_response_template(
             has_chart_analysis,
             model_verbosity=eff_verbosity,
@@ -656,11 +597,7 @@ class PromptBuilder:
         return f"{base_prompt}\n\n{decision_rules}\n\n{analysis_steps}\n\n{response_template}"
 
     def add_custom_instruction(self, instruction: str) -> None:
-        """Add custom instruction to the prompt.
-
-        Args:
-            instruction: Custom instruction to add
-        """
+        """Add custom instruction to the prompt."""
         self.custom_instructions.append(instruction)
 
     def _has_advanced_support_resistance(self) -> bool:
@@ -673,12 +610,10 @@ class PromptBuilder:
             return False
         td = self.context.technical_data
 
-        # Get advanced indicators with defaults
         adv_support = td.get("advanced_support", np.nan)
         adv_resistance = td.get("advanced_resistance", np.nan)
 
         adv_support = last_or_scalar(adv_support)
         adv_resistance = last_or_scalar(adv_resistance)
 
-        # Both values must be valid (not NaN)
         return not math.isnan(adv_support) and not math.isnan(adv_resistance)

@@ -275,7 +275,6 @@ Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.
     def test_hold_open_position_contract_is_explicit(self) -> None:
         response_template = self.manager.build_response_template()
 
-        # Aktualne brzmienie: caly kontrakt w jednej linii "HOLD semantics:".
         assert "HOLD(open position) = no execution change and must not repeat stale SL/TP values" in response_template
         assert "UPDATE is for an open position only" in response_template
         assert "HOLD(no position) = no position and no pending/future order" in response_template

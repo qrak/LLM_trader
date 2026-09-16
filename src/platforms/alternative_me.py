@@ -19,7 +19,6 @@ class AlternativeMeAPI:
     API client for Alternative.me services.
     Primarily handles the Fear & Greed Index data.
     """
-    # API endpoints
     FEAR_GREED_INDEX_URL = "https://api.alternative.me/fng/"
     FEAR_GREED_HISTORY_URL = "https://api.alternative.me/fng/?limit={limit}&format=json"
 
@@ -70,10 +69,6 @@ class AlternativeMeAPI:
     async def get_fear_greed_index(self, force_refresh: bool = False) -> dict[str, Any]:
         """
         Get current Fear & Greed Index data
-
-        Args:
-            force_refresh: Force refresh from API instead of using cache
-
         Returns:
             Dictionary containing Fear & Greed Index data
         """
@@ -120,7 +115,6 @@ class AlternativeMeAPI:
             else:
                 self.logger.error("Fear & Greed API request failed with status %s", resp.status)
 
-        # Non-200 or empty response: return cached data if available
         if self.current_index:
             self.logger.warning("Using cached Fear & Greed data as fallback after API failure")
             return self.current_index
@@ -136,13 +130,9 @@ class AlternativeMeAPI:
     async def get_historical_fear_greed(self, days: int = 30) -> list[dict[str, Any]]:
         """
         Get historical Fear & Greed Index data
-
-        Args:
-            days: Number of days of historical data to retrieve
-
         Returns: list of Fear & Greed Index data points, sorted by date (newest first)
         """
-        limit = min(max(days, 1), 365)  # Limit between 1 and 365
+        limit = min(max(days, 1), 365)
         url = self.FEAR_GREED_HISTORY_URL.format(limit=limit)
 
         if self.session is None or self.session.closed:

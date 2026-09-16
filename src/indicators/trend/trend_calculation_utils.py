@@ -19,13 +19,11 @@ def calculate_directional_movement(high: np.ndarray, low: np.ndarray) -> tuple[n
         up_move = high[i] - high[i - 1]
         down_move = low[i - 1] - low[i]
 
-        # Wilder's +DM: UpMove must be positive and greater than DownMove
         if up_move > down_move and up_move > 0:
             dm_pos[i] = up_move
         else:
             dm_pos[i] = 0
 
-        # Wilder's -DM: DownMove must be positive and greater than UpMove
         if down_move > up_move and down_move > 0:
             dm_neg[i] = down_move
         else:
@@ -91,7 +89,6 @@ def get_donchian_channels_o1(high: np.ndarray, low: np.ndarray, length: int) -> 
     if length > n or length <= 0:
         return mid_line
 
-    # Initial window
     max_h = -np.inf
     min_l = np.inf
     max_idx = -1
@@ -108,7 +105,6 @@ def get_donchian_channels_o1(high: np.ndarray, low: np.ndarray, length: int) -> 
     mid_line[length - 1] = (max_h + min_l) / 2
 
     for i in range(length, n):
-        # Remove old element
         if i - length == max_idx:
             max_h = -np.inf
             for j in range(i - length + 1, i + 1):
@@ -138,7 +134,6 @@ def get_donchian_channels_o1(high: np.ndarray, low: np.ndarray, length: int) -> 
 def calculate_ichimoku_lines(high: np.ndarray, low: np.ndarray,
                            conversion_length: int, base_length: int) -> tuple[np.ndarray, np.ndarray]:
     """Calculate Ichimoku conversion and base lines."""
-    # Calculate Conversion Line (Tenkan-sen) and Base Line (Kijun-sen)
     conversion_line = get_donchian_channels_o1(high, low, conversion_length)
     base_line = get_donchian_channels_o1(high, low, base_length)
 
@@ -154,15 +149,10 @@ def calculate_ichimoku_spans(high: np.ndarray, low: np.ndarray,
     leading_span_a = np.full(n, np.nan)
     leading_span_b = np.full(n, np.nan)
 
-    # Calculate Leading Span A (Senkou Span A)
-    # Span A = (Conversion Line + Base Line) / 2, shifted forward by displacement
-    # It can be calculated as soon as both Conversion and Base lines are available
     for i in range(n - displacement):
         if not math.isnan(conversion_line[i]) and not math.isnan(base_line[i]):
             leading_span_a[i + displacement] = (conversion_line[i] + base_line[i]) / 2
 
-    # Calculate Leading Span B (Senkou Span B)
-    # Span B = (Max(High, n) + Min(Low, n)) / 2, shifted forward
     span_b_mid_line = get_donchian_channels_o1(high, low, lagging_span2_length)
 
     for i in range(lagging_span2_length - 1, n - displacement):

@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
 
-# Define constant action sets for efficient membership testing
 ENTRY_ACTIONS = {"BUY", "SELL"}
 EXIT_ACTIONS = {"CLOSE", "CLOSE_LONG", "CLOSE_SHORT"}
 
@@ -22,14 +21,7 @@ class BaseNotifier(ABC):
     """Abstract base class for notifiers with shared calculation logic."""
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils") -> None:
-        """Initialize BaseNotifier.
-
-        Args:
-            logger: Logger instance
-            config: Config instance
-            unified_parser: UnifiedParser for JSON extraction (DRY)
-            formatter: FormatUtils instance for value formatting
-        """
+        """Initialize BaseNotifier."""
         self.logger = logger
         self.config = config
         self.unified_parser = unified_parser
@@ -107,10 +99,6 @@ class BaseNotifier(ABC):
     @staticmethod
     def get_action_styling(action: str) -> tuple[str, str]:
         """Get color key and emoji for a trading action.
-
-        Args:
-            action: Trading action (BUY, SELL, HOLD, CLOSE, etc.)
-
         Returns: tuple of (color_key, emoji)
         """
         color_map = {
@@ -136,10 +124,6 @@ class BaseNotifier(ABC):
     @staticmethod
     def get_pnl_styling(pnl_pct: float) -> tuple[str, str]:
         """Get color key and emoji based on PnL percentage.
-
-        Args:
-            pnl_pct: Profit and Loss percentage
-
         Returns: tuple of (color_key, emoji)
         """
         if pnl_pct > 0:
@@ -155,11 +139,6 @@ class BaseNotifier(ABC):
             current_price: float
     ) -> tuple[float, float]:
         """Calculate unrealized PnL for a position.
-
-        Args:
-            position: Position object with entry_price, size, direction
-            current_price: Current market price
-
         Returns: tuple of (pnl_percent, pnl_quote)
         """
         pnl_pct = position.calculate_pnl(current_price)
@@ -175,11 +154,6 @@ class BaseNotifier(ABC):
             current_price: float
     ) -> tuple[float, float]:
         """Calculate percentage distances to stop loss and take profit.
-
-        Args:
-            position: Position object with stop_loss, take_profit, direction
-            current_price: Current market price
-
         Returns: tuple of (stop_distance_pct, target_distance_pct)
         """
         if current_price is None or current_price <= 0:
@@ -195,15 +169,10 @@ class BaseNotifier(ABC):
     @staticmethod
     def calculate_time_held(entry_time: datetime) -> float:
         """Calculate hours held since entry.
-
-        Args:
-            entry_time: Position entry timestamp
-
         Returns:
             Hours held as float
         """
         now = datetime.now(timezone.utc)
-        # Handle naive datetime by assuming UTC
         if entry_time.tzinfo is None:
             entry_time = entry_time.replace(tzinfo=timezone.utc)
         time_held = now - entry_time
@@ -236,10 +205,6 @@ class BaseNotifier(ABC):
             trade_history: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
         """Calculate overall performance statistics from trade history.
-
-        Args:
-            trade_history: list of trade decision dictionaries
-
         Returns: dict with stats or None if no closed trades
         """
         if not trade_history:
@@ -314,10 +279,6 @@ class BaseNotifier(ABC):
     @staticmethod
     def extract_analysis_fields(analysis: dict) -> dict[str, Any]:
         """Extract common fields from analysis JSON.
-
-        Args:
-            analysis: Analysis dictionary from AI response
-
         Returns: dict with extracted fields
         """
         return {

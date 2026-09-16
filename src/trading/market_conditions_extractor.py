@@ -50,15 +50,9 @@ class MarketConditionsExtractor:
         try:
             analysis = result.get("analysis", {})
 
-            # Trend info
             trend = analysis.get("trend", {})
             if trend:
                 conditions["trend_direction"] = trend.get("direction", "NEUTRAL")
-                # Sanitize the nested LLM field: json.loads accepts NaN/Infinity
-                # literals and null, so strength_4h can be non-finite or None.
-                # The top-level trend_strength key is sanitized by unified_parser,
-                # but this nested path is NOT — sanitize here or NaN/None poisons
-                # MarketConditions and then brain/vector storage.
                 raw_strength = trend.get("strength_4h", trend.get("strength", 50))
                 try:
                     strength_float = float(raw_strength)
@@ -69,7 +63,6 @@ class MarketConditionsExtractor:
                 conditions["trend_strength"] = strength_float
                 conditions["timeframe_alignment"] = trend.get("timeframe_alignment")
 
-            # Technical data
             tech_data = result.get("technical_data", {})
             if tech_data:
                 conditions["adx"] = tech_data.get("adx", 0)
@@ -116,7 +109,6 @@ class MarketConditionsExtractor:
                 conditions["atr_percentage"] = atr_pct
                 conditions["volatility"] = classify_volatility_level({"atr_percent": atr_pct})
 
-                # --- NEW: enriched indicators for vector DB learning (July 2026) ---
                 conditions["vwap"] = resolve_scalar(tech_data.get("vwap"), 0.0)
                 conditions["mfi"] = resolve_scalar(tech_data.get("mfi"), 50.0)
                 conditions["cmf"] = resolve_scalar(tech_data.get("cmf"), 0.0)
@@ -142,7 +134,6 @@ class MarketConditionsExtractor:
             conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
             conditions["is_weekend"] = datetime.now(timezone.utc).weekday() >= 5
 
-            # Social sentiment from Reddit (injected by app.py)
             conditions["social_sentiment_reddit"] = result.get("_social_sentiment_reddit", "NEUTRAL")
             conditions["portfolio_pnl_pct"] = float(result.get("_portfolio_pnl_pct", 0.0))
         except Exception as e:  # noqa: BLE001

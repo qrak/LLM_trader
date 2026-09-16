@@ -14,12 +14,7 @@ class LongTermFormatter:
     """Formatter for long-term historical analysis and macro trends."""
 
     def __init__(self, logger: Logger | None = None, format_utils: "FormatUtils | None" = None):
-        """Initialize the long-term formatter.
-
-        Args:
-            logger: Optional logger instance
-            format_utils: Format utilities for value formatting (required)
-        """
+        """Initialize the long-term formatter."""
         self.logger = logger
         if format_utils is None:
             raise ValueError("format_utils is required for LongTermFormatter")
@@ -32,39 +27,32 @@ class LongTermFormatter:
 
         sections = []
 
-        # Simple Moving Averages
         sma_section = self._format_sma_section(long_term_data)
         if sma_section:
             sections.append(sma_section)
 
-        # Volume SMAs
         volume_sma_section = self._format_volume_sma_section(long_term_data)
         if volume_sma_section:
             sections.append(volume_sma_section)
 
-        # Price position analysis
         if current_price:
             price_position_section = self._format_price_position_section(long_term_data, current_price)
             if price_position_section:
                 sections.append(price_position_section)
 
-        # Daily indicators
         daily_indicators_section = self._format_daily_indicators_section(long_term_data)
         if daily_indicators_section:
             sections.append(daily_indicators_section)
 
-        # ADX analysis
         adx_section = self._format_adx_section(long_term_data)
         if adx_section:
             sections.append(adx_section)
 
-        # Ichimoku analysis
         if current_price:
             ichimoku_section = self._format_ichimoku_section(long_term_data, current_price)
             if ichimoku_section:
                 sections.append(ichimoku_section)
 
-        # Macro trend analysis (365-day SMA context)
         if "macro_trend" in long_term_data:
             macro_trend_section = self._format_macro_trend_section(long_term_data["macro_trend"])
             if macro_trend_section:
@@ -127,20 +115,17 @@ class LongTermFormatter:
         """Format daily timeframe indicators."""
         indicator_items = []
 
-        # RSI
         if "daily_rsi" in long_term_data:
             rsi_val = long_term_data["daily_rsi"]
             rsi_status = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
             indicator_items.append(f"Daily RSI: {self.format_utils.fmt(rsi_val)} ({rsi_status})")
 
-        # MACD
         if "daily_macd_line" in long_term_data and "daily_macd_signal" in long_term_data:
             macd_line = long_term_data["daily_macd_line"]
             macd_signal = long_term_data["daily_macd_signal"]
             macd_status = "Bullish" if macd_line > macd_signal else "Bearish"
             indicator_items.append(f"Daily MACD: {macd_status}")
 
-        # Stochastic
         if "daily_stoch_k" in long_term_data:
             stoch_val = long_term_data["daily_stoch_k"]
             stoch_status = "Overbought" if stoch_val > 80 else "Oversold" if stoch_val < 20 else "Neutral"
@@ -171,7 +156,6 @@ class LongTermFormatter:
         """Format Ichimoku cloud analysis."""
         ichimoku_items = []
 
-        # Tenkan and Kijun
         if "ichimoku_tenkan" in long_term_data:
             tenkan = long_term_data["ichimoku_tenkan"]
             ichimoku_items.append(f"Tenkan: {self.format_utils.fmt(tenkan)}")
@@ -180,7 +164,6 @@ class LongTermFormatter:
             kijun = long_term_data["ichimoku_kijun"]
             ichimoku_items.append(f"Kijun: {self.format_utils.fmt(kijun)}")
 
-        # Cloud analysis
         if "ichimoku_span_a" in long_term_data and "ichimoku_span_b" in long_term_data:
             span_a = long_term_data["ichimoku_span_a"]
             span_b = long_term_data["ichimoku_span_b"]
@@ -213,11 +196,9 @@ class LongTermFormatter:
         death_cross = macro_trend.get("death_cross", False)
         long_term_price_change_pct = macro_trend.get("long_term_price_change_pct")
 
-        # Build status indicators
         status_parts = []
         status_parts.append(f"Trend: {trend_direction}")
 
-        # Add price change if available
         if long_term_price_change_pct is not None:
             change_sign = "+" if long_term_price_change_pct >= 0 else ""
             status_parts.append(f"365D Change: {change_sign}{self.format_utils.fmt(long_term_price_change_pct)}%")
@@ -254,7 +235,6 @@ class LongTermFormatter:
             status = "Above" if weekly_macro["price_above_200w_sma"] else "Below"
             lines.append(f"  • Price vs 200W SMA: {status}")
 
-        # Golden/Death Cross with dates
         if weekly_macro.get("golden_cross"):
             weeks = weekly_macro.get("golden_cross_weeks_ago", 0)
             date = weekly_macro.get("golden_cross_date", "N/A")
@@ -264,7 +244,6 @@ class LongTermFormatter:
             date = weekly_macro.get("death_cross_date", "N/A")
             lines.append(f"  • Death Cross: {weeks} weeks ago ({date})")
 
-        # Multi-year trend
         if weekly_macro.get("multi_year_trend"):
             mt = weekly_macro["multi_year_trend"]
             years = mt.get("years_analyzed", 0)

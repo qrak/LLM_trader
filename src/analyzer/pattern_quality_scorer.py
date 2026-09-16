@@ -11,13 +11,11 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-# Weight distribution for quality components (must sum to 1.0)
-WEIGHT_PATTERN_QUANTITY = 0.30     # How many patterns were detected
-WEIGHT_PATTERN_CONFIRMATION = 0.30  # Multiple patterns agreeing on direction
-WEIGHT_PATTERN_RECENCY = 0.20       # How recently patterns formed
-WEIGHT_INDICATOR_ALIGNMENT = 0.20   # ADX/RSI alignment with pattern direction
+WEIGHT_PATTERN_QUANTITY = 0.30
+WEIGHT_PATTERN_CONFIRMATION = 0.30
+WEIGHT_PATTERN_RECENCY = 0.20
+WEIGHT_INDICATOR_ALIGNMENT = 0.20
 
-# Max |LLM-reported - computed| before flagging
 QUALITY_DISCREPANCY_THRESHOLD: float = 25.0
 
 
@@ -74,7 +72,6 @@ class PatternQualityScorer:
                            llm_quality, quality.overall)
     """
 
-    # ── Pattern categorization ──────────────────────────────────
 
     BULLISH_PATTERNS = frozenset({
         "bullish_engulfing", "morning_star", "piercing_line", "hammer",
@@ -124,7 +121,6 @@ class PatternQualityScorer:
                     names.append(str(name))
         return names
 
-    # ── Scoring components ──────────────────────────────────────
 
     @staticmethod
     def _score_quantity(pattern_count: int) -> float:
@@ -143,7 +139,7 @@ class PatternQualityScorer:
             return 70.0
         if pattern_count == 4:
             return 85.0
-        return 100.0  # 5+ patterns
+        return 100.0
 
     @staticmethod
     def _score_confirmation(bullish_count: int, bearish_count: int) -> float:
@@ -159,7 +155,6 @@ class PatternQualityScorer:
         majority = max(bullish_count, bearish_count)
         ratio = majority / total_dir
 
-        # Perfect alignment = 100, evenly split = 0
         if ratio >= 0.9:
             return 100.0
         if ratio >= 0.75:
@@ -168,7 +163,7 @@ class PatternQualityScorer:
             return 50.0
         if ratio >= 0.5:
             return 30.0
-        return 0.0  # minority direction (shouldn't happen since majority >= half)
+        return 0.0
 
     @staticmethod
     def _score_recency(patterns: dict[str, Any]) -> float:
@@ -187,19 +182,15 @@ class PatternQualityScorer:
                         pass
 
         if not bar_indices:
-            # No recency data available — neutral score
             return 50.0
 
         max_idx = max(bar_indices)
         if max_idx <= 0:
             return 50.0
 
-        # Average recency: how close to the most recent bar
-        # Normalize: recency = avg_index / max_index (closer to 1 = more recent)
         avg_idx = sum(bar_indices) / len(bar_indices)
         recency_ratio = avg_idx / max_idx
 
-        # Scale: 0.3 ratio = 0, 1.0 ratio = 100 (linear)
         if recency_ratio <= 0.3:
             return 0.0
         return min(100.0, (recency_ratio - 0.3) / 0.7 * 100.0)
@@ -215,7 +206,7 @@ class PatternQualityScorer:
         RSI aligned with direction adds confirmation.
         """
         if direction == "neutral":
-            return 25.0  # No directional alignment possible
+            return 25.0
 
         adx = tech_data.get("adx", 0)
         rsi = tech_data.get("rsi", 50)
@@ -231,7 +222,6 @@ class PatternQualityScorer:
 
         score = 0.0
 
-        # ADX component (0-50): higher ADX = trend is real → patterns more reliable
         if math.isfinite(adx):
             if adx >= 40:
                 score += 50
@@ -241,24 +231,21 @@ class PatternQualityScorer:
                 score += 25
             elif adx >= 20:
                 score += 10
-            # ADX < 20: no trend, patterns unreliable
 
-        # RSI component (0-50): alignment with pattern direction
         if math.isfinite(rsi):
             if direction == "bullish" and 40 <= rsi <= 70:
-                score += 50  # Bullish patterns with healthy RSI
+                score += 50
             elif direction == "bullish" and rsi < 30:
-                score += 35  # Oversold reversal candidate
+                score += 35
             elif direction == "bearish" and 30 <= rsi <= 60:
-                score += 50  # Bearish patterns with weakening RSI
+                score += 50
             elif direction == "bearish" and rsi > 70:
-                score += 35  # Overbought reversal candidate
+                score += 35
             else:
-                score += 15  # Some RSI data but not strongly aligned
+                score += 15
 
         return min(100.0, score)
 
-    # ── Main scoring method ─────────────────────────────────────
 
     def score(
         self,
@@ -267,12 +254,6 @@ class PatternQualityScorer:
         llm_quality: float | None = None,
     ) -> QualityScore:
         """Compute deterministic pattern quality score.
-
-        Args:
-            patterns: Technical patterns dict from PatternAnalyzer output.
-            tech_data: Technical indicator dict (must contain 'adx' and 'rsi').
-            llm_quality: Optional LLM-reported pattern_quality for comparison.
-
         Returns:
             QualityScore with component breakdown and any LLM discrepancies.
         """
@@ -280,7 +261,6 @@ class PatternQualityScorer:
         patterns = patterns or {}
         tech_data = tech_data or {}
 
-        # 1. Extract and classify patterns
         pattern_names = self._extract_pattern_names(patterns)
         n_total = len(pattern_names)
 
@@ -293,7 +273,6 @@ class PatternQualityScorer:
             elif d == "bearish":
                 bearish_count += 1
 
-        # Determine dominant direction
         if bullish_count > bearish_count:
             dominant_dir = "bullish"
         elif bearish_count > bullish_count:
@@ -301,13 +280,11 @@ class PatternQualityScorer:
         else:
             dominant_dir = "neutral"
 
-        # 2. Compute component scores
         result.quantity_score = self._score_quantity(n_total)
         result.confirmation_score = self._score_confirmation(bullish_count, bearish_count)
         result.recency_score = self._score_recency(patterns)
         result.indicator_score = self._score_indicator_alignment(tech_data, dominant_dir)
 
-        # 3. Weighted overall score
         result.overall = (
             result.quantity_score * WEIGHT_PATTERN_QUANTITY
             + result.confirmation_score * WEIGHT_PATTERN_CONFIRMATION
@@ -315,7 +292,6 @@ class PatternQualityScorer:
             + result.indicator_score * WEIGHT_INDICATOR_ALIGNMENT
         )
 
-        # 4. Compare against LLM if provided
         if llm_quality is not None:
             try:
                 llm_q = float(llm_quality)
@@ -339,17 +315,11 @@ class PatternQualityScorer:
         quality: QualityScore,
     ) -> dict[str, Any]:
         """Overwrite LLM's pattern_quality with deterministic score.
-
-        Args:
-            analysis: The 'analysis' dict from parsed_response.
-            quality: Result from score().
-
         Returns:
             The same analysis dict (mutated in-place).
         """
         analysis["pattern_quality"] = round(quality.overall)
 
-        # Store component breakdown for transparency
         analysis["_pattern_validation"] = quality.to_dict()
 
         return analysis

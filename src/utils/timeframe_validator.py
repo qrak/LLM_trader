@@ -13,7 +13,6 @@ import re
 class TimeframeValidator:
     """Validates and manages timeframe configurations"""
     SUPPORTED_TIMEFRAMES = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "1w"]  # noqa: RUF012
-    # Time constants
     MINUTES_IN_HOUR = 60
     MINUTES_IN_DAY = 1440
     MINUTES_IN_WEEK = 10080
@@ -21,10 +20,6 @@ class TimeframeValidator:
     MS_IN_MINUTE = 60 * 1000
     MS_IN_DAY = 24 * 60 * 60 * 1000
 
-    # Alignment constants
-    # Offset to align weekly candles to Monday.
-    # Unix Epoch (1970-01-01) was Thursday.
-    # Monday (1970-01-05) is +4 days from Epoch.
     MONDAY_ALIGNMENT_OFFSET_DAYS = 4
 
     TIMEFRAME_MINUTES = {  # noqa: RUF012
@@ -46,10 +41,6 @@ class TimeframeValidator:
     def validate(cls, timeframe: str) -> bool:
         """
         Check if timeframe is fully supported.
-
-        Args:
-            timeframe: Timeframe string (e.g., "5m", "1h", "4h", "1d")
-
         Returns:
             bool: True if timeframe is supported, False otherwise
         """
@@ -59,10 +50,6 @@ class TimeframeValidator:
     def to_minutes(cls, timeframe: str) -> int:
         """
         Convert timeframe to minutes.
-
-        Args:
-            timeframe: Timeframe string (e.g., "5m", "1h", "4h", "1d")
-
         Returns:
             int: Number of minutes in the timeframe
 
@@ -77,10 +64,6 @@ class TimeframeValidator:
     def parse_period_to_minutes(cls, period: str) -> int:
         """
         Parse period string to minutes. Supports both timeframes and arbitrary periods.
-
-        Args:
-            period: Period string (e.g., "5m", "1h", "4h", "24h", "7d", "30d")
-
         Returns:
             int: Number of minutes in the period
 
@@ -108,11 +91,6 @@ class TimeframeValidator:
     def calculate_period_candles(cls, base_timeframe: str, target_period: str) -> int:
         """
         Calculate how many candles are needed for a target period.
-
-        Args:
-            base_timeframe: The base timeframe (e.g., "5m", "1h", "4h")
-            target_period: The target period (e.g., "24h", "7d", "30d")
-
         Returns:
             int: Number of candles needed
 
@@ -128,11 +106,6 @@ class TimeframeValidator:
     def is_ccxt_compatible(cls, timeframe: str, _exchange_name: str | None = None) -> bool:
         """
         Check if timeframe is compatible with CCXT exchanges.
-
-        Args:
-            timeframe: Timeframe string (e.g., "5m", "1h", "4h")
-            exchange_name: Optional specific exchange name for exact validation
-
         Returns:
             bool: True if timeframe is likely supported
 
@@ -140,23 +113,15 @@ class TimeframeValidator:
             For exact validation with a specific exchange, pass the exchange instance
             to check its .timeframes property directly.
         """
-        # Basic check for standard timeframes
         if timeframe in cls.CCXT_STANDARD_TIMEFRAMES:  # noqa: SIM103
             return True
 
-        # Could be extended to check specific exchange support
-        # via exchange.timeframes property if exchange instance is available
         return False
 
     @classmethod
     def get_candle_limit_for_days(cls, timeframe: str, target_days: int = 30) -> int:
         """
         Calculate how many candles are needed to cover a target number of days.
-
-        Args:
-            timeframe: The timeframe (e.g., "5m", "1h", "4h", "1d")
-            target_days: Number of days to cover (default: 30)
-
         Returns:
             int: Number of candles needed
 
@@ -172,11 +137,6 @@ class TimeframeValidator:
     def calculate_coverage_days(cls, timeframe: str, candle_count: int) -> float:
         """
         Calculate how many days of market history a candle count represents.
-
-        Args:
-            timeframe: The timeframe (e.g., "5m", "1h", "4h", "1d")
-            candle_count: Number of closed candles available
-
         Returns:
             float: Approximate number of days covered by the candles
         """
@@ -189,10 +149,6 @@ class TimeframeValidator:
         Validate and normalize timeframe string.
 
         Handles case variations and returns normalized form.
-
-        Args:
-            timeframe: Timeframe string (e.g., "5M", "1H", "4h", "1D")
-
         Returns:
             str: Normalized timeframe (lowercase)
 
@@ -217,10 +173,6 @@ class TimeframeValidator:
         Weekly candles ('1w') are aligned to start on Monday 00:00 UTC.
         Since the Unix Epoch (1970-01-01) was a Thursday, we need an offset to shift
         the reference point to the next Monday (1970-01-05).
-
-        Args:
-            timeframe: Timeframe string
-
         Returns:
             int: Offset in milliseconds required to align the timeframe
         """
@@ -232,11 +184,6 @@ class TimeframeValidator:
     def calculate_next_candle_time(cls, current_time_ms: int, timeframe: str) -> int:
         """
         Calculate the start time of the next candle for a given timeframe.
-
-        Args:
-            current_time_ms: Current timestamp in milliseconds
-            timeframe: Timeframe string (e.g., "5m", "1h", "4h", "1d")
-
         Returns:
             int: Next candle start time in milliseconds
 
@@ -248,8 +195,6 @@ class TimeframeValidator:
         interval_ms = interval_minutes * cls.MS_IN_MINUTE
         offset = cls._get_alignment_offset(timeframe)
 
-        # Calculate next candle boundary with offset
-        # (time - offset) aligns to 0-based index relative to alignment point
         aligned_time = current_time_ms - offset
         next_index = (aligned_time // interval_ms) + 1
         next_candle_ms = (next_index * interval_ms) + offset
@@ -260,12 +205,6 @@ class TimeframeValidator:
     def is_same_candle(cls, time1_ms: int, time2_ms: int, timeframe: str) -> bool:
         """
         Check if two timestamps fall within the same candle period.
-
-        Args:
-            time1_ms: First timestamp in milliseconds
-            time2_ms: Second timestamp in milliseconds
-            timeframe: Timeframe string (e.g., "5m", "1h", "4h", "1d")
-
         Returns:
             bool: True if both timestamps are in the same candle period
         """

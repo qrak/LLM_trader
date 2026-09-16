@@ -24,8 +24,6 @@ class OpenRouterClient(BaseAIClient):
         self.api_key = api_key
         self.base_url = base_url
         self._client: AsyncOpenAI | None = None
-        # presence_penalty is never forwarded to OpenRouter — kept filtered for parity
-        # with the pre-consolidation dedicated-SDK client (SDK 0.11+ dropped it)
         self._known_unsupported_params.add("presence_penalty")
 
     async def _initialize_client(self) -> None:
@@ -62,14 +60,12 @@ class OpenRouterClient(BaseAIClient):
         try:
             self.logger.debug("Sending request to OpenRouter API with model: %s", model)
 
-            # shared config dict: copy before popping reasoning; sent via extra_body
             call_config = dict(model_config)
             reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}
             if reasoning_effort:
                 extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
 
-            # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.completions.create,
                 call_config,
@@ -91,13 +87,6 @@ class OpenRouterClient(BaseAIClient):
     ) -> ChatResponseModel | None:
         """
         Send a chat completion request with a chart image for pattern analysis.
-
-        Args:
-            model: Model name to use
-            messages: list of OpenAI-style messages
-            chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters for the model
-
         Returns:
             ChatResponseModel or None if failed
         """
@@ -115,14 +104,12 @@ class OpenRouterClient(BaseAIClient):
             )
             self.logger.debug("Sending chart analysis request to OpenRouter API (%s bytes)", len(img_data))
 
-            # shared config dict: copy before popping reasoning; sent via extra_body
             call_config = dict(model_config)
             reasoning_effort = call_config.pop("openrouter_reasoning_effort", None)
             extra_kwargs = {}
             if reasoning_effort:
                 extra_kwargs["extra_body"] = {"reasoning": {"effort": reasoning_effort}}
 
-            # Use base class shared retry logic
             response = await self._execute_with_param_retry(
                 client.chat.completions.create,
                 call_config,
@@ -140,11 +127,6 @@ class OpenRouterClient(BaseAIClient):
     async def get_generation_cost(self, generation_id: str, retry_delay: float = 0.5) -> dict[str, Any] | None:
         """
         Retrieve cost and stats for a specific generation via the REST endpoint.
-
-        Args:
-            generation_id: The generation ID from completion response
-            retry_delay: Seconds to wait before querying (API may need time to index)
-
         Returns:
             Dictionary with token counts and costs
         """

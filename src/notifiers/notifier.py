@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
 
 
-
 class DiscordNotifier(BaseNotifier):
     """Send-only Discord notifier with message expiration tracking."""
 
@@ -32,16 +31,7 @@ class DiscordNotifier(BaseNotifier):
     _DISCORD_SEND_INITIAL_BACKOFF_SECONDS = 1.0
 
     def __init__(self, logger, config: "Config", unified_parser: "UnifiedParser", formatter: "FormatUtils", bot: discord.Client, file_handler: DiscordFileHandler) -> None:
-        """Initialize DiscordNotifier.
-
-        Args:
-            logger: Logger instance
-            config: Config instance for Discord settings
-            unified_parser: UnifiedParser for JSON extraction (DRY)
-            formatter: FormatUtils instance for value formatting
-            bot: Injected Discord client instance
-            file_handler: Injected DiscordFileHandler instance
-        """
+        """Initialize DiscordNotifier."""
 
 
         super().__init__(logger, config, unified_parser, formatter)
@@ -54,7 +44,6 @@ class DiscordNotifier(BaseNotifier):
         self.bot.event(self.on_ready)
         self.file_handler = file_handler
 
-        # pacing gap between Discord sends (burst rate limits)
         self._send_lock = asyncio.Lock()
         self._last_send_timestamp = 0.0
         self._discord_send_interval_seconds = 0.4
@@ -147,7 +136,6 @@ class DiscordNotifier(BaseNotifier):
                 if not self.bot.is_closed():
                     self.logger.info("Closing Discord bot connection...")
                     await self.bot.close()
-                    # Allow discord.py's keep-alive thread to observe the closed websocket.
                     await asyncio.sleep(0.25)
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Error closing Discord bot: %s", e)
@@ -189,12 +177,6 @@ class DiscordNotifier(BaseNotifier):
             expire_after: int | None = None
     ) -> discord.Message | None:
         """Send a text message to Discord with automatic expiration.
-
-        Args:
-            message: Message text
-            channel_id: Discord channel ID
-            expire_after: Message expiry time in seconds (defaults to FILE_MESSAGE_EXPIRY)
-
         Returns:
             The sent message or None on failure
         """
@@ -208,8 +190,7 @@ class DiscordNotifier(BaseNotifier):
             return None
 
         try:
-            # Discord limit: 2000 chars per message. Set reasonable max total length.
-            MAX_TOTAL_LENGTH = 20000  # 10 chunks max
+            MAX_TOTAL_LENGTH = 20000
 
             if len(message) > MAX_TOTAL_LENGTH:
                 self.logger.warning("Message length (%s) exceeds maximum (%s). Truncating.", len(message), MAX_TOTAL_LENGTH)
@@ -266,12 +247,6 @@ class DiscordNotifier(BaseNotifier):
         expire_after: float | None = None
     ) -> discord.Message | None:
         """Send a Discord embed to a channel with expiration.
-
-        Args:
-            embed: Discord embed to send
-            channel_id: Discord channel ID
-            expire_after: Message expiry time in seconds (defaults to FILE_MESSAGE_EXPIRY)
-
         Returns:
             The sent message or None on failure
         """
@@ -289,7 +264,6 @@ class DiscordNotifier(BaseNotifier):
                 operation_name="sending embed",
             )
 
-            # Track message for persistent deletion
             await self.file_handler.track_message(
                 message_id=sent_message.id,
                 channel_id=channel_id,
@@ -305,12 +279,7 @@ class DiscordNotifier(BaseNotifier):
 
     @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
     async def send_trading_decision(self, decision: Any, channel_id: int) -> None:  # type: ignore[reportIncompatibleMethodOverride]
-        """Send a trading decision as Discord embed.
-
-        Args:
-            decision: TradingDecision dataclass
-            channel_id: Discord channel ID
-        """
+        """Send a trading decision as Discord embed."""
         try:
             await self.wait_until_ready()
             channel = self.bot.get_channel(channel_id)
@@ -359,15 +328,7 @@ class DiscordNotifier(BaseNotifier):
             channel_id: int,
             chart_image: io.BytesIO | None = None
     ) -> None:
-        """Send full analysis notification with reasoning and JSON embed.
-
-        Args:
-            result: Analysis result dict with corrected analysis and raw_response
-            symbol: Trading symbol
-            timeframe: Trading timeframe
-            channel_id: Discord channel ID
-            chart_image: Optional PNG chart image buffer to attach
-        """
+        """Send full analysis notification with reasoning and JSON embed."""
         try:
             analysis = result.get("analysis")
             if not analysis:
@@ -452,13 +413,7 @@ class DiscordNotifier(BaseNotifier):
             current_price: float,
             channel_id: int
     ) -> None:
-        """Send current open position status embed.
-
-        Args:
-            position: Current Position object
-            current_price: Current market price
-            channel_id: Discord channel ID
-        """
+        """Send current open position status embed."""
         try:
             pnl_pct, pnl_quote = self.calculate_position_pnl(position, current_price)
             stop_distance_pct, target_distance_pct = self.calculate_stop_target_distances(position, current_price)
@@ -503,13 +458,7 @@ class DiscordNotifier(BaseNotifier):
             symbol: str,
             channel_id: int
     ) -> None:
-        """Send overall performance statistics embed.
-
-        Args:
-            trade_history: Full trade history list
-            symbol: Trading symbol
-            channel_id: Discord channel ID
-        """
+        """Send overall performance statistics embed."""
         try:
             stats = self.calculate_performance_stats(trade_history)
             if not stats:

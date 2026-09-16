@@ -30,19 +30,11 @@ class MarketMetricsCalculator:
     )
 
     def __init__(self, logger: Logger):
-        """Initialize the calculator
-
-        Args:
-            logger: Logger instance
-        """
+        """Initialize the calculator"""
         self.logger = logger
 
     def update_period_metrics(self, context) -> None:
-        """Calculate and update market metrics for different time periods.
-
-        Args:
-            context: AnalysisContext with ohlcv_candles (np.ndarray), timestamps, technical_history
-        """
+        """Calculate and update market metrics for different time periods."""
         period_metrics = {}
         ohlcv = context.ohlcv_candles
 
@@ -96,13 +88,7 @@ class MarketMetricsCalculator:
                 context.market_metrics = period_metrics
 
     def _calculate_period_metrics(self, ohlcv_slice: np.ndarray, period_name: str, context) -> dict:
-        """Calculate metrics for a specific time period.
-
-        Args:
-            ohlcv_slice: NumPy array slice of shape (N, 6) with columns [ts, open, high, low, close, volume]
-            period_name: Name of the period (e.g., "1D", "7D")
-            context: AnalysisContext for technical_data access
-        """
+        """Calculate metrics for a specific time period."""
         basic_metrics = self._calculate_basic_metrics(ohlcv_slice, period_name)
 
         start_idx = -len(ohlcv_slice)
@@ -122,7 +108,6 @@ class MarketMetricsCalculator:
             adv_support = last_or_scalar(adv_support)
             adv_resistance = last_or_scalar(adv_resistance)
 
-            # Use valid values or fallback to already-calculated values from basic_metrics
             if not math.isnan(adv_support):
                 support_level = adv_support
             else:
@@ -133,7 +118,6 @@ class MarketMetricsCalculator:
             else:
                 resistance_level = basic_metrics["highest_price"]
         else:
-            # Fallback to already-calculated values from basic_metrics
             support_level = basic_metrics["lowest_price"]
             resistance_level = basic_metrics["highest_price"]
 
@@ -149,17 +133,10 @@ class MarketMetricsCalculator:
         }
 
     def _calculate_basic_metrics(self, ohlcv_slice: np.ndarray, period_name: str) -> dict:
-        """Calculate basic price and volume metrics using numpy vectorization.
-
-        Args:
-            ohlcv_slice: NumPy array of shape (N, 6) with columns [ts, open, high, low, close, volume]
-            period_name: Period identifier string
-        """
-        # Direct column access - no conversion needed
-        # Column mapping: 0=ts, 1=open, 2=high, 3=low, 4=close, 5=volume
+        """Calculate basic price and volume metrics using numpy vectorization."""
         highs = ohlcv_slice[:, 2]
         lows = ohlcv_slice[:, 3]
-        prices = ohlcv_slice[:, 4]  # close prices
+        prices = ohlcv_slice[:, 4]
         volumes = ohlcv_slice[:, 5]
 
         high_max = float(np.max(highs))
@@ -212,7 +189,6 @@ class MarketMetricsCalculator:
                 else:
                     self.logger.debug("%s has only %s values, need %s", ind_name, len(values), abs(start_idx))
             except TypeError:
-                # values is a scalar numpy value, not an array
                 self.logger.debug("%s is scalar, skipping", ind_name)
 
         return indicator_changes

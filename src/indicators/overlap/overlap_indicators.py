@@ -50,11 +50,6 @@ def sma_numba(arr, length):
     if n < length:
         return sma_values
 
-    # Check for NaNs in the first window
-    # If using sliding window, NaNs can propagate if not careful.
-    # Numba's sum propagates NaNs correctly (returns NaN).
-    # But removing a NaN from sum is tricky (NaN - NaN is NaN).
-    # For performance, we assume clean data or let NaN propagate.
 
     window_sum = 0.0
     for i in range(length):

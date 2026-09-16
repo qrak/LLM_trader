@@ -14,7 +14,7 @@ def test_gemini_3_5_flash_pricing_uses_configured_rates() -> None:
 
     cost = pricing.get_cost("google", "gemini-3.5-flash", input_tokens=1_000_000, output_tokens=1_000_000)
 
-    assert cost == 10.50  # $1.50 input + $9.00 output per million tokens (ai.google.dev 2026-05-19)
+    assert cost == 10.50
 
 
 def test_config_model_mapping_prefers_canonical_penalty_names_over_legacy_aliases() -> None:

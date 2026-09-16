@@ -25,7 +25,6 @@ from src.platforms.ai_providers.response_models import (
     TradingSignal,
 )
 
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def _make_config_stub():
     cfg = MagicMock()
@@ -40,7 +39,7 @@ def _make_config_stub():
 def _mock_client(returns: list[ChatResponseModel]) -> MagicMock:
     """Return a mock provider client that yields responses in order."""
     client = MagicMock()
-    responses = list(reversed(returns))  # pop from end
+    responses = list(reversed(returns))
 
     async def chat_completion(*args, **kwargs):
         return responses.pop()
@@ -68,8 +67,6 @@ def _orchestrator(clients: dict | None = None) -> ProviderOrchestrator:
     )
 
 
-# ── 1. TRUNCATED / MALFORMED JSON ─────────────────────────────────────────────
-
 class TestTruncatedJsonResponse:
     """LLM returns incomplete JSON that cannot be parsed by the trading validator."""
 
@@ -80,12 +77,10 @@ class TestTruncatedJsonResponse:
             "openrouter": _mock_client([
                 ChatResponseModel.from_content(
                     '{"analysis": {"signal": "BUY", "confidence": 85, "entry_price": 50000'
-                    # deliberately truncated — no closing braces
                 )
             ])
         })
         result = await provider.invoke("openrouter", [{"role": "user", "content": "analyze"}])
-        # Should not raise; result may be success=False or parsing fails downstream
         assert result is not None
         assert result.response is not None
 
@@ -163,8 +158,6 @@ class TestStringInjectionInNumericFields:
         assert result is not None
 
 
-# ── 2. MISSING REQUIRED FIELDS — direct model validation ──────────────────────
-
 class TestMissingExecutionFields:
     """TradingAnalysisModel must reject BUY/SELL signals missing required fields."""
 
@@ -174,7 +167,6 @@ class TestMissingExecutionFields:
                 signal=TradingSignal.BUY,
                 confidence=85,
                 entry_price=50000,
-                # stop_loss missing
                 take_profit=52000,
                 position_size=0.1,
                 risk_reward_ratio=2.0,
@@ -188,8 +180,6 @@ class TestMissingExecutionFields:
                 confidence=70,
                 entry_price=50000,
                 stop_loss=51000,
-                # take_profit missing
-                # position_size missing
                 risk_reward_ratio=1.5,
                 reasoning="going down",
             )
@@ -200,7 +190,6 @@ class TestMissingExecutionFields:
                 signal=TradingSignal.UPDATE,
                 confidence=60,
                 stop_loss=49000,
-                # entry_price missing
                 reasoning="adjust SL",
             )
 
@@ -210,7 +199,6 @@ class TestMissingExecutionFields:
                 signal=TradingSignal.UPDATE,
                 confidence=60,
                 entry_price=50000,
-                # both stop_loss and take_profit missing
                 reasoning="no change",
             )
 
@@ -223,8 +211,6 @@ class TestMissingExecutionFields:
         )
         assert model.signal == TradingSignal.HOLD
 
-
-# ── 3. FALLBACK LOOP RESILIENCE ───────────────────────────────────────────────
 
 class TestFallbackLoopResilience:
     """When all providers return corrupt data, fallback must not infinite-loop."""
@@ -244,7 +230,6 @@ class TestFallbackLoopResilience:
             [{"role": "user", "content": "analyze"}],
         )
         assert result is not None
-        # Must not crash; must not loop infinitely
 
     @pytest.mark.asyncio
     async def test_mixed_corruption_then_valid_still_recovers(self):
@@ -263,26 +248,19 @@ class TestFallbackLoopResilience:
             ["googleai", "openrouter", "local"],
             [{"role": "user", "content": "analyze"}],
         )
-        # If google's corruption causes success=False, orchestrator falls through to openrouter
-        # openrouter returns parseable content => result.success = True
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_empty_choices_list_does_not_crash_fallback_chain(self):
         """Response with empty choices list is an edge case from some providers."""
         empty_response = ChatResponseModel(choices=[])
-        # The openrouter client returns empty choices, then triggers fallback model call
-        # but that should also get empty choices (or fallback doesn't change outcome)
         provider = _orchestrator({
             "openrouter": _mock_client([empty_response, empty_response]),
         })
         result = await provider.invoke("openrouter", [{"role": "user", "content": "analyze"}])
         assert result is not None
-        # success should be False because _is_valid_response checks len(choices) > 0
         assert not result.success
 
-
-# ── 4. SCHEMA VIOLATIONS (TradingAnalysisResponseModel) ───────────────────────
 
 class TestSchemaViolations:
     """TradingAnalysisResponseModel and its wrappers handle field-level violations."""
@@ -292,7 +270,7 @@ class TestSchemaViolations:
         with pytest.raises(Exception):
             TradingAnalysisModel(
                 signal=TradingSignal.HOLD,
-                confidence=150,  # invalid
+                confidence=150,
                 reasoning="too confident",
             )
 
@@ -304,7 +282,7 @@ class TestSchemaViolations:
                 entry_price=50000,
                 stop_loss=49000,
                 take_profit=52000,
-                position_size=-0.5,  # invalid
+                position_size=-0.5,
                 risk_reward_ratio=2.0,
                 reasoning="negative size",
             )
@@ -317,7 +295,7 @@ class TestSchemaViolations:
                 entry_price=50000,
                 stop_loss=49000,
                 take_profit=52000,
-                position_size=1.5,  # invalid >1.0
+                position_size=1.5,
                 risk_reward_ratio=2.0,
                 reasoning="overcommitted",
             )
@@ -332,8 +310,6 @@ class TestSchemaViolations:
                 reasoning="not a real signal",
             )
 
-
-# ── 5. CONTENT-LEVEL CORRUPTION (markdown injection, script tags) ─────────────
 
 class TestContentLevelCorruption:
     """LLM responses that inject HTML, markdown tables, or script tags into content."""

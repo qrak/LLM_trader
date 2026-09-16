@@ -70,7 +70,7 @@ class TestAnalyzeClosedTrade:
     async def test_successful_analysis_stores_result(self):
         """Valid LLM response should be parsed and stored in repository."""
         parser = MagicMock()
-        parser.extract_json_block.return_value = None  # force raw JSON path
+        parser.extract_json_block.return_value = None
         manager = MagicMock()
         manager.send_prompt = AsyncMock(return_value=(
             '{"verdict": "good_exit", "llm_analysis": "Trade followed plan.", '
@@ -103,7 +103,7 @@ class TestAnalyzeClosedTrade:
         breaking the JOIN between the journal and trade_history.
         """
         parser = MagicMock()
-        parser.extract_json_block.return_value = None  # force raw JSON path
+        parser.extract_json_block.return_value = None
         manager = MagicMock()
         manager.send_prompt = AsyncMock(return_value=(
             '{"verdict": "oversold_short_entry", "llm_analysis": "Short into support.", '

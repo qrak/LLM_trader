@@ -14,13 +14,7 @@ class JournalRotator:
         max_lines: int = 100,
         max_bytes: int = 50 * 1024,
     ):
-        """Initialize journal rotator settings.
-
-        Args:
-            ai_dir: Root directory for agent prompt/journal files (.ai/).
-            max_lines: Maximum allowed line count before rotation.
-            max_bytes: Maximum allowed byte size before rotation (default 50 KB).
-        """
+        """Initialize journal rotator settings."""
         if ai_dir is None:
             self.ai_dir = Path(__file__).resolve().parent.parent.parent / ".ai"
         else:
@@ -33,10 +27,6 @@ class JournalRotator:
 
         Moves old content to .ai/archive/YYYY-MM/<name>-journal-<timestamp>.md
         and keeps a fresh active journal with header and current summary.
-
-        Args:
-            journal_path: Path to target journal markdown file.
-
         Returns:
             True if rotated, False otherwise.
         """
@@ -51,7 +41,6 @@ class JournalRotator:
             if len(lines) < self.max_lines and size_bytes < self.max_bytes:
                 return False
 
-            # Archive path: .ai/archive/YYYY-MM/
             now = datetime.now(timezone.utc)
             month_str = now.strftime("%Y-%m")
             timestamp_str = now.strftime("%Y%m%d_%H%M%S")
@@ -64,10 +53,8 @@ class JournalRotator:
             archived_filename = f"{stem}_{timestamp_str}.md"
             archived_path = archive_dir / archived_filename
 
-            # Move original file to archive
             shutil.copy2(journal_path, archived_path)
 
-            # Create clean active journal with top header lines
             header_lines = []
             for line in lines[:10]:
                 if line.startswith(("# ", "## ", ">")):

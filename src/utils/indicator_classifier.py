@@ -29,7 +29,7 @@ def resolve_scalar(value: Any, default: float = 0.0) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     try:
-        return float(value)  # numpy scalar
+        return float(value)
     except (TypeError, ValueError):
         pass
     try:
@@ -190,7 +190,6 @@ def classify_market_sentiment(sentiment_data: dict[str, Any] | None) -> str:
     """Classify Fear & Greed index into sentiment zones."""
     if not sentiment_data:
         return "NEUTRAL"
-    # Refactor: Python 3.10 pattern matching dispatches sentiment thresholds
     match sentiment_data.get("fear_greed_index", 50):
         case fg if fg <= 25:
             return "EXTREME_FEAR"
@@ -229,15 +228,6 @@ def build_context_string_from_technical_data(
     Produces the exact same format as BrainContextProvider.build_rich_context_string
     so that dashboard similarity queries are semantically identical to those
     issued during live trading.
-
-    Args:
-        technical_data: dict of raw indicator values (rsi, adx, macd_line …).
-        current_price: Optional current price for Bollinger Band positioning.
-        sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
-        microstructure_data: Optional order book microstructure dict.
-        is_weekend: Whether the current day is Saturday or Sunday.
-        exit_execution_context: Optional SL/TP execution settings snapshot.
-
     Returns:
         Space-and-plus-separated categorical context string.
     """
@@ -251,8 +241,6 @@ def build_context_string_from_technical_data(
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
 
-    # Lazy import: importing src.trading.data_models at module level would pull
-    # src.trading.__init__ -> brain -> brain_context -> this module (cycle).
     from src.trading.data_models import MarketSnapshot
     return build_context_string_from_classified_values(
         MarketSnapshot(
@@ -311,15 +299,6 @@ def build_query_document_from_technical_data(
     Produces the same format as BrainContextProvider.build_query_document so
     that dashboard similarity queries use the richer embedding format that
     mirrors stored experience documents.
-
-    Args:
-        technical_data: dict of raw indicator values (rsi, adx, macd_line …).
-        current_price: Optional current price for Bollinger Band positioning.
-        sentiment_data: Optional sentiment dict with ``fear_greed_index`` key.
-        microstructure_data: Optional order book microstructure dict.
-        is_weekend: Whether the current day is Saturday or Sunday.
-        exit_execution_context: Optional SL/TP execution settings snapshot.
-
     Returns:
         Enriched query string with Indicators and Structure lines.
     """
@@ -332,8 +311,6 @@ def build_query_document_from_technical_data(
     market_sentiment = classify_market_sentiment(sentiment_data)
     order_book_bias = classify_order_book_bias(microstructure_data)
 
-    # Lazy import: importing src.trading.data_models at module level would pull
-    # src.trading.__init__ -> brain -> brain_context -> this module (cycle).
     from src.trading.data_models import MarketSnapshot
     return build_query_document_from_classified_values(
         MarketSnapshot(

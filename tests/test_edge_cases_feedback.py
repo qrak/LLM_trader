@@ -25,10 +25,6 @@ from src.trading.data_models import MarketConditions, MarketSnapshot
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 1: EMPTY STATE — Brain with zero rejections
-# ═════════════════════════════════════════════════════════════════
-
 
 class TestEmptyStateBrain:
     """Brain behavior when no rejections exist."""
@@ -59,7 +55,6 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_confidence_recommendation.return_value = ""
         brain.vector_memory.get_direction_bias.return_value = None
 
-        # Should not raise — should silently skip feedback section
         ctx = brain.get_context(MarketSnapshot(
             adx=25,
         ))
@@ -98,11 +93,6 @@ class TestEmptyStateBrain:
         brain.vector_memory.get_blocked_trade_feedback.assert_called_once()
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 2: SATURATION — High volume of rejections
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestSaturationHighVolume:
     """Handle 50+ recent rejections without breaking the prompt builder."""
 
@@ -123,14 +113,13 @@ class TestSaturationHighVolume:
         """With many blocks, feedback still groups by guard type."""
         svc = vector_memory_saturation
         feedback = svc.get_blocked_trade_feedback(n=50)
-        # Each unique guard type should appear as a group
-        assert "###" in feedback  # subsection headers
+        assert "###" in feedback
 
     def test_fifty_blocked_trades_count_is_correct(self, vector_memory_saturation):
         """get_blocked_trade_count reflects total stored."""
         svc = vector_memory_saturation
         count = svc.get_blocked_trade_count()
-        assert count >= 50  # at least 50 stored
+        assert count >= 50
 
     def test_brain_survives_fifty_blocks_in_prompt(self, vector_memory_saturation):
         """Brain.get_context() doesn't crash with 50+ blocks."""
@@ -138,7 +127,6 @@ class TestSaturationHighVolume:
         logger = MagicMock()
         persistence = MagicMock()
 
-        # Create a mock VM that delegates get_blocked_trade_feedback to the real one
         mock_vm = MagicMock()
         mock_vm.trade_count = 0
         mock_vm.get_blocked_trade_feedback = lambda *a, **kw: svc.get_blocked_trade_feedback(*a, **kw)
@@ -157,13 +145,7 @@ class TestSaturationHighVolume:
             adx=25,
         ))
         assert "CRITICAL FEEDBACK" in ctx
-        # Should still be a valid string (not too large for a prompt)
-        assert len(ctx) < 10000  # reasonable prompt size
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 3: ASYNC RACE CONDITIONS
-# ═════════════════════════════════════════════════════════════════
+        assert len(ctx) < 10000
 
 
 class TestAsyncRaceConditions:
@@ -175,8 +157,7 @@ class TestAsyncRaceConditions:
         for _ in range(10):
             _store_test_block_fast(vector_memory)
         elapsed = time.monotonic() - start
-        # 10 writes should complete quickly
-        assert elapsed < 5.0  # generous bound
+        assert elapsed < 5.0
 
     @pytest.mark.asyncio
     async def test_concurrent_writes_dont_corrupt(self, embedding_model):
@@ -186,7 +167,7 @@ class TestAsyncRaceConditions:
             allow_reset=True,
             is_persistent=False,
         ))
-        client.reset()  # ensure clean slate
+        client.reset()
         logger = MagicMock()
         svc = VectorMemoryService(
             logger=logger,
@@ -195,7 +176,6 @@ class TestAsyncRaceConditions:
         )
         svc._ensure_initialized()
 
-        # Simulate concurrent writes
         for i in range(20):
             result = _store_test_block_fast(svc, guard_type=f"concurrent_{i}")
             assert result is True
@@ -240,7 +220,6 @@ class TestAsyncRaceConditions:
         )
 
         start = time.monotonic()
-        # Add artificial delay to store_blocked_trade to test timeout
         async def slow_store(*_args, **_kwargs):
             await asyncio.sleep(0.01)
             return True
@@ -254,12 +233,7 @@ class TestAsyncRaceConditions:
             market_conditions=MarketConditions(),
         )
         elapsed = time.monotonic() - start
-        assert elapsed < 1.0  # should be well under 1 second
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 4: BOUNDARY VALUES
-# ═════════════════════════════════════════════════════════════════
+        assert elapsed < 1.0
 
 
 class TestBoundaryValues:
@@ -270,7 +244,6 @@ class TestBoundaryValues:
         config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
-        # NaN SL → AI SL not used → falls back to dynamic
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=math.nan,
@@ -296,7 +269,6 @@ class TestBoundaryValues:
         config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
-        # Negative SL → not > 0 → falls back to dynamic
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=-10.0,
@@ -321,7 +293,6 @@ class TestBoundaryValues:
         config = _make_risk_config()
         mgr = RiskManager(logger=MagicMock(), config=config)
 
-        # Very tight SL (1% clamped to min) with far TP
         assessment = mgr.calculate_entry_parameters(
             signal="BUY", current_price=100.0, capital=10000.0,
             confidence="HIGH", stop_loss=99.99, take_profit=200.0,
@@ -343,11 +314,6 @@ class TestBoundaryValues:
         assert math.isfinite(assessment.take_profit)
 
 
-# ═════════════════════════════════════════════════════════════════
-# SECTION 5: LARGE REASONING SNIPPET TRUNCATION
-# ═════════════════════════════════════════════════════════════════
-
-
 class TestLargeReasoningSnippet:
     """Very long AI reasoning doesn't break storage or feedback."""
 
@@ -359,18 +325,12 @@ class TestLargeReasoningSnippet:
 
         results = vector_memory.get_recent_blocked_trades(n=1)
         assert len(results) == 1
-        # The full snippet should be in the result
         assert results[0]["reasoning_snippet"] == long_reasoning
 
     def test_empty_reasoning_snippet_ok(self, vector_memory):
         """Empty reasoning snippet doesn't cause errors."""
         stored = _store_test_block_fast(vector_memory, reasoning_snippet="")
         assert stored is True
-
-
-# ═════════════════════════════════════════════════════════════════
-# SECTION 6: GUARD TYPE UNKNOWN
-# ═════════════════════════════════════════════════════════════════
 
 
 class TestUnknownGuardType:
@@ -381,12 +341,7 @@ class TestUnknownGuardType:
         _store_test_block_fast(vector_memory, guard_type="custom_new_guard")
 
         feedback = vector_memory.get_blocked_trade_feedback(n=5)
-        assert "Custom New Guard" in feedback  # title-cased fallback
-
-
-# ═════════════════════════════════════════════════════════════════
-# Helpers
-# ═════════════════════════════════════════════════════════════════
+        assert "Custom New Guard" in feedback
 
 
 def _make_minimal_brain() -> TradingBrainService:
@@ -406,7 +361,6 @@ def _make_brain_with_svc(svc: VectorMemoryService) -> TradingBrainService:
     """Create a TradingBrainService with a real VectorMemoryService."""
     logger = MagicMock()
     persistence = MagicMock()
-    # Override trade_count to simulate existing trades
     svc.trade_count = 5
     return TradingBrainService(
         logger=logger,
@@ -465,9 +419,6 @@ def _store_test_block_fast(
     )
 
 
-# ── Saturation fixture: 50+ blocked trades ──────────────────────
-
-
 @pytest.fixture(scope="module")
 def embedding_model_saturation():
     return SentenceTransformer("all-MiniLM-L6-v2")
@@ -500,7 +451,6 @@ def vector_memory_saturation(embedding_model_saturation):
                 required_rr=2.0,
                 reasoning_snippet=f"Test #{i} for {guard}",
             )
-    # Add 5 more with different metadata
     for i in range(5):
         _store_test_block_fast(
             svc,
@@ -511,9 +461,6 @@ def vector_memory_saturation(embedding_model_saturation):
         )
 
     return svc
-
-
-# ── Standard vector_memory fixture for edge case tests ──────────
 
 
 @pytest.fixture(scope="module")

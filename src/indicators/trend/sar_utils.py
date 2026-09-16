@@ -41,7 +41,6 @@ def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
     """
     new_sar = sar[i - 1] + af[i - 1] * (ep[i - 1] - sar[i - 1])
 
-    # Apply constraints FIRST, before checking the current bar
     if is_bullish:
         if i > 1:
             new_sar = min(new_sar, low[i - 1], low[i - 2])
@@ -53,7 +52,6 @@ def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
         new_sar = max(new_sar, high[i - 1])
 
     if is_bullish and low[i] > new_sar:
-        # Continue bullish trend
         sar[i] = new_sar
         if high[i] > ep[i - 1]:
             ep[i] = high[i]
@@ -64,7 +62,6 @@ def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
         return 1
 
     if not is_bullish and high[i] < new_sar:
-        # Continue bearish trend
         sar[i] = new_sar
         if low[i] < ep[i - 1]:
             ep[i] = low[i]
@@ -74,7 +71,6 @@ def _advance_sar(i: int, high: np.ndarray, low: np.ndarray,
             af[i] = af[i - 1]
         return -1
 
-    # Trend reversal
     sar[i] = ep[i - 1]
     af[i] = step
     if is_bullish:

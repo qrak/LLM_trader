@@ -23,7 +23,6 @@ def profile_performance(func: Callable) -> Callable:
     """
     @functools.wraps(func)
     async def wrapper(*args, **kwargs) -> Any:
-        # Check config at runtime to allow hot reloading
         if not _logger_debug_enabled():
             return await func(*args, **kwargs) if asyncio.iscoroutinefunction(func) \
                 else func(*args, **kwargs)
@@ -43,9 +42,8 @@ def profile_performance(func: Callable) -> Callable:
             return result
         finally:
             end_time = time.perf_counter()
-            duration = (end_time - start_time) * 1000  # Convert to ms
+            duration = (end_time - start_time) * 1000
 
-            # Identify if it's a "slow" operation (>1s) for highlight
             slow_marker = " [SLOW]" if duration > 1000 else ""
             msg = f"Performance: {class_name}.{method_name} took {duration:.2f}ms{slow_marker}"
 
@@ -74,7 +72,6 @@ def profile_performance(func: Callable) -> Callable:
 
             logger.debug(msg)
 
-    # Return appropriate wrapper based on whether the original function is async
     if asyncio.iscoroutinefunction(func):
         return wrapper
     return sync_wrapper

@@ -124,7 +124,6 @@ class TradingAnalysisModel(BaseModel):
     key_levels: KeyLevelsModel | None = None
     trend: TrendModel | None = None
     risk_reward_ratio: float | None = Field(default=None, ge=0)
-    # CCXT execution fields (for external bot consumption)
     symbol: str | None = None
     order_type: str | None = None
     quantity: float | None = Field(default=None, ge=0)

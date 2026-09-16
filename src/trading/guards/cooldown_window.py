@@ -89,8 +89,6 @@ class CooldownWindowGuard:
                 },
             )
 
-        # Cooldown expired — invalidate cache so next execution re-reads the
-        # (now-stale) timestamp, which will be ahead of this check.
         self.invalidate_cache()
 
         return GuardResult(
@@ -142,7 +140,6 @@ class CooldownWindowGuard:
         try:
             tf_minutes = TimeframeValidator.to_minutes(timeframe)
         except (ValueError, TypeError):
-            # Fallback: parse common formats
             tf_minutes = _fallback_tf_to_minutes(timeframe)
 
         if tf_minutes < 60:
@@ -164,5 +161,5 @@ def _fallback_tf_to_minutes(timeframe: str) -> int:
                 return int(timeframe[:-1]) * mult
             except ValueError:
                 pass
-    return 240  # default to 4h
+    return 240
 

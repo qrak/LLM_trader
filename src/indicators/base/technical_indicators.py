@@ -96,7 +96,6 @@ class TechnicalIndicators(IndicatorBase):
     def __init__(self, measure_time: bool = False, save_to_csv: bool = False) -> None:
         super().__init__(measure_time=measure_time, save_to_csv=save_to_csv)
 
-    # ==================== MOMENTUM INDICATORS ====================
 
     def rsi(self, length: int = 14) -> np.ndarray:
         return self.calculate_indicator(
@@ -251,7 +250,6 @@ class TechnicalIndicators(IndicatorBase):
             config,
             required_length=slow)
 
-    # ==================== OVERLAP INDICATORS ====================
 
     def sma(self, data_series: np.ndarray, length: int = 10) -> np.ndarray:
         return self.calculate_indicator(
@@ -261,7 +259,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    # ==================== PRICE TRANSFORM INDICATORS ====================
 
     def log_return(self, length: int = 1, cumulative: bool = False) -> np.ndarray:
         return self.calculate_indicator(
@@ -283,7 +280,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=1
         )
 
-    # ==================== SENTIMENT INDICATORS ====================
 
     def fear_and_greed_index(
             self,
@@ -312,7 +308,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=max(rsi_length, macd_slow_length + macd_signal_length - 1, mfi_length)
         )
 
-    # ==================== STATISTICAL INDICATORS ====================
 
     def kurtosis(self, length: int = 30) -> np.ndarray:
         return self.calculate_indicator(
@@ -392,7 +387,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    # ==================== SUPPORT/RESISTANCE INDICATORS ====================
 
     def support_resistance(self, length: int = 30) -> tuple[np.ndarray, np.ndarray]:
         return self.calculate_indicator(
@@ -457,7 +451,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=1
         )
 
-    # ==================== TREND INDICATORS ====================
 
     def adx(self, length: int = 14) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.calculate_indicator(
@@ -543,7 +536,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=5
         )
 
-    # ==================== VOLATILITY INDICATORS ====================
 
     def atr(self, length: int = 14, mamode: str = "rma", percent: bool = False) -> np.ndarray:
         return self.calculate_indicator(
@@ -632,7 +624,6 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    # ==================== VOLUME INDICATORS ====================
 
     def cci(self, length: int = 14, c: float = 0.015) -> np.ndarray:
         return self.calculate_indicator(

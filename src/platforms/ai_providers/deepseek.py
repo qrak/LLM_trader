@@ -84,13 +84,6 @@ class DeepSeekClient(BaseAIClient):
         Images go inside user messages (official docs used to require the
         vision-exp model; the regular flash model accepts images as of
         2026-09-12), so the last user message carries the multimodal block.
-
-        Args:
-            model: Model name to use
-            messages: list of OpenAI-style messages
-            chart_image: Chart image as BytesIO, bytes, or file path string
-            model_config: Configuration parameters for the model
-
         Returns:
             ChatResponseModel or None if failed
         """

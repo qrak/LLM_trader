@@ -23,7 +23,7 @@ def _parse_analysis(payload: dict[str, Any]) -> dict[str, Any]:
         ("5%", 0.05),
         ("0.5%", 0.005),
         (0.05, 0.05),
-        (50, None),  # ambiguous without a % suffix — outside the 0.0-1.0 contract, dropped
+        (50, None),
     ],
 )
 def test_position_size_contract_is_owned_by_the_parser(

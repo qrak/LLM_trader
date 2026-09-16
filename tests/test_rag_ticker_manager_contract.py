@@ -56,7 +56,6 @@ class TestCategoryExtractionUsesPipeSeparator:
 
         coins = manager._extract_category_coins([{"categories": "Markets|BTC|DeFi"}])
 
-        # "Markets" and "DeFi" are skipped by the category filter; BTC is found.
         assert coins == {"BTC"}
 
 

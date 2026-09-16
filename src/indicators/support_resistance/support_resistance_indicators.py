@@ -97,14 +97,11 @@ def support_resistance_numba_advanced(high, low, close, volume, length):
     volume_filter = np.full(n, False)
     rolling_avg_volume = np.full(n, np.nan)
 
-    # Guard: seeding loop below needs at least `length` elements
     if n < length:
         strong_support = np.where(volume_filter, s1, np.nan)
         strong_resistance = np.where(volume_filter, r1, np.nan)
         return strong_support, strong_resistance
 
-    # O(N) running sum replaces O(N*K) volume slice scans.
-    # nan_count lets the rolling volume sum recover after NaN leaves the window
     vol_sum = 0.0
     nan_count = 0
     for j in range(length):
@@ -122,7 +119,6 @@ def support_resistance_numba_advanced(high, low, close, volume, length):
             rolling_avg_volume[i] = vol_sum / length
             volume_filter[i] = volume[i] > rolling_avg_volume[i]
 
-        # Slide the window: remove oldest element, add newest
         old_val = volume[i - length]
         if math.isnan(old_val):
             nan_count -= 1
@@ -162,12 +158,9 @@ def advanced_support_resistance_numba(high, low, close, volume, length=50, stren
     strong_support = np.full(n, np.nan)
     strong_resistance = np.full(n, np.nan)
 
-    # Guard: seeding loop below needs at least `length` elements
     if n < length:
         return strong_support, strong_resistance
 
-    # O(N) running sum replaces O(N*K) volume slice scans.
-    # nan_count lets the rolling volume sum recover after NaN leaves the window
     vol_sum = 0.0
     nan_count = 0
     for j in range(length):
@@ -185,7 +178,6 @@ def advanced_support_resistance_numba(high, low, close, volume, length=50, stren
             rolling_avg_volume[i] = vol_sum / length
             volume_filter[i] = volume[i] > rolling_avg_volume[i]
 
-        # Slide the window: remove oldest element, add newest
         old_val = volume[i - length]
         if math.isnan(old_val):
             nan_count -= 1
@@ -452,7 +444,6 @@ def fibonacci_bollinger_bands_numba(src, volume, length, mult):
     inv_length = 1.0 / length
 
     for i in range(length - 1, n):
-        # Recenter every 1000 items to prevent floating-point precision loss
         if (i - length + 1) % 1000 == 0 and i > length - 1:
             sum_pv = 0.0
             sum_v = 0.0
