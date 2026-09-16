@@ -1,0 +1,18 @@
+# Accepted risks — reviewed 2026-09-16.
+#
+# chromadb: CVE-2026-45829, CVE-2026-45830, CVE-2026-45831, CVE-2026-45833
+#   All four are server-mode issues in chromadb's HTTP API: a pre-authentication
+#   code injection, missing tenant/database/collection checks in
+#   SimpleRBACAuthorizationProvider, and an authenticated cross-tenant
+#   read/write/delete.
+#   This project uses chromadb only as an embedded PersistentClient against a
+#   local directory (start.py) — no HTTP server, no tenants, no auth layer, and
+#   nothing but self-produced data reaches the store. None of the four is
+#   reachable in this deployment.
+#   There is also nothing to upgrade to: 1.5.9 is the newest release on PyPI and
+#   every version is inside the affected range (no fix published upstream yet).
+#   Re-check this file when chromadb ships a fix.
+CVE-2026-45829
+CVE-2026-45830
+CVE-2026-45831
+CVE-2026-45833
