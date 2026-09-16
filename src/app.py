@@ -331,7 +331,7 @@ class CryptoTradingBot:
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
                     self.current_symbol, forward_delivered,
-                    order_id=getattr(decision, "order_id", None),
+                    order_id=decision.order_id,
                 )
 
         await self._send_discord_notification(result)

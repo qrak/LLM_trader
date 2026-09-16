@@ -664,18 +664,17 @@ class ProvisioningMixin:
         """Display the initialization summary panel and control footer."""
         symbols_count = (
             len(apis["coingecko"].symbol_to_id_map)
-            if apis.get("coingecko") and hasattr(apis["coingecko"], "symbol_to_id_map")
+            if apis.get("coingecko")
             else 0
         )
         news_count = (
             rag.news_manager.get_database_size()  # type: ignore[reportOptionalMemberAccess]
-            if rag and hasattr(rag, "news_manager")
+            if rag
             else 0
         )
         guards_count = (
             len(trading["strategy"].guard_pipeline.guard_names)
             if trading.get("strategy")
-            and hasattr(trading["strategy"], "guard_pipeline")
             else 0
         )
 
