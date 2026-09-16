@@ -246,10 +246,10 @@ class TestWritableConfigEdgeCases:
     def test_schema_has_required_fields(self, wc):
         """Every schema entry has required fields."""
         schema = wc.get_full_schema()
-        for section_name, section in schema.items():
+        for section in schema.values():
             assert "title" in section
             assert "keys" in section
-            for key_name, key_meta in section["keys"].items():
+            for key_meta in section["keys"].values():
                 assert "value" in key_meta
                 assert "type" in key_meta
                 assert "category" in key_meta
@@ -432,8 +432,6 @@ class TestAdminAuthMiddleware:
         app = FastAPI()
         app.add_middleware(AdminAuthMiddleware)
 
-        from src.config.writable_config import WritableConfig
-        from src.dashboard.log_stream import LogStreamManager
         from src.dashboard.routers.admin import AdminRouter
 
         admin_router = AdminRouter(
@@ -512,8 +510,6 @@ class TestLANAccessControl:
         app = FastAPI()
         app.add_middleware(AdminAuthMiddleware)
 
-        from src.config.writable_config import WritableConfig
-        from src.dashboard.log_stream import LogStreamManager
         from src.dashboard.routers.admin import AdminRouter
 
         admin_router = AdminRouter(

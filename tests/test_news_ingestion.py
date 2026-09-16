@@ -520,7 +520,7 @@ class TestLocalTaxonomyProvider:
             categories = await provider.fetch_categories()
             assert len(categories) == 2
         except FileNotFoundError:
-            os.unlink(tmp_path) if os.path.exists(tmp_path) else None
+            pass
 
     @pytest.mark.asyncio
     async def test_force_refresh_reloads(self):

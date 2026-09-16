@@ -317,7 +317,6 @@ class TestProcessorIntegration:
 
         from src.analyzer.analysis_result_processor import AnalysisResultProcessor
         from src.analyzer.pattern_quality_scorer import PatternQualityScorer
-        from src.analyzer.trend_validator import TrendValidator
 
         proc = AnalysisResultProcessor(
             model_manager=MagicMock(),
@@ -406,7 +405,6 @@ class TestProcessorIntegration:
 
         from src.analyzer.analysis_result_processor import AnalysisResultProcessor
         from src.analyzer.pattern_quality_scorer import PatternQualityScorer
-        from src.analyzer.trend_validator import TrendValidator
 
         logger = MagicMock()
         proc = AnalysisResultProcessor(

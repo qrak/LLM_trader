@@ -285,7 +285,6 @@ class TestVerbosityParserContract:
     """Verify all verbosity levels preserve required parser contract sections."""
 
     def _make_mgr(self, level: str) -> TemplateManager:
-        from types import SimpleNamespace
         config = SimpleNamespace(
             STOP_LOSS_TYPE="soft",
             STOP_LOSS_CHECK_INTERVAL="1h",

@@ -159,7 +159,7 @@ class RedditSentimentAnalyst:
         """
         url = self.BASE_URL.format(subreddit=subreddit)
         timeout = aiohttp.ClientTimeout(total=15)
-        for attempt in range(self.MAX_RETRIES):
+        for _ in range(self.MAX_RETRIES):
             async with session.get(
                 url, params={"limit": limit}, timeout=timeout
             ) as resp:

@@ -1,7 +1,6 @@
 """Run full static analysis (Ruff, Pyright, Pylint) and save findings to data/static_analysis_report.txt."""
 
 import argparse
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone

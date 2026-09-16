@@ -60,9 +60,6 @@ async def test_real_scenario():
 
     async def uvicorn_serve():
         """Mimics uvicorn.server.serve() with capture_signals."""
-        async def ctx():
-            yield
-
         g = capture_signals_ctx()
         await g.__anext__()
         try:
@@ -89,10 +86,10 @@ async def test_real_scenario():
         signal.raise_signal(signal.SIGINT)
 
         # Run the uvicorn-like server
-        lifespan_task = loop.run_until_complete(uvicorn_serve())
+        loop.run_until_complete(uvicorn_serve())
 
         # Now simulate what shutdown_gracefully does:
-        # The server task (lifespan_task) is cancelled
+        # The server task left behind by run_until_complete is cancelled
         remaining = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()]
         print(f"[TEST] Remaining tasks before cancel: {len(remaining)}")
 
