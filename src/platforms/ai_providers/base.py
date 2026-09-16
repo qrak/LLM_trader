@@ -155,7 +155,7 @@ class BaseAIClient(ABC):
         if "503" in error_message_raw or "overloaded" in error_message_lower or (
             "unavailable" in error_message_lower
         ):
-            self.logger.error("Service unavailable/overloaded: %s", error_message_sanitized)
+            self.logger.warning("Service unavailable/overloaded: %s", error_message_sanitized)
             return ChatResponseModel.from_error(f"overloaded: {error_message_sanitized}")
         if "connection" in error_message_lower or "econnreset" in error_message_lower:
             self.logger.error("Connection error: %s", error_message_sanitized)
