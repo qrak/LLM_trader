@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /* global DOMPurify */
 /**
  * Position panel module - Displays active position details, entry/exit prices, and SL/TP distances.

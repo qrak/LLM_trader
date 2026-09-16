@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /* global ApexCharts */
 let chart;
 

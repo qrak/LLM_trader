@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.5';
 import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.5';
 import { updateLogs } from './modules/log_viewer.js?v=4.7';

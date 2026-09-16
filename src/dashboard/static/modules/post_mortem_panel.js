@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /* global DOMPurify */
 /**
  * Trade Journal panel module — Displays post-mortem analyses with FTS5 search.

@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /** Live Console panel — real-time log streaming with day-page history.
  *
  * Connects via WebSocket to /api/console/live for live updates.

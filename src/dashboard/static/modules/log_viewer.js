@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /* global DOMPurify, marked */
 /**
  * Log viewer module - Handles prompt and response display.

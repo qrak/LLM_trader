@@ -1,4 +1,3 @@
-/* eslint-env browser, es2022 */
 /* global DOMPurify */
 /**
  * Statistics panel module - Displays performance stats and win/loss analytics.
