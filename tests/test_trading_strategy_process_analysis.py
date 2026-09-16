@@ -101,6 +101,11 @@ def _build_strategy() -> TradingStrategy:
         EXECUTOR_API_URL="",
         ENTRY_ORDER_TYPE="limit",
         MARKET_TYPE="spot",
+        RESEARCH_TEAM_ENABLED=False,
+        MIN_RR_ENTRY=1.0,
+        EXECUTOR_MAX_POSITION_USDC=0.0,
+        SOCIAL_SENTIMENT_ENABLED=False,
+        EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
     )
     strategy.current_position = None
     strategy.guard_pipeline = None

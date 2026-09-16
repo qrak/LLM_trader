@@ -207,7 +207,7 @@ class PositionManagementMixin:
         reasoning: str,
     ) -> TradeDecision | None:
         """Enforce the config-driven R/R floor; store the rejection and return a HOLD decision."""
-        config_min_rr = float(getattr(self.config, "MIN_RR_ENTRY", 1.0) or 1.0)
+        config_min_rr = float(self.config.MIN_RR_ENTRY or 1.0)
         brain_thresholds = self.brain_service.get_dynamic_thresholds(choppiness=market_conditions.choppiness)
         try:
             brain_min_rr = float(brain_thresholds.get("rr_borderline_min", config_min_rr))
@@ -296,7 +296,7 @@ class PositionManagementMixin:
         quote_amount = risk.quote_amount
         entry_fee = risk.entry_fee
 
-        executor_max = float(getattr(self.config, "EXECUTOR_MAX_POSITION_USDC", 0.0) or 0.0)
+        executor_max = float(self.config.EXECUTOR_MAX_POSITION_USDC or 0.0)
         notional = quantity * current_price
         if executor_max > 0 and notional > executor_max:
             scale = executor_max / notional

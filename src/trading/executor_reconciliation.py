@@ -160,7 +160,7 @@ class ExecutorReconciliationMixin:
 
     def _executor_verdict_path(self) -> Path:
         """Filesystem path of the executor's verdict journal."""
-        configured = getattr(self.config, "EXECUTOR_VERDICT_PATH", "")
+        configured = self.config.EXECUTOR_VERDICT_PATH
         if configured:
             return Path(configured)
         return Path("data/trading/executor_verdicts.jsonl")

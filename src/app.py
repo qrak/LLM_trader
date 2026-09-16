@@ -310,7 +310,7 @@ class CryptoTradingBot:
             return
 
         result["_social_sentiment_reddit"] = self._reddit_sentiment_label
-        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
 
@@ -419,7 +419,7 @@ class CryptoTradingBot:
         additional_context = ""
         self._reddit_sentiment_label = "NEUTRAL"
         if (
-            getattr(self.config, "SOCIAL_SENTIMENT_ENABLED", False)
+            self.config.SOCIAL_SENTIMENT_ENABLED
             and self.sentiment_analyst is not None
         ):
             try:
@@ -461,7 +461,7 @@ class CryptoTradingBot:
         """Build the EV framework context string with dynamic capital tracking."""
         if self.ev_formatter is None:
             return ""
-        demo_capital = float(getattr(self.config, "DEMO_QUOTE_CAPITAL", 10000.0))
+        demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         return self.ev_formatter.build_ev_framework_section(current_capital)
 

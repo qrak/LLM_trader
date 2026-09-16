@@ -20,6 +20,12 @@ def _make_manager(**overrides):
         MODEL_VERBOSITY="high",
         MARKET_TYPE="spot",
         ENTRY_ORDER_TYPE="limit",
+        RESEARCH_TEAM_ENABLED=False,
+        MIN_RR_ENTRY=1.0,
+        EXECUTOR_MAX_POSITION_USDC=0.0,
+        DEMO_QUOTE_CAPITAL=10000.0,
+        SOCIAL_SENTIMENT_ENABLED=False,
+        EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
     )
     defaults = {"config": config, "logger": MagicMock(), "timeframe_validator": TimeframeValidator}
     defaults.update(overrides)
@@ -60,6 +66,12 @@ class TestBuildSystemPrompt:
             TAKE_PROFIT_TYPE="hard",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
             MODEL_VERBOSITY="high",
+            RESEARCH_TEAM_ENABLED=False,
+            MIN_RR_ENTRY=1.0,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
 
@@ -75,6 +87,12 @@ class TestBuildSystemPrompt:
             TAKE_PROFIT_TYPE="soft",
             TAKE_PROFIT_CHECK_INTERVAL="15m",
             MODEL_VERBOSITY="high",
+            RESEARCH_TEAM_ENABLED=False,
+            MIN_RR_ENTRY=1.0,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
 
@@ -240,6 +258,11 @@ class TestBuildResponseTemplate:
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
             MIN_RR_ENTRY=2.9,
+            RESEARCH_TEAM_ENABLED=False,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
         thresholds = {
@@ -280,6 +303,11 @@ class TestBuildResponseTemplate:
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
             MIN_RR_ENTRY=2.9,
+            RESEARCH_TEAM_ENABLED=False,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
         thresholds = {
@@ -313,6 +341,11 @@ class TestBuildResponseTemplate:
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
             MIN_RR_ENTRY=1.0,
+            RESEARCH_TEAM_ENABLED=False,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
         thresholds = {
@@ -346,6 +379,12 @@ class TestBuildResponseTemplate:
             MODEL_VERBOSITY="high",
             MARKET_TYPE="futures",
             ENTRY_ORDER_TYPE="limit",
+            RESEARCH_TEAM_ENABLED=False,
+            MIN_RR_ENTRY=1.0,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         mgr = _make_manager(config=config)
         rules = mgr.build_decision_rules(dynamic_thresholds={})
@@ -621,6 +660,12 @@ class TestBuildResponseTemplateVerbosity:
             MODEL_VERBOSITY=level,
             MARKET_TYPE="spot",
             ENTRY_ORDER_TYPE="limit",
+            RESEARCH_TEAM_ENABLED=False,
+            MIN_RR_ENTRY=1.0,
+            EXECUTOR_MAX_POSITION_USDC=0.0,
+            DEMO_QUOTE_CAPITAL=10000.0,
+            SOCIAL_SENTIMENT_ENABLED=False,
+            EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
         )
         return TemplateManager(config=config, logger=MagicMock(), timeframe_validator=TimeframeValidator)
 

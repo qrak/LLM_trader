@@ -33,6 +33,10 @@ def _make_config(**overrides) -> SimpleNamespace:
         "STOP_LOSS_CHECK_INTERVAL": "4h",
         "TAKE_PROFIT_TYPE": "hard",
         "TAKE_PROFIT_CHECK_INTERVAL": "4h",
+        "RESEARCH_TEAM_ENABLED": False,
+        "EXECUTOR_MAX_POSITION_USDC": 0.0,
+        "SOCIAL_SENTIMENT_ENABLED": False,
+        "EXECUTOR_VERDICT_PATH": "data/trading/executor_verdicts.jsonl",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

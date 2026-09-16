@@ -382,6 +382,11 @@ def _make_risk_config(**overrides: object) -> SimpleNamespace:
         "STOP_LOSS_CHECK_INTERVAL": "4h",
         "TAKE_PROFIT_TYPE": "soft",
         "TAKE_PROFIT_CHECK_INTERVAL": "4h",
+        "RESEARCH_TEAM_ENABLED": False,
+        "MIN_RR_ENTRY": 1.0,
+        "EXECUTOR_MAX_POSITION_USDC": 0.0,
+        "SOCIAL_SENTIMENT_ENABLED": False,
+        "EXECUTOR_VERDICT_PATH": "data/trading/executor_verdicts.jsonl",
     }
     values.update(overrides)
     return SimpleNamespace(**values)

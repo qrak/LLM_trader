@@ -17,6 +17,12 @@ def _make_bot_for_trading_check(**overrides):
         RAG_UPDATE_TIMEOUT=1,
         EXECUTOR_API_ENABLED=False,
         EXECUTOR_API_URL="http://127.0.0.1:9199/decision",
+        RESEARCH_TEAM_ENABLED=False,
+        MIN_RR_ENTRY=1.0,
+        EXECUTOR_MAX_POSITION_USDC=0.0,
+        DEMO_QUOTE_CAPITAL=10000.0,
+        SOCIAL_SENTIMENT_ENABLED=False,
+        EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
     )
 
     discord_notifier = MagicMock()

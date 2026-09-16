@@ -381,7 +381,7 @@ class TemplateManager:
                 "",
             ])
 
-        if getattr(self.config, "RESEARCH_TEAM_ENABLED", False):
+        if self.config.RESEARCH_TEAM_ENABLED:
             header_lines.extend([
                 "## Bull vs Bear Debate Protocol",
                 "Before making your final decision, you MUST internally debate both sides:",
@@ -551,7 +551,7 @@ class TemplateManager:
             max_pos = 0.10
         min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
         try:
-            config_min_rr = float(getattr(self.config, "MIN_RR_ENTRY", 1.0) or 1.0)
+            config_min_rr = float(self.config.MIN_RR_ENTRY or 1.0)
         except (TypeError, ValueError):
             config_min_rr = 1.0
         try:
