@@ -155,7 +155,7 @@ export async function updatePerformanceData() {
         let annotations = [];
         
         if (historyData.history && Array.isArray(historyData.history) && historyData.history.length > 0) {
-            historyData.history.forEach((point, index) => {
+            historyData.history.forEach((point) => {
                 const time = new Date(point.time).getTime();
                 seriesData.push({ 
                     x: time, 
@@ -177,7 +177,6 @@ export async function updatePerformanceData() {
                         let color = '#8b949e';
                         let symbol = 'circle';
                         let markerSize = 6;
-                        let labelText = '';
 
                         if (isBuy) {
                             color = '#00ff9d'; // Vibrant entry green

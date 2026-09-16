@@ -15,12 +15,14 @@ on:
     paths:
       - 'src/**'
       - 'scripts/**'
+      - 'requirements*.txt'
       - '.github/workflows/codacy.yml'
   pull_request:
     branches: [ "master" ]
     paths:
       - 'src/**'
       - 'scripts/**'
+      - 'requirements*.txt'
   schedule:
     - cron: '15 6 * * 4'          # weekly, Thursday 06:15 UTC
   workflow_dispatch: {}            # manual trigger from the Actions tab

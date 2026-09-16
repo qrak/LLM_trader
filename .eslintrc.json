@@ -1,0 +1,11 @@
+{
+  "root": true,
+  "overrides": [
+    {
+      "files": ["src/dashboard/static/**/*.js"],
+      "env": { "browser": true, "es2022": true },
+      "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
+      "extends": ["eslint:recommended"]
+    }
+  ]
+}

@@ -8,7 +8,6 @@ let ws = null;
 let reconnectTimer = null;
 let activePage = 'live';
 let pagesLoaded = false;
-let lineCount = 0;
 const MAX_VISIBLE_LINES = 2000;
 
 const container = () => document.getElementById('console-container');
@@ -101,7 +100,6 @@ function appendLine(line) {
     if (empty) empty.remove();
 
     el.appendChild(createLineElement(line));
-    lineCount++;
 
     while (el.children.length > MAX_VISIBLE_LINES) {
         el.firstElementChild.remove();
@@ -216,7 +214,6 @@ export function initConsolePanel() {
     document.getElementById('console-clear')?.addEventListener('click', () => {
         const el = container();
         if (el) el.innerHTML = '';
-        lineCount = 0;
     });
 
     const observer = new MutationObserver(() => {
