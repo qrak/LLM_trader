@@ -146,7 +146,7 @@ TradingStrategy.process_analysis()
     ├── PositionExtractor + UnifiedParser → extract and validate signal
     ├── GuardPipeline (symbol → max size → cooldown)
     ├── RiskManager → RiskAssessment (SL/TP scaling, computes R:R)
-    ├── TradingStrategy → R:R minimum check against brain-learned threshold (default 1.5)
+    ├── TradingStrategy → R:R minimum check against max(config floor, brain floor; both default 0.0)
     ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → EXECUTED (or REJECTED)
     ├── Approval is recorded as an audit event, not as an OrderLifecycle state
     ├── PersistenceManager → SQLite-only trade_history.db append (no JSON fallback/migration)
@@ -1067,10 +1067,14 @@ Volatility classification (embedded in RiskAssessment + friction metadata):
 ##### R:R Enforcement — Two-Layer Defense
 
 RiskManager computes `rr_ratio` = TP distance / SL distance but does **NOT** reject on it.
-TradingStrategy enforces brain-learned `rr_borderline_min` (default **1.5**, adaptively learned from historical R:R performance):
+TradingStrategy and the prompt share one effective floor: the greater of configured
+`MIN_RR_ENTRY` and brain-provided `rr_borderline_min` (both default **0.0**). With no learned
+floor, R/R remains an EV input rather than a hard veto. After at least 10 closed trades below
+1.0 R/R, negative expectancy can raise the brain floor to 0.5 or 1.0; profitable evidence
+leaves it at 0.0. The brain may raise the configured floor but cannot lower it.
 
 ```python
-if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
+if rr_ratio < max(configured_min_rr, brain_thresholds.get("rr_borderline_min", configured_min_rr)):
     # Blocked as guard_type="rr_minimum" → stored as blocked-trade feedback
 ```
 
@@ -1099,7 +1103,7 @@ if rr_ratio < brain_thresholds.get("rr_borderline_min", 1.5):
 | **ATR unavailable** | Falls back to percentage-based SL (2% of current price) |
 | **Brain thresholds unavailable** | Uses config defaults from `config.ini` |
 | **Invalid configured fallback size** | Falls back to configured MEDIUM size and logs warning |
-| **R:R below minimum** | Enforced in TradingStrategy (not RiskManager) — blocked as `guard_type="rr_minimum"` with brain-learned default 1.5 |
+| **R:R below minimum** | Enforced in TradingStrategy (not RiskManager) — blocked as `guard_type="rr_minimum"` against max(config floor, brain floor; both default 0.0) |
 | **SL on wrong side of entry** | SL above entry for BUY / below entry for SELL → dynamic SL substituted, friction logged |
 
 ---

@@ -85,12 +85,12 @@ class EVFrameworkFormatter:
                 f"EV must exceed ${breakeven_ev:,.2f})"
             ),
             "- **HOLD if EV is negative or below the 1.5× fee threshold**",
-            "- **THIS IS THE ONLY HARD ENTRY GATE.** A low R/R is NOT a veto: R/R 0.6 with a high P(win) is +EV and "
-            "MUST be taken; R/R 2.5 with a low P(win) is negative EV and MUST be rejected. Never HOLD a setup purely "
-            "because its R/R looks small.",
-            "- **State P(win) AND its basis** (which confluences, regime and structure support it). P(win) is logged "
-            "and scored against the realized outcome — an unsupported or inflated P(win) is a calibration failure, "
-            "not a justification.",
+            "- **After the system R/R floor is met, EV decides entry quality.** An R/R near the active floor with a well-supported P(win) can be +EV; a high R/R with a low P(win) can be negative EV and must be rejected. Do not HOLD solely because the ratio is close to the floor.",
+            (
+                "- **State P(win) AND its basis** (which confluences, regime and structure support it). P(win) is logged "
+                "and scored against the realized outcome — an unsupported or inflated P(win) is a calibration failure, "
+                "not a justification."
+            ),
             "- **Never reject a positive EV trade purely due to fear of loss**",
             "- A trade that loses money with good EV reasoning is a GOOD DECISION — luck is not strategy",
             "",

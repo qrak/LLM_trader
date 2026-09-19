@@ -1107,9 +1107,9 @@ def test_compute_optimal_thresholds_learns_expected_values():
 
     assert thresholds["adx_strong_threshold"] == 25
     assert thresholds["adx_weak_threshold"] == 22
-    assert thresholds["min_rr_recommended"] == 1.0
+    assert thresholds["min_rr_recommended"] == 1.5
     assert thresholds["rr_strong_setup"] == 2.0
-    assert thresholds["rr_borderline_min"] == 1.3
+    assert "rr_borderline_min" not in thresholds
 
 
 def test_compute_optimal_thresholds_ignores_update_entries_for_rr_boundary():
@@ -1132,6 +1132,63 @@ def test_compute_optimal_thresholds_ignores_update_entries_for_rr_boundary():
     thresholds = service.compute_optimal_thresholds(min_sample_size=1)
 
     assert thresholds["min_rr_recommended"] == 1.6
+    assert "rr_borderline_min" not in thresholds
+
+
+def test_compute_optimal_thresholds_raises_rr_floor_after_losses_without_wins():
+    service = make_service()
+    service.compute_adx_performance = MagicMock(return_value={})
+    service.compute_confidence_stats = MagicMock(return_value={})
+    service._learn_position_size_threshold = MagicMock()
+    service._learn_confluence_thresholds = MagicMock()
+    service._learn_alignment_thresholds = MagicMock()
+    service._learn_sl_tightening_threshold = MagicMock()
+    service._collection.get.return_value = {
+        "ids": [str(index) for index in range(10)],
+        "metadatas": [{"outcome": "LOSS", "rr_ratio": 0.7} for _ in range(10)],
+    }
+
+    thresholds = service.compute_optimal_thresholds()
+
+    assert thresholds["rr_borderline_min"] == 1.0
+
+
+def test_compute_optimal_thresholds_keeps_zero_rr_floor_without_enough_losing_evidence():
+    service = make_service()
+    service.compute_adx_performance = MagicMock(return_value={})
+    service.compute_confidence_stats = MagicMock(return_value={})
+    service._learn_position_size_threshold = MagicMock()
+    service._learn_confluence_thresholds = MagicMock()
+    service._learn_alignment_thresholds = MagicMock()
+    service._learn_sl_tightening_threshold = MagicMock()
+    service._collection.get.return_value = {
+        "ids": [str(index) for index in range(9)],
+        "metadatas": [{"outcome": "LOSS", "rr_ratio": 0.7} for _ in range(9)],
+    }
+
+    thresholds = service.compute_optimal_thresholds()
+
+    assert "rr_borderline_min" not in thresholds
+
+
+def test_compute_optimal_thresholds_keeps_zero_rr_floor_when_low_rr_trades_are_profitable():
+    service = make_service()
+    service.compute_adx_performance = MagicMock(return_value={})
+    service.compute_confidence_stats = MagicMock(return_value={})
+    service._learn_position_size_threshold = MagicMock()
+    service._learn_confluence_thresholds = MagicMock()
+    service._learn_alignment_thresholds = MagicMock()
+    service._learn_sl_tightening_threshold = MagicMock()
+    service._collection.get.return_value = {
+        "ids": [str(index) for index in range(10)],
+        "metadatas": [
+            *[{"outcome": "WIN", "rr_ratio": 0.9} for _ in range(8)],
+            *[{"outcome": "LOSS", "rr_ratio": 0.9} for _ in range(2)],
+        ],
+    }
+
+    thresholds = service.compute_optimal_thresholds()
+
     assert "rr_borderline_min" not in thresholds
 
 

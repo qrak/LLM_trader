@@ -7,7 +7,6 @@ at MRO resolution time.
 
 import asyncio
 import dataclasses
-import math
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,6 +14,7 @@ from src.utils.indicator_classifier import build_exit_execution_context_from_con
 
 from .data_models import MarketConditions, Position, TradeDecision, entry_direction
 from .order_lifecycle import OrderIntent, OrderLifecycle
+from .rr_policy import format_rr_floor, resolve_entry_rr_floor
 
 
 class PositionManagementMixin:
@@ -200,35 +200,17 @@ class PositionManagementMixin:
         except Exception:
             self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)
 
-    def _configured_min_rr(self) -> float:
-        """Read MIN_RR_ENTRY as the hard R/R floor; a configured 0 disables the floor."""
-        try:
-            value = float(self.config.MIN_RR_ENTRY)
-        except (TypeError, ValueError):
-            return 1.0
-        if not math.isfinite(value):
-            return 1.0
-        return max(0.0, value)
-
     def _resolve_min_rr_for_entry(
         self,
-        choppiness: float | None = None,
         brain_thresholds: dict[str, Any] | None = None,
     ) -> float:
-        """Return the effective R/R floor: the config value, which the brain may only raise."""
-        config_min_rr = self._configured_min_rr()
+        """Return the single R/R floor shared with the prompt."""
         thresholds = (
             brain_thresholds
             if brain_thresholds is not None
-            else self.brain_service.get_dynamic_thresholds(choppiness=choppiness)
+            else self.brain_service.get_dynamic_thresholds()
         )
-        try:
-            brain_min_rr = float(thresholds.get("rr_borderline_min", config_min_rr))
-        except (TypeError, ValueError):
-            return config_min_rr
-        if not math.isfinite(brain_min_rr):
-            return config_min_rr
-        return max(brain_min_rr, config_min_rr)
+        return resolve_entry_rr_floor(self.config, thresholds)
 
     async def _check_entry_thresholds(
         self,
@@ -245,10 +227,11 @@ class PositionManagementMixin:
         if risk.rr_ratio >= min_rr_for_entry:
             return None
 
+        min_rr_text = format_rr_floor(min_rr_for_entry)
         self.logger.warning(
-            "REJECTED entry: R/R %.2f below minimum %.1f. "
+            "REJECTED entry: R/R %.2f below minimum %s. "
             "Trade has unfavorable risk/reward. Signal: %s, Confidence: %s",
-            risk.rr_ratio, min_rr_for_entry, signal, confidence,
+            risk.rr_ratio, min_rr_text, signal, confidence,
         )
         try:
             await asyncio.to_thread(
@@ -268,7 +251,7 @@ class PositionManagementMixin:
         return TradeDecision(
             timestamp=datetime.now(timezone.utc), symbol=intent.symbol,
             action="HOLD", confidence=confidence, price=current_price, fee=0.0,
-            reasoning=f"Entry blocked: R/R {risk.rr_ratio:.2f} below minimum {min_rr_for_entry}.{detail}",
+            reasoning=f"Entry blocked: R/R {risk.rr_ratio:.2f} below minimum {min_rr_text}.{detail}",
         )
 
     async def _open_new_position(
@@ -312,7 +295,7 @@ class PositionManagementMixin:
             market_conditions=market_conditions,
             choppiness=market_conditions.choppiness,
         )
-        min_rr_for_entry = self._resolve_min_rr_for_entry(market_conditions.choppiness)
+        min_rr_for_entry = self._resolve_min_rr_for_entry()
         await self._store_risk_frictions(risk, direction, confidence, current_price, min_rr_for_entry)
 
         blocked = await self._check_entry_thresholds(

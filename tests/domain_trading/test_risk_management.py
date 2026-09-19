@@ -19,7 +19,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import ANY, MagicMock
+from unittest.mock import ANY, MagicMock, PropertyMock
 
 import chromadb
 import pytest
@@ -28,6 +28,11 @@ from sentence_transformers import SentenceTransformer
 from src.managers.risk_manager import RiskManager
 from src.trading.brain import TradingBrainService
 from src.trading.data_models import MarketConditions, MarketSnapshot
+from src.trading.rr_policy import (
+    configured_min_rr,
+    format_rr_floor,
+    resolve_entry_rr_floor,
+)
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
 from tests.conftest import (
@@ -893,7 +898,7 @@ async def test_rr_gate_blocks_entry_below_floor(
     expected_rr: float,
     reasoning: str,
 ) -> None:
-    """An R/R under min(brain borderline, config floor) returns HOLD and stores rr_minimum."""
+    """An R/R under max(brain borderline, config floor) returns HOLD and stores rr_minimum."""
     strategy = make_strategy(
         stop_loss=stop_loss,
         take_profit=take_profit,
@@ -980,9 +985,8 @@ async def test_brain_threshold_can_only_raise_the_config_floor() -> None:
     assert blocked_calls(lowered, "rr_minimum")[0]["required_rr"] == pytest.approx(3.0)
 
 
-async def test_zero_configured_min_rr_disables_the_config_floor() -> None:
-    """MIN_RR_ENTRY=0 is an explicit "no config floor" instead of silently becoming 1.0: the
-    0.25 R/R trade opens, and only the brain's bar can still block it (F11)."""
+async def test_zero_configured_min_rr_disables_the_config_contribution() -> None:
+    """MIN_RR_ENTRY=0 and the untrained brain add no floor; a learned floor still applies."""
     unguarded = make_strategy(
         stop_loss=98.0, take_profit=100.5, brain_thresholds={}, min_rr_entry=0.0
     )
@@ -990,6 +994,14 @@ async def test_zero_configured_min_rr_disables_the_config_floor() -> None:
 
     assert decision.action == "BUY"
     assert blocked_calls(unguarded, "rr_minimum") == []
+
+    brain_default = make_strategy(
+        stop_loss=98.0, take_profit=100.5, rr_borderline_min=0.0, min_rr_entry=0.0
+    )
+    default_decision = await run_entry(brain_default, stop_loss=98.0, take_profit=100.5)
+
+    assert default_decision.action == "BUY"
+    assert blocked_calls(brain_default, "rr_minimum") == []
 
     brain_gated = make_strategy(
         stop_loss=98.0, take_profit=100.5, rr_borderline_min=2.0, min_rr_entry=0.0
@@ -1000,6 +1012,47 @@ async def test_zero_configured_min_rr_disables_the_config_floor() -> None:
     blocked = blocked_calls(brain_gated, "rr_minimum")
     assert blocked[0]["required_rr"] == pytest.approx(2.0)
     assert blocked[0]["suggested_rr"] == pytest.approx(0.25)
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    (0.0, 0.0),
+    (-1.0, 0.0),
+    ("n/a", 1.0),
+    (None, 1.0),
+    (math.nan, 1.0),
+    (math.inf, 1.0),
+    (-math.inf, 1.0),
+])
+def test_configured_min_rr_normalizes_boundary_values(value: Any, expected: float) -> None:
+    assert configured_min_rr(value) == expected
+
+
+@pytest.mark.parametrize(("brain_floor", "expected"), [
+    (-1.0, 1.25),
+    (math.nan, 1.25),
+    (math.inf, 1.25),
+    (-math.inf, 1.25),
+    (2.0, 2.0),
+])
+def test_entry_rr_floor_normalizes_brain_values(brain_floor: float, expected: float) -> None:
+    config = make_config(MIN_RR_ENTRY=1.25)
+    assert resolve_entry_rr_floor(config, {"rr_borderline_min": brain_floor}) == expected
+
+
+def test_entry_rr_floor_handles_a_raising_config_property() -> None:
+    config = MagicMock()
+    type(config).MIN_RR_ENTRY = PropertyMock(side_effect=ValueError("invalid min_rr_entry"))
+
+    assert resolve_entry_rr_floor(config, {}) == 1.0
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    (0.0, "0.0"),
+    (1.0, "1.0"),
+    (1.04, "1.04"),
+])
+def test_rr_floor_format_preserves_enforced_precision(value: float, expected: str) -> None:
+    assert format_rr_floor(value) == expected
 
 
 BRAIN_THRESHOLD_CASES = [

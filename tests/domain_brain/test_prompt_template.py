@@ -276,12 +276,13 @@ def test_system_prompt_renders_mandated_sections():
         "## Decision Protocol",
         ("- Classify regime first: trending, ranging, transitional, breakout, reversal, "
         "or unclear."),
-        ("- TRENDING (ADX >= 25, Choppiness < 38.2): trade with trend. HOLD only on weak "
-        "R/R or invalidation."),
+        ("- TRENDING (ADX >= 25, Choppiness < 38.2): trade with trend. HOLD only when "
+        "the edge fails or the thesis is invalidated."),
         ("- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an "
         "automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness "
         "alone."),
         "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone.",
+        "The R/R floor in Decision Rules applies in every regime.",
         "When price is in range middle: HOLD (no edge).",
         ("- In ALL regimes: HOLD only when invalidation is genuinely unclear or the "
         "setup has no identifiable edge."),
@@ -378,11 +379,12 @@ def test_indicator_delta_alert_needs_previous_context():
         ),
         [alert],
     )
-    for kwargs in (
-        {"previous_response": "Some prior analysis text", "indicator_delta_alert": ""},
-        {"indicator_delta_alert": alert},
-    ):
-        assert_absent(manager.build_system_prompt(SYMBOL, **kwargs), ["SIGNIFICANT DATA SHIFT"])
+    without_alert = manager.build_system_prompt(
+        SYMBOL, previous_response="Some prior analysis text", indicator_delta_alert=""
+    )
+    without_previous = manager.build_system_prompt(SYMBOL, indicator_delta_alert=alert)
+    assert_absent(without_alert, ["SIGNIFICANT DATA SHIFT"])
+    assert_absent(without_previous, ["SIGNIFICANT DATA SHIFT"])
 
 
 def test_temporal_context_rendered_only_with_last_analysis_time():
@@ -568,12 +570,13 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
         "- R/R < 1.0: REJECTED — below the sanity floor (hard block)",
         "- R/R >= 1.0: NOT a rejection by itself. Judge the trade on EV (see EXPECTED VALUE FRAMEWORK)",
-        ("- Historical winning average: 2.0+ R/R (aspirational — NOT enforced, NOT a "
+        ("- Brain-recommended R/R target: 2.0+ (aspirational — NOT enforced, NOT a "
         "gate; do NOT reject a valid setup just to match it)"),
         ("- Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / "
         "CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, "
         "fall back to 0.10 (10%)."),
-        "Max 2.5% from entry.",
+        "Historical winning-trade SL reference: 2.5% from entry (guidance, not a hard cap).",
+        "SL below 1% expands to 1%, SL above 10% clamps to 10%, and TP above 50% clamps to 50%.",
     ]),
     ({"MIN_RR_ENTRY": 2.9}, {
         "adx_strong_threshold": 30,
@@ -595,8 +598,8 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "- R/R < 2.9: REJECTED — below the sanity floor (hard block)",
         "- R/R >= 2.9: NOT a rejection by itself. Judge the trade on EV (see EXPECTED VALUE FRAMEWORK)",
         "- R/R >= 2.5: Preferred / exceptional setup",
-        "- Historical winning average: 2.5+ R/R (aspirational",
-        "Max 3.0% from entry.",
+        "- Brain-recommended R/R target: 2.5+ (aspirational",
+        "Historical winning-trade SL reference: 3.0% from entry (guidance, not a hard cap).",
     ]),
     ({"MIN_RR_ENTRY": 2.9}, {
         "rr_borderline_min": 1.5,
@@ -608,7 +611,7 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "R/R >= 2.9 (sanity floor only — entry quality is decided by EV, not by the ratio)",
         "R/R < 2.9: REJECTED — below the sanity floor (hard block)",
         "R/R >= 2.5: Preferred / exceptional setup",
-        "Historical winning average: 2.0+ R/R (aspirational",
+        "Brain-recommended R/R target: 2.0+ (aspirational",
     ]),
     ({"MIN_RR_ENTRY": 1.0}, {
         "rr_borderline_min": 1.5,
@@ -622,12 +625,51 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
     ]),
 ], ids=["defaults", "custom-thresholds", "borderline-below-config-floor", "brain-tighter-clamped"])
 def test_dynamic_thresholds_render_the_gate_matrix(config_overrides, thresholds, expected):
-    """The rendered gate is min(brain rr_borderline_min, config MIN_RR_ENTRY)."""
+    """The rendered gate is max(brain rr_borderline_min, config MIN_RR_ENTRY)."""
     rules = make_manager(make_config(**config_overrides)).build_decision_rules(
         dynamic_thresholds=thresholds
     )
     assert_fragments(rules, expected)
     assert "system-enforced minimum — the only hard gate" not in rules
+
+
+def test_decision_protocol_uses_the_dynamic_adx_threshold():
+    prompt = make_manager().build_system_prompt(
+        SYMBOL, dynamic_thresholds={"adx_strong_threshold": 30}
+    )
+
+    assert "TRENDING (ADX >= 30, Choppiness < 38.2)" in prompt
+    assert "(a) ADX >= 30 with one DI clearly leading" in prompt
+    assert "(b) ADX < 30 with no directional dominance" in prompt
+
+
+def test_prompt_preserves_rr_floor_precision_used_by_executor():
+    rules = make_manager(make_config(MIN_RR_ENTRY=1.04)).build_decision_rules(
+        dynamic_thresholds={}
+    )
+
+    assert "R/R >= 1.04 (sanity floor only" in rules
+    assert "R/R < 1.04: REJECTED" in rules
+
+
+def test_zero_configured_rr_floor_lets_ev_decide_without_a_ratio_gate():
+    rules = make_manager(make_config(MIN_RR_ENTRY=0.0)).build_decision_rules(
+        dynamic_thresholds={}
+    )
+
+    assert "no hard R/R floor — entry quality is decided by EV" in rules
+    assert "No hard R/R floor is active" in rules
+    assert "R/R < 0.0" not in rules
+    assert "R/R >= 0.0" not in rules
+
+
+def test_learned_rr_floor_reenables_the_prompt_gate_over_zero_config():
+    rules = make_manager(make_config(MIN_RR_ENTRY=0.0)).build_decision_rules(
+        dynamic_thresholds={"rr_borderline_min": 0.5}
+    )
+
+    assert "R/R >= 0.5 (sanity floor only" in rules
+    assert "R/R < 0.5: REJECTED" in rules
 
 
 @pytest.mark.parametrize(("thresholds", "expected"), [

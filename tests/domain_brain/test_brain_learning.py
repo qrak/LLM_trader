@@ -128,11 +128,11 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
      - Your thesis: "Expecting quick bounce off support"
 
 ### PRE-FLIGHT CHECKLIST (MANDATORY):
-- Before outputting BUY/SELL, verify: R/R >= required minimum (see Response Format).
+- Before outputting BUY/SELL, verify: R/R >= required minimum from Decision Rules; historical values above are diagnostic only.
 - If volatility is HIGH, widen SL to >1x ATR to achieve required R/R.
 - If volatility is LOW, do not use 2x+ ATR SL — tighten to keep R/R viable.
 - Compare your proposed SL/TP against the last rejection patterns above.
-- If you cannot meet the R/R requirement with a reasonable SL/TP, output HOLD.
+- If Decision Rules set a positive R/R floor and reasonable SL/TP cannot meet it, output HOLD.
 """
 
 TRUNCATION_MARKER = (
@@ -332,6 +332,7 @@ def test_get_dynamic_thresholds_returns_defaults_and_sl_tightening_payload(confi
     assert thresholds["min_rr_recommended"] == 2.0
     assert thresholds["confidence_threshold"] == 60
     assert thresholds["min_position_size"] == 0.02
+    assert thresholds["rr_borderline_min"] == 0.0
     assert thresholds["trade_count"] == 0
     assert thresholds["learned_keys"] == []
     tightening = thresholds["sl_tightening"]
@@ -369,26 +370,16 @@ def test_sl_tightening_override_respects_config_samples_floor_and_ceiling(
     assert tightening["learned_threshold"] == learned
 
 
-@pytest.mark.parametrize(
-    ("learned_rr", "choppiness", "expected_effective", "expected_gate"),
-    [
-        pytest.param(1.5, None, 1.5, 1.0, id="default-borderline"),
-        pytest.param(1.5, 61.8, 1.5, 1.0, id="choppiness-at-boundary"),
-        pytest.param(1.5, 61.9, 1.2, 1.0, id="choppiness-above-boundary"),
-        pytest.param(2.5, 70.0, 1.2, 1.0, id="already-learned-floor"),
-        pytest.param(1.2, 70.0, 1.2, 1.0, id="no-double-loosening"),
-        pytest.param(0.8, None, 0.8, 0.8, id="brain-loosens-below-config"),
-    ],
-)
-def test_entry_rr_gate_never_tightens_past_config_min_rr(config, learned_rr, choppiness, expected_effective, expected_gate):
+@pytest.mark.parametrize("learned_rr", [1.5, 2.5, 1.2, 0.8])
+def test_dynamic_rr_threshold_does_not_depend_on_choppiness(config, learned_rr):
+    """Prompt and executor must receive the same brain-derived R/R threshold."""
     brain = learning_brain()
     brain.vector_memory.compute_optimal_thresholds.return_value = {"rr_borderline_min": learned_rr}
 
-    effective = brain.get_dynamic_thresholds(choppiness=choppiness)["rr_borderline_min"]
+    thresholds = brain.get_dynamic_thresholds()
 
     assert config.MIN_RR_ENTRY == 1.0
-    assert effective == expected_effective
-    assert min(effective, config.MIN_RR_ENTRY) == expected_gate
+    assert thresholds["rr_borderline_min"] == learned_rr
 
 
 def test_update_from_closed_trade_stores_exit_profile_and_entry_snapshot():

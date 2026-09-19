@@ -30,7 +30,7 @@ class VectorMemoryService(
     COLLECTION_NAME = "trading_experiences"
     SEMANTIC_RULES_COLLECTION = "semantic_rules"
     BLOCKED_TRADES_COLLECTION = "system_constraints_rejections"
-    RR_THRESHOLDS = (1.3, 1.5, 1.8)
+    RR_FLOOR_MIN_SAMPLE_SIZE = 10
     DECAY_HALF_LIFE_DIVISOR = 17
     MAX_DECAY_HALF_LIFE_DAYS = 30
     MAX_AGE_MULTIPLIER = 4
@@ -528,11 +528,11 @@ class VectorMemoryService(
         lines.extend([
             "",
             "### PRE-FLIGHT CHECKLIST (MANDATORY):",
-            "- Before outputting BUY/SELL, verify: R/R >= required minimum (see Response Format).",
+            "- Before outputting BUY/SELL, verify: R/R >= required minimum from Decision Rules; historical values above are diagnostic only.",
             "- If volatility is HIGH, widen SL to >1x ATR to achieve required R/R.",
             "- If volatility is LOW, do not use 2x+ ATR SL — tighten to keep R/R viable.",
             "- Compare your proposed SL/TP against the last rejection patterns above.",
-            "- If you cannot meet the R/R requirement with a reasonable SL/TP, output HOLD.",
+            "- If Decision Rules set a positive R/R floor and reasonable SL/TP cannot meet it, output HOLD.",
             "",
         ])
 
