@@ -2,5 +2,5 @@ import { defineConfig } from 'astro/config';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://semanticsignal.qrak.org',
+  site: 'https://qrak.org',
 });

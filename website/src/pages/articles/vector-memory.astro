@@ -4,57 +4,63 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 
 <ArticleLayout
 	title="Vector Memory: How an LLM Trader Remembers Its Mistakes — Semantic Signal"
-	description="How Semantic Signal stores every closed trade as a 768D vector in ChromaDB, retrieves top-5 similar setups before each decision, and uses the Surprise Ratio to separate luck from skill."
-	meta="Article · August 2026 · By @qrak"
+	description="How Semantic Signal stores closed trades as 768-dimensional vectors in ChromaDB, retrieves the nearest ones before each decision (k=3), and uses the Surprise Ratio to separate luck from skill."
+	meta="Article · first published August 2026 · updated September 2026"
 >
-	<span slot="title">Vector Memory: How an LLM Trader Remembers Its Mistakes</span>
-	<p slot="subtitle" class="subtitle">A stateless LLM is just a calculator. This bot keeps a semantic memory of every trade — and reviews its own history before acting.</p>
+	<span slot="title">Vector memory: how an LLM trader remembers its mistakes</span>
+	<p slot="subtitle" class="subtitle">A stateless LLM is just a calculator. This one keeps a semantic memory of every closed trade — and reviews its own history before acting.</p>
 
 	<section class="section">
-		<h2>The Problem With Stateless Bots</h2>
-		<p>An LLM without memory treats every decision as if it's the first one ever made. It doesn't know it bought the same breakdown pattern twice before — and lost both times. The first version of this project (December 2025) was exactly that: a stateless prompt pipeline that produced confident, articulate, and consistently wrong decisions.</p>
-		<p>The fix wasn't a better model. It was <strong>architecture</strong>: give the system a brain that actually remembers.</p>
+		<h2>The problem with stateless bots</h2>
+		<p>An LLM without memory treats every decision as if it were the first one ever made. It does not know that it bought the same breakdown pattern twice before — and lost both times. The first version of this project (December 2025) was exactly that: a stateless prompt pipeline producing confident, articulate, consistently wrong decisions.</p>
+		<p>The fix was not a better model. It was architecture: give the system a brain that actually remembers.</p>
 	</section>
 
 	<section class="section">
-		<h2>Every Trade Becomes a Vector</h2>
-		<p>When a trade closes, its outcome is embedded as a <strong>768-dimensional vector</strong> in ChromaDB using <code>BAAI/bge-base-en-v1.5</code>. Semantic memory lives in four collections:</p>
+		<h2>Every closed trade becomes a vector</h2>
+		<p>When a trade closes, its full context and outcome are embedded with <code>BAAI/bge-base-en-v1.5</code> — <strong>768 dimensions</strong> — and stored in ChromaDB. Three collections carry the memory:</p>
 		<ul>
-			<li><strong>Trade experiences</strong> — every closed trade with its full context and outcome;</li>
-			<li><strong>Semantic rules</strong> — rules the reflection engine has synthesized from past results;</li>
-			<li><strong>Blocked trades</strong> — signals that were rejected, and why;</li>
-			<li><strong>Confidence statistics</strong> — the system's own track record across market conditions.</li>
+			<li><code>trading_experiences</code> — every closed trade with its context, outcome and P&amp;L;</li>
+			<li><code>semantic_rules</code> — rules the reflection engine has written from results, in plain language;</li>
+			<li><code>system_constraints_rejections</code> — signals that were refused, and the reason.</li>
 		</ul>
+		<p>Confidence statistics are not a fourth collection: they are computed on demand from the same embeddings (<code>compute_confidence_stats</code>), which keeps one source of truth for "how am I actually doing?".</p>
 	</section>
 
 	<section class="section">
-		<h2>Retrieval: "Have I Seen This Before?"</h2>
-		<p>Before each decision, the brain retrieves the <strong>top-5 most similar past trades</strong> plus the rules that match current conditions — scored by vector similarity, evidence quality, and timeframe freshness. The prompt effectively starts with: <em>"Here are five times something like this happened, and here's what happened next."</em></p>
-		<p>That retrieval is what turns the model from a confident guesser into a system that reasons from its own track record.</p>
+		<h2>Retrieval: "have I seen this before?"</h2>
+		<p>Before each decision the brain assembles a context it can reason from:</p>
+		<ul>
+			<li><strong>3 most similar past trades</strong> — retrieved by vector similarity (over-fetched, then re-scored 70% similarity / 30% recency), each labelled with a match breakdown;</li>
+			<li><strong>win-rate statistics</strong> computed over the 20 nearest trades in the current market context;</li>
+			<li><strong>5 most recent rejected signals</strong> — so the bot remembers what it refused and why;</li>
+			<li><strong>3 learned rules</strong> that match the current regime (trend + ADX + volatility label).</li>
+		</ul>
+		<p>If the sample is too thin the prompt says so, in capitals: <em>"⚠️ LIMITED DATA: treat these as ANECDOTES, not as an established pattern"</em>. A bot that pretends two trades are a track record is worse than one with no memory at all.</p>
 	</section>
 
 	<section class="section">
-		<h2>The Surprise Ratio: Separating Luck From Skill</h2>
-		<p>Not all outcomes are equally informative. A support breach that won because of a random news spike teaches the wrong lesson. To handle this, every trade gets a Surprise Ratio:</p>
+		<h2>The Surprise Ratio: separating luck from skill</h2>
+		<p>Not all outcomes are equally informative. A support breach that won because of a random news spike teaches the wrong lesson. Every trade therefore gets a surprise score:</p>
 		<div class="formula-box">
 			Surprise Ratio = |Realized P&amp;L − Expected P&amp;L| / |Expected P&amp;L|
 		</div>
-		<p>Trades with a surprise ratio <strong>&gt; 1.5</strong> carry a <code>⚠️ high surprise</code> tag in vector memory, so the LLM discounts them in future cycles. The bot learns from what it understood — not from what it got lucky on.</p>
+		<p>Anything above <strong>1.5</strong> is tagged <code>⚠️ high surprise</code> in vector memory, so the model discounts it in later cycles. The bot learns from what it understood, not from what it got lucky on.</p>
 	</section>
 
 	<section class="section">
-		<h2>The Reflection Engine</h2>
-		<p>Periodically, a reflection pass reviews recent outcomes and <strong>synthesizes new rules</strong> from what worked and what didn't. Rules are semantic — written in natural language, embedded, and retrieved when conditions match. A missed +EV opportunity is treated as mathematically identical to a realized loss, so the system is honest about its omissions too.</p>
-		<p>The result is a loop: act → embed the outcome → retrieve the lesson → act differently. Next cycle, the bot remembers.</p>
+		<h2>The reflection engine</h2>
+		<p>Periodically a reflection pass reviews recent outcomes and synthesises new rules from what worked and what did not. The rules are semantic — natural language, embedded, retrieved when conditions match — and they are typed: <code>anti_pattern</code> (things to avoid), <code>corrective</code> (adjustments) and best practice. A matched anti-pattern forces the model to state the conflict and lower its confidence instead of quietly ignoring it.</p>
+		<p>A missed +EV opportunity is treated as mathematically identical to a realized loss (it is written into the prompt that way), so the loop stays honest about omissions too: act → embed the outcome → retrieve the lesson → act differently.</p>
 	</section>
 
 	<div class="cta-box">
-		<p>See the memory bank in action — the dashboard streams the top-5 retrievals behind every decision.</p>
-		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
-		<a href="/articles/executor-separation" class="btn btn-secondary">Next: The Executor Separation →</a>
+		<p>The dashboard shows the memory bank in action — retrievals, rules and rejections behind every decision.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener" class="btn btn-primary">Live dashboard ↗</a>
+		<a href="/articles/executor-separation/" class="btn btn-secondary">Next: the executor →</a>
 	</div>
 
 	<div class="disclaimer-box">
-		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Results are simulated unless stated otherwise. Trading crypto carries substantial risk. See the <a href="/disclaimer">full risk disclaimer</a>.
+		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. It trades simulated capital by default; results are not live trading results. Trading crypto carries substantial risk. See the <a href="/disclaimer/">full risk disclaimer</a>.
 	</div>
 </ArticleLayout>

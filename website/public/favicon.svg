@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Semantic Signal">
+  <rect width="64" height="64" rx="12" fill="#0b0f19"/>
+  <rect x="0.5" y="0.5" width="63" height="63" rx="11.5" fill="none" stroke="#10b981" stroke-opacity="0.35"/>
+  <g stroke="#10b981" stroke-width="5" stroke-linecap="round">
+    <line x1="14" y1="30" x2="14" y2="44"/>
+    <line x1="26" y1="22" x2="26" y2="40"/>
+    <line x1="38" y1="14" x2="38" y2="34"/>
+    <line x1="50" y1="26" x2="50" y2="48"/>
+  </g>
+</svg>

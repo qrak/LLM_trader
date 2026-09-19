@@ -1,113 +1,163 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// Verified against the repo on 2026-09-19 (see the "Where these numbers come
+// from" section at the bottom of this page):
+//   python -m pytest tests -q          -> 1532 passed, 17 skipped (1549 collected)
+//   grep -rhoE "@njit" src/indicators  -> 97 Numba-compiled functions
+const TESTS_TOTAL = '1,549';
+const TESTS_PASSING = '1,532';
+const TESTS_SKIPPED = '17';
 ---
 
-<Layout title="The Full Story & Technology — Semantic Signal LLM Trader">
+<Layout
+	title="The Full Story & Technology — Semantic Signal"
+	description="The complete engineering history of an open-source, vision-capable LLM crypto bot: real commit dates, the indicator engine, the expected-value gate, and an honest status report. Trades simulated capital by default."
+>
 	<article class="article-container">
 		<header class="article-header">
-			<div class="meta">Published July 2026 • By @qrak</div>
+			<div class="meta">Published July 2026 · last updated 19 September 2026 · by @qrak</div>
 			<h1>I Built a Trading Bot That Doesn't Just Calculate — It Sees, Remembers, and Learns from Its Failures</h1>
-			<p class="subtitle">The complete 9-month engineering journey of an open-source, vision-capable crypto bot.</p>
+			<p class="subtitle">The engineering history of an open-source, vision-capable crypto bot — first commit 21 December 2025.</p>
 		</header>
 
 		<hr class="divider" />
 
 		<section class="section">
-			<h2>1. The Wrocław Warehouse Spark</h2>
-			<p>In December 2025, I was living in Wrocław, Poland. By day, I worked 8-hour shifts in a physical warehouse. My back was sore, my energy depleted, but my mind was occupied with a single question: <em>Why are all the "AI trading bots" on the market so incredibly dumb?</em></p>
-			<p>I spent my evenings testing open-source strategy templates. I did what every YouTube tutorial recommended: pulled RSI, MACD, and Bollinger Bands values via Python, wrote a basic prompt template, and dumped the floats into the ChatGPT API.</p>
-			<p>The bot's decisions were confident, articulate, and completely wrong. It would say: <code>"RSI is at 28, oversold. BUY."</code> The next morning, the market would slide another 4.5%, dragging my paper portfolio down with it.</p>
-			<p>The problem wasn't the AI model. The problem was the architecture. I was building a stateless calculator, not a reasoning engine.</p>
+			<h2>1. The Wrocław warehouse spark</h2>
+			<p>In December 2025 I was living in Wrocław, Poland, working 8-hour warehouse shifts. My back was sore, my energy depleted, and my mind was stuck on one question: <em>why are all the "AI trading bots" out there so dumb?</em></p>
+			<p>I did what every YouTube tutorial recommends. Pull RSI, MACD and Bollinger Bands in Python, write a prompt template, dump the floats into an LLM API. The decisions came back confident, articulate — and wrong. <code>"RSI is at 28, oversold. BUY."</code> Then the market went down instead, and the paper portfolio went with it.</p>
+			<p>The model was not the problem. The architecture was. I had built a stateless calculator and called it a reasoning engine.</p>
 		</section>
 
 		<section class="section">
-			<h2>2. Chronological Timeline (Dec 2025 – Jul 2026)</h2>
+			<h2>2. The timeline, taken from <code>git log</code></h2>
+			<p>Every date below is the date a file first appeared in the repository or a commit landed. You can check all of them with <code>git log --date=short --diff-filter=A</code>.</p>
 			<div class="timeline">
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 1: Float Prompts (Dec 2025 – Jan 2026)</h3>
-						<p>Calculated indicators in Python and dumped them as YAML text into Claude/Gemini. The bot was stateless, forgot past trades, and bled capital (-4.2%).</p>
+						<h3>Phase 1 — December 2025: the stateless calculator</h3>
+						<p>First commit 21 Dec 2025, multimodal support via OpenRouter on 28 Dec. The <code>candle_limit = 999</code> value has been in <code>config.ini</code> since that very first commit, the order book is fetched at 50 levels, and the bot had no memory of anything it did.</p>
 					</div>
 				</div>
 
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 2: Multimodal Chart Vision (Feb – Mar 2026)</h3>
-						<p>Scrapped 900 lines of hardcoded pattern-matching heuristics. Plotly now renders a 1080p chart image (SMA, RSI, Volume, CMF, OBV) fed directly to Gemini Flash. The visual model spots pattern geometry far better than programmatic rules.</p>
+						<h3>Phase 2 — January 2026: the bot gets eyes</h3>
+						<p>The dashboard server lands 6 Jan; the <code>ChartGenerator</code> (16 Jan) renders OHLCV and RSI into a PNG the model can actually look at, with the image-export retry logic that Plotly/Kaleido makes necessary. The bot stops reading floats and starts reading a chart.</p>
 					</div>
 				</div>
 
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 3: Stateful Vector Memory (Apr – May 2026)</h3>
-						<p>Integrated local SQLite and ChromaDB (768D BAAI/bge-base-en-v1.5 embeddings). Every closed trade is embedded. The bot queries top-5 similar past setups. Introduced the <strong>Surprise Ratio</strong> metric to filter out market noise.</p>
+						<h3>Phase 3 — May 2026: the brain</h3>
+						<p>16 May: the vector-memory era. <code>brain_experience</code>, <code>brain_context</code> and <code>brain_reflection</code> arrive — closed trades become 768D embeddings in ChromaDB, retrievable before the next decision, with a reflection pass that writes rules in plain language. A few days earlier (12 May) came the blunt commit message "make bot profitable with Gemini Flash 3 Preview" — that one aged badly, and I left it in the history on purpose.</p>
 					</div>
 				</div>
 
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 4: EV & Falsification Gates (Jun 2026)</h3>
-						<p>Added deterministic Expected Value math (Kelly sizing, min 1.5 R:R threshold) and the Falsification Gate (forcing the LLM to write a strict price invalidation trigger before any trade is executed).</p>
+						<h3>Phase 4 — July 2026: the bot starts maintaining itself</h3>
+						<p>26 Jul: the <code>.ai/</code> directory appears — a supervisor plus seven specialist agents (Bolt, Palette, Sentinel, Refactor, Concise, Bugfixer, Smoke&nbsp;Tests) with their own journals. 30 Jul: Reddit/RSS sentiment lands, and with it the public landing page.</p>
 					</div>
 				</div>
 
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 5: 8-Agent Dev System (Mid-Jul 2026)</h3>
-						<p>Built a local multi-agent system (<code>.ai/</code> directory). A Supervisor orchestrates 7 specialized developer agents (Bolt, Palette, Sentinel, Refactor, Concise, Bugfixer, Smoke Tests) to maintain the codebase.</p>
+						<h3>Phase 5 — August 2026: the executor and the verdict journal</h3>
+						<p>14 Aug: executor integration. The engine stops <em>assuming</em> what happened to its orders and starts reading a verdict journal — one line per decision, written by the executor service, keyed by the bot's own <code>order_id</code>. Orders that cannot be confirmed go to a dead-letter queue instead of vanishing.</p>
 					</div>
 				</div>
 
 				<div class="timeline-item">
 					<div class="timeline-dot"></div>
 					<div class="timeline-content">
-						<h3>Phase 6: Hardened Executor Separation (Late-Jul 2026)</h3>
-						<p>Decoupled the engine into Semantic Signal (reasoning) and <code>llm_trader_executor</code> (CCXT order placement, leverage, OCO stop-losses, and dead-letter queue).</p>
+						<h3>Phase 6 — September 2026: providers, tests, and a smaller ego</h3>
+						<p>12 Sep: provider transport consolidation and the official DeepSeek API added next to Google AI. 19 Sep: the test suite is reorganised into domain modules and the entry gate is reduced to expected value alone — the fixed R/R floor is gone, and the brain earns its own floor from its own expectancy. <strong>{TESTS_TOTAL} tests collected, {TESTS_PASSING} passing, {TESTS_SKIPPED} skipped.</strong></p>
 					</div>
 				</div>
 			</div>
 		</section>
 
 		<section class="section">
-			<h2>3. The Mathematics & Engineering</h2>
-			
-			<h3>Numba JIT Indicator Engine</h3>
-			<p>50+ custom technical indicators written in NumPy and Numba. Every calculation compiles to machine code on first call and caches the result, running in microseconds on a standard CPU:</p>
+			<h2>3. The mathematics and the engineering</h2>
+
+			<h3>The Numba JIT indicator engine</h3>
+			<p>Indicators are written in NumPy and decorated with Numba's <code>@njit(cache=True)</code>, so they compile to machine code on first call and cache the result. <code>src/indicators/</code> contains <strong>97 Numba-compiled functions</strong> (134 across the whole <code>src/</code> tree) with zero external technical-analysis dependencies. Real code, not a screenshot:</p>
 			<pre><code>@njit(cache=True)
-def _ema_numba(prices: np.ndarray, period: int) -> np.ndarray:
-    alpha = 2.0 / (period + 1)
-    result = np.empty_like(prices)
-    result[0] = prices[0]
-    for i in range(1, len(prices)):
-        result[i] = alpha * prices[i] + (1 - alpha) * result[i - 1]
-    return result</code></pre>
+def supertrend_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
+                     length: int = 10, multiplier: float = 3.0) -&gt; tuple[np.ndarray, np.ndarray]:
+    """Calculate Supertrend indicator."""
+    n = len(close)
+    atr = atr_numba(high, low, close, length)
 
-			<h3>The Surprise Ratio Metric</h3>
-			<p>To prevent the bot from learning bad habits from lucky trades (e.g. buying a support breach that won due to random news spikes):</p>
-			<div class="formula-box">
-				Surprise Ratio = |Realized P&L - Expected P&L| / |Expected P&L|
-			</div>
-			<p>Trades with a surprise ratio &gt; 1.5 carry a <code>⚠️ high surprise</code> tag in vector memory so the LLM discounts them in future cycles.</p>
+    hl2 = (high + low) / 2
+    upperband = hl2 + multiplier * atr
+    lowerband = hl2 - multiplier * atr
 
-			<h3>Deterministic Expected Value Gate</h3>
+    # ... band adjustments, then the trend/direction loop
+    return trend, direction</code></pre>
+			<p class="caption">src/indicators/trend/trend_indicators.py — trimmed; the full function is in the repo.</p>
+
+			<h3>Chart vision</h3>
+			<p>Plotly renders a <strong>1920×1080</strong> candlestick chart (SMA, RSI, CMF, OBV, swing annotations) to PNG and it is sent to a multimodal model alongside the numeric stack. Images arrive from an export pipeline that hangs often enough that the code carries timeouts and exponential-backoff retries around it — <code>src/analyzer/pattern_engine/chart_generator.py</code>.</p>
+
+			<h3>The Surprise Ratio</h3>
+			<p>A support break that won because of a random news spike should not become a rule. Every closed trade gets a surprise score:</p>
 			<div class="formula-box">
-				EV = (Win Rate × Average Win) - ((1 - Win Rate) × Average Loss) - Fees
+				Surprise Ratio = |Realized P&amp;L − Expected P&amp;L| / |Expected P&amp;L|
 			</div>
-			<p>If EV is negative or Risk-to-Reward ratio is under 1.5, the signal is rejected outright, overriding the LLM.</p>
+			<p>Anything above <strong>1.5</strong> is tagged <code>⚠️ high surprise</code> in vector memory so the model discounts it later (<code>src/trading/brain_reflection.py</code>). The bot learns from what it understood, not from what it got lucky on.</p>
+
+			<h3>The expected-value gate</h3>
+			<div class="formula-box">
+				EV = (Win Rate × Average Win) − ((1 − Win Rate) × Average Loss) − Fees
+			</div>
+			<p>EV is computed from the bot's own closed-trade history. If it is negative, the signal is rejected outright — deterministic arithmetic that overrides the model, not a suggestion. This is now the <em>only</em> hard gate: the old fixed 1.5 R/R floor was removed (<code>config/config.ini → min_rr_entry = 0.0</code>) and replaced by a floor the brain derives from its own expectancy once it has enough losing low-R/R trades to learn from.</p>
+
+			<h3>What is <em>not</em> in here</h3>
+			<ul>
+				<li><strong>No Kelly criterion.</strong> An earlier version of this page claimed Kelly-sized positions. There is no Kelly code in the repository. Position size is the model's proposal, clamped to a 10% of capital cap, with 1% / 2% / 3% fallbacks by conviction level.</li>
+				<li><strong>No magic win rate.</strong> I have no sustained profitable period to show, so I do not quote one.</li>
+				<li><strong>No backtest-to-live claim.</strong> Simulated fills have no slippage, no partial fills and no liquidity limits. Paper numbers are not live numbers.</li>
+			</ul>
 		</section>
 
 		<section class="section">
-			<h2>4. Quick Start</h2>
-			<pre><code>git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
-python -m venv .venv && source .venv/bin/activate
+			<h2>4. Honest status — September 2026</h2>
+			<ul>
+				<li><strong>Trading:</strong> simulated capital only (a 10,000 USDC paper book). No real funds are involved anywhere in this project.</li>
+				<li><strong>Executor:</strong> implemented as a separate service and wired to an exchange <strong>testnet</strong> (<code>ENABLE_TESTNET=true</code>, sandbox endpoints). It has placed test orders and journals their verdicts; live trading with real money is not enabled.</li>
+				<li><strong>Profitability:</strong> unproven. Development has had losing stretches and the code comments admit it. If that ever changes, this page changes with it.</li>
+				<li><strong>Source:</strong> the whole thing is at <a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">github.com/qrak/LLM_trader</a>. Read the code before you believe a word of this page.</li>
+			</ul>
+		</section>
+
+		<section class="section">
+			<h2>5. Quick start</h2>
+			<pre><code>git clone https://github.com/qrak/LLM_trader.git &amp;&amp; cd LLM_trader
+python -m venv .venv &amp;&amp; source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp keys.env.example keys.env  # Add your API key (DEEPSEEK_API_KEY or GOOGLE_STUDIO_API_KEY)
-python start.py               # Dashboard launches at http://localhost:8000</code></pre>
+cp keys.env.example keys.env    # add GOOGLE_STUDIO_API_KEY, DEEPSEEK_API_KEY or OPENROUTER_API_KEY
+python start.py                 # dashboard at http://localhost:8000</code></pre>
+			<p class="caption">Paper trading is the default. The executor only sees decisions when you enable it — and it defaults to testnet.</p>
+		</section>
+
+		<section class="section errata">
+			<h2>6. Errata — what this page used to claim</h2>
+			<p>Kept visible on purpose, because a page that silently edits its own history is worth less than one that shows its corrections:</p>
+			<ul>
+				<li>"Kelly Criterion position sizing" — removed. No Kelly code exists in the repo.</li>
+				<li>"a hard 1.5 R/R floor rejects the signal" — no longer true; EV is the only hard gate and the R/R floor is learned from expectancy.</li>
+				<li>"how the system earns real money" — removed. The executor runs against an exchange testnet, and no real capital is at stake.</li>
+				<li>"1,270 automated tests" (August) → {TESTS_TOTAL} today. The number moves with the code, so it is now generated from a test run, not typed from memory.</li>
+				<li>Chart vision and vector memory were previously dated February–April 2026. The code says 22 Dec 2025 and 16 May 2026 — the timeline above is the one that matches <code>git log</code>.</li>
+			</ul>
 		</section>
 	</article>
 </Layout>
@@ -125,20 +175,21 @@ python start.py               # Dashboard launches at http://localhost:8000</cod
 
 	.meta {
 		color: var(--text-dim);
-		font-size: 0.9rem;
+		font-family: 'Fira Code', monospace;
+		font-size: 0.82rem;
 		font-weight: 500;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.6rem;
 	}
 
 	h1 {
-		font-size: 2.2rem;
+		font-size: 2.1rem;
 		font-weight: 800;
 		line-height: 1.3;
 		margin-bottom: 1rem;
 	}
 
 	.subtitle {
-		font-size: 1.15rem;
+		font-size: 1.1rem;
 		color: var(--text-muted);
 	}
 
@@ -154,14 +205,14 @@ python start.py               # Dashboard launches at http://localhost:8000</cod
 	}
 
 	h2 {
-		font-size: 1.5rem;
+		font-size: 1.45rem;
 		font-weight: 700;
 		margin-bottom: 1.25rem;
 		color: var(--accent-emerald);
 	}
 
 	h3 {
-		font-size: 1.2rem;
+		font-size: 1.15rem;
 		font-weight: 600;
 		margin: 1.5rem 0 0.75rem;
 		color: var(--text-main);
@@ -170,7 +221,24 @@ python start.py               # Dashboard launches at http://localhost:8000</cod
 	p {
 		margin-bottom: 1.25rem;
 		color: #d1d5db;
-		font-size: 1.05rem;
+		font-size: 1.03rem;
+	}
+
+	ul {
+		margin: 0 0 1.25rem 1.25rem;
+		color: #d1d5db;
+		font-size: 1.03rem;
+	}
+
+	li {
+		margin-bottom: 0.6rem;
+	}
+
+	.caption {
+		font-family: 'Fira Code', monospace;
+		font-size: 0.8rem;
+		color: var(--text-dim);
+		margin-top: -0.75rem;
 	}
 
 	.timeline {
@@ -205,9 +273,19 @@ python start.py               # Dashboard launches at http://localhost:8000</cod
 		padding: 1rem 1.5rem;
 		border-radius: 8px;
 		font-family: 'Fira Code', monospace;
-		font-size: 1.05rem;
+		font-size: 0.95rem;
 		color: var(--accent-cyan);
 		margin: 1rem 0;
 		text-align: center;
+		overflow-x: auto;
+	}
+
+	.errata {
+		border-top: 1px solid var(--border-color);
+		padding-top: 1.5rem;
+	}
+
+	.errata h2 {
+		color: #fbbf24;
 	}
 </style>

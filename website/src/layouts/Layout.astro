@@ -6,6 +6,14 @@ interface Props {
 
 const { title, description = "Semantic Signal LLM Trader — Autonomous AI Trading Agent with Chart Vision, 768D Vector Memory, and Risk Governance" } = Astro.props;
 
+// Canonical URL: Cloudflare Pages serves directory builds with a trailing slash
+// (a request to /story redirects to /story/), so point the canonical at the
+// served form instead of the source path.
+const rawPath = Astro.url.pathname;
+const canonicalPath = rawPath.endsWith("/") ? rawPath : `${rawPath}/`;
+const canonicalUrl = new URL(canonicalPath, Astro.site).href;
+const ogImageUrl = new URL("/og-image.png", Astro.site).href;
+
 const jsonLd = {
 	"@context": "https://schema.org",
 	"@type": "WebSite",
@@ -41,6 +49,16 @@ const jsonLd = {
 		<meta property="og:description" content={description} />
 		<meta property="og:type" content="website" />
 		<meta property="og:site_name" content="Semantic Signal LLM Trader" />
+		<meta property="og:url" content={canonicalUrl} />
+		<meta property="og:image" content={ogImageUrl} />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImageUrl} />
+		<meta name="theme-color" content="#0b0f19" />
+		<link rel="canonical" href={canonicalUrl} />
 
 		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
@@ -52,7 +70,15 @@ const jsonLd = {
 		<header class="navbar">
 			<div class="nav-container">
 				<a href="/" class="brand">
-					<span class="brand-badge">⚡</span>
+					<svg class="brand-mark" viewBox="0 0 64 64" width="26" height="26" aria-hidden="true">
+						<rect width="64" height="64" rx="12" fill="#0b0f19" stroke="rgba(16,185,129,0.35)" />
+						<g stroke="#10b981" stroke-width="6" stroke-linecap="round">
+							<line x1="14" y1="30" x2="14" y2="44" />
+							<line x1="26" y1="22" x2="26" y2="40" />
+							<line x1="38" y1="14" x2="38" y2="34" />
+							<line x1="50" y1="26" x2="50" y2="48" />
+						</g>
+					</svg>
 					<span class="brand-text">Semantic Signal</span>
 				</a>
 				<nav class="nav-links">
@@ -61,8 +87,8 @@ const jsonLd = {
 					<a href="/articles">Articles</a>
 					<a href="/about">About</a>
 					<a href="/contact">Contact</a>
-					<a href="https://semanticsignal.qrak.org" target="_blank" class="live-btn">📊 Live Dashboard</a>
-					<a href="https://github.com/qrak/LLM_trader" target="_blank" class="github-btn">🐙 GitHub</a>
+					<a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener" class="live-btn">Live dashboard <span class="arrow">↗</span></a>
+					<a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener" class="github-btn">GitHub <span class="arrow">↗</span></a>
 				</nav>
 			</div>
 		</header>
@@ -73,7 +99,7 @@ const jsonLd = {
 
 		<footer class="footer">
 			<div class="footer-container">
-				<p>© 2026 Semantic Signal by <a href="https://qrak.org" target="_blank">@qrak</a>. Built with ☕ and no sleep in Wrocław, Poland.</p>
+				<p>© 2026 Semantic Signal by <a href="https://qrak.org" target="_blank">@qrak</a> — built in Wrocław, Poland.</p>
 				<div class="footer-links">
 					<a href="/about">About</a>
 					<a href="/articles">Articles</a>
@@ -85,6 +111,9 @@ const jsonLd = {
 					<a href="https://discord.gg/ZC48aTTqR2" target="_blank">Discord</a>
 					<a href="https://www.buymeacoffee.com/qrak" target="_blank">Buy Me a Coffee</a>
 				</div>
+				<p class="stack">
+					Python 3.13 · FastAPI · ChromaDB · Numba · CCXT · Astro — <a href="https://github.com/qrak/LLM_trader/tree/main/website" target="_blank" rel="noopener">source of this site</a>
+				</p>
 			</div>
 		</footer>
 
@@ -142,6 +171,12 @@ const jsonLd = {
 		padding: 0;
 	}
 
+	h1,
+	h2,
+	h3 {
+		letter-spacing: -0.02em;
+	}
+
 	body {
 		font-family: 'Inter', system-ui, -apple-system, sans-serif;
 		background-color: var(--bg-main);
@@ -151,8 +186,7 @@ const jsonLd = {
 		display: flex;
 		flex-direction: column;
 		background-image: 
-			radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
-			radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.05) 0%, transparent 40%);
+			radial-gradient(circle at 12% 8%, rgba(16, 185, 129, 0.06) 0%, transparent 42%);
 	}
 
 	a {
@@ -193,8 +227,14 @@ const jsonLd = {
 		color: #fff;
 	}
 
-	.brand-badge {
-		font-size: 1.3rem;
+	.brand-mark {
+		flex: none;
+		display: block;
+	}
+
+	.arrow {
+		font-size: 0.85em;
+		opacity: 0.75;
 	}
 
 	.nav-links {
@@ -271,6 +311,15 @@ const jsonLd = {
 		display: flex;
 		gap: 1.2rem;
 		flex-wrap: wrap;
+	}
+
+	.footer-container .stack {
+		flex-basis: 100%;
+		margin: 0;
+		font-family: 'Fira Code', monospace;
+		font-size: 0.78rem;
+		letter-spacing: 0.01em;
+		color: #4b5563;
 	}
 
 	.cookie-banner {
