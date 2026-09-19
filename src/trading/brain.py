@@ -130,7 +130,7 @@ class TradingBrainService:
         """Generate formatted brain context for prompt injection using vector retrieval."""
         return self.context_provider.get_context(snapshot)
 
-    def get_dynamic_thresholds(self, choppiness: float | None = None) -> dict[str, Any]:
+    def get_dynamic_thresholds(self) -> dict[str, Any]:
         """Get Brain-learned thresholds from vector store.
         Returns: dict with learned thresholds. Defaults used when insufficient data.
         """
@@ -147,10 +147,6 @@ class TradingBrainService:
         sl_payload["effective_threshold_pct"] = round(effective_threshold * 100)
         sl_payload["source"] = source
         thresholds["sl_tightening"] = sl_payload
-
-        if choppiness is not None and choppiness > 61.8:
-            current_min = thresholds.get("rr_borderline_min", 1.5)
-            thresholds["rr_borderline_min"] = min(current_min, 1.2)
 
         return thresholds
 

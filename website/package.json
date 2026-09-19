@@ -5,11 +5,13 @@
     "type": "module",
     "scripts": {
         "dev": "astro dev",
-        "build": "astro build",
+        "build": "astro build && node scripts/build-llms-full.mjs",
+        "build:site": "astro build",
         "preview": "astro preview"
     },
     "dependencies": {
-        "astro": "^7.2.8"
+        "astro": "^7.2.8",
+        "devalue": "^5.9.2"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.20",

@@ -3,51 +3,60 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 ---
 
 <ArticleLayout
-	title="From Paper to Real Money: Why the Executor Is a Separate Service — Semantic Signal"
-	description="Why Semantic Signal separates reasoning from order execution, how the llm_trader_executor service places orders under a strict guard chain, and how the system moves from simulated to real capital."
-	meta="Article · August 2026 · By @qrak"
+	title="From Paper to a Live Executor: Why Order Placement Is a Separate Service — Semantic Signal"
+	description="Why Semantic Signal separates reasoning from order execution, the seven checks every decision passes in llm_trader_executor, and the honest state of the live pipeline (testnet, no real funds)."
+	meta="Article · first published August 2026 · updated September 2026"
 >
-	<span slot="title">From Paper to Real Money: Why the Executor Is a Separate Service</span>
-	<p slot="subtitle" class="subtitle">The engine thinks. The executor acts. Keeping those two apart is the difference between a research prototype and something you'd trust near a real exchange.</p>
+	<span slot="title">From paper to a live executor: why order placement is a separate service</span>
+	<p slot="subtitle" class="subtitle">The engine thinks. The executor acts. Keeping those apart is the difference between a research prototype and something you would trust near a real exchange.</p>
 
 	<section class="section">
-		<h2>Two Very Different Jobs</h2>
-		<p>Reasoning and execution have opposite failure modes. Reasoning is slow, deliberate, and benefits from context. Execution is fast, unforgiving, and benefits from discipline.</p>
-		<p>Semantic Signal splits them cleanly: the main engine produces <strong>atomic JSON decisions</strong> — symbol, side, size, stop-loss, take-profit, reasoning. The <code>llm_trader_executor</code> service handles everything on the exchange side: CCXT order placement, leverage, OCO stop-losses, and a dead-letter queue for orders that can't be reconciled.</p>
+		<h2>Two very different jobs</h2>
+		<p>Reasoning and execution have opposite failure modes. Reasoning is slow, deliberate and benefits from context. Execution is fast, unforgiving and benefits from discipline.</p>
+		<p>Semantic Signal splits them: the engine produces an <strong>atomic JSON decision</strong> — symbol, side, size, stop-loss, take-profit, reasoning. A separate service, <code>llm_trader_executor</code>, does everything on the exchange side: CCXT order placement, leverage, exchange-side stops, and a JSONL verdict journal that answers the only question that matters — <em>what actually happened to this order?</em></p>
 	</section>
 
 	<section class="section">
-		<h2>The Guard Chain</h2>
-		<p>Every signal passes a pre-execution guard chain, in order:</p>
+		<h2>The guard chain in the executor</h2>
+		<p>Every decision is checked in order before a single order can leave the process (<code>src/safety.py</code>):</p>
 		<ol>
-			<li><strong>Symbol whitelist</strong> — the bot only trades instruments it's configured for;</li>
-			<li><strong>Maximum position size</strong> — portfolio-percentage sizing with fallback sizes of 1% / 2% / 3% of capital for LOW / MEDIUM / HIGH conviction;</li>
-			<li><strong>Cooldown window</strong> — prevents overtrading;</li>
-			<li><strong>R:R gate</strong> — take-profit targets minimum 1.5 R:R at structure;</li>
-			<li><strong>ATR-scaled stops</strong> — stop-loss distance scales with volatility, not a fixed percentage.</li>
+			<li><strong>Duplicate detection</strong> — a content hash of the decision, not a timestamp, persisted to disk so a bot restart cannot re-execute the same trade;</li>
+			<li><strong>Actionable signal</strong> — anything that is not a known entry, close or update is dropped;</li>
+			<li><strong>Confidence floor</strong> — entries below the configured minimum confidence are blocked, while exits and stop updates are deliberately exempt (you do not want a low-confidence signal keeping you in a losing trade);</li>
+			<li><strong>Quantity sanity</strong> — entries need a positive size;</li>
+			<li><strong>Leverage cap</strong> — anything above the configured maximum is rejected;</li>
+			<li><strong>Order type enforcement</strong> — with market entries configured, limit orders are refused rather than quietly resized;</li>
+			<li><strong>Max position notional</strong> — <code>quantity × entry price</code> has to fit the USDC limit, re-priced from the exchange if the decision arrives without a price.</li>
 		</ol>
-		<p>If governance or risk validation can't decide safely, the system <strong>fails closed</strong> — no order, no exceptions. Soft exits trigger at candle close; hard exits check against live ticker prices at 15-minute intervals.</p>
+		<p>On the engine side the same decision already passed the configured pair (<code>crypto_pair = BTC/USDC</code>, 4h — the bot does not roam the market), a cooldown window, the shared R/R floor policy and the position cap. A spot SELL is capped to what is actually held, so a short can never be created by accident. Stop distances come from the regime risk profile (a tight 1.5× ATR in choppy markets, a wider 2× ATR in trends) instead of a fixed percentage.</p>
+		<p>If governance or risk validation cannot decide safely, the system <strong>fails closed</strong>: no order, no exception. Soft exits trigger at candle close; hard exits poll live prices every 15 minutes.</p>
 	</section>
 
 	<section class="section">
-		<h2>Honest Accounting</h2>
-		<p>Every order outcome is journaled and reconciled against the exchange — not taken on trust from the API response. Orders that can't be confirmed go to a dead-letter queue instead of disappearing. Friction from position-size clamping is measured and reported rather than silently ignored.</p>
-		<p>The dashboard doesn't hide ambiguity: if a state can't be determined, it says so. No fake green checkmarks.</p>
+		<h2>The verdict journal</h2>
+		<p>A successful HTTP call is not proof that an order exists. Instead of assuming, the executor appends one line per processed decision to a JSONL journal — <code>executed</code>, <code>blocked</code> or <code>error</code>, with the reason, keyed by the bot's own <code>order_id</code>. The engine reads that file back to find out what actually happened to <em>its</em> order.</p>
+		<p>Friction is reported, not swallowed: if position size gets clamped or a decision is blocked, that shows up in the journal and on the dashboard. When a state genuinely cannot be determined, the dashboard says so instead of showing a green checkmark it cannot back up.</p>
 	</section>
 
 	<section class="section">
-		<h2>Paper First. Real Money Only When the Pipeline Proves Itself</h2>
-		<p>Right now the system trades <strong>simulated capital by default</strong>. Real exchange execution is being built as this dedicated executor service — the same guard chain, the same journaling, the same fail-closed behavior — and capital stays simulated until the pipeline proves itself over a sustained period.</p>
-		<p>That's a deliberate product decision, not a limitation to hide: demo and live are different worlds, and the system earns live trading the way it earns everything else — by demonstrating it can survive its own history.</p>
+		<h2>Where this actually stands (September 2026)</h2>
+		<p>No overselling:</p>
+		<ul>
+			<li>The executor runs against an exchange <strong>testnet</strong> (<code>ENABLE_TESTNET=true</code>, sandbox endpoints). It has placed test orders — the verdict journal has entries — and it has never touched real funds.</li>
+			<li>It was last exercised in <strong>August 2026</strong>. Since then the work went into the brain, the tests and the R/R policy, so the live path is the least-recently-certified part of the system.</li>
+			<li>The part I trust least is <strong>reconciliation</strong>: proving that what the exchange holds matches what the journal claims. That is exactly what has to be boring and reliable before any real capital is considered — and it is not there yet.</li>
+			<li>The executor is a <strong>separate local service</strong> and is not open-sourced yet; the engine is.</li>
+		</ul>
+		<p>Capital stays simulated until the pipeline proves itself over a sustained period. That is a deliberate decision, not a limitation to hide: demo and live are different worlds, and a system should earn live trading the way it earns everything else — by surviving its own history.</p>
 	</section>
 
 	<div class="cta-box">
-		<p>Track the executor's progress — the dashboard shows live position state and the audit trail behind every decision.</p>
-		<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-primary">📊 Live Dashboard</a>
-		<a href="https://github.com/qrak/LLM_trader" target="_blank" class="btn btn-secondary">🐙 GitHub Repository</a>
+		<p>The dashboard shows live position state and the audit trail behind every decision.</p>
+		<a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener" class="btn btn-primary">Live dashboard ↗</a>
+		<a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener" class="btn btn-secondary">GitHub ↗</a>
 	</div>
 
 	<div class="disclaimer-box">
-		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Results are simulated unless stated otherwise. Trading crypto carries substantial risk. See the <a href="/disclaimer">full risk disclaimer</a>.
+		<strong>Risk notice:</strong> This is an experimental open-source project, not financial advice. Real-money trading is not enabled; everything you see runs on simulated capital or an exchange testnet. Trading crypto carries substantial risk. See the <a href="/disclaimer/">full risk disclaimer</a>.
 	</div>
 </ArticleLayout>

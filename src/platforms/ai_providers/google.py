@@ -346,7 +346,7 @@ class GoogleAIClient(BaseAIClient):
                             "Model may not support thinking_config for chart analysis, retrying without it: %s", e
                         )
                         break
-                    self.logger.error("Error during Google AI chart analysis request: %s", e)
+                    self.logger.warning("Error during Google AI chart analysis request: %s", e)
                     return self._handle_exception(e)
         return None
 

@@ -3,7 +3,7 @@ Consolidated Technical Analysis Formatter.
 Handles all technical analysis formatting in a single comprehensive class.
 """
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -17,6 +17,8 @@ from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
     from src.utils.format_utils import FormatUtils
+
+_PRICE_ACTION_LOOKBACK = 24
 
 _STALENESS_TARGET_HOURS: dict[str, int] = {
     "rsi": 40,
@@ -63,6 +65,23 @@ class TechnicalFormatter:
 
         return technical_analysis
 
+    @staticmethod
+    def _finite_ohlcv_window(ohlcv_data: Any) -> Any:
+        """Return the last 24 candles with every non-finite OHLCV row removed, or None.
+
+        A candle whose open/high/low/close/volume carries NaN or infinity is dropped
+        instead of leaking into the trend, range and green/red counters.
+        """
+        if ohlcv_data is None or len(ohlcv_data) < 2:
+            return None
+        window = (
+            ohlcv_data[-_PRICE_ACTION_LOOKBACK:]
+            if len(ohlcv_data) >= _PRICE_ACTION_LOOKBACK
+            else ohlcv_data
+        )
+        finite_rows = window[np.isfinite(window[:, 1:6]).all(axis=1)]
+        return finite_rows if len(finite_rows) >= 2 else None
+
     def format_price_action_section(self, context, td: dict) -> str:
         """Format price action section with OHLCV temporal context (last 24 candles).
 
@@ -71,12 +90,9 @@ class TechnicalFormatter:
         - Volatility expansion/contraction (High/Low range)
         - Volume confirmation (Volume trend)
         """
-        ohlcv_data = context.ohlcv_candles
-        if ohlcv_data is None or len(ohlcv_data) < 2:
+        ohlcv_slice = self._finite_ohlcv_window(context.ohlcv_candles)
+        if ohlcv_slice is None:
             return f"## Price Action:\n- Price:{self.format_utils.fmt(context.current_price)} | VWAP:{self.format_utils.fmt_ta(td, 'vwap', 8)} TWAP:{self.format_utils.fmt_ta(td, 'twap', 8)}"
-
-        lookback = 24
-        ohlcv_slice = ohlcv_data[-lookback:] if len(ohlcv_data) >= lookback else ohlcv_data
 
         opens = ohlcv_slice[:, 1]
         highs = ohlcv_slice[:, 2]

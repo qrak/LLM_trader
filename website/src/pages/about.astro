@@ -4,33 +4,52 @@ import ArticleLayout from '../layouts/ArticleLayout.astro';
 
 <ArticleLayout
 	title="About — Semantic Signal LLM Trader"
-	description="About Piotr Kurnicki (@qrak): self-taught backend developer from Wrocław, Poland, building an open-source AI trading bot with 1,380+ automated tests."
+	description="About Piotr Kurnicki (@qrak): self-taught backend developer from Wrocław, Poland, building an open-source AI trading bot with 1,549 automated tests."
 	meta="About"
 >
-	<span slot="title">About the Developer</span>
+	<span slot="title">About the developer</span>
 	<p slot="subtitle" class="subtitle">Self-taught backend developer. AI/LLM specialist. Building autonomous systems after hours in Wrocław, Poland.</p>
 
 	<section class="section">
-		<h2>Who I Am</h2>
-		<p>I'm <strong>Piotr Kurnicki (@qrak)</strong> — a self-taught backend developer with deep AI/LLM expertise. By day I work in warehouse logistics; after hours I build autonomous AI systems. My strength is going deep rather than wide: every line of this codebase was written, tested, and understood by me.</p>
-		<p>Before the warehouse, I worked with <strong>enterprise SAP environments at BSH Sprzęt Gospodarstwa Domowego</strong>, where I learned to navigate complex business processes and enterprise software. That experience taught me how large, mission-critical systems are structured — and what happens when they're built carelessly.</p>
+		<h2>Who I am</h2>
+		<p>I'm <strong>Piotr Kurnicki (@qrak)</strong> — a self-taught backend developer with deep AI/LLM experience. By day I work in warehouse logistics; after hours I build autonomous AI systems. My strength is depth rather than breadth: every line of this codebase was written, tested and understood by me.</p>
+		<p>Before the warehouse I worked with <strong>enterprise SAP environments at BSH Sprzęt Gospodarstwa Domowego</strong>, where I learned how large, mission-critical systems are structured — and what happens when they are built carelessly.</p>
 	</section>
 
 	<section class="section">
-		<h2>What I'm Building Now</h2>
-		<p>Semantic Signal is an open-source, vision-capable AI trading agent: it reads candlestick charts as images, keeps a semantic vector memory of every trade, and reasons with bull/bear debates and deterministic expected-value gates before acting.</p>
-		<p>Right now I'm building the <strong>trade executor</strong> — the dedicated service that carries the system from paper trading to real exchange orders, under the same guard chain that governs the paper pipeline. Capital stays simulated until the pipeline proves itself.</p>
-		<p>More on the project: <a href="/story">the full 9-month development history</a>.</p>
+		<h2>What I'm building now</h2>
+		<p>Semantic Signal is an open-source, vision-capable AI trading agent: it reads candlestick charts as images, keeps a semantic vector memory of its own trades, and reasons with bull/bear cases and a deterministic expected-value gate before acting.</p>
+		<p>Right now I'm hardening the <strong>trade executor</strong> — the separate service that carries the system from simulated capital towards real exchange orders, under the same guard chain and with a verdict journal that confirms what happened to every order. Capital stays simulated until that path proves itself; today it runs against an exchange testnet, and the site says so instead of implying otherwise.</p>
+		<p>More on the project: <a href="/story/">the full development history</a>.</p>
 	</section>
 
 	<section class="section">
-		<h2>Open to Work</h2>
+		<h2>What I actually work on (repositories)</h2>
+		<ul>
+			<li><a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">qrak/LLM_trader</a> — the main project, and the one this site documents: the reasoning engine, the Numba indicator library, the vector memory, the dashboard and this website. Started December 2025, still active.</li>
+			<li><a href="https://github.com/qrak/ti_numba" target="_blank" rel="noopener">qrak/ti_numba</a> — high-performance technical indicators built on Numba JIT, extracted as a standalone library. This is the indicator work the bot runs on.</li>
+			<li><a href="https://github.com/qrak/DiscordCryptoAnalyzer" target="_blank" rel="noopener">qrak/DiscordCryptoAnalyzer</a> — the earlier Discord bot that analysed crypto markets and posted to a server. The precursor to the current project; less maintained, kept public for the history.</li>
+			<li>Everything else on <a href="https://github.com/qrak" target="_blank" rel="noopener">my GitHub</a> is older experiments and tools, and I would rather say that than pad the list.</li>
+		</ul>
+	</section>
+
+	<section class="section">
+		<h2>How I work</h2>
+		<ul>
+			<li><strong>Tests before claims.</strong> The suite is at <strong>1,549 tests</strong> (1,532 passing, 17 skipped) and runs in under a minute — <code>python -m pytest tests -q</code>. Numbers on this site come from that run, not from memory.</li>
+			<li><strong>A changelog with the ugly parts in it.</strong> Decisions, reversals and the "this aged badly" notes are in the public <code>CHANGELOG.md</code>, including a brain-learning reset after a losing streak.</li>
+			<li><strong>Corrections in public.</strong> When the site claims something the code no longer does, the page changes and the old claim stays visible in the <a href="/story/">story's errata section</a>.</li>
+		</ul>
+	</section>
+
+	<section class="section">
+		<h2>Open to work</h2>
 		<p>I'm looking for a role as a <strong>backend developer (Python/FastAPI)</strong> or <strong>AI/LLM engineer</strong> — ideally where I can apply both my AI knowledge and backend skills, in Wrocław or remote.</p>
-		<p>No university degree — but I bring something better: a public project with <strong>1,380+ automated tests</strong>, zero lint errors, and a <a href="https://semanticsignal.qrak.org" target="_blank">live dashboard</a> you can inspect right now.</p>
+		<p>No university degree — but the work is public: a repo with 1,549 tests you can run yourself, a <a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener">live dashboard</a> you can inspect right now, and a codebase whose history is fully documented.</p>
 	</section>
 
 	<section class="section">
 		<h2>Contact</h2>
-		<p>Email: <a href="mailto:contact@qrak.org">contact@qrak.org</a> · GitHub: <a href="https://github.com/qrak" target="_blank">@qrak</a> · Discord: <a href="https://discord.gg/ZC48aTTqR2" target="_blank">community server</a></p>
+		<p>Email: <a href="mailto:contact@qrak.org">contact@qrak.org</a> · GitHub: <a href="https://github.com/qrak" target="_blank" rel="noopener">@qrak</a> · Discord: <a href="https://discord.gg/ZC48aTTqR2" target="_blank" rel="noopener">community server</a></p>
 	</section>
 </ArticleLayout>

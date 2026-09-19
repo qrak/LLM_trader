@@ -124,16 +124,16 @@ class TrendValidator:
         if comp_4h is not None:
             result.validated_4h = comp_4h
             if llm_4h is not None:
-                delta = abs(llm_4h - comp_4h)
+                reported_4h = int(llm_4h)
+                computed_4h = round(comp_4h)
+                delta = abs(reported_4h - computed_4h)
                 if delta > ADX_DISCREPANCY_THRESHOLD:
                     result.passed = False
                     result.discrepancies.append(
-                        f"4H ADX: LLM reported {llm_4h}, computed {comp_4h:.0f} "
-                        f"({self._adx_label(comp_4h)}). Delta={delta:.0f} > {ADX_DISCREPANCY_THRESHOLD:.0f}. "
+                        f"4H ADX: LLM reported {reported_4h}, computed {computed_4h} "
+                        f"({self._adx_label(comp_4h)}). Delta={delta} > {ADX_DISCREPANCY_THRESHOLD:.0f}. "
                         f"Using computed value."
                     )
-            else:
-                pass
         elif llm_4h is not None:
             result.validated_4h = float(llm_4h)
 
@@ -143,12 +143,14 @@ class TrendValidator:
         if comp_daily is not None:
             result.validated_daily = comp_daily
             if llm_daily is not None:
-                delta = abs(llm_daily - comp_daily)
+                reported_daily = int(llm_daily)
+                computed_daily = round(comp_daily)
+                delta = abs(reported_daily - computed_daily)
                 if delta > ADX_DISCREPANCY_THRESHOLD:
                     result.passed = False
                     result.discrepancies.append(
-                        f"Daily ADX: LLM reported {llm_daily}, computed {comp_daily:.0f} "
-                        f"({self._adx_label(comp_daily)}). Delta={delta:.0f} > {ADX_DISCREPANCY_THRESHOLD:.0f}. "
+                        f"Daily ADX: LLM reported {reported_daily}, computed {computed_daily} "
+                        f"({self._adx_label(comp_daily)}). Delta={delta} > {ADX_DISCREPANCY_THRESHOLD:.0f}. "
                         f"Using computed value."
                     )
         elif llm_daily is not None:

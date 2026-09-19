@@ -144,10 +144,11 @@ class _RetryContext:
 def _should_retry_api_error(error_value: Any) -> bool:
     """Check if an API error should trigger a retry."""
     if isinstance(error_value, dict):
-        error_code = error_value.get("code")
-        if error_code in (500, 502, 503, 504):
+        if error_value.get("code") in (500, 502, 503, 504):
             return True
-        if error_value.get("metadata", {}).get("raw", {}).get("retryable"):
+        metadata = error_value.get("metadata")
+        raw = metadata.get("raw") if isinstance(metadata, dict) else None
+        if isinstance(raw, dict) and raw.get("retryable"):
             return True
     return error_value == "timeout"
 

@@ -11,7 +11,12 @@ from typing import Any
 
 import numpy as np
 
-from src.trading.data_models import ClosedTradeResult
+from src.trading.data_models import (
+    ENTRY_SIGNALS,
+    EXIT_SIGNALS,
+    LONG_ENTRY_SIGNALS,
+    ClosedTradeResult,
+)
 from src.utils.data_utils import SerializableMixin
 
 
@@ -113,21 +118,23 @@ class StatisticsCalculator:
         open_position: dict[str, Any] | None = None
         for trade in trade_history:
             action = trade.get("action", "").upper()
-            if action in ("BUY", "SELL"):
+            if action in ENTRY_SIGNALS:
                 open_position = trade
-            elif action in ("CLOSE", "CLOSE_LONG", "CLOSE_SHORT") and open_position:
+            elif action in EXIT_SIGNALS and open_position:
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
-                quantity = open_position.get("quantity", 0)
+                quantity = open_position.get("quantity", 0) or 0.0
+                quote_amount = open_position.get("quote_amount", 0) or 0.0
                 if entry_price is None or not math.isfinite(entry_price) or entry_price <= 0:
                     open_position = None
                     continue
-                if open_position.get("action", "").upper() == "BUY":
-                    pnl_pct = ((exit_price - entry_price) / entry_price) * 100
-                    pnl_quote = (exit_price - entry_price) * quantity
-                else:
-                    pnl_pct = ((entry_price - exit_price) / entry_price) * 100
-                    pnl_quote = (entry_price - exit_price) * quantity
+                price_move = (
+                    exit_price - entry_price
+                    if open_position.get("action", "").upper() in LONG_ENTRY_SIGNALS
+                    else entry_price - exit_price
+                )
+                pnl_pct = (price_move / entry_price) * 100
+                pnl_quote = price_move * quantity if quantity > 0 else pnl_pct / 100 * quote_amount
                 closed_trades.append(ClosedTradeResult(
                     entry_price=entry_price,
                     exit_price=exit_price,

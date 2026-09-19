@@ -252,7 +252,7 @@ class BrainRouter:
                 return str(meta.get("direction", ""))
             return 0
 
-        experiences.sort(key=get_sort_key, reverse=order == "desc")
+        experiences = sorted(experiences, key=get_sort_key, reverse=order == "desc")
         current_atr_percentage = extract_current_atr_percentage(self.config)
         result["experiences"] = [
             {
@@ -435,7 +435,7 @@ class BrainRouter:
         if not self.post_mortem_repo:
             return {"count": 0, "post_mortems": []}
 
-        limit = min(limit, 100)
+        limit = max(1, min(limit, 100))
 
         try:
             if q and q.strip():

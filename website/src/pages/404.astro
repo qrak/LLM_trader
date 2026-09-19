@@ -1,0 +1,64 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+	title="404 — Page Not Found | Semantic Signal"
+	description="This page does not exist on qrak.org."
+>
+	<section class="nf">
+		<div class="code">404</div>
+		<h1>There is no page at this address.</h1>
+		<p>
+			No redirect, no "helpful" auto-forward to the homepage — the link is simply wrong or the page was renamed.
+		</p>
+		<ul class="links">
+			<li><a href="/">Home</a></li>
+			<li><a href="/story/">The full development story</a></li>
+			<li><a href="/articles/">Articles</a></li>
+			<li><a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">Source on GitHub</a></li>
+		</ul>
+	</section>
+</Layout>
+
+<style>
+	.nf {
+		max-width: 640px;
+		margin: 2rem auto;
+	}
+
+	.code {
+		font-family: 'Fira Code', monospace;
+		font-size: 3.5rem;
+		font-weight: 600;
+		color: #ef4444;
+		letter-spacing: 0.05em;
+	}
+
+	h1 {
+		font-size: 1.9rem;
+		font-weight: 700;
+		margin: 0.5rem 0 1rem;
+	}
+
+	p {
+		color: var(--text-muted);
+		font-size: 1.05rem;
+		margin-bottom: 1.75rem;
+	}
+
+	.links {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		font-size: 1rem;
+	}
+
+	.links li::before {
+		content: "→ ";
+		color: var(--text-dim);
+	}
+</style>

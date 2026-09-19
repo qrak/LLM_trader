@@ -1,23 +1,48 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// Verified against the repo on 2026-09-19:
+//   python -m pytest tests -q  ->  1532 passed, 17 skipped (1549 collected)
+// Keep these in sync with the code before every deploy.
+const TESTS_TOTAL = '1,549';
+const TESTS_PASSING = '1,532';
+const TESTS_SKIPPED = '17';
 ---
 
-<Layout title="Semantic Signal — Vision-Capable Open Source Crypto Trading Bot">
+<Layout
+	title="Semantic Signal — an LLM trading agent that reads charts | qrak.org"
+	description="Open-source LLM trading agent: 1080p chart vision, a 768D vector memory of its own closed trades, and a deterministic expected-value gate before any order. Trades simulated capital by default."
+>
 	<section class="hero">
-		<div class="badge">Open Source • Paper Trading by Default • Python 3.13</div>
-		<h1>Freqtrade, 3Commas, Cryptohopper — None of Them See What This Bot Sees</h1>
+		<div class="badge">Open source • Python 3.13 • simulated capital by default</div>
+		<h1>Most trading bots do arithmetic. This one reads the chart, remembers its trades, and has to defend every call.</h1>
 		<p class="hero-sub">
-			An autonomous crypto trading agent with multimodal 1080p chart vision, 768D vector trade memory, self-written rules, and deterministic expected value gates.
+			Semantic Signal renders a 1920×1080 candlestick chart for a multimodal model, keeps a
+			768-dimensional memory of every closed trade, and puts one deterministic
+			expected-value gate between the model's opinion and any order.
 		</p>
 		<div class="cta-buttons">
-			<a href="/story" class="btn btn-primary">Read the 9-Month Story</a>
-			<a href="https://semanticsignal.qrak.org" target="_blank" class="btn btn-secondary">📊 Live Dashboard</a>
-			<a href="https://github.com/qrak/LLM_trader" target="_blank" class="btn btn-outline">🐙 GitHub Repository</a>
+			<a href="/story/" class="btn btn-primary">Read the 9-month story</a>
+			<a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener" class="btn btn-secondary">Live dashboard ↗</a>
+			<a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener" class="btn btn-outline">GitHub ↗</a>
 		</div>
+
+		<dl class="status">
+			<div><dt>trading</dt><dd>simulated capital (paper)</dd></div>
+			<div><dt>live executor</dt><dd>exchange testnet only — no real funds</dd></div>
+			<div><dt>test suite</dt><dd>{TESTS_TOTAL} tests · {TESTS_PASSING} passing · {TESTS_SKIPPED} skipped</dd></div>
+			<div><dt>providers</dt><dd>Google AI, DeepSeek, OpenRouter, local — switchable</dd></div>
+		</dl>
 	</section>
 
 	<section class="scoreboard-section">
-		<h2>The Technical Scoreboard</h2>
+		<h2>How it compares — including the rows where I lose</h2>
+		<p class="table-note">
+			Feature-by-feature against three mature products. <strong>✔ / ✘ only where I could check their
+			public documentation</strong>; a question mark means I could not verify it and would rather
+			show a gap than a guess. Freqtrade, 3Commas and Cryptohopper have been in production for
+			years and run thousands of accounts — the rows near the bottom say so.
+		</p>
 		<div class="table-container">
 			<table>
 				<thead>
@@ -26,125 +51,176 @@ import Layout from '../layouts/Layout.astro';
 						<th>Freqtrade</th>
 						<th>3Commas</th>
 						<th>Cryptohopper</th>
-						<th>Semantic Signal (Mine)</th>
+						<th class="mine">This project</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr>
-						<td><strong>Chart Vision (reads image)</strong></td>
+						<td>Chart vision — an image goes to the model, not floats</td>
 						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="yes">✔ (Multimodal AI)</td>
+						<td class="q">?</td>
+						<td class="q">?</td>
+						<td class="yes mine">✔ 1920×1080 PNG per cycle</td>
 					</tr>
 					<tr>
-						<td><strong>Semantic Trade Memory</strong></td>
+						<td>Semantic memory of its own closed trades</td>
 						<td class="no">✘</td>
 						<td class="no">✘</td>
 						<td class="no">✘</td>
-						<td class="yes">✔ (ChromaDB 768D)</td>
+						<td class="yes mine">✔ ChromaDB, 768D</td>
 					</tr>
 					<tr>
-						<td><strong>Bull/Bear Self-Debate</strong></td>
+						<td>Bull case / bear case before deciding</td>
 						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="yes">✔ (Single-Prompt)</td>
+						<td class="q">?</td>
+						<td class="q">?</td>
+						<td class="yes mine">✔ one prompt, two roles</td>
 					</tr>
 					<tr>
-						<td><strong>EV + Falsification Gates</strong></td>
+						<td>Deterministic expected-value gate before entry</td>
 						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="yes">✔ (Deterministic Math)</td>
+						<td class="q">?</td>
+						<td class="q">?</td>
+						<td class="yes mine">✔ math overrides the model</td>
 					</tr>
 					<tr>
-						<td><strong>Hardened CCXT Executor</strong></td>
+						<td>Free news / community context (no paid API keys)</td>
+						<td class="no">✘</td>
+						<td class="q">?</td>
+						<td class="q">?</td>
+						<td class="yes mine">✔ RSS + Reddit</td>
+					</tr>
+					<tr>
+						<td>Automated order execution</td>
 						<td class="yes">✔</td>
 						<td class="yes">✔</td>
 						<td class="yes">✔</td>
-						<td class="yes">✔ (llm_trader_executor)</td>
+						<td class="yes mine">✔ separate executor service</td>
 					</tr>
 					<tr>
-						<td><strong>Self-Maintaining Codebase</strong></td>
-						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="no">✘</td>
-						<td class="yes">✔ (8-Agent System)</td>
+						<td><strong>Trading with real money today</strong></td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="no mine">✘ testnet only</td>
 					</tr>
 					<tr>
-						<td><strong>Zero-Cost News & Sentiment</strong></td>
+						<td>Years in production, thousands of users</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="no mine">✘ started Dec 2025</td>
+					</tr>
+					<tr>
+						<td>Hosted for you — nothing to install or babysit</td>
+						<td class="no">✘</td>
+						<td class="yes">✔</td>
+						<td class="yes">✔</td>
+						<td class="no mine">✘ you run it yourself</td>
+					</tr>
+					<tr>
+						<td><strong>Proven, audited profitability</strong></td>
 						<td class="no">✘</td>
 						<td class="no">✘</td>
 						<td class="no">✘</td>
-						<td class="yes">✔ (RSS + Reddit RAG)</td>
+						<td class="no mine">✘ neither do I — nobody can promise this</td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
+		<p class="table-note small">
+			Comparison reflects the vendors' public documentation as of September 2026, not their paid
+			marketing material. If a ✔ or ✘ is wrong, mail <a href="mailto:contact@qrak.org">contact@qrak.org</a>
+			and it gets fixed.
+		</p>
 	</section>
 
 	<section class="features-grid">
 		<div class="card">
-			<div class="card-icon">👁️</div>
-			<h3>Multimodal Chart Vision</h3>
-			<p>Renders 1080p Plotly candlestick charts directly to the multimodal AI. The model reads visual geometry (support wicks, volume spikes, wedge breakouts) rather than flat indicator floats.</p>
+			<div class="card-tag">chart_vision</div>
+			<h3>An image, not just indicator floats</h3>
+			<p>A Plotly candlestick chart at 1920×1080 with SMA, RSI, CMF and OBV goes to the multimodal model
+			alongside the numeric stack. Wick geometry, volume spikes and wedges are read off the picture —
+			but every number the model cites is checked against the computed values.</p>
 		</div>
 
 		<div class="card">
-			<div class="card-icon">🧠</div>
-			<h3>768D Vector Memory</h3>
-			<p>Every closed trade is embedded into ChromaDB (BAAI/bge-base-en-v1.5). Queries top-5 similar past trade setups and applies the <strong>Surprise Ratio</strong> metric to filter out market noise.</p>
+			<div class="card-tag">vector_memory</div>
+			<h3>768D memory of its own mistakes</h3>
+			<p>Every closed trade is embedded with <code>BAAI/bge-base-en-v1.5</code> into ChromaDB. Before each
+			decision the bot retrieves the top-5 most similar past setups, each tagged with a
+			<strong>Surprise Ratio</strong> so a lucky win does not become a rule.</p>
 		</div>
 
 		<div class="card">
-			<div class="card-icon">⚔️</div>
-			<h3>EV & Falsification Gates</h3>
-			<p>Calculates Kelly Criterion position sizes based on historical win rates and forces the LLM to write an explicit price invalidation trigger before any signal is accepted.</p>
+			<div class="card-tag">ev_gate</div>
+			<h3>Deterministic math beats the model</h3>
+			<p>Expected value is computed from the bot's own closed-trade history. If the math says the trade is
+			not worth taking, the signal is rejected — the model does not get a vote. Position size comes from
+			the same history, not from a confidence score.</p>
 		</div>
 
 		<div class="card">
-			<div class="card-icon">🛡️</div>
-			<h3>Decoupled Execution</h3>
-			<p>Separates reasoning from live execution. The main engine outputs atomic JSON decisions to <code>llm_trader_executor</code>, protecting exchange-side OCO stop-losses from API latency.</p>
+			<div class="card-tag">executor</div>
+			<h3>Reasoning and execution are separate processes</h3>
+			<p>The engine emits one atomic JSON decision; a second service does CCXT order placement, leverage
+			and exchange-side stops, and writes a verdict journal the engine reads back. The bot confirms what
+			happened to <em>its own</em> order instead of assuming it.</p>
 		</div>
 	</section>
 
 	<section class="story-preview">
-		<h2>Built in a Wrocław Apartment After Warehouse Shifts</h2>
+		<h2>Built in a Wrocław apartment after warehouse shifts</h2>
 		<p>
-			In December 2025, I was working 8-hour warehouse shifts in Poland. Tired of subscription "AI bots" that were just simple moving average crossovers, I spent 9 months building a cognitive trading engine with 1,380+ automated tests.
+			In December 2025 I was working 8-hour warehouse shifts in Poland and testing "AI trading bot"
+			templates in the evenings. Nine months later the project has {TESTS_TOTAL} automated tests, an
+			8-agent development system that maintains the codebase, and a live executor running against an
+			exchange testnet — not a cent of real money, by design.
 		</p>
-		<a href="/story" class="read-more-link">Read the Full 9-Month Development History →</a>
-		</section>
+		<a href="/story/" class="read-more-link">Read the full development history →</a>
+	</section>
 
-		<section class="articles-section">
-		<h2>From the Blog</h2>
+	<section class="articles-section">
+		<h2>From the blog</h2>
 		<div class="articles-grid">
-			<a href="/articles/chart-vision" class="article-card">
-				<h3>📈 How the Bot Reads Charts</h3>
-				<p>999 candles, 50+ Numba indicators, a 1080p chart image — and an LLM that has to defend its call.</p>
+			<a href="/articles/chart-vision/" class="article-card">
+				<h3>How the bot reads charts</h3>
+				<p>999 candles, 50+ Numba indicators, a 1080p chart image — and a model that has to defend its call.</p>
 			</a>
-			<a href="/articles/vector-memory" class="article-card">
-				<h3>🧠 Vector Memory</h3>
+			<a href="/articles/vector-memory/" class="article-card">
+				<h3>Vector memory</h3>
 				<p>How 768D embeddings turn closed trades into lessons the bot retrieves before every decision.</p>
 			</a>
-			<a href="/articles/executor-separation" class="article-card">
-				<h3>🛡️ Paper → Real: The Executor</h3>
-				<p>Why reasoning and order execution are separate services, and how the system earns real money.</p>
+			<a href="/articles/executor-separation/" class="article-card">
+				<h3>Paper → live: the executor</h3>
+				<p>Why reasoning and order placement are separate services, and what is still missing before real capital.</p>
 			</a>
 		</div>
-		</section>
+	</section>
 
-		<section class="risk-disclaimer">
-		<p><strong>⚠️ Risk disclaimer:</strong> Semantic Signal is an experimental, open-source software project — not financial advice, not a money machine. It currently trades <strong>simulated capital by default</strong>, and trading cryptocurrencies carries substantial risk of loss. <a href="/disclaimer">Read the full disclaimer</a>.</p>
-		</section>
-		</Layout>
+	<section class="verify">
+		<h2>Where every number on this page comes from</h2>
+		<p>
+			Nothing here is a screenshot from a course. All of it lives in
+			<a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">github.com/qrak/LLM_trader</a>:
+		</p>
+		<pre><code>chart image 1920x1080    src/analyzer/pattern_engine/chart_generator.py
+999 candles, 50 lvls     config/config.ini · src/analyzer/data_fetcher.py
+trade memory 768D        src/trading/vector_memory.py (BAAI/bge-base-en-v1.5)
+EV gate, pre-entry       src/trading/position_management.py
+dev agents x8            .ai/ (supervisor + 7 specialists)
+tests {TESTS_TOTAL}            python -m pytest tests -q   -&gt; {TESTS_PASSING} passed, {TESTS_SKIPPED} skipped</code></pre>
+	</section>
+
+	<section class="risk-disclaimer">
+		<p><strong>⚠️ Risk disclaimer:</strong> Semantic Signal is an experimental, open-source software project — not financial advice, not a money machine. It trades <strong>simulated capital by default</strong>, it has lost money on paper during development, and trading cryptocurrencies carries substantial risk of loss. <a href="/disclaimer/">Read the full disclaimer</a>.</p>
+	</section>
+</Layout>
 
 <style>
 	.hero {
 		text-align: center;
-		padding: 3rem 1rem 4rem;
+		padding: 2.5rem 1rem 3rem;
 	}
 
 	.badge {
@@ -160,20 +236,19 @@ import Layout from '../layouts/Layout.astro';
 	}
 
 	h1 {
-		font-size: 2.75rem;
+		font-size: 2.6rem;
 		font-weight: 800;
-		line-height: 1.2;
-		margin-bottom: 1.25rem;
-		background: linear-gradient(135deg, #ffffff 0%, #9ca3af 100%);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
+		line-height: 1.22;
+		margin: 0 auto 1.25rem;
+		max-width: 21ch;
+		color: var(--text-main);
 	}
 
 	.hero-sub {
-		font-size: 1.2rem;
+		font-size: 1.15rem;
 		color: var(--text-muted);
-		max-width: 750px;
-		margin: 0 auto 2.5rem;
+		max-width: 720px;
+		margin: 0 auto 2.25rem;
 	}
 
 	.cta-buttons {
@@ -181,6 +256,37 @@ import Layout from '../layouts/Layout.astro';
 		justify-content: center;
 		gap: 1rem;
 		flex-wrap: wrap;
+	}
+
+	.status {
+		max-width: 760px;
+		margin: 2.75rem auto 0;
+		border-top: 1px solid var(--border-color);
+		border-bottom: 1px solid var(--border-color);
+		padding: 0.5rem 0;
+		font-family: 'Fira Code', monospace;
+		font-size: 0.82rem;
+		text-align: left;
+	}
+
+	.status > div {
+		display: flex;
+		gap: 0.75rem;
+		padding: 0.3rem 0.25rem;
+	}
+
+	.status dt {
+		color: var(--text-dim);
+		min-width: 9.5rem;
+	}
+
+	.status dt::after {
+		content: ":";
+	}
+
+	.status dd {
+		color: var(--text-muted);
+		margin: 0;
 	}
 
 	.btn {
@@ -199,7 +305,7 @@ import Layout from '../layouts/Layout.astro';
 	.btn-primary:hover {
 		background: #059669;
 		color: #0b0f19;
-		box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+		box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
 	}
 
 	.btn-secondary {
@@ -229,10 +335,24 @@ import Layout from '../layouts/Layout.astro';
 	}
 
 	h2 {
-		font-size: 1.8rem;
+		font-size: 1.75rem;
 		font-weight: 700;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.25rem;
 		text-align: center;
+	}
+
+	.table-note {
+		color: var(--text-muted);
+		font-size: 0.95rem;
+		max-width: 780px;
+		margin: 0 auto 1.5rem;
+		text-align: center;
+	}
+
+	.table-note.small {
+		font-size: 0.85rem;
+		margin: 1rem auto 0;
+		color: var(--text-dim);
 	}
 
 	.table-container {
@@ -246,11 +366,11 @@ import Layout from '../layouts/Layout.astro';
 		width: 100%;
 		border-collapse: collapse;
 		text-align: left;
-		font-size: 0.95rem;
+		font-size: 0.92rem;
 	}
 
 	th, td {
-		padding: 1rem 1.25rem;
+		padding: 0.85rem 1.1rem;
 		border-bottom: 1px solid var(--border-color);
 	}
 
@@ -258,20 +378,33 @@ import Layout from '../layouts/Layout.astro';
 		background: rgba(255, 255, 255, 0.03);
 		color: var(--text-muted);
 		font-weight: 600;
+		white-space: nowrap;
 	}
 
 	.yes {
 		color: var(--accent-emerald);
 		font-weight: 600;
+		white-space: nowrap;
 	}
 
 	.no {
 		color: #ef4444;
+		white-space: nowrap;
+	}
+
+	.q {
+		color: var(--text-dim);
+		font-family: 'Fira Code', monospace;
+		white-space: nowrap;
+	}
+
+	.mine {
+		background: rgba(16, 185, 129, 0.04);
 	}
 
 	.features-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 		gap: 1.5rem;
 		margin: 4rem 0;
 	}
@@ -279,30 +412,42 @@ import Layout from '../layouts/Layout.astro';
 	.card {
 		background: var(--bg-card);
 		border: 1px solid var(--border-color);
-		padding: 1.75rem;
-		border-radius: 12px;
-		transition: transform 0.2s ease, border-color 0.2s ease;
+		padding: 1.6rem;
+		border-radius: 10px;
+		transition: border-color 0.2s ease;
 	}
 
 	.card:hover {
-		transform: translateY(-4px);
 		border-color: var(--border-accent);
 	}
 
-	.card-icon {
-		font-size: 2rem;
-		margin-bottom: 1rem;
+	.card-tag {
+		font-family: 'Fira Code', monospace;
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+		color: var(--accent-emerald);
+		margin-bottom: 0.9rem;
+	}
+
+	.card-tag::before {
+		content: "[ ";
+		color: var(--text-dim);
+	}
+
+	.card-tag::after {
+		content: " ]";
+		color: var(--text-dim);
 	}
 
 	.card h3 {
-		font-size: 1.2rem;
-		margin-bottom: 0.75rem;
+		font-size: 1.1rem;
+		margin-bottom: 0.7rem;
 	}
 
 	.card p {
 		color: var(--text-muted);
-		font-size: 0.95rem;
-		line-height: 1.6;
+		font-size: 0.94rem;
+		line-height: 1.65;
 	}
 
 	.story-preview {
@@ -315,9 +460,9 @@ import Layout from '../layouts/Layout.astro';
 
 	.story-preview p {
 		color: var(--text-muted);
-		max-width: 700px;
+		max-width: 720px;
 		margin: 0 auto 1.5rem;
-		font-size: 1.1rem;
+		font-size: 1.05rem;
 	}
 
 	.read-more-link {
@@ -327,11 +472,6 @@ import Layout from '../layouts/Layout.astro';
 
 	.articles-section {
 		margin: 4rem 0 2rem;
-	}
-
-	.articles-section h2 {
-		text-align: center;
-		margin-bottom: 1.5rem;
 	}
 
 	.articles-grid {
@@ -346,24 +486,44 @@ import Layout from '../layouts/Layout.astro';
 		border: 1px solid var(--border-color);
 		border-radius: 10px;
 		padding: 1.5rem;
-		transition: transform 0.2s ease, border-color 0.2s ease;
+		transition: border-color 0.2s ease;
 	}
 
 	.article-card:hover {
-		transform: translateY(-4px);
 		border-color: var(--border-accent);
 	}
 
 	.article-card h3 {
 		color: var(--text-main);
-		font-size: 1.05rem;
+		font-size: 1.02rem;
 		margin-bottom: 0.5rem;
 	}
 
 	.article-card p {
 		color: var(--text-muted);
-		font-size: 0.92rem;
+		font-size: 0.9rem;
 		line-height: 1.6;
+		margin: 0;
+	}
+
+	.verify {
+		margin: 3.5rem 0;
+		max-width: 820px;
+	}
+
+	.verify h2 {
+		text-align: left;
+		font-size: 1.4rem;
+	}
+
+	.verify p {
+		color: var(--text-muted);
+		font-size: 0.98rem;
+	}
+
+	.verify pre {
+		font-size: 0.84rem;
+		line-height: 1.75;
 		margin: 0;
 	}
 
@@ -383,7 +543,15 @@ import Layout from '../layouts/Layout.astro';
 
 	@media (max-width: 768px) {
 		h1 {
-			font-size: 2rem;
+			font-size: 1.95rem;
+		}
+
+		.status {
+			font-size: 0.78rem;
+		}
+
+		.status dt {
+			min-width: 7.5rem;
 		}
 	}
 </style>

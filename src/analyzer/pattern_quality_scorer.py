@@ -196,6 +196,15 @@ class PatternQualityScorer:
         return min(100.0, (recency_ratio - 0.3) / 0.7 * 100.0)
 
     @staticmethod
+    def _finite_or(value: Any, default: float) -> float:
+        """Coerce to a finite float, falling back to the neutral default."""
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return default
+        return number if math.isfinite(number) else default
+
+    @staticmethod
     def _score_indicator_alignment(
         tech_data: dict[str, Any],
         direction: str,
@@ -208,41 +217,30 @@ class PatternQualityScorer:
         if direction == "neutral":
             return 25.0
 
-        adx = tech_data.get("adx", 0)
-        rsi = tech_data.get("rsi", 50)
-
-        try:
-            adx = float(adx)
-        except (TypeError, ValueError):
-            adx = 0.0
-        try:
-            rsi = float(rsi)
-        except (TypeError, ValueError):
-            rsi = 50.0
+        adx = PatternQualityScorer._finite_or(tech_data.get("adx", 0), 0.0)
+        rsi = PatternQualityScorer._finite_or(tech_data.get("rsi", 50), 50.0)
 
         score = 0.0
 
-        if math.isfinite(adx):
-            if adx >= 40:
-                score += 50
-            elif adx >= 30:
-                score += 35
-            elif adx >= 25:
-                score += 25
-            elif adx >= 20:
-                score += 10
+        if adx >= 40:
+            score += 50
+        elif adx >= 30:
+            score += 35
+        elif adx >= 25:
+            score += 25
+        elif adx >= 20:
+            score += 10
 
-        if math.isfinite(rsi):
-            if direction == "bullish" and 40 <= rsi <= 70:
-                score += 50
-            elif direction == "bullish" and rsi < 30:
-                score += 35
-            elif direction == "bearish" and 30 <= rsi <= 60:
-                score += 50
-            elif direction == "bearish" and rsi > 70:
-                score += 35
-            else:
-                score += 15
+        if direction == "bullish" and 40 <= rsi <= 70:
+            score += 50
+        elif direction == "bullish" and rsi < 30:
+            score += 35
+        elif direction == "bearish" and 30 <= rsi <= 60:
+            score += 50
+        elif direction == "bearish" and rsi > 70:
+            score += 35
+        else:
+            score += 15
 
         return min(100.0, score)
 
@@ -294,18 +292,20 @@ class PatternQualityScorer:
 
         if llm_quality is not None:
             try:
-                llm_q = float(llm_quality)
-                if 0 <= llm_q <= 100:
-                    delta = abs(llm_q - result.overall)
-                    if delta > QUALITY_DISCREPANCY_THRESHOLD:
-                        result.passed = False
-                        result.discrepancies.append(
-                            f"Pattern quality: LLM reported {llm_q:.0f}, "
-                            f"computed {result.overall:.0f} ({result.label}). "
-                            f"Delta={delta:.0f} > {QUALITY_DISCREPANCY_THRESHOLD:.0f}."
-                        )
+                llm_q: float | None = float(llm_quality)
             except (TypeError, ValueError):
-                pass
+                llm_q = None
+            if llm_q is not None and 0 <= llm_q <= 100:
+                reported = round(llm_q)
+                computed = round(result.overall)
+                delta = abs(reported - computed)
+                if delta > QUALITY_DISCREPANCY_THRESHOLD:
+                    result.passed = False
+                    result.discrepancies.append(
+                        f"Pattern quality: LLM reported {reported}, "
+                        f"computed {computed} ({result.label}). "
+                        f"Delta={delta} > {QUALITY_DISCREPANCY_THRESHOLD:.0f}."
+                    )
 
         return result
 

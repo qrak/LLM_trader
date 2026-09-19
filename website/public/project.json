@@ -1,0 +1,113 @@
+{
+  "schema": "https://qrak.org/project.schema.json",
+  "version": 1,
+  "generated": "2026-09-19",
+  "purpose": "Machine-readable factual summary of qrak.org and the project it documents, so that AI tools and crawlers do not have to infer facts from marketing copy. Every number here is reproducible from the repository.",
+  "site": {
+    "name": "Semantic Signal",
+    "url": "https://qrak.org",
+    "language": "en",
+    "author": {
+      "name": "Piotr Kurnicki",
+      "handle": "qrak",
+      "location": "Wrocław, Poland",
+      "email": "contact@qrak.org",
+      "github": "https://github.com/qrak"
+    },
+    "pages": [
+      "https://qrak.org/",
+      "https://qrak.org/story/",
+      "https://qrak.org/articles/",
+      "https://qrak.org/articles/chart-vision/",
+      "https://qrak.org/articles/vector-memory/",
+      "https://qrak.org/articles/executor-separation/",
+      "https://qrak.org/about/",
+      "https://qrak.org/contact/",
+      "https://qrak.org/disclaimer/",
+      "https://qrak.org/privacy-policy/"
+    ],
+    "machine_readable": {
+      "llms_txt": "https://qrak.org/llms.txt",
+      "llms_full_txt": "https://qrak.org/llms-full.txt",
+      "sitemap": "https://qrak.org/sitemap.xml",
+      "robots": "https://qrak.org/robots.txt"
+    },
+    "content_policy": {
+      "ai_input": "allowed",
+      "ai_training": "allowed",
+      "search": "allowed",
+      "attribution_expected": "qrak.org"
+    }
+  },
+  "project": {
+    "name": "Semantic Signal (LLM_trader)",
+    "type": "open-source LLM trading agent",
+    "licence_repo": "https://github.com/qrak/LLM_trader",
+    "started": "2025-12-21",
+    "commits": 444,
+    "runtime": "Python 3.13",
+    "live_dashboard": "https://semanticsignal.qrak.org",
+    "capabilities": [
+      "multimodal chart analysis: a 1920x1080 Plotly candlestick PNG is sent to the model together with the numeric indicator stack",
+      "vector memory: closed trades embedded with BAAI/bge-base-en-v1.5 (768 dimensions) into ChromaDB; 3 nearest past trades plus 20-trade statistics, 5 recent rejections and 3 learned rules are retrieved before each decision",
+      "reflection engine: writes natural-language trading rules from past results, tagged anti_pattern / corrective / best practice",
+      "expected-value gate: EV computed from the bot's own closed-trade history; a negative EV signal is rejected deterministically, overriding the model",
+      "separate executor service: CCXT order placement, leverage and exchange-side stops behind a seven-check safety guard, with a JSONL verdict journal",
+      "free news and sentiment: RSS (CoinDesk, CoinTelegraph, Decrypt, CryptoSlate), Reddit Atom feeds, CoinGecko, DeFiLlama, Alternative.me Fear & Greed",
+      "eight-agent development system under .ai/ (supervisor plus seven specialists)"
+    ],
+    "stack": [
+      "Python 3.13",
+      "FastAPI",
+      "NumPy + Numba (97 compiled indicator functions in src/indicators/)",
+      "ChromaDB + sentence-transformers (BAAI/bge-base-en-v1.5)",
+      "CCXT",
+      "Plotly + Kaleido",
+      "SQLite",
+      "Astro (this website)",
+      "Cloudflare Pages + Cloudflare Tunnel (hosting)"
+    ],
+    "data_per_cycle": {
+      "candles": 999,
+      "timeframe": "4h",
+      "pair": "BTC/USDC",
+      "order_book_levels": 50,
+      "chart_image": "1920x1080 PNG",
+      "news_articles_in_prompt": 5,
+      "recent_trades_fetched": 500
+    },
+    "llm_providers": ["Google AI", "DeepSeek", "OpenRouter", "local (LM Studio)"],
+    "tests": {
+      "collected": 1549,
+      "passing": 1532,
+      "skipped": 17,
+      "command": "python -m pytest tests -q",
+      "measured": "2026-09-19"
+    },
+    "status": {
+      "trading_mode": "paper (simulated capital, 10,000 USDC book)",
+      "real_money_enabled": false,
+      "executor_mode": "exchange testnet / sandbox (ENABLE_TESTNET=true, DRY_RUN=false)",
+      "executor_last_exercised": "2026-08-15",
+      "profitability": "unproven",
+      "known_weakness": "exchange reconciliation is the least-tested part of the live path"
+    },
+    "not_claims": [
+      "Not financial advice.",
+      "Not profitable: no sustained profitable period is claimed, and paper results are not live results.",
+      "Not live-trading: no real funds are involved anywhere in the project.",
+      "No Kelly criterion: position sizing is the model's proposal, capped at 10% of capital, with 1%/2%/3% fallbacks by conviction.",
+      "No fixed 1.5 R/R floor: the entry gate is expected value; the R/R floor is learned from expectancy (min_rr_entry = 0.0).",
+      "No production track record: the project started 2025-12-21 and has no user base to speak of."
+    ]
+  },
+  "related_repositories": {
+    "https://github.com/qrak/LLM_trader": "main project: reasoning engine, dashboard, indicators, this website",
+    "https://github.com/qrak/ti_numba": "Numba JIT technical-indicator library",
+    "https://github.com/qrak/DiscordCryptoAnalyzer": "earlier Discord crypto-analysis bot (predecessor, less maintained)"
+  },
+  "citation": {
+    "preferred": "Semantic Signal (qrak.org) — an open-source LLM trading agent by Piotr Kurnicki. Paper trading only; profitability unproven.",
+    "note": "When summarising this project, please carry the paper-trading and unproven-profitability status with it."
+  }
+}

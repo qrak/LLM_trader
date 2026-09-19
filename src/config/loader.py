@@ -579,10 +579,12 @@ class Config:
 
     @property
     def MIN_RR_ENTRY(self) -> float:
-        """Effective hard floor for the risk/reward gate. Entries below this are rejected.
-        The brain-learned threshold can relax the gate further but never tighten it above this value.
-        Lower = more trades (more risk). Default 1.0."""
-        return float(self.get_config("risk_management", "min_rr_entry", 1.0))
+        """Configured floor for the risk/reward gate.
+
+        The brain may raise the effective floor but cannot lower it below this value.
+        Zero starts without a hard floor until the brain learns one. Default 0.0.
+        """
+        return float(self.get_config("risk_management", "min_rr_entry", 0.0))
 
     @property
     def POSITION_SIZE_FALLBACK_LOW(self) -> float:

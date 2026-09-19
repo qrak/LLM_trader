@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
 from src.parsing.unified_parser import UnifiedParser
+from src.trading.rr_policy import format_rr_floor, resolve_entry_rr_floor
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
@@ -329,6 +330,8 @@ class TemplateManager:
         Returns:
             str: Formatted system prompt
         """
+        thresholds = dynamic_thresholds or {}
+        adx_strong = thresholds.get("adx_strong_threshold", 25)
         _verbosity = self._normalize_model_verbosity(model_verbosity)
         if _verbosity == "high":
             _output_rule = (
@@ -361,9 +364,9 @@ class TemplateManager:
             "",
             "## Decision Protocol",
             "- Classify regime first: trending, ranging, transitional, breakout, reversal, or unclear.",
-            "- TRENDING (ADX >= 25, Choppiness < 38.2): trade with trend. HOLD only on weak R/R or invalidation.",
-            "- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness alone. (a) ADX >= 25 with one DI clearly leading the other and price closing on the leader's side of the 20 SMA: treat it as an early/developing trend and trade WITH it (standard R/R floor applies). (b) ADX < 25 with no directional dominance: the tape is undecided — HOLD in the middle of the recent range, but at a range boundary a mean-reversion entry against that boundary is valid (SL just beyond the boundary, TP at the opposite boundary).",
-            "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. R/R >= 1.2 acceptable here (higher-probability setups). When price is in range middle: HOLD (no edge).",
+            f"- TRENDING (ADX >= {adx_strong}, Choppiness < 38.2): trade with trend. HOLD only when the edge fails or the thesis is invalidated.",
+            f"- TRANSITIONAL (Choppiness 38.2-61.8): no clean regime — this is NOT an automatic HOLD. Classify it on ADX plus DI dominance, not on choppiness alone. (a) ADX >= {adx_strong} with one DI clearly leading the other and price closing on the leader's side of the 20 SMA: treat it as an early/developing trend and trade WITH it (standard R/R floor applies). (b) ADX < {adx_strong} with no directional dominance: the tape is undecided — HOLD in the middle of the recent range, but at a range boundary a mean-reversion entry against that boundary is valid (SL just beyond the boundary, TP at the opposite boundary).",
+            "- RANGING (Choppiness > 61.8): DO NOT treat as a no-trade zone. Range boundaries provide natural entry/exit levels — mean-reversion trades at support/resistance are VALID. Tighter SL at boundary, TP at opposite boundary. The R/R floor in Decision Rules applies in every regime. When price is in range middle: HOLD (no edge).",
             "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
@@ -419,8 +422,9 @@ class TemplateManager:
             (
                 "- REJECTION AWARENESS: If the prompt contains 'CRITICAL FEEDBACK: System Rejections', "
                 "perform a pre-flight check. Compare your proposed SL/TP/RR against the rejection patterns "
-                "before finalizing. If your R/R is below the required minimum, either widen TP or tighten SL "
-                "using ATR-scaled levels, or output HOLD."
+                "before finalizing, but obey the current Decision Rules rather than historical thresholds. "
+                "If a positive R/R floor is active and your setup is below it, use valid structural levels "
+                "or output HOLD."
             ),
             "",
             "## Adversarial Awareness (Market Microstructure)",
@@ -463,7 +467,7 @@ class TemplateManager:
             "## Profit Maximization Strategy",
             f"- LET TRADES BREATHE: Do NOT tighten stops prematurely. {tightening_rule} Premature tightening is the #1 cause of losing trades.",
             "- UPDATE sparingly: tighten SL only after the hybrid tightening policy threshold is met; TP/thesis updates require a material structure change confirmed by closed candles. Not on intra-candle wicks.",
-            "- HOLD discipline: better to miss a trade than force a weak setup.",
+            "- BIAS TO ACTION: a setup that clears the gates on the latest closed candle must be taken THIS cycle. Do not skip a valid setup to wait for more confirmation — a missed +EV trade costs the same as a realized loss.",
             "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
         ])
 
@@ -537,10 +541,10 @@ class TemplateManager:
         adx_strong = thresholds.get("adx_strong_threshold", 25)
         avg_sl = thresholds.get("avg_sl_pct", 2.5)
         min_rr = thresholds.get("min_rr_recommended", 2.0)
-        conf_threshold = thresholds.get("confidence_threshold", 70)
+        conf_threshold = thresholds.get("confidence_threshold", 60)
         adx_weak = thresholds.get("adx_weak_threshold", 20)
-        conf_weak = thresholds.get("min_confluences_weak", 4)
-        conf_std = thresholds.get("min_confluences_standard", 3)
+        conf_weak = thresholds.get("min_confluences_weak", 2)
+        conf_std = thresholds.get("min_confluences_standard", 2)
         pos_reduce_mixed = thresholds.get("position_reduce_mixed", 0.20)
         pos_reduce_div = thresholds.get("position_reduce_divergent", 0.35)
         try:
@@ -550,15 +554,32 @@ class TemplateManager:
         if max_pos <= 0:
             max_pos = 0.10
         min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)
-        try:
-            config_min_rr = float(self.config.MIN_RR_ENTRY or 1.0)
-        except (TypeError, ValueError):
-            config_min_rr = 1.0
-        try:
-            rr_borderline = float(thresholds.get("rr_borderline_min", config_min_rr))
-        except (TypeError, ValueError):
-            rr_borderline = config_min_rr
-        rr_borderline = min(rr_borderline, config_min_rr)
+        is_futures = self.config.MARKET_TYPE == "futures"
+        entry_signal_open = "LONG" if is_futures else "BUY"
+        entry_signal_close = "SHORT" if is_futures else "SELL"
+        rr_floor = resolve_entry_rr_floor(self.config, thresholds)
+        rr_floor_text = format_rr_floor(rr_floor)
+        if rr_floor > 0:
+            entry_rr_rule = (
+                f"- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, clear SL/TP, "
+                f"R/R >= {rr_floor_text} (sanity floor only — entry quality is decided by EV, not by the ratio)"
+            )
+            rr_gate_rules = (
+                f"- R/R < {rr_floor_text}: REJECTED — below the sanity floor (hard block)\n"
+                f"- R/R >= {rr_floor_text}: NOT a rejection by itself. Judge the trade on EV "
+                "(see EXPECTED VALUE FRAMEWORK): an R/R near the active floor with a high P(win) "
+                "can be a valid +EV trade; a high R/R with a low P(win) is negative EV and must be "
+                "rejected. Do not HOLD a setup solely because its R/R is small."
+            )
+        else:
+            entry_rr_rule = (
+                f"- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, clear SL/TP; "
+                "no hard R/R floor — entry quality is decided by EV"
+            )
+            rr_gate_rules = (
+                "- No hard R/R floor is active. R/R remains an EV input; do not reject a positive-EV "
+                "setup only because its ratio is small."
+            )
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         trade_count = thresholds.get("trade_count", 0)
         learned_keys = set(thresholds.get("learned_keys", []))
@@ -573,10 +594,6 @@ class TemplateManager:
             safe_mae_line = (
                 "\n- **Safe Drawdown**: Insufficient trade data for MAE baseline — rely on ATR-based stops only."
             )
-
-        is_futures = self.config.MARKET_TYPE == "futures"
-        entry_signal_open = "LONG" if is_futures else "BUY"
-        entry_signal_close = "SHORT" if is_futures else "SELL"
 
         update_sl_rule = (
             "tighten SL only after the hybrid tightening policy threshold is met "
@@ -605,7 +622,7 @@ Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional
 Override with exceptional conviction ({conf_weak + 1}+ confluences). State reasoning.
 
 SIGNALS:
-- {entry_signal_open}/{entry_signal_close}: {conf_threshold}+ conf, R/R >= {rr_borderline:.1f} (standard minimum for full-confidence entries), clear SL/TP
+{entry_rr_rule}
 - HOLD: strong evidence against entry. CLOSE: thesis invalidated.
 - UPDATE: {update_sl_rule}; TP/thesis updates require material structure change and closed-candle confirmation
 
@@ -615,11 +632,10 @@ DECIDE ON THE LATEST CLOSED CANDLE (no staged/future entries):
 - Do NOT stage, describe, or carry forward a conditional/future entry (e.g. "buy stop above resistance", "pre-staged trigger at $X", "wait for a confirmed close to $Y"). The execution layer accepts only market/limit orders placed THIS cycle — a staged/pending trigger can never actually be executed.
 - If the latest closed candle does not confirm the setup, HOLD with no entry and no carried-forward intention. Re-evaluate fresh on the next cycle.
 
-RISK/REWARD GUIDELINES (authoritative — the only hard gate is below):
-- R/R < {rr_borderline:.1f}: REJECTED — system blocks entries below this (THE ONLY hard gate)
-- R/R {rr_borderline:.1f}-{rr_strong:.1f}: Accepted when the setup is real — a clearly defined level validated by the latest closed candle. Standard edge.
+RISK/REWARD GUIDELINES (R/R is an INPUT to EV — it is NOT a standalone veto):
+{rr_gate_rules}
 - R/R >= {rr_strong:.1f}: Preferred / exceptional setup
-- Historical winning average: {min_rr:.1f}+ R/R (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
+- Brain-recommended R/R target: {min_rr:.1f}+ (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
 
 R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
 
@@ -635,19 +651,21 @@ QUANTITY CALCULATION (for automated execution):
 - Round down to exchange precision. For HOLD: 0.0. For CLOSE: current position quantity.
 
 MACRO CONFLICT:
-If 365D trend conflicts with trade: need 4+ confluences. Both 365D+Weekly conflict: need 5+ or HOLD.
+If 365D trend conflicts with trade: need 3+ confluences. Both 365D+Weekly conflict: need 4+ or HOLD.
 State "365D MACRO CONFLICT: [direction]" in analysis.
 
 SHORT TRADES: Valid with sufficient confluence even in bull macro. Look for overextension, divergence, volume climax at resistance.
 
 STOP LOSS & TAKE PROFIT:{safe_mae_line}
-- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. Max {avg_sl:.1f}% from entry. TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT).
+- SL distance = ACTIVE RISK PROFILE ATR multiple × ATR (AGGRESSIVE 1.5x / NEUTRAL 2x / CONSERVATIVE 2.5x — see ACTIVE RISK PROFILE section) is the NORM, not a floor on how far it may sit. LONG: SL below the swing low / range support; SHORT: SL above the swing high / range resistance. Structural levels may be WIDER than the profile multiple, never arbitrarily tighter — but when a validated structural boundary (range edge, swing extreme, or the level whose break invalidates the thesis) sits CLOSER than the profile multiple, place the SL just beyond THAT boundary instead: a stop parked past the range edge risks more than the trade can pay, and no valid setup can carry that. Never place the SL inside noise or at an arbitrary round number — it must sit beyond a real level or beyond the profile multiple. Historical winning-trade SL reference: {avg_sl:.1f}% from entry (guidance, not a hard cap). TP at resistance/Fib levels (LONG) or support/Fib levels (SHORT) — EXCEPT in a TRENDING regime (ADX >= {adx_strong} with aligned +DI/-DI): there the nearest level is a WAYPOINT, not a cap. Set the TP by measured move (project the range/impulse height from the breakout point) or by the next higher-timeframe level, so the reward is not clipped at a level price is currently pushing through. In a trending regime a target that sits inside the momentum's path forces sub-1.0 R/R by construction and MUST NOT be used — extend the target instead of shrinking the trade.
+- Execution normalizes AI-proposed distances before opening: SL below 1% expands to 1%, SL above 10% clamps to 10%, and TP above 50% clamps to 50%. R/R is recomputed from those corrected levels, so propose structural levels inside these bounds.
 
 Mandatory: All trades require stops based on technical levels (not arbitrary %), accounting for ATR volatility, positioned to invalidate thesis if hit.{chart_validation_guidance}"""
 
         if trade_count > 0:
             if learned_keys:
                 origin_parts = [f"recommended_rr={min_rr}" if "min_rr_recommended" in learned_keys else None,
+                                f"rr_floor={rr_floor_text}" if "rr_borderline_min" in learned_keys else None,
                                 f"adx_strong={adx_strong}" if "adx_strong_threshold" in learned_keys else None,
                                 f"confidence={conf_threshold}" if "confidence_threshold" in learned_keys else None,
                                 f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None]

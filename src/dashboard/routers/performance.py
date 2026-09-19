@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from src.trading.data_models import ENTRY_SIGNALS, EXIT_SIGNALS
 from src.trading.statistics_calculator import StatisticsCalculator, TradingStatistics
 
 
@@ -46,7 +47,7 @@ class PerformanceRouter:
         for trade in trades:
             ts = trade.get("timestamp")
             action = trade.get("action", "").upper()
-            if action in ("BUY", "SELL"):
+            if action in ENTRY_SIGNALS:
                 open_position = trade
                 equity_curve.append({
                     "time": ts,
@@ -54,9 +55,13 @@ class PerformanceRouter:
                     "action": action,
                     "price": trade.get("price")
                 })
-            elif action in ("CLOSE", "CLOSE_LONG", "CLOSE_SHORT") and open_position:
+            elif action in EXIT_SIGNALS and open_position:
                 if closed_trade_idx < len(closed_trades):
-                    running_capital += closed_trades[closed_trade_idx].pnl_quote
+                    closed = closed_trades[closed_trade_idx]
+                    if closed.pnl_quote:
+                        running_capital += closed.pnl_quote
+                    else:
+                        running_capital += running_capital * closed.pnl_pct / 100
                     closed_trade_idx += 1
                 equity_curve.append({
                     "time": ts,

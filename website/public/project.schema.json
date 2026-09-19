@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qrak.org/project.schema.json",
+  "title": "qrak.org project fact sheet",
+  "description": "Schema for /project.json — a machine-readable summary of the Semantic Signal project. Values are reproducible from https://github.com/qrak/LLM_trader.",
+  "type": "object",
+  "required": ["schema", "version", "generated", "site", "project"],
+  "properties": {
+    "schema": { "type": "string", "format": "uri" },
+    "version": { "type": "integer" },
+    "generated": { "type": "string", "format": "date" },
+    "purpose": { "type": "string" },
+    "site": {
+      "type": "object",
+      "required": ["name", "url", "author"],
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "language": { "type": "string" },
+        "author": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "handle": { "type": "string" },
+            "location": { "type": "string" },
+            "email": { "type": "string", "format": "email" },
+            "github": { "type": "string", "format": "uri" }
+          }
+        },
+        "pages": { "type": "array", "items": { "type": "string", "format": "uri" } },
+        "machine_readable": {
+          "type": "object",
+          "properties": {
+            "llms_txt": { "type": "string", "format": "uri" },
+            "llms_full_txt": { "type": "string", "format": "uri" },
+            "sitemap": { "type": "string", "format": "uri" },
+            "robots": { "type": "string", "format": "uri" }
+          }
+        },
+        "content_policy": {
+          "type": "object",
+          "properties": {
+            "ai_input": { "enum": ["allowed", "disallowed"] },
+            "ai_training": { "enum": ["allowed", "disallowed"] },
+            "search": { "enum": ["allowed", "disallowed"] },
+            "attribution_expected": { "type": "string" }
+          }
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["name", "type", "licence_repo", "status", "tests"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "licence_repo": { "type": "string", "format": "uri" },
+        "started": { "type": "string", "format": "date" },
+        "commits": { "type": "integer" },
+        "runtime": { "type": "string" },
+        "live_dashboard": { "type": "string", "format": "uri" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "stack": { "type": "array", "items": { "type": "string" } },
+        "data_per_cycle": { "type": "object" },
+        "llm_providers": { "type": "array", "items": { "type": "string" } },
+        "tests": {
+          "type": "object",
+          "required": ["collected", "passing", "skipped", "command"],
+          "properties": {
+            "collected": { "type": "integer" },
+            "passing": { "type": "integer" },
+            "skipped": { "type": "integer" },
+            "command": { "type": "string" },
+            "measured": { "type": "string", "format": "date" }
+          }
+        },
+        "status": {
+          "type": "object",
+          "properties": {
+            "trading_mode": { "type": "string" },
+            "real_money_enabled": { "type": "boolean" },
+            "executor_mode": { "type": "string" },
+            "executor_last_exercised": { "type": "string", "format": "date" },
+            "profitability": { "type": "string" },
+            "known_weakness": { "type": "string" }
+          }
+        },
+        "not_claims": {
+          "type": "array",
+          "description": "Things this project explicitly does not claim. Please carry these with any summary.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "related_repositories": { "type": "object", "additionalProperties": { "type": "string" } },
+    "citation": {
+      "type": "object",
+      "properties": {
+        "preferred": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    }
+  }
+}

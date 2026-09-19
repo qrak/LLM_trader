@@ -47,10 +47,16 @@ class RiskManager:
         return self.config.POSITION_SIZE_FALLBACK_MEDIUM
 
     def _resolve_position_size_pct(self, position_size: float | None, confidence: str, profile_cap: float | None = None) -> float:
-        """Resolve final position size from AI request or configured confidence fallback."""
-        max_size = profile_cap if profile_cap is not None else self.config.MAX_POSITION_SIZE
-        if not math.isfinite(max_size) or max_size <= 0:
+        """Resolve final position size from AI request or configured confidence fallback.
+
+        MAX_POSITION_SIZE is the hard ceiling: a regime profile cap may only tighten it.
+        """
+        config_cap = self.config.MAX_POSITION_SIZE
+        if not math.isfinite(config_cap) or config_cap <= 0:
             raise ValueError("MAX_POSITION_SIZE must be a positive finite decimal")
+        max_size = config_cap if profile_cap is None else min(profile_cap, config_cap)
+        if not math.isfinite(max_size) or max_size <= 0:
+            raise ValueError("effective position size cap must be a positive finite decimal")
 
         if position_size is not None and self._is_valid_position_size(position_size):
             requested_size = position_size
@@ -99,9 +105,13 @@ class RiskManager:
         """
         Calculate all risk parameters for a new position entry.
         """
-        from src.trading.data_models import RiskAssessment
+        from src.trading.data_models import RiskAssessment, entry_direction
+        if not math.isfinite(current_price) or current_price <= 0:
+            raise ValueError("current_price must be a positive finite number")
+        if not math.isfinite(capital) or capital < 0:
+            raise ValueError("capital must be a non-negative finite number")
+        direction = entry_direction(signal)
         mc = market_conditions
-        direction = "LONG" if signal == "BUY" else "SHORT"
 
         atr = mc.atr if mc and mc.atr > 0 else current_price * 0.02
         atr_pct = mc.atr_percentage if mc and mc.atr_percentage > 0 else (atr / current_price) * 100
@@ -151,6 +161,7 @@ class RiskManager:
             self._last_frictions.append({
                 "guard_type": "sl_distance_max",
                 "direction": direction,
+                "suggested_sl": final_sl,
                 "suggested_sl_pct": sl_distance_raw,
                 "corrected_sl_pct": 0.10,
                 "current_price": current_price,
@@ -166,6 +177,7 @@ class RiskManager:
             self._last_frictions.append({
                 "guard_type": "sl_distance_min",
                 "direction": direction,
+                "suggested_sl": final_sl,
                 "suggested_sl_pct": sl_distance_raw,
                 "corrected_sl_pct": 0.01,
                 "current_price": current_price,
@@ -183,6 +195,7 @@ class RiskManager:
             self._last_frictions.append({
                 "guard_type": "tp_distance_max",
                 "direction": direction,
+                "suggested_tp": final_tp,
                 "suggested_tp_pct": tp_distance_raw,
                 "corrected_tp_pct": 0.50,
                 "current_price": current_price,

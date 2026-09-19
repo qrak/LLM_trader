@@ -15,7 +15,7 @@ class VectorMemoryAnalyticsMixin:
     logger: Any
     FACTOR_NAMES: Any = None
     FACTOR_BUCKETS: Any = None
-    RR_THRESHOLDS: Any = None
+    RR_FLOOR_MIN_SAMPLE_SIZE: Any = None
 
     """Statistics, reporting, and threshold-learning behavior."""
 
@@ -542,16 +542,18 @@ class VectorMemoryAnalyticsMixin:
                 if meta.get("outcome") == "WIN" and meta.get("sl_distance_pct", 0) > 0:
                     sl_distances.append(meta["sl_distance_pct"] * 100)
 
-            if rr_wins and rr_losses:
-                for test_rr in self.RR_THRESHOLDS:
-                    wins = sum(1 for rr in rr_wins if rr < test_rr)
-                    losses = sum(1 for rr in rr_losses if rr < test_rr)
-                    total = wins + losses
-                    if total >= 3:
-                        below_win_rate = wins / total
-                        if below_win_rate < 0.40:
-                            thresholds["rr_borderline_min"] = test_rr
-                            break
+            low_rr_wins = [rr for rr in rr_wins if rr < 1.0]
+            low_rr_losses = [rr for rr in rr_losses if rr < 1.0]
+            low_rr_total = len(low_rr_wins) + len(low_rr_losses)
+            min_rr_sample = max(min_sample_size, self.RR_FLOOR_MIN_SAMPLE_SIZE)
+            if low_rr_losses and low_rr_total >= min_rr_sample:
+                win_rate = len(low_rr_wins) / low_rr_total
+                avg_win_rr = sum(low_rr_wins) / len(low_rr_wins) if low_rr_wins else 0.0
+                expectancy_r = win_rate * avg_win_rr - (1 - win_rate)
+                if expectancy_r < -0.05:
+                    thresholds["rr_borderline_min"] = 1.0
+                elif expectancy_r < 0:
+                    thresholds["rr_borderline_min"] = 0.5
 
             if rr_wins:
                 avg_winning_rr = sum(rr_wins) / len(rr_wins)
