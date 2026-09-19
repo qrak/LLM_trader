@@ -345,6 +345,15 @@ def test_crash_hooks_write_unhandled_errors_into_errors_log(tmp_path, monkeypatc
     assert "TEST: fallback writer" in written
     assert "RuntimeError" in written
 
+    # Windows keeps an exclusive lock on open files: release the errors.log handler
+    # before deleting it, or unlink() fails with WinError 32. The crash path itself is
+    # unchanged: the fallback writer re-creates the file on the next crash (asserted below).
+    for handler in list(logger.handlers):
+        base = getattr(handler, "baseFilename", None)
+        if base is not None and Path(base) == crash_path:
+            handler.close()
+            logger.removeHandler(handler)
+
     crash_path.unlink()
     try:
         raise asyncio.CancelledError("TEST: cancelled from task")
