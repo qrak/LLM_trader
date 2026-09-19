@@ -317,7 +317,7 @@ def test_system_prompt_renders_mandated_sections():
         ("- UPDATE sparingly: tighten SL only after the hybrid tightening policy "
         "threshold is met; TP/thesis updates require a material structure change "
         "confirmed by closed candles. Not on intra-candle wicks."),
-        "- HOLD discipline: better to miss a trade than force a weak setup.",
+        ("- BIAS TO ACTION: a setup that clears the gates on the latest closed candle must be taken THIS cycle. Do not skip a valid setup to wait for more confirmation — a missed +EV trade costs the same as a realized loss."),
         "- ADAPT: if win rate is low, increase entry standards and R/R requirements.",
     ])
     assert_absent(prompt, [
@@ -509,14 +509,13 @@ def test_decision_rules_render_one_line_per_rule():
     assert_fragments(rules, [
         "## Decision Rules",
         "=== Trend Strength ===",
-        "ADX < 20: weak trend — needs 4+ confluences",
-        "ADX 20-25: developing — 3+ confluences",
+        "ADX < 20: weak trend — needs 2+ confluences",
+        "ADX 20-25: developing — 2+ confluences",
         "ADX >= 25: strong trend",
         "Choppiness > 61.8 = ranging, < 38.2 = trending, 38-62 = transitional",
-        "Override with exceptional conviction (5+ confluences). State reasoning.",
+        "Override with exceptional conviction (3+ confluences). State reasoning.",
         "SIGNALS:",
-        ("- BUY/SELL: 70+ conf, R/R >= 1.0 (standard minimum for full-confidence "
-        "entries), clear SL/TP"),
+        ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
         "- HOLD: strong evidence against entry. CLOSE: thesis invalidated.",
         ("- UPDATE: tighten SL only after the hybrid tightening policy threshold is met "
         "(see SL Tightening Policy in position context)"),
@@ -528,8 +527,8 @@ def test_decision_rules_render_one_line_per_rule():
         "QUANTITY CALCULATION (for automated execution):",
         "- quantity = (available_capital × position_size) / entry_price",
         "MACRO CONFLICT:",
-        ("If 365D trend conflicts with trade: need 4+ confluences. Both 365D+Weekly "
-        "conflict: need 5+ or HOLD."),
+        ("If 365D trend conflicts with trade: need 3+ confluences. Both 365D+Weekly "
+        "conflict: need 4+ or HOLD."),
         'State "365D MACRO CONFLICT: [direction]" in analysis.',
         "SHORT TRADES: Valid with sufficient confluence even in bull macro.",
         ("R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use "
@@ -564,12 +563,11 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
 
 @pytest.mark.parametrize(("config_overrides", "thresholds", "expected"), [
     ({}, {}, [
-        "ADX < 20: weak trend — needs 4+ confluences",
+        "ADX < 20: weak trend — needs 2+ confluences",
         "ADX >= 25: strong trend",
-        ("- BUY/SELL: 70+ conf, R/R >= 1.0 (standard minimum for full-confidence "
-        "entries), clear SL/TP"),
-        "- R/R < 1.0: REJECTED — system blocks entries below this (THE ONLY hard gate)",
-        "- R/R 1.0-2.5: Accepted when the setup is real",
+        ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
+        "- R/R < 1.0: REJECTED — below the sanity floor (hard block)",
+        "- R/R >= 1.0: NOT a rejection by itself. Judge the trade on EV (see EXPECTED VALUE FRAMEWORK)",
         ("- Historical winning average: 2.0+ R/R (aspirational — NOT enforced, NOT a "
         "gate; do NOT reject a valid setup just to match it)"),
         ("- Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / "
@@ -593,10 +591,9 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "ADX 18-30: developing — 4+ confluences",
         "ADX >= 30: strong trend",
         "Override with exceptional conviction (6+ confluences). State reasoning.",
-        ("- BUY/SELL: 75+ conf, R/R >= 1.8 (standard minimum for full-confidence "
-        "entries), clear SL/TP"),
-        "- R/R < 1.8: REJECTED — system blocks entries below this (THE ONLY hard gate)",
-        "- R/R 1.8-2.5: Accepted when the setup is real",
+        ("- BUY/SELL: 75+ conf, clear SL/TP, R/R >= 2.9 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
+        "- R/R < 2.9: REJECTED — below the sanity floor (hard block)",
+        "- R/R >= 2.9: NOT a rejection by itself. Judge the trade on EV (see EXPECTED VALUE FRAMEWORK)",
         "- R/R >= 2.5: Preferred / exceptional setup",
         "- Historical winning average: 2.5+ R/R (aspirational",
         "Max 3.0% from entry.",
@@ -608,8 +605,8 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "trade_count": 0,
         "learned_keys": [],
     }, [
-        "R/R >= 1.5 (standard minimum for full-confidence entries)",
-        "R/R < 1.5: REJECTED — system blocks entries below this (THE ONLY hard gate)",
+        "R/R >= 2.9 (sanity floor only — entry quality is decided by EV, not by the ratio)",
+        "R/R < 2.9: REJECTED — below the sanity floor (hard block)",
         "R/R >= 2.5: Preferred / exceptional setup",
         "Historical winning average: 2.0+ R/R (aspirational",
     ]),
@@ -620,8 +617,8 @@ def test_stop_loss_rule_permits_tighter_structural_stop():
         "trade_count": 0,
         "learned_keys": [],
     }, [
-        "R/R >= 1.0 (standard minimum for full-confidence entries)",
-        "R/R < 1.0: REJECTED — system blocks entries below this (THE ONLY hard gate)",
+        "R/R >= 1.5 (sanity floor only — entry quality is decided by EV, not by the ratio)",
+        "R/R < 1.5: REJECTED — below the sanity floor (hard block)",
     ]),
 ], ids=["defaults", "custom-thresholds", "borderline-below-config-floor", "brain-tighter-clamped"])
 def test_dynamic_thresholds_render_the_gate_matrix(config_overrides, thresholds, expected):
@@ -811,8 +808,7 @@ def test_model_verbosity_argument_overrides_config():
     ("spot", "market", [
         "EMIT BUY THIS cycle",
         "Allowed signals: BUY, SELL, HOLD, CLOSE, UPDATE.",
-        ("- BUY/SELL: 70+ conf, R/R >= 1.0 (standard minimum for full-confidence "
-        "entries), clear SL/TP"),
+        ("- BUY/SELL: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
         ("| BUY/SELL | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
         "false | number |"),
         ("BUY/SELL: quantity = (available_capital × position_size) / entry_price, "
@@ -830,8 +826,7 @@ def test_model_verbosity_argument_overrides_config():
     ("futures", "market", [
         "EMIT LONG THIS cycle",
         "Allowed signals: LONG, SHORT, HOLD, CLOSE, UPDATE.",
-        ("- LONG/SHORT: 70+ conf, R/R >= 1.0 (standard minimum for full-confidence "
-        "entries), clear SL/TP"),
+        ("- LONG/SHORT: 60+ conf, clear SL/TP, R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)"),
         ("| LONG/SHORT | number | number | number | 0.0-1.0 | number > 0 | \"market\" | "
         "false | number |"),
         ("LONG/SHORT: quantity = (available_capital × position_size) / entry_price, "
@@ -916,8 +911,8 @@ def test_garbage_config_numerics_fall_back_to_documented_defaults():
         make_config(MIN_RR_ENTRY="n/a", MAX_POSITION_SIZE=0)
     ).build_decision_rules(dynamic_thresholds={"rr_borderline_min": "n/a"})
     assert_fragments(rules, [
-        "- R/R < 1.0: REJECTED — system blocks entries below this (THE ONLY hard gate)",
-        "R/R >= 1.0 (standard minimum for full-confidence entries)",
+        "- R/R < 1.0: REJECTED — below the sanity floor (hard block)",
+        "R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)",
         "fall back to 0.10 (10%)",
         "Min normal: 0.020 (target). Don't round up.",
     ])

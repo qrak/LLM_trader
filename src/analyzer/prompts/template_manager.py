@@ -559,10 +559,13 @@ class TemplateManager:
         except (TypeError, ValueError):
             rr_borderline = config_min_rr
         rr_borderline = min(rr_borderline, config_min_rr)
+        # Must match the executor floor (position_management._resolve_min_rr_for_entry):
+        # if the prompt and the executor disagree, the model proposes setups the
+        # executor then silently rejects. Same expression in both places, by design.
         try:
-            rr_floor = float(thresholds.get("rr_hard_floor", 0.5))
+            rr_floor = max(float(thresholds.get("rr_borderline_min", config_min_rr)), config_min_rr)
         except (TypeError, ValueError):
-            rr_floor = 0.5
+            rr_floor = config_min_rr
         rr_strong = thresholds.get("rr_strong_setup", 2.5)
         trade_count = thresholds.get("trade_count", 0)
         learned_keys = set(thresholds.get("learned_keys", []))

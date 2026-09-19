@@ -136,9 +136,10 @@ take_profit_type = hard
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
 max_position_size = 0.10
-# Hard floor for the risk/reward gate: entries below this R/R are rejected.
-# The brain can only raise this floor (demand a better R/R), never lower it; 0 disables the floor.
-min_rr_entry = 1.0
+# Baseline floor for the risk/reward gate, shared by the prompt and the executor:
+# entries below this R/R are rejected. The brain may only raise it as it learns
+# (demand a better R/R after losses); 0 disables the floor entirely.
+min_rr_entry = 0.5
 # Fallback sizes when AI doesn't provide position_size (by confidence)
 position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02

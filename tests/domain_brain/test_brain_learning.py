@@ -330,7 +330,7 @@ def test_get_dynamic_thresholds_returns_defaults_and_sl_tightening_payload(confi
     }.issubset(thresholds)
     assert thresholds["adx_strong_threshold"] == 25
     assert thresholds["min_rr_recommended"] == 2.0
-    assert thresholds["confidence_threshold"] == 70
+    assert thresholds["confidence_threshold"] == 60
     assert thresholds["min_position_size"] == 0.02
     assert thresholds["trade_count"] == 0
     assert thresholds["learned_keys"] == []

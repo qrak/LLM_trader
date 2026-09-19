@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -1193,9 +1193,17 @@ class TestConditionsAndPriceExtraction:
         ids=["empty-result", "null-analysis"],
     )
     def test_extract_market_conditions_defaults_when_nothing_is_readable(
-        self, result: dict[str, Any]
+        self, result: dict[str, Any], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An unreadable payload yields the neutral snapshot, never a partial one."""
+        # is_weekend follows the UTC clock, so freeze it to a Wednesday: the neutral
+        # snapshot must hold regardless of when the suite runs (it failed every weekend).
+        class _Sroda(datetime):
+            @classmethod
+            def now(cls, tz: tzinfo | None = None) -> datetime:
+                return datetime(2026, 9, 16, 12, 0, tzinfo=tz or timezone.utc)
+
+        monkeypatch.setattr("src.trading.market_conditions_extractor.datetime", _Sroda)
         conditions = MarketConditionsExtractor(null_logger()).extract_market_conditions(result)
 
         assert conditions == MarketConditions()
