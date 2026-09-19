@@ -5,7 +5,8 @@
     "type": "module",
     "scripts": {
         "dev": "astro dev",
-        "build": "astro build",
+        "build": "astro build && node scripts/build-llms-full.mjs",
+        "build:site": "astro build",
         "preview": "astro preview"
     },
     "dependencies": {

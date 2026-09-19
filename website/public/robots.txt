@@ -1,4 +1,58 @@
+# qrak.org — Semantic Signal, an open-source LLM trading agent
+# AI crawlers are explicitly welcome: the point of publishing this project
+# is that other people — and other models — can read and check it.
+
 User-agent: *
 Allow: /
+
+# Assistant / AI-training crawlers (explicit allow, not merely "not blocked")
+User-agent: GPTBot
+Allow: /
+User-agent: OAI-SearchBot
+Allow: /
+User-agent: ChatGPT-User
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: Claude-User
+Allow: /
+User-agent: Claude-SearchBot
+Allow: /
+User-agent: anthropic-ai
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Perplexity-User
+Allow: /
+User-agent: Google-Extended
+Allow: /
+User-agent: Applebot-Extended
+Allow: /
+User-agent: CCBot
+Allow: /
+User-agent: meta-externalagent
+Allow: /
+User-agent: Amazonbot
+Allow: /
+User-agent: DuckAssistBot
+Allow: /
+User-agent: cohere-ai
+Allow: /
+User-agent: YouBot
+Allow: /
+User-agent: Bytespider
+Allow: /
+User-agent: PetalBot
+Allow: /
+
+# Machine-readable entry points for LLM tools:
+#   /llms.txt        — short index of this site (llmstxt.org format)
+#   /llms-full.txt   — every page as one plain-text document
+#   /project.json    — project facts: repo, stack, test counts, honest status
+#   /sitemap.xml     — page list
+
+# Content Signals Policy (Cloudflare): search, AI input and AI training allowed.
+# Attribution to qrak.org is expected.
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
 
 Sitemap: https://qrak.org/sitemap.xml

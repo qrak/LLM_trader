@@ -16,22 +16,46 @@ const ogImageUrl = new URL("/og-image.png", Astro.site).href;
 
 const jsonLd = {
 	"@context": "https://schema.org",
-	"@type": "WebSite",
-	name: "Semantic Signal LLM Trader",
-	url: "https://qrak.org/",
-	description:
-		"Open-source AI trading agent with multimodal chart vision, 768D vector trade memory, and deterministic risk gates. Built by Piotr Kurnicki (@qrak).",
-	inLanguage: "en",
-	author: {
-		"@type": "Person",
-		name: "Piotr Kurnicki",
-		url: "https://qrak.org/about",
-		sameAs: [
-			"https://github.com/qrak",
-			"https://discord.gg/ZC48aTTqR2",
-			"https://www.buymeacoffee.com/qrak",
-		],
-	},
+	"@graph": [
+		{
+			"@type": "WebSite",
+			name: "Semantic Signal LLM Trader",
+			url: "https://qrak.org/",
+			description:
+				"Open-source AI trading agent with multimodal chart vision, 768D vector trade memory, and deterministic risk gates. Built by Piotr Kurnicki (@qrak).",
+			inLanguage: "en",
+			author: {
+				"@type": "Person",
+				name: "Piotr Kurnicki",
+				url: "https://qrak.org/about/",
+				sameAs: [
+					"https://github.com/qrak",
+					"https://discord.gg/ZC48aTTqR2",
+					"https://www.buymeacoffee.com/qrak",
+				],
+			},
+		},
+		{
+			"@type": "SoftwareSourceCode",
+			name: "Semantic Signal (LLM_trader)",
+			description:
+				"Open-source LLM trading agent: 1920×1080 chart vision, 768D vector memory of closed trades, deterministic expected-value entry gate, and a separate CCXT executor service. Trades simulated capital by default.",
+			codeRepository: "https://github.com/qrak/LLM_trader",
+			programmingLanguage: ["Python", "TypeScript"],
+			runtimePlatform: "Python 3.13",
+			license: "https://github.com/qrak/LLM_trader/blob/master/LICENSE.md",
+			author: { "@type": "Person", name: "Piotr Kurnicki", url: "https://qrak.org/about/" },
+			keywords: [
+				"LLM trading bot",
+				"multimodal chart analysis",
+				"vector memory",
+				"ChromaDB",
+				"Numba",
+				"CCXT",
+				"expected value",
+			],
+		},
+	],
 };
 ---
 
@@ -59,6 +83,10 @@ const jsonLd = {
 		<meta name="twitter:image" content={ogImageUrl} />
 		<meta name="theme-color" content="#0b0f19" />
 		<link rel="canonical" href={canonicalUrl} />
+
+		<!-- Machine-readable entry points for LLM tools and crawlers -->
+		<link rel="alternate" type="text/markdown" href="/llms.txt" title="LLM index" />
+		<link rel="alternate" type="application/json" href="/project.json" title="Project fact sheet" />
 
 		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
 
@@ -112,7 +140,8 @@ const jsonLd = {
 					<a href="https://www.buymeacoffee.com/qrak" target="_blank">Buy Me a Coffee</a>
 				</div>
 				<p class="stack">
-					Python 3.13 · FastAPI · ChromaDB · Numba · CCXT · Astro — <a href="https://github.com/qrak/LLM_trader/tree/main/website" target="_blank" rel="noopener">source of this site</a>
+					Python 3.13 · FastAPI · ChromaDB · Numba · CCXT · Astro — <a href="https://github.com/qrak/LLM_trader/tree/master/website" target="_blank" rel="noopener">source of this site</a><br />
+					machine-readable: <a href="/llms.txt">/llms.txt</a> · <a href="/llms-full.txt">/llms-full.txt</a> · <a href="/project.json">/project.json</a> · <a href="/sitemap.xml">/sitemap.xml</a> — for AI agents and crawlers; <a href="/robots.txt">crawlers are welcome</a>
 				</p>
 			</div>
 		</footer>
