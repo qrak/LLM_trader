@@ -9,7 +9,8 @@
         "preview": "astro preview"
     },
     "dependencies": {
-        "astro": "^7.2.8"
+        "astro": "^7.2.8",
+        "devalue": "^5.9.2"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.20",
