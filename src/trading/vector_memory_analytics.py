@@ -581,8 +581,50 @@ class VectorMemoryAnalyticsMixin:
         self._learn_confluence_thresholds(all_experiences, min_sample_size, thresholds)
         self._learn_alignment_thresholds(all_experiences, min_sample_size, thresholds)
         self._learn_sl_tightening_threshold(all_experiences_raw, min_sample_size, thresholds)
+        self._learn_rr_floor(all_experiences, min_sample_size, thresholds)
 
         return thresholds
+
+    def _learn_rr_floor(
+        self,
+        all_experiences: dict[str, Any],
+        min_sample_size: int,
+        thresholds: dict[str, Any],
+    ) -> None:
+        """Learn the R/R sanity floor from trades actually taken below 1:1.
+
+        A fixed 1.0 floor is not evidence-based: with a high enough win rate a sub-1:1
+        R/R is profitable, and with a low win rate even 2:1 loses. Only once enough
+        sub-1:1 trades have closed do we let realized results move the floor. The
+        sample is deliberately larger than the default: five trades are noise, so a
+        short unlucky streak must not be able to rewrite the entry gate.
+        """
+        def _f(value: Any, default: float = 0.0) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        min_sample = max(int(min_sample_size), 10)
+        cohort = [
+            meta
+            for meta in (all_experiences.get("metadatas") or [])
+            if meta.get("outcome") in ("WIN", "LOSS") and 0 < _f(meta.get("rr_ratio")) < 1.0
+        ]
+        if len(cohort) < min_sample:
+            return
+
+        wins = [m for m in cohort if m.get("outcome") == "WIN"]
+        win_rate = len(wins) / len(cohort)
+        avg_win_rr = sum(_f(m.get("rr_ratio")) for m in wins) / len(wins) if wins else 0.0
+        expectancy_r = win_rate * avg_win_rr - (1 - win_rate) * 1.0
+
+        if expectancy_r > 0.05:
+            thresholds["rr_hard_floor"] = 0.4
+        elif expectancy_r < -0.05:
+            thresholds["rr_hard_floor"] = 1.0
+        else:
+            thresholds["rr_hard_floor"] = 0.5
 
     def _learn_position_size_threshold(
         self,
