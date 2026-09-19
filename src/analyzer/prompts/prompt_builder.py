@@ -522,16 +522,16 @@ class PromptBuilder:
         if "## PREVIOUS ANALYSIS CONTEXT" not in system_prompt:
             return False
         previous_context = system_prompt.split("## PREVIOUS ANALYSIS CONTEXT", 1)[1]
-        previous_context = previous_context.split("### DETERMINISTIC TIME CHECK", 1)[0]
+        previous_context = previous_context.split("### DETERMINISTIC TIME CHECK", 1)[0].lower()
         stale_markers = (
-            "## Response Format",
-            "Allowed signals",
-            "Allowed `signal` values",
-            "Signal-specific JSON field rules",
-            "CONFLUENCE SCORING",
-            "POSITION SIZING FORMULA",
-            "TRADING SIGNALS & CONFIDENCE",
-            "HOLD SIGNAL JSON FIELDS",
+            "## response format",
+            "allowed signals",
+            "allowed `signal` values",
+            "signal-specific json field rules",
+            "confluence scoring",
+            "position sizing formula",
+            "trading signals & confidence",
+            "hold signal json fields",
         )
         return any(marker in previous_context for marker in stale_markers)
 

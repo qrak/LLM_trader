@@ -268,8 +268,8 @@ class UnifiedParser:
             return default_value
         if field == "position_size":
             if isinstance(value, str) and value.strip().endswith("%"):
-                return numeric_value / 100
-            if numeric_value > 1:
+                numeric_value = numeric_value / 100
+            if not 0.0 <= numeric_value <= 1.0:
                 self.logger.warning(
                     "position_size %s is outside the 0.0-1.0 contract; treating it as unset", value
                 )

@@ -6,6 +6,21 @@ from typing import Any
 
 from src.utils.data_utils import SerializableMixin
 
+LONG_ENTRY_SIGNALS = frozenset({"BUY", "LONG"})
+SHORT_ENTRY_SIGNALS = frozenset({"SELL", "SHORT"})
+ENTRY_SIGNALS = LONG_ENTRY_SIGNALS | SHORT_ENTRY_SIGNALS
+EXIT_SIGNALS = frozenset({"CLOSE", "CLOSE_LONG", "CLOSE_SHORT"})
+
+
+def entry_direction(signal: str) -> str:
+    """Return LONG/SHORT for an entry signal; raise ValueError when it opens nothing."""
+    normalized = signal.upper()
+    if normalized in LONG_ENTRY_SIGNALS:
+        return "LONG"
+    if normalized in SHORT_ENTRY_SIGNALS:
+        return "SHORT"
+    raise ValueError(f"{signal} is not an entry signal")
+
 
 @dataclass(slots=True)
 class MarketConditions(SerializableMixin):
@@ -226,10 +241,10 @@ class TradingMemory(SerializableMixin):
 
         open_position = None
         for decision in history_to_analyze:
-            if decision.action in ["BUY", "SELL"]:
+            if decision.action in ENTRY_SIGNALS:
                 open_position = decision
-            elif decision.action in ["CLOSE", "CLOSE_LONG", "CLOSE_SHORT"] and open_position:
-                if open_position.action == "BUY":
+            elif decision.action in EXIT_SIGNALS and open_position:
+                if open_position.action in LONG_ENTRY_SIGNALS:
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
                     pnl_quote = (decision.price - open_position.price) * open_position.quantity
                 else:

@@ -5,13 +5,15 @@ Split out of trading_strategy.py; the methods use ``self`` state provided by Tra
 at MRO resolution time.
 """
 
+import asyncio
 import dataclasses
+import math
 from datetime import datetime, timezone
 from typing import Any
 
 from src.utils.indicator_classifier import build_exit_execution_context_from_config
 
-from .data_models import MarketConditions, Position, TradeDecision
+from .data_models import MarketConditions, Position, TradeDecision, entry_direction
 from .order_lifecycle import OrderIntent, OrderLifecycle
 
 
@@ -173,18 +175,21 @@ class PositionManagementMixin:
             reasoning=f"Order {order_id} rejected by guard pipeline: {failure_reasons}",
         )
 
-    def _store_risk_frictions(self, risk, direction: str, confidence: str, current_price: float) -> None:
+    async def _store_risk_frictions(
+        self, risk, direction: str, confidence: str, current_price: float, min_rr_for_entry: float
+    ) -> None:
         """Persist RiskManager SL/TP clamping frictions so the brain learns from them."""
         try:
             for friction in self.risk_manager.get_and_clear_frictions():
-                self.brain_service.vector_memory.store_blocked_trade(
+                await asyncio.to_thread(
+                    self.brain_service.vector_memory.store_blocked_trade,
                     guard_type=friction.get("guard_type", "unknown"),
                     direction=friction.get("direction", direction),
                     confidence=confidence,
                     suggested_rr=risk.rr_ratio,
-                    required_rr=risk.rr_ratio,
+                    required_rr=min_rr_for_entry,
                     suggested_sl_pct=friction.get("suggested_sl_pct", risk.sl_distance_pct),
-                    suggested_tp_pct=risk.tp_distance_pct,
+                    suggested_tp_pct=friction.get("suggested_tp_pct", risk.tp_distance_pct),
                     suggested_sl=friction.get("suggested_sl", risk.stop_loss),
                     suggested_tp=friction.get("suggested_tp", risk.take_profit),
                     current_price=current_price,
@@ -195,25 +200,48 @@ class PositionManagementMixin:
         except Exception:
             self.logger.warning("Failed to store friction event from RiskManager", exc_info=True)
 
-    def _check_entry_thresholds(
+    def _configured_min_rr(self) -> float:
+        """Read MIN_RR_ENTRY as the hard R/R floor; a configured 0 disables the floor."""
+        try:
+            value = float(self.config.MIN_RR_ENTRY)
+        except (TypeError, ValueError):
+            return 1.0
+        if not math.isfinite(value):
+            return 1.0
+        return max(0.0, value)
+
+    def _resolve_min_rr_for_entry(
+        self,
+        choppiness: float | None = None,
+        brain_thresholds: dict[str, Any] | None = None,
+    ) -> float:
+        """Return the effective R/R floor: the config value, which the brain may only raise."""
+        config_min_rr = self._configured_min_rr()
+        thresholds = (
+            brain_thresholds
+            if brain_thresholds is not None
+            else self.brain_service.get_dynamic_thresholds(choppiness=choppiness)
+        )
+        try:
+            brain_min_rr = float(thresholds.get("rr_borderline_min", config_min_rr))
+        except (TypeError, ValueError):
+            return config_min_rr
+        if not math.isfinite(brain_min_rr):
+            return config_min_rr
+        return max(brain_min_rr, config_min_rr)
+
+    async def _check_entry_thresholds(
         self,
         risk,
-        market_conditions: MarketConditions,
         intent: OrderIntent,
         direction: str,
         signal: str,
         confidence: str,
         current_price: float,
         reasoning: str,
+        min_rr_for_entry: float,
     ) -> TradeDecision | None:
         """Enforce the config-driven R/R floor; store the rejection and return a HOLD decision."""
-        config_min_rr = float(self.config.MIN_RR_ENTRY or 1.0)
-        brain_thresholds = self.brain_service.get_dynamic_thresholds(choppiness=market_conditions.choppiness)
-        try:
-            brain_min_rr = float(brain_thresholds.get("rr_borderline_min", config_min_rr))
-        except (TypeError, ValueError):
-            brain_min_rr = config_min_rr
-        min_rr_for_entry = min(brain_min_rr, config_min_rr)
         if risk.rr_ratio >= min_rr_for_entry:
             return None
 
@@ -223,13 +251,14 @@ class PositionManagementMixin:
             risk.rr_ratio, min_rr_for_entry, signal, confidence,
         )
         try:
-            self.brain_service.vector_memory.store_blocked_trade(
+            await asyncio.to_thread(
+                self.brain_service.vector_memory.store_blocked_trade,
                 guard_type="rr_minimum", direction=direction, confidence=confidence,
                 suggested_rr=risk.rr_ratio, required_rr=min_rr_for_entry,
                 suggested_sl_pct=risk.sl_distance_pct, suggested_tp_pct=risk.tp_distance_pct,
                 suggested_sl=risk.stop_loss, suggested_tp=risk.take_profit,
                 current_price=current_price, volatility_level=risk.volatility_level,
-                reasoning_snippet=reasoning[:200] if reasoning else "",
+                reasoning_snippet=reasoning or "",
             )
         except Exception:
             self.logger.warning("Failed to store blocked trade event", exc_info=True)
@@ -256,7 +285,7 @@ class PositionManagementMixin:
         confluence_factors: tuple = (),
     ) -> TradeDecision:
         """Open a new trading position with guard-governed lifecycle."""
-        direction = "LONG" if signal in ("BUY", "LONG") else "SHORT"
+        direction = entry_direction(signal)
         order_id = f"order-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
         intent = OrderIntent(
             order_id=order_id, signal=signal, direction=direction, symbol=symbol,
@@ -283,10 +312,11 @@ class PositionManagementMixin:
             market_conditions=market_conditions,
             choppiness=market_conditions.choppiness,
         )
-        self._store_risk_frictions(risk, direction, confidence, current_price)
+        min_rr_for_entry = self._resolve_min_rr_for_entry(market_conditions.choppiness)
+        await self._store_risk_frictions(risk, direction, confidence, current_price, min_rr_for_entry)
 
-        blocked = self._check_entry_thresholds(
-            risk, market_conditions, intent, direction, signal, confidence, current_price, reasoning
+        blocked = await self._check_entry_thresholds(
+            risk, intent, direction, signal, confidence, current_price, reasoning, min_rr_for_entry
         )
         if blocked is not None:
             return blocked
@@ -443,19 +473,20 @@ class PositionManagementMixin:
                     )
                     try:
                         pos = self.current_position
-                        self.brain_service.vector_memory.store_blocked_trade(
+                        await asyncio.to_thread(
+                            self.brain_service.vector_memory.store_blocked_trade,
                             guard_type="sl_tightening",
                             direction=direction,
                             confidence=pos.confidence,
-                            suggested_rr=0.0,
-                            required_rr=0.0,
+                            suggested_rr=pos.rr_ratio_at_entry,
+                            required_rr=self._resolve_min_rr_for_entry(brain_thresholds=brain_thresholds),
                             suggested_sl_pct=abs(stop_loss - pos.entry_price) / pos.entry_price if pos.entry_price else 0.0,
                             suggested_tp_pct=pos.tp_distance_pct,
                             suggested_sl=stop_loss,
                             suggested_tp=pos.take_profit,
                             current_price=current_price or 0.0,
                             volatility_level=pos.volatility_level,
-                            reasoning_snippet=evaluation.reason[:200],
+                            reasoning_snippet=evaluation.reason,
                             metadata={
                                 "price_progress": evaluation.price_progress,
                                 "effective_min_progress": evaluation.effective_min_progress,

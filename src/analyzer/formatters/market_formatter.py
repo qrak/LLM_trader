@@ -207,7 +207,7 @@ class MarketFormatter:
         if not market_metrics:
             return ""
 
-        sections = ["## Period Metrics"]
+        rows: list[str] = []
 
         for period, period_data in market_metrics.items():
             if not period_data:
@@ -241,9 +241,11 @@ class MarketFormatter:
 
             if parts:
                 period_label = str(metrics.get("period") or period).upper()
-                sections.append(f"\n{period_label}: {' | '.join(parts)}")
+                rows.append(f"\n{period_label}: {' | '.join(parts)}")
 
-        return "".join(sections)
+        if not rows:
+            return ""
+        return "## Period Metrics" + "".join(rows)
 
     def _format_indicator_changes_compressed(self, indicator_changes: dict) -> str:
         """Format indicator changes in compressed format."""

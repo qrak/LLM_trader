@@ -13,6 +13,8 @@ from .vector_memory_analytics import VectorMemoryAnalyticsMixin
 from .vector_memory_context import VectorMemoryContextMixin
 from .vector_memory_rules import VectorMemoryRulesMixin
 
+MAX_BLOCKED_SNIPPET_CHARS = 200
+
 
 class VectorMemoryService(
     VectorMemoryContextMixin,
@@ -318,8 +320,10 @@ class VectorMemoryService(
         Fields: guard_type ('rr_minimum', 'sl_clamp', 'tp_clamp', ...), direction,
         confidence, suggested_rr / required_rr, suggested_sl_pct / suggested_tp_pct,
         absolute suggested_sl / suggested_tp, current_price, volatility_level,
-        reasoning_snippet (first 200 chars), metadata. True on success.
+        reasoning_snippet (stored truncated to MAX_BLOCKED_SNIPPET_CHARS), metadata.
+        True on success.
         """
+        reasoning_snippet = reasoning_snippet[:MAX_BLOCKED_SNIPPET_CHARS] if reasoning_snippet else ""
         if not self._ensure_initialized():
             self.logger.warning("VectorMemoryService not initialized, cannot store blocked trade.")
             return False
