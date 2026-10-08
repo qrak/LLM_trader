@@ -666,6 +666,64 @@ class TestReconcileLocalPosition:
         assert result.is_exchange_verified is False
         assert result.evidence == EXECUTOR_TRACKER_EVIDENCE
 
+    async def test_venue_amount_rounded_to_market_precision_still_verifies(self) -> None:
+        """The live 2026-09-28 position: paper size 0.0038412035106648494 held as 0.00384."""
+        subject = position(size=0.0038412035106648494, entry_price=83257.62)
+        instance, _, _ = strategy(
+            subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
+        )
+
+        async def reports_open(symbol: str) -> bool | None:
+            payload = verified_position_payload(subject)
+            payload["quantity"] = 0.00384
+            payload["confirmation"]["protection_verified"] = None
+            instance._last_executor_position_payload = payload
+            return True
+
+        instance._executor_has_position = reports_open
+
+        result = await instance.reconcile_local_position(source="periodic")
+
+        assert result.is_exchange_verified is True
+        assert result.evidence == EXECUTOR_VENUE_EVIDENCE
+
+    async def test_venue_amount_one_step_short_of_the_position_never_verifies(self) -> None:
+        subject = position(size=0.0038412035106648494, entry_price=83257.62)
+        instance, _, _ = strategy(
+            subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
+        )
+
+        async def reports_open(symbol: str) -> bool | None:
+            payload = verified_position_payload(subject)
+            payload["quantity"] = 0.00383
+            instance._last_executor_position_payload = payload
+            return True
+
+        instance._executor_has_position = reports_open
+
+        result = await instance.reconcile_local_position(source="periodic")
+
+        assert result.is_exchange_verified is False
+        assert result.evidence == EXECUTOR_TRACKER_EVIDENCE
+
+    async def test_exchange_denied_protection_legs_never_verifies(self) -> None:
+        subject = position()
+        instance, _, _ = strategy(
+            subject, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL="http://127.0.0.1:9199/decision"
+        )
+
+        async def reports_open(symbol: str) -> bool | None:
+            payload = verified_position_payload(subject)
+            payload["confirmation"]["protection_verified"] = False
+            instance._last_executor_position_payload = payload
+            return True
+
+        instance._executor_has_position = reports_open
+
+        result = await instance.reconcile_local_position(source="periodic")
+
+        assert result.is_exchange_verified is False
+
     async def test_disabled_executor_api_is_local_only_not_executor_reported(self) -> None:
         """No query happened, so nothing may be labelled an executor report."""
         subject = position()

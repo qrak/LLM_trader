@@ -226,7 +226,7 @@ def test_market_period_metrics_compresses_indicator_changes(market_formatter, in
             list(np.linspace(100.0, 200.0, 10)),
             list(np.linspace(1000.0, 2000.0, 10)),
             "↑RISING (10G/0R, +100.0%)",
-            "↑INCREASING (+100%)",
+            "↑INCREASING (+38%)",
         ),
     ],
     ids=["legacy-rising", "flat", "falling", "rising-volume-surge"],
@@ -243,6 +243,16 @@ def test_price_action_classifies_close_and_volume_trends(
     assert f"Close Trend: {expected_close_trend}" in result
     assert f"- Volume: {expected_volume_trend}" in result
     assert "(NORMAL)" in result
+
+
+def test_price_action_volume_trend_uses_the_window_mean_not_two_candles(technical_formatter):
+    """A spike at the start of the window must not hide a dry-up on the last candle."""
+    volumes = [100.0] * 8 + [5000.0, 100.0]
+    context = price_action_context(candles([100.0] * 10, [100.0] * 10, volumes=volumes))
+
+    result = technical_formatter.format_price_action_section(context, {})
+
+    assert "- Volume: ↓DECLINING (-84%)" in result
 
 
 def test_price_action_falls_back_on_short_history_and_guards_zero_baselines(technical_formatter):

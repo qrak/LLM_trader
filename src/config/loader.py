@@ -221,6 +221,7 @@ class Config:
         self._deepseek_model_config = {
             "max_tokens": deepseek_max_tokens,
             "reasoning_effort": self.get_config("model_config", "deepseek_reasoning_effort", "max"),
+            "response_format": {"type": "json_object"},
         }
 
     def get_env(self, key: str, default: Any = None) -> Any:

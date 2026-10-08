@@ -5,10 +5,12 @@ Handles the processing and formatting of analysis results from the AI models.
 from __future__ import annotations
 
 import io
+import json
 import re
 from typing import TYPE_CHECKING, Any
 
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.logger.logger import Logger
 
@@ -27,6 +29,7 @@ class AnalysisResultProcessor:
         unified_parser,
         trend_validator: TrendValidator,
         quality_scorer: PatternQualityScorer,
+        risk_reward_validator: RiskRewardValidator,
     ):
         """Initialize the processor"""
         self.model_manager = model_manager
@@ -35,6 +38,7 @@ class AnalysisResultProcessor:
         self.context: AnalysisContext | None = None
         self._trend_validator = trend_validator
         self._quality_scorer = quality_scorer
+        self._risk_reward_validator = risk_reward_validator
 
     async def process_analysis(self, system_prompt: str, prompt: str,
                               chart_image: io.BytesIO | bytes | str | None = None,
@@ -84,9 +88,6 @@ class AnalysisResultProcessor:
         cleaned_response = self._clean_response(complete_response)
 
         parsed_response = self.unified_parser.parse_ai_response(cleaned_response)
-        parsed_response, cleaned_response = await self._repair_missing_json_block(
-            parsed_response, cleaned_response, system_prompt, prompt, provider, model
-        )
 
         if not self.unified_parser.validate_ai_response(parsed_response):
             self.logger.warning("Invalid response format from AI model")
@@ -95,9 +96,10 @@ class AnalysisResultProcessor:
                 "raw_response": cleaned_response
             }
         self._log_response_validation(parsed_response.get("response_validation"))
-        self._log_analysis_result(parsed_response)
-
         self._validate_llm_claims(parsed_response)
+        for issue in self._risk_reward_validator.validate(parsed_response):
+            self.logger.warning("R/R validation: %s", issue)
+        self._log_analysis_result(parsed_response)
 
         return self._format_analysis_response(parsed_response, cleaned_response)
 
@@ -144,54 +146,35 @@ class AnalysisResultProcessor:
             return
         self.logger.debug("AI response contract validation skipped: no trading signal found")
 
-    async def _repair_missing_json_block(
-        self,
-        parsed_response: dict[str, Any],
-        cleaned_response: str,
-        system_prompt: str,
-        prompt: str,
-        provider: str | None,
-        model: str | None
-    ) -> tuple[dict[str, Any], str]:
-        """Recover a reply that omitted the required ```json block.
-
-        Models occasionally return only the narrative. Without the block the parser
-        falls back to defaults (HOLD), silently dropping the decision. Replay the turn
-        as a continuation and ask for the block; if that fails, keep the fallback.
-        """
-        validation = parsed_response.get("response_validation") or {}
-        errors = validation.get("errors") or []
-        if validation.get("status") != "invalid" or not any(
-            error.get("type") == "json_parse_error" for error in errors
-        ):
-            return parsed_response, cleaned_response
-
-        self.logger.warning("AI reply omitted the required JSON block; requesting a contract repair from the same provider.")
-        repaired_text = self._clean_response(
-            await self.model_manager.send_contract_repair(
-                system_message=system_prompt,
-                prompt=prompt,
-                previous_response=cleaned_response,
-                provider=provider,
-                model=model
-            )
-        )
-        repaired = self.unified_parser.parse_ai_response(repaired_text)
-        analysis = repaired.get("analysis") or {}
-        if repaired.get("parse_error") or not analysis.get("signal"):
-            self.logger.error("Contract repair did not return a valid JSON block; keeping the fallback response.")
-            return parsed_response, cleaned_response
-
-        self.logger.info("Contract repair recovered a valid JSON block (signal: %s)", analysis.get("signal"))
-        return repaired, f"{cleaned_response}\n\n{repaired_text}"
-
     def _format_analysis_response(self, parsed_response: dict[str, Any],
                                 cleaned_response: str) -> dict[str, Any]:
         """Format the final analysis response."""
-        parsed_response["raw_response"] = cleaned_response
+        parsed_response["raw_response"] = self._render_response_text(parsed_response, cleaned_response)
         if self.context is not None:
             parsed_response["current_price"] = self.context.current_price
         return parsed_response
+
+    @staticmethod
+    def _render_response_text(parsed_response: dict[str, Any], cleaned_response: str) -> str:
+        """Return the reply as narrative text plus the trailing fenced decision block.
+
+        JSON-output providers (DeepSeek runs with response_format=json_object) answer with a
+        single object — {"narrative": ..., "analysis": {...}} — while everything downstream
+        (notifiers, dashboard history, the next cycle's previous-response context) reads the
+        narrative and the trailing fenced block. Such a reply is rendered back into that
+        shape; every other reply is returned untouched.
+
+        Returns:
+            The response text stored as ``raw_response``.
+        """
+        narrative = parsed_response.get("narrative")
+        analysis = parsed_response.get("analysis")
+        if not isinstance(narrative, str) or not narrative.strip() or not isinstance(analysis, dict):
+            return cleaned_response
+        if "```json" in cleaned_response:
+            return cleaned_response
+        block = json.dumps({"analysis": analysis}, indent=4, ensure_ascii=False)
+        return f"{narrative.strip()}\n\n```json\n{block}\n```"
 
     @staticmethod
     def _clean_response(text: str) -> str:

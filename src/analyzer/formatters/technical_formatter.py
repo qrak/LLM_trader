@@ -78,7 +78,9 @@ class TechnicalFormatter:
         Shows text-based trend descriptions for:
         - Price trend direction (Close)
         - Volatility expansion/contraction (High/Low range)
-        - Volume confirmation (Volume trend)
+        - Volume confirmation (Volume trend): the last candle's volume against the mean of the
+          preceding candles in the window (same baseline style as the range expansion above, and
+          the same ratio the volume dry-up detector uses).
         """
         ohlcv_slice = self._finite_ohlcv_window(context.ohlcv_candles)
         if ohlcv_slice is None:
@@ -103,8 +105,9 @@ class TechnicalFormatter:
         else:
             close_trend = f"↓FALLING ({green_candles}G/{red_candles}R, {close_delta_pct:+.1f}%)"
 
-        volume_delta = float(volumes[-1] - volumes[0])
-        volume_delta_pct = (volume_delta / volumes[0] * 100) if volumes[0] != 0 else 0
+        volume_baseline = float(np.mean(volumes[:-1]))
+        volume_delta = float(volumes[-1] - volume_baseline)
+        volume_delta_pct = (volume_delta / volume_baseline * 100) if volume_baseline != 0 else 0
 
         if abs(volume_delta_pct) < 10.0:
             volume_trend = f"→STABLE ({volume_delta_pct:+.0f}%)"
@@ -137,7 +140,7 @@ class TechnicalFormatter:
     def format_momentum_section(self, td: dict, history: dict) -> str:
         """Format the momentum indicators section with temporal context (last 12 candles)."""
         rsi_temporal = self._format_temporal_array(history, "rsi", 12, 1)
-        macd_hist_temporal = self._format_temporal_array(history, "macd_hist", 12, 8)
+        macd_hist_temporal = self._format_temporal_array(history, "macd_hist", 12, 2)
         stoch_k_temporal = self._format_temporal_array(history, "stoch_k", 12, 1)
 
         return f"""## Momentum:
@@ -182,7 +185,7 @@ class TechnicalFormatter:
         """Format the volatility indicators section with temporal context for volatility evolution."""
         bb_interpretation = self.format_utils.format_bollinger_interpretation(td)
 
-        atr_temporal = self._format_temporal_array(history, "atr", 12, 8)
+        atr_temporal = self._format_temporal_array(history, "atr", 12, 2)
 
         bb_percent_b_temporal = self._format_temporal_array(history, "bb_percent_b", 12, 2)
 
@@ -200,8 +203,8 @@ class TechnicalFormatter:
         return (
             "## Levels:\n"
             f"- S/R: Support:{self.format_utils.fmt_ta(td, 'basic_support', 8)} Resistance:{self.format_utils.fmt_ta(td, 'basic_resistance', 8)}\n"
-            f"- Pivot:{self.format_utils.fmt_ta(td, 'pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'pivot_s2', 8)},{self.format_utils.fmt_ta(td, 'pivot_s3', 8)}] R[{self.format_utils.fmt_ta(td, 'pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'pivot_r2', 8)},{self.format_utils.fmt_ta(td, 'pivot_r3', 8)}]\n"
-            f"- FibPivot:{self.format_utils.fmt_ta(td, 'fib_pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'fib_pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_s2', 8)}] R[{self.format_utils.fmt_ta(td, 'fib_pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_r2', 8)}]"
+            f"- Pivot(prev bar):{self.format_utils.fmt_ta(td, 'pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'pivot_s2', 8)},{self.format_utils.fmt_ta(td, 'pivot_s3', 8)}] R[{self.format_utils.fmt_ta(td, 'pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'pivot_r2', 8)},{self.format_utils.fmt_ta(td, 'pivot_r3', 8)}]\n"
+            f"- FibPivot(prev bar):{self.format_utils.fmt_ta(td, 'fib_pivot_point', 8)} S[{self.format_utils.fmt_ta(td, 'fib_pivot_s1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_s2', 8)}] R[{self.format_utils.fmt_ta(td, 'fib_pivot_r1', 8)},{self.format_utils.fmt_ta(td, 'fib_pivot_r2', 8)}]"
         )
 
     def format_advanced_indicators_section(self, td: dict, history: dict) -> str:

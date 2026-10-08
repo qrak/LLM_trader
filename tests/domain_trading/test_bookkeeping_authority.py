@@ -24,6 +24,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.trading import executor_reconciliation
 from src.trading.data_models import MarketConditions, Position
 from src.trading.executor_reconciliation import (
     INTENT_ACTION_CLOSE,
@@ -46,6 +47,12 @@ from tests.conftest import (
 )
 
 ENTRY_TIME = datetime(2026, 9, 21, 8, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _instant_intent_poll(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The forwarded-command verdict poll waits seconds in production; the suite must not."""
+    monkeypatch.setattr(executor_reconciliation, "INTENT_CONFIRM_DELAY", 0.0)
 
 
 def _position(**overrides: Any) -> Position:
@@ -167,6 +174,64 @@ class TestCloseIntentIsNotAnExecution:
         assert strategy.current_position is position
         assert strategy.take_unconfirmed_intent_alert() is not None
         assert persistence.async_save_trade_decision.await_count == 0
+
+    async def test_close_verdict_that_lands_after_the_forward_still_confirms(self, tmp_path: Path) -> None:
+        """The executor's queue tick can reach ~10s: the forwarding read is retried."""
+        position = _position()
+        strategy, _, persistence = _strategy(
+            tmp_path,
+            position,
+            EXECUTOR_EXIT_PATH=str(_journal(tmp_path / "exits.jsonl", [_exit_record()])),
+        )
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        decision = await _close_signal(strategy)
+        _verdicts(
+            tmp_path / "verdicts.jsonl",
+            [{"order_id": decision.order_id, "verdict": "executed", "reason": ""}],
+        )
+        strategy.config.EXECUTOR_VERDICT_PATH = str(tmp_path / "verdicts.jsonl")
+        reads = {"count": 0}
+        real_read = strategy._read_executor_verdict_entry
+
+        def late_verdict(order_id: str) -> dict | None:
+            reads["count"] += 1
+            return None if reads["count"] == 1 else real_read(order_id)
+
+        strategy._read_executor_verdict_entry = late_verdict
+
+        state = await strategy.resolve_position_intents_after_forward(
+            order_id=decision.order_id, delivered=True
+        )
+
+        assert reads["count"] == 2, "the journal must be read again, not abandoned after one look"
+        assert state == INTENT_CONFIRMED
+        assert strategy.current_position is None
+        persistence.async_save_trade_decision.assert_awaited_once()
+
+    async def test_close_without_a_verdict_polls_every_attempt_then_stays_unknown(self, tmp_path: Path) -> None:
+        """A short grace window, then UNKNOWN: an unanswered command is never a close."""
+        position = _position()
+        strategy, _, persistence = _strategy(tmp_path, position)
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        decision = await _close_signal(strategy)
+        reads = {"count": 0}
+
+        def never_a_verdict(order_id: str) -> dict | None:
+            reads["count"] += 1
+            return None
+
+        strategy._read_executor_verdict_entry = never_a_verdict
+
+        state = await strategy.resolve_position_intents_after_forward(
+            order_id=decision.order_id, delivered=True
+        )
+
+        assert reads["count"] == executor_reconciliation.INTENT_CONFIRM_ATTEMPTS + 1
+        assert state == INTENT_UNKNOWN
+        assert strategy.current_position is position
+        assert persistence.async_save_position.await_count == 0
+        assert persistence.async_save_trade_decision.await_count == 0
+        assert strategy.take_unconfirmed_intent_alert() is not None
 
     async def test_undelivered_close_is_unknown_and_never_erases_the_position(self, tmp_path: Path) -> None:
         """A failed forward (file fallback / no response) is UNKNOWN, not a close."""

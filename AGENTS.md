@@ -291,7 +291,8 @@ LLM_trader/
 ├── keys.env / keys.env.example  # Secrets
 ├── config/
 │   ├── config.ini               # Active configuration
-│   ├── model_pricing.json       # Per-model cost data
+│   ├── model_pricing.json       # Per-model cost data (BASE rates)
+│   ├── peak_rates.example.json  # Optional peak/off-peak billing windows (copy to peak_rates.json)
 │   └── rag_priorities.json      # Category/generic RAG priority config (important_categories + generic_priorities)
 ├── src/
 │   ├── app.py                   # Main application wiring

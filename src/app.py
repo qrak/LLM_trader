@@ -274,10 +274,7 @@ class CryptoTradingBot:
 
         last_analysis_time = self.persistence.get_last_analysis_time()
         if last_analysis_time:
-            self.logger.info(
-                "Resuming from last analysis at %s",
-                self._format_utc_and_local(last_analysis_time)
-            )
+            # The single "Resuming from last analysis ..." line is logged by the wait helper.
             await self._wait_until_next_timeframe_after(last_analysis_time)
         else:
             self.logger.info("Crypto Trading Bot ready")
@@ -994,7 +991,11 @@ class CryptoTradingBot:
             return False
 
     async def _wait_until_next_timeframe_after(self, last_time: datetime):
-        """Wait until the next timeframe candle after a specific timestamp."""
+        """Wait until the next timeframe candle after a specific timestamp.
+
+        Owns the single "Resuming from last analysis ..." startup line, so callers
+        must not log a resume message of their own.
+        """
         try:
             if last_time.tzinfo is None:
                 last_time = last_time.replace(tzinfo=timezone.utc)
@@ -1007,7 +1008,7 @@ class CryptoTradingBot:
             next_candle_ms = int(next_check_time.timestamp() * 1000) - (CANDLE_BUFFER_SECONDS * 1000)
             if current_time_ms >= next_candle_ms:
                 self.logger.info(
-                    "Resuming from last check at %s. Next candle already passed - proceeding immediately",
+                    "Resuming from last analysis at %s. Next candle already passed - proceeding immediately",
                     self._format_utc_and_local(last_time)
                 )
                 self.logger.info("Crypto Trading Bot ready")
@@ -1015,9 +1016,9 @@ class CryptoTradingBot:
 
             is_same = TimeframeValidator.is_same_candle(current_time_ms, last_time_ms, self.current_timeframe)  # type: ignore
 
-            context_msg = "Still in same candle" if is_same else "Resuming wait"
+            context_msg = "Still in same candle" if is_same else "Waiting for next candle"
             self.logger.info(
-                "Resuming from last check at %s. %s - next check at %s (in %.0fs)",
+                "Resuming from last analysis at %s. %s - next check at %s (in %.0fs)",
                 self._format_utc_and_local(last_time),
                 context_msg,
                 self._format_utc_and_local(next_check_time),

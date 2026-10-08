@@ -7,18 +7,21 @@ import os
 import tempfile
 import threading
 import time
+from datetime import datetime
 from typing import Any
 
 import tiktoken
 
 from src.trading.data_models import ProviderCostStats, SessionCosts
+from src.utils.peak_rates import PeakRates
 
 
 class ModelPricing:
-    """Loads and provides model pricing from config/model_pricing.json."""
+    """Loads model pricing from config/model_pricing.json and applies the active billing window."""
 
-    def __init__(self):
+    def __init__(self, peak_rates: PeakRates | None = None):
         self._pricing = self._load_pricing()
+        self.peak_rates = peak_rates if peak_rates is not None else PeakRates()
 
     def _load_pricing(self) -> dict[str, Any]:
         """Load pricing data from JSON file."""
@@ -30,9 +33,10 @@ class ModelPricing:
         except (FileNotFoundError, json.JSONDecodeError):
             return {"google": {}, "openrouter": {}}
 
-    def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int) -> float | None:
+    def get_cost(self, provider: str, model: str, input_tokens: int, output_tokens: int,
+                 at: datetime | None = None) -> float | None:
         """
-        Calculate cost for a request based on token counts.
+        Calculate cost for a request based on token counts and the active billing window.
         Returns:
             Cost in USD or None if pricing not available
         """
@@ -50,7 +54,11 @@ class ModelPricing:
             return None
         input_cost = (input_tokens / 1_000_000) * model_pricing.get("input_per_million", 0)
         output_cost = (output_tokens / 1_000_000) * model_pricing.get("output_per_million", 0)
-        return input_cost + output_cost
+        return (input_cost + output_cost) * self.peak_rates.multiplier(provider, model, at)
+
+    def cost_note(self, provider: str, model: str, at: datetime | None = None) -> str | None:
+        """Return the billing window applied to a model, for cost logging."""
+        return self.peak_rates.tier_label(provider, model, at)
 
     def _normalize_model_key(self, model: str) -> str:
         """Normalize model name for lookup."""
@@ -122,13 +130,13 @@ class TokenCounter:
 
     @staticmethod
     def format_cost(cost: float) -> str:
-        """Format cost in human-readable format."""
+        """Format cost in US dollars, with precision scaled to the amount."""
         if cost == 0 or cost is None:
             return "Free"
         if cost < 0.0001:
-            return f"${cost:.8f} ({cost * 100:.6f}¢)"
+            return f"${cost:.8f}"
         if cost < 0.01:
-            return f"${cost:.6f} ({cost * 100:.4f}¢)"
+            return f"${cost:.6f}"
         if cost < 1:
             return f"${cost:.4f}"
         return f"${cost:.2f}"
@@ -138,7 +146,8 @@ class TokenCounter:
         usage: dict[str, Any] | None,
         provider: str = "unknown",
         logger=None,
-        fallback_text: str | None = None
+        fallback_text: str | None = None,
+        cost_note: str | None = None
     ) -> None:
         """
         Process API response usage data: record and optionally log.
@@ -154,7 +163,8 @@ class TokenCounter:
                 logger.info("Response token count: %s", f"{completion_tokens:,}")
                 logger.info("Total tokens used: %s", f"{total_tokens:,}")
                 if cost is not None:
-                    logger.info("Request cost: %s", self.format_cost(cost))
+                    window = f" ({cost_note})" if cost_note else ""
+                    logger.info("Request cost: %s%s", self.format_cost(cost), window)
         elif fallback_text:
             response_tokens = self.track_prompt_tokens(fallback_text, "completion")
             if logger:

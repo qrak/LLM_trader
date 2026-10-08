@@ -140,7 +140,7 @@ NARRATIVE_MATRIX = {
             "evidence"),
             ("10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid "
             "tightening policy status"),
-            "11) RISK/REWARD: current R/R ratio, distance to target vs invalidation",
+            "11) RISK/REWARD: no active ratio on flat HOLD; otherwise show entry, SL, TP, reward, risk and checked ratio",
             ("12) DECISION: signal with clear actionable directive (HOLD / BUY / SELL "
             "/ CLOSE)"),
             ("13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or "
@@ -323,6 +323,19 @@ def test_system_prompt_renders_mandated_sections():
         "☁️= = inside the cloud."),
         ("- Price action shorthand: 4G/0R = 4 green and 0 red candles in the lookback window; "
         "⚠️ marks a TD Setup of 8 or more, i.e. an exhausted move that often reverses."),
+        ("- Indicator variants (these are the calculator's fixed windows, NOT the textbook "
+        "defaults): TSI uses the fast 20/10 smoothing, not 25/13; KST weights ROC 5/10/15/20 "
+        "smoothed by SMA 3/5/7/9 (short variant, not Pring's 10/15/20/30 smoothed 10/10/10/15); "
+        "Keltner bands are built from their own EMA-smoothed ATR, so KC width does not match "
+        "the ATR value printed in the same block; Vortex VI+ and VI- each hover around 1.0 "
+        "(a value near 1 means balanced flow, not missing data) — read them against each other, "
+        "not against 1."),
+        ("- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
+        "start of the loaded window, so only each one's CHANGE carries information — never "
+        "read the absolute level; Variance is measured in price^2 over the last 20 candles, so "
+        "judge price extremes with the Z-score instead of the variance; Pivot and FibPivot are "
+        "computed from the PREVIOUS closed bar, i.e. they are the levels of the current "
+        "(still forming) candle, not levels of the last closed candle."),
         "## Profit Maximization Strategy",
         "- LET TRADES BREATHE: Do NOT tighten stops prematurely.",
         "Premature tightening is the #1 cause of losing trades.",
@@ -544,8 +557,8 @@ def test_decision_rules_render_one_line_per_rule():
         "conflict: need 4+ or HOLD."),
         'State "365D MACRO CONFLICT: [direction]" in analysis.',
         "SHORT TRADES: Valid with sufficient confluence even in bull macro.",
-        ("R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use "
-        "null for CLOSE/HOLD(open)."),
+        ("R/R: LONG/BUY reward = TP - entry, risk = entry - SL; SHORT/SELL "
+         "reward = entry - TP, risk = SL - entry."),
         ("THRESHOLD ORIGIN: All thresholds use industry-standard defaults (no trade "
         "history)."),
     ])
@@ -728,7 +741,10 @@ def test_response_template_json_example_is_parser_safe():
     assert analysis["signal"] == "HOLD"
     assert type(analysis["confidence"]) is int
     assert type(analysis["leverage"]) is int
-    assert type(analysis["entry_price"]) is float
+    assert analysis["entry_price"] is None
+    assert analysis["stop_loss"] is None
+    assert analysis["take_profit"] is None
+    assert analysis["risk_reward_ratio"] is None
     assert analysis["order_type"] is None
     assert set(analysis["confluence_factors"]) == {
         "trend_alignment",
@@ -737,6 +753,31 @@ def test_response_template_json_example_is_parser_safe():
         "pattern_quality",
         "support_resistance_strength",
     }
+
+
+def test_response_template_asks_for_one_json_object_in_json_output_mode():
+    """DeepSeek runs with response_format=json_object, so the contract is a single object.
+
+    While provider = deepseek the narrative cannot be asked for as plain text followed by a
+    fenced block: that shape does not exist in JSON-output mode, and the fenced block used to
+    get dropped (the parser then fell back to the HOLD default and the decision was lost).
+    """
+    template = make_manager(make_config(PROVIDER="deepseek")).build_response_template()
+
+    assert_fragments(template, [
+        "## Response Format",
+        "Output: ONE JSON object and NOTHING outside it.",
+        'Narrative (the lines below as one string in "narrative", \\n separated):',
+        "13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action",
+    ])
+    assert_absent(template, ["Narrative (plain-text only):"])
+
+    match = re.search(r"```json\s*(.*?)\s*```", template, re.DOTALL | re.IGNORECASE)
+    assert match is not None
+    example = json.loads(match.group(1))
+    assert set(example) == {"narrative", "analysis"}
+    assert set(example["analysis"]) == SNAPSHOT_KEYS
+    assert example["analysis"]["signal"] == "HOLD"
 
 
 def test_response_template_documents_the_trend_block_vocabulary():

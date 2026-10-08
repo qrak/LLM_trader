@@ -1,5 +1,93 @@
 # Changelog
 
+## 2026-09-26 — DeepSeek thinking effort `high` → `low` (measured, not guessed)
+
+### Changed
+- **`deepseek_reasoning_effort = low`** in `config.ini` + `config.ini.example` (comment now lists every
+  level the API accepts: `minimal | low | medium | high | max`, and carries the reasoning below).
+- Picked by replaying **18 real production prompts** (4h analysis prompts from June, August and
+  September logs) through the repo's own DeepSeek client at every effort — 108 calls total — and
+  judging each raw reply with the real `UnifiedParser`, the `TradingAnalysisResponseModel` contract,
+  `TrendValidator`, and ground truth from ccxt 4h BTC/USDC candles:
+  - **Contract/reliability**: `minimal` 27/27 clean, `high` 27/27 (one unclosed JSON object, recovered
+    by the parser's lenient path), `low` 26/27 (one `strength_4h: 18.56` float where the model wants an
+    int), `medium` **lost a whole cycle** (answered with prose, not JSON).
+  - **Numeric grounding** (share of cited numbers that exist in the prompt): `low` 0.90 / `minimal` 0.90
+    / `high` 0.87 / `medium` 0.86 on calm prompts — and 0.90 / 0.88 / 0.70 / 0.73 on the volatile
+    June–August prompts, i.e. the top of the scale drifts into inventing figures exactly when data
+    quality matters most.
+  - **Speed and cost per call**: `low` 15.7 s / $0.0060, `minimal` 20.1 s / $0.0064, `high` 28.8 s /
+    $0.0081, `medium` 31.5 s / $0.0082 (p90 up to 47 s).
+  - **Decision stability** (3 prompts × 4 repeats): `low` and `minimal` never flipped the signal;
+    `medium` and `high` each flipped once.
+  - Thinking volume is NOT monotonic: `medium` burned 16 426 thinking tokens on a prompt where `high`
+    stopped at 2 682.
+  - Only 4 of 108 replies were actionable BUY/SELL (the rest HOLD), so the ranking above is about
+    reliability, grounding, latency and cost — not proof that one level *trades* better.
+
+## 2026-09-26 — Peak/off-peak rates are configurable (`config/peak_rates.json`)
+
+### Added
+- **`config/peak_rates.json` (optional, with `config/peak_rates.example.json`) + `src/utils/peak_rates.py`.**
+  Providers that bill peak/off-peak (DeepSeek: half price off-peak) are now reported at the price
+  actually charged instead of a flat peak rate. Per-token rates stay in `config/model_pricing.json`
+  and are treated as the BASE (peak) rates; the new file only declares WHEN a window applies
+  (`peak_windows_utc`: day names or ranges such as `["mon-fri"]`, UTC clock values, start-inclusive
+  and end-exclusive) and how it scales them (`peak_multiplier` / `off_peak_multiplier`). A provider
+  entry is merged over its built-in default, so only the changed keys need to be listed; `_default`
+  covers anything unlisted (multiplier 1.0 = flat). Without the file the built-in defaults in
+  `src/utils/peak_rates.py` apply, so a checkout works unchanged. The file is read at startup.
+- `ModelPricing` now applies that window in `get_cost()` and exposes `cost_note()`; the log line
+  reads `Request cost: $0.007000 (off-peak x0.5)` so the applied window is visible.
+- README section **Billing windows (`config/peak_rates.json`)** with the field table and an example.
+
+### Verified
+- New tests pin: built-in defaults without a file (DeepSeek peak vs off-peak, weekend),
+  unlisted provider/model staying flat, the file merging over the built-in entry, a custom
+  `_default`, a malformed file falling back to defaults, `get_cost` scaling, and the log note.
+
+## 2026-09-26 — DeepSeek: empty replies are re-sent, thinking effort lowered to `high`
+
+### Changed
+- **`reasoning_effort = high` for DeepSeek** (`config.ini`, `config.ini.example`). Measured on the
+  production 4h prompt, `max` spent 14.9k–24.2k tokens of thinking per call (72–110 s, $0.013–0.017)
+  where `high` spent 1.8k–2.1k (15 s, $0.0024–0.0063), and both returned the same decision:
+- **An empty DeepSeek reply is re-sent instead of quietly becoming a HOLD.** `retry_api_call` gained
+  `retry_on_empty`, which treats a reply carrying no JSON object (empty content, or prose with no `{`)
+  as retryable; the DeepSeek client opts in on both request paths (text and chart). Up to 3 retries
+  with the existing backoff → 4 attempts at most, after which the last reply flows into the normal
+  fallback. The request body is rebuilt from the same kwargs: no prompt repair, no conversation
+  replay, just the same request again (the removed `send_contract_repair` paid for a second full
+  generation instead).
+- `_log_usage` reads `completion_tokens_details` defensively: a reply without that field used to raise
+  inside the request method, and the swallowed exception became a `None` that no retry could see.
+
+### Verified
+- `pytest tests/` → **1887 passed, 17 skipped**. New tests pin the opt-in classification (blank/prose
+  retryable, real JSON never), the re-send, and the 3-retry ceiling.
+- Live DeepSeek calls, same prompt and same day (weekend = off-peak, cache warm after the first call):
+
+| run | contract | signal / confidence | sections | analysis keys | grounded values | label values | thinking tokens | wall time | cost |
+|---|---|---|---|---|---|---|---|---|---|
+| high ×3 | 3/3 one JSON object | HOLD / 72, 72, 70 | 13 | 16 | 103/113, 106/109, 118/118 | 9/9, 8/8, 9/9 | 1 751–2 124 | 14.6–15.2 s | $0.0063 (cold), $0.0026, $0.0024 |
+| max ×2 | 2/2 one JSON object | HOLD / 73, 73 | 13 | 16 | 124/131, 144/155 | 9/9, 8/8 | 14 949–24 166 | 72.0–109.7 s | $0.0131, $0.0175 |
+
+- Live retry proof against the real API (request engineered to answer with nothing): the client sent
+  the request **4 times** (1 + 3 retries), logging `Provider returned an empty reply` before each
+  re-send, then passed the last empty reply on instead of crashing.
+
+
+## 2026-09-26 — DeepSeek answers with enforced JSON instead of a copied fence
+
+### Changed
+- **DeepSeek runs in JSON-output mode.** Every DeepSeek request now carries `response_format: {"type": "json_object"}` (added to the DeepSeek model config in the loader, so it rides the existing `_execute_with_param_retry` path for text and chart calls alike), and while `provider = deepseek` the rendered prompt asks for **one JSON object** — `{"narrative": ..., "analysis": {...}}` — instead of narrative prose plus a fenced ```json block. Verified live against `api.deepseek.com` with the real production system+user prompt: one object back, `analysis` contract `valid`, 48.5 s, 18.5k prompt / 11.2k completion tokens.
+- **`deepseek_max_tokens` raised 32768 → 65536** (`config.ini` + `config.ini.example`). The API allows up to 384k and thinking tokens count toward the cap; at `reasoning_effort = max` a single reply already spent 22k tokens on thinking, and the decision block used to sit at the very END of the reply — so a hit cap silently removed the decision. The cap costs nothing unless the tokens are actually generated.
+- **`AnalysisResultProcessor._render_response_text`**: a JSON-mode reply is written back into the canonical "narrative + trailing fenced block" text for `raw_response`, so notifiers, dashboard history and the next cycle's previous-response context keep working unchanged.
+
+### Removed
+- **The contract-repair round trip** (`_repair_missing_json_block` in the processor, `ModelManager.send_contract_repair` and its tests). It used to fire a second, conversation-replaying request whenever a reply lacked the fenced block — extra latency and cost for a format the API itself can now guarantee. A reply that still carries no parseable JSON is logged and falls back to the HOLD default with a single API call, same as before the patch existed.
+- The now-unused `json_block` test helper.
+
 ## 2026-09-19 — Legacy Page Rule deleted; /ads.txt now served directly
 
 ### Fixed

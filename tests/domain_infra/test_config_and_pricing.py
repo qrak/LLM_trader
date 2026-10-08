@@ -23,7 +23,8 @@ from src.utils.data_utils import (
     get_last_valid_value,
     serialize_for_json,
 )
-from src.utils.token_counter import ModelPricing
+from src.utils.peak_rates import PeakRates
+from src.utils.token_counter import ModelPricing, TokenCounter
 
 
 @dataclass
@@ -405,3 +406,115 @@ def test_position_from_dict_restores_confluence_tuples_from_plain_lists():
     assert type(position.confluence_factors) is tuple
     assert position.confluence_factors == (("trend", 0.8), ("momentum", 0.6))
     assert all(type(factor) is tuple for factor in position.confluence_factors)
+
+
+WEDNESDAY_PEAK = datetime(2026, 9, 23, 2, 0, tzinfo=timezone.utc)
+WEDNESDAY_OFF_PEAK = datetime(2026, 9, 23, 5, 0, tzinfo=timezone.utc)
+WEDNESDAY_LATE = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
+SATURDAY_NIGHT = datetime(2026, 9, 26, 2, 0, tzinfo=timezone.utc)
+
+
+def test_peak_rates_use_builtin_defaults_when_no_file_exists(tmp_path):
+    rates = PeakRates(str(tmp_path / "missing.json"))
+
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == 1.0
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == 0.5
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_LATE) == 0.5
+    assert rates.multiplier("deepseek", "deepseek-v4-pro", SATURDAY_NIGHT) == 0.5
+    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == "peak x1"
+    assert rates.tier_label("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5"
+
+
+def test_peak_rates_leave_unlisted_providers_and_models_flat(tmp_path):
+    rates = PeakRates(str(tmp_path / "missing.json"))
+
+    assert rates.multiplier("google", "gemini-3.8-flash", WEDNESDAY_PEAK) == 1.0
+    assert rates.tier_label("google", "gemini-3.8-flash", WEDNESDAY_PEAK) is None
+    assert rates.multiplier("deepseek", "a-model-nobody-configured", WEDNESDAY_PEAK) == 1.0
+    assert rates.resolve("deepseek", "a-model-nobody-configured")["peak_windows_utc"] == []
+
+
+def test_peak_rates_file_merges_over_the_builtin_entry(tmp_path):
+    path = tmp_path / "peak_rates.json"
+    path.write_text(
+        json.dumps(
+            {
+                "deepseek": {
+                    "off_peak_multiplier": 0.25,
+                    "peak_windows_utc": [{"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rates = PeakRates(str(path))
+
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_PEAK) == 1.0
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == 0.25
+    assert rates.multiplier("deepseek", "deepseek-flash", SATURDAY_NIGHT) == 0.25
+    assert rates.tier_label("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == "off-peak x0.25"
+    assert rates.multiplier("deepseek", "a-model-nobody-configured", WEDNESDAY_PEAK) == 1.0
+
+
+def test_peak_rates_default_entry_covers_unlisted_providers(tmp_path):
+    path = tmp_path / "peak_rates.json"
+    path.write_text(
+        json.dumps(
+            {
+                "_default": {
+                    "peak_multiplier": 3.0,
+                    "off_peak_multiplier": 1.5,
+                    "peak_windows_utc": [{"days": ["sat", "sun"], "start_utc": "00:00", "end_utc": "23:59"}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rates = PeakRates(str(path))
+
+    assert rates.multiplier("openrouter", "any-model", SATURDAY_NIGHT) == 3.0
+    assert rates.multiplier("openrouter", "any-model", WEDNESDAY_LATE) == 1.5
+
+
+def test_peak_rates_fall_back_to_defaults_on_a_malformed_file(tmp_path):
+    path = tmp_path / "peak_rates.json"
+    path.write_text("{not-json", encoding="utf-8")
+
+    rates = PeakRates(str(path))
+
+    assert rates.multiplier("deepseek", "deepseek-flash", WEDNESDAY_OFF_PEAK) == 0.5
+
+
+def test_model_pricing_scales_rates_by_the_active_billing_window(tmp_path):
+    pricing = ModelPricing(peak_rates=PeakRates(str(tmp_path / "missing.json")))
+
+    peak = pricing.get_cost("deepseek", "deepseek-flash", 1_000_000, 0, at=WEDNESDAY_PEAK)
+    off_peak = pricing.get_cost("deepseek", "deepseek-flash", 1_000_000, 0, at=SATURDAY_NIGHT)
+
+    assert peak == pytest.approx(0.44)
+    assert off_peak == pytest.approx(0.22)
+    assert pricing.cost_note("deepseek", "deepseek-flash", SATURDAY_NIGHT) == "off-peak x0.5"
+    assert pricing.cost_note("google", "gemini-3.8-flash", SATURDAY_NIGHT) is None
+
+
+def test_cost_log_reports_the_billing_window():
+    class CapturingLogger:
+        def __init__(self):
+            self.lines: list[str] = []
+
+        def info(self, message: str, *args: Any) -> None:
+            self.lines.append(message % args)
+
+    logger = CapturingLogger()
+    TokenCounter().process_response_usage(
+        usage={"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.007},
+        provider="deepseek",
+        logger=logger,
+        cost_note="off-peak x0.5",
+    )
+
+    assert logger.lines[-1].startswith("Request cost:")
+    assert logger.lines[-1].endswith("(off-peak x0.5)")
+

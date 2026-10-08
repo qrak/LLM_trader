@@ -201,6 +201,41 @@ Required API keys in `keys.env`:
 | `COINGECKO_API_KEY` | No | Market metrics (rate limit boost) |
 | `HF_TOKEN` | No | HuggingFace model access |
 
+### Billing windows (`config/peak_rates.json`)
+
+Some providers charge different rates at different hours — DeepSeek is half price off-peak
+(Mon–Fri 01:00–04:00 and 06:00–10:00 UTC are peak; nights and the whole weekend are off-peak).
+The bot applies that window when it reports a cost, so the log shows the price actually charged:
+`Request cost: $0.007000 (off-peak x0.5)`.
+
+- Per-token rates live in `config/model_pricing.json` and are treated as the BASE (peak) rates.
+  `peak_rates.json` only declares **when** a window applies and how it scales those rates.
+- The file is optional. Copy `config/peak_rates.example.json` to `config/peak_rates.json` and edit
+  it; without the file the built-in defaults in `src/utils/peak_rates.py` apply, and anything not
+  listed is billed flat. It is read at startup, so restart the bot after editing.
+- Each provider entry is merged over its built-in default, so list only what you change. Example
+  (shortening DeepSeek's peak window and turning the off-peak discount into a quarter price):
+
+```json
+{
+  "deepseek": {
+    "models": ["deepseek-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-pro"],
+    "peak_multiplier": 1.0,
+    "off_peak_multiplier": 0.25,
+    "peak_windows_utc": [
+      {"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"}
+    ]
+  }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `models` | Models the entry covers (omitted = every model of that provider) |
+| `peak_multiplier` / `off_peak_multiplier` | Scale applied to the base rates inside / outside the peak windows |
+| `peak_windows_utc` | Peak windows. `days` takes single names or inclusive ranges (`["mon-fri"]`, `["sat","sun"]`); clock values are UTC, start-inclusive and end-exclusive |
+| `_default` | Entry used for providers and models nobody listed (multiplier `1.0` = flat rates) |
+
 ---
 
 ## Agent Documentation Map

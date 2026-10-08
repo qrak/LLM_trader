@@ -13,6 +13,7 @@ import pytest
 
 from src.analyzer.analysis_result_processor import AnalysisResultProcessor
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
+from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import (
     ADX_DISCREPANCY_THRESHOLD,
     TrendValidation,
@@ -32,16 +33,6 @@ from src.utils.format_utils import FormatUtils
 VALID_ANALYSIS_RESPONSE = '{"analysis": {"signal": "HOLD"}}'
 NARRATIVE_ONLY = "1) MARKET STRUCTURE: price below both SMAs; 2) DECISION: HOLD - no edge."
 
-
-def json_block(signal: str = "HOLD") -> str:
-    """LLM reply carrying the required JSON block."""
-    return (
-        "```json\n"
-        f'{{"analysis": {{"signal": "{signal}", "confidence": 82, "entry_price": 77880, '
-        '"stop_loss": 76500, "take_profit": 80640, "position_size": 0.08, '
-        '"risk_reward_ratio": 2.0, "reasoning": "Valid setup."}}\n'
-        "```"
-    )
 
 
 def make_processor(*, supports_image: bool = True, chart_error: Exception | None = None) -> AnalysisResultProcessor:
@@ -66,21 +57,22 @@ def make_processor(*, supports_image: bool = True, chart_error: Exception | None
         unified_parser=unified_parser,
         trend_validator=TrendValidator(),
         quality_scorer=PatternQualityScorer(),
+        risk_reward_validator=RiskRewardValidator(),
     )
 
 
-def make_repair_processor(first_response: str, repair_response: str):
-    """Processor wired to the real parser so the JSON-repair contract is exercised."""
+def make_json_parser_processor(first_response: str):
+    """Processor wired to the real parser so the reply contract is exercised."""
     model_manager = MagicMock()
     model_manager.supports_image_analysis.return_value = False
     model_manager.send_prompt_streaming = AsyncMock(return_value=first_response)
-    model_manager.send_contract_repair = AsyncMock(return_value=repair_response)
     processor = AnalysisResultProcessor(
         model_manager=model_manager,
         logger=MagicMock(),
         unified_parser=UnifiedParser(logger=MagicMock(), format_utils=FormatUtils()),
         trend_validator=TrendValidator(),
         quality_scorer=PatternQualityScorer(),
+        risk_reward_validator=RiskRewardValidator(),
     )
     return processor, model_manager
 
@@ -336,38 +328,53 @@ async def test_process_analysis_returns_error_payload_when_validation_fails():
     assert "raw_response" in result
 
 
-async def test_contract_repair_recovers_missing_json_block():
-    processor, model_manager = make_repair_processor(NARRATIVE_ONLY, json_block("HOLD"))
+def json_object_reply(signal: str = "HOLD") -> str:
+    """DeepSeek reply in JSON-object mode: narrative and decision inside one object."""
+    return json.dumps({
+        "narrative": NARRATIVE_ONLY,
+        "analysis": {
+            "signal": signal,
+            "confidence": 82,
+            "entry_price": 77880,
+            "stop_loss": 76500,
+            "take_profit": 80640,
+            "position_size": 0.08,
+            "risk_reward_ratio": 2.0,
+            "reasoning": "Valid setup.",
+        },
+    })
+
+
+async def test_json_object_reply_keeps_the_narrative_and_a_trailing_block():
+    """A response_format=json_object reply is stored as narrative plus the fenced block.
+
+    DeepSeek answers JSON-mode requests with one object. Notifiers, dashboard history and
+    the next cycle's previous-response context all read a narrative and a trailing fenced
+    block, so the object has to be rendered back into that shape.
+    """
+    processor, model_manager = make_json_parser_processor(json_object_reply("BUY"))
 
     result = await processor.process_analysis(system_prompt="system", prompt="prompt")
 
-    model_manager.send_contract_repair.assert_awaited_once()
-    repair_kwargs = model_manager.send_contract_repair.await_args.kwargs
-    assert repair_kwargs["system_message"] == "system"
-    assert repair_kwargs["prompt"] == "prompt"
-    assert repair_kwargs["previous_response"] == NARRATIVE_ONLY
-    assert result["analysis"]["signal"] == "HOLD"
+    assert result["analysis"]["signal"] == "BUY"
     assert result["response_validation"]["status"] == "valid"
-    assert "parse_error" not in result
     assert result["raw_response"].startswith(NARRATIVE_ONLY)
     assert "```json" in result["raw_response"]
+    block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
+    assert json.loads(block)["analysis"]["signal"] == "BUY"
+    model_manager.send_prompt_streaming.assert_awaited_once()
 
 
-async def test_contract_repair_is_skipped_when_block_present_and_kept_when_repair_fails():
-    compliant, compliant_manager = make_repair_processor(json_block("BUY"), "unused")
-    compliant_result = await compliant.process_analysis(system_prompt="system", prompt="prompt")
+async def test_reply_without_a_json_block_falls_back_without_a_second_request():
+    """A reply that carries no JSON at all falls back to HOLD with a single API call."""
+    processor, model_manager = make_json_parser_processor(NARRATIVE_ONLY)
 
-    compliant_manager.send_contract_repair.assert_not_awaited()
-    assert compliant_result["analysis"]["signal"] == "BUY"
-    assert compliant_result["response_validation"]["status"] == "valid"
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
 
-    unrepairable, unrepairable_manager = make_repair_processor("narrative only", "still no json here")
-    fallback_result = await unrepairable.process_analysis(system_prompt="system", prompt="prompt")
-
-    unrepairable_manager.send_contract_repair.assert_awaited_once()
-    assert fallback_result["parse_error"] == "Failed to parse response"
-    assert fallback_result["response_validation"]["status"] == "invalid"
-    assert fallback_result["raw_response"] == "narrative only"
+    assert result["parse_error"] == "Failed to parse response"
+    assert result["response_validation"]["status"] == "invalid"
+    assert result["raw_response"] == NARRATIVE_ONLY
+    model_manager.send_prompt_streaming.assert_awaited_once()
 
 
 def test_invocation_result_error_surface():
@@ -390,6 +397,7 @@ async def test_analysis_validation_flags_discrepant_llm_claims():
         unified_parser=MagicMock(),
         trend_validator=TrendValidator(),
         quality_scorer=PatternQualityScorer(),
+        risk_reward_validator=RiskRewardValidator(),
     )
     processor.context = SimpleNamespace(
         technical_data={"adx": 35.0, "rsi": 55.0},
@@ -424,6 +432,7 @@ def test_analysis_validation_is_skipped_without_context_or_analysis():
         unified_parser=MagicMock(),
         trend_validator=MagicMock(),
         quality_scorer=MagicMock(),
+        risk_reward_validator=RiskRewardValidator(),
     )
 
     processor.context = None

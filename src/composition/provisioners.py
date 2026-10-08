@@ -36,6 +36,7 @@ from src.analyzer.pattern_engine.indicator_patterns import IndicatorPatternEngin
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
+from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
 from src.app import POSITION_UPDATE_INTERVAL
 from src.composition.startup_support import (
@@ -110,6 +111,7 @@ from src.utils.indicator_classifier import build_exit_execution_context_from_con
 
 # pylint: disable=wrong-import-position
 from src.utils.keyboard_handler import KeyboardHandler
+from src.utils.peak_rates import PeakRates
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
@@ -373,7 +375,7 @@ class ProvisioningMixin:
             unified_parser=utils["parser"],
             token_counter=utils["token_counter"],
             cost_storage=CostStorage(),
-            model_pricing=ModelPricing(),
+            model_pricing=ModelPricing(peak_rates=PeakRates()),
             orchestrator=orchestrator,
             provider_clients=provider_clients,
         )
@@ -451,6 +453,7 @@ class ProvisioningMixin:
                 utils["parser"],
                 TrendValidator(),
                 PatternQualityScorer(),
+                RiskRewardValidator(),
             ),
             ChartGenerator(
                 self.logger,

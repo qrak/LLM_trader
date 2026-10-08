@@ -407,6 +407,25 @@ async def test_wait_until_next_timeframe_after_short_circuits_and_recovers():
     bot._interruptible_sleep.assert_awaited_with(1)
 
 
+async def test_resume_logs_a_single_resuming_line_with_the_next_check():
+    """A restart must not print two "Resuming ..." lines for the same timestamp."""
+    bot: Any = wait_bot()
+    last_analysis = datetime.now(timezone.utc) - timedelta(hours=1)
+    next_candle_ms = int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp() * 1000)
+
+    with patch("src.app.TimeframeValidator") as validator:
+        validator.calculate_next_candle_time.return_value = next_candle_ms
+        validator.is_same_candle.return_value = True
+        await bot._wait_until_next_timeframe_after(last_analysis)
+
+    resuming = [
+        call[0][0] for call in bot.logger.info.call_args_list if "Resuming" in call[0][0]
+    ]
+
+    assert len(resuming) == 1
+    assert "next check at" in resuming[0]
+
+
 async def test_execute_trading_check_notifies_with_analysis_and_hands_position_to_monitor():
     fixture = trading_check_bot()
 

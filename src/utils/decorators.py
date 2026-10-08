@@ -4,6 +4,7 @@ Provides functionality for utils.decorators.py.
 """
 import asyncio
 import functools
+import json
 import random
 import socket
 import traceback
@@ -153,12 +154,40 @@ def _should_retry_api_error(error_value: Any) -> bool:
     return error_value == "timeout"
 
 
-def retry_api_call(max_retries: int = 3, initial_delay: float = 1, backoff_factor: float = 2, max_delay: float = 60):
-    """Retry decorator for API call methods that return a dict possibly containing an 'error' key."""
+def _carries_no_payload(payload: dict[str, Any]) -> bool:
+    """True when a reply object holds no payload key of its own.
+
+    ``{"type": "json_object"}`` is the requested ``response_format`` coming back (live
+    2026-09-27) and ``{}`` is an empty answer — neither holds anything a parser could
+    read, so both are resent. A key naming a payload means the provider served a real
+    answer, whichever contract's prompt produced it.
+    """
+    meta_keys = {"type", "response_format", "format"}
+    return set(payload) <= meta_keys
+
+
+def retry_api_call(
+    max_retries: int = 3,
+    initial_delay: float = 1,
+    backoff_factor: float = 2,
+    max_delay: float = 60,
+    retry_on_empty: bool = False,
+):
+    """Retry decorator for API call methods that return a dict possibly containing an 'error' key.
+
+    ``retry_on_empty`` additionally retries a reply that carries no decision-bearing JSON object:
+    blank content, prose only, or a JSON object without the ``analysis`` payload (a JSON-output
+    provider that answers this way leaves the parser with no decision, so resending the identical
+    request is the only fix). Off by default: for providers whose replies are not JSON, such an
+    answer is legitimate.
+    """
     def decorator(func: Any):
         @functools.wraps(func)
         async def wrapper(self, *args: Any, **kwargs: Any):
-            context = _ApiRetryContext(self, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay)
+            context = _ApiRetryContext(
+                self, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay,
+                retry_on_empty,
+            )
             return await context.execute_with_retry()
         return wrapper
     return decorator
@@ -167,7 +196,8 @@ def retry_api_call(max_retries: int = 3, initial_delay: float = 1, backoff_facto
 class _ApiRetryContext:
     """Helper class to manage API retry logic."""
 
-    def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay):
+    def __init__(self, instance, func, args, kwargs, max_retries, initial_delay, backoff_factor, max_delay,
+                 retry_on_empty: bool = False):
         self.logger = instance.logger
         self.model = kwargs.get("model", args[0] if args else "unknown")
         self.func = func
@@ -178,6 +208,8 @@ class _ApiRetryContext:
         self.initial_delay = initial_delay
         self.backoff_factor = backoff_factor
         self.max_delay = max_delay
+        self.retry_on_empty = retry_on_empty
+        self.retry_reason = ""
 
     async def execute_with_retry(self) -> dict[str, Any] | None:
         """Execute the function with retry logic."""
@@ -209,8 +241,70 @@ class _ApiRetryContext:
         if response is None:
             return False
         if isinstance(response, dict):
-            return self._check_dict_response(response)
-        return self._check_sdk_response(response)
+            return self._check_dict_response(response) or self._check_decisionless_reply(response)
+        return self._check_sdk_response(response) or self._check_decisionless_reply(response)
+
+    def _check_decisionless_reply(self, response: Any) -> bool:
+        """Retry a reply that serves no usable JSON object, for opted-in providers.
+
+        DeepSeek's JSON-output mode occasionally answers without an object — empty content,
+        prose, or a degenerate object that only repeats the requested ``response_format``
+        (``{"type": "json_object"}``, seen live 2026-09-27 after the reasoning phase used the
+        whole completion budget). The parser rejects such a cycle outright, so the identical
+        request is resent.
+
+        A well-formed object from a DIFFERENT contract of the same provider is a served
+        answer, never a broken one: the post-mortem prompt asks for
+        ``verdict``/``lesson_learned`` and has no ``analysis`` payload to hand back, so
+        requiring one resent that answer three times per closed trade (2026-09-28, four
+        paid calls for one post-mortem). The reply does not say which prompt it answers —
+        the ``retry_on_empty`` opt-in means \"this provider must serve a JSON object\", not
+        \"every prompt it serves is the trading decision contract\".
+        """
+        if not self.retry_on_empty:
+            return False
+        content = self._extract_content(response)
+        if content is None:
+            return False
+        payload = self._json_object(content)
+        if payload is not None and not _carries_no_payload(payload):
+            return False
+        self.retry_reason = "reply without a decision object"
+        self.logger.warning(
+            "Provider returned no decision object for model %s: %s", self.model, content[:120]
+        )
+        return True
+
+    @staticmethod
+    def _json_object(content: str) -> dict[str, Any] | None:
+        """First JSON object in the reply text, None when the text holds none."""
+        first_brace = content.find("{")
+        if first_brace == -1:
+            return None
+        try:
+            payload, _ = json.JSONDecoder().raw_decode(content, first_brace)
+        except ValueError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _extract_content(response: Any) -> str | None:
+        """Visible reply text from an SDK object or a dict payload, None when absent."""
+        choices = getattr(response, "choices", None)
+        if choices is None and isinstance(response, dict):
+            choices = response.get("choices")
+        if not choices:
+            return None
+        first = choices[0]
+        message = getattr(first, "message", None)
+        if message is None and isinstance(first, dict):
+            message = first.get("message")
+        if message is None:
+            return None
+        content = getattr(message, "content", None)
+        if content is None and isinstance(message, dict):
+            content = message.get("content")
+        return content if isinstance(content, str) else None
 
     def _check_dict_response(self, response: dict[str, Any]) -> bool:
         """Check dict-based response for retryable errors."""
@@ -274,7 +368,8 @@ class _ApiRetryContext:
     async def _wait_and_increment(self, attempt: int):
         """Wait before next retry attempt."""
         wait_time = min(self.initial_delay * (self.backoff_factor ** attempt), self.max_delay)
-        self.logger.warning("API returned error for model %s. Retrying in %.2fs (%s/%s)", self.model, wait_time, attempt + 1, self.max_retries)
+        reason = f" ({self.retry_reason})" if self.retry_reason else ""
+        self.logger.warning("API returned error for model %s%s. Retrying in %.2fs (%s/%s)", self.model, reason, wait_time, attempt + 1, self.max_retries)
         await asyncio.sleep(_RetryContext._add_jitter(wait_time))
 
     def _log_exception(self, e: Exception):

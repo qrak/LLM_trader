@@ -31,6 +31,9 @@ from src.analyzer.pattern_engine.indicator_patterns.divergence_patterns import (
     detect_bearish_divergence_numba,
     detect_bullish_divergence_numba,
 )
+from src.analyzer.pattern_engine.indicator_patterns.indicator_pattern_engine import (
+    IndicatorPatternEngine,
+)
 from src.analyzer.pattern_engine.indicator_patterns.rsi_patterns import (
     detect_rsi_overbought_numba,
     detect_rsi_oversold_numba,
@@ -38,6 +41,9 @@ from src.analyzer.pattern_engine.indicator_patterns.rsi_patterns import (
 from src.analyzer.pattern_engine.indicator_patterns.stochastic_patterns import (
     detect_stoch_overbought_numba,
     detect_stoch_oversold_numba,
+)
+from src.analyzer.pattern_engine.indicator_patterns.volatility_patterns import (
+    detect_bb_squeeze_numba,
 )
 from src.analyzer.pattern_engine.indicator_patterns.volume_patterns import (
     detect_climax_volume_numba,
@@ -1146,6 +1152,46 @@ def test_volume_detectors_need_lookback_plus_one_candles():
     assert detect_volume_spike_numba(candles(*([100.0] * 20), 300.0)) == (True, 300.0, 100.0, 3.0)
     assert detect_climax_volume_numba(candles(*([100.0] * 49), 400.0)) == (False, 0.0, 0.0, 0.0)
     assert detect_climax_volume_numba(candles(*([100.0] * 50), 400.0)) == (True, 400.0, 100.0, 4.0)
+
+
+def band(widths):
+    """Turn band widths into (upper, lower) arrays sharing one middle."""
+    widths = np.asarray(widths, dtype=float)
+    return 100.0 + widths / 2, 100.0 - widths / 2
+
+
+def test_bb_squeeze_is_judged_against_120_candles():
+    """A series shorter than the window cannot be called a squeeze."""
+    upper, lower = band(np.full(60, 1000.0))
+
+    assert detect_bb_squeeze_numba(upper, lower) == (False, 0.0, 0.0, 0.0)
+
+
+def test_bb_squeeze_flags_only_the_low_end_of_the_width_range():
+    widening = np.concatenate([np.linspace(500.0, 1000.0, 119), [2000.0]])
+    tightest = np.concatenate([np.linspace(2000.0, 1000.0, 119), [400.0]])
+
+    found, current_width, _, width_percentile = detect_bb_squeeze_numba(*band(widening))
+    assert (found, current_width) == (False, 2000.0)
+    assert width_percentile > 90.0  # widest band in the window: not a squeeze
+
+    found, current_width, percentile_width, width_percentile = detect_bb_squeeze_numba(*band(tightest))
+    assert (found, current_width, width_percentile) == (True, 400.0, 0.0)
+    assert current_width <= percentile_width
+
+
+def test_bb_squeeze_confidence_stays_inside_zero_to_hundred():
+    """Regression: the old formula scaled a price width and returned -395982."""
+    upper, lower = band(np.concatenate([np.linspace(2000.0, 1000.0, 119), [400.0]]))
+
+    volatility = IndicatorPatternEngine().detect_patterns(
+        {"bb_upper": upper, "bb_lower": lower}
+    )["volatility"]
+    squeeze = [pattern for pattern in volatility if pattern["type"] == "bb_squeeze"]
+
+    assert len(squeeze) == 1
+    assert squeeze[0]["confidence"] == 100
+    assert squeeze[0]["details"]["width_percentile"] == 0.0
 
 
 def test_threshold_breaches_are_strict_at_the_boundary():

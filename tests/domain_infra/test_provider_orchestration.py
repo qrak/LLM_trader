@@ -9,7 +9,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import MagicMock, call
 
 import aiohttp
 import ccxt
@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from src.managers.model_manager import ModelManager
 from src.managers.provider_orchestrator import ProviderOrchestrator
-from src.managers.provider_types import InvocationResult, ProviderClients
+from src.managers.provider_types import ProviderClients
 from src.parsing.unified_parser import UnifiedParser
 from src.platforms.ai_providers.response_models import (
     ChatResponseModel,
@@ -204,19 +204,6 @@ def _model_manager() -> tuple[ModelManager, MagicMock]:
     return manager, counter
 
 
-def _repair_manager(result: InvocationResult) -> tuple[ModelManager, MagicMock]:
-    manager, _ = _model_manager()
-    manager.provider = "deepseek"
-    manager.cost_storage = MagicMock()
-    manager.model_pricing = MagicMock()
-    manager.unified_parser = MagicMock()
-    manager.unified_parser.format_error_response = MagicMock(return_value="formatted error")
-    orchestrator = MagicMock()
-    orchestrator.get_text_response = AsyncMock(return_value=result)
-    manager._orchestrator = orchestrator
-    return manager, orchestrator
-
-
 class TestRetryJitterAndBackoff:
     def test_jitter_keeps_every_delay_inside_a_quarter_of_its_base(self) -> None:
         """Each base delay keeps 75% to 125% of its value and the result is randomised."""
@@ -373,6 +360,165 @@ class TestApiRetryBackoff:
         assert result == payload
         assert calls == ["test-model"]
         assert sleeps == []
+
+    def test_reply_without_a_json_object_is_only_retryable_when_opted_in(self) -> None:
+        """Blank, prose-only and decisionless JSON content count as empty; a served answer never does."""
+        empty = {"choices": [{"message": {"content": "  "}}]}
+        prose = {"choices": [{"message": {"content": "1) MARKET STRUCTURE: no json here"}}]}
+        object_reply = {"choices": [{"message": {"content": '{"analysis": {}}'}}]}
+        degenerate = {"choices": [{"message": {"content": '{"type": "json_object"}'}}]}
+        truncated = {"choices": [{"message": {"content": '{"analysis": {"signal": "BUY"'}}]}
+        tool_call = {"choices": [{"message": {"content": None, "tool_calls": [{"id": "x"}]}}]}
+        opted_in = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
+        )
+        opted_out = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1
+        )
+
+        measured = {
+            "opted-in-blank": opted_in._is_retryable_response(empty),
+            "opted-in-prose": opted_in._is_retryable_response(prose),
+            "opted-in-object": opted_in._is_retryable_response(object_reply),
+            "opted-in-degenerate": opted_in._is_retryable_response(degenerate),
+            "opted-in-truncated": opted_in._is_retryable_response(truncated),
+            "opted-in-none-content": opted_in._is_retryable_response(tool_call),
+            "opted-out-blank": opted_out._is_retryable_response(empty),
+            "opted-out-degenerate": opted_out._is_retryable_response(degenerate),
+        }
+
+        assert measured == {
+            "opted-in-blank": True,
+            "opted-in-prose": True,
+            "opted-in-object": False,
+            "opted-in-degenerate": True,
+            "opted-in-truncated": True,
+            "opted-in-none-content": False,
+            "opted-out-blank": False,
+            "opted-out-degenerate": False,
+        }
+
+    async def test_empty_replies_are_resent_until_a_json_reply_arrives(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Opted-in empty replies are resent unchanged; the first JSON answer wins."""
+        sleeps = _capture_sleeps(monkeypatch)
+        json_reply = {"choices": [{"message": {"content": '{"analysis": {"signal": "HOLD"}}'}}]}
+        client, calls = _scripted_api_client(
+            [{"choices": [{"message": {"content": ""}}]}, json_reply],
+            max_retries=3,
+            initial_delay=0.01,
+            backoff_factor=2,
+            max_delay=1,
+            retry_on_empty=True,
+        )
+
+        result = await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {})
+
+        assert result == json_reply
+        assert calls == ["deepseek-flash", "deepseek-flash"]
+        assert len(sleeps) == 1
+
+    async def test_decisionless_json_reply_is_resent_until_a_decision_arrives(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A JSON reply that repeats the requested format is resent; the decision-bearing one wins."""
+        sleeps = _capture_sleeps(monkeypatch)
+        degenerate = {"choices": [{"message": {"content": '{"type": "json_object"}'}}]}
+        decision = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"narrative": "1) MARKET STRUCTURE: range", '
+                        '"analysis": {"signal": "HOLD", "confidence": 70}}'
+                    }
+                }
+            ]
+        }
+        client, calls = _scripted_api_client(
+            [degenerate, decision],
+            max_retries=3,
+            initial_delay=0.01,
+            backoff_factor=2,
+            max_delay=1,
+            retry_on_empty=True,
+        )
+
+        result = await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {})
+
+        assert result == decision
+        assert calls == ["deepseek-flash", "deepseek-flash"]
+        assert len(sleeps) == 1
+
+    def test_post_mortem_object_without_an_analysis_payload_is_a_served_answer(self) -> None:
+        """The post-mortem prompt has its own JSON contract — its answer is never resent."""
+        post_mortem = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"verdict": "plan_followed", "llm_analysis": "held the plan", '
+                        '"expected_vs_actual": "expected against actual", '
+                        '"lesson_learned": "When the boundary fails, stand aside."}'
+                    }
+                }
+            ]
+        }
+        opted_in = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1, retry_on_empty=True
+        )
+
+        assert opted_in._is_retryable_response(post_mortem) is False
+
+    async def test_post_mortem_reply_is_sent_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """One closed trade costs one post-mortem call, not four (live 2026-09-28)."""
+        sleeps = _capture_sleeps(monkeypatch)
+        post_mortem = {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"verdict": "thesis_invalidated_clean_exit", '
+                        '"llm_analysis": "the floor failed", '
+                        '"expected_vs_actual": "a bounce versus a slide", '
+                        '"lesson_learned": "When X, do Y."}'
+                    }
+                }
+            ]
+        }
+        client, calls = _scripted_api_client(
+            [post_mortem],
+            max_retries=3,
+            initial_delay=0.01,
+            backoff_factor=2,
+            max_delay=1,
+            retry_on_empty=True,
+        )
+
+        result = await client.fetch("deepseek-flash", [{"role": "user", "content": "pm"}], {})
+
+        assert result == post_mortem
+        assert calls == ["deepseek-flash"]
+        assert sleeps == []
+
+    async def test_empty_replies_stop_after_the_retry_budget(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Three retries maximum: four attempts, then the last empty reply is returned."""
+        sleeps = _capture_sleeps(monkeypatch)
+        empty = {"choices": [{"message": {"content": ""}}]}
+        client, calls = _scripted_api_client(
+            [empty],
+            max_retries=3,
+            initial_delay=0.01,
+            backoff_factor=2,
+            max_delay=1,
+            retry_on_empty=True,
+        )
+
+        result = await client.fetch("deepseek-flash", [{"role": "user", "content": "hi"}], {})
+
+        assert result == empty
+        assert calls == ["deepseek-flash"] * 4
+        assert len(sleeps) == 3
 
     def test_error_classification_table(self) -> None:
         """Retryable codes, the retryable flag and the timeout string are the only retries."""
@@ -915,78 +1061,3 @@ class TestModelManagerMessages:
 
         assert messages == [{"role": "user", "content": "prompt only"}]
         assert counter.count_tokens.call_args_list == [call("prompt only")]
-
-    @pytest.mark.parametrize(
-        ("provider", "model", "expected_provider", "expected_model"),
-        [
-            (None, None, "deepseek", None),
-            ("googleai", "gemini-3.8-flash", "googleai", "gemini-3.8-flash"),
-        ],
-        ids=["defaults-to-manager-provider", "explicit-override"],
-    )
-    async def test_contract_repair_replays_the_turn_and_asks_for_the_block(
-        self,
-        provider: str | None,
-        model: str | None,
-        expected_provider: str,
-        expected_model: str | None,
-    ) -> None:
-        """The repair call replays system/user/assistant plus one instruction for the block."""
-        json_block = '```json\n{"analysis": {"signal": "HOLD", "confidence": 60}}\n```'
-        manager, orchestrator = _repair_manager(
-            InvocationResult(
-                success=True,
-                response=ChatResponseModel.from_content(json_block),
-                provider="deepseek",
-                model="deepseek-flash",
-            )
-        )
-
-        text = await manager.send_contract_repair(
-            system_message="system instructions",
-            prompt="original user prompt",
-            previous_response="narrative without the block",
-            provider=provider,
-            model=model,
-        )
-
-        assert text == json_block
-        provider_arg, messages, model_arg = orchestrator.get_text_response.await_args.args
-        assert (provider_arg, model_arg) == (expected_provider, expected_model)
-        assert [message["role"] for message in messages] == [
-            "system",
-            "user",
-            "assistant",
-            "user",
-        ]
-        assert [message["content"] for message in messages[:3]] == [
-            "system instructions",
-            "original user prompt",
-            "narrative without the block",
-        ]
-        assert messages[3]["content"] == (
-            "Your previous reply omitted the required ```json block. Output ONLY the "
-            "```json block for the decision described above — valid JSON, no other text."
-        )
-
-    async def test_contract_repair_formats_a_provider_error(self) -> None:
-        """A failed repair request returns the parser's formatted error, not the raw reply."""
-        manager, _orchestrator_double = _repair_manager(
-            InvocationResult(
-                success=False,
-                response=ChatResponseModel.from_error("rate_limit"),
-                provider="deepseek",
-                model="deepseek-flash",
-            )
-        )
-
-        text = await manager.send_contract_repair(
-            system_message="s",
-            prompt="p",
-            previous_response="r",
-            provider=None,
-            model=None,
-        )
-
-        assert text == "formatted error"
-        assert manager.unified_parser.format_error_response.call_args.args == ("rate_limit",)

@@ -233,10 +233,18 @@ model_verbosity = high
 # xhigh and max both map to DeepSeek's max reasoning level
 openrouter_reasoning_effort = max
 
-# DeepSeek thinking effort: low | high | max (thinking mode is enabled by default)
-deepseek_reasoning_effort = max
-# Optional DeepSeek max output override (falls back to max_tokens when absent)
-deepseek_max_tokens = 32768
+# DeepSeek thinking effort: none | minimal | low | medium | high | max (thinking mode is enabled by default).
+# Thinking tokens are billed as output and count toward deepseek_max_tokens.
+# `high` is a deliberate choice; it is slower/costlier and does not guarantee correct R/R arithmetic.
+deepseek_reasoning_effort = high
+# DeepSeek max output (falls back to max_tokens when absent). Thinking tokens count
+# toward this cap and DeepSeek allows up to 384k, so keep a wide margin: a hit cap
+# cuts the reply mid-answer, and a cut reply means no parsed decision.
+deepseek_max_tokens = 65536
+# DeepSeek requests are sent with response_format=json_object, so while provider =
+# deepseek the prompt asks for ONE JSON object ({"narrative": ..., "analysis": {...}})
+# instead of narrative + fenced block. The wire format and the prompt are switched by
+# the `provider = deepseek` selection alone - there is no separate switch to keep in sync.
 
 # === Dashboard ===
 [dashboard]

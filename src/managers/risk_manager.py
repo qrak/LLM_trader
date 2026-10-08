@@ -3,6 +3,7 @@
 import math
 from typing import TYPE_CHECKING, Any
 
+from src.indicators.price.risk_reward import risk_reward_ratio_numba
 from src.logger.logger import Logger
 from src.trading.regime_risk_profile import RegimeRiskProfileSelector
 
@@ -267,7 +268,11 @@ class RiskManager:
 
         sl_distance_pct = abs(current_price - final_sl) / current_price
         tp_distance_pct = abs(final_tp - current_price) / current_price
-        rr_ratio = tp_distance_pct / sl_distance_pct if sl_distance_pct > 0 else 0
+        rr_ratio = risk_reward_ratio_numba(
+            current_price, final_sl, final_tp, 1 if direction == "LONG" else -1
+        )
+        if not math.isfinite(rr_ratio):
+            raise ValueError("normalized SL/TP do not form a valid risk/reward setup")
 
         return RiskAssessment(
             direction=direction,

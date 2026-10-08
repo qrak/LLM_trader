@@ -460,6 +460,23 @@ class TemplateManager:
                 "- Price action shorthand: 4G/0R = 4 green and 0 red candles in the lookback window; "
                 "⚠️ marks a TD Setup of 8 or more, i.e. an exhausted move that often reverses."
             ),
+            (
+                "- Indicator variants (these are the calculator's fixed windows, NOT the textbook "
+                "defaults): TSI uses the fast 20/10 smoothing, not 25/13; KST weights ROC 5/10/15/20 "
+                "smoothed by SMA 3/5/7/9 (short variant, not Pring's 10/15/20/30 smoothed 10/10/10/15); "
+                "Keltner bands are built from their own EMA-smoothed ATR, so KC width does not match "
+                "the ATR value printed in the same block; Vortex VI+ and VI- each hover around 1.0 "
+                "(a value near 1 means balanced flow, not missing data) — read them against each other, "
+                "not against 1."
+            ),
+            (
+                "- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
+                "start of the loaded window, so only each one's CHANGE carries information — never "
+                "read the absolute level; Variance is measured in price^2 over the last 20 candles, so "
+                "judge price extremes with the Z-score instead of the variance; Pivot and FibPivot are "
+                "computed from the PREVIOUS closed bar, i.e. they are the levels of the current "
+                "(still forming) candle, not levels of the last closed candle."
+            ),
             "",
         ])
 
@@ -498,14 +515,19 @@ class TemplateManager:
             ])
 
         if previous_response:
-            text_reasoning = self._sanitize_previous_reasoning(previous_response, _verbosity)
+            feedback_line = ""
+            if previous_response.startswith("Python R/R validation of previous cycle: "):
+                feedback_line, _, previous_reasoning = previous_response.partition("\n")
+            else:
+                previous_reasoning = previous_response
+            text_reasoning = self._sanitize_previous_reasoning(previous_reasoning, _verbosity)
             prior_analysis = self._extract_previous_analysis(previous_response)
             decision_snapshot = (
                 self._format_previous_decision_snapshot(prior_analysis)
                 if prior_analysis is not None else None
             )
 
-            if decision_snapshot or text_reasoning:
+            if decision_snapshot or text_reasoning or feedback_line:
                 window_minutes = 120
                 if self.timeframe_validator:
                     try:
@@ -518,6 +540,13 @@ class TemplateManager:
                     "",
                     "## PREVIOUS ANALYSIS CONTEXT",
                 ])
+                if feedback_line:
+                    header_lines.extend([
+                        "### PYTHON R/R FEEDBACK (previous cycle)",
+                        feedback_line,
+                        "Use the corrected arithmetic; never copy the previous incorrect ratio. Reassess with current prices and levels.",
+                        "",
+                    ])
                 if indicator_delta_alert:
                     header_lines.append(indicator_delta_alert)
                 if decision_snapshot:
@@ -657,7 +686,8 @@ RISK/REWARD GUIDELINES (R/R is an INPUT to EV — it is NOT a standalone veto):
 - R/R >= {rr_strong:.1f}: Preferred / exceptional setup
 - Brain-recommended R/R target: {min_rr:.1f}+ (aspirational — NOT enforced, NOT a gate; do NOT reject a valid setup just to match it)
 
-R/R: risk = |entry - SL|, reward = |TP - entry|, ratio = reward / risk. Use null for CLOSE/HOLD(open).
+R/R: LONG/BUY reward = TP - entry, risk = entry - SL; SHORT/SELL reward = entry - TP, risk = SL - entry. Compute two positive distances from ONE explicit price triple, then divide reward by risk; multiply the ratio by risk to check it. Use null in JSON for HOLD/CLOSE. Python's RiskManager recomputes the executable R/R after price/SL/TP normalization; your ratio is not the source of truth. Do not reuse R/R numbers from the previous analysis or quote an unverified ratio in other narrative sections/reasoning.
+For HOLD without a position there is no active R/R. If a hypothetical setup is informative, show at most one complete example in line 11 using EXACTLY this format with ungrouped decimal numbers: RR_CHECK side=<LONG|SHORT> entry=<price> SL=<price> TP=<price> reward=<distance> risk=<distance> R/R=<ratio>. Use current levels, not prior prices. Otherwise write N/A and no numeric hypothetical ratio. Every RR_CHECK number is verified by Python; an incorrect actionable R/R blocks the entry.
 
 POSITION SIZING:
 - Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
@@ -752,7 +782,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
                 f"8) BULL CASE: squeeze/relief conditions and evidence supporting the bullish scenario\n"
                 f"9) BEAR CASE: breakdown triggers, distribution targets and bearish evidence\n"
                 f"10) POSITION & RISK: current entry, P&L%, SL/TP progress and hybrid tightening policy status\n"
-                f"11) RISK/REWARD: current R/R ratio, distance to target vs invalidation\n"
+                f"11) RISK/REWARD: no active ratio on flat HOLD; otherwise show entry, SL, TP, reward, risk and checked ratio\n"
                 f"12) DECISION: signal with clear actionable directive (HOLD / {entry_signal_open} / {entry_signal_close} / CLOSE)\n"
                 f"13) EXECUTION NOTE: specific entry conditions, SL/TP placement logic or position management action"
             )
@@ -780,18 +810,9 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
             )
             _reasoning_guidance = "(1) thesis and key drivers, (2) invalidation trigger, (3) what to watch next."
 
-        response_template = f"""## Response Format
+        is_json_object_output = self.config.PROVIDER.strip().lower() == "deepseek"
 
-{_output_header}
-
-Narrative (plain-text only):
-{_narrative_section}
-
-JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluence = 0-100 integers. Price/size/ratio = numbers or null.
-
-```json
-{{
-    "analysis": {{
+        _analysis_object = f"""    "analysis": {{
         "signal": "HOLD",
         "confidence": 72,
         "confluence_factors": {{
@@ -801,21 +822,51 @@ JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluen
             "pattern_quality": 67,
             "support_resistance_strength": 78
         }},
-        "entry_price": 63370.0,
-        "stop_loss": 62050.0,
-        "take_profit": 65680.0,
+        "entry_price": null,
+        "stop_loss": null,
+        "take_profit": null,
         "position_size": 0.0,
         "reasoning": "{_reasoning_guidance}",
         "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
-        "risk_reward_ratio": 1.75,
+        "risk_reward_ratio": null,
         "symbol": "BTC/USDC",
         "order_type": null,
         "quantity": 0.0,
         "reduce_only": false,
         "leverage": 1
-    }}
-}}
+    }}"""
+
+        if is_json_object_output:
+            _output_header = (
+                "Output: ONE JSON object and NOTHING outside it. No prose before or after it, "
+                "no markdown headings. Put the numbered narrative lines in the \"narrative\" "
+                "string (ONE string, lines joined with \\n — not an array) and the decision in "
+                "\"analysis\". Each narrative line must use quantitative data first, then "
+                "interpretation."
+            )
+            _narrative_label = 'Narrative (the lines below as one string in "narrative", \\n separated):'
+            _json_example = (
+                '{\n'
+                '    "narrative": "<narrative lines 1) and up, joined with \\n>",\n'
+                f'{_analysis_object}\n'
+                '}'
+            )
+        else:
+            _narrative_label = "Narrative (plain-text only):"
+            _json_example = f'{{\n{_analysis_object}\n}}'
+
+        response_template = f"""## Response Format
+
+{_output_header}
+
+{_narrative_label}
+{_narrative_section}
+
+JSON rules: valid JSON only (no comments, $, %, arithmetic). confidence/confluence = 0-100 integers. Price/size/ratio = numbers or null.
+
+```json
+{_json_example}
 ```
 
 Allowed signals: {allowed_signals}.

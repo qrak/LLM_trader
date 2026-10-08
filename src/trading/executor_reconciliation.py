@@ -12,6 +12,7 @@ import json
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,9 @@ from .data_models import Position, TradeDecision
 ENTRY_CONFIRM_ATTEMPTS = 10
 ENTRY_CONFIRM_DELAY = 2.5
 ENTRY_CONFIRM_MIN_FALSE_REPORTS = 6
+
+INTENT_CONFIRM_ATTEMPTS = 5
+INTENT_CONFIRM_DELAY = 2.0
 
 RECONCILE_ENTRY_GRACE_SECONDS = 120.0
 
@@ -125,6 +129,30 @@ def _non_negative_float(raw: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) and value >= 0 else None
+
+
+def _quantity_matches_exchange_amount(reported: Any, local: Any) -> bool:
+    """True when the venue's amount is the local size at the market's precision.
+
+    A venue holds an amount rounded to its own precision, while the local position
+    carries the paper-computed size the order was sized from. A fixed relative
+    tolerance therefore rejected every real fill (2026-09-28: 0.0038412035106648494
+    local, 0.00384 on the exchange — one rounding step, and 3000x the old
+    tolerance). The reported amount is already rounded to the market's precision,
+    so its own decimal places ARE that precision: flooring the local size to them
+    must reproduce the reported amount exactly. An amount a full step smaller or
+    larger than the position still fails.
+    """
+    reported_value = _positive_float(reported)
+    local_value = _positive_float(local)
+    if reported_value is None or local_value is None:
+        return False
+    exponent = Decimal(str(reported_value)).as_tuple().exponent
+    if not isinstance(exponent, int):
+        return False
+    scale = 10 ** -min(exponent, 0)
+    units = math.floor(Decimal(str(local_value)) * scale)
+    return units == Decimal(str(reported_value)) * scale
 
 
 def quote_asset(symbol: Any) -> str | None:
@@ -1145,7 +1173,16 @@ class ExecutorReconciliationMixin:
         symbol: str,
         position: Position,
     ) -> bool:
-        """Validate the executor's venue-backed confirmation for this exact position."""
+        """Validate the executor's venue-backed confirmation for this exact position.
+
+        ``reconcile_status == "verified"`` is the venue's own answer on the exchange's
+        protection orders (for a spot long: every tracked leg was queried and is still
+        open), and the protection block must report a live, complete, unduplicated set.
+        ``protection_verified`` is a separate cache the executor fills only when it
+        re-checks legs recovered from durable artifacts, so it stays None for a
+        position the running executor placed itself; False — the exchange explicitly
+        refused to confirm the legs — is the one value that must never pass.
+        """
         if not isinstance(payload, dict):
             return False
         positions = payload.get("positions")
@@ -1162,12 +1199,7 @@ class ExecutorReconciliationMixin:
         reported_entry = _positive_float(reported.get("entry_price"))
         if reported_quantity is None or reported_entry is None:
             return False
-        quantity_matches = math.isclose(
-            reported_quantity,
-            float(position.size),
-            rel_tol=1e-6,
-            abs_tol=1e-10,
-        )
+        quantity_matches = _quantity_matches_exchange_amount(reported_quantity, position.size)
         entry_matches = math.isclose(
             reported_entry,
             float(position.entry_price),
@@ -1185,7 +1217,7 @@ class ExecutorReconciliationMixin:
             and confirmation.get("confirmed") is True
             and confirmation.get("reconcile_status") == "verified"
             and confirmation.get("protection_status") == "active"
-            and confirmation.get("protection_verified") is True
+            and confirmation.get("protection_verified") is not False
             and confirmation.get("protection_unresolved") is False
             and confirmation.get("protection_duplicated") is False
         )
@@ -1465,7 +1497,7 @@ class ExecutorReconciliationMixin:
             )
             return INTENT_UNKNOWN
 
-        verdict_entry = self._read_executor_verdict_entry(intent.order_id or "")
+        verdict_entry = await self._await_forwarded_verdict(intent)
         verdict = str((verdict_entry or {}).get("verdict") or "").strip().lower()
 
         if verdict == "executed" or (
@@ -1492,6 +1524,30 @@ class ExecutorReconciliationMixin:
             ),
         )
         return INTENT_UNKNOWN
+
+    async def _await_forwarded_verdict(self, intent: PositionIntent) -> dict | None:
+        """Executor verdict for one forwarded command, polling briefly when it is due.
+
+        ``/decision`` answers "queued"; the executor then processes the command in its own
+        loop, whose tick reaches ~10s (the reason ``confirm_entry_with_executor`` polls).
+        A single immediate read races that loop — the CLOSE of 2026-09-28 was recorded 4ms
+        after the forward and was still missed, leaving the intent UNKNOWN plus a critical
+        operator alert until the reconcile booked the exit two minutes later. UPDATE/CLOSE
+        get the same short grace here (``INTENT_CONFIRM_ATTEMPTS`` x
+        ``INTENT_CONFIRM_DELAY``, then one last read). An entry is not polled: it already
+        waits through ``confirm_entry_with_executor``. Nothing is assumed while waiting —
+        a verdict that never arrives still resolves to UNKNOWN with the position kept.
+        """
+        order_id = intent.order_id or ""
+        if intent.action == INTENT_ACTION_ENTRY:
+            return self._read_executor_verdict_entry(order_id)
+        for _ in range(INTENT_CONFIRM_ATTEMPTS):
+            entry = self._read_executor_verdict_entry(order_id)
+            verdict = str((entry or {}).get("verdict") or "").strip().lower()
+            if verdict in ("executed", "blocked", "error"):
+                return entry
+            await asyncio.sleep(INTENT_CONFIRM_DELAY)
+        return self._read_executor_verdict_entry(order_id)
 
     async def _apply_confirmed_intent(self, intent: PositionIntent, verdict_entry: dict | None) -> str:
         """Book what the executor receipt confirmed (never anything more)."""

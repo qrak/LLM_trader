@@ -1,0 +1,28 @@
+{
+  "_comment": [
+    "OPTIONAL. Models billed at different peak/off-peak prices (e.g. DeepSeek) are",
+    "reported at the price actually charged when this file exists. Rates themselves",
+    "stay in config/model_pricing.json and are treated as the BASE (peak) rates; this",
+    "file only says WHEN a window applies and how it scales those rates.",
+    "Copy this file to config/peak_rates.json and edit it. Without that file the",
+    "built-in defaults in src/utils/peak_rates.py apply, and any provider not listed",
+    "here is billed flat. The file is read at startup, so restart the bot after editing.",
+    "Each provider entry is merged over its built-in default, so list only what changes.",
+    "Times are UTC. 'days' accepts single names or inclusive ranges: [\"mon-fri\"],",
+    "[\"sat\", \"sun\"], [\"mon\", \"wed\", \"fri\"]. Windows are start-inclusive, end-exclusive."
+  ],
+  "_default": {
+    "peak_multiplier": 1.0,
+    "off_peak_multiplier": 1.0,
+    "peak_windows_utc": []
+  },
+  "deepseek": {
+    "models": ["deepseek-flash", "deepseek-v4-flash-vision-exp", "deepseek-v4-pro"],
+    "peak_multiplier": 1.0,
+    "off_peak_multiplier": 0.5,
+    "peak_windows_utc": [
+      {"days": ["mon-fri"], "start_utc": "01:00", "end_utc": "04:00"},
+      {"days": ["mon-fri"], "start_utc": "06:00", "end_utc": "10:00"}
+    ]
+  }
+}

@@ -67,6 +67,7 @@ It performs four distinct analytical passes:
 ##### Validation Overrides (deterministic — always overwrite LLM claims)
 - `TrendValidator` — cross-checks LLM ADX claims (±15 delta threshold), always uses computed value
 - `PatternQualityScorer` — deterministic 0–100 score from 4 components (30% quantity, 30% confirmation, 20% recency, 20% indicator alignment), flags >25-point divergence from LLM
+- `RiskRewardValidator` — checks entry/SL/TP and tagged `RR_CHECK` narrative examples with the same Numba arithmetic as `RiskManager`; an inconsistent entry becomes HOLD before strategy/executor, and a Python correction is saved in `raw_response` for the next cycle's `## PREVIOUS ANALYSIS CONTEXT`. The execution layer still recalculates final R/R after SL/TP normalization.
 
 ---
 
@@ -135,6 +136,8 @@ All deterministic indicator-pattern detection is Numba `@njit(cache=True)` compi
 
 **Indicator Patterns** (via `pattern_engine/indicator_patterns/indicator_pattern_engine.py`):
 7 categories — RSI (oversold/overbought, W-bottom, M-top), MACD (crossovers, histogram), Divergence (bull/bear with 5-candle min spacing), Volume (spike, climax, dry-up, accumulation/distribution), Stochastic (oversold/overbought, crossovers), MA Crossovers (golden/death, alignments), Volatility (ATR spike, BB squeeze, TTM squeeze).
+
+Conventions (`volatility_patterns.py`): the BB squeeze compares the current band width against the lowest 20% of the last **120** candles (not 20 — a 20-candle window fired on ~37% of candles and ignored real history) and reports `width_percentile` (share of the window narrower than now, 0–100); the engine turns that into `confidence = 100 - width_percentile`, so it stays inside 0–100 and never scales a price width. Both numbers are relative to the window, not absolute volatility.
 
 ##### ChartGenerator (`pattern_engine/chart_generator.py`)
 - Resolution: 3840×2160 (4K)

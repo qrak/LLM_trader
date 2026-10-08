@@ -449,13 +449,13 @@ class IndicatorPatternEngine:
         if "bb_upper" in technical_history and "bb_lower" in technical_history:
             bb_upper = technical_history["bb_upper"]
             bb_lower = technical_history["bb_lower"]
-            found, current_width, percentile_width = detect_bb_squeeze_numba(
+            found, current_width, percentile_width, width_percentile = detect_bb_squeeze_numba(
                 bb_upper, bb_lower
             )
             if found:
                 pattern_index = len(bb_upper) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-                confidence = min(100, int(100 - percentile_width * 100))
+                confidence = round(max(0.0, min(100.0, 100.0 - width_percentile)))
                 patterns.append({
                     "type": "bb_squeeze",
                     "description": f"Bollinger Band squeeze detected (low volatility, breakout imminent) {timestamp_str}",
@@ -464,6 +464,7 @@ class IndicatorPatternEngine:
                     "details": {
                         "current_width": float(current_width),
                         "percentile_width": float(percentile_width),
+                        "width_percentile": float(width_percentile),
                         "periods_ago": 0
                     }
                 })

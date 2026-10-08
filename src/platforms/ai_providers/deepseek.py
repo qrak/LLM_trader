@@ -51,7 +51,7 @@ class DeepSeekClient(BaseAIClient):
         finally:
             self._client = None
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30, retry_on_empty=True)
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
@@ -70,7 +70,7 @@ class DeepSeekClient(BaseAIClient):
         except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30, retry_on_empty=True)
     async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
@@ -115,7 +115,7 @@ class DeepSeekClient(BaseAIClient):
         usage = getattr(response, "usage", None)
         if not usage:
             return
-        details = usage.completion_tokens_details
+        details = getattr(usage, "completion_tokens_details", None)
         reasoning = details.reasoning_tokens if details else 0
         self.logger.info(
             "DeepSeek token breakdown: prompt=%s, completion=%s (incl. reasoning=%s), total=%s, cache_hit=%s, cache_miss=%s",

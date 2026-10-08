@@ -5,6 +5,7 @@ LM Studio, BlockRun.AI), the contracts they inherit from ``BaseAIClient``, and
 the ``ProviderOrchestrator`` routes that dispatch text and chart requests
 through them (single-provider, fallback chain, availability and guidance).
 """
+import asyncio
 import base64
 import io
 import struct
@@ -822,6 +823,75 @@ class TestDeepSeekRequestWiring:
         assert "reasoning_effort" in attempts[0]
         assert "reasoning_effort" not in attempts[1]
 
+    async def test_json_output_mode_travels_with_both_request_paths(self) -> None:
+        """response_format from the model config reaches the SDK for text and chart calls.
+
+        The app asks DeepSeek for a single JSON object (the prompt is written for that
+        shape), so the wire flag has to ride along on every request, chart analysis
+        included. A dropped flag means prose again and an unparseable reply.
+        """
+        json_mode = {"max_tokens": 128, "reasoning_effort": "max", "response_format": {"type": "json_object"}}
+        text_client = _deepseek_client()
+        text_create = AsyncMock(return_value=_sdk_response("{}", (11, 22, 33)))
+        text_client._client = _openai_sdk(text_create)
+
+        await text_client.chat_completion(
+            model="deepseek-flash",
+            messages=[{"role": "user", "content": "hello"}],
+            model_config=json_mode,
+        )
+
+        assert text_create.await_args.kwargs["response_format"] == {"type": "json_object"}
+
+        chart_client = _deepseek_client()
+        chart_create = AsyncMock(return_value=_sdk_response("{}", (11, 22, 33)))
+        chart_client._client = _openai_sdk(chart_create)
+
+        await chart_client.chat_completion_with_chart_analysis(
+            model="deepseek-flash",
+            messages=[{"role": "user", "content": "hello"}],
+            chart_image=_png_bytes(4, 4),
+            model_config=json_mode,
+        )
+
+        assert chart_create.await_args.kwargs["response_format"] == {"type": "json_object"}
+
+    async def test_empty_reply_is_resent_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An empty DeepSeek reply is re-sent as the same request, and the JSON one wins.
+
+        JSON-output mode documents occasionally returning empty content; the request body
+        is rebuilt from the same kwargs, so the retry costs one more generation and
+        nothing else - no prompt repair, no changed conversation.
+        """
+        async def no_sleep(_delay: float) -> None:
+            return None
+
+        monkeypatch.setattr(asyncio, "sleep", no_sleep)
+        client = _deepseek_client()
+        calls: list[dict[str, Any]] = []
+        replies = [
+            _sdk_response("", (11, 22, 33), usage_extra=_DEEPSEEK_USAGE_EXTRA),
+            _sdk_response(
+                '{"analysis": {"signal": "HOLD"}}', (11, 22, 33), usage_extra=_DEEPSEEK_USAGE_EXTRA
+            ),
+        ]
+
+        async def create(**kwargs: Any) -> SimpleNamespace:
+            calls.append(kwargs)
+            return replies[min(len(calls), len(replies)) - 1]
+
+        client._client = _openai_sdk(create)
+
+        response = await client.chat_completion(
+            model="deepseek-flash",
+            messages=[{"role": "user", "content": "hello"}],
+            model_config={"max_tokens": 128, "response_format": {"type": "json_object"}},
+        )
+
+        assert len(calls) == 2
+        assert calls[0] == calls[1]
+        assert response.choices[0].message.content == '{"analysis": {"signal": "HOLD"}}'
+
 
 class TestMalformedPayloadDegradation:
     async def test_malformed_sdk_payloads_have_pinned_degradation(self) -> None:
@@ -1420,6 +1490,7 @@ class TestLoaderWiring:
 
         assert "reasoning_effort" in model_config
         assert "openrouter_reasoning_effort" not in model_config
+        assert model_config["response_format"] == {"type": "json_object"}
 
     def test_provider_registry_omits_blockrun_despite_documentation(self) -> None:
         """Measured: config.ini documents blockrun, but the loader registry rejects it."""

@@ -49,6 +49,7 @@ htmlcov/
 /cache/
 /logs/
 config/config.ini
+config/peak_rates.json
 # Updated configuration file management
 # Private keys and sensitive data
 keys.env

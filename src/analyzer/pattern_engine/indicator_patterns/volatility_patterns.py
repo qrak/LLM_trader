@@ -51,21 +51,26 @@ def detect_bb_squeeze_numba(
     bb_upper: np.ndarray,
     bb_lower: np.ndarray,
     squeeze_percentile: float = 20.0,
-    lookback: int = 20
-) -> tuple[bool, float, float]:
+    lookback: int = 120
+) -> tuple[bool, float, float, float]:
     """
     Detect Bollinger Band squeeze (low volatility).
 
-    BB squeeze = Band width is in lowest X percentile over lookback period.
-    Indicates consolidation and potential for big move (breakout or breakdown).
+    BB squeeze = the current band width sits in the lowest `squeeze_percentile`
+    percent of the last `lookback` widths. The window is 120 candles (~20 days on
+    a 4h chart) so the reading is relative to a real price history instead of a
+    handful of candles.
     Returns:
-        (squeeze_detected, current_width, percentile_width)
-        - squeeze_detected: True if squeeze detected
-        - current_width: Current band width
-        - percentile_width: Percentile threshold width
+        (squeeze_detected, current_width, percentile_width, width_percentile)
+        - squeeze_detected: True if the current width is at or below the threshold
+        - current_width: current band width (price units)
+        - percentile_width: threshold width at `squeeze_percentile` (price units)
+        - width_percentile: share of the window narrower than now, 0..100
+          (0 = tightest band in the window, 100 = widest) — scale-free, this is
+          what a confidence score must be derived from
     """
     if len(bb_upper) < lookback or len(bb_lower) < lookback:
-        return (False, 0.0, 0.0)
+        return (False, 0.0, 0.0, 0.0)
 
     recent_upper = bb_upper[-lookback:]
     recent_lower = bb_lower[-lookback:]
@@ -78,10 +83,16 @@ def detect_bb_squeeze_numba(
     percentile_index = max(0, min(percentile_index, len(sorted_widths) - 1))
     percentile_width = sorted_widths[percentile_index]
 
-    if current_width <= percentile_width:
-        return (True, current_width, percentile_width)
+    narrower = 0
+    for i in range(len(widths)):
+        if widths[i] < current_width:
+            narrower += 1
+    width_percentile = 100.0 * narrower / len(widths)
 
-    return (False, current_width, percentile_width)
+    if current_width <= percentile_width:
+        return (True, current_width, percentile_width, width_percentile)
+
+    return (False, current_width, percentile_width, width_percentile)
 
 
 @njit(cache=True)

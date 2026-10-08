@@ -2117,7 +2117,7 @@ class TestTemplateManagerPreviousAnalysis:
     """Shared parser helper: the LAST parseable json block wins."""
 
     def test_extract_previous_analysis_uses_the_last_block(self) -> None:
-        """A contract repair appends the recovered block, so the last one must win."""
+        """A reply may carry more than one block, so the last one must win."""
         manager = TemplateManager(
             config=make_config(), logger=null_logger(), timeframe_validator=None
         )
