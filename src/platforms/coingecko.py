@@ -45,6 +45,7 @@ class CoinGeckoAPI:
         self.api_key = api_key
         self.global_api_url = global_api_url
         self._file_lock = asyncio.Lock()
+        self._expiry_warned: set[str] = set()
 
         os.makedirs(self.cache_dir, exist_ok=True)
 
@@ -179,6 +180,7 @@ class CoinGeckoAPI:
                 self.COINS_MARKETS_URL,
                 params=params
             ) as response:
+                self._warn_if_response_has_no_expiry(response, "coins/markets")
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch coins/markets. Status: %s", response.status)
@@ -199,6 +201,7 @@ class CoinGeckoAPI:
 
         try:
             async with self.session.get(self.GLOBAL_DEFI_URL) as response:
+                self._warn_if_response_has_no_expiry(response, "global/decentralized_finance_defi")
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch global/defi. Status: %s", response.status)
@@ -246,6 +249,8 @@ class CoinGeckoAPI:
             cached = await self._get_cached_global_data()
             return cached if cached else {}
 
+        self._warn_if_source_data_is_stale(processed_global)
+
         dominance_data = processed_global.get("dominance", {})
 
         dominance_coin_ids = self._get_dominance_coin_ids(dominance_data)
@@ -292,6 +297,7 @@ class CoinGeckoAPI:
         """Fetch /global endpoint."""
         try:
             async with self.session.get(self.global_api_url) as response:  # type: ignore[reportOptionalMemberAccess]
+                self._warn_if_response_has_no_expiry(response, "global")
                 if response.status == 200:
                     return await response.json()
                 self.logger.error("Failed to fetch /global. Status: %s", response.status)
@@ -322,7 +328,7 @@ class CoinGeckoAPI:
 
         data = api_data["data"]
 
-        return {
+        processed = {
             "market_cap": {
                 "total_usd": data.get("total_market_cap", {}).get("usd", 0),
                 "change_24h": data.get("market_cap_change_percentage_24h_usd", 0)
@@ -337,11 +343,23 @@ class CoinGeckoAPI:
             }
         }
 
+        updated_at = data.get("updated_at")
+        if updated_at:
+            try:
+                processed["source_updated_at"] = datetime.fromtimestamp(
+                    int(updated_at), tz=timezone.utc
+                ).isoformat()
+            except (TypeError, ValueError, OverflowError, OSError):
+                self.logger.warning("Unusable CoinGecko updated_at value: %r", updated_at)
+
+        return processed
+
     async def _fetch_all_coins(self) -> list[dict[str, str]]:
         if not self.session:
             self.session = CachedSession(cache=self.cache_backend)
 
         async with self.session.get(self.COINS_LIST_URL) as response:
+            self._warn_if_response_has_no_expiry(response, "coins/list")
             if response.status == 200:
                 return await response.json()
             self.logger.error("Failed to fetch coin list. Status: %s", response.status)
@@ -366,6 +384,55 @@ class CoinGeckoAPI:
             self.logger.debug("Cache file size: %.2f MB", cache_size_mb)
         else:
             self.logger.debug("Cache file does not exist yet.")
+
+    def _warn_if_response_has_no_expiry(self, response: Any, endpoint: str) -> None:
+        """Warn once per endpoint when a stored cache entry carries no expiry policy.
+
+        An entry stored without an expiry is served indefinitely, so a later
+        ``expire_after`` never reaches it and the data it holds silently stops
+        being refreshed. A response that came straight from the network also
+        carries ``expires=None``, so only entries served from the cache count.
+        """
+        if endpoint in self._expiry_warned:
+            return
+
+        if not getattr(response, "from_cache", False):
+            return
+
+        if getattr(response, "expires", "missing") is None:
+            self._expiry_warned.add(endpoint)
+            self.logger.warning(
+                "Cached CoinGecko response for %s was stored without an expiry (created %s) "
+                "and can be served indefinitely",
+                endpoint,
+                getattr(response, "created_at", None),
+            )
+
+    def _warn_if_source_data_is_stale(self, processed_global: dict[str, Any], max_age_hours: int = 48) -> None:
+        """Warn when CoinGecko's own ``updated_at`` is far older than this fetch.
+
+        A fresh fetch timestamp on stale upstream data is how last year's numbers
+        end up looking current in the prompt.
+        """
+        source_ts = processed_global.get("source_updated_at")
+        if not source_ts:
+            return
+
+        try:
+            source_time = datetime.fromisoformat(str(source_ts))
+        except (TypeError, ValueError):
+            return
+
+        if source_time.tzinfo is None:
+            source_time = source_time.replace(tzinfo=timezone.utc)
+
+        age_hours = (datetime.now(timezone.utc) - source_time).total_seconds() / 3600
+        if age_hours > max_age_hours:
+            self.logger.warning(
+                "CoinGecko global data is %.1f h old according to the API (updated_at %s)",
+                age_hours,
+                source_ts,
+            )
 
     async def close(self) -> None:
         if self.session:

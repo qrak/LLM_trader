@@ -36,6 +36,10 @@ class MarketOverviewFormatter:
 
         sections = []
 
+        source_updated_at = market_overview.get("source_updated_at")
+        if source_updated_at:
+            sections.append(f"Market data source updated: {source_updated_at}")
+
         market_cap_data = market_overview.get("market_cap", {})
         if "total_usd" in market_cap_data:
             market_cap = market_cap_data["total_usd"]
