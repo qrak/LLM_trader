@@ -72,8 +72,13 @@ class TestSecurityHeaders:
         import time
         resp = page.goto(f"{ADMIN_URL}?_nocsp={int(time.time())}", timeout=15000)
         csp = resp.headers.get("content-security-policy", "")
-        assert "cdn.tailwindcss.com" in csp or "'unsafe-inline'" in csp, \
-            "Neither Tailwind CDN nor unsafe-inline in CSP — admin page JS will break"
+        script_src = next(
+            (d for d in csp.split(";") if d.strip().lower().startswith("script-src")),
+            "",
+        )
+        sources = script_src.split()[1:]
+        assert "cdn.tailwindcss.com" in sources or "'unsafe-inline'" in sources, \
+            "Neither Tailwind CDN nor unsafe-inline in script-src — admin page JS will break"
 
     def test_no_cors_for_cross_origin(self, page):
         """Cross-origin requests should not get ACAO header."""
