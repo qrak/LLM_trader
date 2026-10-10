@@ -642,6 +642,47 @@ def test_select_exchange_prefers_binance_then_a_ticker_capable_venue(
 
 
 @pytest.mark.parametrize(
+    ("symbols", "expected_symbols"),
+    [
+        (["BTC/USDT", "FIGR_HELOC/USDT"], ["BTC/USDT"]),
+        (["BTC/USDT"], ["BTC/USDT"]),
+        (["FIGR_HELOC/USDT"], []),
+        ([], []),
+        (None, None),
+    ],
+    ids=["mixed", "supported", "unsupported", "empty", "all-markets"],
+)
+async def test_ticker_batch_skips_unsupported_symbols_without_losing_supported_prices(
+    symbols, expected_symbols
+):
+    exchange = SimpleNamespace(
+        id="binance",
+        has={"fetchTickers": True},
+        load_markets=AsyncMock(return_value={"BTC/USDT": {}}),
+        fetch_tickers=AsyncMock(return_value={"BTC/USDT": {"last": 83000.0}}),
+    )
+    logger = MagicMock()
+    result = await DataFetcher(exchange, logger).fetch_multiple_tickers(symbols)
+
+    if expected_symbols == []:
+        assert result == {}
+        exchange.fetch_tickers.assert_not_awaited()
+    else:
+        exchange.fetch_tickers.assert_awaited_once_with(expected_symbols)
+        assert result["RAW"]["BTC"]["USDT"]["PRICE"] == 83000.0
+    if symbols is not None:
+        exchange.load_markets.assert_awaited_once_with()
+    else:
+        exchange.load_markets.assert_not_awaited()
+    logger.error.assert_not_called()
+    if symbols and "FIGR_HELOC/USDT" in symbols:
+        logger.info.assert_called_once_with(
+            "Skipping unsupported ticker symbols on %s: %s",
+            "binance", "FIGR_HELOC/USDT",
+        )
+
+
+@pytest.mark.parametrize(
     ("timeframe", "candles", "expected_warning"),
     [
         ("5m", 999, call(INSUFFICIENT_HISTORY, 30, "5m", 999, 3.46875, 8640)),

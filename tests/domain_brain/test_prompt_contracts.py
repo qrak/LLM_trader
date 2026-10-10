@@ -198,10 +198,7 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
     assert section == (
         "Prior decision snapshot:\n"
         "- Signal: SELL (confidence: 82)\n"
-        "- Thesis: Breakdown confirmed.\n"
-        "\n"
-        + REASONING_HEADER
-        + "1) MARKET STRUCTURE: Bearish continuation."
+        "- Thesis: Breakdown confirmed."
     )
 
 
@@ -210,13 +207,11 @@ def test_previous_snapshot_uses_last_valid_json_block(config):
     [
         (
             ECHOED_CONTRACT_RESPONSE,
-            "Prior decision snapshot:\n"
-            "- Signal: HOLD (confidence: 73)\n"
-            "- Thesis: Invalidation is unclear.\n"
-            "\n"
-            + REASONING_HEADER
-            + "1) MARKET STRUCTURE: Bearish but range-bound.\n"
-            "2) DECISION: HOLD because invalidation is unclear.",
+            (
+                "Prior decision snapshot:\n"
+                "- Signal: HOLD (confidence: 73)\n"
+                "- Thesis: Invalidation is unclear."
+            ),
             ("Allowed signals", "CONFLUENCE SCORING", "POSITION SIZING FORMULA", "0.080"),
         ),
         (

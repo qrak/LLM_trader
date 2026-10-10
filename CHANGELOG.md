@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-10 — Prompt deduplication and unsupported ticker isolation
+
+### Fixed
+- Prompt v1.4 omits retrieved entry insights already present verbatim in recent trade
+  history and retains distinct insights and trade outcomes. A structured previous-decision
+  thesis replaces the additional narrative replay; Python R/R feedback remains available.
+- Brain context renders relevant learned rules once, instead of also appending the global
+  rule block to retrieved experiences. Learned statistics start on a separate paragraph.
+- Aligned CLOSE quantity guidance with the current position quantity, clarified that the
+  advisory sizing reference is never a minimum or permission to exceed the active cap,
+  and reinforced current-period high/low attribution and OBV delta interpretation.
+- Explicit ticker batches skip symbols absent from the exchange's loaded markets. An
+  unsupported asset no longer discards supported prices; empty/unsupported-only lists
+  return no data, while `None` still requests all tickers.
+
+### Verified
+- Full Windows-venv suite: **1970 passed, 17 skipped**. Ruff passes; touched production
+  files have zero Pyright diagnostics. Full Pyright still reports the same 16 previously
+  documented errors in unchanged files. The composition-root import passes.
+- Reconstructed the latest audited prompt using HEAD and updated templates: locally
+  estimated text tokens fell from **20,607 to 18,748** (1,859 fewer, approximately 9%).
+  These are tokenizer estimates, not measured DeepSeek API billing or a new model reply.
+- Public Binance markets exclude `FIGR_HELOC/USDT`. The original mixed batch reproduced
+  the reported BadSymbol error; the patched batch returned a real BTC/USDT price.
+- Live position paths and bot intent / executor verdict / exit journals were unchanged
+  by the full suite. DeepSeek V4.1 Flash, ADX computation/correction, execution logic
+  and trading gates were not changed. No model API call, order, restart or commit was made.
+
 ## v1.1.4 — 2026-10-10
 
 ### Changed

@@ -283,6 +283,17 @@ def test_snapshot_from_conditions_maps_stored_state_and_drops_unmodelled_fields(
     )
 
 
+def test_vector_stats_heading_is_separated_when_context_has_no_trailing_newline():
+    brain = learning_brain(trade_count=8)
+    brain.vector_memory.get_context_for_prompt.return_value = "experience ends here"
+    brain.vector_memory.get_stats_for_context.return_value = {
+        "total_trades": 7, "win_rate": 28.6, "avg_pnl": 0.07,
+    }
+    context = brain.context_provider.get_vector_context(MarketSnapshot(adx=30))
+    assert "experience ends here\n\n### Learned Stats for This Context:" in context
+    assert brain.vector_memory.get_context_for_prompt.call_args.kwargs["include_rules"] is False
+
+
 def test_get_vector_context_sends_query_display_context_and_appends_stats():
     brain = learning_brain(trade_count=8)
     brain.vector_memory.get_context_for_prompt.return_value = "## Similar Past Trades\n- Trade 1: WIN\n"
@@ -296,7 +307,7 @@ def test_get_vector_context_sends_query_display_context_and_appends_stats():
     context = brain.context_provider.get_vector_context(snapshot)
 
     assert context == (
-        "## Similar Past Trades\n- Trade 1: WIN\n"
+        "## Similar Past Trades\n- Trade 1: WIN\n\n"
         "### Learned Stats for This Context:\n"
         "- Win Rate in similar conditions: 67% (12 trades)\n"
         "- Avg P&L: +1.25%\n"
@@ -308,6 +319,7 @@ def test_get_vector_context_sends_query_display_context_and_appends_stats():
     assert brain.vector_memory.get_context_for_prompt.call_args.kwargs == {
         "display_context": "BULLISH + High ADX + MEDIUM Volatility + Exit Execution: SL hard/15m | TP hard/15m",
         "current_atr_percentage": 2.5,
+        "include_rules": False,
     }
     stats_query = brain.vector_memory.get_stats_for_context.call_args
     assert stats_query.args == (query,)

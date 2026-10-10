@@ -299,8 +299,9 @@ class VectorMemoryContextMixin:
         k: int = 5,
         display_context: str = "",
         current_atr_percentage: float | None = None,
+        include_rules: bool = True,
     ) -> str:
-        """Get formatted context string for prompt injection."""
+        """Render experiences, optionally including rules for standalone use."""
         display = display_context or current_context
         experiences = self.retrieve_similar_experiences(
             current_context, k, where={"outcome": {"$ne": "UPDATE"}}
@@ -362,7 +363,7 @@ class VectorMemoryContextMixin:
                 lines.append(f'   - Key Insight: "{self._generate_synthetic_insight(meta)}"')
             lines.append("")
 
-        anti_patterns = self.get_anti_patterns_for_prompt(k=2)
+        anti_patterns = self.get_anti_patterns_for_prompt(k=2) if include_rules else ""
         if anti_patterns:
             lines.append("")
             lines.append(anti_patterns)

@@ -247,14 +247,14 @@ def test_prompt_metadata_is_backend_only():
     """Metadata is attribution data: exact dict contract, never rendered."""
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.3",
+        "prompt_version": "trading-analysis-prompt-v1.4",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
     }
     assert_absent(
         manager.build_system_prompt(SYMBOL),
-        ["Prompt Metadata", "trading-analysis-prompt-v1.3", "trading-analysis-response-v1"],
+        ["Prompt Metadata", "trading-analysis-prompt-v1.4", "trading-analysis-response-v1"],
     )
 
 
@@ -332,7 +332,7 @@ def test_system_prompt_renders_mandated_sections():
         "not against 1."),
         ("- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
         "start of the loaded window, so only each one's CHANGE carries information — never "
-        "read the absolute level; Variance is measured in price^2 over the last 20 candles, so "
+        "read the absolute level; negative but rising OBV is not bearish because of its sign. Variance is measured in price^2 over the last 20 candles, so "
         "judge price extremes with the Z-score instead of the variance; Pivot and FibPivot are "
         "computed from the PREVIOUS closed bar, i.e. they are the levels of the current "
         "(still forming) candle, not levels of the last closed candle."),
@@ -548,8 +548,8 @@ def test_decision_rules_render_one_line_per_rule():
         "POSITION SIZING:",
         "- Base = confidence/100 × active profile cap.",
         "- MIXED alignment: −20%. DIVERGENT: −35%.",
-        ("- Weak trend (ADX < 20): reduce size. Min normal: 0.020 (target). Don't round "
-        "up."),
+        ("- Weak trend (ADX < 20): reduce size. Advisory size reference: "
+         "min(0.020, active profile cap), never a minimum. Don't round up."),
         "QUANTITY CALCULATION (for automated execution):",
         "- quantity = (available_capital × position_size) / entry_price",
         "MACRO CONFLICT:",
@@ -819,7 +819,7 @@ def test_response_template_tables_and_hold_semantics():
         "| HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |",
         ("| UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | "
         "0.0 | null | false | number (from current) |"),
-        "| CLOSE | current price | null | null | 0.0 | 0.0 | \"market\" | true | null |",
+        "| CLOSE | current price | null | null | 0.0 | current position quantity | \"market\" | true | null |",
         "EXECUTION FIELDS (for automated trade execution bots):",
         "- symbol: Trading pair. Must match exactly the symbol from Trading Context.",
         ("- order_type: \"market\" for entries/exits; null for HOLD/UPDATE. CLOSE must "
@@ -1029,8 +1029,55 @@ def test_garbage_config_numerics_fall_back_to_documented_defaults():
         "- R/R < 1.0: REJECTED — below the sanity floor (hard block)",
         "R/R >= 1.0 (sanity floor only — entry quality is decided by EV, not by the ratio)",
         "fall back to 0.10 (10%)",
-        "Min normal: 0.020 (target). Don't round up.",
+        "min(0.020, active profile cap), never a minimum. Don't round up.",
     ])
+
+
+def test_prompt_deduplicates_only_entry_insights_already_in_recent_history():
+    manager = make_manager()
+    repeated = "(1) thesis: short below resistance. (2) regime: trending."
+    distinct = "A different entry thesis with different invalidation."
+    performance = f"## Recent Trading History\n- SELL - {repeated}"
+    brain = (
+        '## Trading Brain\n1. SHORT trade\n   - Result: WIN (+3.45%)\n'
+        f'   - Key Insight: "{repeated}"\n'
+        f'2. LONG trade\n   - Key Insight: "{distinct}"'
+    )
+    prompt = manager.build_system_prompt(
+        SYMBOL, performance_context=performance, brain_context=brain,
+    )
+    assert prompt.count(repeated) == 1
+    assert distinct in prompt
+    assert "- Result: WIN (+3.45%)" in prompt
+    assert repeated in brain
+
+
+def test_previous_context_keeps_structured_thesis_once_and_preserves_feedback():
+    thesis = "(1) thesis: no confirmed breakout. (2) invalidation: support breaks."
+    previous = (
+        "Python R/R validation of previous cycle: ratio corrected\n"
+        f"1) MARKET STRUCTURE: {thesis}\n```json\n"
+        + json.dumps({"analysis": {"signal": "HOLD", "reasoning": thesis}})
+        + "\n```"
+    )
+    prompt = make_manager().build_system_prompt(SYMBOL, previous_response=previous)
+    assert prompt.count(thesis) == 1
+    assert f"- Thesis: {thesis}" in prompt
+    assert "ratio corrected" in prompt
+    assert "Your last analysis reasoning (for continuity):" not in prompt
+
+
+def test_execution_contract_and_grounding_guidance_are_unambiguous():
+    manager = make_manager(make_config(PROVIDER="deepseek", MODEL_VERBOSITY="high"))
+    template = manager.build_response_template()
+    close_row = next(line for line in template.splitlines() if line.startswith("| CLOSE |"))
+    assert close_row.split("|")[6].strip() == "current position quantity"
+    rules = manager.build_decision_rules(dynamic_thresholds={"min_position_size": 0.15})
+    assert "Min normal:" not in rules
+    assert "min(0.100, active profile cap), never a minimum" in rules
+    prompt = manager.build_system_prompt(SYMBOL)
+    assert "current user-data period summaries, not prior analysis" in prompt
+    assert "negative but rising OBV is not bearish because of its sign" in prompt
 
 
 def test_empty_optional_contexts_are_not_injected():
@@ -1084,8 +1131,7 @@ def test_previous_reasoning_strips_leaked_prompt_instructions():
 @pytest.mark.parametrize(("previous_response", "expected", "forbidden"), [
     (FULL_PREVIOUS_RESPONSE, [
         "## PREVIOUS ANALYSIS CONTEXT",
-        "Your last analysis reasoning (for continuity):",
-        "1) MARKET STRUCTURE: Bullish.",
+        "- Thesis: Strong breakout above resistance.",
         "### DETERMINISTIC TIME CHECK",
         "Window: 120 minutes",
         ("Use prior context only as a hypothesis to retest. If current evidence changed, "

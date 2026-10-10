@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class TemplateManager:
     """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
 
-    PROMPT_VERSION = "trading-analysis-prompt-v1.3"
+    PROMPT_VERSION = "trading-analysis-prompt-v1.4"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
     PREVIOUS_REASONING_MAX_CHARS = 3000
@@ -370,6 +370,7 @@ class TemplateManager:
             "- BREAKOUT/REVERSAL: require volume + closed-candle confirmation. HOLD if unconfirmed or false breakout.",
             "- In ALL regimes: HOLD only when invalidation is genuinely unclear or the setup has no identifiable edge.",
             "- Closed-candle structure > sentiment > stale analysis. Resolve conflicts explicitly.",
+            "- Copy period highs/lows from current user-data period summaries, not prior analysis. Label older levels as historical, never as current 12h/24h extremes.",
             "- UPDATE when close-price event triggers a candidate exit signal or for SL breakeven/trailing moves on confirmed price progress toward TP.",
             "- CLOSE when original thesis is invalidated at candle close — don't wait for SL.",
             "",
@@ -472,7 +473,7 @@ class TemplateManager:
             (
                 "- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
                 "start of the loaded window, so only each one's CHANGE carries information — never "
-                "read the absolute level; Variance is measured in price^2 over the last 20 candles, so "
+                "read the absolute level; negative but rising OBV is not bearish because of its sign. Variance is measured in price^2 over the last 20 candles, so "
                 "judge price extremes with the Z-score instead of the variance; Pivot and FibPivot are "
                 "computed from the PREVIOUS closed bar, i.e. they are the levels of the current "
                 "(still forming) candle, not levels of the last closed candle."
@@ -511,7 +512,11 @@ class TemplateManager:
         if brain_context:
             header_lines.extend([
                 "",
-                brain_context.strip(),
+                "\n".join(
+                    line for line in brain_context.strip().splitlines()
+                    if not ((insight := re.fullmatch(r'\s*- Key Insight: "(.+)"', line))
+                            and insight.group(1) in (performance_context or ""))
+                ),
             ])
 
         if previous_response:
@@ -522,6 +527,8 @@ class TemplateManager:
                 previous_reasoning = previous_response
             text_reasoning = self._sanitize_previous_reasoning(previous_reasoning, _verbosity)
             prior_analysis = self._extract_previous_analysis(previous_response)
+            if prior_analysis is not None and prior_analysis.get("reasoning"):
+                text_reasoning = ""
             decision_snapshot = (
                 self._format_previous_decision_snapshot(prior_analysis)
                 if prior_analysis is not None else None
@@ -693,7 +700,7 @@ POSITION SIZING:
 - Max position: the ACTIVE RISK PROFILE cap (AGGRESSIVE 10% / NEUTRAL 8% / CONSERVATIVE 5% — see ACTIVE RISK PROFILE section). If no profile is shown, fall back to {max_pos:.2f} ({max_pos*100:.0f}%). Never exceed the profile cap — the system clamps to it.
 - Base = confidence/100 × active profile cap.
 - MIXED alignment: −{pos_reduce_mixed*100:.0f}%. DIVERGENT: −{pos_reduce_div*100:.0f}%.
-- Weak trend (ADX < {adx_weak}): reduce size. Min normal: {min_pos_size:.3f} (target). Don't round up.
+- Weak trend (ADX < {adx_weak}): reduce size. Advisory size reference: min({min_pos_size:.3f}, active profile cap), never a minimum. Don't round up.
 
 QUANTITY CALCULATION (for automated execution):
 - quantity = (available_capital × position_size) / entry_price
@@ -877,7 +884,7 @@ JSON rules by signal:
 | HOLD (no position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | HOLD (open position) | null | null | null | 0.0 | 0.0 | null | false | null |
 | UPDATE | current price | changed SL/TP only | changed SL/TP only | 0.0 | 0.0 | null | false | number (from current) |
-| CLOSE | current price | null | null | 0.0 | 0.0 | "market" | true | null |
+| CLOSE | current price | null | null | 0.0 | current position quantity | "market" | true | null |
 
 EXECUTION FIELDS (for automated trade execution bots):
 - symbol: Trading pair. Must match exactly the symbol from Trading Context.

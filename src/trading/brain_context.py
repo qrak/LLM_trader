@@ -379,13 +379,14 @@ class BrainContextProvider:
             k,
             display_context=context_query,
             current_atr_percentage=snapshot.atr_percentage or None,
+            include_rules=False,
         )
         if not vector_context:
             return ""
         stats = self.vector_memory.get_stats_for_context(query_document, k=20)
         if stats["total_trades"] > 0:
-            vector_context += (
-                f"### Learned Stats for This Context:\n"
+            vector_context = vector_context.rstrip() + (
+                f"\n\n### Learned Stats for This Context:\n"
                 f"- Win Rate in similar conditions: {stats['win_rate']:.0f}% "
                 f"({stats['total_trades']} trades)\n"
                 f"- Avg P&L: {stats['avg_pnl']:+.2f}%\n"

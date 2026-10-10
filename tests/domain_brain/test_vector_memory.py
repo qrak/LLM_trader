@@ -781,6 +781,19 @@ def test_context_for_prompt_renders_header_limited_data_and_anti_patterns():
     assert "Avoid weak breakouts into resistance" in prompt
 
 
+def test_experience_context_can_leave_rules_to_the_brain_renderer():
+    service = make_service()
+    with patch.object(
+        VectorMemoryService, "trade_count", new_callable=PropertyMock, return_value=8
+    ), patch.object(
+        service, "retrieve_similar_experiences", return_value=[experience(90.0)]
+    ), patch.object(service, "get_anti_patterns_for_prompt") as render_rules:
+        prompt = service.get_context_for_prompt("BEARISH", include_rules=False)
+    assert "Key Insight:" in prompt
+    assert "[SIMILARITY 90%] LONG trade" in prompt
+    render_rules.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("similarity", "brain_trades", "reason"),
     [

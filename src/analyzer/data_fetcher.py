@@ -181,6 +181,15 @@ class DataFetcher:
             if not self._validate_exchange_support():
                 return {}
 
+            if symbols is not None:
+                markets = await self.exchange.load_markets()
+                skipped = [symbol for symbol in symbols if symbol not in markets]
+                symbols = [symbol for symbol in symbols if symbol in markets]
+                if skipped:
+                    self.logger.info("Skipping unsupported ticker symbols on %s: %s", self.exchange.id, ", ".join(skipped))
+                if not symbols:
+                    return {}
+
             tickers = await self.exchange.fetch_tickers(symbols)
             if not tickers:
                 self.logger.warning("No ticker data returned from exchange")
