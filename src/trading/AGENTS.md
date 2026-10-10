@@ -157,26 +157,14 @@ The effective threshold is resolved by `_resolve_effective_threshold()`:
 
 ##### Position Update Gating
 
-`TradingStrategy` enforces a **timeframe-adaptive minimum interval** between successive position parameter updates. This prevents the LLM from "over-managing" open positions with continuous micro-adjustments:
-
-| Timeframe | Multiplier | Effect at 4h |
-|-----------|-----------|-------------|
-| Scalping (<60 min) | 4× | — |
-| Intraday (60–239 min) | 3× | — |
-| Swing (240–1439 min) | 2× | Update every 8h |
-| Position (≥1440 min) | 1× | Update every 24h |
-
-The gate lives in `TradingStrategy._handle_existing_position()`:
-```python
-if hours_since_last < self._min_update_interval_hours:
-    # REJECTED UPDATE — letting trade breathe
-    return None
-```
+There is no minimum time interval between position parameter updates. Each valid UPDATE may
+be processed immediately, including on consecutive analysis cycles. The brain still records
+position updates and learns from closed trades; executor-state checks, SL tightening and
+widening policies, and execution receipts remain unchanged.
 
 ##### Refused Updates Are Recorded, Not Swallowed
 
-Every command the bot refuses to send — a blocked UPDATE (tightening gate, widening cap, update
-interval) or an UPDATE/CLOSE skipped because the executor state could not be verified — is written
+Every command the bot refuses to send — a blocked UPDATE (tightening gate or widening cap) or an UPDATE/CLOSE skipped because the executor state could not be verified — is written
 down: `PositionManagementMixin._record_refused_command()` records it as a position intent with
 `state=refused`, `evidence=bot_policy` in `data/trading/bot_position_intents.jsonl` and queues a
 one-shot operator alert (`take_rejected_intent_alert()` → `CryptoTradingBot._report_rejected_intent()`).

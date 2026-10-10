@@ -80,7 +80,6 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         self.current_position: Position | None = self.persistence.load_position()
 
-        self._last_position_update_time: datetime | None = None
         self._executor_side_exit_reason: str | None = None
         self._state_divergence: str | None = None
         self._local_exit_request: LocalExitRequest | None = None
@@ -99,16 +98,6 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         )
 
         self._last_sl_tightening_evaluation: TighteningEvaluation | None = None
-
-        tf = self._tf_minutes
-        if tf < 60:
-            self._min_update_interval_hours: float = (tf * 4) / 60.0
-        elif tf < 240:
-            self._min_update_interval_hours = (tf * 3) / 60.0
-        elif tf < 1440:
-            self._min_update_interval_hours = (tf * 2) / 60.0
-        else:
-            self._min_update_interval_hours = tf / 60.0
 
         if self.current_position:
             self.logger.info("Loaded existing position: %s %s @ $%s", self.current_position.direction, self.current_position.symbol, f"{self.current_position.entry_price:,.2f}")

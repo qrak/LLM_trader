@@ -5,6 +5,7 @@ JSON serialization of the data models.
 import io
 import json
 import math
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -54,6 +55,76 @@ def config_with(config_data: dict[str, dict[str, Any]]) -> Config:
     if "model_config" in config_data:
         config._build_model_configs()
     return config
+
+
+@pytest.mark.parametrize(
+    ("provider", "key"),
+    [
+        ("deepseek", "DEEPSEEK_API_KEY"),
+        ("openrouter", "OPENROUTER_API_KEY"),
+        ("googleai", "GOOGLE_STUDIO_API_KEY"),
+        ("local", None),
+        ("all", "OPENROUTER_API_KEY"),
+    ],
+)
+@pytest.mark.parametrize("source", ["file", "system"])
+def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, key, source):
+    ini = tmp_path / "config.ini"
+    ini.write_text(
+        f"[ai_providers]\nprovider = {provider}\n"
+        "[model_config]\nmax_tokens = 1024\ngoogle_max_tokens = 1024\n",
+        encoding="utf-8",
+    )
+    env_path = tmp_path / "keys.env"
+    credentials = {key: "selected-provider-test-key"} if key else {}
+    if source == "file":
+        env_path.write_text(
+            "\n".join(f"{name}={value}" for name, value in credentials.items()),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", env_path)
+    with patch.dict(os.environ, credentials if source == "system" else {}, clear=True):
+        config = Config()
+    for name in ("DEEPSEEK_API_KEY", "OPENROUTER_API_KEY", "GOOGLE_STUDIO_API_KEY"):
+        assert config.get_env(name) == credentials.get(name)
+
+
+def test_system_credentials_override_file_without_mutating_environment(tmp_path, monkeypatch):
+    env_path = tmp_path / "keys.env"
+    env_path.write_text(
+        "DEEPSEEK_API_KEY=file-key\nOPENROUTER_API_KEY=file-or-key\n"
+        "MAIN_CHANNEL_ID=123456789\nADMIN_USER_IDS=1, 2\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", env_path)
+    config = Config.__new__(Config)
+    config._env_vars = {}
+    environment = {
+        "DEEPSEEK_API_KEY": "0123456789",
+        "OPENROUTER_API_KEY": "",
+        "MAIN_CHANNEL_ID": "987654321",
+        "ADMIN_USER_IDS": "3, 4",
+    }
+    with patch.dict(os.environ, environment, clear=True):
+        config._load_environment()
+        assert dict(os.environ) == environment
+    assert config.DEEPSEEK_API_KEY == "0123456789"
+    assert config.OPENROUTER_API_KEY == ""
+    assert config.MAIN_CHANNEL_ID == 987654321
+    assert config.get_env("ADMIN_USER_IDS") == [3, 4]
+
+
+def test_missing_selected_deepseek_key_still_fails(tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text(
+        "[ai_providers]\nprovider = deepseek\n[model_config]\nmax_tokens = 1024\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "absent.env")
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
+        Config()
 
 
 def test_convert_value_coercion_matrix():

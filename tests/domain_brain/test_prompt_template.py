@@ -796,7 +796,8 @@ def test_response_template_documents_the_trend_block_vocabulary():
         "- timeframe_alignment: ALIGNED | MIXED | DIVERGENT — whether the 4h and daily",
         "timeframes AGREE WITH EACH OTHER, not which way the market points.",
         "A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here",
-        "- strength_4h / strength_daily: trend strength 0-100 for each timeframe.",
+        "- strength_4h / strength_daily: copy the provided ADX / Daily ADX, rounded to integers.",
+        "NOT subjective strength scores; do not rescale or double them.",
     ])
 
 

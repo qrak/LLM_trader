@@ -2,7 +2,8 @@
 # config.ini.example - TEMPLATE. Copy it to config/config.ini and edit the copy.
 #
 # Secrets do NOT belong here: API keys, admin credentials and Discord channel
-# IDs go into keys.env (repo root, see keys.env.example). The bot reads both.
+# IDs go into OS/service environment variables (recommended) or optional keys.env.
+# See keys.env.example; process variables override the file. config.ini is separate.
 #
 # Only the keys marked REQUIRED have to be present; delete any other key and the
 # loader falls back to its own default in src/config/loader.py.
@@ -28,7 +29,7 @@ openrouter_base_url = https://openrouter.ai/api/v1
 openrouter_base_model = google/gemini-3-flash-preview
 openrouter_fallback_model = deepseek/deepseek-v4.1-flash
 
-# DeepSeek (official API, OpenAI-compatible) — requires DEEPSEEK_API_KEY in keys.env
+# DeepSeek (official API) — requires DEEPSEEK_API_KEY in the environment or keys.env
 deepseek_base_url = https://api.deepseek.com
 # One model for text + chart analysis (flash accepts images natively)
 deepseek_model = deepseek-flash

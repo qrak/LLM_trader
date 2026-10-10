@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.1.4 — 2026-10-10
+
+### Changed
+- Removed the minimum interval between position UPDATE commands completely, including
+  the timeframe multiplier and last-update timestamp. Valid consecutive updates can now
+  adjust LONG or SHORT protection immediately. Existing SL tightening/widening rules,
+  executor-state checks, execution receipts and brain update tracking remain unchanged.
+- Secrets may come from the OS/service environment (recommended) or an optional `keys.env`.
+  Process variables override file values, including explicitly empty values. A missing
+  file no longer prevents startup. Credential strings retain their original contents;
+  only Discord channel IDs and the admin ID list receive numeric conversion.
+- Replaced fake credentials in `keys.env.example` with empty optional entries and documented
+  provider-specific requirements, environment/file precedence, restart requirements and
+  security limitations. DeepSeek and OpenRouter do not need direct Google credentials;
+  an OpenRouter-hosted vendor model needs only the OpenRouter key.
+- Clarified that `analysis.trend.strength_4h` / `strength_daily` must copy computed ADX
+  readings, rounded to integers, rather than subjective 0–100 strength scores. The existing
+  deterministic ADX correction stays in place and does not veto the trading signal.
+
+### Removed
+- `.trivyignore`: accepted ChromaDB server-mode risks left over from the retired scanner.
+  No tracked workflow or script invokes Trivy; CodeQL configuration is unchanged. Future
+  Trivy scans will report these findings instead of silently suppressing them.
+
+### Verified
+- Full Windows-venv suite: **1948 passed, 17 skipped**. New regressions cover consecutive
+  LONG/SHORT updates at 15m/1h/4h/1d, environment-only and file-only credentials for each
+  supported provider mode, precedence, empty overrides and preservation of numeric keys.
+- Ruff passes for `src`, `start.py`, `scripts` and all changed tests; compilation and
+  `import start` pass. Pyright reports the same **16 pre-existing errors** on both the
+  pre-change HEAD snapshot and the updated tree, with no new diagnostics.
+- Re-fetched public Binance BTC/USDC candles at the two reported analysis boundaries and
+  independently implemented Wilder ADX(14). Production/reference differences are below
+  `7e-14`: 2026-10-09 20:00 UTC → 4h **33.93202572**, daily **40.24306105**;
+  2026-10-10 04:00 UTC → 4h **32.51545513**, daily **37.91793615**. The model's
+  corresponding 68/80 and 65/76 values were approximately twice the actual ADX readings.
+- Live bot position/intents and executor verdict/exit journals were unchanged by the full
+  suite. No bot/executor restart, exchange order or historical accounting change was made.
+
 ## 2026-10-10 — ESLint can parse the website's ES modules
 
 ### Fixed

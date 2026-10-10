@@ -923,39 +923,49 @@ class TestUpdatePositionParameters:
         assert "state: refused" in context
         assert "stop loss in force stays $83,850.00" in context
 
-    async def test_update_interval_refusal_is_recorded_as_well(self) -> None:
-        """The 'letting trade breathe' gate is a refusal too, and equally invisible."""
+    @pytest.mark.parametrize("timeframe", ["15m", "1h", "4h", "1d"])
+    @pytest.mark.parametrize(
+        ("direction", "old_sl", "tp", "price", "new_stops"),
+        [
+            ("LONG", 83850.0, 90400.0, 88000.0, (85987.62, 86050.0)),
+            ("SHORT", 88000.0, 81000.0, 83000.0, (85987.62, 85500.0)),
+        ],
+    )
+    async def test_successive_updates_have_no_time_gate(
+        self, timeframe, direction, old_sl, tp, price, new_stops,
+    ) -> None:
+        """A fresh UPDATE must not block the next valid LONG or SHORT stop change."""
         strategy, _, _, _, _ = _strategy(
             position=make_position(
-                direction="LONG",
+                direction=direction,
                 entry_price=85987.62,
-                stop_loss=83850.0,
-                take_profit=90400.0,
+                stop_loss=old_sl,
+                take_profit=tp,
             ),
-            policy=StopLossTighteningPolicy(swing_threshold=0.15),
-            config=_isolated_config(TIMEFRAME="4h"),
+            config=_isolated_config(TIMEFRAME=timeframe),
         )
-        strategy._last_position_update_time = datetime.now(timezone.utc)
         strategy._executor_has_position = AsyncMock(return_value=True)
+        decisions = []
+        for stop in new_stops:
+            decision = await strategy._handle_existing_position(
+                signal="UPDATE",
+                confidence="HIGH",
+                stop_loss=stop,
+                take_profit=tp,
+                current_price=price,
+                symbol="BTC/USDC",
+                reasoning="adjust the protective stop",
+                market_conditions=make_market_conditions(),
+            )
+            assert decision is not None and decision.action == "UPDATE"
+            assert strategy.current_position is not None
+            assert strategy.current_position.stop_loss == stop
+            decisions.append(decision)
 
-        decision = await strategy._handle_existing_position(
-            signal="UPDATE",
-            confidence="HIGH",
-            stop_loss=85987.62,
-            take_profit=90400.0,
-            current_price=86698.39,
-            symbol="BTC/USDC",
-            reasoning="raise the stop to breakeven",
-            market_conditions=make_market_conditions(),
-        )
-
-        assert decision is None
-        intent = strategy.position_intents().recent(1)[0]
-        assert intent.action == "UPDATE"
-        assert intent.state == "refused"
-        assert "last position update" in (intent.detail or "")
-        alert = strategy.take_rejected_intent_alert()
-        assert alert is not None and "refused by the bot's own policy" in alert
+        assert decisions[0].order_id != decisions[1].order_id
+        assert strategy.brain_service.track_position_update.call_count == 2
+        assert all(intent.state == "local_only" for intent in strategy.position_intents().recent(2))
+        assert strategy.take_rejected_intent_alert() is None
 
     async def test_unverifiable_executor_state_is_recorded_as_a_refusal(self) -> None:
         """An executor that cannot confirm the position drops the command — say so.

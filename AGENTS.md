@@ -443,7 +443,7 @@ Use this checklist for every documentation or tooling-policy PR:
 
 ## 11. Security Conventions
 
-- Secrets live in `keys.env` / `.env` only (gitignored): never in `.py`, never in a log. Follow the redaction pattern (`_redact_private_key()`); never log credentials, private keys or full secret payloads.
+- Secrets come from OS/service environment variables (recommended) or optional `keys.env` / `.env` (gitignored); process variables take precedence: never in `.py`, never in a log. Follow the redaction pattern (`_redact_private_key()`); never log credentials, private keys or full secret payloads.
 - Any `eval` / `exec` / `subprocess(shell=True)` / `os.system` / `pickle.loads` / `yaml.load` hit in `src/` is CRITICAL until proven otherwise.
 - Validate input with FastAPI/Pydantic models (`Field`, `Path`, `Query`) instead of hand-parsing dicts; errors must never leak sensitive data.
 - Use the established patterns: PBKDF2-SHA256 password hashing, HMAC-SHA256 signed cookies, `hmac.compare_digest` for comparisons, constant-time anti-enumeration on login, `/admin` and `/api/admin` gated to LAN behind admin auth, DOMPurify for every dynamic HTML string.

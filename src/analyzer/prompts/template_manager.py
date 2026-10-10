@@ -896,7 +896,7 @@ TREND BLOCK (analysis.trend):
   contradict each other. A trend word (BULLISH/BEARISH/NEUTRAL) is INVALID here
   and fails the response contract — the alignment question is about agreement
   between timeframes, not direction.
-- strength_4h / strength_daily: trend strength 0-100 for each timeframe.
+- strength_4h / strength_daily: copy the provided ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
 
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 

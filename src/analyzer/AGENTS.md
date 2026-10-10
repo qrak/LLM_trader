@@ -65,7 +65,7 @@ It performs four distinct analytical passes:
 | `prompt_lint` | Pre-flight linting results (missing sections, stale prompt rules) |
 
 ##### Validation Overrides (deterministic — always overwrite LLM claims)
-- `TrendValidator` — cross-checks LLM ADX claims (±15 delta threshold), always uses computed value
+- `TrendValidator` — cross-checks LLM ADX claims (15-point warning threshold), always uses computed ADX without changing the signal. The prompt requires copying ADX readings rather than inventing subjective strength scores.
 - `PatternQualityScorer` — deterministic 0–100 score from 4 components (30% quantity, 30% confirmation, 20% recency, 20% indicator alignment), flags >25-point divergence from LLM
 - `RiskRewardValidator` — checks entry/SL/TP and tagged `RR_CHECK` narrative examples with the same Numba arithmetic as `RiskManager`; an inconsistent entry becomes HOLD before strategy/executor, and a Python correction is saved in `raw_response` for the next cycle's `## PREVIOUS ANALYSIS CONTEXT`. The execution layer still recalculates final R/R after SL/TP normalization.
 

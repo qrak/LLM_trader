@@ -55,9 +55,7 @@ class PositionManagementMixin:
     _rejected_intent_alert: str | None
     _tf_minutes: int
     _tightening_policy: Any
-    _last_position_update_time: Any
     _last_sl_tightening_evaluation: Any
-    _min_update_interval_hours: float
 
     async def _handle_existing_position(
         self,
@@ -199,35 +197,11 @@ class PositionManagementMixin:
             )
             return None
 
-        now = datetime.now(timezone.utc)
-        if self._last_position_update_time is not None:
-            hours_since_last = (now - self._last_position_update_time).total_seconds() / 3600
-            if hours_since_last < self._min_update_interval_hours:
-                self.logger.info(
-                    "REJECTED UPDATE: only %.1fh since last update (min %.1fh for %s). "
-                    "Letting trade breathe.",
-                    hours_since_last, self._min_update_interval_hours, self.config.TIMEFRAME,
-                )
-                self._record_refused_command(
-                    INTENT_ACTION_UPDATE,
-                    reason=(
-                        f"only {hours_since_last:.1f}h since the last position update "
-                        f"(minimum {self._min_update_interval_hours:.1f}h at "
-                        f"{self.config.TIMEFRAME})"
-                    ),
-                    requested_sl=stop_loss,
-                    requested_tp=take_profit,
-                    old_sl=old_sl,
-                    old_tp=old_tp,
-                )
-                return None
-
         self._last_sl_tightening_evaluation = None
         policy_price = market_price if market_price and market_price > 0 else current_price
         updated = await self._update_position_parameters(stop_loss, take_profit, policy_price)
 
         if updated:
-            self._last_position_update_time = now
             try:
                 current_pnl = self.current_position.calculate_pnl(current_price)  # type: ignore
                 self.brain_service.track_position_update(

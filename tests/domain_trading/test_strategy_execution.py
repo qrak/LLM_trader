@@ -11,7 +11,7 @@ import asyncio
 import json
 import tempfile
 from contextlib import ExitStack
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -908,18 +908,18 @@ class TestExecutorHandshake:
             assert client.get.await_args.kwargs == {"params": {"symbol": "BTC/USDC"}}
 
     @pytest.mark.parametrize(
-        ("signal", "position_overrides", "stop_loss", "take_profit", "probe", "update_age_hours", "expected_action", "expected_sl", "expected_tp", "expected_save", "executor_enabled"),
+        ("signal", "position_overrides", "stop_loss", "take_profit", "probe", "expected_action", "expected_sl", "expected_tp", "expected_save", "executor_enabled"),
         [
-            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, "real", None, None, 40000.0, 60000.0, "unknown_close", False, id="close_signal_without_executor_books_nothing"),
-            pytest.param("CLOSE_LONG", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, "real", None, None, 40000.0, 60000.0, "unknown_close", False, id="close_long_signal_without_executor_books_nothing"),
-            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, True, None, "CLOSE", 40000.0, 60000.0, "pending_close", True, id="close_signal_with_executor_requests_only"),
-            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, "real", 0.0, None, 40000.0, 60000.0, "absent", False, id="update_rejected_too_soon"),
-            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, "real", 100000.0, "UPDATE", 39000.0, 60000.0, "position", False, id="update_sl_applied"),
-            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 40000.0, 61000.0, "real", 100000.0, "UPDATE", 40000.0, 61000.0, "position", False, id="update_tp_applied"),
-            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, False, None, None, 40000.0, 60000.0, "kept", True, id="close_keeps_position_when_executor_flat"),
-            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, False, 100000.0, None, 40000.0, 60000.0, "kept", True, id="update_keeps_position_when_executor_flat"),
-            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, None, None, None, 40000.0, 60000.0, "absent", True, id="close_skipped_when_unverifiable"),
-            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, None, 100000.0, None, 40000.0, 60000.0, "absent", True, id="update_skipped_when_unverifiable"),
+            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, "real", None, 40000.0, 60000.0, "unknown_close", False, id="close_signal_without_executor_books_nothing"),
+            pytest.param("CLOSE_LONG", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, "real", None, 40000.0, 60000.0, "unknown_close", False, id="close_long_signal_without_executor_books_nothing"),
+            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, True, "CLOSE", 40000.0, 60000.0, "pending_close", True, id="close_signal_with_executor_requests_only"),
+            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, "real", "UPDATE", 39000.0, 60000.0, "position", False, id="update_has_no_time_gate"),
+            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, "real", "UPDATE", 39000.0, 60000.0, "position", False, id="update_sl_applied"),
+            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 40000.0, 61000.0, "real", "UPDATE", 40000.0, 61000.0, "position", False, id="update_tp_applied"),
+            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, False, None, 40000.0, 60000.0, "kept", True, id="close_keeps_position_when_executor_flat"),
+            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, False, None, 40000.0, 60000.0, "kept", True, id="update_keeps_position_when_executor_flat"),
+            pytest.param("CLOSE", {"stop_loss": 40000.0, "take_profit": 60000.0}, None, None, None, None, 40000.0, 60000.0, "absent", True, id="close_skipped_when_unverifiable"),
+            pytest.param("UPDATE", {"stop_loss": 40000.0, "take_profit": 60000.0}, 39000.0, 60000.0, None, None, 40000.0, 60000.0, "absent", True, id="update_skipped_when_unverifiable"),
         ],
     )
     async def test_existing_position_signal_matrix(
@@ -929,7 +929,6 @@ class TestExecutorHandshake:
         stop_loss: float | None,
         take_profit: float | None,
         probe: Any,
-        update_age_hours: float | None,
         expected_action: str | None,
         expected_sl: float | None,
         expected_tp: float | None,
@@ -937,7 +936,7 @@ class TestExecutorHandshake:
         executor_enabled: bool,
         tmp_path: Path,
     ) -> None:
-        """CLOSE needs executor evidence; UPDATE needs a verified position and a mature interval."""
+        """CLOSE needs executor evidence; UPDATE needs a verified position, not a time interval."""
         position = make_position(**position_overrides)
         strategy, _, persistence = _strategy(
             position,
@@ -946,8 +945,6 @@ class TestExecutorHandshake:
         )
         if probe != "real":
             strategy._executor_has_position = AsyncMock(return_value=probe)
-        if update_age_hours is not None:
-            strategy._last_position_update_time = datetime.now(timezone.utc) - timedelta(hours=update_age_hours)
 
         result = await strategy._handle_existing_position(
             signal=signal,

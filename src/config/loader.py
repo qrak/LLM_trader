@@ -1,9 +1,10 @@
 """
 Configuration loader for LLM_Trader v2.
-Loads private keys from keys.env and public configuration from config.ini.
+Loads secrets from the process environment or optional keys.env, and settings from config.ini.
 """
 
 import configparser
+import os
 from pathlib import Path
 from typing import Any
 
@@ -35,30 +36,21 @@ class Config:
         self._validate_model_verbosity()
 
     def _load_environment(self):
-        """Load environment variables from keys.env file using python-dotenv."""
-        if not KEYS_ENV_PATH.exists():
-            raise FileNotFoundError(
-                f"Private keys file not found: {KEYS_ENV_PATH}. "
-                "Please create keys.env in the root directory with your API keys."
-            )
-
-        try:
-            env_vars = dotenv_values(KEYS_ENV_PATH)
-
-            for key, value in env_vars.items():
-                if value is not None:
-                    if key == "ADMIN_USER_IDS":
-                        try:
-                            self._env_vars[key] = [int(uid.strip()) for uid in value.split(",") if uid.strip()]
-                        except ValueError as exc:
-                            raise ValueError("Invalid ADMIN_USER_IDS format in keys.env. Expected comma-separated integers.") from exc
-                        continue
-                    if value.isdigit():
-                        value = int(value)
-                    self._env_vars[key] = value
-
-        except Exception as e:
-            raise RuntimeError(f"Error loading environment file {KEYS_ENV_PATH}: {e}") from e
+        """Merge optional keys.env with process variables; process values take precedence."""
+        env_vars = dotenv_values(KEYS_ENV_PATH) if KEYS_ENV_PATH.exists() else {}
+        env_vars.update(os.environ)
+        for key, value in env_vars.items():
+            if value is None:
+                continue
+            if key == "ADMIN_USER_IDS":
+                try:
+                    self._env_vars[key] = [int(uid.strip()) for uid in value.split(",") if uid.strip()]
+                except ValueError as exc:
+                    raise ValueError("Invalid ADMIN_USER_IDS format. Expected comma-separated integers.") from exc
+            elif key == "MAIN_CHANNEL_ID" and value.isdigit():
+                self._env_vars[key] = int(value)
+            else:
+                self._env_vars[key] = value
 
     def _load_ini_config(self):
         """Load configuration from config.ini file."""
@@ -215,7 +207,7 @@ class Config:
         }
 
         if self.PROVIDER.lower() == "deepseek" and not self.DEEPSEEK_API_KEY:
-            raise RuntimeError("`DEEPSEEK_API_KEY` is required in keys.env when using the DeepSeek provider")
+            raise RuntimeError("`DEEPSEEK_API_KEY` is required in the process environment or keys.env when using the DeepSeek provider")
 
         deepseek_max_tokens = self.get_config("model_config", "deepseek_max_tokens", default_max_tokens)
         self._deepseek_model_config = {

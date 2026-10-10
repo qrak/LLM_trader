@@ -25,7 +25,7 @@
 git clone https://github.com/qrak/LLM_trader.git && cd LLM_trader
 python -m venv .venv && source .venv/bin/activate  # or .venv\Scripts\Activate.ps1 on Windows
 pip install -r requirements.txt
-cp keys.env.example keys.env  # add your API keys (DEEPSEEK_API_KEY / GOOGLE_STUDIO_API_KEY / OPENROUTER_API_KEY)
+cp keys.env.example keys.env  # optional; alternatively set your selected provider key in the OS environment
 python start.py               # dashboard at http://localhost:8000
 ```
 
@@ -188,14 +188,26 @@ Key settings in `config/config.ini`:
 | `stop_loss_type` | hard | hard (interval check) or soft (candle close) |
 | `stop_loss_interval_minutes` | 15 | Hard exit check interval |
 
-Required API keys in `keys.env`:
+Secrets can come from **OS / service environment variables (recommended)** or an optional
+`keys.env` in the repository root. Process variables take precedence, including explicitly
+empty values. Environment-only startup needs no `keys.env`. Both sources are read at startup;
+restart after changes (on Windows, reopen the launcher terminal after changing persistent
+variables). Environment variables are not encrypted: keep them out of logs and shell history.
+See `keys.env.example` for the complete list and security notes.
+
+Only the selected provider needs its key. OpenRouter-hosted Google or DeepSeek models use
+**only `OPENROUTER_API_KEY`**, not the direct-vendor keys. With `provider = all`, unavailable
+clients are skipped; supply credentials only for the fallbacks you want. `provider = local`
+needs no cloud key. Unused entries may be empty or absent.
+
+Provider / feature-specific credentials:
 
 | Variable | Required | For |
 |----------|----------|-----|
-| `GOOGLE_STUDIO_API_KEY` | Yes | Google AI Studio provider |
+| `GOOGLE_STUDIO_API_KEY` | Only for `googleai` | Google AI Studio provider |
 | `GOOGLE_STUDIO_PAID_API_KEY` | If used | Paid tier Google AI |
-| `OPENROUTER_API_KEY` | If used | Secondary AI provider |
-| `DEEPSEEK_API_KEY` | If used | DeepSeek official API provider |
+| `OPENROUTER_API_KEY` | Only for `openrouter` | All models served through OpenRouter |
+| `DEEPSEEK_API_KEY` | Only for `deepseek` | DeepSeek official API provider |
 | `BOT_TOKEN_DISCORD` | If used | Discord notifications |
 | `MAIN_CHANNEL_ID` | If used | Discord notification channel |
 | `COINGECKO_API_KEY` | No | Market metrics (rate limit boost) |
