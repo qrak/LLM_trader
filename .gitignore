@@ -1,66 +1,45 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-*.db
-# Virtual Environment
-.env
-.venv
-env/
+
+# Virtual environments
+.venv/
 venv/
-ENV/
 
-# IDE
-.idea/
+# IDE / editors
 .vscode/
+pyrightconfig.json
 
-*.swp
-*.swo
-.devcontainer/
-.claude/
-# Testing
+# Tooling state
+.ruff_cache/
 .pytest_cache/
 .pytest_temp/
-.coverage
-*.future
-htmlcov/
 
-# Project specific
-*.log
+# Runtime data (only categories.json is tracked)
 /data/*
 !/data/categories.json
 /cache/
 /logs/
+*.log
+
+# Local config (secrets: keys.env / .env)
 config/config.ini
 config/peak_rates.json
-# Updated configuration file management
-# Private keys and sensitive data
-keys.env
 *.env
+
+# Website (Astro)
 node_modules/
 website/.astro/
 website/dist/
 
-# Temporary & Cloud Sync Files
+# Local-only files (agent workspace, Windows start scripts)
+.hermes/
+.hermes.md
+.agents/
+scripts/start_script_develop.ps1
+scripts/start_script_futures.ps1
+
+# Temporary & cloud sync files
 .tmp.driveupload/
 *.tmp
-
-.hermes.md
 
