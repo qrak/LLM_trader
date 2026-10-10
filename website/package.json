@@ -14,9 +14,9 @@
         "devalue": "^5.9.4"
     },
     "devDependencies": {
-        "autoprefixer": "^10.4.20",
+        "@tailwindcss/vite": "^4.3.3",
         "postcss": "^8.5.25",
-        "tailwindcss": "^3.4.14",
+        "tailwindcss": "^4.3.3",
         "typescript": "^5.6.3"
     },
     "overrides": {

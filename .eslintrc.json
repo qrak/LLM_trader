@@ -1,5 +1,6 @@
 {
   "root": true,
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "module" },
   "overrides": [
     {
       "files": ["src/dashboard/static/**/*.js"],
