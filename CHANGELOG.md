@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-10 — Dependency security bumps (four of five Dependabot alerts cleared)
+
+### Changed
+- `website/package.json` overrides: `sharp` `^0.35.4` → `^0.35.5`, `smol-toml` `^1.7.1` → `^1.9.1`,
+  plus new pins `source-map-js` `^1.2.2` and `http-cache-semantics` `^4.3.0`; the lockfile was
+  regenerated once (`npm install --package-lock-only`) so all four land in a single commit instead of
+  four Dependabot lockfile PRs that would conflict with each other.
+- Cleared alerts: `sharp` (high, librsvg CVE-2026-96889), `source-map-js` (high, CVE-2026-93749),
+  `http-cache-semantics` (high, CVE-2026-93748), `smol-toml` (medium, quadratic `parse()`).
+- Deliberately NOT cleared: `postcss-selector-parser < 7.1.6` (medium) — reachable only through
+  `tailwindcss@3` and `postcss-nested`, whose declared ranges stop at `^6.x`. The fix requires the
+  Tailwind 3 → 4 migration (that is what Dependabot PR #17 proposes; it rewrites the whole PostCSS
+  plugin chain) and is a separate, build-verified change.
+
 ## 2026-09-26 — DeepSeek thinking effort `high` → `low` (measured, not guessed)
 
 ### Changed
