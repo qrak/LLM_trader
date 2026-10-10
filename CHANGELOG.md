@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-10 — ESLint can parse the website's ES modules
+
+### Fixed
+- Set ECMAScript 2022 / module parsing at the root of `.eslintrc.json`. Previously those
+  options applied only to dashboard JavaScript, so Codacy's ESLint step failed on both
+  `website/astro.config.mjs` and `website/scripts/build-llms-full.mjs` with `import is reserved`.
+- Reproduced both parser errors with ESLint 8.57.1 and confirmed the same invocation passes
+  after this configuration change. The hosted Codacy result requires a new analysis after push;
+  no Codacy account settings or GitHub integration permissions were changed.
+
+## 2026-10-10 — Landing page build migrated to Tailwind CSS 4
+
+### Changed
+- Updated `website` to Tailwind CSS 4.3.3 with the official `@tailwindcss/vite` plugin;
+  removed the unused Autoprefixer dependency and regenerated the lockfile.
+- Imported Tailwind's theme and utilities from the shared Astro layout, with source detection
+  scoped to `website/src`. Preflight is deliberately omitted: the site already has its own
+  reset and component styles, which remain unchanged. Tailwind 3 was installed but not wired
+  into the previous build; this migration does not rewrite the site's templates.
+- Removed the vulnerable transitive `postcss-selector-parser` dependency behind Dependabot
+  alert #82 / PR #17. The prior exposure was limited to building trusted local CSS.
+
+### Verified
+- Production build generates all 11 routes and the same `llms-full.txt` content.
+- Chromium comparison of all routes at 375, 768 and 1280 px: identical sampled computed styles,
+  element geometry and visible text; cookie decline persists after reload; no JavaScript errors.
+- `npm audit`: zero known vulnerabilities in the updated dependency tree.
+
 ## 2026-10-10 — Dashboard chart endpoint stops eating the upload (1.3 GB/day → kB/day)
 
 ### Changed
