@@ -230,6 +230,57 @@ def client(dashboard_server) -> TestClient:
         yield test_client
 
 
+@pytest.mark.parametrize("source", ["disk", "cache", "rag"])
+def test_news_preview_preserves_cards_without_full_bodies(client, dashboard_server, tmp_path, source):
+    articles = [
+        {
+            "title": f"News {index}", "url": "https://example.org/news",
+            "body": "Full article " * 1000, "body_lower": "full article " * 1000,
+            "published_on": 1700000000, "source_info": {"name": "Publisher"},
+            "detected_coins": ["BTC"], "categories": "Bitcoin|Markets", "tags": "BTC",
+        }
+        for index in range(43)
+    ]
+    original = json.loads(json.dumps(articles))
+    if source == "cache":
+        dashboard_server.dashboard_state.set_cached("news", articles)
+    elif source == "rag":
+        dashboard_server.brain_service.rag_engine.get_news_cache_snapshot.return_value = articles
+    else:
+        dashboard_server.brain_service.rag_engine.get_news_cache_snapshot.return_value = []
+        (tmp_path / "crypto_news.json").write_text(json.dumps({"articles": articles}), encoding="utf-8")
+    response = client.get("/api/monitor/news?preview=true")
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview["count"] == 43
+    assert len(preview["articles"]) == 30
+    for full, short in zip(articles, preview["articles"], strict=False):
+        assert short["body"] == full["body"][:301]
+        assert "body_lower" not in short
+        for key in ("title", "url", "published_on", "source_info", "detected_coins", "categories", "tags"):
+            assert short[key] == full[key]
+    assert client.get("/api/monitor/news").json() == {"articles": original, "count": 43}
+    assert articles == original
+    assert len(response.content) < len(json.dumps(original).encode()) / 10
+
+
+@pytest.mark.parametrize("article,expected", [
+    ({"summary": "Summary only"}, "Summary only"),
+    ({"body": "", "summary": "Fallback summary"}, "Fallback summary"),
+    ({}, ""),
+])
+def test_news_preview_keeps_summary_fallback(client, dashboard_server, article, expected):
+    dashboard_server.dashboard_state.set_cached("news", [article])
+    assert client.get("/api/monitor/news?preview=true").json() == {
+        "articles": [{"body": expected}], "count": 1,
+    }
+
+
+def test_news_preview_empty_state(client, dashboard_server):
+    dashboard_server.dashboard_state.set_cached("news", [])
+    assert client.get("/api/monitor/news?preview=true").json() == {"articles": [], "count": 0}
+
+
 def test_build_current_market_context_renders_indicators_and_exit_execution(tmp_path, monkeypatch):
     class _Sroda(datetime):
         @classmethod

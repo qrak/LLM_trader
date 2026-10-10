@@ -86,10 +86,14 @@ DashboardServer(
 |------|--------|--------|
 | **Bypass** | `/api/brain/refresh-price` | Volatile price endpoint |
 | **Bypass** | `/api/brain/vectors?query=*` | High-cardinality search |
-| **Cache** | `/api/status/countdown` | Static countdown data |
-| **Cache** | `/api/*` | Safe GET traffic |
+| **Cache** | `/api/status/countdown` | Short-lived fallback; live updates use WebSocket |
+| **No broad cache rule** | `/api/*` | Position, status and private APIs must stay fresh |
+| **Cache** | GET `/api/visuals/charts/latest` | Edge TTL 300s; preserve revision query across polls and rotate after analysis / tab return |
 | **Cache** | HTML shell pages | Static shell |
 | **Cache** | Static assets | Versioned assets |
+
+- Never strip chart revision query parameters at the edge: doing so defeats immediate post-analysis refresh. Keep one revision URL between ordinary polls and reject late responses from an older request.
+- The news panel requests `/api/monitor/news?preview=true`: the same 30 cards with 300-character excerpts, without full article bodies and internal search fields. The default API response and RAG cache remain full; polling intervals are unchanged.
 
 ---
 

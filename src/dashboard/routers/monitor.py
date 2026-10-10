@@ -126,11 +126,11 @@ class MonitorRouter:
             data = json.load(f)
             return data.get("articles", data)
 
-    async def get_news(self) -> dict[str, Any]:
-        """Get cached news articles from RAG engine or disk."""
+    async def get_news(self, preview: bool = False) -> dict[str, Any]:
+        """Get full articles or the unchanged dashboard's lightweight previews."""
         cached = self.dashboard_state.get_cached("news", ttl_seconds=3600.0)
         if cached is not None:
-            return {"articles": cached, "count": len(cached)}
+            return self._news_payload(cached, preview)
         articles = []
         if self.rag_engine:
             articles = self.rag_engine.get_news_cache_snapshot()
@@ -147,7 +147,22 @@ class MonitorRouter:
                     except Exception:
                         self.logger.error("Failed to load news from %s", news_path, exc_info=True)  # noqa: G201
         self.dashboard_state.set_cached("news", articles)
-        return {"articles": articles, "count": len(articles)}
+        return self._news_payload(articles, preview)
+
+    @staticmethod
+    def _news_payload(articles: list[dict[str, Any]], preview: bool) -> dict[str, Any]:
+        if not preview:
+            return {"articles": articles, "count": len(articles)}
+        fields = (
+            "title", "url", "guid", "published_on", "publishedOn", "source_info",
+            "source", "detected_coins", "categories", "tags",
+        )
+        previews = []
+        for article in articles[:30]:
+            item = {key: article[key] for key in fields if key in article}
+            item["body"] = (article.get("body") or article.get("summary") or "")[:301]
+            previews.append(item)
+        return {"articles": previews, "count": len(articles)}
 
     async def get_health(self) -> dict[str, Any]:
         """Lightweight liveness probe for Docker healthchecks and systemd watchdogs.

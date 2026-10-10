@@ -1,14 +1,14 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.6';
 import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.6';
 import { updateLogs } from './modules/log_viewer.js?v=4.8';
-import { updateVisuals } from './modules/visuals.js?v=4.6';
+import { updateVisuals } from './modules/visuals.js?v=4.7';
 import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.10';
 import { initFullscreen } from './modules/fullscreen.js?v=4.7';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.7';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.10';
 import { initUI } from './modules/ui.js?v=4.9';
 import { initStatisticsPanel, updateStatisticsData } from './modules/statistics_panel.js?v=4.7';
-import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.8';
+import { initNewsPanel, updateNewsData } from './modules/news_panel.js?v=4.9';
 import { initPostMortemPanel, updatePostMortemData } from './modules/post_mortem_panel.js?v=1.3';
 import { initConsolePanel } from './modules/console_panel.js?v=1.1';
 
@@ -277,9 +277,11 @@ function initApp() {
     setInterval(() => { if (!document.hidden) _runSafely('updateFastLane', updateFastLane); }, state.fastPollInterval);
     setInterval(() => { if (!document.hidden) _runSafely('updateSlowLane', updateSlowLane); }, state.slowPollInterval);
 
-    // A hidden tab polls nothing; catch up once when it comes back into view.
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) _runSafely('updateAll', updateAll);
+        if (!document.hidden) {
+            _runSafely('updateVisuals', () => updateVisuals({ cacheBust: true }));
+            _runSafely('updateAll', updateAll);
+        }
     });
 
     document.addEventListener('analysis-complete', () => {

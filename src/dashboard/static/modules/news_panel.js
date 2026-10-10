@@ -7,7 +7,7 @@ export async function updateNewsData() {
     const container = document.getElementById('news-content');
     if (!container) return;
     try {
-        const response = await fetch('/api/monitor/news');
+        const response = await fetch('/api/monitor/news?preview=true');
         const data = await response.json();
         if (!data.articles || data.articles.length === 0) {
             container.innerHTML = `

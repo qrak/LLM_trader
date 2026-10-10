@@ -1,15 +1,21 @@
+let chartRevision = Date.now();
+let chartRequest = 0;
+
 export async function updateVisuals({ cacheBust = false } = {}) {
+    if (cacheBust) chartRevision = Date.now();
+    if (document.hidden) return;
+    const requestId = ++chartRequest;
     const img = document.getElementById('analysis-chart');
     const noChartMsg = document.getElementById('no-chart-msg');
     
     try {
-        const url = cacheBust
-            ? `/api/visuals/charts/latest?t=${Date.now()}`
-            : '/api/visuals/charts/latest';
-        const response = await fetch(url, { cache: cacheBust ? 'reload' : 'default' });
+        const url = `/api/visuals/charts/latest?t=${chartRevision}`;
+        const response = await fetch(url);
+        if (requestId !== chartRequest) return;
         
         if (response.ok) {
             const data = await response.json();
+            if (requestId !== chartRequest) return;
             
             if (data.chart_base64) {
                 img.src = `data:image/png;base64,${data.chart_base64}`;
@@ -63,6 +69,7 @@ export async function updateVisuals({ cacheBust = false } = {}) {
             noChartMsg.style.display = 'block';
         }
     } catch (e) {
+        if (requestId !== chartRequest) return;
         console.error("Failed to update visuals", e);
         img.style.display = 'none';
         noChartMsg.textContent = 'Error loading chart';

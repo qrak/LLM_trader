@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-10-10 — Fresh chart revisions and lightweight dashboard news
+
+### Fixed
+- Preserve one chart revision URL between polls and rotate it after analysis or return
+  to a visible tab. Late HTTP responses and JSON decoding cannot overwrite newer charts.
+- Disabled the Cloudflare query-stripping rewrite that defeated immediate chart refresh;
+  narrowed the 300-second edge rule to GET `/api/visuals/charts/latest`. New revisions
+  produce MISS; repeated requests to the same revision produce HIT.
+
+### Changed
+- The news panel requests `?preview=true`: the same 30 rendered cards and excerpts,
+  without full article bodies or internal search fields. Full API responses and RAG
+  contents remain unchanged; fast/slow polling intervals remain 10/30 seconds.
+- Bumped modified static imports and purged only the dashboard HTML shell URLs.
+
+### Verified
+- Full Windows-venv suite: **1977 passed, 17 skipped**; dashboard subset: **144 passed**.
+  Ruff passes; changed backend has zero Pyright diagnostics. Full Pyright reports
+  16 errors in unchanged files, matching the previously documented baseline.
+- Real news payload: 610,664 → 20,197 bytes; gzip comparison: 157,797 → 7,022 bytes.
+  Both payloads render identical HTML for all 30 actual news cards.
+- Six frontend checks pass: stable revision, forced revision persistence, hidden-tab
+  suppression, HTTP/JSON race protection and news rendering parity. Live browser
+  loads the 1920×1080 chart, opens WebSocket, renders 30 news cards and immediately
+  requests a fresh revision on the simulated client-side analysis-complete event.
+- Public position/status/price remain DYNAMIC; admin remains 403 and unauthenticated
+  Hermes sessions remain 401. Live-state fingerprints are unchanged by the suite.
+- Cloudflare/frontend changes are live. The news backend awaits the user's normal bot
+  restart; the running older backend safely ignores the new query. No bot/executor
+  restart, order, commit or push was performed.
+
 ## 2026-10-10 — Prompt deduplication and unsupported ticker isolation
 
 ### Fixed
