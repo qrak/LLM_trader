@@ -274,11 +274,17 @@ function initApp() {
 
     _runSafely('updateAll', updateAll);
 
-    setInterval(() => _runSafely('updateFastLane', updateFastLane), state.fastPollInterval);
-    setInterval(() => _runSafely('updateSlowLane', updateSlowLane), state.slowPollInterval);
+    setInterval(() => { if (!document.hidden) _runSafely('updateFastLane', updateFastLane); }, state.fastPollInterval);
+    setInterval(() => { if (!document.hidden) _runSafely('updateSlowLane', updateSlowLane); }, state.slowPollInterval);
+
+    // A hidden tab polls nothing; catch up once when it comes back into view.
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) _runSafely('updateAll', updateAll);
+    });
 
     document.addEventListener('analysis-complete', () => {
         console.log('Analysis complete, refreshing...');
+        _runSafely('updateVisuals', () => updateVisuals({ cacheBust: true }));
         _runSafely('updateFastLane', updateFastLane);
         _runSafely('updateSlowLane', updateSlowLane);
     });

@@ -404,6 +404,14 @@ def _api_cache_policies(path, query_params):
             "public, max-age=15, stale-while-revalidate=10, stale-if-error=60",
         )
 
+    if path.startswith("/api/visuals/"):
+        # Charts are a few hundred kB and only change when an analysis runs;
+        # a long edge TTL keeps the pollers off the origin box.
+        return (
+            "public, max-age=60, stale-while-revalidate=300",
+            "public, max-age=300, stale-while-revalidate=60, stale-if-error=600",
+        )
+
     return (
         "public, max-age=15",
         "public, max-age=60, stale-while-revalidate=30, stale-if-error=300",

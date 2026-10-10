@@ -1,10 +1,12 @@
-export async function updateVisuals() {
+export async function updateVisuals({ cacheBust = false } = {}) {
     const img = document.getElementById('analysis-chart');
     const noChartMsg = document.getElementById('no-chart-msg');
     
     try {
-        const timestamp = Date.now();
-        const response = await fetch(`/api/visuals/charts/latest?t=${timestamp}`);
+        const url = cacheBust
+            ? `/api/visuals/charts/latest?t=${Date.now()}`
+            : '/api/visuals/charts/latest';
+        const response = await fetch(url, { cache: cacheBust ? 'reload' : 'default' });
         
         if (response.ok) {
             const data = await response.json();
@@ -32,7 +34,7 @@ export async function updateVisuals() {
                     }
                 };
             } else if (data.chart_url) {
-                img.src = data.chart_url + `?t=${timestamp}`;
+                img.src = cacheBust ? `${data.chart_url}?t=${Date.now()}` : data.chart_url;
                 img.style.display = 'block';
                 img.alt = 'Analysis chart';
                 noChartMsg.style.display = 'none';

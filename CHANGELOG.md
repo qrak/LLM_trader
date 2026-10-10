@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-10 — Dashboard chart endpoint stops eating the upload (1.3 GB/day → kB/day)
+
+### Changed
+- **`/api/visuals/charts/latest` carries an ETag derived from the chart bytes** (`routers/visuals.py`)
+  instead of letting the middleware hash a body that contains a fresh timestamp — the old ETag changed
+  on every call, so every poll re-downloaded the whole image. A stable ETag means revalidations answer
+  `304` with no body.
+- **`/api/visuals/*` gets its own cache policy** (`server.py::_api_cache_policies`): browsers 60 s,
+  Cloudflare edge 300 s. The endpoint hands out ~690 kB of base64 per call and only changes when an
+  analysis produces a new chart.
+- **The dashboard stopped defeating its own cache** (`static/modules/visuals.js`, `static/main.js`):
+  the chart poll appended a random `?t=<Date.now()>` to every request, so no browser or edge cache could
+  ever serve it. Now the plain URL is polled (and the chart is force-refreshed on `analysis-complete`),
+  and a hidden tab no longer polls at all — it catches up once when it comes back into view.
+- Cloudflare cache rule added for `semanticsignal.qrak.org/api/visuals/*`: cache eligible, edge TTL 300 s
+  (verified: `cf-cache-status: HIT` with `age` past 300 s, then `EXPIRED`).
+
+### Why
+Cloudflare analytics showed 1.46 GB/day leaving this box, dominated by ~1,900 calls/day to that one
+endpoint from viewers in three countries. Measured after the change: the edge serves the polls, the
+origin is fetched at most once per 300 s, and an unchanged chart answers 304.
+
 ## 2026-10-10 — Dependency security bumps (four of five Dependabot alerts cleared)
 
 ### Changed
