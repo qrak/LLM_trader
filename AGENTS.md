@@ -286,7 +286,8 @@ LLM_trader/
 ├── start.py                     # Entry point + CompositionRoot
 ├── AGENTS.md                    # THIS FILE — single master architecture blueprint & rules
 ├── README.md                    # Project overview, setup, roadmap
-├── CHANGELOG.md                 # Version history
+├── CHANGELOG.md                 # Version history (newest first)
+├── docs/                        # Older changelog entries: changelog-archive-{2025,2026}.md
 ├── requirements.txt / -dev.txt
 ├── keys.env / keys.env.example  # Secrets
 ├── config/

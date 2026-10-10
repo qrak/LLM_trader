@@ -43,7 +43,7 @@ If your change touches prompts, parsing, trading logic, dashboard routes, or new
 
 - Update `README.md` when user-facing behavior changes.
 - Update docs under `docs/` when architecture or workflows change.
-- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes.
+- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes. Add entries at the top; when the file grows, move the entries below the previous release into `docs/changelog-archive-<year>.md` and link them from the `## Archive` section.
 
 ## Pull Request Checklist
 
