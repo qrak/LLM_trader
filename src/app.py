@@ -132,7 +132,7 @@ class CryptoTradingBot:
 
         self.current_symbol: str | None = None
         self.current_timeframe: str | None = None
-        self._reddit_sentiment_label = "NEUTRAL"
+        self._reddit_post_count = 0
         self.position_monitor = (
             services.position_monitor_factory(self)
             if services.position_monitor_factory is not None
@@ -329,7 +329,13 @@ class CryptoTradingBot:
             and snapshot_before != snapshot_after_analysis
         )
 
-        result["_social_sentiment_reddit"] = self._reddit_sentiment_label
+        analysis = result.get("analysis")
+        if analysis is not None:
+            analysis["reddit_sentiment"] = (
+                self.sentiment_analyst.validate_assessment(
+                    analysis.get("reddit_sentiment"), self._reddit_post_count
+                ) if self.sentiment_analyst is not None else None
+            )
         demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
         result["_portfolio_pnl_pct"] = ((current_capital - demo_capital) / demo_capital * 100) if demo_capital > 0 else 0.0
@@ -560,24 +566,12 @@ class CryptoTradingBot:
         return tuple(snapshot) if isinstance(snapshot, tuple) and len(snapshot) == 2 else None
 
     async def _protection_version(self) -> str | None:
-        """Protection revision the executor reports, or None without that contract.
-
-        Wave-5 requirement (3). The strategy's ``executor_protection_version`` asks the
-        executor's ``/position`` for its ``protection_version`` (monotonic counter of
-        protection changes; ``0`` = none observed, returned verbatim). An older executor
-        without the field gives None, in which case the guard below stays inert (it
-        never guesses a version). A strategy double / older strategy without the method
-        also yields None — the guard must not fail a trading cycle over a missing hook.
-        """
-        version_fn = getattr(self.trading_strategy, "executor_protection_version", None)
-        if not callable(version_fn):
-            return None
+        """Query the executor's protection revision; log I/O failures without guessing it."""
         try:
-            version = await version_fn()
+            return await self.trading_strategy.executor_protection_version()
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Protection version query failed: %s", e)
             return None
-        return str(version) if version is not None else None
 
     def _protection_version_guard(
         self,
@@ -781,17 +775,16 @@ class CryptoTradingBot:
         dynamic_thresholds = self.brain_service.get_dynamic_thresholds()
 
         additional_context = ""
-        self._reddit_sentiment_label = "NEUTRAL"
+        self._reddit_post_count = 0
         if (
             self.config.SOCIAL_SENTIMENT_ENABLED
             and self.sentiment_analyst is not None
         ):
             try:
-                sentiment_data = await self.sentiment_analyst.fetch_sentiment()
-                additional_context += self.sentiment_analyst.format_sentiment_section(
-                    sentiment_data
-                )
-                self._reddit_sentiment_label = sentiment_data.get("overall_sentiment", "NEUTRAL")
+                posts_data = await self.sentiment_analyst.fetch_posts()
+                reddit_context = self.sentiment_analyst.build_context(posts_data)
+                additional_context += reddit_context.text
+                self._reddit_post_count = reddit_context.post_count
             except Exception as e:  # noqa: BLE001
                 self.logger.warning("Failed to fetch Reddit sentiment: %s", e)
 

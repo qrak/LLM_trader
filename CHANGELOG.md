@@ -1,5 +1,95 @@
 # Changelog
 
+## 2026-10-11 — Clean full type check and safe post-await position handling
+
+### Fixed
+- Removed the remaining 15 Pyright diagnostics without new ignores, casts,
+  blanket Any declarations or weaker checker settings. Known asynchronous
+  strategy/notifier methods are called directly.
+- Declared the mixin's executor-query and intent-registration contracts. Moved
+  the shared static commission formatter into the position-management mixin
+  without changing its signature, body or inherited callers.
+- Recheck the nullable local position after executor verification and after an
+  awaited parameter update. If another task closed it, skip the stale command
+  instead of dereferencing None or recording a command for a nonexistent position.
+- Removed four obsolete position-access type ignores.
+
+### Verified
+- Full `pyright src start.py`: **0 errors, 0 warnings**. Ruff and startup import pass.
+- Full Windows suite: **2011 passed, 17 skipped**. Every existing test file and
+  assertion remains byte-identical to the source snapshot before this correction.
+- Separate isolated runtime probes reproduced AttributeError in the old CLOSE,
+  UPDATE and save-in-progress paths; corrected paths emit no stale decision,
+  history row, intent or learning event. Protection-version and one-shot alert
+  probes pass. No trading services or external orders were started by the probes.
+
+## 2026-10-11 — Direct configuration access in position-monitor wiring
+
+### Fixed
+- Read the reconciliation interval through the known Config.get_config method
+  directly, removing dynamic method discovery and its incorrect object inference
+  in the composition root. Keep the existing default for missing/malformed values.
+- Added six composition-root wiring cases covering the default, numeric values,
+  numeric strings and invalid configuration values.
+
+### Verified
+- Full Windows suite: **2011 passed, 17 skipped**. Ruff passes.
+- Full Pyright: **15 errors**, down from 16; start.py has no diagnostics.
+  The remaining diagnostics in app.py, position_management.py and
+  position_status_monitor.py are unchanged and still unresolved.
+
+## 2026-10-11 — Evidence-based Reddit context in the existing trading analysis
+
+### Changed
+- Replaced bullish/bearish title-keyword scoring with a bounded sample interpreted
+  by the trading LLM in the same request. No new model, vector index or API call.
+- Select up to 15 distinct titles published within 48 hours; exclude organizational
+  threads, missing/future dates and duplicates. The complete section, including
+  instructions and UTC dates, is capped at 600 locally estimated tokens. Titles
+  are kept whole rather than truncated to fit.
+- The model returns BULLISH, BEARISH, MIXED or INSUFFICIENT_EVIDENCE with cited
+  title IDs and a short explanation. Missing/malformed assessments and references
+  outside the supplied sample are discarded; no data means null, not neutral.
+- Validated model outlook reaches the entry-time market snapshot and learning.
+  Removed the old scoring/formatting methods, fake vote/comment metrics, keyword
+  topics and scraper-derived result label; no compatibility aliases or fallback.
+
+### Verified
+- Full Windows-venv suite: **2005 passed, 17 skipped**, compared with **1984 passed,
+  17 skipped** before changes. Ruff passes; full Pyright retains the same 16
+  pre-existing diagnostics, with no new errors.
+- Real Reddit fetch returned 40 titles without errors; 14 selected titles used
+  **596 tokens**, 404 more than the previous section. A text-only replay through
+  the configured DeepSeek model returned a valid INSUFFICIENT_EVIDENCE assessment,
+  distinguishing jokes/wallet-security concerns from price expectations. No chart
+  was supplied and no trading services or orders were started by the probe.
+- HTTP retry/partial-failure, recency/deduplication/budget, response-evidence,
+  application wiring and fresh position-load regressions pass. Bot activation
+  requires the user's normal restart; no restart, commit or push was performed.
+
+## 2026-10-10 — Shared dashboard price refresh cooldown
+
+### Fixed
+- Dashboard `/api/brain/refresh-price` shares one exchange attempt across concurrent
+  visitors and keeps the result in process memory for 10 seconds using a monotonic clock.
+  Errors are reused too, preventing repeated retry traffic when the exchange fails.
+- Browser reloads, no-cache headers and changing query strings cannot bypass the
+  cooldown. Response format, HTTP no-store, trading-loop fetches and polling stay unchanged.
+
+### Verified
+- Full Windows suite: **1984 passed, 17 skipped**; dashboard subset: **151 passed**.
+  Ruff passes; changed router has zero Pyright diagnostics. Full Pyright retains
+  the 16 documented errors in unchanged files. Composition-root import succeeds.
+- Isolated HTTP test against the real Binance public ticker: 41 dashboard requests
+  produced one exchange request; a request after 10.1 seconds produced the second.
+  Concurrent caller, expiry-boundary, result-copy, query/IP and failure regressions pass.
+- Live dashboard stays connected with its 1920x1080 chart and 30 news cards;
+  live-state fingerprints are unchanged by tests. Backend changes require the
+  user's normal restart; no bot/executor restart, commit or push was performed.
+- Additional Cloudflare rate limiting was rejected by the Free plan: its one slot
+  is occupied by the leaked-credential protection. That existing rule was preserved;
+  no additional edge rate limit is claimed or active.
+
 ## 2026-10-10 — Fresh chart revisions and lightweight dashboard news
 
 ### Fixed

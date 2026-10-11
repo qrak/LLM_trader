@@ -154,7 +154,7 @@ class VectorMemoryContextMixin:
             structure_parts.append(f"MFI={mfi:.1f}")
         if cmf is not None:
             structure_parts.append(f"CMF={cmf:+.3f}")
-        if social_sentiment_reddit and social_sentiment_reddit not in ("NEUTRAL", "NO_DATA"):
+        if social_sentiment_reddit in ("BULLISH", "BEARISH", "MIXED"):
             structure_parts.append(f"Reddit={social_sentiment_reddit}")
         if portfolio_pnl_pct is not None:
             structure_parts.append(f"PortfolioPnL={portfolio_pnl_pct:+.1f}%")

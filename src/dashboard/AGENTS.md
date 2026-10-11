@@ -94,6 +94,7 @@ DashboardServer(
 
 - Never strip chart revision query parameters at the edge: doing so defeats immediate post-analysis refresh. Keep one revision URL between ordinary polls and reject late responses from an older request.
 - The news panel requests `/api/monitor/news?preview=true`: the same 30 cards with 300-character excerpts, without full article bodies and internal search fields. The default API response and RAG cache remain full; polling intervals are unchanged.
+- `/api/brain/refresh-price` shares one exchange attempt across all dashboard callers in the process, then reuses its result for 10 seconds measured with a monotonic clock. An asyncio lock coalesces concurrent callers; failed attempts are cached too. Query strings, reload and browser no-cache cannot bypass this origin-side cooldown. HTTP remains no-store; trading-loop fetches and WebSocket cadence are unchanged.
 
 ---
 

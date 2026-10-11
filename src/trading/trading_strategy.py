@@ -297,19 +297,6 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         return decision
 
     @staticmethod
-    def _commission_text(fee: float | None, fee_source: str | None = None) -> str:
-        """Operator-facing commission text that never invents a number.
-
-        A commission may only be stated when real fill/order fee data provided it. With
-        no such data the text says UNKNOWN explicitly: ``0.0`` and the configured
-        0.075% rate are both claims the bot cannot back with evidence.
-        """
-        if fee is None:
-            return "Fee: unknown (no fill/order fee data — no rate was assumed)"
-        origin = f" from {fee_source}" if fee_source else ""
-        return f"Fee: ${fee:.4f}{origin}"
-
-    @staticmethod
     def _booked_quantity(
         position: Position, filled_quantity: float | None
     ) -> tuple[float, str]:

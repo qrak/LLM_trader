@@ -198,7 +198,9 @@ enabled = false
 # Fetches the latest posts from r/CryptoCurrency, r/Bitcoin, r/ethereum and
 # r/CryptoMarkets via Reddit's public Atom RSS feeds (no API key).
 # Requests are spaced ~20s apart to stay within Reddit's rate limits.
-# Sentiment summary is injected into the LLM prompt as supplementary context.
+# Up to 15 distinct titles from the last 48h fit in a 600-token context budget.
+# The trading LLM assesses outlook with cited titles in its existing response.
+# No keyword sentiment score, extra LLM request or vector index is used.
 # (this template ships it disabled so the first run makes no Reddit requests)
 [social_sentiment]
 enabled = false

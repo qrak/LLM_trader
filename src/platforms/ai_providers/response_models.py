@@ -1,6 +1,6 @@
 """Unified Pydantic response models for all AI providers."""
 from enum import Enum
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -109,6 +109,24 @@ class TrendModel(BaseModel):
     timeframe_alignment: TimeframeAlignment | None = None
 
 
+class RedditAssessmentModel(BaseModel):
+    """Same-call interpretation of the selected Reddit titles, with evidence IDs."""
+    model_config = ConfigDict(extra="forbid")
+
+    outlook: Literal["BULLISH", "BEARISH", "MIXED", "INSUFFICIENT_EVIDENCE"]
+    evidence: list[Annotated[int, Field(strict=True, ge=1)]]
+    reason: str = Field(min_length=1, max_length=240)
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> "RedditAssessmentModel":
+        """Directional assessments need distinct references to supplied titles."""
+        if len(self.evidence) != len(set(self.evidence)):
+            raise ValueError("Reddit evidence IDs must be unique")
+        if self.outlook != "INSUFFICIENT_EVIDENCE" and not self.evidence:
+            raise ValueError("Reddit outlook requires title evidence")
+        return self
+
+
 class TradingAnalysisModel(BaseModel):
     """Validated shape for the `analysis` object in trading responses."""
     model_config = ConfigDict(extra="allow")
@@ -123,6 +141,7 @@ class TradingAnalysisModel(BaseModel):
     reasoning: str = ""
     key_levels: KeyLevelsModel | None = None
     trend: TrendModel | None = None
+    reddit_sentiment: RedditAssessmentModel | None = None
     risk_reward_ratio: float | None = Field(default=None, ge=0)
     symbol: str | None = None
     order_type: str | None = None

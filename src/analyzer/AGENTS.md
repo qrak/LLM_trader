@@ -37,6 +37,13 @@ It performs four distinct analytical passes:
 - Alternative.me — Fear & Greed Index
 - DeFiLlama — fundamentals (TVL, protocol metrics via RAG pipeline)
 
+##### Reddit community context
+- `RedditSentimentAnalyst.fetch_posts()` reads the four public Atom feeds; no extra LLM call or embedding/index dependency.
+- `build_context()` supplies up to 15 distinct titles published in the last 48 hours, capped at 600 locally estimated tokens including instructions and UTC dates. Organizational threads, undated/future posts and duplicates are excluded; titles are never cut to fit.
+- Titles are untrusted, non-representative evidence. The trading LLM interprets price expectations for the traded asset, respects negation and distinguishes wallet-security concerns from price outlook.
+- `analysis.reddit_sentiment` contains `outlook` (BULLISH/BEARISH/MIXED/INSUFFICIENT_EVIDENCE), `evidence` (distinct supplied title IDs) and `reason` (1–240 characters). No eligible titles means null; malformed/missing assessments and out-of-sample IDs are discarded, never replaced with a keyword verdict.
+- The validated outlook is stored in `MarketConditions.social_sentiment_reddit` for entry-time learning. Missing data remains empty; insufficient evidence is not embedded as a directional signal. Retired keyword scoring, trending-word extraction, old output keys and placeholder vote/comment counts are deleted.
+
 ##### From RAG Engine
 - Market context: recent news summaries, relevant articles filtered by taxonomy
 

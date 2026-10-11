@@ -189,9 +189,6 @@ class PositionStatusMonitor:
         )
         if not self.notifier:
             return
-        send = getattr(self.notifier, "send_message", None)
-        if not callable(send):
-            return
         detail = getattr(request, "detail", "") or ""
         message = (
             "🚨 **Local exit condition — no evidence, no booking** — "
@@ -199,7 +196,7 @@ class PositionStatusMonitor:
             "I am not closing the position silently."
         )
         try:
-            await send(message, channel_id=self.config.MAIN_CHANNEL_ID)
+            await self.notifier.send_message(message, channel_id=self.config.MAIN_CHANNEL_ID)
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Failed to send the local-exit alert: %s", e)
 

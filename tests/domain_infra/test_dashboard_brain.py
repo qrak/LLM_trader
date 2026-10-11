@@ -4,6 +4,7 @@ Covers the brain and performance routers, the cache and security middleware of
 src/dashboard/server.py, the decision presenters and the static dashboard bindings.
 """
 
+import asyncio
 import json
 import re
 import time
@@ -12,6 +13,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
 from src.dashboard.dashboard_state import DashboardState
@@ -1000,6 +1003,104 @@ async def test_refresh_current_price_updates_state_only_for_positive_price(tmp_p
         "symbol": "BTC/USDT",
     }
     assert state.current_price == 71000.5
+
+
+async def test_refresh_current_price_reuses_result_for_all_callers(tmp_path):
+    config = make_config(DATA_DIR=str(tmp_path), CRYPTO_PAIR="BTC/USDT")
+    exchange = exchange_double({"last": 71000.5})
+    manager = exchange_manager_for(exchange)
+    router = brain_router(config, exchange_manager=manager)
+
+    first = await router.refresh_current_price()
+    second = await router.refresh_current_price()
+
+    assert first == second
+    exchange.fetch_ticker.assert_awaited_once_with("BTC/USDT")
+    manager.find_symbol_exchange.assert_awaited_once_with("BTC/USDT")
+
+
+async def test_refresh_current_price_expires_at_ten_seconds(tmp_path, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr("src.dashboard.routers.brain.monotonic", lambda: clock[0])
+    config = make_config(DATA_DIR=str(tmp_path), CRYPTO_PAIR="BTC/USDT")
+    exchange = exchange_double()
+    exchange.fetch_ticker.side_effect = [{"last": 71000.0}, {"last": 72000.0}]
+    router = brain_router(config, exchange_manager=exchange_manager_for(exchange))
+
+    first = await router.refresh_current_price()
+    first["current_price"] = -1.0
+    clock[0] = 109.999
+    assert (await router.refresh_current_price())["current_price"] == 71000.0
+    exchange.fetch_ticker.assert_awaited_once()
+    clock[0] = 110.0
+    assert (await router.refresh_current_price())["current_price"] == 72000.0
+    assert exchange.fetch_ticker.await_count == 2
+
+
+async def test_refresh_current_price_shares_concurrent_fetch(tmp_path):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    state = DashboardState()
+    state.update_price = AsyncMock()
+    config = make_config(DATA_DIR=str(tmp_path), CRYPTO_PAIR="BTC/USDT")
+    exchange = exchange_double()
+
+    async def fetch_ticker(symbol):
+        assert symbol == "BTC/USDT"
+        started.set()
+        await release.wait()
+        return {"last": 71000.0}
+
+    exchange.fetch_ticker.side_effect = fetch_ticker
+    manager = exchange_manager_for(exchange)
+    router = brain_router(config, state=state, exchange_manager=manager)
+    first = asyncio.create_task(router.refresh_current_price())
+    await asyncio.wait_for(started.wait(), timeout=2.0)
+    callers = [asyncio.create_task(router.refresh_current_price()) for _ in range(20)]
+    release.set()
+    results = await asyncio.wait_for(asyncio.gather(first, *callers), timeout=2.0)
+
+    assert all(result == results[0] for result in results)
+    assert results[0]["success"] is True
+    exchange.fetch_ticker.assert_awaited_once()
+    manager.find_symbol_exchange.assert_awaited_once()
+    state.update_price.assert_awaited_once_with(71000.0)
+
+
+@pytest.mark.parametrize("outcome", ["unresolved", "exception", "empty"])
+async def test_refresh_current_price_throttles_failures(tmp_path, monkeypatch, outcome):
+    clock = [100.0]
+    monkeypatch.setattr("src.dashboard.routers.brain.monotonic", lambda: clock[0])
+    config = make_config(DATA_DIR=str(tmp_path), CRYPTO_PAIR="BTC/USDT")
+    exchange = exchange_double(error=RuntimeError("exchange unavailable") if outcome == "exception" else None)
+    manager = exchange_manager_for(None if outcome == "unresolved" else exchange)
+    router = brain_router(config, exchange_manager=manager)
+
+    first = await router.refresh_current_price()
+    assert first["success"] is False
+    assert await router.refresh_current_price() == first
+    manager.find_symbol_exchange.assert_awaited_once()
+    clock[0] = 110.0
+    assert await router.refresh_current_price() == first
+    assert manager.find_symbol_exchange.await_count == 2
+
+
+async def test_refresh_price_http_callers_cannot_bypass_shared_cache(tmp_path):
+    config = make_config(DATA_DIR=str(tmp_path), CRYPTO_PAIR="BTC/USDT")
+    exchange = exchange_double({"last": 71000.0})
+    router = brain_router(config, exchange_manager=exchange_manager_for(exchange))
+    app = FastAPI()
+    app.include_router(router.router)
+
+    async def request_price(index):
+        transport = ASGITransport(app=app, client=(f"192.0.2.{index + 1}", 12345))
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get(f"/api/brain/refresh-price?cb={index}", headers={"Cache-Control": "no-cache"})
+
+    responses = await asyncio.gather(*(request_price(index) for index in range(20)))
+    assert all(response.status_code == 200 for response in responses)
+    assert all(response.json()["current_price"] == 71000.0 for response in responses)
+    exchange.fetch_ticker.assert_awaited_once_with("BTC/USDT")
 
 
 async def test_get_statistics_defaults_reads_file_and_serves_cache(tmp_path):

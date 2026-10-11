@@ -837,6 +837,7 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
         "key_levels": {{"support": [64032.54, 63370.50], "resistance": [64478.17, 64961.17]}},
         "trend": {{"direction": "NEUTRAL", "strength_4h": 20, "strength_daily": 15, "timeframe_alignment": "DIVERGENT"}},
         "risk_reward_ratio": null,
+        "reddit_sentiment": null,
         "symbol": "BTC/USDC",
         "order_type": null,
         "quantity": 0.0,
@@ -904,6 +905,7 @@ TREND BLOCK (analysis.trend):
   and fails the response contract — the alignment question is about agreement
   between timeframes, not direction.
 - strength_4h / strength_daily: copy the provided ADX / Daily ADX, rounded to integers. These are ADX readings (0-100), NOT subjective strength scores; do not rescale or double them.
+- analysis.reddit_sentiment: assess the supplied Reddit title IDs using that section's contract; null when no eligible titles are supplied. Never reuse a previous cycle's assessment.
 
 HOLD semantics: HOLD(no position) = no position and no pending/future order; if the entry isn't valid at the current price, stay flat. HOLD(open position) = no execution change and must not repeat stale SL/TP values. UPDATE is for an open position only.
 

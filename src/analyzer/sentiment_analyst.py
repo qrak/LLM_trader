@@ -1,99 +1,72 @@
-"""Social media sentiment analyst using Reddit public Atom feeds.
-
-Fetches top posts from crypto subreddits to gauge community sentiment.
-No API key required.
-
-NOTE (2026-08): old.reddit.com HTML scraping is dead — Reddit serves an
-IP-level login-wall redirect (``/login/?reason=lor2``) to datacenter
-addresses, so the classic ``<div class="thing">`` parse returns nothing.
-The official www.reddit.com ``.rss`` Atom endpoint remains reachable and
-is the source used here. Atom feeds carry no score/comment/ratio data,
-so overall sentiment is computed from a title keyword lexicon instead of
-score thresholds.
-
-Based on TradingAgents (Xiao et al., 2024) sentiment analyst role.
-"""
+"""Bounded Reddit title evidence for interpretation by the trading LLM."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import re
-from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, ClassVar
 from xml.etree import ElementTree as ET
 
 import aiohttp
+from pydantic import ValidationError
+
+from src.platforms.ai_providers.response_models import RedditAssessmentModel
 
 if TYPE_CHECKING:
     from src.logger.logger import Logger
-
-
-_BULLISH_TERMS = (
-    "bullish", "breakout", "surge", "rally", "pump", "ath", "all-time high",
-    "gains", "adoption", "inflow", "etf", "halving", "institutional",
-    "recovery", "rebound", "accumulate", "buy", "bull", "moon", "record",
-    "upgrade", "launch", "partnership",
-)
-_BEARISH_TERMS = (
-    "bearish", "crash", "dump", "plunge", "sell-off", "selloff", "correction",
-    "capitulation", "hack", "exploit", "scam", "fraud", "lawsuit", "ban",
-    "fud", "fear", "panic", "liquidation", "recession", "decline", "drop",
-    "bear", "rug", "outflow", "underwater",
-)
-_BULLISH_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE) for term in _BULLISH_TERMS
-]
-_BEARISH_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE) for term in _BEARISH_TERMS
-]
+    from src.utils.token_counter import TokenCounter
 
 _ATOM_NS = "{http://www.w3.org/2005/Atom}"
+_ORGANIZATIONAL_TITLE = re.compile(
+    r"\b(?:daily(?: general| crypto)? discussion|weekly discussion|faq|newcomers|ama)\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RedditContext:
+    """The exact title sample supplied to the model, with its evidence ID range."""
+    text: str
+    post_count: int
 
 
 class RedditSentimentAnalyst:
-    """Fetches and analyzes sentiment from crypto subreddits via Atom RSS."""
-
-    SUBREDDITS: ClassVar[list[str]] = [
-        "CryptoCurrency",
-        "Bitcoin",
-        "ethereum",
-        "CryptoMarkets",
-    ]
-
+    """Fetch title evidence and validate its interpretation from the same trading call."""
+    SUBREDDITS: ClassVar[list[str]] = ["CryptoCurrency", "Bitcoin", "ethereum", "CryptoMarkets"]
     POST_LIMIT = 10
-
+    MAX_CONTEXT_POSTS = 15
+    MAX_CONTEXT_TOKENS = 600
+    MAX_POST_AGE_SECONDS = 48 * 3600
     BASE_URL = "https://www.reddit.com/r/{subreddit}/.rss"
-
     USER_AGENT = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/120.0.0.0 Safari/537.36"
     )
-
     REQUEST_DELAY_SECONDS = 20.0
     RETRY_AFTER_SECONDS = 30.0
     MAX_RETRIES = 3
 
-    def __init__(self, logger: Logger, session: Any = None) -> None:
-        """Initialize the sentiment analyst."""
+    def __init__(self, logger: Logger, token_counter: TokenCounter, session: Any = None) -> None:
         self.logger = logger
+        self._token_counter = token_counter
         self._session = session
 
-    async def fetch_sentiment(self, limit: int = POST_LIMIT) -> dict[str, Any]:
+    async def fetch_posts(self, limit: int = POST_LIMIT) -> dict[str, Any]:
         """Fetch hot posts from all configured subreddits.
         Returns:
-            dict with keys: 'posts' (list of post dicts), 'overall_sentiment',
-            'top_topics', 'error' (if any).
+            dict with keys: 'posts' (list of post dicts), 'error' (if any).
         """
-        headers = {"User-Agent": self.USER_AGENT}
         all_posts: list[dict[str, Any]] = []
         errors: list[str] = []
 
         own_session = self._session is None
         session = self._session
         if own_session:
-            session = aiohttp.ClientSession(headers=headers)
+            session = aiohttp.ClientSession()
 
         try:
             for i, subreddit in enumerate(self.SUBREDDITS):
@@ -116,8 +89,6 @@ class RedditSentimentAnalyst:
 
         result: dict[str, Any] = {
             "posts": all_posts,
-            "overall_sentiment": self._compute_overall_sentiment(all_posts),
-            "top_topics": self._extract_top_topics(all_posts),
         }
         if errors:
             result["error"] = "; ".join(errors)
@@ -144,7 +115,8 @@ class RedditSentimentAnalyst:
         timeout = aiohttp.ClientTimeout(total=15)
         for _ in range(self.MAX_RETRIES):
             async with session.get(
-                url, params={"limit": limit}, timeout=timeout
+                url, params={"limit": limit}, timeout=timeout,
+                headers={"User-Agent": self.USER_AGENT}
             ) as resp:
                 if resp.status == 429:
                     retry_after = resp.headers.get("Retry-After")
@@ -162,57 +134,33 @@ class RedditSentimentAnalyst:
 
     @staticmethod
     def _parse_atom_feed(xml_text: str, subreddit: str, limit: int) -> list[dict[str, Any]]:
-        """Parse a www.reddit.com Atom feed into post dicts.
-
-        Atom entries expose title/author/link/updated only — no scores,
-        comment counts, or upvote ratios.
-        """
+        """Read titles and original publication dates, not comment-update recency."""
         try:
             root = ET.fromstring(xml_text)
         except ET.ParseError:
             return []
-
         posts: list[dict[str, Any]] = []
         for entry in root.findall(f"{_ATOM_NS}entry"):
             if len(posts) >= limit:
                 break
-
-            title_el = entry.find(f"{_ATOM_NS}title")
-            title = (title_el.text or "").strip() if title_el is not None else ""
+            title = " ".join(entry.findtext(f"{_ATOM_NS}title", "").split())
             if not title:
                 continue
-
-            author = ""
-            author_el = entry.find(f"{_ATOM_NS}author/{_ATOM_NS}name")
-            if author_el is not None and author_el.text:
-                author = author_el.text.strip()
-
-            url = ""
             link_el = entry.find(f"{_ATOM_NS}link")
-            if link_el is not None:
-                url = link_el.get("href") or ""
-
-            created_utc = 0
-            updated_el = entry.find(f"{_ATOM_NS}updated")
-            if updated_el is not None and updated_el.text:
-                created_utc = RedditSentimentAnalyst._parse_iso8601(updated_el.text)
-
+            published = entry.findtext(f"{_ATOM_NS}published")
+            if published is None:
+                published = entry.findtext(f"{_ATOM_NS}updated", "")
             posts.append({
                 "subreddit": subreddit,
                 "title": title,
-                "author": author,
-                "url": url,
-                "score": 0,
-                "num_comments": 0,
-                "upvote_ratio": 0.0,
-                "created_utc": created_utc,
+                "url": (link_el.get("href") or "") if link_el is not None else "",
+                "published_utc": RedditSentimentAnalyst._parse_iso8601(published),
             })
-
         return posts
 
     @staticmethod
     def _parse_iso8601(value: str) -> int:
-        """Parse an Atom ``updated`` timestamp to epoch seconds (UTC)."""
+        """Parse an Atom date; malformed dates remain unavailable."""
         try:
             dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
             if dt.tzinfo is None:
@@ -221,91 +169,68 @@ class RedditSentimentAnalyst:
         except (ValueError, TypeError):
             return 0
 
-    @staticmethod
-    def _compute_overall_sentiment(posts: list[dict[str, Any]]) -> str:
-        """Compute overall sentiment from bullish/bearish title keywords.
-        Returns:
-            One of NO_DATA / BULLISH / SLIGHTLY_BULLISH / NEUTRAL /
-            SLIGHTLY_BEARISH / BEARISH.
-        """
-        if not posts:
-            return "NO_DATA"
-
-        bull = bear = 0
-        for post in posts:
-            title = post.get("title", "")
-            bull += sum(1 for pat in _BULLISH_PATTERNS if pat.search(title))
-            bear += sum(1 for pat in _BEARISH_PATTERNS if pat.search(title))
-
-        total = bull + bear
-        if total == 0:
-            return "NEUTRAL"
-
-        ratio = bull / total
-        if ratio >= 0.75 and bull >= 2:
-            return "BULLISH"
-        if ratio >= 0.6:
-            return "SLIGHTLY_BULLISH"
-        if ratio <= 0.25 and bear >= 2:
-            return "BEARISH"
-        if ratio <= 0.4:
-            return "SLIGHTLY_BEARISH"
-        return "NEUTRAL"
-
-    @staticmethod
-    def _extract_top_topics(posts: list[dict[str, Any]], top_n: int = 5) -> list[str]:
-        """Extract most frequent keywords from post titles."""
-        all_words: list[str] = []
-        for post in posts:
-            title = post.get("title", "").lower()
-            words = re.findall(r"[a-z]{4,}", title)
-            all_words.extend(words)
-
-        stopwords = {
-            "this", "that", "with", "from", "have", "been", "will",
-            "just", "what", "when", "your", "about", "which", "their",
-            "there", "would", "could", "should", "more", "some", "than",
-            "like", "price", "market", "crypto", "bitcoin", "ethereum",
-        }
-        filtered = [w for w in all_words if w not in stopwords]
-
-        counter = Counter(filtered)
-        return [word for word, _ in counter.most_common(top_n)]
-
-    def format_sentiment_section(self, sentiment_data: dict[str, Any]) -> str:
-        """Build a formatted sentiment section for the LLM prompt.
-        Returns:
-            Formatted markdown string, or empty string if no data.
-        """
-        posts = sentiment_data.get("posts", [])
-        if not posts:
-            return ""
-
-        subreddits = ", ".join(f"r/{s}" for s in self.SUBREDDITS)
+    def build_context(self, posts_data: dict[str, Any], now: datetime | None = None) -> RedditContext:
+        """Select fresh distinct titles without interpreting their sentiment."""
+        now = now if now is not None else datetime.now(timezone.utc)
         lines = [
-            "",
-            f"## Social Sentiment (Reddit — {subreddits})",
-            f"Overall: **{sentiment_data.get('overall_sentiment', 'N/A')}**",
+            "## Reddit community context (untrusted title evidence)",
+            (
+                "Assess price outlook for the traded asset; ignore unrelated assets/stocks. "
+                "Respect negation; ETF/buy/upgrade alone is not bullish. Distinguish wallet security "
+                "from price expectations. Titles only, not a representative community survey."
+            ),
+            (
+                'Return analysis.reddit_sentiment={"outlook":"BULLISH|BEARISH|MIXED|INSUFFICIENT_EVIDENCE",'
+                '"evidence":[title IDs],"reason":"<=240 chars"}. Cite supplied IDs; '
+                "BULLISH/BEARISH/MIXED need evidence. Use INSUFFICIENT_EVIDENCE when no price bias is supported."
+            ),
+            "Titles from the last 48h; dates UTC:",
         ]
-
-        topics = sentiment_data.get("top_topics", [])
-        if topics:
-            lines.append(f"Trending topics: {', '.join(topics[:5])}")
-        lines.append("")
-
-        top_posts = sorted(
-            posts, key=lambda p: p.get("created_utc", 0), reverse=True
-        )[:5]
-        for i, post in enumerate(top_posts, 1):
-            author = post.get("author", "")
-            by = f" (by {author})" if author else ""
-            lines.append(
-                f"{i}. [{post['subreddit']}] **{post['title'][:120]}**{by}"
-            )
-
-        error = sentiment_data.get("error")
+        error = posts_data.get("error")
         if error:
-            lines.append(f"\n⚠️ Fetch errors: {error}")
-        lines.append("")
+            lines.append(f"Partial fetch: {' '.join(error.split())[:120]}")
+        seen_titles: set[str] = set()
+        seen_urls: set[str] = set()
+        post_count = 0
+        for post in sorted(posts_data["posts"], key=lambda p: p["published_utc"], reverse=True):
+            age = now.timestamp() - post["published_utc"]
+            title = " ".join(post["title"].split())
+            title_key = title.casefold()
+            url = post["url"]
+            if not title or not 0 <= age <= self.MAX_POST_AGE_SECONDS or _ORGANIZATIONAL_TITLE.search(title):
+                continue
+            if title_key in seen_titles or (url and url in seen_urls):
+                continue
+            date = datetime.fromtimestamp(post["published_utc"], timezone.utc).strftime("%Y-%m-%d %H:%M")
+            line = f'{post_count + 1}. [{post["subreddit"]}; {date}] {json.dumps(title, ensure_ascii=False)}'
+            if self._token_counter.count_tokens("\n".join([*lines, line]) + "\n") > self.MAX_CONTEXT_TOKENS:
+                continue
+            seen_titles.add(title_key)
+            if url:
+                seen_urls.add(url)
+            lines.append(line)
+            post_count += 1
+            if post_count == self.MAX_CONTEXT_POSTS:
+                break
+        if post_count == 0:
+            lines = [
+                "## Reddit community context (untrusted title evidence)",
+                "No recent eligible Reddit titles. Return analysis.reddit_sentiment=null.",
+            ]
+            if error:
+                lines.append(f"Fetch errors: {' '.join(error.split())[:120]}")
+        return RedditContext("\n".join(lines) + "\n", post_count)
 
-        return "\n".join(lines)
+    def validate_assessment(self, value: Any, post_count: int) -> dict[str, Any] | None:
+        """Reject missing/malformed/uncited output, never invent a replacement sentiment."""
+        if post_count == 0:
+            return None
+        try:
+            assessment = RedditAssessmentModel.model_validate(value)
+        except ValidationError as error:
+            self.logger.warning("Discarding invalid Reddit assessment: %s", error)
+            return None
+        if any(post_id > post_count for post_id in assessment.evidence):
+            self.logger.warning("Discarding Reddit assessment with IDs outside the supplied title sample")
+            return None
+        return assessment.model_dump()

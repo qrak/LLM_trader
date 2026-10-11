@@ -3,6 +3,7 @@ import asyncio
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
@@ -31,6 +32,7 @@ from src.utils.indicator_classifier import (
 class BrainRouter:
     """Handles endpoints for the trading brain status, rules, and memory."""
     UNKNOWN_EXIT_PROFILE = "SL unknown/unknown | TP unknown/unknown"
+    PRICE_REFRESH_TTL_SECONDS = 10.0
 
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-instance-attributes
     def __init__(self, config, logger, dashboard_state, vector_memory, unified_parser, persistence, exchange_manager, post_mortem_repo=None):
@@ -43,6 +45,9 @@ class BrainRouter:
         self.persistence = persistence
         self.exchange_manager = exchange_manager
         self.post_mortem_repo = post_mortem_repo
+        self._price_refresh_lock = asyncio.Lock()
+        self._price_refresh_result: dict[str, Any] | None = None
+        self._price_refresh_expires_at = 0.0
 
         self.router.add_api_route("/status", self.get_brain_status, methods=["GET"])
         self.router.add_api_route("/rules", self.get_active_rules, methods=["GET"])
@@ -382,7 +387,16 @@ class BrainRouter:
         return res
 
     async def refresh_current_price(self) -> dict[str, Any]:
-        """Fetch fresh price from exchange and update dashboard state."""
+        """Share one exchange attempt across dashboard callers for ten seconds."""
+        async with self._price_refresh_lock:
+            if self._price_refresh_result is not None and monotonic() < self._price_refresh_expires_at:
+                return dict(self._price_refresh_result)
+            self._price_refresh_result = await self._fetch_current_price()
+            self._price_refresh_expires_at = monotonic() + self.PRICE_REFRESH_TTL_SECONDS
+            return dict(self._price_refresh_result)
+
+    async def _fetch_current_price(self) -> dict[str, Any]:
+        """Fetch price and report exchange I/O failures without breaking the panel."""
         if not self.exchange_manager:
             return {"success": False, "error": "Exchange manager not available"}
         try:

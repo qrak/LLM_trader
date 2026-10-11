@@ -7,6 +7,7 @@ at MRO resolution time.
 
 import asyncio
 import dataclasses
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
@@ -27,6 +28,7 @@ from .executor_reconciliation import (
     INTENT_PENDING,
     INTENT_REFUSED,
     INTENT_UNKNOWN,
+    PositionIntent,
     position_identity,
 )
 from .order_lifecycle import OrderIntent, OrderLifecycle
@@ -45,6 +47,8 @@ class PositionManagementMixin:
     guard_pipeline: Any
     current_position: Position | None
     _executor_has_position: Any
+    _executor_query_available: Callable[[], bool]
+    register_position_intent: Callable[..., PositionIntent]
     _record_trade_decision: Any
     position_intents: Any
     intent_identity: Any
@@ -56,6 +60,19 @@ class PositionManagementMixin:
     _tf_minutes: int
     _tightening_policy: Any
     _last_sl_tightening_evaluation: Any
+
+    @staticmethod
+    def _commission_text(fee: float | None, fee_source: str | None = None) -> str:
+        """Operator-facing commission text that never invents a number.
+
+        A commission may only be stated when real fill/order fee data provided it. With
+        no such data the text says UNKNOWN explicitly: ``0.0`` and the configured
+        0.075% rate are both claims the bot cannot back with evidence.
+        """
+        if fee is None:
+            return "Fee: unknown (no fill/order fee data — no rate was assumed)"
+        origin = f" from {fee_source}" if fee_source else ""
+        return f"Fee: ${fee:.4f}{origin}"
 
     async def _handle_existing_position(
         self,
@@ -74,6 +91,10 @@ class PositionManagementMixin:
             TradeDecision if action taken
         """
         executor_pos_state = await self._executor_has_position(symbol)
+
+        if self.current_position is None:
+            self.logger.info("%s for %s skipped — the local position closed during verification.", signal, symbol)
+            return None
 
         if signal == "CLOSE" or signal.startswith("CLOSE_"):
             if executor_pos_state is False:
@@ -165,8 +186,8 @@ class PositionManagementMixin:
             self._unconfirmed_intent_alert = note
             return None
 
-        old_sl = self.current_position.stop_loss  # type: ignore
-        old_tp = self.current_position.take_profit  # type: ignore
+        old_sl = self.current_position.stop_loss
+        old_tp = self.current_position.take_profit
 
         if executor_pos_state is False:
             self.logger.warning(
@@ -202,10 +223,13 @@ class PositionManagementMixin:
         updated = await self._update_position_parameters(stop_loss, take_profit, policy_price)
 
         if updated:
+            if self.current_position is None:
+                self.logger.info("UPDATE for %s skipped — the local position closed during the parameter update.", symbol)
+                return None
             try:
-                current_pnl = self.current_position.calculate_pnl(current_price)  # type: ignore
+                current_pnl = self.current_position.calculate_pnl(current_price)
                 self.brain_service.track_position_update(
-                    position=self.current_position,  # type: ignore
+                    position=self.current_position,
                     old_sl=old_sl,
                     old_tp=old_tp,
                     new_sl=stop_loss if stop_loss else old_sl,

@@ -868,26 +868,22 @@ async def test_save_tickers_persists_a_sorted_detached_list():
 
 
 def test_parse_atom_feed_maps_the_post_contract_and_respects_the_limit():
-    analyst = RedditSentimentAnalyst(logger=null_logger())
+    analyst = RedditSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
     posts = analyst._parse_atom_feed(ATOM_SAMPLE, "Bitcoin", limit=10)
 
     assert len(posts) == 3
     assert posts[0] == {
         "subreddit": "Bitcoin",
         "title": "Bitcoin breaks $70k resistance",
-        "author": "/u/satoshi",
         "url": "https://www.reddit.com/r/Bitcoin/comments/abc123/bitcoin_breaks_70k/",
-        "score": 0,
-        "num_comments": 0,
-        "upvote_ratio": 0.0,
-        "created_utc": 1786622940,
+        "published_utc": 1786622940,
     }
     assert [post["title"] for post in posts] == [
         "Bitcoin breaks $70k resistance",
         "ETF outflows spark crash fears",
         "Daily discussion thread",
     ]
-    assert [post["created_utc"] for post in posts] == [1786622940, 1786622880, 1786622820]
+    assert [post["published_utc"] for post in posts] == [1786622940, 1786622880, 1786622820]
     lengths = [
         len(analyst._parse_atom_feed(ATOM_SAMPLE, "Bitcoin", limit=limit)) for limit in (10, 2, 0)
     ]
@@ -896,7 +892,7 @@ def test_parse_atom_feed_maps_the_post_contract_and_respects_the_limit():
 
 
 def test_parse_atom_feed_rejects_unusable_or_emptied_payloads():
-    analyst = RedditSentimentAnalyst(logger=null_logger())
+    analyst = RedditSentimentAnalyst(logger=null_logger(), token_counter=TokenCounter())
     emptied_title = "<title>Bitcoin breaks $70k resistance</title>"
     emptied = ATOM_SAMPLE.replace(emptied_title, "<title></title>")
 
@@ -913,8 +909,8 @@ def test_parse_atom_feed_rejects_unusable_or_emptied_payloads():
     bare = analyst._parse_atom_feed(BARE_ENTRY_FEED, "Bitcoin", limit=10)
 
     assert [
-        (post["title"], post["author"], post["url"], post["created_utc"]) for post in bare
-    ] == [("Bare entry title", "", "", 0), ("Second bare entry", "", "", 0)]
+        (post["title"], post["url"], post["published_utc"]) for post in bare
+    ] == [("Bare entry title", "", 0), ("Second bare entry", "", 0)]
 
 
 def test_parse_iso8601_normalizes_offsets_and_falls_back_to_zero():
@@ -924,138 +920,3 @@ def test_parse_iso8601_normalizes_offsets_and_falls_back_to_zero():
     assert RedditSentimentAnalyst._parse_iso8601("not-a-date") == 0
     assert RedditSentimentAnalyst._parse_iso8601("") == 0
     assert RedditSentimentAnalyst._parse_iso8601("2026-13-45T99:00:00+00:00") == 0
-
-
-@pytest.mark.parametrize(
-    ("titles", "expected"),
-    [
-        (
-            [
-                "Bitcoin breaks $70k resistance, new all-time high",
-                "ETF inflows hit record, institutional adoption surges",
-            ],
-            "BULLISH",
-        ),
-        (
-            [
-                "Bitcoin crashes below support, panic selling",
-                "ETF outflows spark sell-off, bear market fears",
-            ],
-            "BEARISH",
-        ),
-        (["Daily discussion thread", "Weekly market update"], "NEUTRAL"),
-        ([], "NO_DATA"),
-        (["rally"], "SLIGHTLY_BULLISH"),
-        (["crash"], "SLIGHTLY_BEARISH"),
-    ],
-    ids=[
-        "bullish-pair",
-        "bearish-pair",
-        "no-lexicon-hits",
-        "no-posts",
-        "single-bull",
-        "single-bear",
-    ],
-)
-def test_compute_overall_sentiment_uses_the_title_lexicon_ratio(titles, expected):
-    posts = [{"title": title} for title in titles]
-
-    assert RedditSentimentAnalyst._compute_overall_sentiment(posts) == expected
-
-
-def test_extract_top_topics_ranks_words_and_drops_stopwords():
-    analyst = RedditSentimentAnalyst(logger=null_logger())
-    posts = [
-        {"title": "Bitcoin ETF approval expected soon halving"},
-        {"title": "ETF inflows break records again Bitcoin"},
-    ]
-
-    assert analyst._extract_top_topics(posts) == [
-        "approval",
-        "expected",
-        "soon",
-        "halving",
-        "inflows",
-    ]
-    assert analyst._extract_top_topics(posts, top_n=2) == ["approval", "expected"]
-    assert analyst._extract_top_topics([]) == []
-
-
-def test_format_sentiment_section_renders_sorted_capped_posts():
-    analyst = RedditSentimentAnalyst(logger=null_logger())
-    posts = [
-        {
-            "subreddit": "CryptoCurrency",
-            "title": "Bitcoin breaks $70k resistance",
-            "author": "/u/bull",
-            "created_utc": 1755080000,
-        },
-        {
-            "subreddit": "Bitcoin",
-            "title": "ETF inflows hit $1B weekly",
-            "author": "/u/hodler",
-            "created_utc": 1755081000,
-        },
-    ]
-
-    section = analyst.format_sentiment_section(
-        {
-            "posts": posts,
-            "overall_sentiment": "BULLISH",
-            "top_topics": ["etf", "halving", "breakout"],
-        }
-    )
-
-    subreddits = "r/CryptoCurrency, r/Bitcoin, r/ethereum, r/CryptoMarkets"
-    header = f"## Social Sentiment (Reddit — {subreddits})"
-
-    assert header in section
-    assert "Overall: **BULLISH**" in section
-    assert "Trending topics: etf, halving, breakout" in section
-    assert "1. [Bitcoin] **ETF inflows hit $1B weekly** (by /u/hodler)" in section
-    assert "2. [CryptoCurrency] **Bitcoin breaks $70k resistance** (by /u/bull)" in section
-    assert "⚠" not in section
-
-    ranked = [
-        {"subreddit": f"s{index}", "title": f"T{index}", "author": "", "created_utc": index}
-        for index in reversed(range(7))
-    ]
-    topics = [f"t{index}" for index in range(7)]
-    capped = analyst.format_sentiment_section(
-        {"posts": ranked, "overall_sentiment": "NEUTRAL", "top_topics": topics}
-    )
-    numbers = enumerate(range(6, 1, -1), 1)
-
-    assert capped.startswith("\n## Social Sentiment")
-    assert "Overall: **NEUTRAL**" in capped
-    assert "Trending topics: t0, t1, t2, t3, t4\n" in capped
-    assert [f"{rank}. [s{index}] **T{index}**" in capped for rank, index in numbers] == [True] * 5
-    assert "T1" not in capped
-
-    truncated = analyst.format_sentiment_section(
-        {"posts": [{"subreddit": "s", "title": "L" * 200, "author": "", "created_utc": 5}]}
-    )
-
-    assert "Overall: **N/A**" in truncated
-    assert f"1. [s] **{'L' * 120}**" in truncated
-    assert "L" * 121 not in truncated
-    assert analyst.format_sentiment_section({"posts": [], "overall_sentiment": "NO_DATA"}) == ""
-    assert analyst.format_sentiment_section({}) == ""
-
-    errored = analyst.format_sentiment_section(
-        {
-            "posts": [
-                {
-                    "subreddit": "CryptoCurrency",
-                    "title": "Test post",
-                    "author": "",
-                    "created_utc": 0,
-                }
-            ],
-            "overall_sentiment": "NEUTRAL",
-            "top_topics": [],
-            "error": "CryptoMarkets: timeout",
-        }
-    )
-
-    assert "⚠️ Fetch errors: CryptoMarkets: timeout" in errored

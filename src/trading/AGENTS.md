@@ -320,6 +320,12 @@ TradingBrainService.get_context()
 
 ## Regression Contracts (never break these)
 
+- Existing-position handling rechecks `current_position` after executor verification
+  and after an awaited protection update. A closed local position produces no stale
+  CLOSE/UPDATE decision, intent, history row or position-update learning event.
+- `PositionManagementMixin` declares its sibling-method callable contracts. The
+  shared static commission formatter lives in this mixin and remains inherited by
+  `TradingStrategy`; do not duplicate it or add compatibility wrappers.
 - `executor_handler.py`, `exchange_executor.py` and `safety.py` changes need thorough tests: an UPDATE carrying `quantity=0.0` must use the tracker's real quantity; market orders carry `entry_price=None`; a spot SELL is blocked while `SPOT_SHORT_ALLOWED=False` and that rejection is logged, never silent.
 - Verify the read/write round-trip after any data-model or persistence change, and check `position_state.json` / `executed_state.json` are clean before and after.
 - The executor keeps its file fallback — it is what makes a restart reliable even when the HTTP path works.

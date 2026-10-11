@@ -5,6 +5,7 @@ exchange symbol preloading.
 
 import ast
 import json
+from dataclasses import MISSING, fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -13,8 +14,10 @@ import pytest
 
 from scripts.check_requirements import find_missing
 from scripts.fix_sarif import fix_sarif, main, sanitize_level
+from src.app import BotServices
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
 from src.platforms.exchange_manager import ExchangeManager
+from start import CompositionRoot, CryptoTradingBot
 
 
 def decision(timestamp: str, action: str = "BUY", symbol: str = "BTC/USDC") -> dict:
@@ -114,6 +117,50 @@ def test_start_module_exposes_composition_root_and_single_instance_lock():
     assert callable(lock._release_windows_mutex)
     assert callable(lock.acquire)
     assert callable(lock.release)
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        ({}, 120.0),
+        ({"reconcile_interval_seconds": 45}, 45.0),
+        ({"reconcile_interval_seconds": "45.5"}, 45.5),
+        ({"reconcile_interval_seconds": "invalid"}, 120.0),
+        ({"reconcile_interval_seconds": None}, 120.0),
+        ({"reconcile_interval_seconds": object()}, 120.0),
+    ],
+)
+async def test_composition_root_wires_reconcile_interval_from_config(
+    settings, expected, monkeypatch
+):
+    root = object.__new__(CompositionRoot)
+    root.config = MagicMock()
+    root.config.DASHBOARD_ENABLED = False
+    root.config.get_config.side_effect = lambda section, key, default: settings.get(key, default)
+    root.logger = MagicMock()
+    root.loop = None
+    root.shutdown_manager = None
+    dependencies = {
+        field.name: MagicMock()
+        for field in fields(BotServices)
+        if field.default is MISSING and field.name not in {"logger", "config", "shutdown_manager"}
+    }
+    root.build_dependencies = AsyncMock(return_value=dependencies)
+    monitors = []
+
+    async def initialize(bot):
+        monitors.append(bot.position_monitor)
+
+    monkeypatch.setattr(CryptoTradingBot, "initialize", initialize)
+    monkeypatch.setattr(CryptoTradingBot, "run", AsyncMock())
+
+    await root.run_async()
+
+    root.config.get_config.assert_called_once_with(
+        "executor_api", "reconcile_interval_seconds", 120.0
+    )
+    assert len(monitors) == 1
+    assert monitors[0].reconcile_interval_seconds == expected
 
 
 def test_launcher_requirements_check_reports_only_unsatisfied_lines(tmp_path):

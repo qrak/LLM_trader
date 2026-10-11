@@ -288,6 +288,8 @@ class CompositionRoot(ProvisioningMixin):
             "exit_monitor": trading["exit_monitor"],
             "sentiment_analyst": RedditSentimentAnalyst(
                 logger=self.logger,
+                token_counter=utils["token_counter"],
+                session=infra["session"],
             ),
             "ev_formatter": analyzer["ev_formatter"],
             "executor_handler": ExecutorHandler(
@@ -331,15 +333,12 @@ class CompositionRoot(ProvisioningMixin):
         force_analysis_event = dependencies.pop("force_analysis_event", None)
 
         def _create_position_monitor(bot: CryptoTradingBot) -> PositionStatusMonitor:
-            reconcile_interval_seconds = 120.0
-            get_config = getattr(self.config, "get_config", None)
-            if callable(get_config):
-                try:
-                    reconcile_interval_seconds = float(
-                        get_config("executor_api", "reconcile_interval_seconds", 120.0)
-                    )
-                except (TypeError, ValueError):
-                    reconcile_interval_seconds = 120.0
+            try:
+                reconcile_interval_seconds = float(
+                    self.config.get_config("executor_api", "reconcile_interval_seconds", 120.0)
+                )
+            except (TypeError, ValueError):
+                reconcile_interval_seconds = 120.0
 
             return PositionStatusMonitor(
                 logger=self.logger,

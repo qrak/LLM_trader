@@ -151,7 +151,8 @@ class MarketConditionsExtractor:
             conditions["order_book_bias"] = classify_order_book_bias(microstructure_data)
             conditions["is_weekend"] = datetime.now(timezone.utc).weekday() >= 5
 
-            conditions["social_sentiment_reddit"] = result.get("_social_sentiment_reddit", "NEUTRAL")
+            reddit_assessment = analysis.get("reddit_sentiment")
+            conditions["social_sentiment_reddit"] = reddit_assessment["outlook"] if reddit_assessment else ""
             conditions["portfolio_pnl_pct"] = float(result.get("_portfolio_pnl_pct", 0.0))
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not extract market conditions: %s", e)
@@ -181,6 +182,7 @@ class MarketConditionsExtractor:
             chandelier_long=float(conditions.get("chandelier_long", 0.0)),
             pfe=float(conditions.get("pfe", 0.0)),
             supertrend_direction=str(conditions.get("supertrend_direction", "NEUTRAL")),
+            social_sentiment_reddit=conditions.get("social_sentiment_reddit", ""),
         )
 
     def extract_confluence_factors(self, result: dict) -> tuple:

@@ -53,7 +53,7 @@ class MarketConditions(SerializableMixin):
     chandelier_long: float = 0.0
     pfe: float = 0.0
     supertrend_direction: str = "NEUTRAL"
-    social_sentiment_reddit: str = "NEUTRAL"
+    social_sentiment_reddit: str = ""
     portfolio_pnl_pct: float = 0.0
 
 
