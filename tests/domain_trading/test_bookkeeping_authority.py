@@ -1161,6 +1161,30 @@ async def test_filled_entry_with_protection_error_is_confirmed_not_refused(
     persistence.async_save_position.assert_not_awaited()
 
 
+@pytest.mark.parametrize("quantity", [None, 0.0, -1.0, "invalid"])
+async def test_entry_error_with_incomplete_fill_evidence_keeps_the_position_unknown(tmp_path, quantity):
+    position = _position(symbol="BTC/USDC")
+    strategy, _, persistence = _strategy(tmp_path, position)
+    order_id = "order-incomplete-filled"
+    intent = strategy.register_position_intent(
+        "ENTRY", "BTC/USDC", order_id=order_id, position_id=position_identity(position),
+    )
+    _verdicts(tmp_path / "verdicts.jsonl", [{
+        "order_id": order_id, "verdict": "error", "state": "filled",
+        "filled_quantity": quantity, "exposure_possible": True,
+        "reason": "entry filled but protection failed",
+    }])
+    strategy.config.EXECUTOR_VERDICT_PATH = str(tmp_path / "verdicts.jsonl")
+
+    assert await strategy.confirm_entry_with_executor("BTC/USDC", order_id=order_id) is True
+    state = await strategy.resolve_position_intents_after_forward(order_id, delivered=True)
+
+    assert state == INTENT_UNKNOWN
+    assert strategy.current_position is position
+    assert strategy.position_intents().get(intent.key).state == INTENT_UNKNOWN
+    persistence.async_save_position.assert_not_awaited()
+
+
 class TestReceiptFillEvidenceBooking:
     """Wave-5 req. 1: the executor's RECEIPT itself carries the fill evidence.
 

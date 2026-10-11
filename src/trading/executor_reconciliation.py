@@ -1341,6 +1341,12 @@ class ExecutorReconciliationMixin:
                         verdict, order_id,
                     )
                 return True
+            if self._entry_fill_is_unresolved(verdict_entry):
+                self.logger.critical(
+                    "Executor entry %s has incomplete fill evidence — keeping local position",
+                    order_id,
+                )
+                return True
             if verdict in ("blocked", "error"):
                 self.logger.warning(
                     "Executor verdict for %s: %s — entry was %s",
@@ -1459,6 +1465,16 @@ class ExecutorReconciliationMixin:
             return False
         return math.isfinite(quantity) and quantity > 0
 
+    @classmethod
+    def _entry_fill_is_unresolved(cls, entry: dict | None) -> bool:
+        """A filled exposure claim with missing numbers cannot justify a rollback."""
+        return bool(
+            entry
+            and entry.get("exposure_possible")
+            and str(entry.get("state") or "").lower() in {"filled", "partially_filled"}
+            and not cls._entry_fill_is_proven(entry)
+        )
+
     async def resolve_position_intents_after_forward(
         self,
         order_id: str | None,
@@ -1505,6 +1521,14 @@ class ExecutorReconciliationMixin:
             and self._entry_fill_is_proven(verdict_entry)
         ):
             return await self._apply_confirmed_intent(intent, verdict_entry)
+
+        if intent.action == INTENT_ACTION_ENTRY and self._entry_fill_is_unresolved(verdict_entry):
+            self.mark_position_intent_unknown(
+                intent.key,
+                source="executor_verdict_journal",
+                detail="executor reports entry exposure but fill evidence is incomplete — local position kept",
+            )
+            return INTENT_UNKNOWN
 
         if verdict in ("blocked", "error"):
             self.refuse_position_intent(
