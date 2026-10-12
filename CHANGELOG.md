@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-12 — Persist Python R/R corrections for both response contracts
+
+### Fixed
+- Extract the narrative preceding a fenced JSON decision before R/R validation.
+  Render the validated narrative and analysis for both JSON-object and fenced replies,
+  so a blocked entry is saved as HOLD and the next prompt receives Python feedback.
+- Use explicit source equality in the admin CSP test instead of the membership form
+  flagged by CodeQL. Accept the bare/HTTPS Tailwind host and reject lookalike sources.
+  Alert closure still requires a CodeQL scan of the published correction.
+
+### Verified
+- Added seven response-shape/persistence regressions and six offline CSP cases.
+  Existing R/R tests and assertions are unchanged. Full isolated Windows suite:
+  **2042 passed, 17 skipped**; full Pyright: **0 errors, 0 warnings**; Ruff passes.
+- Historical dashboard cache-busting omission is already fixed on HEAD; no static
+  assets, website, CI configuration, live state or provider settings were changed.
+
 ## 2026-10-12 — Late UPDATE confirmations and next-analysis context
 
 ### Fixed

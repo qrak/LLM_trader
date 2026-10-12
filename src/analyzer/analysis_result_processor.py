@@ -96,6 +96,8 @@ class AnalysisResultProcessor:
                 "raw_response": cleaned_response
             }
         self._log_response_validation(parsed_response.get("response_validation"))
+        if "narrative" not in parsed_response and "```json" in cleaned_response:
+            parsed_response["narrative"] = cleaned_response.split("```json", 1)[0].strip()
         self._validate_llm_claims(parsed_response)
         for issue in self._risk_reward_validator.validate(parsed_response):
             self.logger.warning("R/R validation: %s", issue)
@@ -156,22 +158,10 @@ class AnalysisResultProcessor:
 
     @staticmethod
     def _render_response_text(parsed_response: dict[str, Any], cleaned_response: str) -> str:
-        """Return the reply as narrative text plus the trailing fenced decision block.
-
-        JSON-output providers (DeepSeek runs with response_format=json_object) answer with a
-        single object — {"narrative": ..., "analysis": {...}} — while everything downstream
-        (notifiers, dashboard history, the next cycle's previous-response context) reads the
-        narrative and the trailing fenced block. Such a reply is rendered back into that
-        shape; every other reply is returned untouched.
-
-        Returns:
-            The response text stored as ``raw_response``.
-        """
+        """Render the validated narrative and decision for either provider contract."""
         narrative = parsed_response.get("narrative")
         analysis = parsed_response.get("analysis")
-        if not isinstance(narrative, str) or not narrative.strip() or not isinstance(analysis, dict):
-            return cleaned_response
-        if "```json" in cleaned_response:
+        if not isinstance(narrative, str) or not isinstance(analysis, dict):
             return cleaned_response
         block = json.dumps({"analysis": analysis}, indent=4, ensure_ascii=False)
         return f"{narrative.strip()}\n\n```json\n{block}\n```"

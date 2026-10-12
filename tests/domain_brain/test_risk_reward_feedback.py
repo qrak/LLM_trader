@@ -145,3 +145,80 @@ def test_bad_level_order_rejects_actionable_trade():
     RiskRewardValidator().validate(response)
     assert response["analysis"]["signal"] == "HOLD"
     assert "invalid prices" in response["rr_feedback"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reply_shape", ["json_object", "fenced", "fenced_object"])
+@pytest.mark.parametrize("signal", ["HOLD", "SELL"])
+async def test_rr_feedback_survives_both_response_contracts(tmp_path, reply_shape, signal):
+    narrative = (
+        "10) POSITION & RISK: flat\n"
+        "11) RISK/REWARD: RR_CHECK side=SHORT entry=84380 SL=84750 TP=83726 "
+        "reward=654 risk=370 R/R=0.62\n"
+        f"12) DECISION: {signal}\n13) EXECUTION NOTE: model recommendation"
+    )
+    analysis = {
+        "signal": signal, "entry_price": 84380.0, "stop_loss": 84750.0,
+        "take_profit": 83726.0, "risk_reward_ratio": 0.62,
+        "quantity": 0.01, "position_size": 0.08, "order_type": "market",
+    }
+    payload = {"narrative": narrative, "analysis": analysis}
+    if reply_shape == "json_object":
+        reply = json.dumps(payload)
+    elif reply_shape == "fenced_object":
+        reply = f"```json\n{json.dumps(payload)}\n```"
+    else:
+        reply = f"{narrative}\n\n```json\n{json.dumps({'analysis': analysis})}\n```"
+    logger = MagicMock()
+    manager = MagicMock()
+    manager.supports_image_analysis.return_value = False
+    manager.send_prompt_streaming = AsyncMock(return_value=reply)
+    parser = UnifiedParser(logger, FormatUtils())
+    processor = AnalysisResultProcessor(
+        manager, logger, parser, TrendValidator(), PatternQualityScorer(), RiskRewardValidator()
+    )
+
+    result = await processor.process_analysis("system", "user")
+
+    assert result["analysis"]["signal"] == "HOLD"
+    assert result["raw_response"].startswith("Python R/R validation of previous cycle:")
+    assert "10) POSITION & RISK: flat" in result["raw_response"]
+    assert "R/R=1.77" in result["raw_response"]
+    assert "R/R=0.62" not in result["raw_response"]
+    assert "12) DECISION: SELL" not in result["raw_response"]
+    saved_analysis = parser.parse_ai_response(result["raw_response"])["analysis"]
+    assert saved_analysis == result["analysis"]
+    if signal == "SELL":
+        assert saved_analysis["quantity"] == 0.0
+        assert saved_analysis["risk_reward_ratio"] is None
+        assert "13) EXECUTION NOTE: no order" in result["raw_response"]
+    manager.send_prompt_streaming.assert_awaited_once()
+
+    persistence = PersistenceManager(logger, data_dir=str(tmp_path / "trading"))
+    persistence.save_previous_response(result["raw_response"])
+    loaded = persistence.load_previous_response()
+    assert loaded is not None
+    template = TemplateManager(cast(Any, make_config()), logger)
+    next_prompt = template.build_system_prompt("BTC/USDC", previous_response=loaded["response"])
+    assert next_prompt.count("### PYTHON R/R FEEDBACK (previous cycle)") == 1
+    assert "R/R=0.62" not in next_prompt
+    assert "12) DECISION: SELL" not in next_prompt
+
+
+@pytest.mark.asyncio
+async def test_fenced_entry_without_narrative_persists_the_blocked_signal():
+    reply = '```json\n{"analysis":{"signal":"SELL","entry_price":84380,"stop_loss":84750,' \
+            '"take_profit":83726,"risk_reward_ratio":0.62,"quantity":0.01}}\n```'
+    manager = MagicMock()
+    manager.supports_image_analysis.return_value = False
+    manager.send_prompt_streaming = AsyncMock(return_value=reply)
+    logger = MagicMock()
+    parser = UnifiedParser(logger, FormatUtils())
+    processor = AnalysisResultProcessor(
+        manager, logger, parser, TrendValidator(), PatternQualityScorer(), RiskRewardValidator()
+    )
+
+    result = await processor.process_analysis("system", "user")
+
+    assert result["raw_response"].startswith("Python R/R validation of previous cycle:")
+    assert parser.parse_ai_response(result["raw_response"])["analysis"]["signal"] == "HOLD"

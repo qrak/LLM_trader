@@ -9,6 +9,7 @@ Requires: live bot with admin credentials configured in keys.env
 """
 
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -77,8 +78,10 @@ class TestSecurityHeaders:
             "",
         )
         sources = script_src.split()[1:]
-        assert "cdn.tailwindcss.com" in sources or "'unsafe-inline'" in sources, \
-            "Neither Tailwind CDN nor unsafe-inline in script-src — admin page JS will break"
+        assert any(
+            source == "https://cdn.tailwindcss.com" or source == "cdn.tailwindcss.com"
+            or source == "'unsafe-inline'" for source in sources
+        ), "Neither Tailwind CDN nor unsafe-inline in script-src — admin page JS will break"
 
     def test_no_cors_for_cross_origin(self, page):
         """Cross-origin requests should not get ACAO header."""
@@ -99,6 +102,26 @@ class TestSecurityHeaders:
             """)
             assert result in (404, 403, 502), f"{path} returned {result} — may be accessible!"
 
+
+
+@pytest.mark.parametrize(("csp", "allowed"), [
+    ("script-src https://cdn.tailwindcss.com", True),
+    ("script-src cdn.tailwindcss.com", True),
+    ("script-src 'unsafe-inline'", True),
+    ("script-src https://cdn.tailwindcss.com.evil.example", False),
+    ("script-src https://evil.example/cdn.tailwindcss.com", False),
+    ("default-src https://cdn.tailwindcss.com; script-src 'self'", False),
+])
+def test_admin_csp_assertion_matches_exact_script_sources(csp, allowed):
+    page = SimpleNamespace(goto=lambda *args, **kwargs: SimpleNamespace(
+        headers={"content-security-policy": csp}
+    ))
+    security = TestSecurityHeaders()
+    if allowed:
+        security.test_csp_allows_admin_scripts(page)
+    else:
+        with pytest.raises(AssertionError):
+            security.test_csp_allows_admin_scripts(page)
 
 
 class TestAdminLoginFlow:
