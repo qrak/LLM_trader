@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 import json
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -22,7 +22,7 @@ ENTRY_CONFIRM_ATTEMPTS = 10
 ENTRY_CONFIRM_DELAY = 2.5
 ENTRY_CONFIRM_MIN_FALSE_REPORTS = 6
 
-INTENT_CONFIRM_ATTEMPTS = 5
+INTENT_CONFIRM_ATTEMPTS = 15
 INTENT_CONFIRM_DELAY = 2.0
 
 RECONCILE_ENTRY_GRACE_SECONDS = 120.0
@@ -453,7 +453,7 @@ class PositionIntentLedger:
         return [intent for intent in self._intents.values() if intent.is_unbooked]
 
     def recent(self, limit: int = 1) -> list[PositionIntent]:
-        """Newest intents first, by last write — resolved ones included.
+        """Newest commands first, regardless of when their receipts arrived.
 
         ``pending()`` answers "what is still unresolved"; this answers "what did the
         bot ask for last and what became of it", which is what the next analysis
@@ -462,10 +462,20 @@ class PositionIntentLedger:
         self._load()
         ordered = sorted(
             self._intents.values(),
-            key=lambda intent: intent.updated_at or intent.created_at or "",
+            key=lambda intent: (intent.created_at or "", intent.updated_at or ""),
             reverse=True,
         )
         return ordered[: max(limit, 0)]
+
+    def latest_for_position(self, position_id: str, action: str | None = None) -> PositionIntent | None:
+        """Newest command for one trade, optionally restricted to one action."""
+        self._load()
+        return max(
+            (intent for intent in self._intents.values()
+             if intent.position_id == position_id and (action is None or intent.action == action)),
+            key=lambda intent: intent.created_at or "",
+            default=None,
+        )
 
     def mark_event_booked(self, event_id: str, position_id: str | None = None) -> None:
         """Persist that one exit event was booked (restart-safe idempotency)."""
@@ -1497,9 +1507,11 @@ class ExecutorReconciliationMixin:
             return None
         return await self._resolve_forwarded_intent(intent, delivered=delivered)
 
-    async def _resolve_forwarded_intent(self, intent: PositionIntent, *, delivered: bool) -> str:
+    async def _resolve_forwarded_intent(
+        self, intent: PositionIntent, *, delivered: bool, verdict_entry: dict | None = None,
+    ) -> str:
         """Apply the executor receipt to one pending intent (idempotent)."""
-        if intent.state != INTENT_PENDING:
+        if intent.state not in NON_BOOKED_INTENT_STATES:
             return intent.state
 
         if not delivered:
@@ -1513,8 +1525,18 @@ class ExecutorReconciliationMixin:
             )
             return INTENT_UNKNOWN
 
-        verdict_entry = await self._await_forwarded_verdict(intent)
+        if verdict_entry is None:
+            verdict_entry = await self._await_forwarded_verdict(intent)
         verdict = str((verdict_entry or {}).get("verdict") or "").strip().lower()
+
+        if intent.action == INTENT_ACTION_UPDATE and verdict in ("executed", "blocked", "error"):
+            return await self._settle_update_intent(intent, verdict_entry or {})
+
+        position = self.current_position
+        if intent.action == INTENT_ACTION_CLOSE and position is not None and (
+            intent.position_id != position_identity(position) or intent.symbol != position.symbol
+        ):
+            return intent.state
 
         if verdict == "executed" or (
             intent.action == INTENT_ACTION_ENTRY
@@ -1550,20 +1572,13 @@ class ExecutorReconciliationMixin:
         return INTENT_UNKNOWN
 
     async def _await_forwarded_verdict(self, intent: PositionIntent) -> dict | None:
-        """Executor verdict for one forwarded command, polling briefly when it is due.
+        """Allow 30s for queue delay plus execution; revisit UNKNOWN without waiting.
 
-        ``/decision`` answers "queued"; the executor then processes the command in its own
-        loop, whose tick reaches ~10s (the reason ``confirm_entry_with_executor`` polls).
-        A single immediate read races that loop — the CLOSE of 2026-09-28 was recorded 4ms
-        after the forward and was still missed, leaving the intent UNKNOWN plus a critical
-        operator alert until the reconcile booked the exit two minutes later. UPDATE/CLOSE
-        get the same short grace here (``INTENT_CONFIRM_ATTEMPTS`` x
-        ``INTENT_CONFIRM_DELAY``, then one last read). An entry is not polled: it already
-        waits through ``confirm_entry_with_executor``. Nothing is assumed while waiting —
-        a verdict that never arrives still resolves to UNKNOWN with the position kept.
+        Entries have their own confirmation window. Missing evidence remains UNKNOWN;
+        independent reconciliation later consumes a receipt without resending a command.
         """
         order_id = intent.order_id or ""
-        if intent.action == INTENT_ACTION_ENTRY:
+        if intent.action == INTENT_ACTION_ENTRY or intent.state == INTENT_UNKNOWN:
             return self._read_executor_verdict_entry(order_id)
         for _ in range(INTENT_CONFIRM_ATTEMPTS):
             entry = self._read_executor_verdict_entry(order_id)
@@ -1572,6 +1587,69 @@ class ExecutorReconciliationMixin:
                 return entry
             await asyncio.sleep(INTENT_CONFIRM_DELAY)
         return self._read_executor_verdict_entry(order_id)
+
+    async def _settle_update_intent(self, intent: PositionIntent, receipt: dict) -> str:
+        """Settle one exact UPDATE without changing another trade or newer protection."""
+        async with self._position_lock():
+            current_intent = self.position_intents().get(intent.key)
+            if current_intent is None or current_intent.state not in NON_BOOKED_INTENT_STATES:
+                return current_intent.state if current_intent else intent.state
+            position = self.current_position
+            if position is None:
+                return current_intent.state
+            position_id = position_identity(position)
+            if intent.position_id != position_id:
+                return current_intent.state
+            if intent.symbol != position.symbol or receipt.get("order_id") != intent.order_id:
+                return current_intent.state
+            if receipt.get("symbol") not in (None, intent.symbol):
+                return current_intent.state
+            entry = self.position_intents().latest_for_position(position_id, INTENT_ACTION_ENTRY)
+            executor_position_id = (entry.payload or {}).get("position_id") if entry else None
+            if executor_position_id and receipt.get("position_id") not in (None, executor_position_id):
+                return current_intent.state
+            latest = self.position_intents().latest_for_position(position_id, INTENT_ACTION_UPDATE)
+            superseded = latest is not None and latest.key != intent.key
+            verdict = str(receipt.get("verdict") or "").lower()
+            if verdict == "executed":
+                if not superseded:
+                    payload = intent.payload or {}
+                    self.current_position = replace(
+                        position,
+                        stop_loss=payload.get("new_stop_loss", position.stop_loss),
+                        take_profit=payload.get("new_take_profit", position.take_profit),
+                    )
+                    await self.persistence.async_save_position(self.current_position)
+                self.confirm_position_intent(
+                    intent.key, source="executor_verdict_journal",
+                    detail=("executor receipt: executed (UPDATE applied on the exchange)"
+                            + ("; superseded by a newer UPDATE, current levels kept" if superseded else "")),
+                )
+                return INTENT_CONFIRMED
+            if not superseded:
+                self._apply_refused_intent(intent, verdict)
+                await self.persistence.async_save_position(self.current_position)
+            self.refuse_position_intent(
+                intent.key, source="executor_verdict_journal",
+                detail=(f"executor receipt: {verdict} ({receipt.get('reason') or ''})"
+                        + ("; superseded by a newer UPDATE, current levels kept" if superseded else "")),
+            )
+            return INTENT_REFUSED
+
+    async def _reconcile_late_updates(self) -> None:
+        """Read late UPDATE receipts once; CLOSE settlement stays in exit booking."""
+        for intent in self.position_intents().pending():
+            position = self.current_position
+            if position is None:
+                return
+            if intent.action != INTENT_ACTION_UPDATE:
+                continue
+            if intent.position_id != position_identity(position) or intent.symbol != position.symbol:
+                continue
+            receipt = self._read_executor_verdict_entry(intent.order_id or "")
+            if str((receipt or {}).get("verdict") or "").lower() not in ("executed", "blocked", "error"):
+                continue
+            await self._resolve_forwarded_intent(intent, delivered=True, verdict_entry=receipt)
 
     async def _apply_confirmed_intent(self, intent: PositionIntent, verdict_entry: dict | None) -> str:
         """Book what the executor receipt confirmed (never anything more)."""
@@ -1945,6 +2023,7 @@ class ExecutorReconciliationMixin:
         position on an unverifiable answer, and never invents a price. A confirmed
         exit is booked exactly once (shared lock + per-event idempotency).
         """
+        await self._reconcile_late_updates()
         now = datetime.now(timezone.utc)
         position = self.current_position
         symbol = symbol or (position.symbol if position is not None else None)

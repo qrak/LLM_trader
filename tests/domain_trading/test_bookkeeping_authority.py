@@ -16,6 +16,7 @@ Every test uses temporary journals, so nothing here touches the live repo or dat
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1454,3 +1455,165 @@ class TestReceiptEvidenceAdapter:
         verified, problem = verify_exit_record(record)
         assert problem is None and verified is not None
         assert verified.exit_fee is None, "no conversion is invented"
+
+
+class TestLateUpdateReceipts:
+    """Late receipts settle once and reach the next prompt without stale levels."""
+
+    def register_update(self, strategy: TradingStrategy, order_id: str = "update-late", **overrides: Any) -> Any:
+        position = strategy.current_position
+        assert position is not None
+        values = {
+            "order_id": order_id,
+            "position_id": position_identity(position),
+            "state": INTENT_UNKNOWN,
+            "payload": {
+                "old_stop_loss": 78800.0, "old_take_profit": 84500.0,
+                "new_stop_loss": 80500.0, "new_take_profit": 85000.0,
+            },
+        }
+        values.update(overrides)
+        return strategy.register_position_intent("UPDATE", position.symbol, **values)
+
+    def write_receipt(self, tmp_path: Path, strategy: TradingStrategy, **overrides: Any) -> None:
+        position = strategy.current_position
+        assert position is not None
+        row = {"order_id": "update-late", "symbol": position.symbol, "signal": "UPDATE", "verdict": "executed"}
+        row.update(overrides)
+        strategy.config.EXECUTOR_VERDICT_PATH = str(_verdicts(tmp_path / "verdicts.jsonl", [row]))
+
+    async def test_initial_window_covers_queue_delay_plus_execution(self, tmp_path: Path) -> None:
+        strategy, _, _ = _strategy(tmp_path, _position())
+        intent = self.register_update(strategy, state=INTENT_PENDING)
+        reads = []
+
+        def delayed(order_id: str) -> dict | None:
+            reads.append(order_id)
+            return {"order_id": order_id, "verdict": "executed"} if len(reads) == 7 else None
+
+        strategy._read_executor_verdict_entry = delayed
+        assert executor_reconciliation.INTENT_CONFIRM_ATTEMPTS == 15
+        assert await strategy.resolve_position_intents_after_forward(intent.order_id, True) == INTENT_CONFIRMED
+        assert len(reads) == 7
+
+    async def test_unknown_update_settles_before_next_prompt_and_after_restart(self, tmp_path: Path) -> None:
+        strategy, _, persistence = _strategy(tmp_path, _position())
+        intent = self.register_update(strategy)
+        self.write_receipt(tmp_path, strategy)
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await strategy.reconcile_local_position(source="pre_analysis")
+        context = strategy.get_position_context(82000.0)
+
+        assert strategy.position_intents().get(intent.key).state == INTENT_CONFIRMED
+        assert "state: confirmed" in context
+        assert "state: unknown" not in context
+        assert "missing-confirmation alerts" in context
+        assert "80,500" in context and "85,000" in context
+        assert strategy.current_position.stop_loss == 80500.0
+        persistence.async_save_position.assert_awaited_once()
+        await strategy.reconcile_local_position(source="periodic")
+        persistence.async_save_position.assert_awaited_once()
+        restarted, _, restarted_persistence = _strategy(tmp_path, strategy.current_position)
+        assert "state: confirmed" in restarted.get_position_context(82000.0)
+        restarted_persistence.async_save_position.assert_not_awaited()
+
+    @pytest.mark.parametrize("state", [INTENT_PENDING, INTENT_UNKNOWN])
+    async def test_missing_receipt_never_confirms_or_waits_during_sync(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str,
+    ) -> None:
+        position = _position()
+        strategy, _, persistence = _strategy(tmp_path, position)
+        intent = self.register_update(strategy, state=state)
+        strategy.config.EXECUTOR_VERDICT_PATH = str(tmp_path / "missing.jsonl")
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        sleeper = AsyncMock()
+        monkeypatch.setattr(executor_reconciliation.asyncio, "sleep", sleeper)
+
+        await strategy.reconcile_local_position()
+
+        assert strategy.position_intents().get(intent.key).state == state
+        assert strategy.current_position is position
+        assert "Execution is not confirmed" in strategy.get_position_context(82000.0)
+        persistence.async_save_position.assert_not_awaited()
+        sleeper.assert_not_awaited()
+
+    @pytest.mark.parametrize("verdict", ["blocked", "error"])
+    async def test_late_refusal_restores_and_persists_old_levels(self, tmp_path: Path, verdict: str) -> None:
+        strategy, _, persistence = _strategy(tmp_path, _position(stop_loss=80500.0, take_profit=85000.0))
+        intent = self.register_update(strategy)
+        self.write_receipt(tmp_path, strategy, verdict=verdict, reason="safety refusal")
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await strategy.reconcile_local_position()
+
+        assert strategy.position_intents().get(intent.key).state == "refused"
+        assert strategy.current_position.stop_loss == 78800.0
+        assert strategy.current_position.take_profit == 84500.0
+        persistence.async_save_position.assert_awaited_once_with(strategy.current_position)
+        assert "state: refused" in strategy.get_position_context(82000.0)
+        assert strategy.take_unconfirmed_intent_alert() is not None
+
+    @pytest.mark.parametrize("verdict", ["executed", "blocked", "error"])
+    async def test_old_receipt_cannot_replace_newer_update_or_its_prompt(self, tmp_path: Path, verdict: str) -> None:
+        position = _position(stop_loss=81000.0, take_profit=86000.0)
+        strategy, _, persistence = _strategy(tmp_path, position)
+        old = self.register_update(strategy)
+        newer = self.register_update(strategy, order_id="update-newer", state=INTENT_CONFIRMED)
+        self.write_receipt(tmp_path, strategy, verdict=verdict)
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await strategy.reconcile_local_position()
+
+        assert strategy.position_intents().get(old.key).state == (INTENT_CONFIRMED if verdict == "executed" else "refused")
+        assert strategy.position_intents().recent(1)[0].key == newer.key
+        assert strategy.current_position is position
+        persistence.async_save_position.assert_not_awaited()
+        assert "state: confirmed" in strategy.get_position_context(82000.0)
+        assert "state: refused" not in strategy.get_position_context(82000.0)
+        assert strategy.take_unconfirmed_intent_alert() is None
+
+    @pytest.mark.parametrize("foreign", ["trade", "symbol", "executor_position"])
+    async def test_foreign_update_receipt_cannot_change_current_trade(self, tmp_path: Path, foreign: str) -> None:
+        position = _position()
+        strategy, _, persistence = _strategy(tmp_path, position)
+        intent = self.register_update(strategy, **({"position_id": "another-trade"} if foreign == "trade" else {}))
+        strategy.register_position_intent(
+            "ENTRY", position.symbol, order_id="entry-original", position_id=position_identity(position),
+            state=INTENT_CONFIRMED, payload={"position_id": "executor-original"},
+        )
+        self.write_receipt(
+            tmp_path, strategy,
+            **({"symbol": "ETH/USDT"} if foreign == "symbol" else {"position_id": "executor-foreign"}),
+        )
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await strategy.reconcile_local_position()
+
+        assert strategy.position_intents().get(intent.key).state == INTENT_UNKNOWN
+        assert strategy.current_position is position
+        persistence.async_save_position.assert_not_awaited()
+        if foreign == "trade":
+            assert "state: unknown" not in strategy.get_position_context(82000.0)
+
+    async def test_concurrent_syncs_settle_once(self, tmp_path: Path) -> None:
+        strategy, _, persistence = _strategy(tmp_path, _position())
+        intent = self.register_update(strategy)
+        self.write_receipt(tmp_path, strategy)
+        strategy._executor_has_position = AsyncMock(return_value=True)
+
+        await asyncio.gather(strategy.reconcile_local_position(), strategy.reconcile_local_position())
+
+        assert strategy.position_intents().get(intent.key).state == INTENT_CONFIRMED
+        persistence.async_save_position.assert_awaited_once()
+
+    async def test_failed_position_save_does_not_confirm_the_intent(self, tmp_path: Path) -> None:
+        strategy, _, persistence = _strategy(tmp_path, _position())
+        intent = self.register_update(strategy)
+        self.write_receipt(tmp_path, strategy)
+        persistence.async_save_position.side_effect = OSError("disk unavailable")
+
+        with pytest.raises(OSError, match="disk unavailable"):
+            await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+
+        assert strategy.position_intents().get(intent.key).state == INTENT_UNKNOWN

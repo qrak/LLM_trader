@@ -12,7 +12,9 @@ from .brain import TradingBrainService
 from .data_models import LocalExitRequest, MarketConditions, Position, TradeDecision
 from .executor_reconciliation import (
     INTENT_ACTION_CLOSE,
+    INTENT_CONFIRMED,
     INTENT_PENDING,
+    INTENT_REFUSED,
     INTENT_UNKNOWN,
     LESSON_SKIPPED_ALREADY_LEARNED,
     LESSON_SKIPPED_NO_EVIDENCE,
@@ -603,11 +605,16 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         UPDATE/CLOSE/ENTRY can still change a decision, so the outcome travels with the
         position context instead of living only in the logs.
         """
-        intents = self.position_intents().recent(1)
-        if not intents:
+        ledger = self.position_intents()
+        position = self.current_position
+        if position is not None:
+            intent = ledger.latest_for_position(position_identity(position))
+        else:
+            recent = ledger.recent(1)
+            intent = recent[0] if recent else None
+        if intent is None:
             return []
-        intent = intents[0]
-        stamp = (intent.updated_at or intent.created_at or "")[:16].replace("T", " ")
+        stamp = (intent.created_at or intent.updated_at or "")[:16].replace("T", " ")
         evidence = f" (evidence: {intent.evidence})" if intent.evidence else ""
         lines = [
             "",
@@ -624,10 +631,12 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             lines.append(
                 f"- proposed stop loss ${proposed_sl:,.2f} — stop loss in force stays {in_force_text}"
             )
-        lines.append(
-            "- Only state 'confirmed' means the command reached the exchange: 'refused' means "
-            "it did NOT run, so the levels above are what the exchange still holds."
-        )
+        if intent.state == INTENT_CONFIRMED:
+            lines.append("- Executor evidence confirms this command. This outcome supersedes earlier missing-confirmation alerts.")
+        elif intent.state == INTENT_REFUSED:
+            lines.append("- This command was refused; do not treat its requested levels as executed.")
+        else:
+            lines.append("- Execution is not confirmed. Local SL/TP values are a mirror, not proof of exchange protection.")
         return lines
 
     def get_position_context(self, current_price: float | None = None) -> str:

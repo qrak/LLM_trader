@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-12 — Late UPDATE confirmations and next-analysis context
+
+### Fixed
+- Allow 30 seconds for UPDATE/CLOSE queue delay plus exchange execution, instead of
+  assuming one 10-second executor poll covers both. Missing evidence still stays UNKNOWN.
+- Revisit pending/unknown UPDATE receipts during independent reconciliation and before
+  analysis. Settle the exact command once, persist its corrected SL/TP mirror, and retain
+  genuine refusal alerts. Never resend an order or alter another trade or newer UPDATE.
+- Scope the next prompt's outcome to the current trade and order commands by creation,
+  not delayed receipt arrival. Confirmed outcomes explicitly supersede the earlier
+  missing-confirmation alert and keep the original command time.
+
+### Verified
+- Added 14 regression cases; trading tests: **625 passed**. Full Windows suite:
+  **2029 passed, 17 skipped**. Full Pyright: **0 errors, 0 warnings**; Ruff passes.
+- Replayed the actual affected intent and executor receipt on copied data: UNKNOWN becomes
+  CONFIRMED, SL **84350**, TP **82000**, with no stale alarm in the next prompt context.
+  Live journals and position state remain untouched. Activation requires the user's bot
+  restart; no executor change, service restart, commit or push is needed.
+
 ## 2026-10-11 — Clean full type check and safe post-await position handling
 
 ### Fixed

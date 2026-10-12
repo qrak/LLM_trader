@@ -172,6 +172,14 @@ one-shot operator alert (`take_rejected_intent_alert()` → `CryptoTradingBot._r
 block, so the next analysis — one per timeframe, the only place a refusal can still change a
 verdict — sees the requested level, the level still in force, and that nothing was sent.
 
+UPDATE/CLOSE forwarding allows 30 seconds for queue delay plus execution. A missing verdict
+still means UNKNOWN, not success. Independent reconciliation and the pre-analysis hook
+revisit pending/unknown UPDATE receipts without waiting or sending another command. Match
+the exact order and current trade; persist corrected levels on success or refusal, and
+never let an older receipt overwrite a newer UPDATE. Prompt outcomes are scoped to the
+current trade and ordered by command creation, not delayed receipt arrival. A confirmation
+explicitly supersedes an earlier missing-confirmation alert.
+
 A queued CLOSE may produce its verdict after the bot's immediate journal read, and the executor's
 market-order reply may prove quantity but omit average price. The executor re-reads that exact
 order before writing the verdict; `book_executor_side_exit()` also revisits a matching

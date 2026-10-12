@@ -17,6 +17,10 @@
 
 > 💡 **Paper trading by default.** A real exchange execution service ([llm_trader_executor](https://github.com/qrak/llm_trader_executor)) is currently in testing — it consumes this bot's decisions and places live CCXT orders. Coming soon. Stay tuned.
 
+With executor integration enabled, UPDATE/CLOSE confirmation waits up to 30 seconds.
+Unanswered commands remain unconfirmed; a late UPDATE receipt is revisited during position
+synchronization and before the next analysis, so the model receives the corrected outcome.
+
 ---
 
 ## Quick Start
