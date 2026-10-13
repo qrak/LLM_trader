@@ -249,13 +249,15 @@ class AnalysisEngine:
             )
 
             assert self.prompt_builder is not None
-            self.prompt_builder.custom_instructions = []
 
             return analysis_result
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.logger.exception("Analysis failed")
             return {"error": str(e), "recommendation": "HOLD"}
+        finally:
+            if self.prompt_builder is not None:
+                self.prompt_builder.custom_instructions = []
 
     async def _collect_market_data(self) -> bool:
         """Collect market data using data collector"""

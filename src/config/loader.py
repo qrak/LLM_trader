@@ -10,6 +10,7 @@ from typing import Any
 
 from dotenv import dotenv_values
 
+from src.utils.prompt_budget import PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
 
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
@@ -34,6 +35,7 @@ class Config:
         self._validate_exit_monitoring()
         self._build_model_configs()
         self._validate_model_verbosity()
+        self._validate_prompt_budget()
 
     def _load_environment(self):
         """Merge optional keys.env with process variables; process values take precedence."""
@@ -65,11 +67,16 @@ class Config:
                 interpolation=None,
                 inline_comment_prefixes=("#", ";"),
             )
+            config.optionxform = lambda optionstr: optionstr
             config.read(CONFIG_INI_PATH, encoding="utf-8")
 
             for section_name in config.sections():
                 section_data = {}
                 for key, value in config.items(section_name):
+                    if section_name != "model_context_windows":
+                        key = key.lower()
+                    if key in section_data:
+                        raise ValueError(f"Duplicate option {key} in [{section_name}]")
                     converted_value = self._convert_value(value)
                     if section_name == "dashboard" and key == "cors_origins":
                         converted_value = ["*"] if value.strip() == "*" else [origin.strip() for origin in value.split(",") if origin.strip()]
@@ -79,6 +86,47 @@ class Config:
                 self._config_data[section_name] = section_data
         except Exception as e:
             raise RuntimeError(f"Error loading configuration file {CONFIG_INI_PATH}: {e}") from e
+
+    def _prompt_budget_int(self, key: str, default: int) -> int:
+        value = self.get_config("prompt_budget", key, default)
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"[prompt_budget] {key} must be a positive integer")
+        return value
+
+    @property
+    def BRAIN_MAX_TOKENS(self) -> int:
+        return self._prompt_budget_int("brain_max_tokens", 50000)
+
+    @property
+    def PROMPT_MAX_TOKENS(self) -> int:
+        return self._prompt_budget_int("request_max_tokens", 100000)
+
+    @property
+    def PROMPT_SAFETY_MARGIN_PERCENT(self) -> int:
+        value = self._prompt_budget_int("safety_margin_percent", 10)
+        if value > 50:
+            raise ValueError("[prompt_budget] safety_margin_percent must not exceed 50")
+        return value
+
+    @property
+    def PROMPT_IMAGE_RESERVE_TOKENS(self) -> int:
+        return self._prompt_budget_int("image_reserve_tokens", 16384)
+
+    @property
+    def MODEL_CONTEXT_WINDOWS(self) -> dict[str, int]:
+        windows = dict(PromptBudgetPolicy.DEFAULT_CONTEXT_WINDOWS)
+        for key, value in self._config_data.get("model_context_windows", {}).items():
+            provider, _, model = key.partition("/")
+            if provider not in VALID_PROVIDERS | {"blockrun"} or not model or model != model.strip():
+                raise ValueError(f"Invalid model context key: {key}")
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"Context window for {key} must be a positive integer")
+            windows[key] = value
+        return windows
+
+    def _validate_prompt_budget(self) -> None:
+        _ = (self.BRAIN_MAX_TOKENS, self.PROMPT_MAX_TOKENS, self.PROMPT_SAFETY_MARGIN_PERCENT,
+             self.PROMPT_IMAGE_RESERVE_TOKENS, self.MODEL_CONTEXT_WINDOWS)
 
     def _validate_provider(self):
         """Validate that the configured AI provider is supported."""

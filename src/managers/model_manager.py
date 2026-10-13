@@ -120,10 +120,11 @@ class ModelManager:
         if (effective_provider in ("local", "all")) and self._clients.lmstudio and self.config.LM_STUDIO_STREAMING:  # type: ignore[reportOptionalMemberAccess]
             try:
                 effective_model = model if model else self.config.LM_STUDIO_MODEL
+                local_messages = self._orchestrator.prepare_request_messages("local", messages, effective_model)  # type: ignore[reportOptionalMemberAccess]
                 async def print_stream_callback(chunk):
                     print(chunk, end="", flush=True)
                 response_json = await self._clients.lmstudio.stream_chat_completion(  # type: ignore[reportOptionalMemberAccess]
-                    effective_model, messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback  # type: ignore[reportOptionalMemberAccess]
+                    effective_model, local_messages, self._orchestrator.get_metadata("local").config, callback=print_stream_callback  # type: ignore[reportOptionalMemberAccess]
                 )
                 if response_json is not None:
                     result = InvocationResult(
@@ -205,15 +206,12 @@ class ModelManager:
             system_tokens = self.token_counter.count_tokens(system_message)  # type: ignore[reportOptionalMemberAccess]
             prompt_tokens = self.token_counter.count_tokens(prompt)  # type: ignore[reportOptionalMemberAccess]
             self.logger.debug("Pre-call estimate: system=%s, prompt=%s", f"{system_tokens:,}", f"{prompt_tokens:,}")
-            combined_prompt = f"System instructions: {system_message}\n\nUser query: {prompt}"
-            self.logger.info("Full prompt content: %s", combined_prompt)
             return [
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt},
             ]
         prompt_tokens = self.token_counter.count_tokens(prompt)  # type: ignore[reportOptionalMemberAccess]
         self.logger.debug("Pre-call estimate: prompt=%s", f"{prompt_tokens:,}")
-        self.logger.info("Full prompt content: %s", prompt)
         return [{"role": "user", "content": prompt}]
 
     async def _process_result(self, result) -> str:

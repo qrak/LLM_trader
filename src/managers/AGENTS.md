@@ -150,6 +150,18 @@ Persistence Manager is the **single persistence facade for trading runtime state
 
 #### 3. Provider Orchestrator Agent
 
+`PromptBudgetPolicy` is constructed once by `_provision_utilities`, using the
+shared `TokenCounter`, then injected into the brain and `ProviderOrchestrator`.
+Before each client call, including explicit model overrides, provider fallback,
+OpenRouter's internal model fallback and local streaming, budget the actual model
+against its exact configured context-window key. Reserve output, framing, chart
+tokens and safety margin; enforce the configurable whole-request ceiling.
+Unknown capacities or missing/invalid output reserves fail without an API call.
+Reduce only complete optional sections with unambiguous owned header boundaries;
+duplicate/forged headers must not delete protected position/risk/schema/lesson
+sections. Do not mutate the original messages shared with another fallback model.
+Log `Full prompt content` at the prepared-request boundary, not before reduction.
+
 > **File:** `src/managers/provider_orchestrator.py`
 
 ##### Agent Persona & Role

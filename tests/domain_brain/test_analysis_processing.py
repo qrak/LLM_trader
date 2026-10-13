@@ -2,6 +2,7 @@
 result processor execution paths and the decision-summary aggregation.
 """
 
+import asyncio
 import json
 import math
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.analyzer.analysis_context import AnalysisContext
+from src.analyzer.analysis_engine import AnalysisEngine
 from src.analyzer.analysis_result_processor import AnalysisResultProcessor
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
@@ -29,9 +32,56 @@ from src.managers.provider_types import InvocationResult
 from src.parsing.unified_parser import UnifiedParser
 from src.trading.data_models import MarketConditions, Position
 from src.utils.format_utils import FormatUtils
+from tests.conftest import make_config
+from tests.domain_brain.test_prompt_contracts import make_builder
 
 VALID_ANALYSIS_RESPONSE = '{"analysis": {"signal": "HOLD"}}'
 NARRATIVE_ONLY = "1) MARKET STRUCTURE: price below both SMAs; 2) DECISION: HOLD - no edge."
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["success", "error", "cancelled"])
+async def test_repeated_analysis_cycles_do_not_accumulate_news_after_failures(monkeypatch, outcome):
+    config = make_config()
+    builder = make_builder(config)
+    rag = MagicMock()
+    rag.retrieve_context = AsyncMock()
+    rag.get_latest_article_urls_snapshot.return_value = {}
+    manager = MagicMock()
+    manager.supports_image_analysis.return_value = False
+    engine = AnalysisEngine(MagicMock(), rag, manager, MagicMock(), config, prompt_builder=builder)
+    engine.symbol = "BTC/USDC"
+    engine.context = AnalysisContext(symbol=engine.symbol)
+    captured = []
+
+    async def generate(*args, **kwargs):
+        captured.append(tuple(builder.custom_instructions))
+        if outcome == "error":
+            raise RuntimeError("Synthetic analysis failure")
+        if outcome == "cancelled":
+            raise asyncio.CancelledError()
+        return {"analysis": {"signal": "HOLD"}}
+
+    monkeypatch.setattr(engine, "_collect_market_data", AsyncMock(return_value=True))
+    monkeypatch.setattr(engine, "_enrich_market_context", AsyncMock())
+    monkeypatch.setattr(engine, "_perform_technical_analysis", AsyncMock())
+    monkeypatch.setattr(engine, "_generate_ai_analysis", generate)
+    expected = []
+    for index in range(30):
+        news = f"News for cycle {index:03d}: " + "x" * 1000
+        expected.append((news,))
+        rag.retrieve_context.return_value = news
+        if outcome == "cancelled":
+            with pytest.raises(asyncio.CancelledError):
+                await engine.analyze_market()
+        else:
+            result = await engine.analyze_market()
+            if outcome == "error":
+                assert result == {"error": "Synthetic analysis failure", "recommendation": "HOLD"}
+            else:
+                assert result == {"analysis": {"signal": "HOLD"}}
+    assert captured == expected
+    assert builder.custom_instructions == []
 
 
 

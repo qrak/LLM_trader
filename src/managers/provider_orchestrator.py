@@ -9,6 +9,7 @@ from src.managers.provider_types import (
     ProviderMetadata,
 )
 from src.platforms.ai_providers.response_models import ChatResponseModel
+from src.utils.prompt_budget import PromptBudgetExceeded, PromptBudgetPolicy
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -30,7 +31,8 @@ class ProviderOrchestrator:
         self,
         logger: Logger,
         config: "Config",
-        clients: ProviderClients
+        clients: ProviderClients,
+        prompt_budget: PromptBudgetPolicy | None = None,
     ) -> None:
         """
         Initialize the provider orchestrator.
@@ -38,6 +40,7 @@ class ProviderOrchestrator:
         self.logger = logger
         self.config = config
         self.clients = clients
+        self.prompt_budget = prompt_budget
         self._providers = self._build_provider_metadata()
 
     def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
@@ -81,6 +84,21 @@ class ProviderOrchestrator:
                 supports_chart=True,
             )
         }
+
+    def prepare_request_messages(
+        self, provider: str, messages: list[dict[str, str]], model: str, *, chart: bool = False,
+    ) -> list[dict[str, str]]:
+        metadata = self._providers[provider]
+        result = (
+            self.prompt_budget.prepare_messages(messages, provider, model, metadata.config, chart=chart)
+            if self.prompt_budget is not None else messages
+        )
+        parts = [
+            ("System instructions: " if message["role"] == "system" else "User query: ") + message["content"]
+            for message in result
+        ]
+        self.logger.info("Full prompt content: %s", "\n\n".join(parts))
+        return result
 
     def get_metadata(self, provider: str) -> ProviderMetadata | None:
         """Get metadata for a provider."""
@@ -136,6 +154,15 @@ class ProviderOrchestrator:
             )
         model_override_provided = model is not None
         effective_model = self.resolve_model(provider, model)
+        if provider != "openrouter":
+            try:
+                messages = self.prepare_request_messages(provider, messages, effective_model, chart=chart)
+            except PromptBudgetExceeded as exc:
+                self.logger.warning("Prompt budget refused %s/%s: %s", provider, effective_model, exc)
+                return InvocationResult(
+                    success=False, response=ChatResponseModel.from_error(str(exc)),
+                    provider=provider, model=effective_model,
+                )
         if provider == "googleai":
             return await self._invoke_google(metadata, messages, effective_model, chart, chart_image)
         if provider == "local":
@@ -371,12 +398,7 @@ class ProviderOrchestrator:
         allow_model_fallback: bool
     ) -> InvocationResult:
         """Invoke OpenRouter provider."""
-        if chart and chart_image:
-            response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
-                effective_model, messages, cast(Any, chart_image), metadata.config
-            )
-        else:
-            response = await metadata.client.chat_completion(effective_model, messages, metadata.config)  # type: ignore
+        response = await self._request_openrouter_model(metadata, messages, effective_model, chart, chart_image)
         success = self._is_valid_response(response) and not self._is_rate_limited(response)
         fallback_model = metadata.fallback_model
         if not success and allow_model_fallback and fallback_model and fallback_model != effective_model:
@@ -387,12 +409,7 @@ class ProviderOrchestrator:
                 error_detail,
                 fallback_model
             )
-            if chart and chart_image:
-                response = await metadata.client.chat_completion_with_chart_analysis(  # type: ignore
-                    fallback_model, messages, cast(Any, chart_image), metadata.config
-                )
-            else:
-                response = await metadata.client.chat_completion(fallback_model, messages, metadata.config)  # type: ignore
+            response = await self._request_openrouter_model(metadata, messages, fallback_model, chart, chart_image)
             success = self._is_valid_response(response) and not self._is_rate_limited(response)
             if success:
                 self.logger.info("OpenRouter fallback model %s succeeded", fallback_model)
@@ -413,6 +430,22 @@ class ProviderOrchestrator:
             model=effective_model,
             error_message=None if success else (response.error if response and response.error else "Empty or invalid response content from OpenRouter")
         )
+
+    async def _request_openrouter_model(
+        self, metadata: ProviderMetadata, messages: list[dict[str, str]], model: str,
+        chart: bool, chart_image: io.BytesIO | bytes | str | None,
+    ) -> ChatResponseModel | None:
+        assert metadata.client is not None
+        try:
+            prepared = self.prepare_request_messages("openrouter", messages, model, chart=chart)
+        except PromptBudgetExceeded as exc:
+            self.logger.warning("Prompt budget refused openrouter/%s: %s", model, exc)
+            return ChatResponseModel.from_error(str(exc))
+        if chart and chart_image:
+            return await metadata.client.chat_completion_with_chart_analysis(
+                model, prepared, chart_image, metadata.config,
+            )
+        return await metadata.client.chat_completion(model, prepared, metadata.config)
 
     def _is_valid_response(self, response: ChatResponseModel | None) -> bool:
         """Check if response contains valid choices with content."""

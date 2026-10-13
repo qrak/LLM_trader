@@ -180,8 +180,9 @@ async def test_composition_root_wires_reconcile_interval_from_config(
 
 
 @pytest.mark.parametrize("lesson_count", [0, 6])
+@pytest.mark.parametrize("vector_context_chars", [0, 18000, 48000, 100000])
 def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
-    tmp_path, monkeypatch, lesson_count
+    tmp_path, monkeypatch, lesson_count, vector_context_chars
 ):
     monkeypatch.chdir(tmp_path)
     root = object.__new__(CompositionRoot)
@@ -192,7 +193,11 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     vector.experience_count = 0
     vector.prune_aged_documents.return_value = {}
     vector.get_blocked_trade_feedback.return_value = ""
-    vector.get_context_for_prompt.return_value = ""
+    vector.get_context_for_prompt.return_value = (
+        "Relevant past experiences:\n" + "x" * vector_context_chars
+        if vector_context_chars else ""
+    )
+    vector.get_stats_for_context.return_value = {"total_trades": 0}
     vector.get_relevant_rules.return_value = []
     vector.compute_optimal_thresholds.return_value = {}
     monkeypatch.setattr(provisioners, "configure_hf_hub_auth", lambda: None)
@@ -202,12 +207,13 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
     monkeypatch.setattr(provisioners, "SentenceTransformer", MagicMock())
     monkeypatch.setattr(provisioners, "VectorMemoryService", lambda *args, **kwargs: vector)
 
-    trading = root._provision_trading_layer(
-        {"parser": MagicMock()}, {"manager": MagicMock()}
-    )
+    utils = root._provision_utilities()
+    trading = root._provision_trading_layer(utils, {"manager": MagicMock()})
     brain = trading["brain_service"]
     repository = trading["post_mortem_repo"]
     assert brain.context_provider.post_mortem_repo is repository
+    assert brain.context_provider.prompt_budget is utils["prompt_budget"]
+    assert utils["prompt_budget"].token_counter is utils["token_counter"]
     assert brain.persistence is trading["persistence"]
 
     for index in range(lesson_count):
@@ -239,6 +245,7 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
         template_manager=TemplateManager(root.config, root.logger, TimeframeValidator),
     )
     context = brain.get_context(MarketSnapshot(adx=19.49, trend_direction="BEARISH"))
+    assert "Brain context reduced" not in context
     prompt = builder.build_system_prompt(
         "BTC/USDC", AnalysisContext(symbol="BTC/USDC", current_price=82000.0),
         brain_context=context, dynamic_thresholds=brain.get_dynamic_thresholds(),
@@ -262,6 +269,21 @@ def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
         assert marker not in prompt
         assert "Stored lesson" not in prompt
     vector.store_experience.assert_not_called()
+
+
+def test_model_provisioning_connects_request_budget_to_the_shared_token_counter(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    root = object.__new__(CompositionRoot)
+    root.logger = MagicMock()
+    root.config = make_config(OPENROUTER_API_KEY="", GOOGLE_STUDIO_API_KEY="", LM_STUDIO_BASE_URL="")
+    root.config.get_model_config = lambda model: {"max_tokens": 1024}
+    monkeypatch.setattr(provisioners, "DeepSeekClient", MagicMock())
+    utils = root._provision_utilities()
+    models = root._provision_model_layer(utils)
+    manager = models["manager"]
+    assert manager.token_counter is utils["token_counter"]
+    assert manager._orchestrator.prompt_budget is utils["prompt_budget"]
+    assert manager._orchestrator.prompt_budget.token_counter is manager.token_counter
 
 
 def test_launcher_requirements_check_reports_only_unsatisfied_lines(tmp_path):

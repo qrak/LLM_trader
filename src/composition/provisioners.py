@@ -112,6 +112,7 @@ from src.utils.indicator_classifier import build_exit_execution_context_from_con
 # pylint: disable=wrong-import-position
 from src.utils.keyboard_handler import KeyboardHandler
 from src.utils.peak_rates import PeakRates
+from src.utils.prompt_budget import PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import CostStorage, ModelPricing, TokenCounter
 
@@ -158,6 +159,14 @@ class ProvisioningMixin:
         format_utils = FormatUtils()
         parser = UnifiedParser(self.logger, format_utils=format_utils)
         token_counter = TokenCounter()
+        prompt_budget = PromptBudgetPolicy(
+            token_counter, self.logger,
+            brain_max_tokens=self.config.BRAIN_MAX_TOKENS,
+            request_max_tokens=self.config.PROMPT_MAX_TOKENS,
+            context_windows=self.config.MODEL_CONTEXT_WINDOWS,
+            safety_margin_percent=self.config.PROMPT_SAFETY_MARGIN_PERCENT,
+            image_reserve_tokens=self.config.PROMPT_IMAGE_RESERVE_TOKENS,
+        )
         timeframe_validator = TimeframeValidator()
         collision_resolver = CategoryCollisionResolver()
 
@@ -165,6 +174,7 @@ class ProvisioningMixin:
             "format_utils": format_utils,
             "parser": parser,
             "token_counter": token_counter,
+            "prompt_budget": prompt_budget,
             "timeframe_validator": timeframe_validator,
             "collision_resolver": collision_resolver,
         }
@@ -367,7 +377,7 @@ class ProvisioningMixin:
             blockrun=blockrun_client,
             deepseek=deepseek_client,
         )
-        orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients)
+        orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients, prompt_budget=utils["prompt_budget"])
 
         manager = ModelManager(
             logger=self.logger,
@@ -524,6 +534,7 @@ class ProvisioningMixin:
             timeframe_minutes=timeframe_minutes,
             tightening_policy=tightening_policy,
             post_mortem_repo=post_mortem_repo,
+            prompt_budget=utils["prompt_budget"],
         )
 
         try:

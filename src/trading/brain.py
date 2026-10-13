@@ -6,6 +6,7 @@ Handles brain state management, learning from closed trades, and providing AI co
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
+from src.utils.prompt_budget import PromptBudgetPolicy
 
 from .brain_context import BrainContextProvider
 from .brain_exit_profiles import ExitProfileResolver
@@ -69,6 +70,7 @@ class TradingBrainService:
         timeframe_minutes: int = DEFAULT_REFLECTION_TIMEFRAME_MINUTES,
         tightening_policy: StopLossTighteningPolicy | None = None,
         post_mortem_repo: Any | None = None,
+        prompt_budget: PromptBudgetPolicy | None = None,
     ):
         """Initialize trading brain service."""
         self.logger = logger
@@ -98,6 +100,7 @@ class TradingBrainService:
             exit_profiles=self.exit_profiles,
             post_mortem_repo=post_mortem_repo,
             logger=self.logger,
+            prompt_budget=prompt_budget,
         )
         self._reflection_interval: int = self._derive_reflection_interval(timeframe_minutes)
         self.logger.debug(

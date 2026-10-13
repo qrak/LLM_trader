@@ -488,7 +488,7 @@ class PromptBuilder:
         total_tokens = system_tokens + prompt_tokens
         warnings: list[str] = []
 
-        if total_tokens > 20000:
+        if total_tokens > self.config.PROMPT_MAX_TOKENS:
             warnings.append(f"Large prompt: estimated {total_tokens} tokens")
         if "## Response Format" not in system_prompt:
             warnings.append("Missing response format section in system prompt")

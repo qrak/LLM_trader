@@ -41,6 +41,15 @@ class SectionMeta:
 
 
 _SCHEMA: dict[str, SectionMeta] = {
+    "prompt_budget": SectionMeta(
+        name="prompt_budget", title="Estimated-token safety budgets",
+        settings={
+            "brain_max_tokens": SettingMeta("brain_max_tokens", "int", "restart", "Brain estimated-token limit", min_val=1),
+            "request_max_tokens": SettingMeta("request_max_tokens", "int", "restart", "Whole request estimated-token limit", min_val=1),
+            "safety_margin_percent": SettingMeta("safety_margin_percent", "int", "restart", "Model context safety margin (%)", min_val=1, max_val=50),
+            "image_reserve_tokens": SettingMeta("image_reserve_tokens", "int", "restart", "Conservative chart-image token reserve", min_val=1),
+        },
+    ),
     "ai_providers": SectionMeta(
         name="ai_providers",
         title="AI Providers",

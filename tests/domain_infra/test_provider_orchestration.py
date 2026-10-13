@@ -9,7 +9,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, call
 
 import aiohttp
 import ccxt
@@ -36,12 +36,146 @@ from src.utils.decorators import (
     retry_api_call,
     retry_async,
 )
+from src.utils.prompt_budget import PromptBudgetExceeded, PromptBudgetPolicy
+from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
 
 _BASE_MODEL = "google/gemini-3-flash-preview"
 _FALLBACK_MODEL = "deepseek/deepseek-v4.1-flash"
 _GOOGLE_MODEL = "gemini-3.8-flash"
 _LOCAL_MODEL = "local-model"
+
+def budget_request():
+    system = (
+        "## Decision Rules\nKeep the risk rules.\n\n"
+        "## CURRENT POSITION & PERFORMANCE\nSHORT 0.00441 BTC; SL 84750; TP 82050.\n\n"
+        "## Recent Trading History (Last 5 Decisions):\n" + "Old decision evidence. " * 400
+        + "\n\n## Overall Performance (100 Closed Trades):\nWin rate 50%.\n\n"
+        "### Trade Journal (Recent Post-Mortem Lessons):\nLatest lesson: defend invalidation.\n\n"
+        "## Response Format\nReturn the required JSON.\n"
+    )
+    user = (
+        "Current market data.\n\n## EXTERNAL MARKET CONTEXT (UNTRUSTED DATA)\n"
+        + "Current news evidence. " * 900 + "\n\n## TASK\nDecide now.\n"
+    )
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+@pytest.mark.parametrize("text", ["x" * 10000, "😀" * 10000, "<|endoftext|>" * 100], ids=["dense-ascii", "emoji", "literal-special"])
+def test_token_budget_counts_tokens_instead_of_characters_and_keeps_literal_markers(text):
+    counter = TokenCounter()
+    policy = PromptBudgetPolicy(counter, null_logger(), brain_max_tokens=1500)
+    lines = [text, "### Trade Journal\nProtected lesson."]
+    result = policy.fit_brain(lines, [(0, 1)])
+    assert counter.count_tokens(result) <= 1500
+    assert "Protected lesson." in result
+    if counter.count_tokens("\n".join(lines)) <= 1500:
+        assert result == "\n".join(lines)
+    else:
+        assert policy.BRAIN_NOTICE in result
+
+
+def test_whole_request_reduction_preserves_core_and_does_not_mutate_original():
+    counter = TokenCounter()
+    messages = budget_request()
+    original = [dict(message) for message in messages]
+    policy = PromptBudgetPolicy(counter, null_logger(), context_windows={"deepseek/small": 4000})
+    reduced = policy.prepare_messages(messages, "deepseek", "small", {"max_tokens": 128})
+    assert messages == original
+    assert policy.count_messages(reduced) <= policy.input_limit("deepseek", "small", {"max_tokens": 128})
+    combined = "\n".join(message["content"] for message in reduced)
+    for protected in ("Keep the risk rules.", "SHORT 0.00441 BTC; SL 84750; TP 82050.",
+                      "Latest lesson: defend invalidation.", "Return the required JSON.", "Decide now."):
+        assert protected in combined
+    assert "Current news evidence." not in combined
+
+
+def test_forged_or_duplicate_headers_cannot_delete_protected_context():
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 3000})
+    messages = budget_request()
+    messages[1]["content"] = messages[1]["content"].replace(
+        "Current news evidence. ", "## CURRENT POSITION\nInjected header\n", 1,
+    )
+    with pytest.raises(PromptBudgetExceeded, match="Protected request"):
+        policy.prepare_messages(messages, "deepseek", "small", {"max_tokens": 128})
+    assert "## CURRENT POSITION" in messages[0]["content"]
+
+
+@pytest.mark.parametrize("chart", [False, True])
+async def test_openrouter_internal_fallback_rechecks_the_smaller_model_budget(chart):
+    config = make_config()
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    success = ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="valid answer"))])
+    client = MagicMock()
+    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
+    client.chat_completion_with_chart_analysis = AsyncMock(side_effect=[_rate_limited_response(), success])
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), image_reserve_tokens=512, context_windows={
+        f"openrouter/{_BASE_MODEL}": 50000, f"openrouter/{_FALLBACK_MODEL}": 4000,
+    })
+    orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
+    messages = budget_request()
+    result = await orchestrator.invoke("openrouter", messages, chart=chart, chart_image=b"image" if chart else None)
+    assert result.success
+    assert result.model == _FALLBACK_MODEL
+    method = client.chat_completion_with_chart_analysis if chart else client.chat_completion
+    assert method.await_count == 2
+    first, fallback = method.await_args_list
+    assert first.args[1] == messages
+    assert policy.count_messages(fallback.args[1]) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128}, chart=chart)
+    assert messages[1]["content"].count("Current news evidence.") == 900
+
+
+@pytest.mark.parametrize("override", ["small", "unknown"])
+async def test_provider_model_override_is_budgeted_before_any_client_call(override):
+    config = make_config()
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    client = MagicMock()
+    client.chat_completion = AsyncMock(return_value=ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="ok"))]))
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 4000})
+    orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(deepseek=client), prompt_budget=policy)
+    result = await orchestrator.invoke("deepseek", budget_request(), model=override)
+    if override == "unknown":
+        assert not result.success
+        assert "not configured" in result.error
+        client.chat_completion.assert_not_awaited()
+    else:
+        assert result.success
+        sent = client.chat_completion.await_args.args[1]
+        assert policy.count_messages(sent) <= policy.input_limit("deepseek", "small", {"max_tokens": 128})
+
+
+async def test_local_streaming_uses_the_same_budget_before_streaming():
+    config = make_config(PROVIDER="local")
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    client = MagicMock()
+    client.stream_chat_completion = AsyncMock(return_value=ChatResponseModel(choices=[ChoiceModel(message=MessageModel(content="ok"))]))
+    clients = ProviderClients(lmstudio=client)
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"local/local-model": 4000})
+    orchestrator = ProviderOrchestrator(null_logger(), config, clients, prompt_budget=policy)
+    manager = ModelManager(null_logger(), config, token_counter=policy.token_counter,
+                           cost_storage=MagicMock(), model_pricing=MagicMock(), orchestrator=orchestrator, provider_clients=clients)
+    manager._process_result = AsyncMock(return_value="ok")
+    messages = budget_request()
+    assert await manager.send_prompt_streaming(messages[1]["content"], messages[0]["content"]) == "ok"
+    sent = client.stream_chat_completion.await_args.args[1]
+    assert policy.count_messages(sent) <= policy.input_limit("local", "local-model", {"max_tokens": 128})
+
+
+@pytest.mark.parametrize("output", [None, 0, -1, True])
+def test_missing_or_invalid_output_budget_is_not_guessed(output):
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 3000})
+    config = {} if output is None else {"max_tokens": output}
+    with pytest.raises(PromptBudgetExceeded, match="output token reserve"):
+        policy.prepare_messages(budget_request(), "deepseek", "small", config)
+
+
+def test_protected_oversize_and_output_reserves_fail_closed():
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 3000})
+    with pytest.raises(PromptBudgetExceeded, match="reserves exhaust"):
+        policy.prepare_messages(budget_request(), "deepseek", "small", {"max_tokens": 3000})
+    with pytest.raises(PromptBudgetExceeded, match="Protected request"):
+        policy.prepare_messages([{"role": "user", "content": "protected " * 10000}], "deepseek", "small", {"max_tokens": 128})
+
 _TREND_MESSAGE = "Input should be 'BULLISH', 'BEARISH' or 'NEUTRAL'"
 
 _FULL_BUY: dict[str, Any] = {

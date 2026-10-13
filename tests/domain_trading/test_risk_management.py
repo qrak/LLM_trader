@@ -35,6 +35,8 @@ from src.trading.rr_policy import (
 )
 from src.trading.trading_strategy import TradingStrategy
 from src.trading.vector_memory import VectorMemoryService
+from src.utils.prompt_budget import PromptBudgetPolicy
+from src.utils.token_counter import TokenCounter
 from tests.conftest import (
     make_config,
     mock_brain,
@@ -198,6 +200,7 @@ def empty_state_brain(respond: Callable[[], str]) -> tuple[TradingBrainService, 
         logger=MagicMock(),
         persistence=MagicMock(),
         vector_memory=vector_memory,
+        prompt_budget=PromptBudgetPolicy(TokenCounter(), MagicMock()),
     )
     return brain, seen
 
@@ -1242,6 +1245,7 @@ def test_brain_context_survives_saturated_feedback(
         logger=MagicMock(),
         persistence=MagicMock(),
         vector_memory=vector_memory,
+        prompt_budget=PromptBudgetPolicy(TokenCounter(), MagicMock()),
     )
     context = brain.get_context(MarketSnapshot(adx=25))
 

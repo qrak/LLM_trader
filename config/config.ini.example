@@ -259,3 +259,23 @@ port = 8000
 # internet is allowed to talk to your dashboard.
 enable_cors = false
 cors_origins = *
+
+# === Estimated-token safety budgets ===
+# TokenCounter uses cl100k_base: estimates, not exact provider/vision token counts.
+[prompt_budget]
+brain_max_tokens = 50000
+request_max_tokens = 100000
+safety_margin_percent = 10
+image_reserve_tokens = 16384
+
+# Exact provider/model IDs; values are configured context-window capacities.
+# Unknown targets are refused before sending. Add local/model-id using the
+# context actually loaded in the local server, not an advertised model maximum.
+# Defaults verified against DeepSeek/Google docs and the public OpenRouter catalog.
+[model_context_windows]
+deepseek/deepseek-flash = 1000000
+deepseek/deepseek-v4-pro = 1000000
+googleai/gemini-3.8-flash = 1048576
+googleai/gemini-3-flash-preview = 1048576
+openrouter/google/gemini-3-flash-preview = 1048576
+openrouter/deepseek/deepseek-v4.1-flash = 1048576

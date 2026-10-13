@@ -89,7 +89,7 @@ class TokenCounter:
         """
         if not text:
             return 0
-        return len(self.tokenizer.encode(text))
+        return len(self.tokenizer.encode(text, disallowed_special=()))
 
     def track_prompt_tokens(self, text: str, message_type: str = "prompt") -> int:
         """

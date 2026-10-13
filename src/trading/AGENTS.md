@@ -64,6 +64,16 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
   `PostMortemRepository`. `_provision_trading_layer` must inject the same repository
   into `TradingBrainService` and `PostMortemService`; test this through real
   provisioning and system-prompt assembly, not only an isolated brain constructor.
+- Brain context is rebuilt per request and uses the shared `PromptBudgetPolicy`
+  and `TokenCounter` from the composition root. The default emergency budget is
+  50,000 estimated tokens, not a character cutoff. Whole optional experience/rule
+  ranges are removed by owned line indexes; never remove or partially cut recent
+  lessons, rejection feedback or risk guidance. If protected content cannot fit,
+  raise `PromptBudgetExceeded` before a model call. Log estimated input/output
+  tokens whenever reduction occurs. Keep three experiences, three relevant rules,
+  five recent lessons and five rejection samples; stats do not enumerate history.
+  Test production wiring and real SQLite/prompt assembly with >64,000 characters
+  still below the token budget, plus complete lesson retention during reduction.
 
 ##### `get_dynamic_thresholds()` — ~15 learned parameters
 - R/R minimum thresholds, ADX thresholds, SL tightening progress thresholds

@@ -573,11 +573,11 @@ def test_prompt_lint_matrix(config, system_prompt, prompt, expected):
 
 @pytest.mark.parametrize(
     ("system_tokens", "warnings"),
-    [(19991, []), (19992, ["Large prompt: estimated 20001 tokens"])],
+    [(99991, []), (99992, ["Large prompt: estimated 100001 tokens"])],
     ids=["at-threshold", "over-threshold"],
 )
 def test_prompt_lint_large_prompt_threshold(config, system_tokens, warnings):
-    """The 20k-token warning fires strictly above the threshold, not at it."""
+    """The configured request-budget warning fires strictly above the threshold."""
     lint = make_builder(config).validate_and_warn(
         system_prompt_with_tokens(system_tokens), USER_PROMPT, FixedTokenCounter()
     )

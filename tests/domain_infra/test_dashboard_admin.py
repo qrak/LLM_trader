@@ -421,6 +421,7 @@ def test_config_schema_exposes_every_section_with_live_values(writable_config):
         "demo_trading",
         "model_config",
         "dashboard",
+        "prompt_budget",
     }
     assert schema["general"]["title"] == "General"
 
@@ -448,6 +449,18 @@ def test_schema_entries_declare_typed_metadata(writable_config):
                 assert meta.options, key
             if meta.type in ("int", "float") and meta.min_val is not None and meta.max_val is not None:
                 assert meta.min_val < meta.max_val, key
+
+
+async def test_prompt_budget_settings_are_restart_scoped_and_persist(writable_config, tmp_config):
+    assert await writable_config.set_value("prompt_budget", "brain_max_tokens", 50000) == "restart"
+    assert await writable_config.set_value("prompt_budget", "request_max_tokens", 100000) == "restart"
+    loaded = WritableConfig(tmp_config)
+    assert loaded.get_value("prompt_budget", "brain_max_tokens") == "50000"
+    assert loaded.get_value("prompt_budget", "request_max_tokens") == "100000"
+    with pytest.raises(ValueError):
+        await writable_config.set_value("prompt_budget", "safety_margin_percent", 90)
+    with pytest.raises(ValueError):
+        await writable_config.set_value("prompt_budget", "brain_max_tokens", 0)
 
 
 async def test_set_value_returns_category_and_persists_to_disk(writable_config, tmp_config):

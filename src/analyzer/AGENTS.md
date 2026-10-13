@@ -46,10 +46,19 @@ It performs four distinct analytical passes:
 
 ##### From RAG Engine
 - Market context: recent news summaries, relevant articles filtered by taxonomy
+- Clear `PromptBuilder.custom_instructions` in `analyze_market`'s `finally` block,
+  including failed, cancelled and early-returned requests. Appending a fresh RAG
+  snapshot must not retain snapshots from previous failed cycles. Preserve normal
+  HOLD/error results and cancellation propagation; do not make repair model calls.
 
 ##### From Brain Agent
 - `brain_service.get_context()` — historical trade outcomes, learned rules, confidence calibration
 - `brain_service.get_dynamic_thresholds()` — learned SL/TP/RR thresholds
+- Whole-prompt preflight uses the configurable estimated-token request ceiling,
+  not the retired 20,000-token warning. Provider-bound checks separately account
+  for the actual model and output/image/safety reserves. Built prompt state may
+  precede emergency reduction; the provider-bound `Full prompt content` log is the
+  evidence for what was sent, particularly on a smaller fallback model.
 
 ##### Configuration (from `config/config.ini`)
 - Pair: BTC/USDC, Timeframe: 4h, Candles: 999 (125 for AI chart)

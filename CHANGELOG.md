@@ -1,5 +1,74 @@
 # Changelog
 
+## 2026-10-13 — Shared estimated-token budgets and model-aware fallback guards
+
+### Changed
+- Replace the brain's character cutoff with a configurable **50,000-estimated-token**
+  emergency budget, counted by the existing shared `TokenCounter`. Preserve complete
+  lessons, rejection feedback and risk guidance; remove optional experiences/rules
+  as whole owned ranges instead of slicing the tail. Refuse oversized protected
+  context rather than sending a partial instruction set.
+- Add a configurable **100,000-estimated-token** whole-request ceiling with output,
+  framing, chart and model-window safety reserves. Check every actual target,
+  including provider/model overrides, OpenRouter's internal fallback and local
+  streaming. Unknown model windows and invalid output reserves fail before API calls.
+- Drop complete optional news/history/previous-analysis/experience/rule sections
+  without mutating the original fallback input. Ambiguous or forged headers cannot
+  cause protected position, risk, response schema or lesson sections to be removed.
+- Log the actual prepared request at the provider boundary. Replace the hardcoded
+  20,000-token preflight warning with the configurable whole-request ceiling.
+- Expose restart-scoped budget settings in config/admin metadata. Keep exact model
+  ID case in `[model_context_windows]` while retaining case-insensitive standard INI
+  options and duplicate-option rejection. Treat special-token marker strings as
+  ordinary text when counting, not as tiktoken errors.
+
+### Scope
+- `cl100k_base` counts are estimates for other providers; chart reserves are not
+  exact vision accounting. This guards size/cost, not general prompt injection.
+- Cloud default capacities were checked against official DeepSeek/Google docs and
+  the public OpenRouter catalog. Local/other targets require an explicit configured
+  capacity; do not assume a million-token window for a smaller fallback.
+
+### Verification
+- Isolated baseline: **2090 passed, 17 skipped**. Final suite: **2130 passed,
+  17 skipped**; no existing test functions removed. Budget-specific expectations
+  use estimated tokens and explicit refusal instead of clipping protected feedback.
+- Ruff, full Pyright and startup/AST/compile gates passed. Vulture at 90% and 80%
+  reported no candidates; no code removed based on the heuristic.
+- Read-only copied SQLite/captured-vector replay preserves all five real lessons,
+  stays identical over 200 brain calls and leaves the offline rebuilt DeepSeek request
+  unreduced at **20,409 estimated text tokens**. A smaller configured request budget
+  reduces it to **14,811** without losing those lessons. No LLM/exchange calls or
+  live stores/config modifications; activation still requires a bot restart.
+
+## 2026-10-13 — Restore longer brain context and bound repeated failed cycles
+
+### Fixed
+- Raise the brain context's character budget from **12,000 to 64,000**. Keep the
+  emergency cutoff and its existing in-prompt marker, but also log an explicit
+  warning with original/rendered character counts whenever a cutoff occurs.
+  Retrieval remains three experiences, three rules and five recent lessons; this
+  does not insert the whole growing history or change the model's context window.
+- Clear per-analysis RAG snippets in `AnalysisEngine.analyze_market`'s `finally`
+  block, not only after success. Previously repeated errors or cancellations after
+  news injection retained old snapshots and accumulated them in later prompts.
+  Preserve failure results and cancellation propagation.
+
+### Verified
+- **2090 passed, 17 skipped**, versus **2081 passed, 17 skipped** before this change;
+  targeted tests: **163 passed**. Ruff, full Pyright and startup import/compilation
+  pass. Existing assertions are retained; the legacy cutoff test sets its original
+  12,000-character limit locally and new tests exercise the larger default.
+- Real isolated provisioning, SQLite and system-prompt assembly preserve the latest
+  five lessons with 18,000/48,000 characters of vector context. A >64,000-character
+  stress input remains bounded and emits the warning. Rebuilding a large brain
+  context 200 times does not append previous contexts.
+- Thirty sequential cycles per success/error/cancellation path carry only the
+  current news snapshot. The new error/cancellation regressions failed before the
+  fix. Replay using a read-only backup of the real trade database and captured
+  experience metadata includes all five recent real lessons in the rebuilt prompt;
+  this is offline verification, not a fresh live LLM call.
+
 ## 2026-10-13 — Complete runtime wiring and historical MAE evidence
 
 ### Fixed

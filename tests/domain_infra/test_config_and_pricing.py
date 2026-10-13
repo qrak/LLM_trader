@@ -90,6 +90,49 @@ def test_only_selected_provider_key_is_needed(tmp_path, monkeypatch, provider, k
         assert config.get_env(name) == credentials.get(name)
 
 
+@pytest.mark.parametrize("key", ["brain_max_tokens", "request_max_tokens", "image_reserve_tokens"])
+@pytest.mark.parametrize("value", [0, -1, True, 1.5, "bad"])
+def test_prompt_budget_rejects_invalid_integer_settings(key, value):
+    config = config_with({"prompt_budget": {key: value}})
+    with pytest.raises(ValueError, match="positive integer"):
+        config._validate_prompt_budget()
+
+
+def test_prompt_budget_defaults_and_exact_model_keys(tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text(
+        "[ai_providers]\nprovider = local\n[model_config]\nmax_tokens = 1024\n"
+        "[model_context_windows]\nlocal/MyCaseModel = 32768\n"
+        "[prompt_budget]\nbrain_max_tokens = 60000\nrequest_max_tokens = 120000\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config()
+    assert config.BRAIN_MAX_TOKENS == 60000
+    assert config.PROMPT_MAX_TOKENS == 120000
+    assert config.MODEL_CONTEXT_WINDOWS["local/MyCaseModel"] == 32768
+    assert "local/mycasemodel" not in config.MODEL_CONTEXT_WINDOWS
+    assert config.MODEL_CONTEXT_WINDOWS["deepseek/deepseek-flash"] == 1000000
+
+
+@pytest.mark.parametrize("key,value", [("invalid/model", 1000), ("deepseek/", 1000), ("local/model", False), ("local/model", -1)])
+def test_prompt_budget_rejects_invalid_model_context_entries(key, value):
+    config = config_with({"model_context_windows": {key: value}})
+    with pytest.raises(ValueError):
+        config._validate_prompt_budget()
+
+
+def test_model_key_case_support_does_not_allow_duplicate_standard_options(tmp_path, monkeypatch):
+    ini = tmp_path / "config.ini"
+    ini.write_text("[ai_providers]\nprovider = local\nPROVIDER = deepseek\n", encoding="utf-8")
+    monkeypatch.setattr(loader, "CONFIG_INI_PATH", ini)
+    monkeypatch.setattr(loader, "KEYS_ENV_PATH", tmp_path / "missing.env")
+    with patch.dict(os.environ, {}, clear=True), pytest.raises(RuntimeError, match="Duplicate option provider"):
+        Config()
+
+
 def test_system_credentials_override_file_without_mutating_environment(tmp_path, monkeypatch):
     env_path = tmp_path / "keys.env"
     env_path.write_text(

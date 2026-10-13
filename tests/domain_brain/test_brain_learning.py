@@ -29,7 +29,6 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.dashboard.server import DashboardServer
 from src.trading.brain import TradingBrainService
-from src.trading.brain_context import BrainContextProvider
 from src.trading.data_models import ExitExecutionContext, MarketSnapshot, TradeDecision
 from src.trading.executor_reconciliation import ExitEvidence
 from src.trading.stop_loss_tightening_policy import (
@@ -38,7 +37,9 @@ from src.trading.stop_loss_tightening_policy import (
 )
 from src.trading.vector_memory import VectorMemoryService
 from src.utils.format_utils import FormatUtils
+from src.utils.prompt_budget import PromptBudgetExceeded, PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, make_market_conditions, make_position
 
 
@@ -172,7 +173,7 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
 """
 
 TRUNCATION_MARKER = (
-    "[Brain context truncated: token budget reached. Rely on standard analysis for remaining decisions.]"
+    PromptBudgetPolicy.BRAIN_NOTICE
 )
 
 
@@ -203,8 +204,10 @@ def learning_brain(
     **kwargs,
 ) -> TradingBrainService:
     """TradingBrainService wired to doubles, with an optional configured exit profile."""
+    logger = MagicMock()
+    kwargs.setdefault("prompt_budget", PromptBudgetPolicy(TokenCounter(), logger))
     return TradingBrainService(
-        logger=MagicMock(),
+        logger=logger,
         persistence=MagicMock(),
         vector_memory=vector_memory_double(trade_count),
         exit_execution_context=exit_execution_context,
@@ -510,7 +513,7 @@ def test_closed_trades_round_trip_through_chroma_to_dashboard_and_prompt(tmp_pat
     embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
     client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
     memory = VectorMemoryService(logger, client, embedding)
-    brain = TradingBrainService(logger, MagicMock(), memory, timeframe_minutes=15)
+    brain = TradingBrainService(logger, MagicMock(), memory, timeframe_minutes=15, prompt_budget=PromptBudgetPolicy(TokenCounter(), logger))
     config = make_config(DATA_DIR=str(tmp_path), TIMEFRAME="15m")
     formatter = FormatUtils()
     overview = MarketOverviewFormatter(logger, formatter)
@@ -1175,6 +1178,7 @@ def test_critical_feedback_coexists_with_bias_vector_context_and_rules(trade_cou
 
 def test_critical_feedback_survives_unicode_and_token_budget_truncation():
     brain = learning_brain(trade_count=5)
+    brain.context_provider.prompt_budget.brain_max_tokens = 1500
     brain.vector_memory.get_blocked_trade_feedback.return_value = (
         "## CRITICAL FEEDBACK: System Rejections\n\nUnicode: émoji ✓ • ★\n"
     )
@@ -1190,22 +1194,76 @@ def test_critical_feedback_survives_unicode_and_token_budget_truncation():
         + "\n\n".join(f"entry {index}: " + "x" * 120 for index in range(150))
     )
 
-    truncated = brain.get_context(MarketSnapshot(adx=25))
-
-    assert TRUNCATION_MARKER in truncated
-    assert truncated.endswith("]")
-    assert BrainContextProvider.BRAIN_CONTEXT_MAX_CHARS <= len(truncated) <= (
-        BrainContextProvider.BRAIN_CONTEXT_MAX_CHARS + 120
-    )
+    feedback = brain.vector_memory.get_blocked_trade_feedback.return_value
+    budget = brain.context_provider.prompt_budget
+    assert budget.token_counter.count_tokens(feedback) > budget.brain_max_tokens
+    with pytest.raises(PromptBudgetExceeded, match="Protected brain context") as error:
+        brain.get_context(MarketSnapshot(adx=25))
+    assert str(error.value) == "Protected brain context exceeds 1500 estimated tokens; no lesson was cut"
+    assert brain.vector_memory.get_blocked_trade_feedback.return_value == feedback
 
     brain.vector_memory.get_blocked_trade_feedback.return_value = (
         "## CRITICAL FEEDBACK: System Rejections\n" + "x" * 20000
     )
 
-    single_block = brain.get_context(MarketSnapshot(adx=25))
+    feedback = brain.vector_memory.get_blocked_trade_feedback.return_value
+    assert budget.token_counter.count_tokens(feedback) > budget.brain_max_tokens
+    with pytest.raises(PromptBudgetExceeded, match="Protected brain context") as error:
+        brain.get_context(MarketSnapshot(adx=25))
+    assert str(error.value) == "Protected brain context exceeds 1500 estimated tokens; no lesson was cut"
 
-    assert TRUNCATION_MARKER in single_block
-    assert len(single_block) < 400
+
+def test_large_brain_context_keeps_recent_lessons_without_growing_between_calls():
+    repository = MagicMock()
+    repository.get_recent_post_mortems.return_value = [
+        {
+            "verdict": "good_exit", "created_at": "2026-10-13 00:00:00",
+            "symbol": "BTC/USDC", "pnl_pct": 2.0,
+            "lesson_learned": f"Lesson {index}: " + "Historical entry and exit evidence. " * 30,
+        }
+        for index in range(5)
+    ]
+    brain = learning_brain(trade_count=10000, post_mortem_repo=repository)
+    brain.vector_memory.get_context_for_prompt.return_value = (
+        "Relevant past experiences:\n" + "Detailed historical reasoning. " * 1000
+    )
+    budget = brain.context_provider.prompt_budget
+    assert budget.brain_max_tokens == 50000
+    first = brain.get_context(MarketSnapshot(adx=25))
+    assert len(first) > 12000
+    assert budget.token_counter.count_tokens(first) < budget.brain_max_tokens
+    assert TRUNCATION_MARKER not in first
+    for index in range(5):
+        assert first.count(f"Lesson {index}:") == 1
+    for _ in range(200):
+        assert brain.get_context(MarketSnapshot(adx=25)) == first
+    repository.get_recent_post_mortems.assert_called_with(limit=5)
+    brain.vector_memory.get_context_for_prompt.assert_called_with(
+        brain.context_provider.build_query_document(MarketSnapshot(adx=25)), 3,
+        display_context=brain.context_provider.build_rich_context_string(MarketSnapshot(adx=25)),
+        current_atr_percentage=None, include_rules=False,
+    )
+    brain.vector_memory.get_relevant_rules.assert_called_with(
+        current_context="NEUTRAL + High ADX + MEDIUM Volatility", n_results=3,
+    )
+    brain.logger.warning.assert_not_called()
+
+
+def test_brain_emergency_budget_still_bounds_oversized_records_and_warns():
+    brain = learning_brain(trade_count=5)
+    budget = brain.context_provider.prompt_budget
+    budget.brain_max_tokens = 2000
+    brain.vector_memory.get_context_for_prompt.return_value = (
+        "Relevant past experiences:\n\n" + "\n\n".join("x" * 80 for _ in range(1000))
+    )
+    context = brain.get_context(MarketSnapshot(adx=25))
+    assert TRUNCATION_MARKER in context
+    assert budget.token_counter.count_tokens(context) <= budget.brain_max_tokens
+    warning = brain.logger.warning.call_args
+    assert warning.args[0] == "Brain context reduced: estimated tokens %d -> %d (limit=%d)"
+    assert warning.args[1] > budget.brain_max_tokens
+    assert warning.args[2] == budget.token_counter.count_tokens(context)
+    assert warning.args[3] == budget.brain_max_tokens
 
 
 def test_empty_brain_context_only_contains_the_regime_risk_profile():

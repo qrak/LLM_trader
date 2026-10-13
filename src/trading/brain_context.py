@@ -8,6 +8,7 @@ from src.utils.indicator_classifier import (
     build_query_document_from_classified_values,
     classify_adx_label,
 )
+from src.utils.prompt_budget import PromptBudgetPolicy
 
 from .brain_exit_profiles import ExitProfileResolver
 from .data_models import MarketSnapshot
@@ -17,20 +18,20 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
-    BRAIN_CONTEXT_MAX_CHARS = 12000
-
     def __init__(
         self,
         vector_memory: VectorMemoryService,
         exit_profiles: ExitProfileResolver,
         post_mortem_repo: Any | None = None,
         logger: Any | None = None,
+        prompt_budget: PromptBudgetPolicy | None = None,
     ):
         """Initialize context provider dependencies and cache state."""
         self.vector_memory = vector_memory
         self.exit_profiles = exit_profiles
         self.post_mortem_repo = post_mortem_repo
         self.logger = logger
+        self.prompt_budget = prompt_budget
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
 
@@ -41,6 +42,7 @@ class BrainContextProvider:
     def get_context(self, snapshot: MarketSnapshot) -> str:
         """Generate formatted brain context for prompt injection using vector retrieval."""
         lines = []
+        optional_ranges = []
         exp_count = self.vector_memory.trade_count
         if exp_count > 0:
             lines.extend([
@@ -86,8 +88,10 @@ class BrainContextProvider:
                 self.logger.warning("Failed to fetch blocked trade feedback: %s", exc)
         vector_context = self.get_vector_context(snapshot, k=3)
         if vector_context:
+            begin = len(lines)
             vector_context = self.exit_profiles.replace_unknown_exit_profile_text(vector_context)
             lines.extend(["", vector_context])
+            optional_ranges.append((begin, len(lines)))
         has_limited_data = "⚠️ LIMITED DATA" in vector_context if vector_context else False
         if lines and not has_limited_data:
             lines.extend([
@@ -137,6 +141,7 @@ class BrainContextProvider:
             n_results=3,
         )
         if semantic_rules:
+            begin = len(lines)
             lines.extend([
                 "### Learned Trading Rules (relevant to current conditions):",
             ])
@@ -170,6 +175,7 @@ class BrainContextProvider:
                 if recommended:
                     lines.append(f"  → Apply: {recommended}")
             lines.append("")
+            optional_ranges.append((begin, len(lines)))
 
         journal_context = self._build_trade_journal_context()
         if journal_context:
@@ -188,16 +194,8 @@ class BrainContextProvider:
         if condition_text:
             lines.extend(["", condition_text])
 
-        result = "\n".join(lines)
-        if len(result) > self.BRAIN_CONTEXT_MAX_CHARS:
-            truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n\n", 1)[0]
-            if not truncated:
-                truncated = result[: self.BRAIN_CONTEXT_MAX_CHARS].rsplit("\n", 1)[0]
-            result = (
-                truncated + "\n\n[Brain context truncated: token budget reached. "
-                "Rely on standard analysis for remaining decisions.]"
-            )
-        return result
+        assert self.prompt_budget is not None
+        return self.prompt_budget.fit_brain(lines, optional_ranges)
 
 
     def _build_trade_journal_context(self) -> str:
