@@ -16,6 +16,7 @@ import pytest
 
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger, _write_fallback_crash
+from src.trading.executor_handler import ExecutorHandler
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.utils.keyboard_handler import KeyboardHandler
 from src.utils.timeframe_validator import TimeframeValidator
@@ -31,6 +32,40 @@ class NaiveUtcDateTime(datetime):
 def shutdown_manager() -> GracefulShutdownManager:
     """GracefulShutdownManager with a disposable loop."""
     return GracefulShutdownManager(loop=asyncio.new_event_loop(), logger=MagicMock())
+
+
+@pytest.mark.parametrize("reload_requested", [False, True])
+@pytest.mark.parametrize("client_created", [False, True])
+@pytest.mark.parametrize("earlier_cleanup_fails", [False, True])
+async def test_initialize_wires_executor_cleanup_into_real_shutdown(reload_requested, client_created, earlier_cleanup_fails):
+    loop = MagicMock()
+    loop.shutdown_asyncgens = AsyncMock()
+    manager = GracefulShutdownManager(loop=loop, logger=MagicMock(), confirmation_callback=lambda: True)
+    handler = ExecutorHandler(MagicMock(), SimpleNamespace(), MagicMock())
+    client = handler._get_client() if client_created else None
+    close = AsyncMock(wraps=handler.close)
+    handler.close = close
+    keyboard = MagicMock()
+    keyboard.start_listening = AsyncMock()
+    keyboard.stop_listening = AsyncMock()
+    bot = trading_check_bot(shutdown_manager=manager, executor_handler=handler,
+                            keyboard_handler=keyboard, discord_notifier=None).bot
+    if earlier_cleanup_fails:
+        bot.model_manager.close = AsyncMock(side_effect=RuntimeError("Earlier provider cleanup failed"))
+    try:
+        await bot.initialize()
+        if reload_requested:
+            assert manager.request_reload() is True
+        with patch("kaleido.stop_sync_server"):
+            await manager.shutdown_gracefully()
+            await manager.shutdown_gracefully()
+        close.assert_awaited_once_with()
+        assert handler._http_client is None
+        if client is not None:
+            assert client.is_closed
+        assert bot.running is False
+    finally:
+        await handler.close()
 
 
 def wait_bot() -> CryptoTradingBot:

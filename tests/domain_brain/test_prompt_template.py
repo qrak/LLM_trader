@@ -730,6 +730,18 @@ def test_safe_drawdown_line_matrix(thresholds, expected, forbidden):
     assert_absent(rules, forbidden)
 
 
+def test_zero_mae_baseline_is_not_misreported_as_insufficient_data():
+    rules = make_manager().build_decision_rules(dynamic_thresholds={
+        "safe_mae_pct": 0.0, "safe_mae_sample_count": 5,
+        "trade_count": 5, "learned_keys": ["safe_mae_pct"],
+    })
+    assert "had no observed adverse move" in rules
+    assert "MAE evidence: 5 winning trades" in rules
+    assert "not a guaranteed safe limit or an SL floor" in rules
+    assert "safe_mae=0.00%" in rules
+    assert "Insufficient trade data for MAE baseline" not in rules
+
+
 def test_response_template_json_example_is_parser_safe():
     """The fenced example is real JSON with the response contract's field types."""
     template = make_manager().build_response_template()

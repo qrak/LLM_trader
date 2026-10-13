@@ -76,6 +76,8 @@ python start.py               # dashboard at http://localhost:8000
 
 - **🧠 Brain with Memory** — ChromaDB vector store retains trade experiences, semantic rules, system rejections, and confidence statistics. Past outcomes are retrieved by similarity to current market conditions and injected into every LLM prompt.
 
+  The historical MAE reference uses the largest observed drawdown of at least five winning trades with valid drawdown metadata. Its sample count is included in the prompt; it is not a guaranteed safe limit, an automatic SL floor, or a reason to widen a stop. Missing/invalid observations do not count as zero drawdown.
+
 - **📈 Vision AI Chart Analysis** — Generates 4K PNG candlestick charts with indicators, sends them to a multimodal LLM (DeepSeek V4.1 Flash) for visual pattern recognition. Chart-pattern code was dropped because the AI reads charts better than hardcoded rules.
 
 - **🔄 Reflection Engine** — After every `N` closed trades, the system synthesizes best-practice rules, anti-patterns, and AI-mistake rules with **surprise ratio** annotation — high-surprise outcomes are flagged so the LLM discounts lucky/unlucky noise. Rules persist in vector memory and influence future decisions. The bot learns from its own outcomes.
@@ -88,11 +90,13 @@ python start.py               # dashboard at http://localhost:8000
 
 - **📊 Live Dashboard** — FastAPI + WebSocket real-time SPA at `0.0.0.0:8000` (or [semanticsignal.qrak.org](https://semanticsignal.qrak.org)). Nine tabs with brain activity, last prompt/response, position state, performance stats, news, market data, and memory bank.
 
+  News uses the analysis engine's in-memory RAG snapshot with the existing disk fallback. Factor statistics include recorded support/resistance scores and entry-time trend; missing historical entry trends are not guessed from exit-time conditions.
+
 - **🛡️ Risk Pipeline** — Pre-execution guard chain (symbol whitelist, max position size) + dynamic SL/TP scaling with minimum 1.5 R:R enforced. Soft exits at candle close, hard exits at configurable intervals against live ticker price.
 
 - **🔄 Multi-Provider AI Routing** — Primary: DeepSeek V4.1 Flash (`deepseek-flash`, native chart vision). Fallback chain through Google Gemini / OpenRouter / LM Studio. Chart vision support on every provider that allows it.
 
-- **🧪 1,380+ Tests** — Fully mocked test suite covering LLM output corruption, async races, rate-limit backoff, vector-DB boundaries, friction-reporting, closed-loop feedback, AST code indexing, and positional market types (spot / perpetual futures).
+- **🧪 Regression Tests** — Isolated tests covering LLM output corruption, async races, rate-limit backoff, friction reporting, closed-loop feedback and spot/perpetual futures. Wiring regressions also exercise real temporary SQLite/ChromaDB databases, assembled prompts, dashboard HTTP routes and registered shutdown callbacks without live model or exchange calls.
 
 - **🗂️ Layered Agent Documentation** — Root [`AGENTS.md`](AGENTS.md) carries the system-wide rules and a map into per-package `AGENTS.md` files (`src/trading/`, `src/analyzer/`, `src/dashboard/`, `src/managers/`, `src/indicators/`, `src/rag/`, `src/trading/guards/`), so a coding model reads only the package it touches instead of the whole manual.
 
@@ -145,7 +149,7 @@ flowchart TB
 | `src/analyzer/analysis_engine.py` | Market analysis orchestration — indicators, chart, RAG, LLM call |
 | `src/managers/provider_orchestrator.py` | AI provider fallback chain with retry logic |
 | `src/managers/risk_manager.py` | Dynamic SL/TP, position sizing, friction tracking |
-| `src/managers/post_mortem_repository.py` | AI-written post-mortem after every closed trade |
+| `src/managers/post_mortem_repository.py` | Stores AI-written post-mortems; the brain includes up to five recent saved lessons in its prompt context |
 | `src/trading/trading_strategy.py` | Position lifecycle, guard enforcement, exit monitoring |
 | `src/analyzer/prompts/template_manager.py` | System prompt construction with falsification-based invalidation step |
 | `src/analyzer/trend_validator.py` | Cross-checks LLM-reported trend strength against computed ADX |

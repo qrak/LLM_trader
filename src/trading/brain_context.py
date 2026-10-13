@@ -347,6 +347,7 @@ class BrainContextProvider:
             "min_rr_recommended": thresholds.get("min_rr_recommended", 2.0),
             "confidence_threshold": thresholds.get("confidence_threshold", 60),
             "safe_mae_pct": thresholds.get("safe_mae_pct", 0),
+            "safe_mae_sample_count": thresholds.get("safe_mae_sample_count", 0),
             "adx_weak_threshold": thresholds.get("adx_weak_threshold", 20),
             "min_confluences_weak": thresholds.get("min_confluences_weak", 2),
             "min_confluences_standard": thresholds.get("min_confluences_standard", 2),

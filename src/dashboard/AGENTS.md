@@ -94,6 +94,13 @@ DashboardServer(
 
 - Never strip chart revision query parameters at the edge: doing so defeats immediate post-analysis refresh. Keep one revision URL between ordinary polls and reject late responses from an older request.
 - The news panel requests `/api/monitor/news?preview=true`: the same 30 cards with 300-character excerpts, without full article bodies and internal search fields. The default API response and RAG cache remain full; polling intervals are unchanged.
+- `DashboardServer` supplies `analysis_engine.rag_engine` to `MonitorRouter`; the
+  trading brain does not own news RAG. Verify this through startup plus the HTTP
+  route with a real `TradingBrainService`, including no brain/no RAG and disk fallback.
+- Vector factor statistics consume the closed-trade recorder's actual metadata:
+  S/R scores use `support_resistance_strength_score`, and Trend groups use the entry
+  snapshot, not exit-time `market_regime`. Keep API factor names stable and verify a
+  real isolated ChromaDB round-trip through `/api/brain/vectors`.
 - `/api/brain/refresh-price` shares one exchange attempt across all dashboard callers in the process, then reuses its result for 10 seconds measured with a monotonic clock. An asyncio lock coalesces concurrent callers; failed attempts are cached too. Query strings, reload and browser no-cache cannot bypass this origin-side cooldown. HTTP remains no-store; trading-loop fetches and WebSocket cadence are unchanged.
 
 ---

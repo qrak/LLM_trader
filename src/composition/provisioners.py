@@ -523,6 +523,7 @@ class ProvisioningMixin:
             exit_execution_context=exit_execution_context,
             timeframe_minutes=timeframe_minutes,
             tightening_policy=tightening_policy,
+            post_mortem_repo=post_mortem_repo,
         )
 
         try:

@@ -1,5 +1,6 @@
 """Analytics helpers for vector memory."""
 
+import math
 from typing import Any, ClassVar
 
 from .data_models import VectorSearchResult
@@ -439,6 +440,8 @@ class VectorMemoryAnalyticsMixin:
 
             for name in self.FACTOR_NAMES:
                 score = meta.get(f"{name}_score", 0)
+                if name == "support_resistance":
+                    score = meta.get("support_resistance_strength_score", score)
                 bucket = self._factor_bucket_for_score(score)
                 if bucket is None:
                     continue
@@ -582,9 +585,32 @@ class VectorMemoryAnalyticsMixin:
         self._learn_position_size_threshold(all_experiences, min_sample_size, thresholds)
         self._learn_confluence_thresholds(all_experiences, min_sample_size, thresholds)
         self._learn_alignment_thresholds(all_experiences, min_sample_size, thresholds)
+        self._learn_safe_mae_threshold(all_experiences, min_sample_size, thresholds)
         self._learn_sl_tightening_threshold(all_experiences_raw, min_sample_size, thresholds)
 
         return thresholds
+
+    @staticmethod
+    def _learn_safe_mae_threshold(
+        all_experiences: dict[str, Any], min_sample_size: int, thresholds: dict[str, Any]
+    ) -> None:
+        """Expose the observed maximum winning-trade MAE as a fraction, not a safety guarantee."""
+        drawdowns: list[float] = []
+        for meta in all_experiences.get("metadatas", []):
+            if meta.get("outcome") != "WIN":
+                continue
+            raw_drawdown = meta.get("max_drawdown_pct")
+            if raw_drawdown is None or raw_drawdown is True or raw_drawdown is False:
+                continue
+            try:
+                drawdown = float(raw_drawdown)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if math.isfinite(drawdown) and drawdown <= 0:
+                drawdowns.append(-drawdown / 100)
+        if drawdowns and len(drawdowns) >= min_sample_size:
+            thresholds["safe_mae_pct"] = max(drawdowns)
+            thresholds["safe_mae_sample_count"] = len(drawdowns)
 
     def _learn_position_size_threshold(
         self,

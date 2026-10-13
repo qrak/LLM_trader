@@ -26,6 +26,7 @@ from src.dashboard.decision_presenter import (
 from src.dashboard.routers.brain import BrainRouter
 from src.dashboard.routers.performance import PerformanceRouter
 from src.dashboard.server import DashboardServer, _api_cache_policies
+from src.trading.brain import TradingBrainService
 from src.trading.data_models import VectorSearchResult
 from tests.conftest import make_config, make_position
 
@@ -248,9 +249,9 @@ def test_news_preview_preserves_cards_without_full_bodies(client, dashboard_serv
     if source == "cache":
         dashboard_server.dashboard_state.set_cached("news", articles)
     elif source == "rag":
-        dashboard_server.brain_service.rag_engine.get_news_cache_snapshot.return_value = articles
+        dashboard_server.analysis_engine.rag_engine.get_news_cache_snapshot.return_value = articles
     else:
-        dashboard_server.brain_service.rag_engine.get_news_cache_snapshot.return_value = []
+        dashboard_server.analysis_engine.rag_engine.get_news_cache_snapshot.return_value = []
         (tmp_path / "crypto_news.json").write_text(json.dumps({"articles": articles}), encoding="utf-8")
     response = client.get("/api/monitor/news?preview=true")
     assert response.status_code == 200
@@ -282,6 +283,41 @@ def test_news_preview_keeps_summary_fallback(client, dashboard_server, article, 
 def test_news_preview_empty_state(client, dashboard_server):
     dashboard_server.dashboard_state.set_cached("news", [])
     assert client.get("/api/monitor/news?preview=true").json() == {"articles": [], "count": 0}
+
+
+@pytest.mark.parametrize("with_brain", [True, False])
+def test_dashboard_startup_connects_analysis_news_to_http(tmp_path, with_brain):
+    articles = [{"title": "Memory-only news", "body": "Full body", "url": "https://example.org"}]
+    analysis = MagicMock()
+    analysis.rag_engine.get_news_cache_snapshot.return_value = articles
+    memory = MagicMock()
+    memory.trade_count = 0
+    brain_service = TradingBrainService(MagicMock(), flat_persistence(), memory) if with_brain else None
+    server = DashboardServer(
+        brain_service=brain_service, vector_memory=memory, analysis_engine=analysis,
+        config=make_config(DATA_DIR=str(tmp_path)), logger=MagicMock(),
+        unified_parser=MagicMock(), persistence=flat_persistence(), exchange_manager=MagicMock(),
+    )
+    with TestClient(server.app) as http:
+        assert http.get("/api/monitor/news").json() == {"articles": articles, "count": 1}
+        assert http.get("/api/monitor/news?preview=true").json() == {"articles": articles, "count": 1}
+    analysis.rag_engine.get_news_cache_snapshot.assert_called_once_with()
+
+
+@pytest.mark.parametrize("with_analysis", [True, False])
+def test_dashboard_news_retains_disk_fallback_without_rag(tmp_path, with_analysis):
+    articles = [{"title": "Persisted news", "body": "Full body"}]
+    (tmp_path / "crypto_news.json").write_text(json.dumps({"articles": articles}), encoding="utf-8")
+    analysis = MagicMock() if with_analysis else None
+    if analysis is not None:
+        analysis.rag_engine = None
+    server = DashboardServer(
+        brain_service=None, vector_memory=None, analysis_engine=analysis,
+        config=make_config(DATA_DIR=str(tmp_path)), logger=MagicMock(),
+        unified_parser=MagicMock(), persistence=flat_persistence(), exchange_manager=MagicMock(),
+    )
+    with TestClient(server.app) as http:
+        assert http.get("/api/monitor/news").json() == {"articles": articles, "count": 1}
 
 
 def test_build_current_market_context_renders_indicators_and_exit_execution(tmp_path, monkeypatch):

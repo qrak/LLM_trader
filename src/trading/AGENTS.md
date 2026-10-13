@@ -60,10 +60,26 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
 - Vector-retrieved similar past experiences (top-5 semantic similarity search)
 - CoT Step 6 — Historical Evidence instructions (win-rate < 50% → reduce confidence, anti-pattern matching, AI-mistake memory, exit-execution memory)
 - Learned trading rules matched to current conditions (similarity %, timeframe freshness, evidence score, tagged by type)
+- Recent persisted post-mortem lessons (up to five) from the shared
+  `PostMortemRepository`. `_provision_trading_layer` must inject the same repository
+  into `TradingBrainService` and `PostMortemService`; test this through real
+  provisioning and system-prompt assembly, not only an isolated brain constructor.
 
 ##### `get_dynamic_thresholds()` — ~15 learned parameters
 - R/R minimum thresholds, ADX thresholds, SL tightening progress thresholds
 - Position size limits, confluence count minimums, timeframe alignment reduction coefficients
+- Historical MAE: `safe_mae_pct` is the observed maximum magnitude of signed
+  `max_drawdown_pct` among WIN experiences, converted from percentage points to a
+  fraction. Require at least five valid winning samples by default; exclude missing,
+  malformed, non-finite, boolean and positive drawdowns, LOSS and UPDATE entries.
+  Explicit zero observations count, and a learned zero baseline is not insufficient
+  data. Carry `safe_mae_sample_count` to the real prompt; label the maximum as
+  historical evidence, never a guaranteed safe drawdown or a hard SL floor.
+- Closed experiences persist `position.trend_direction_at_entry` separately from
+  exit-time `market_regime`. Dashboard S/R statistics read
+  `support_resistance_strength_score` while retaining the existing API bucket names
+  and older persisted `support_resistance_score` data. Do not migrate live memories
+  or infer unknown historical entry trends from exit conditions.
 
 ##### `get_vector_context()` — Vector-similarity search results + contextual stats
 
@@ -251,6 +267,11 @@ class ExecutorHandler:
 ```
 
 Wired once in `start.py` `build_dependencies()` — not in app.py constructors.
+
+Register `ExecutorHandler.close` in `CryptoTradingBot.initialize` after the bot's
+shutdown callback, so its persistent HTTP client is closed during normal exit and
+in-place reload. Test actual shutdown callback execution, including an earlier
+callback failure, an unused handler and repeated shutdown requests.
 
 ##### Blocked-Trade Feedback Loop (ChromaDB → LLM Prompt)
 

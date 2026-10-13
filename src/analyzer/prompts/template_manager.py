@@ -646,9 +646,16 @@ class TemplateManager:
                 f"\n- **Safe Drawdown**: Historical winning trades survived up to {safe_mae_pct*100:.2f}% "
                 "drawdown (brain-learned). Ensure stop isn't too tight."
             )
+        elif "safe_mae_pct" in learned_keys:
+            safe_mae_line = "\n- **Safe Drawdown**: Historical winning trades had no observed adverse move."
         elif trade_count > 0:
             safe_mae_line = (
                 "\n- **Safe Drawdown**: Insufficient trade data for MAE baseline — rely on ATR-based stops only."
+            )
+        if safe_mae_pct > 0 or "safe_mae_pct" in learned_keys:
+            safe_mae_line += (
+                f"\n- MAE evidence: {thresholds.get('safe_mae_sample_count', 0)} winning trades with valid observations; "
+                "observed maximum, not a guaranteed safe limit or an SL floor. Never widen a stop solely to match it."
             )
 
         update_sl_rule = (
@@ -725,7 +732,8 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
                                 f"rr_floor={rr_floor_text}" if "rr_borderline_min" in learned_keys else None,
                                 f"adx_strong={adx_strong}" if "adx_strong_threshold" in learned_keys else None,
                                 f"confidence={conf_threshold}" if "confidence_threshold" in learned_keys else None,
-                                f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None]
+                                f"avg_sl={avg_sl:.1f}%" if "avg_sl_pct" in learned_keys else None,
+                                f"safe_mae={safe_mae_pct * 100:.2f}%" if "safe_mae_pct" in learned_keys else None]
                 learned = [p for p in origin_parts if p]
                 if learned:
                     rules += (

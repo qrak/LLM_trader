@@ -160,10 +160,7 @@ class DashboardServer:
             exchange_manager=self.exchange_manager,
             post_mortem_repo=self.post_mortem_repo,
         )
-        try:
-            rag_engine = self.brain_service.rag_engine if self.brain_service else None
-        except AttributeError:
-            rag_engine = None
+        rag_engine = self.analysis_engine.rag_engine if self.analysis_engine else None
 
         monitor_router = monitor.MonitorRouter(
             config=self.config,

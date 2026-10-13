@@ -113,6 +113,7 @@ class BrainExperienceRecorder:
                 "max_profit_pct": position.max_profit_pct,
                 "fear_greed_index": conditions.fear_greed_index,
                 "market_regime": conditions.trend_direction,
+                "trend_direction_at_entry": position.trend_direction_at_entry,
                 "trend_strength": conditions.trend_strength,
                 "is_weekend": conditions.is_weekend,
                 "position_size_pct": position.size_pct,

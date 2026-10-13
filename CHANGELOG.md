@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-10-13 — Complete runtime wiring and historical MAE evidence
+
+### Fixed
+- Wire the dashboard news router to `AnalysisEngine.rag_engine`, not the trading
+  brain's nonexistent RAG attribute. Preserve full/preview responses, caching and
+  the existing disk fallback.
+- Read recorded `support_resistance_strength_score` in factor statistics, with
+  unchanged API bucket names and support for older persisted S/R metadata.
+- Persist entry-time trend separately from exit-time market regime so the dashboard
+  can group new closed experiences by the actual entry snapshot. Historical missing
+  entry trends stay unknown; no live memory migration is performed.
+- Register `ExecutorHandler.close()` for graceful shutdown and in-place reload.
+
+### Added
+- Compute `safe_mae_pct` from the observed maximum adverse move of at least five
+  valid winning-trade observations by default. Convert signed percentage points to
+  fraction units; skip missing/invalid/non-finite/boolean/positive values and
+  non-winning entries. Pass the sample count through brain thresholds to the prompt.
+  Explicit zero baselines are recognized. The prompt states that the historical
+  maximum is not a guaranteed safe limit or an SL floor and must not alone widen stops.
+
+### Verified
+- **2081 passed, 17 skipped**, versus **2044 passed, 17 skipped** before this change;
+  targeted tests: **404 passed**. Existing assertions are unchanged; the existing
+  news test's two mock-source references now point at the actual analysis RAG owner.
+- Regressions exercise real temporary ChromaDB storage, LONG/SHORT close learning,
+  dashboard HTTP statistics and real prompt assembly, plus startup news wiring and
+  registered shutdown execution. No live model/exchange calls or service restarts.
+- Full Ruff passes; Pyright reports **0 errors, 0 warnings**; startup import and
+  compilation pass. Vulture finds **0 candidates at 100% confidence** and the same
+  **106 lower-confidence candidates** at 60% as the baseline, with none introduced.
+
+## 2026-10-13 — Connect saved post-mortem lessons to the trading brain
+
+### Fixed
+- Inject the existing shared `PostMortemRepository` into `TradingBrainService`
+  during trading-layer provisioning. Saved lessons no longer remain available
+  only to post-mortem storage and dashboard views while brain context has no
+  repository to read.
+
+### Verified
+- Added real provisioning/SQLite/system-prompt regressions for empty history,
+  the five-most-recent lesson limit and a lesson added after the first context.
+  Existing test bodies and assertions are unchanged. Full isolated Windows suite:
+  **2044 passed, 17 skipped** (baseline: **2042 passed, 17 skipped**).
+  Targeted tests: **175 passed**; full Pyright: **0 errors, 0 warnings**; Ruff passes.
+- An offline probe using a copied live trade-history database included five saved
+  lessons in the system prompt, including the latest profitable short's lesson.
+  No live data, model calls, exchange orders or service restarts were involved.
+
 ## 2026-10-12 — Persist Python R/R corrections for both response contracts
 
 ### Fixed

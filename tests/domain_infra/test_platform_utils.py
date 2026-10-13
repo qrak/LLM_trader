@@ -5,6 +5,7 @@ exchange symbol preloading.
 
 import ast
 import json
+import sqlite3
 from dataclasses import MISSING, fields
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,10 +15,25 @@ import pytest
 
 from scripts.check_requirements import find_missing
 from scripts.fix_sarif import fix_sarif, main, sanitize_level
+from src.analyzer.analysis_context import AnalysisContext
+from src.analyzer.formatters import (
+    LongTermFormatter,
+    MarketFormatter,
+    MarketOverviewFormatter,
+    TechnicalFormatter,
+)
+from src.analyzer.prompts.prompt_builder import PromptBuilder
+from src.analyzer.prompts.template_manager import TemplateManager
+from src.analyzer.technical_calculator import TechnicalCalculator
 from src.app import BotServices
+from src.composition import provisioners
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
 from src.platforms.exchange_manager import ExchangeManager
+from src.trading.data_models import MarketSnapshot
+from src.utils.format_utils import FormatUtils
+from src.utils.timeframe_validator import TimeframeValidator
 from start import CompositionRoot, CryptoTradingBot
+from tests.conftest import make_config
 
 
 def decision(timestamp: str, action: str = "BUY", symbol: str = "BTC/USDC") -> dict:
@@ -161,6 +177,91 @@ async def test_composition_root_wires_reconcile_interval_from_config(
     )
     assert len(monitors) == 1
     assert monitors[0].reconcile_interval_seconds == expected
+
+
+@pytest.mark.parametrize("lesson_count", [0, 6])
+def test_trading_provisioning_connects_saved_lessons_to_the_analysis_prompt(
+    tmp_path, monkeypatch, lesson_count
+):
+    monkeypatch.chdir(tmp_path)
+    root = object.__new__(CompositionRoot)
+    root.config = make_config(DATA_DIR="data", TIMEFRAME="4h", CRYPTO_PAIR="BTC/USDC")
+    root.logger = MagicMock()
+    vector = MagicMock()
+    vector.trade_count = 0
+    vector.experience_count = 0
+    vector.prune_aged_documents.return_value = {}
+    vector.get_blocked_trade_feedback.return_value = ""
+    vector.get_context_for_prompt.return_value = ""
+    vector.get_relevant_rules.return_value = []
+    vector.compute_optimal_thresholds.return_value = {}
+    monkeypatch.setattr(provisioners, "configure_hf_hub_auth", lambda: None)
+    monkeypatch.setattr(provisioners, "cleanup_legacy_embedding_cache", lambda logger: None)
+    monkeypatch.setattr(provisioners, "get_best_device", lambda: "cpu")
+    monkeypatch.setattr(provisioners.chromadb, "PersistentClient", MagicMock())
+    monkeypatch.setattr(provisioners, "SentenceTransformer", MagicMock())
+    monkeypatch.setattr(provisioners, "VectorMemoryService", lambda *args, **kwargs: vector)
+
+    trading = root._provision_trading_layer(
+        {"parser": MagicMock()}, {"manager": MagicMock()}
+    )
+    brain = trading["brain_service"]
+    repository = trading["post_mortem_repo"]
+    assert brain.context_provider.post_mortem_repo is repository
+    assert brain.persistence is trading["persistence"]
+
+    for index in range(lesson_count):
+        row_id = repository.insert_post_mortem(
+            trade_id=None, symbol="BTC/USDC", direction="SHORT", verdict="good_exit",
+            llm_analysis="Confirmed exit", expected_vs_actual=None,
+            lesson_learned=f"Stored lesson {index}", pnl_pct=2.04,
+            close_reason="take_profit_filled",
+        )
+        with sqlite3.connect(repository._db_path) as conn:
+            conn.execute(
+                "UPDATE trade_post_mortem SET created_at = ? WHERE id = ?",
+                (f"2026-10-13 00:00:{index:02d}", row_id),
+            )
+
+    formatter = FormatUtils()
+    overview = MarketOverviewFormatter(root.logger, formatter)
+    long_term = LongTermFormatter(root.logger, formatter)
+    builder = PromptBuilder(
+        timeframe="4h", logger=root.logger, config=root.config, format_utils=formatter,
+        overview_formatter=overview, long_term_formatter=long_term,
+        technical_formatter=TechnicalFormatter(
+            TechnicalCalculator(root.logger, formatter), root.logger, formatter
+        ),
+        market_formatter=MarketFormatter(
+            root.logger, formatter, root.config, MagicMock(), overview, long_term
+        ),
+        timeframe_validator=TimeframeValidator,
+        template_manager=TemplateManager(root.config, root.logger, TimeframeValidator),
+    )
+    context = brain.get_context(MarketSnapshot(adx=19.49, trend_direction="BEARISH"))
+    prompt = builder.build_system_prompt(
+        "BTC/USDC", AnalysisContext(symbol="BTC/USDC", current_price=82000.0),
+        brain_context=context, dynamic_thresholds=brain.get_dynamic_thresholds(),
+    )
+    marker = "### Trade Journal (Recent Post-Mortem Lessons):"
+    if lesson_count:
+        assert marker in prompt
+        assert "Stored lesson 0" not in prompt
+        for index in range(1, lesson_count):
+            assert prompt.count(f"Stored lesson {index}") == 1
+        assert prompt.count("P&L: +2.0%") == 5
+        assert prompt.index("Stored lesson 5") < prompt.index("Stored lesson 1")
+        repository.insert_post_mortem(
+            trade_id=None, symbol="BTC/USDC", direction="SHORT", verdict="good_exit",
+            llm_analysis="Another confirmed exit", expected_vs_actual=None,
+            lesson_learned="New lesson after the first context", pnl_pct=1.0,
+            close_reason="take_profit_filled",
+        )
+        assert "New lesson after the first context" in brain.get_context(MarketSnapshot())
+    else:
+        assert marker not in prompt
+        assert "Stored lesson" not in prompt
+    vector.store_experience.assert_not_called()
 
 
 def test_launcher_requirements_check_reports_only_unsatisfied_lines(tmp_path):

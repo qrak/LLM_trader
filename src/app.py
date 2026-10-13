@@ -160,6 +160,9 @@ class CryptoTradingBot:
             if self.model_manager:
                 self.shutdown_manager.register_shutdown_callback(self.model_manager.close)
 
+            if self.executor_handler:
+                self.shutdown_manager.register_shutdown_callback(self.executor_handler.close)
+
             if self.market_analyzer:
                 self.shutdown_manager.register_shutdown_callback(self.market_analyzer.close)
 

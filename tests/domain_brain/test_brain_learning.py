@@ -8,11 +8,26 @@ config-bounded gates the learned thresholds feed.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
+import chromadb
+import numpy as np
 import pytest
+from chromadb.config import Settings
+from starlette.testclient import TestClient
 
+from src.analyzer.analysis_context import AnalysisContext
+from src.analyzer.formatters import (
+    LongTermFormatter,
+    MarketFormatter,
+    MarketOverviewFormatter,
+    TechnicalFormatter,
+)
+from src.analyzer.prompts.prompt_builder import PromptBuilder
+from src.analyzer.prompts.template_manager import TemplateManager
+from src.analyzer.technical_calculator import TechnicalCalculator
+from src.dashboard.server import DashboardServer
 from src.trading.brain import TradingBrainService
 from src.trading.brain_context import BrainContextProvider
 from src.trading.data_models import ExitExecutionContext, MarketSnapshot, TradeDecision
@@ -22,7 +37,9 @@ from src.trading.stop_loss_tightening_policy import (
     TighteningEvaluation,
 )
 from src.trading.vector_memory import VectorMemoryService
-from tests.conftest import make_market_conditions, make_position
+from src.utils.format_utils import FormatUtils
+from src.utils.timeframe_validator import TimeframeValidator
+from tests.conftest import make_config, make_market_conditions, make_position
 
 
 def proven_exit(**overrides) -> ExitEvidence:
@@ -466,6 +483,97 @@ def test_update_from_closed_trade_without_entry_decision_falls_back_to_position(
     assert stored["metadata"]["entry_action"] == "LONG"
     assert stored["metadata"]["entry_confidence"] == "MEDIUM"
     assert stored["metadata"]["ai_reasoning"] == ""
+
+
+@pytest.mark.parametrize("entry_trend", ["BULLISH", "BEARISH", "NEUTRAL"])
+def test_closed_experience_preserves_entry_trend_separately_from_exit(entry_trend):
+    brain = learning_brain()
+    assert brain.update_from_closed_trade(
+        position=make_position(trend_direction_at_entry=entry_trend),
+        close_price=52000.0, close_reason="take_profit",
+        market_conditions=make_market_conditions(trend_direction="BEARISH"), evidence=proven_exit(),
+    )
+    metadata = brain.vector_memory.store_experience.call_args.kwargs["metadata"]
+    assert metadata["trend_direction_at_entry"] == entry_trend
+    assert metadata["market_regime"] == "BEARISH"
+
+
+@pytest.mark.parametrize("direction", ["LONG", "SHORT"])
+@pytest.mark.parametrize(("drawdowns", "expected"), [
+    ([-1.0, -2.0, -3.0, -4.0], None),
+    ([-1.0, -2.0, -3.0, -4.0, -5.0], 0.05),
+    ([0.0, 0.0, 0.0, 0.0, 0.0], 0.0),
+])
+def test_closed_trades_round_trip_through_chroma_to_dashboard_and_prompt(tmp_path, direction, drawdowns, expected):
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding)
+    brain = TradingBrainService(logger, MagicMock(), memory, timeframe_minutes=15)
+    config = make_config(DATA_DIR=str(tmp_path), TIMEFRAME="15m")
+    formatter = FormatUtils()
+    overview = MarketOverviewFormatter(logger, formatter)
+    long_term = LongTermFormatter(logger, formatter)
+    builder = PromptBuilder(
+        timeframe="15m", logger=logger, config=config, format_utils=formatter,
+        overview_formatter=overview, long_term_formatter=long_term,
+        technical_formatter=TechnicalFormatter(TechnicalCalculator(logger, formatter), logger, formatter),
+        market_formatter=MarketFormatter(logger, formatter, config, MagicMock(), overview, long_term),
+        timeframe_validator=TimeframeValidator,
+        template_manager=TemplateManager(config, logger, TimeframeValidator),
+    )
+    assert brain.get_dynamic_thresholds()["safe_mae_pct"] == 0
+    assert brain.get_dynamic_thresholds()["safe_mae_sample_count"] == 0
+    entry = datetime(2026, 9, 17, tzinfo=timezone.utc)
+    for index, drawdown in enumerate(drawdowns):
+        position = make_position(
+            direction=direction, entry_time=entry + timedelta(minutes=index),
+            stop_loss=49000.0 if direction == "LONG" else 51000.0,
+            take_profit=53000.0 if direction == "LONG" else 47000.0,
+            trend_direction_at_entry="BULLISH", max_drawdown_pct=drawdown,
+            confluence_factors=(("support_resistance_strength", 78),),
+        )
+        close_price = 52000.0 if direction == "LONG" else 48000.0
+        assert brain.update_from_closed_trade(
+            position, close_price, "take_profit", make_market_conditions(trend_direction="BEARISH"),
+            evidence=proven_exit(price=close_price, event_id=f"exit-{index}"),
+        )
+    stored = memory.get_trade_metadatas()
+    assert len(stored) == len(drawdowns)
+    assert all(row["trend_direction_at_entry"] == "BULLISH" for row in stored)
+    assert all(row["market_regime"] == "BEARISH" for row in stored)
+    thresholds = brain.get_dynamic_thresholds()
+    prompt = builder.build_system_prompt(
+        "BTC/USDC", AnalysisContext(symbol="BTC/USDC", current_price=50000.0),
+        dynamic_thresholds=thresholds,
+    )
+    if expected is None:
+        assert "safe_mae_pct" not in thresholds["learned_keys"]
+        assert "Insufficient trade data for MAE baseline" in prompt
+    else:
+        assert thresholds["safe_mae_pct"] == pytest.approx(expected)
+        assert thresholds["safe_mae_sample_count"] == len(drawdowns)
+        assert "safe_mae_pct" in thresholds["learned_keys"]
+        assert f"MAE evidence: {len(drawdowns)} winning trades" in prompt
+        assert "not a guaranteed safe limit or an SL floor" in prompt
+        assert "Insufficient trade data for MAE baseline" not in prompt
+        if expected:
+            assert "survived up to 5.00% drawdown" in prompt
+        else:
+            assert "had no observed adverse move" in prompt
+    server = DashboardServer(
+        brain_service=brain, vector_memory=memory, analysis_engine=None, config=config,
+        logger=logger, unified_parser=None, persistence=None, exchange_manager=None,
+    )
+    with TestClient(server.app) as http:
+        response = http.get("/api/brain/vectors")
+        assert response.status_code == 200
+        stats = response.json()["factor_stats"]
+        assert stats["support_resistance_HIGH"]["total_trades"] == len(drawdowns)
+        assert stats["support_resistance_HIGH"]["avg_score"] == 78
+        assert stats["cat_Trend: BULLISH"]["total_trades"] == len(drawdowns)
+        assert "cat_Trend: BEARISH" not in stats
 
 
 @pytest.mark.parametrize(

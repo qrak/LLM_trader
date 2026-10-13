@@ -1226,6 +1226,55 @@ def test_compute_factor_performance_groups_scores_into_buckets():
     assert result["trend_alignment_HIGH"]["avg_score"] == 82.0
 
 
+@pytest.mark.parametrize("metadata", [
+    {"support_resistance_strength_score": 78},
+    {"support_resistance_score": 78},
+    {"support_resistance_strength_score": 78, "support_resistance_score": 20},
+])
+def test_factor_performance_reads_canonical_and_persisted_sr_scores(metadata):
+    service = make_service()
+    service._collection.get.return_value = {
+        "ids": ["trade"], "metadatas": [{"outcome": "WIN", "pnl_pct": 2.0, **metadata}],
+    }
+    result = service.compute_factor_performance()
+    assert result["support_resistance_HIGH"]["total_trades"] == 1
+    assert result["support_resistance_HIGH"]["avg_score"] == 78
+    assert "support_resistance_LOW" not in result
+
+
+@pytest.mark.parametrize("invalid", [None, "invalid", float("nan"), float("inf"), float("-inf"), 2.0, True, False])
+def test_safe_mae_excludes_missing_malformed_and_impossible_drawdowns(invalid):
+    service = make_service()
+    rows = [{"outcome": "WIN", "max_drawdown_pct": -2.0} for _ in range(4)]
+    rows.extend({"outcome": "WIN", "max_drawdown_pct": invalid} for _ in range(5))
+    service._collection.get.return_value = {"ids": [str(i) for i in range(len(rows))], "metadatas": rows}
+    assert "safe_mae_pct" not in service.compute_optimal_thresholds()
+
+
+@pytest.mark.parametrize(("drawdowns", "expected"), [
+    ([-1.0, -2.0, -3.0, -4.0], None),
+    ([-1.0, -2.0, -3.0, -4.0, -5.0], 0.05),
+    ([0.0, 0.0, 0.0, 0.0, 0.0], 0.0),
+    ([0.0, -1.0, -2.0, "-1.5", -0.5], 0.02),
+])
+def test_safe_mae_learns_observed_winner_maximum_in_fraction_units(drawdowns, expected):
+    service = make_service()
+    rows = [{"outcome": "WIN", "max_drawdown_pct": value} for value in drawdowns]
+    rows.extend([
+        {"outcome": "LOSS", "max_drawdown_pct": -80.0},
+        {"outcome": "UPDATE", "max_drawdown_pct": -90.0},
+        {"outcome": "UNKNOWN", "max_drawdown_pct": -70.0},
+        {"outcome": "WIN"},
+    ])
+    service._collection.get.return_value = {"ids": [str(i) for i in range(len(rows))], "metadatas": rows}
+    thresholds = service.compute_optimal_thresholds()
+    if expected is None:
+        assert "safe_mae_pct" not in thresholds
+    else:
+        assert thresholds["safe_mae_pct"] == pytest.approx(expected)
+        assert thresholds["safe_mae_sample_count"] == len(drawdowns)
+
+
 def test_compute_factor_performance_normalizes_categorical_values():
     service = make_service()
     service._collection.get.return_value = {
