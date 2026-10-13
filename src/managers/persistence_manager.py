@@ -20,7 +20,14 @@ from typing import Any
 
 from src.logger.logger import Logger
 from src.managers.sqlite_trade_history import SQLiteTradeHistory
-from src.trading.data_models import MarketConditions, Position, TradeDecision
+from src.trading.data_models import (
+    ENTRY_SIGNALS,
+    LONG_ENTRY_SIGNALS,
+    SHORT_ENTRY_SIGNALS,
+    MarketConditions,
+    Position,
+    TradeDecision,
+)
 from src.trading.statistics_calculator import TradingStatistics
 from src.utils.data_utils import serialize_for_json
 
@@ -70,7 +77,7 @@ class PersistenceManager:
         """Expose the SQLite trade history store for dashboard/query access."""
         return self._sqlite
 
-    def save_position(self, position: Position | None) -> None:
+    def save_position(self, position: Position | None, *, strict: bool = False) -> None:
         """Save current position to disk."""
         try:
             if position is None:
@@ -127,8 +134,10 @@ class PersistenceManager:
             self._position_cache_valid = True
 
             self.logger.debug("Saved position: %s %s", position.direction, position.symbol)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             self.logger.error("Error saving position: %s", e)
+            if strict:
+                raise
 
     async def async_save_position(self, position: Position | None) -> None:
         """Non-blocking save_position: runs on a thread-pool worker."""
@@ -269,6 +278,21 @@ class PersistenceManager:
         """Non-blocking save_trade_decision: runs on a thread-pool worker."""
         return await asyncio.to_thread(self.save_trade_decision, decision)
 
+    def apply_entry_fill(
+        self, position: Position, *, row_id: int | None = None, history_time: str | None = None,
+    ) -> int:
+        """Persist an executed entry; failed position writes remain retryable."""
+        history_id = self._sqlite.update_entry_fill(
+            entry_time=datetime.fromisoformat(history_time) if history_time else position.entry_time,
+            symbol=position.symbol,
+            actions=LONG_ENTRY_SIGNALS if position.direction == "LONG" else SHORT_ENTRY_SIGNALS,
+            price=position.entry_price, quantity=position.size, fee=position.entry_fee,
+            tolerance_seconds=0.0 if history_time else self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS,
+            row_id=row_id,
+        )
+        self.save_position(position, strict=True)
+        return history_id
+
     def load_trade_history(self) -> list[dict[str, Any]]:
         """Load full trade history from SQLite."""
         return self._sqlite.export_json()
@@ -296,7 +320,7 @@ class PersistenceManager:
                 since=since,
                 until=until,
             )
-            entry_actions = {"BUY", "SELL"}
+            entry_actions = ENTRY_SIGNALS
             best_match: tuple[float, dict[str, Any], datetime] | None = None
 
             for decision_dict in candidates:

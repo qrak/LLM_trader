@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,8 +26,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.managers.persistence_manager import PersistenceManager
 from src.trading import executor_reconciliation
-from src.trading.data_models import MarketConditions, Position
+from src.trading.data_models import MarketConditions, Position, TradeDecision
 from src.trading.executor_reconciliation import (
     INTENT_ACTION_CLOSE,
     INTENT_CONFIRMED,
@@ -36,6 +38,7 @@ from src.trading.executor_reconciliation import (
     position_identity,
     verify_exit_record,
 )
+from src.trading.memory import TradingMemoryService
 from src.trading.trading_strategy import TradingStrategy
 from tests.conftest import (
     make_config,
@@ -1617,3 +1620,199 @@ class TestLateUpdateReceipts:
             await strategy.resolve_position_intents_after_forward(intent.order_id, True)
 
         assert strategy.position_intents().get(intent.key).state == INTENT_UNKNOWN
+
+class TestExecutedEntrySettlement:
+    """Real SQLite/position round-trips for ordinary market slippage and replay."""
+
+    @staticmethod
+    def setup_entry(tmp_path: Path, signal: str = "SELL", state: str = INTENT_PENDING):
+        position = _position(
+            symbol="BTC/USDC", direction="SHORT" if signal in {"SELL", "SHORT"} else "LONG",
+            entry_price=83881.61, size=0.004414628904734711,
+            quote_amount=370.3061800816842, size_pct=0.037,
+            stop_loss=84150.0, take_profit=82050.0,
+        )
+        strategy, logger, _ = _strategy(tmp_path, position)
+        persistence = PersistenceManager(logger, str(tmp_path / "data"))
+        persistence.save_position(position)
+        row_id = persistence.save_trade_decision(TradeDecision(
+            timestamp=ENTRY_TIME, symbol=position.symbol, action=signal, confidence="MEDIUM",
+            price=position.entry_price, quantity=position.size, fee=None,
+            quote_amount=position.quote_amount, position_size=position.size_pct,
+            stop_loss=position.stop_loss, take_profit=position.take_profit,
+            reasoning="original model thesis",
+        ))
+        strategy.persistence = persistence
+        strategy.memory_service = TradingMemoryService(logger, persistence)
+        intent = strategy.register_position_intent(
+            "ENTRY", position.symbol, order_id="entry-slippage", position_id=position_identity(position),
+            state=state, payload={"entry_history_id": row_id},
+        )
+        receipt = {
+            "order_id": intent.order_id, "symbol": position.symbol, "signal": signal,
+            "verdict": "executed", "state": "filled", "position_id": "venue-position",
+            "filled_quantity": 0.00441, "average_price": 83862.62,
+            "fill_evidence": "exchange_trade_fills", "fees_known": True,
+            "fees": [{"currency": "USDC", "amount": 0.0}], "exposure_possible": True,
+        }
+        strategy.config.EXECUTOR_VERDICT_PATH = str(tmp_path / "verdicts.jsonl")
+        strategy._executor_has_position = AsyncMock(return_value=True)
+        return strategy, persistence, intent, receipt
+
+    @pytest.mark.parametrize("signal", ["BUY", "SELL", "LONG", "SHORT"])
+    async def test_execution_facts_replace_planned_entry_without_duplicate_rows(self, tmp_path, signal):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path, signal)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        assert await strategy.resolve_position_intents_after_forward(intent.order_id, True) == INTENT_CONFIRMED
+        position = strategy.current_position
+        assert position.entry_price == 83862.62
+        assert position.size == 0.00441
+        assert position.entry_fee == 0.0
+        assert position.quote_amount == pytest.approx(369.8341542)
+        assert position.size_pct == pytest.approx(369.8341542 / (370.3061800816842 / 0.037))
+        rows = persistence.load_trade_history()
+        assert len(rows) == 1
+        assert rows[0]["price"] == position.entry_price
+        assert rows[0]["quantity"] == position.size
+        assert rows[0]["fee"] == 0.0
+        assert rows[0]["reasoning"] == "original model thesis"
+        assert position.entry_time == ENTRY_TIME
+        restarted = PersistenceManager(null_logger(), str(persistence.data_dir))
+        assert restarted.load_position().entry_price == position.entry_price
+        assert strategy.memory_service.memory.decisions[0].price == position.entry_price
+
+    @pytest.mark.parametrize("state", [INTENT_PENDING, INTENT_UNKNOWN, INTENT_CONFIRMED])
+    async def test_independent_sync_recovers_late_or_pre_fix_confirmed_entry(self, tmp_path, state):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path, state=state)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        await strategy.reconcile_local_position()
+        assert strategy.current_position.entry_price == 83862.62
+        assert strategy.position_intents().get(intent.key).state == INTENT_CONFIRMED
+        assert len(persistence.load_trade_history()) == 1
+
+    async def test_replayed_fill_does_not_restore_quantity_after_partial_exit(self, tmp_path):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        strategy.current_position.size = 0.002
+        persistence.save_position(strategy.current_position)
+        restarted, _, _ = _strategy(tmp_path, persistence.load_position())
+        restarted.persistence = PersistenceManager(null_logger(), str(persistence.data_dir))
+        restarted.memory_service = TradingMemoryService(null_logger(), restarted.persistence)
+        restarted.config.EXECUTOR_VERDICT_PATH = strategy.config.EXECUTOR_VERDICT_PATH
+        restarted._executor_has_position = AsyncMock(return_value=True)
+        await restarted.reconcile_local_position()
+        assert restarted.current_position.size == 0.002
+        assert restarted.persistence.load_position().size == 0.002
+        assert len(restarted.persistence.load_trade_history()) == 1
+
+    @pytest.mark.parametrize("field,value", [
+        ("order_id", "another-order"), ("symbol", "ETH/USDC"), ("signal", "BUY"),
+        ("position_id", "another-venue-position"), ("average_price", None),
+        ("average_price", float("nan")), ("average_price", True),
+        ("filled_quantity", 0), ("filled_quantity", float("inf")),
+        ("fill_evidence", "local_price"),
+    ])
+    async def test_unrelated_or_invalid_fill_cannot_rewrite_accounting(self, tmp_path, field, value):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        if field == "position_id":
+            strategy.position_intents().record(
+                intent.action, intent.symbol, key=intent.key, order_id=intent.order_id,
+                position_id=intent.position_id, payload={**intent.payload, "position_id": "venue-position"},
+            )
+        receipt[field] = value
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        before = persistence.load_trade_history()
+        await strategy.reconcile_local_position()
+        assert strategy.current_position.entry_price == 83881.61
+        assert persistence.load_trade_history() == before
+
+    @pytest.mark.parametrize("fees_known,fees,expected", [
+        (False, [], None), (True, [], None),
+        (True, [{"currency": "BNB", "amount": 0.001}], None),
+        (True, [{"currency": "USDC", "amount": 0.25}], 0.25),
+    ])
+    async def test_entry_fees_are_actual_quote_fees_or_unknown(self, tmp_path, fees_known, fees, expected):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        receipt.update(fees_known=fees_known, fees=fees)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        assert strategy.current_position.entry_fee == expected
+        assert persistence.load_trade_history()[0]["fee"] == expected
+
+    async def test_position_write_failure_can_replay_without_duplicate_history(self, tmp_path, monkeypatch):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        save = persistence.save_position
+        monkeypatch.setattr(persistence, "save_position", MagicMock(side_effect=OSError("disk unavailable")))
+        with pytest.raises(OSError, match="disk unavailable"):
+            await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        assert strategy.current_position.entry_price == 83881.61
+        assert strategy.position_intents().get(intent.key).state == INTENT_PENDING
+        monkeypatch.setattr(persistence, "save_position", save)
+        await strategy.reconcile_local_position()
+        assert strategy.current_position.entry_price == 83862.62
+        assert len(persistence.load_trade_history()) == 1
+
+    async def test_concurrent_entry_syncs_settle_once(self, tmp_path):
+        strategy, persistence, _, receipt = self.setup_entry(tmp_path)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        apply = persistence.apply_entry_fill
+        persistence.apply_entry_fill = MagicMock(side_effect=apply)
+        await asyncio.gather(strategy.reconcile_local_position(), strategy.reconcile_local_position())
+        persistence.apply_entry_fill.assert_called_once()
+        assert strategy.current_position.entry_price == 83862.62
+        assert len(persistence.load_trade_history()) == 1
+
+    @pytest.mark.parametrize("history_rows", [0, 2])
+    async def test_missing_or_ambiguous_history_refuses_to_guess(self, tmp_path, history_rows):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        rows = persistence.load_trade_history()
+        if history_rows == 0:
+            with sqlite3.connect(persistence.data_dir / "trade_history.db") as conn:
+                conn.execute("DELETE FROM trade_history")
+        else:
+            persistence.sqlite_history.insert(rows[0])
+        strategy.position_intents().record(
+            intent.action, intent.symbol, key=intent.key, order_id=intent.order_id,
+            position_id=intent.position_id, payload={},
+        )
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        before = persistence.load_trade_history()
+        with pytest.raises(RuntimeError, match="exactly one history row"):
+            await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        assert persistence.load_trade_history() == before
+        assert strategy.current_position.entry_price == 83881.61
+        assert strategy.position_intents().get(intent.key).state == INTENT_PENDING
+
+    async def test_history_timestamp_correlates_even_when_initial_save_was_slow(self, tmp_path):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        history_time = "2026-09-21T08:12:05+00:00"
+        with sqlite3.connect(persistence.data_dir / "trade_history.db") as conn:
+            conn.execute("UPDATE trade_history SET timestamp = ?", (history_time,))
+        strategy.position_intents().record(
+            intent.action, intent.symbol, key=intent.key, order_id=intent.order_id,
+            position_id=intent.position_id, payload={"entry_history_time": history_time},
+        )
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        assert strategy.current_position.entry_price == 83862.62
+        assert persistence.load_trade_history()[0]["timestamp"] == history_time
+
+    async def test_actual_partial_entry_is_booked_at_filled_quantity(self, tmp_path):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        receipt.update(state="partially_filled", filled_quantity=0.0023)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        assert strategy.current_position.size == 0.0023
+        assert persistence.load_trade_history()[0]["quantity"] == 0.0023
+
+    async def test_late_receipt_from_previous_trade_never_changes_new_position(self, tmp_path):
+        strategy, persistence, intent, receipt = self.setup_entry(tmp_path)
+        _verdicts(Path(strategy.config.EXECUTOR_VERDICT_PATH), [receipt])
+        strategy.current_position = _position(symbol="BTC/USDC")
+        before = persistence.load_trade_history()
+        await strategy.reconcile_local_position()
+        assert strategy.current_position.entry_price == 81200.45
+        assert persistence.load_trade_history() == before
+        assert strategy.position_intents().get(intent.key).state == INTENT_PENDING

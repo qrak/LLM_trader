@@ -1,5 +1,26 @@
 # Changelog
 
+## 2026-10-13 — Settle entry accounting from executor fill receipts
+
+### Fixed
+- Replace planned entry price, quantity, allocation and known quote-currency commission
+  with the exact correlated executor fill, in both the position and its existing
+  SQLite history row. Refresh short-term decision memory without adding another trade.
+- Recover late receipts and previously confirmed-but-unsettled entries during independent
+  reconciliation, including after restart. Preserve entry identity, current SL/TP,
+  genuine unknown fees and partial-exit remainders; reject unrelated or malformed fills.
+- Persist exact entry-history correlation for new commands. Refuse missing or ambiguous
+  historical matches rather than selecting another trade. Failed writes remain replayable.
+
+### Verification
+- Original full baseline: **2130 passed, 17 skipped**. Final offline suite:
+  **2150 passed, 1 skipped**; Ruff and full Pyright pass. Existing test functions and
+  assertions are unchanged. Public-dashboard tests require the running service and
+  are excluded from the offline gate; the stopped-service run failed its live header check.
+- Replay of copied live stores settles only entry history row **37**, preserves all
+  **27** history rows and current protection levels, survives restart and is idempotent.
+  Live store hashes are unchanged; no exchange/model calls, order changes or process starts.
+
 ## 2026-10-13 — Shared estimated-token budgets and model-aware fallback guards
 
 ### Changed

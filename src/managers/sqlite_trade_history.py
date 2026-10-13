@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,46 @@ class SQLiteTradeHistory:
                 self._logger.error("Failed to insert trade decision: %s", e)
                 conn.rollback()
                 return 0
+            finally:
+                conn.close()
+
+    def update_entry_fill(
+        self, *, entry_time: datetime, symbol: str, actions: frozenset[str],
+        price: float, quantity: float, fee: float | None,
+        tolerance_seconds: float, row_id: int | None = None,
+    ) -> int:
+        """Update exactly one correlated entry, preserving its timestamp and reasoning."""
+        since = (entry_time - timedelta(seconds=tolerance_seconds)).isoformat()
+        until = (entry_time + timedelta(seconds=tolerance_seconds)).isoformat()
+        placeholders = ", ".join("?" for _ in actions)
+        sql = (
+            "SELECT * FROM trade_history WHERE symbol = ? AND timestamp >= ? "
+            f"AND timestamp <= ? AND action IN ({placeholders})"
+        )
+        params: list[Any] = [symbol, since, until, *sorted(actions)]
+        if row_id is not None:
+            sql += " AND id = ?"
+            params.append(row_id)
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                rows = conn.execute(sql, params).fetchall()
+                if len(rows) != 1:
+                    raise RuntimeError(f"Entry fill requires exactly one history row, found {len(rows)}")
+                row = rows[0]
+                quote_amount = price * quantity
+                allocation = row["quote_amount"]
+                size_pct = row["position_size"]
+                if allocation and size_pct:
+                    size_pct *= quote_amount / allocation
+                conn.execute(
+                    "UPDATE trade_history SET price = ?, quantity = ?, fee = ?, "
+                    "quote_amount = ?, position_size = ? WHERE id = ?",
+                    (price, quantity, fee, quote_amount, size_pct, row["id"]),
+                )
+                conn.commit()
+                return int(row["id"])
             finally:
                 conn.close()
 

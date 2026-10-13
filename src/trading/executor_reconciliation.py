@@ -16,7 +16,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from .data_models import Position, TradeDecision
+from .data_models import (
+    LONG_ENTRY_SIGNALS,
+    SHORT_ENTRY_SIGNALS,
+    Position,
+    TradeDecision,
+)
 
 ENTRY_CONFIRM_ATTEMPTS = 10
 ENTRY_CONFIRM_DELAY = 2.5
@@ -836,6 +841,7 @@ class ExecutorReconciliationMixin:
     logger: Any
     config: Any
     persistence: Any
+    memory_service: Any
     current_position: Position | None
     _http_client: Any
     _last_executor_position_payload: dict | None
@@ -1636,6 +1642,86 @@ class ExecutorReconciliationMixin:
             )
             return INTENT_REFUSED
 
+    async def _settle_entry_fill(self, intent: PositionIntent, receipt: dict) -> bool:
+        """Apply correlated execution facts once, before confirming accounting."""
+        price = _positive_float(receipt.get("average_price"))
+        quantity = _positive_float(receipt.get("filled_quantity"))
+        if (price is None or quantity is None
+                or isinstance(receipt.get("average_price"), bool)
+                or isinstance(receipt.get("filled_quantity"), bool)
+                or receipt.get("state") not in {"filled", "partially_filled"}
+                or receipt.get("fill_evidence") not in EXIT_EVIDENCE_KINDS):
+            return False
+        async with self._position_lock():
+            position = self.current_position
+            current = self.position_intents().get(intent.key)
+            if (position is None or current is None
+                    or current.state in {INTENT_REFUSED, INTENT_LOCAL_ONLY}
+                    or intent.position_id != position_identity(position)
+                    or intent.symbol != position.symbol
+                    or receipt.get("order_id") != intent.order_id
+                    or receipt.get("symbol") != intent.symbol):
+                return False
+            signals = LONG_ENTRY_SIGNALS if position.direction == "LONG" else SHORT_ENTRY_SIGNALS
+            if receipt.get("signal") not in signals or not receipt.get("position_id"):
+                return False
+            payload = current.payload
+            executor_position_id = payload.get("position_id")
+            if executor_position_id and receipt["position_id"] != executor_position_id:
+                return False
+            fees = _actual_fees(receipt) if receipt.get("fees_known") is True else None
+            fee = math.fsum(fees) if fees else None
+            fill = {"price": price, "quantity": quantity, "fee": fee}
+            previous_fill = payload.get("entry_fill")
+            if previous_fill == fill:
+                return True
+            if previous_fill and position.size != previous_fill.get("quantity"):
+                self.logger.error("Entry receipt changed after a partial exit for %s — accounting kept", intent.key)
+                return False
+            quote_amount = price * quantity
+            size_pct = position.size_pct
+            if position.quote_amount > 0:
+                size_pct *= quote_amount / position.quote_amount
+            settled = replace(
+                position, entry_price=price, size=quantity, entry_fee=fee,
+                quote_amount=quote_amount, size_pct=size_pct,
+            )
+            row_id = await asyncio.to_thread(
+                self.persistence.apply_entry_fill, settled, row_id=payload.get("entry_history_id"),
+                history_time=payload.get("entry_history_time"),
+            )
+            self.current_position = settled
+            await asyncio.to_thread(self.memory_service.refresh_from_history)
+            self.position_intents().record(
+                current.action, current.symbol, key=current.key, order_id=current.order_id,
+                position_id=current.position_id, state=current.state,
+                evidence="executor_verdict_journal", detail=current.detail,
+                payload={**payload, "entry_history_id": row_id,
+                         "position_id": receipt["position_id"], "entry_fill": fill},
+            )
+            self.logger.info(
+                "Entry execution settled %s: price=%s quantity=%s fee=%s (order_id=%s)",
+                position.symbol, price, quantity, fee, intent.order_id,
+            )
+            return True
+
+    async def _reconcile_entry_fill(self) -> None:
+        """Recover late receipts and old confirmed entries without resending orders."""
+        position = self.current_position
+        if position is None or not self._executor_query_available():
+            return
+        intent = self.position_intents().latest_for_position(position_identity(position), INTENT_ACTION_ENTRY)
+        if intent is None or intent.state in {INTENT_REFUSED, INTENT_LOCAL_ONLY}:
+            return
+        receipt = self._read_executor_verdict_entry(intent.order_id or "")
+        if (receipt
+                and (receipt.get("verdict") == "executed" or self._entry_fill_is_proven(receipt))
+                and await self._settle_entry_fill(intent, receipt)):
+            self.confirm_position_intent(
+                intent.key, source="executor_verdict_journal",
+                detail="executor receipt: entry execution facts settled",
+            )
+
     async def _reconcile_late_updates(self) -> None:
         """Read late UPDATE receipts once; CLOSE settlement stays in exit booking."""
         for intent in self.position_intents().pending():
@@ -1698,8 +1784,10 @@ class ExecutorReconciliationMixin:
             return INTENT_CONFIRMED
 
         if intent.action == INTENT_ACTION_ENTRY:
+            settled = await self._settle_entry_fill(intent, verdict_entry or {})
             verdict = str((verdict_entry or {}).get("verdict") or "").strip().lower()
-            detail = "executor receipt: entry filled"
+            detail = ("executor receipt: entry execution facts settled" if settled
+                      else "executor receipt: entry filled; execution accounting unavailable")
             if verdict != "executed":
                 detail += f"; command verdict={verdict}, protection unresolved"
             self.confirm_position_intent(
@@ -2023,6 +2111,7 @@ class ExecutorReconciliationMixin:
         position on an unverifiable answer, and never invents a price. A confirmed
         exit is booked exactly once (shared lock + per-event idempotency).
         """
+        await self._reconcile_entry_fill()
         await self._reconcile_late_updates()
         now = datetime.now(timezone.utc)
         position = self.current_position

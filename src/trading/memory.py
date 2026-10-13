@@ -45,6 +45,11 @@ class TradingMemoryService:
         self.memory.add_decision(decision)
         self._cached_trade_count = -1
 
+    def refresh_from_history(self) -> None:
+        """Reload settled execution facts without appending a second decision."""
+        self.memory = self._build_memory_from_history()
+        self._cached_trade_count = -1
+
     def get_context_summary(self) -> str:
         """Get formatted memory context for prompt injection.
 

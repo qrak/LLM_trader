@@ -504,19 +504,6 @@ class PositionManagementMixin:
             direction, f"{current_price:,.2f}", f"{risk.stop_loss:,.2f}",
             f"{risk.take_profit:,.2f}", quantity, self._commission_text(entry_fee),
         )
-        self.register_position_intent(
-            INTENT_ACTION_ENTRY,
-            symbol,
-            order_id=order_id,
-            position_id=position_identity(self.current_position),
-            state=INTENT_PENDING if self._executor_query_available() else INTENT_LOCAL_ONLY,
-            detail=(
-                "entry forwarded to the executor — awaiting its receipt; local position is "
-                "bookkeeping, NOT a confirmed execution"
-                if self._executor_query_available()
-                else "executor integration disabled — no command sent, local bookkeeping only"
-            ),
-        )
         intent.transition_to(
             OrderLifecycle.READY_FOR_REVIEW,
             reason="Intent persisted; execution awaits executor evidence",
@@ -550,6 +537,20 @@ class PositionManagementMixin:
                 "trend_direction_at_entry": mc.trend_direction,
             },
             order_id=order_id,
+        )
+        self.register_position_intent(
+            INTENT_ACTION_ENTRY,
+            symbol,
+            order_id=order_id,
+            position_id=position_identity(self.current_position),
+            state=INTENT_PENDING if self._executor_query_available() else INTENT_LOCAL_ONLY,
+            payload={"entry_history_time": decision.timestamp.isoformat()},
+            detail=(
+                "entry forwarded to the executor — awaiting its receipt; local position is "
+                "bookkeeping, NOT a confirmed execution"
+                if self._executor_query_available()
+                else "executor integration disabled — no command sent, local bookkeeping only"
+            ),
         )
         await self._record_trade_decision(decision)
         return decision
