@@ -190,6 +190,12 @@ widening policies, and execution receipts remain unchanged.
 
 ##### Refused Updates Are Recorded, Not Swallowed
 
+Executor connection failures and transport timeouts are availability warnings, not
+`CRITICAL` errors. `_executor_has_position()` returns `None`, clears stale query
+evidence and retains the local position; reconciliation remains unverified and
+UPDATE/CLOSE still require confirmation. Do not add a traceback to this expected
+offline path or hide unexpected code/payload failures behind the same warning.
+
 Every command the bot refuses to send — a blocked UPDATE (tightening gate or widening cap) or an UPDATE/CLOSE skipped because the executor state could not be verified — is written
 down: `PositionManagementMixin._record_refused_command()` records it as a position intent with
 `state=refused`, `evidence=bot_policy` in `data/trading/bot_position_intents.jsonl` and queues a

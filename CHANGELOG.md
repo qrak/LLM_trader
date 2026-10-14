@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-10-14 — Treat an unavailable executor as an availability warning
+
+### Fixed
+- Report executor position-query connection failures and transport timeouts as a
+  concise warning instead of `CRITICAL` with a traceback. Keep unexpected failures
+  on the error path; do not assume a disconnected executor means a closed position.
+- Preserve the unverified state, local position and existing UPDATE/CLOSE safety
+  gates. The next successful query resumes normal verification without a reset.
+
+### Regression coverage
+- Connection failure, connect/read timeout, reset and server disconnect; recovery
+  after an outage; unexpected failures still retain their traceback.
+- A real unavailable loopback endpoint exercises startup reconciliation and proves
+  no position/history write or invented exit occurs.
+- Offline suite: **2157 passed, 1 skipped** (live public-dashboard tests excluded).
+  Ruff, full Pyright (**0 errors, 0 warnings**), compilation and startup import pass;
+  all pre-existing test functions and assertions remain unchanged.
+
 ## 2026-10-13 — Settle entry accounting from executor fill receipts
 
 ### Fixed

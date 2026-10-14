@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 import tempfile
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import chromadb
+import httpx
 import pytest
 from sentence_transformers import SentenceTransformer
 
@@ -871,6 +873,83 @@ class TestPositionPersistence:
 
 class TestExecutorHandshake:
     """TradingStrategy executor position probe and the CLOSE/UPDATE gate."""
+
+    @pytest.mark.parametrize(
+        "failure",
+        [
+            httpx.ConnectError("All connection attempts failed"),
+            httpx.ConnectTimeout("Connection timed out"),
+            httpx.ReadTimeout("Read timed out"),
+            httpx.ReadError("Connection reset"),
+            httpx.RemoteProtocolError("Server disconnected"),
+        ],
+        ids=["offline", "connect_timeout", "read_timeout", "connection_reset", "disconnect"],
+    )
+    async def test_transport_failure_warns_and_recovers(self, failure: httpx.TransportError) -> None:
+        """Unavailable transport is unknown, not flat or a code failure; the next probe recovers."""
+        position = make_position()
+        strategy, logger, persistence = _strategy(
+            position, EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL=EXECUTOR_URL,
+        )
+        strategy._last_executor_position_payload = {"open": True}
+        client = _probe_stub(strategy, exc=failure)
+
+        assert await strategy._executor_has_position(position.symbol) is None
+        assert strategy._last_executor_position_payload is None
+        assert strategy.current_position is position
+        persistence.async_save_position.assert_not_awaited()
+        persistence.async_save_trade_decision.assert_not_awaited()
+        logger.error.assert_not_called()
+        logger.warning.assert_called_once_with(
+            "Executor unavailable for %s (%s) — position state remains unverified; "
+            "local position unchanged.",
+            position.symbol, type(failure).__name__,
+        )
+
+        response = httpx.Response(200, json={"open": True, "symbol": position.symbol})
+        client.get.side_effect = None
+        client.get.return_value = response
+        assert await strategy._executor_has_position(position.symbol) is True
+        assert strategy._last_executor_position_payload == response.json()
+        logger.error.assert_not_called()
+        assert logger.warning.call_count == 1
+
+    async def test_real_refused_connection_retains_unverified_position(self) -> None:
+        """A real refused TCP connection must not generate an error or book an exit."""
+        position = make_position()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as endpoint:
+            endpoint.bind(("127.0.0.1", 0))
+            port = endpoint.getsockname()[1]
+            strategy, logger, persistence = _strategy(
+                position, EXECUTOR_API_ENABLED=True,
+                EXECUTOR_API_URL=f"http://127.0.0.1:{port}/decision",
+            )
+            async with httpx.AsyncClient(timeout=1.0, trust_env=False) as client:
+                strategy._http_client = client
+                outcome = await strategy.reconcile_local_position(source="startup")
+
+        assert outcome.state == "unverified"
+        assert outcome.exit_booked is False
+        assert strategy.current_position is position
+        assert strategy._last_executor_position_payload is None
+        persistence.async_save_position.assert_not_awaited()
+        persistence.async_save_trade_decision.assert_not_awaited()
+        logger.error.assert_not_called()
+        logger.warning.assert_called_once()
+        assert logger.warning.call_args.args[2] in {"ConnectError", "ConnectTimeout"}
+        assert not logger.warning.call_args.kwargs.get("exc_info", False)
+
+    async def test_unexpected_probe_failure_keeps_error_traceback(self) -> None:
+        """A programming failure must not be hidden behind the offline warning."""
+        strategy, logger, _ = _strategy(
+            make_position(), EXECUTOR_API_ENABLED=True, EXECUTOR_API_URL=EXECUTOR_URL,
+        )
+        _probe_stub(strategy, exc=RuntimeError("unexpected failure"))
+
+        assert await strategy._executor_has_position("BTC/USDC") is None
+        logger.error.assert_called_once()
+        assert logger.error.call_args.kwargs["exc_info"] is True
+        logger.warning.assert_not_called()
 
     @pytest.mark.parametrize(
         ("config_overrides", "status_code", "body", "probe_exc", "expected", "expected_query_url"),

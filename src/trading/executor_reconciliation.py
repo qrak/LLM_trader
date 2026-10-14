@@ -16,6 +16,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from .data_models import (
     LONG_ENTRY_SIGNALS,
     SHORT_ENTRY_SIGNALS,
@@ -1128,7 +1130,6 @@ class ExecutorReconciliationMixin:
     def _get_http_client(self):
         """Reuse one httpx client across executor position queries (keeps TCP pools alive)."""
         if self._http_client is None or self._http_client.is_closed:
-            import httpx
             self._http_client = httpx.AsyncClient(timeout=3.0)
         return self._http_client
 
@@ -1173,6 +1174,13 @@ class ExecutorReconciliationMixin:
             self.logger.warning(
                 "Executor returned HTTP %s for position query: %s",
                 resp.status_code, resp.text,
+            )
+            return None
+        except httpx.TransportError as exc:
+            self.logger.warning(
+                "Executor unavailable for %s (%s) — position state remains unverified; "
+                "local position unchanged.",
+                symbol, type(exc).__name__,
             )
             return None
         except Exception:
