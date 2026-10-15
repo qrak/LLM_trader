@@ -9,15 +9,6 @@ from numba import njit
 
 
 @njit(cache=True)
-def ewma_numba(data, span):
-    alpha = 2 / (span + 1)
-    out = np.empty_like(data)
-    out[0] = data[0]
-    for i in range(1, len(data)):
-        out[i] = alpha * data[i] + (1 - alpha) * out[i - 1]
-    return out
-
-@njit(cache=True)
 def ema_numba(arr, length):
     ema_arr = np.empty_like(arr)
     multiplier = 2 / (length + 1)

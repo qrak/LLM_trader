@@ -169,7 +169,7 @@ class TradingBrainService:
         )
         thresholds["sl_tightening_pct"] = round(effective_threshold * 100)
         thresholds["sl_tightening_source"] = source
-        sl_payload: dict[str, Any] = thresholds.get("sl_tightening") or {}
+        sl_payload: dict[str, Any] = dict(thresholds.get("sl_tightening") or {})
         sl_payload["base_threshold"] = base_threshold
         sl_payload["effective_threshold"] = effective_threshold
         sl_payload["effective_threshold_pct"] = round(effective_threshold * 100)

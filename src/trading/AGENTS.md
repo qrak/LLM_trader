@@ -85,6 +85,11 @@ The Brain does **not** execute trades or calculate indicators — it operates pu
   Explicit zero observations count, and a learned zero baseline is not insufficient
   data. Carry `safe_mae_sample_count` to the real prompt; label the maximum as
   historical evidence, never a guaranteed safe drawdown or a hard SL floor.
+- Preserve `_portfolio_pnl_pct` when extracting `MarketConditions`: pass the
+  already-read value to the dataclass constructor. Verify positive, negative,
+  zero and absent values through Position serialization, real isolated Chroma
+  storage and prompt rendering. Portfolio return and the trade's `pnl_pct` are
+  separate fields; do not overwrite historical snapshots with current equity.
 - Closed experiences persist `position.trend_direction_at_entry` separately from
   exit-time `market_regime`. Dashboard S/R statistics read
   `support_resistance_strength_score` while retaining the existing API bucket names
@@ -181,6 +186,25 @@ The effective threshold is resolved by `_resolve_effective_threshold()`:
 2. If a brain-learned SL tightening threshold exists with enough samples, use the learned value clamped to the configured floor/ceiling
 3. Expose the result via `get_dynamic_thresholds()` as `sl_tightening_pct`, `sl_tightening_source`, and the nested `sl_tightening` payload
 
+SL outcome learning is recency-weighted, not a causal estimate of tightening benefit.
+Use at most one observation per closed position (smallest observed tightening progress,
+canonicalized through its close record); never count UPDATE aliases as separate trades.
+Age each observation from that UPDATE's timestamp, so a late close write does not
+rejuvenate it. Require a valid, non-future UPDATE followed by a valid close timestamp.
+Apply the timeframe-derived exponential half-life and maximum age with fractional days
+(4h: 14/56 days); exclude invalid/non-finite/bool evidence and expired observations.
+For each candidate, report only its eligible raw sample count and effective sample
+count `(sum(w) ** 2) / sum(w ** 2)`. Weight expectancy, win rate and conditional
+win/loss means consistently. Activation requires both raw and effective counts to meet
+`SL_TIGHTENING_MIN_SAMPLES`; missing effective evidence means configuration, not an
+old learned threshold. The learning algorithm's minimum remains separately enforced.
+`BrainContextProvider` invalidates statistics after 300 monotonic seconds on the next
+request even if experience count is unchanged, and `TradingBrainService` copies the
+nested SL payload before adding display fields. Regression coverage must exercise
+real isolated Chroma storage, time-only expiry and the resulting prompt for LONG/SHORT.
+No intrabar replay, alternative-exit comparison, cost-aware optimization or chronological
+out-of-sample validation is implemented by this recency-only stage.
+
 ##### Position Update Gating
 
 There is no minimum time interval between position parameter updates. Each valid UPDATE may
@@ -235,7 +259,7 @@ from the entry price or an `executed` flag alone.
 | **Blocked trade feedback stall** | Failures silently caught/passed |
 | **timeframe_minutes ≤ 0** | Defaults to 240 minutes |
 | **Cross-restart trade count** | `trade_count` re-read from `vector_memory.trade_count` on init |
-| **Stats cache staleness** | Auto-invalidated when vector-memory experience count changes |
+| **Stats cache staleness** | Invalidated when experience count changes or 300 monotonic seconds elapse; recomputed on the next request |
 | **Unknown profile in vector context** | Replaced with resolved rule defaults in `get_context()` |
 | **"LIMITED DATA" flag detected** | Swaps full CoT instructions for "rely on standard TA" note |
 

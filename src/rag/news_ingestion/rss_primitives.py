@@ -9,21 +9,19 @@ normalization rules centralized in this module.
 from __future__ import annotations
 
 import asyncio
-import re
-
-try:
-    import defusedxml.ElementTree as ET
-except ImportError:
-    import xml.etree.ElementTree as ET
 import html as html_module
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import aiohttp
+import defusedxml.ElementTree as ET
+import feedparser
+from defusedxml.common import DefusedXmlException
 
 _DEFAULT_RSS_SOURCES: list[dict[str, str]] = [
     {"name": "coindesk",      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
@@ -253,13 +251,6 @@ def parse_pub_date_to_epoch(raw_date: str | None) -> float:
         return 0.0
 
 
-def _first_text(parent: ET.Element, path: str) -> str:  # type: ignore
-    node = parent.find(path)
-    if node is None or node.text is None:
-        return ""
-    return node.text.strip()
-
-
 def parse_rss_items(
     payload_text: str,
     source_name: str,
@@ -273,30 +264,29 @@ def parse_rss_items(
     results: list[dict[str, Any]] = []
     try:
         root = ET.fromstring(payload_text)
-    except (ET.ParseError, Exception):  # noqa: BLE001
+    except (ET.ParseError, DefusedXmlException):
+        return results
+    for entry in root.findall("./channel/item"):
+        for description in entry.findall("{http://purl.org/dc/elements/1.1/}description"):
+            entry.remove(description)
+    parsed = feedparser.parse(ET.tostring(root, encoding="utf-8"), resolve_relative_uris=False)
+    if parsed.bozo or not parsed.version.startswith("rss"):
         return results
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    for item in root.findall("./channel/item"):
+    for item in cast(list[dict[str, Any]], parsed.entries):
         if len(results) >= max_items:
             break
 
-        title = _first_text(item, "title")
-        link = _first_text(item, "link")
-        guid = _first_text(item, "guid")
-        description = _first_text(item, "description")
-        content_encoded = _first_text(
-            item, "{http://purl.org/rss/1.0/modules/content/}encoded"
-        )
-        author = _first_text(item, "{http://purl.org/dc/elements/1.1/}creator")
-        pub_date = _first_text(item, "pubDate")
-
-        categories = [
-            (cat.text or "").strip()
-            for cat in item.findall("category")
-            if (cat.text or "").strip()
-        ]
+        title = item.get("title", "").strip()
+        link = item.get("link", "").strip()
+        guid = item.get("id", "").strip()
+        description = item.get("summary", "")
+        content_encoded = next((part["value"] for part in item.get("content", []) if part.get("value")), "")
+        author = next((author["name"] for author in item.get("authors", []) if author.get("name")), "").strip()
+        pub_date = item.get("published", "")
+        categories = [tag["term"].strip() for tag in item.get("tags", []) if tag.get("term", "").strip()]
 
         clean_url = normalize_url(link)
         clean_summary = strip_html(description) if description else ""

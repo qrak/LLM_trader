@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from scripts.check_requirements import find_missing
+from scripts.check_requirements import find_missing, resolve_constraints_path
 from scripts.fix_sarif import fix_sarif, main, sanitize_level
 from src.analyzer.analysis_context import AnalysisContext
 from src.analyzer.formatters import (
@@ -301,6 +301,33 @@ def test_launcher_requirements_check_reports_only_unsatisfied_lines(tmp_path):
         requirements = tmp_path / "requirements.txt"
         requirements.write_text(content, encoding="utf-8")
         assert find_missing(requirements) == expected
+
+
+def test_launcher_requirements_check_includes_constraints_file(tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("pytest>=1\n", encoding="utf-8")
+    constraints = tmp_path / "constraints.txt"
+    constraints.write_text(
+        "# floors and caps for packages pulled in as dependencies\npytest>=9999\ndefinitely-not-installed-xyz==1.0\n",
+        encoding="utf-8",
+    )
+
+    # The unmet floor is reported; a constrained package that is not installed is not
+    # (pip does not install constraints, so that line cannot be the reason for a pip run).
+    assert find_missing(requirements, constraints) == ["pytest>=9999"]
+    assert find_missing(requirements) == []
+
+
+def test_launcher_requirements_check_resolves_constraints_beside_requirements(tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("pytest>=1\n", encoding="utf-8")
+
+    assert resolve_constraints_path(requirements) is None
+
+    (tmp_path / "constraints.txt").write_text("pytest<1\n", encoding="utf-8")
+    assert resolve_constraints_path(requirements) == tmp_path / "constraints.txt"
+    assert resolve_constraints_path(requirements, "explicit.txt") == Path("explicit.txt")
+    assert find_missing(requirements, tmp_path / "absent.txt") == []
 
 
 def test_sarif_levels_are_normalized():

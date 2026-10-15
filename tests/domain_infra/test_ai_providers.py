@@ -733,6 +733,85 @@ class TestOpenRouterRequestWiring:
 
 
 class TestDeepSeekRequestWiring:
+    @pytest.mark.parametrize("chart", [False, True], ids=["text", "chart"])
+    @pytest.mark.parametrize("empty_payload", [{}, {"choices": []}, {"choices": None}])
+    @pytest.mark.parametrize(
+        "content",
+        ['{"analysis": {"signal": "HOLD"}}', '{"verdict": "plan_followed", "lesson_learned": "Keep the plan"}'],
+        ids=["analysis", "post-mortem"],
+    )
+    async def test_empty_http_completion_is_retried_unchanged(
+        self, chart: bool, empty_payload: dict[str, Any], content: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sleep = AsyncMock()
+        monkeypatch.setattr(asyncio, "sleep", sleep)
+        requests: list[bytes] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            requests.append(request.content)
+            payload = empty_payload if len(requests) == 1 else {
+                "id": "recovered",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "deepseek-flash",
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+            }
+            return httpx.Response(200, json=payload)
+
+        client = _deepseek_client()
+        client._client = deepseek_module.AsyncOpenAI(
+            api_key="test-key", base_url="https://api.deepseek.test",
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)), max_retries=0,
+        )
+        kwargs = {
+            "model": "deepseek-flash", "messages": [{"role": "user", "content": "Return JSON"}],
+            "model_config": {"response_format": {"type": "json_object"}},
+        }
+        try:
+            if chart:
+                response = await client.chat_completion_with_chart_analysis(**kwargs, chart_image=_png_bytes(4, 4))
+            else:
+                response = await client.chat_completion(**kwargs)
+        finally:
+            await client.close()
+
+        assert response.choices[0].message.content == content
+        assert len(requests) == 2
+        assert requests[0] == requests[1]
+        sleep.assert_awaited_once()
+
+    @pytest.mark.parametrize("code", [401, 503])
+    async def test_http_error_envelope_keeps_its_cause_and_retry_classification(
+        self, code: int, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sleep = AsyncMock()
+        monkeypatch.setattr(asyncio, "sleep", sleep)
+        requests: list[bytes] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            requests.append(request.content)
+            return httpx.Response(200, json={"error": {"code": code, "message": "provider failure test-key"}})
+
+        client = _deepseek_client()
+        client._client = deepseek_module.AsyncOpenAI(
+            api_key="test-key", base_url="https://api.deepseek.test",
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handle)), max_retries=0,
+        )
+        try:
+            response = await client.chat_completion(
+                model="deepseek-flash", messages=[{"role": "user", "content": "Return JSON"}], model_config={},
+            )
+        finally:
+            await client.close()
+
+        assert response.error is not None
+        assert str(code) in response.error
+        assert "[REDACTED_API_KEY]" in response.error
+        assert "test-key" not in response.error
+        assert len(requests) == (4 if code == 503 else 1)
+        assert sleep.await_count == len(requests) - 1
+        assert all(body == requests[0] for body in requests)
+
     async def test_chat_completion_forwards_reasoning_effort_and_logs_cache_counters(self) -> None:
         """DeepSeek forwards reasoning_effort and reports reasoning plus cache-hit counters."""
         client = _deepseek_client()

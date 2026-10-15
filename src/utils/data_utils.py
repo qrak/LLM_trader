@@ -1,8 +1,12 @@
 """Utilities for data manipulation, serialization, and type conversion."""
 import dataclasses
+import json
 import math
+import os
+import tempfile
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, TypeVar, Union, get_args, get_origin
 
 import numpy as np
@@ -201,6 +205,39 @@ def serialize_for_json(obj: Any) -> Any:
             return None
         return val
     return str(obj)
+
+
+def atomic_write_json(
+    path: str | Path,
+    data: Any,
+    *,
+    ensure_ascii: bool = True,
+    fsync: bool = False,
+) -> None:
+    """Write *data* as JSON atomically: temp file next to the target, then os.replace().
+
+    A reader never sees a partial file, and a failed write leaves the previous
+    content untouched while the temp file is removed.
+    """
+    target = Path(path)
+    temp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            delete=False, mode="w", encoding="utf-8", dir=str(target.parent), suffix=".tmp"
+        ) as stream:
+            temp_name = stream.name
+            json.dump(data, stream, indent=2, ensure_ascii=ensure_ascii)
+            if fsync:
+                stream.flush()
+                os.fsync(stream.fileno())
+        os.replace(temp_name, target)
+    except Exception:
+        if temp_name:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
+        raise
 
 
 class SerializableMixin:

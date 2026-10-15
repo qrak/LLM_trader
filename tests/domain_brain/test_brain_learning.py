@@ -29,8 +29,14 @@ from src.analyzer.prompts.template_manager import TemplateManager
 from src.analyzer.technical_calculator import TechnicalCalculator
 from src.dashboard.server import DashboardServer
 from src.trading.brain import TradingBrainService
-from src.trading.data_models import ExitExecutionContext, MarketSnapshot, TradeDecision
+from src.trading.data_models import (
+    ExitExecutionContext,
+    MarketSnapshot,
+    Position,
+    TradeDecision,
+)
 from src.trading.executor_reconciliation import ExitEvidence
+from src.trading.market_conditions_extractor import MarketConditionsExtractor
 from src.trading.stop_loss_tightening_policy import (
     StopLossTighteningPolicy,
     TighteningEvaluation,
@@ -175,6 +181,46 @@ The following trade suggestions were BLOCKED by risk guards. ADJUST your paramet
 TRUNCATION_MARKER = (
     PromptBudgetPolicy.BRAIN_NOTICE
 )
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        pytest.param({"_portfolio_pnl_pct": 0.1332466574281699}, 0.1332466574281699, id="small-profit"),
+        pytest.param({"_portfolio_pnl_pct": 12.34}, 12.34, id="profit"),
+        pytest.param({"_portfolio_pnl_pct": -5.0}, -5.0, id="loss"),
+        pytest.param({"_portfolio_pnl_pct": 0.0}, 0.0, id="breakeven"),
+        pytest.param({}, 0.0, id="absent-default"),
+        pytest.param({"_portfolio_pnl_pct": "1.25"}, 1.25, id="numeric-string"),
+    ],
+)
+def test_extracted_portfolio_pnl_survives_position_storage_and_brain_context(tmp_path, result, expected):
+    conditions = MarketConditionsExtractor(MagicMock()).extract_market_conditions(result)
+    position = make_position(conditions_at_entry=conditions)
+    restored = Position.from_dict(position.to_dict())
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding)
+    brain = TradingBrainService(logger, MagicMock(), memory, prompt_budget=PromptBudgetPolicy(TokenCounter(), logger))
+
+    brain.experience_recorder.record_closed_trade(
+        position=restored,
+        close_price=52000.0,
+        close_reason="take_profit",
+        market_conditions=restored.conditions_at_entry,
+        entry_decision=ENTRY_DECISION,
+    )
+
+    stored = memory._collection.get(ids=[f"trade_{restored.entry_time.isoformat()}"])
+    tag = f"PortfolioPnL={expected:+.1f}%"
+    assert conditions.portfolio_pnl_pct == expected
+    assert restored.conditions_at_entry.portfolio_pnl_pct == expected
+    assert stored["metadatas"][0]["portfolio_pnl_pct"] == expected
+    assert tag in stored["documents"][0]
+    assert tag in memory.get_context_for_prompt(stored["documents"][0], k=1)
+    assert stored["metadatas"][0]["pnl_pct"] == restored.calculate_pnl(52000.0)
 
 
 def vector_memory_double(trade_count: int = 0) -> MagicMock:
@@ -411,7 +457,8 @@ def test_sl_tightening_override_respects_config_samples_floor_and_ceiling(
 ):
     brain = learning_brain(tightening_policy=StopLossTighteningPolicy.from_config(config))
     brain.vector_memory.compute_optimal_thresholds.return_value = {
-        "sl_tightening": {"learned_threshold": learned, "sample_count": sample_count, "source": "brain"}
+        "sl_tightening": {"learned_threshold": learned, "sample_count": sample_count,
+                          "effective_sample_count": sample_count, "source": "brain"}
     }
 
     tightening = brain.get_dynamic_thresholds()["sl_tightening"]
@@ -1526,3 +1573,96 @@ class TestBrainRefusesUnprovenLessons:
 
         assert (stored, refused) == (True, False)
         assert brain.vector_memory.store_experience.call_count == 1
+
+
+@pytest.mark.parametrize("effective_count", [0, 9.99, float("nan"), float("inf"), True])
+def test_sl_tightening_policy_requires_effective_samples(config, effective_count):
+    policy = StopLossTighteningPolicy.from_config(config)
+    payload = {"sl_tightening": {
+        "learned_threshold": 0.25, "sample_count": 20,
+        "effective_sample_count": effective_count,
+    }}
+    assert policy.resolve_effective_threshold(0.15, payload) == (0.15, "config")
+
+
+def test_sl_tightening_policy_accepts_sufficient_effective_samples(config):
+    policy = StopLossTighteningPolicy.from_config(config)
+    payload = {"sl_tightening": {
+        "learned_threshold": 0.25, "sample_count": 20, "effective_sample_count": 10.0,
+    }}
+    assert policy.resolve_effective_threshold(0.15, payload) == (0.25, "brain")
+
+
+def test_brain_threshold_cache_expires_without_new_experiences(monkeypatch):
+    brain = learning_brain()
+    clock = [1000.0]
+    monkeypatch.setattr("src.trading.brain_context.monotonic", lambda: clock[0])
+    brain.vector_memory.compute_optimal_thresholds.side_effect = [
+        {"sl_tightening": {"learned_threshold": 0.25, "sample_count": 20,
+                           "effective_sample_count": 15}}, {},
+    ]
+    first = brain.get_dynamic_thresholds()
+    assert first["sl_tightening_source"] == "brain"
+    clock[0] += 299
+    assert brain.get_dynamic_thresholds()["sl_tightening_source"] == "brain"
+    brain.vector_memory.compute_optimal_thresholds.assert_called_once()
+    clock[0] += 1
+    assert brain.get_dynamic_thresholds()["sl_tightening_source"] == "config"
+    assert brain.vector_memory.compute_optimal_thresholds.call_count == 2
+
+
+def test_brain_does_not_mutate_cached_sl_evidence():
+    brain = learning_brain()
+    payload = {"learned_threshold": 0.25, "sample_count": 20, "effective_sample_count": 15}
+    brain.vector_memory.compute_optimal_thresholds.return_value = {"sl_tightening": payload}
+    brain.get_dynamic_thresholds()
+    assert payload == {"learned_threshold": 0.25, "sample_count": 20, "effective_sample_count": 15}
+
+
+@pytest.mark.parametrize("direction", ["LONG", "SHORT"])
+def test_sl_decay_chroma_round_trip_expires_to_config_and_updates_prompt(tmp_path, monkeypatch, direction):
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding, timeframe_minutes=240)
+    config = make_config(TIMEFRAME="4h")
+    policy = StopLossTighteningPolicy.from_config(config)
+    brain = TradingBrainService(logger, MagicMock(), memory, timeframe_minutes=240, tightening_policy=policy)
+    now = datetime.now(timezone.utc)
+    for index in range(12):
+        position = make_position(
+            direction=direction, entry_time=now - timedelta(days=2, minutes=index),
+            stop_loss=49000.0 if direction == "LONG" else 51000.0,
+            take_profit=52000.0 if direction == "LONG" else 48000.0,
+        )
+        current = 51000.0 if direction == "LONG" else 49000.0
+        new_sl = 49500.0 if direction == "LONG" else 50500.0
+        brain.experience_recorder.track_position_update(
+            position, position.stop_loss, position.take_profit, new_sl, position.take_profit,
+            current, 2.0, make_market_conditions(),
+            tightening_evaluation=policy.evaluate_update(position, new_sl, current, 240),
+            timeframe_minutes=240,
+        )
+        brain.experience_recorder.record_closed_trade(
+            position, current, "analysis_signal", make_market_conditions(),
+        )
+    clock = [1000.0]
+    wall = [datetime.now(timezone.utc)]
+    monkeypatch.setattr("src.trading.brain_context.monotonic", lambda: clock[0])
+    monkeypatch.setattr("src.trading.vector_memory_analytics.datetime", MagicMock(now=lambda *_: wall[0]))
+    first = brain.get_dynamic_thresholds()
+    assert first["sl_tightening_source"] == "brain"
+    assert first["sl_tightening"]["sample_count"] == 12
+    assert first["sl_tightening"]["effective_sample_count"] == pytest.approx(12)
+    template = TemplateManager(config, logger, TimeframeValidator)
+    assert "source: brain" in template.build_system_prompt("BTC/USDT", "4h", dynamic_thresholds=first)
+    wall[0] += timedelta(days=57)
+    clock[0] += 300
+    expired = brain.get_dynamic_thresholds()
+    assert memory.experience_count == 24
+    assert expired["sl_tightening_source"] == "config"
+    assert expired["sl_tightening_pct"] == 15
+    assert "learned_threshold" not in expired["sl_tightening"]
+    assert "15%+" in template.build_system_prompt("BTC/USDT", "4h", dynamic_thresholds=expired)
+    assert "source: config" in template.build_system_prompt("BTC/USDT", "4h", dynamic_thresholds=expired)

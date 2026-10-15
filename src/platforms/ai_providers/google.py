@@ -13,7 +13,7 @@ from google.genai import errors, types
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_api_call_default
 
 _IMAGE_TILE_SIZE = 75
 _IMAGE_TOKENS_PER_TILE = 258
@@ -256,7 +256,7 @@ class GoogleAIClient(BaseAIClient):
             return False
         return any(term in error_text for term in ("invalid", "unsupported", "unknown", "field", "400"))
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
@@ -292,7 +292,7 @@ class GoogleAIClient(BaseAIClient):
                 return self._handle_exception(e)
         return None
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,

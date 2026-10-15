@@ -44,7 +44,10 @@ Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM —
 #### Inputs
 
 ##### From RSS/Web
-- RSS feed XML from configured crypto news sources
+- RSS feed XML from configured crypto news sources, mapped by `feedparser` after
+  defusedxml validation. Preserve the RSS-only contract and first creator; remove
+  Dublin Core description aliases before parsing so CoinDesk's empty duplicate
+  cannot overwrite the real RSS summary. URL normalization and dedupe stay local.
 - Raw HTML pages (via Crawl4AI enrichment fallback chain)
 - Per-source raw and normalized JSON artifacts (saved to `data/news_fetch_preview/`)
 
@@ -116,8 +119,15 @@ Current scoring uses keyword, category, coin, importance, density, cooccurrence,
 4. **Body length / completeness** — penalizes truncated or thin articles
 
 ##### Enrichment Fallback Chain
+
+`constraints.txt` caps htmldate below 1.11 and `requirements.txt` pins trafilatura
+2.1.0: newer versions require charset-normalizer/urllib3 versions incompatible with
+the installed CCXT release. The launchers pass constraints.txt to pip with `-c`.
+Verify the entire dependency graph with `pip check` before changing those bounds.
+
 ```
-Crawl4AI (primary) → aiohttp direct fetch (degradation) → store raw RSS text
+Crawl4AI browser HTML → trafilatura text → Crawl4AI markdown if too short/unusable
+    → existing HTML extractor → aiohttp direct fetch → store raw RSS text
 ```
 
 ---
@@ -131,7 +141,7 @@ Crawl4AI (primary) → aiohttp direct fetch (degradation) → store raw RSS text
 | **Duplicate article detected** | Article deduplication is URL-first via `news_manager.py` and `rss_primitives.py` (no fuzzy matching) |
 | **Empty news cycle** | Returns empty context — AnalysisEngine continues without news |
 | **Provider rate-limited** | Cache fallback — serves stale data from `news_cache/` |
-| **Body too short / low density** | Density penalty defaults to 300 in `loader.py`; body re-enrichment threshold mirrors 400 in `news_manager.py` |
+| **Body too short / low density** | Density penalty defaults to 300 in `loader.py`; enrichment also retries long bodies with dense ticker/menu clutter. URL merge accepts a clean body >=400 characters over contaminated cache even when shorter, preserves the stored ID, and never downgrades clean full text to a summary. |
 | **Token limit exceeded** | `ContextBuilder` truncates to token budget, keeps highest-scored articles |
 | **Index corruption** | `file_handler.py` provides file-based fallback storage |
 | **New ticker not in TickerManager** | Dynamic symbol detection with name→ticker resolution |

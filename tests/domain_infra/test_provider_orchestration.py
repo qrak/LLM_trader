@@ -676,6 +676,45 @@ class TestApiRetryBackoff:
 
         assert measured == {repr(value): expected for value, expected in table}
 
+    @pytest.mark.parametrize("payload", [{}, {"choices": []}, {"choices": None}])
+    async def test_missing_choices_exhaust_the_opted_in_retry_budget(
+        self, payload: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sleeps = _capture_sleeps(monkeypatch)
+        client, calls = _scripted_api_client(
+            [payload], max_retries=3, initial_delay=0.01, backoff_factor=2,
+            max_delay=1, retry_on_empty=True,
+        )
+
+        result = await client.fetch("deepseek-flash", [{"role": "user", "content": "JSON"}], {})
+
+        assert result == payload
+        assert len(calls) == 4
+        assert len(sleeps) == 3
+        client.logger.error.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "payload",
+        [{"error": {"code": 401}}, {"choices": [{"error": {"code": 400}}]}],
+    )
+    def test_json_retry_opt_in_does_not_override_explicit_permanent_errors(
+        self, payload: dict[str, Any]
+    ) -> None:
+        context = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2,
+            max_delay=1, retry_on_empty=True,
+        )
+
+        assert context._is_retryable_response(payload) is False
+
+    @pytest.mark.parametrize("payload", [{}, {"choices": []}, {"choices": None}])
+    def test_missing_choices_are_not_retried_without_opt_in(self, payload: dict[str, Any]) -> None:
+        context = _api_retry_context(
+            max_retries=3, initial_delay=0.01, backoff_factor=2, max_delay=1,
+        )
+
+        assert context._is_retryable_response(payload) is False
+
     def test_response_shapes_that_count_as_retryable(self) -> None:
         """Dict and SDK replies are both inspected, at top level and inside choices."""
         context = _api_retry_context(

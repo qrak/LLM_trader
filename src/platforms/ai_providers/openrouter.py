@@ -3,7 +3,6 @@ OpenRouter client implementation using the raw OpenAI SDK (AsyncOpenAI).
 Supports text-only and multimodal (text + image) requests with cost tracking.
 """
 import asyncio
-import base64
 import io
 from typing import Any
 
@@ -13,7 +12,7 @@ from openai import AsyncOpenAI
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_api_call_default
 
 
 class OpenRouterClient(BaseAIClient):
@@ -23,35 +22,13 @@ class OpenRouterClient(BaseAIClient):
         super().__init__(logger)
         self.api_key = api_key
         self.base_url = base_url
-        self._client: AsyncOpenAI | None = None
         self._known_unsupported_params.add("presence_penalty")
 
-    async def _initialize_client(self) -> None:
-        """Initialize the OpenRouter API client."""
-        self._client = self._create_client()
-
-    def _create_client(self) -> AsyncOpenAI:
+    def _build_client(self) -> AsyncOpenAI:
         """Create an OpenAI-compatible client pointed at the OpenRouter API."""
         return AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    def _ensure_client(self) -> AsyncOpenAI:
-        """Ensure a client exists and return it."""
-        if not self._client:
-            self._client = self._create_client()
-        return self._client
-
-    async def close(self) -> None:
-        """Close the SDK client."""
-        client = self._client
-        if not client:
-            return
-        try:
-            self.logger.debug("Closing OpenRouterClient SDK session")
-            await client.close()
-        finally:
-            self._client = None
-
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
@@ -77,7 +54,7 @@ class OpenRouterClient(BaseAIClient):
         except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
@@ -92,13 +69,8 @@ class OpenRouterClient(BaseAIClient):
         """
         client = self._ensure_client()
         try:
-            img_data = self.process_chart_image(chart_image)
-            base64_image = base64.b64encode(img_data).decode("utf-8")
             user_text = self._extract_user_text_from_messages(messages)
-            multimodal_content = [
-                {"type": "text", "text": user_text},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
-            ]
+            img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
             multimodal_messages = self._prepare_multimodal_messages(
                 messages, multimodal_content
             )
@@ -159,11 +131,3 @@ class OpenRouterClient(BaseAIClient):
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Could not retrieve generation stats: %s", e)
             return None
-
-    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
-        """Handle OpenRouter specific exceptions, falling back to common handler."""
-        result = self.handle_common_errors(exception)
-        if result:
-            return result
-        self.logger.error("Unexpected OpenRouter error: %s", exception)
-        return None

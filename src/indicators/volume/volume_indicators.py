@@ -382,32 +382,3 @@ def twap_numba(high, low, close, length):
             twap[i] = tp_sum / length
 
     return twap
-
-@njit(cache=True)
-def average_quote_volume_numba(close_prices, volumes, window_size):
-    """Calculate Average Quote Volume using single-pass sliding window."""
-    n = len(close_prices)
-    quote_volumes = np.full(n, np.nan)
-
-    if n < window_size:
-        return quote_volumes
-
-    sum_close = 0.0
-    sum_vol = 0.0
-
-    for i in range(window_size - 1):
-        sum_close += close_prices[i]
-        sum_vol += volumes[i]
-
-    inv_window = 1.0 / window_size
-
-    for i in range(window_size - 1, n):
-        sum_close += close_prices[i]
-        sum_vol += volumes[i]
-
-        quote_volumes[i] = (sum_close * inv_window) * (sum_vol * inv_window)
-
-        sum_close -= close_prices[i - window_size + 1]
-        sum_vol -= volumes[i - window_size + 1]
-
-    return quote_volumes

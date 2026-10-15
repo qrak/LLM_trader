@@ -752,7 +752,7 @@ def test_tightening_rejects_without_a_usable_price_or_distance(
     ("brain_thresholds", "min_samples", "expected_source", "expected_effective", "allowed"),
     [
         pytest.param(
-            {"sl_tightening": {"sample_count": 5, "learned_threshold": 0.35}},
+            {"sl_tightening": {"sample_count": 5, "effective_sample_count": 5, "learned_threshold": 0.35}},
             5,
             "brain",
             0.35,
@@ -760,7 +760,7 @@ def test_tightening_rejects_without_a_usable_price_or_distance(
             id="samples-exactly-at-minimum",
         ),
         pytest.param(
-            {"sl_tightening": {"sample_count": 4, "learned_threshold": 0.35}},
+            {"sl_tightening": {"sample_count": 4, "effective_sample_count": 4, "learned_threshold": 0.35}},
             5,
             "config",
             0.50,
@@ -768,7 +768,7 @@ def test_tightening_rejects_without_a_usable_price_or_distance(
             id="samples-one-below-minimum",
         ),
         pytest.param(
-            {"sl_tightening": {"sample_count": 20, "learned_threshold": 0.01}},
+            {"sl_tightening": {"sample_count": 20, "effective_sample_count": 20, "learned_threshold": 0.01}},
             5,
             "brain",
             0.05,
@@ -776,7 +776,7 @@ def test_tightening_rejects_without_a_usable_price_or_distance(
             id="learned-below-floor",
         ),
         pytest.param(
-            {"sl_tightening": {"sample_count": 20, "learned_threshold": 0.99}},
+            {"sl_tightening": {"sample_count": 20, "effective_sample_count": 20, "learned_threshold": 0.99}},
             5,
             "brain",
             0.40,
@@ -784,7 +784,7 @@ def test_tightening_rejects_without_a_usable_price_or_distance(
             id="learned-above-ceiling",
         ),
         pytest.param(
-            {"sl_tightening": {"sample_count": 20, "learned_threshold": "bad"}},
+            {"sl_tightening": {"sample_count": 20, "effective_sample_count": 20, "learned_threshold": "bad"}},
             5,
             "config",
             0.50,

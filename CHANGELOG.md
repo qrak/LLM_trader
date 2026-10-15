@@ -1,5 +1,257 @@
 # Changelog
 
+## 2026-10-15 — Move non-imported dependency pins into constraints.txt
+
+### Changed
+- Add `constraints.txt` holding the eight entries nothing in the tree imports:
+  security floors (`accelerate>=1.15.0`, `jinja2>=3.1.6`, `Pillow==12.3.0`,
+  `requests>=2.34.2`, `transformers>=5.14.1`, `urllib3>=2.7.0`) and compatibility
+  caps (`chardet<6`, `htmldate>=1.10,<1.11`). Pip still resolves against them, but
+  requirements.txt no longer reads as if the code imported them.
+- requirements.txt now lists what the code imports plus the feature-gated entries
+  (crawl4ai, beautifulsoup4, blockrun-llm) and points at the constraints file.
+- All six launchers (`start_script_develop.ps1`, `start_script_futures.ps1`,
+  `start_script_main.ps1`, `start_script_main_linux.sh`,
+  `start_script_main_macos.sh`, `run_all_tests.sh`) pass `-c constraints.txt`
+  when the file exists.
+- `scripts/check_requirements.py` verifies both files: constraints come from the
+  second argument or from `constraints.txt` beside the requirements file, and a
+  constrained package that is not installed is not reported — pip does not
+  install constraints, so it cannot be the reason to run pip.
+- CONTRIBUTING install commands, the AGENTS.md tree line and the
+  src/rag/AGENTS.md pin note now name constraints.txt.
+
+### Verification
+- Real runs of `scripts/check_requirements.py`: empty output for the repository
+  files (every floor and cap satisfied by the venv); a probe file with
+  `pytest>=9999` plus a non-installed constrained package reports only the unmet
+  floor, while the same package listed in requirements is still reported.
+- `pip install --dry-run -r requirements.txt`: whole graph already satisfied,
+  nothing to install; `pip check` clean.
+- `bash -n` passes on the three shell scripts; the PowerShell parser reports
+  PARSE-OK for the three `.ps1` launchers.
+- `pytest tests/domain_infra/test_platform_utils.py` → **27 passed** (2 new cases).
+- No bot restart, no model request, no order submission.
+
+## 2026-10-15 — Refresh README against the current tree
+
+### Changed
+- README cut from 300 to 278 lines: duplicated paragraphs merged, the stale
+  "searches its own codebase using vector semantics" claim and its dangling
+  `CVI`/`QUERY` Mermaid nodes (feature removed earlier) dropped, and the executor
+  section collapsed into one status callout.
+- Every number re-derived in this session: **2,265 collected tests** (was
+  "1,380+"), a **1920×1080** chart PNG (was "4K"), **79 Numba-compiled indicator
+  functions across 14 modules** (was "50+ indicators"), **ten** dashboard tabs
+  (was "nine"), **nine** provisioning stages in `start.py` (was "8-stage"), a
+  ≈2.3 GB environment (disk guidance raised) and 477 commits since 2025-12-21.
+- Configuration table corrected against `config/config.ini`: `provider = deepseek`
+  (was googleai), the provider list including blockrun, `stop_loss_check_interval
+  = 15m` (was the non-existent `stop_loss_interval_minutes`), and `min_rr_entry =
+  0.0` replacing the "minimum 1.5 R:R enforced" claim. The testing recipes now
+  name test files that exist.
+- The `llm_trader_executor` repository link is gone (private for now): the README
+  describes the executor capability and its testnet status without linking it.
+- Quick Start installs with `-c constraints.txt`.
+
+### Verification
+- Figures re-measured on this revision: `pytest tests/ --collect-only`,
+  `git rev-list --count HEAD`, `grep -c @njit src/indicators`, the tab list in
+  `src/dashboard/static/index.html`, the `_provision_*` calls in `start.py`,
+  `du -sm .venv`.
+- Documentation only — no source file changed by this entry.
+
+## 2026-10-15 — Drop three dependency entries that no code imports
+
+### Changed
+- Remove `aiosqlite==0.21.0`, `scipy==1.16.1` and `bitsandbytes>=0.45.0` from
+  `requirements.txt`. Nothing in the tree imports or names them: an AST scan of
+  236 Python files plus a text search over configs, scripts, workflows and docs
+  finds no reference, and the committed tree at `654d92f` is the same. The SQLite
+  layer uses the standard `sqlite3` (`src/managers/sqlite_trade_history.py`), and
+  no code path quantises a model (`load_in_8bit`/`bnb_config` do not exist).
+- Each removed package still reaches the environment through a dependency that is
+  used (`aiohttp-client-cache` → `aiosqlite`, `sentence-transformers` →
+  `scipy`/`scikit-learn`, `accelerate` → `bitsandbytes`), so the installed
+  environment and the imported API surface are unchanged. `blockrun-llm` stays:
+  the provider integration is kept even though `config.ini` selects
+  `deepseek-flash` today.
+- No other pin moves. Imported packages (`torch`, `chromadb`, `python-dotenv`,
+  `pydantic`) keep their floors, as do the non-imported security and
+  compatibility pins (`requests`, `urllib3`, `Pillow`, `jinja2`, `transformers`,
+  `accelerate`, `chardet<6`, `htmldate<1.11`).
+
+### Verification
+- `pip check` reports no broken requirements. `pip install --dry-run -r
+  requirements.txt` resolves the full graph with every requirement already
+  satisfied and nothing to install.
+- `scripts/check_requirements.py` prints nothing, so the launcher's dependency
+  check stays satisfied and no `pip install` is triggered.
+- `pytest tests/domain_infra/test_platform_utils.py` → **25 passed**.
+- No bot restart, no model request, no order submission.
+
+## 2026-10-15 — Recency-weight SL-tightening outcome evidence
+
+### Changed
+- Weight the existing paired UPDATE/close outcome heuristic exponentially by age
+  (4h: 14-day half-life, 56-day maximum age), with fractional-day precision.
+  Keep one observation per closed position, including UPDATE aliases, and age
+  it from the selected UPDATE rather than a potentially delayed close write.
+- Require valid chronological timestamps and finite non-boolean progress/P&L.
+  For each candidate, use its eligible sample count, weighted expectancy and
+  effective sample size. The policy requires both raw and effective evidence
+  to meet the configured minimum; otherwise it uses the timeframe configuration.
+- Expire cached brain statistics after five monotonic minutes on the next request,
+  even without new experiences. Do not mutate cached nested SL evidence when
+  adding the effective policy/display fields.
+- This is the recency-only stage: it retains the paired-outcome heuristic and
+  does not establish the incremental benefit of tightening. No intrabar replay,
+  alternative-exit comparison, cost optimization or out-of-sample validation.
+  Retrieval decay, risk configuration and live memories are unchanged.
+
+### Verification
+- Add 27 regression cases; 21 fail against the original implementation. Existing
+  assertions and expected outcomes are retained; relevant fixtures now supply
+  timestamps/effective sample counts required by the new contract.
+- Real isolated Chroma round-trips for LONG/SHORT verify activation, time-only
+  expiry, configuration fallback and the updated prompt with unchanged row count.
+- Full suite: **2245 passed, 17 skipped, 1 failed**. Baseline: **2218 passed,
+  17 skipped, 1 failed**. The same pre-existing live-dashboard security-header
+  test fails in both runs; it is not changed or suppressed. Ruff and full Pyright
+  pass with **0 errors, 0 warnings**; compilation and `import start` pass.
+- Read-only metadata snapshot of the real brain: eight updates, three positions,
+  effective sample count about 2.985; no learned override, configuration remains
+  15% progress for 4h. No model calls, live-data migration or bot restart.
+
+## 2026-10-15 — Preserve portfolio return in trading-memory snapshots
+
+### Fixed
+- Pass the already-extracted `_portfolio_pnl_pct` into `MarketConditions` instead
+  of silently leaving the dataclass default at zero. Preserve signed portfolio
+  return separately from each trade's P&L through position serialization, vector
+  storage and historical-experience prompt rendering.
+- Keep the existing zero default when the input is absent. Do not migrate old
+  memories or substitute today's equity for an unknown historical snapshot.
+
+### Verification
+- Six new regression cases cover small/large profits, a loss, explicit zero,
+  missing input and numeric-string conversion. Four fail against the original
+  extractor; all six pass with the one-line fix, including real isolated Chroma
+  persistence and prompt retrieval. Existing test definitions are unchanged.
+- Full suite: **2219 passed, 17 skipped**, zero failures (baseline: 2213 passed,
+  17 skipped). Targeted brain/strategy tests: **287 passed**. Ruff clean; full
+  Pyright: **0 errors, 0 warnings**; compilation and `import start` pass.
+- Tests run in an isolated copy with dummy credentials. No paid model call,
+  live-memory write, order operation or bot restart; operator restart is needed.
+
+## 2026-10-15 — Retry empty DeepSeek completions and preserve provider errors
+
+### Fixed
+- Treat missing, null or empty `choices` as a retryable empty reply for providers
+  that opt into JSON-response retries. Previously this shape bypassed retries,
+  losing a closed-trade post-mortem at 04:40 and the 06:00 analysis after both
+  chart and text requests failed. Keep the existing three-retry budget and send
+  the identical request; valid post-mortem objects still complete without retries.
+- Preserve top-level SDK error details with API-key redaction instead of dropping
+  them into `choices=[] error=None`. Retain retryable server-error codes across
+  conversion; explicit permanent errors are not retried just because choices
+  are absent. Do not change provider settings, trading rules or live state.
+
+### Verification
+- Reproduce 14 failures through the actual OpenAI SDK using controlled HTTP
+  responses before the fix. Add 22 regression cases for text/chart recovery,
+  analysis/post-mortem payloads, retry exhaustion, opt-out, error classification
+  and credential redaction. Existing test definitions and assertions are unchanged.
+- Full suite: **2213 passed, 17 skipped**, zero failures (baseline: 2191 passed,
+  17 skipped). Ruff clean; full Pyright: **0 errors, 0 warnings**; compilation
+  and `import start` pass.
+- Real loopback HTTP probe: an empty completion is retried with the same body,
+  then the returned fixture post-mortem is stored once and read back through a
+  fresh SQLite connection and FTS. All tests run in an isolated copy with dummy
+  credentials; no paid model call, exchange operation or bot restart.
+- The original provider-side failure is not recoverable from the old log, which
+  omitted raw error details. This repair does not recreate the missed historical
+  lesson or guarantee that an unavailable provider recovers within the retry budget.
+
+## 2026-10-15 — Replace cached news navigation with real article bodies
+
+### Fixed
+- Allow a clean body of at least 400 characters to replace detected ticker/menu
+  clutter for the same URL, even when shorter. Keep the stored article ID and
+  normalized fields; never replace a clean full article with a shorter summary.
+- Recognize compact price rows such as `$81,615.00-2.05%`; strip the ticker before
+  prompt formatting and reject unrecoverable navigation rather than treating its
+  length as article content. Ordinary article price prose is preserved.
+- Retry long contaminated RSS bodies. If Crawl4AI cleaned HTML yields navigation,
+  try its original rendered HTML before markdown/HTTP fallback; reject contaminated
+  fallback text as well.
+
+### Verification
+- Re-fetch all 20 detected contaminated URLs through Crawl4AI: all yield real
+  article text. Persist 19 still-current repairs; the existing 24-hour retention
+  policy expires four old records, including the twentieth candidate. The other
+  51 retained articles stay unchanged; IDs, URLs, dates and categories are preserved.
+- Full suite: **2191 passed, 17 skipped**, zero failures; targeted news suite:
+  **129 passed**. Ruff clean; full Pyright: **0 errors, 0 warnings**.
+- Existing test functions and assertions are unchanged. No model calls, order
+  operations or bot restart; the running process needs an operator restart to load
+  the repaired cache and new replacement policy.
+
+## 2026-10-14 — Keep browser retrieval, simplify news parsing and remove unused indicators
+
+### Changed
+- Parse RSS fields with feedparser while preserving the raw-item schema, URL
+  normalization, dates, item limits and strict malformed/non-RSS rejection.
+  Keep defusedxml at the input boundary and prevent empty Dublin Core descriptions
+  from overwriting CoinDesk summaries; preserve the first creator.
+- Extract article text with trafilatura from Crawl4AI's browser-rendered HTML.
+  Too-short, unusable or rejected extraction falls back to the existing Crawl4AI
+  markdown, HTML extractor and HTTP/RSS degradation paths. Browser retrieval stays enabled.
+- Remove 19 unused indicator functions, their reexports and the three source files
+  in the unused EOT helper package. Quantile and all live indicator implementations
+  remain unchanged; AST comparison verifies all 44 surviving functions in the edited
+  calculation modules. Indicator source shrinks by 547 lines net.
+- Install and verify Crawl4AI 0.9.5, feedparser 6.0.14 and trafilatura 2.1.0.
+  Bound htmldate below 1.11 to preserve compatibility with current CCXT's exact
+  charset-normalizer/urllib3 pins; trafilatura 2.3.1 conflicts with those pins.
+
+### Verification
+- Compare every raw field on 100 live RSS entries across all four sources: no
+  differences except the intentionally ignored fetch timestamp. Retrieve eight
+  real article URLs with Crawl4AI 0.9.5: all retain usable extracted article text.
+- Existing test functions and assertions are preserved; new coverage pins real
+  extraction, markdown/HTML fallback, duplicate DC fields, dates and entity rejection.
+- Final suite: **2178 passed, 17 skipped**, zero failures. Ruff and full Pyright
+  (**0 errors, 0 warnings**) pass; `pip check`, compilation of changed Python
+  files and `import start` pass. No bot restart, model request or order submission.
+
+## 2026-10-14 — Share the provider client lifecycle, the chart block and the atomic JSON write
+
+### Changed
+- Move the OpenAI-SDK client lifecycle (build, lazy ensure, close), the chart
+  multimodal content block and the default provider exception handler into
+  `BaseAIClient`. `DeepSeekClient`, `OpenRouterClient` and `LMStudioClient` now
+  declare only how their SDK client is created; `BlockRunClient` keeps its own
+  async ensure path (`_ensure_sdk_client`) and redacting error handler.
+- Replace nine copies of the same `@retry_api_call(...)` arguments and six copies of
+  `@retry_async(...)` with the `retry_api_call_default` / `retry_async_default` presets.
+- Add `atomic_write_json` to `src/utils/data_utils.py` (temp file next to the target,
+  `os.replace`, temp cleanup on failure, optional `fsync`) and use it in the CoinGecko
+  cache, the DeFiLlama cache, the RAG file handler and the token-cost store.
+  `PersistenceManager` keeps its local write: a pinned test patches that module's
+  `os.replace` failure path, so that module stays untouched.
+- `requirements.txt`: `crawl4ai>=0.9.5` (was `>=0.9.2`; the dependency set is unchanged,
+  so no browser re-download) and `pydantic>=2.12` declared explicitly — it is imported
+  by `response_models.py` and was only transitive before.
+
+### Verification
+- Offline suite: **2166 passed, 17 skipped**. Ruff clean; full Pyright **0 errors, 0 warnings**.
+  Every pre-existing test function and assertion is unchanged.
+- Crawl4AI 0.9.5 compatibility checked against the `v0.9.5` tag: every
+  `BrowserConfig`/`CrawlerRunConfig` field the enricher sets, `AsyncWebCrawler.arun_many`
+  and `DefaultMarkdownGenerator` are present, and `PruningContentFilter` still exists
+  (deprecated in favour of the faster lxml pruning).
+
 ## 2026-10-14 — Treat an unavailable executor as an availability warning
 
 ### Fixed

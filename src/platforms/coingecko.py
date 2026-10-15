@@ -17,6 +17,7 @@ from aiohttp_client_cache.session import (
 )
 
 from src.logger.logger import Logger
+from src.utils.data_utils import atomic_write_json
 from src.utils.decorators import retry_async
 
 
@@ -110,10 +111,7 @@ class CoinGeckoAPI:
 
     def _write_json_sync(self, data: dict[str, Any]) -> None:
         """Synchronous file write for executor (atomic: temp + os.replace)."""
-        temp_path = f"{self.coingecko_cache_file}.tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(temp_path, self.coingecko_cache_file)
+        atomic_write_json(self.coingecko_cache_file, data, ensure_ascii=False)
 
     def _get_dominance_coin_ids(self, dominance_data: dict[str, float] | None = None) -> list[str]:
         """

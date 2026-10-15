@@ -5,53 +5,6 @@ Provides functionality for indicators.statistical.statistical_indicators.py.
 import numpy as np
 from numba import njit
 
-from .utils import (
-    calculate_correlation_matrix,
-    calculate_dominant_cycle,
-    calculate_spectral_components,
-    f_ess,
-    f_hp,
-    smooth_power_spectrum,
-)
-
-
-@njit(cache=True)
-def apa_adaptive_eot_numba(closeprices, q1_=0.8, q2_=0.4, minlen=10, maxlen=48, avelen=3):
-    masterdom = _auto_dom_imp(closeprices, minlen, maxlen, avelen)
-    dcout = max(minlen, min(maxlen, round(masterdom)))
-
-    qup = _eot(closeprices, dcout, q1_)
-    qdn = _eot(closeprices, dcout, q2_)
-
-    return qup, qdn
-
-@njit(cache=True)
-def _eot(closeprices, lpperiod, k):
-    n = len(closeprices)
-    pk = np.zeros(n)
-    filt = f_ess(f_hp(closeprices, lpperiod), lpperiod)
-    x = np.zeros(n)
-    q = np.zeros(n)
-
-    for i in range(1, n):
-        pk[i] = np.maximum(abs(filt[i]), 0.99 * pk[i - 1])
-        x[i] = filt[i] / pk[i] if pk[i] != 0 else 0
-        q[i] = (x[i] + k) / (k * x[i] + 1) if x[i] != 0 else np.nan
-
-    return q
-
-@njit(cache=True)
-def _auto_dom_imp(source, minlen, maxlen, avelen):
-    """Simplified auto-dominant impulse using extracted utilities"""
-    filt = f_ess(f_hp(source, maxlen), minlen)
-
-    corr = calculate_correlation_matrix(filt, maxlen, avelen)
-
-    sqsum = calculate_spectral_components(corr, minlen, maxlen, avelen)
-
-    r1 = smooth_power_spectrum(sqsum, minlen, maxlen)
-
-    return calculate_dominant_cycle(r1, minlen, maxlen, avelen)
 
 @njit(cache=True)
 def kurtosis_numba(arr, length):
@@ -291,28 +244,6 @@ def zscore_numba(close, length=30, std=1.0):
     return zscore_values
 
 @njit(cache=True)
-def mad_numba(close, length=30):
-    n = len(close)
-    mad_values = np.full(n, np.nan)
-
-    if n < length:
-        return mad_values
-
-    for i in range(length - 1, n):
-        sum_val = 0.0
-        for j in range(i - length + 1, i + 1):
-            sum_val += close[j]
-        mean = sum_val / length
-
-        sum_abs_dev = 0.0
-        for j in range(i - length + 1, i + 1):
-            sum_abs_dev += abs(close[j] - mean)
-
-        mad_values[i] = sum_abs_dev / length
-
-    return mad_values
-
-@njit(cache=True)
 def quantile_numba(close, length=30, q=0.5):
     n = len(close)
     quantile_values = np.full(n, np.nan)
@@ -479,34 +410,3 @@ def linreg_numba(close, length=14, r=False):
                 linreg[i] = m
 
     return linreg
-
-@njit(cache=True)
-def calculate_eot_numba(close_prices, period=21, q1=0.8, q2=0.4):
-    angle = 0.707 * 2 * np.pi / 100
-    alpha1 = (np.cos(angle) + np.sin(angle) - 1) / np.cos(angle)
-    a1 = np.exp(-1.414 * np.pi / period)
-    b1 = 2 * a1 * np.cos(1.414 * np.pi / period)
-    c2 = b1
-    c3 = -a1 * a1
-    c1 = 1 - c2 - c3
-    n = len(close_prices)
-    hp = np.zeros(n)
-    filt = np.zeros(n)
-    pk = np.zeros(n)
-    x = np.zeros(n)
-    quotient1 = np.full(n, np.nan)
-    quotient2 = np.full(n, np.nan)
-
-    for i in range(period, n):
-        hp[i] = (1 - alpha1 / 2) ** 2 * (close_prices[i] - 2 * close_prices[i - 1] + close_prices[i - 2]) + \
-                2 * (1 - alpha1) * hp[i - 1] - (1 - alpha1) ** 2 * hp[i - 2]
-        filt[i] = c1 * (hp[i] + hp[i - 1]) / 2 + c2 * filt[i - 1] + c3 * filt[i - 2]
-        if abs(filt[i]) > 0.991 * pk[i - 1]:
-            pk[i] = abs(filt[i])
-        else:
-            pk[i] = 0.991 * pk[i - 1]
-        x[i] = filt[i] / pk[i] if pk[i] != 0 else 0
-        quotient1[i] = (x[i] + q1) / (q1 * x[i] + 1) if x[i] != 0 else np.nan
-        quotient2[i] = (x[i] + q2) / (q2 * x[i] + 1) if x[i] != 0 else np.nan
-
-    return quotient1, quotient2

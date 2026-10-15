@@ -1,5 +1,6 @@
 """Stop-loss tightening policy — single authoritative gate for SL update decisions."""
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -196,6 +197,16 @@ class StopLossTighteningPolicy:
         if sample_count < self._min_brain_samples:
             return base, "config"
 
+        effective_count = sl_tightening.get("effective_sample_count", 0)
+        if effective_count is True or effective_count is False:
+            return base, "config"
+        try:
+            effective_count = float(effective_count)
+        except (TypeError, ValueError, OverflowError):
+            return base, "config"
+        if not math.isfinite(effective_count) or effective_count + 1e-9 < self._min_brain_samples:
+            return base, "config"
+
         learned = sl_tightening.get("learned_threshold")
         if learned is None:
             return base, "config"
@@ -205,5 +216,7 @@ class StopLossTighteningPolicy:
         except (TypeError, ValueError):
             return base, "config"
 
+        if not math.isfinite(learned_float):
+            return base, "config"
         clamped = max(self._floor, min(self._ceiling, learned_float))
         return clamped, "brain"

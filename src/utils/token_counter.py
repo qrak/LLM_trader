@@ -4,7 +4,6 @@ from __future__ import annotations
 import atexit
 import json
 import os
-import tempfile
 import threading
 import time
 from datetime import datetime
@@ -13,6 +12,7 @@ from typing import Any
 import tiktoken
 
 from src.trading.data_models import ProviderCostStats, SessionCosts
+from src.utils.data_utils import atomic_write_json
 from src.utils.peak_rates import PeakRates
 
 
@@ -256,25 +256,12 @@ class CostStorage:
             for provider, stats in self._providers.items():
                 data[provider] = stats.to_dict()  # type: ignore[reportAttributeAccessIssue]
 
-            temp_path = None
             try:
-                directory = os.path.dirname(self.file_path)
-                with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", dir=directory) as f:
-                    temp_path = f.name
-                    json.dump(data, f, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-
-                os.replace(temp_path, self.file_path)
+                atomic_write_json(self.file_path, data, fsync=True)
                 self._last_save_time = time.time()
                 self._dirty = False
             except Exception as e:  # noqa: BLE001
                 print(f"Error saving cost storage: {e}")
-                if temp_path and os.path.exists(temp_path):
-                    try:
-                        os.remove(temp_path)
-                    except OSError:
-                        pass
 
     def record_usage(
         self,

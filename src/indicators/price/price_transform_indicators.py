@@ -21,20 +21,6 @@ def log_return_numba(close, length=1, cumulative=False):
     return log_return
 
 @njit(cache=True)
-def percent_return_numba(close, length=1, cumulative=False):
-    n = len(close)
-    pct_return = np.full(n, np.nan)
-
-    if cumulative:
-        for i in range(length, n):
-            pct_return[i] = (close[i] / close[0]) - 1
-    else:
-        for i in range(length, n):
-            pct_return[i] = (close[i] / close[i - length]) - 1
-
-    return pct_return
-
-@njit(cache=True)
 def pdist_numba(open_, high, low, close, drift=1):
     n = len(open_)
     pdist = np.full(n, np.nan)

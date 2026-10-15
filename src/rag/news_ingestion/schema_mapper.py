@@ -67,7 +67,7 @@ _BOILERPLATE_MENU_PATTERN = re.compile(
 
 _MARKET_TICKER_END_PATTERN = re.compile(r"(?is)\bprice data by\b")
 _MARKET_TICKER_PRICE_CHANGE_PATTERN = re.compile(
-    r"\$[\d,.]+\s+[-+]?\d+(?:\.\d+)?%"
+    r"\$[\d,.]+\s*[-+]?\d+(?:\.\d+)?%"
 )
 _MARKET_TICKER_TRAILING_NAV_PATTERN = re.compile(
     r"(?is)^\s*(?:\*\s*){3,}[^\*\n]{0,160}?(?:\*\s*){3,}"
@@ -75,6 +75,19 @@ _MARKET_TICKER_TRAILING_NAV_PATTERN = re.compile(
 _MARKET_TICKER_SEPARATOR_PREFIX_PATTERN = re.compile(r"(?i)^\s*(?:\*\s*){3,}")
 _MARKET_TICKER_MIN_PRICE_CHANGES = 12
 _MARKET_TICKER_SCAN_CHARS = 20_000
+_NEWS_NAVIGATION_MARKERS = (
+    "asset news", "all news news terminal", "guide categories",
+    "review categories", "browse directory",
+)
+
+
+def has_news_boilerplate(text: str) -> bool:
+    """Detect dense market tickers or clustered publisher navigation, not price prose."""
+    prefix = text[:_MARKET_TICKER_SCAN_CHARS]
+    return (
+        len(_MARKET_TICKER_PRICE_CHANGE_PATTERN.findall(prefix)) >= _MARKET_TICKER_MIN_PRICE_CHANGES
+        or sum(marker in prefix.lower() for marker in _NEWS_NAVIGATION_MARKERS) >= 3
+    )
 
 
 def make_article_id(url: str) -> str:
@@ -246,8 +259,11 @@ def strip_news_boilerplate(text: str) -> str:
     carry the story, and the model reads them as content. Bodies that lose all
     their content are reported as empty so the caller can drop the article.
     """
-    normalized = normalize_article_whitespace(text)
+    normalized = _strip_market_ticker_prefix(normalize_article_whitespace(text))
     if not normalized:
+        return ""
+
+    if has_news_boilerplate(normalized):
         return ""
 
     lines = [line for line in normalized.split("\n") if not _is_chrome_line(line)]

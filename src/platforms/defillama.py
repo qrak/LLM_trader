@@ -12,6 +12,7 @@ import aiohttp
 from pydantic import BaseModel, Field
 
 from src.logger.logger import Logger
+from src.utils.data_utils import atomic_write_json
 
 
 class StablecoinData(BaseModel):
@@ -116,10 +117,7 @@ class DefiLlamaClient:
 
     def _write_cache_file_sync(self, cache_payload: dict[str, Any]) -> None:
         """Synchronous helper for atomic writing cache file."""
-        temp_path = f"{self.cache_file_path}.tmp"
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(cache_payload, f, ensure_ascii=False, indent=2)
-        os.replace(temp_path, self.cache_file_path)
+        atomic_write_json(self.cache_file_path, cache_payload, ensure_ascii=False)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self.session is None:

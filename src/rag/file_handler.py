@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from src.logger.logger import Logger
+from src.utils.data_utils import atomic_write_json
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -71,18 +72,8 @@ class RagFileHandler:
                 self.logger.error("Path traversal attempt detected: %s", file_path)
                 return
 
-            temp_path = f"{abs_path}.tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            os.replace(temp_path, abs_path)
+            atomic_write_json(abs_path, data, ensure_ascii=False)
         except Exception as e:  # noqa: BLE001
-            temp_path = f"{os.path.abspath(file_path)}.tmp"
-            if os.path.exists(temp_path):
-                try:
-                    os.remove(temp_path)
-                except OSError:
-                    pass
             self.logger.error("Error saving JSON file %s: %s", file_path, e)
 
     def filter_articles_by_age(self, articles: list[dict], max_age_seconds: int) -> list[dict]:

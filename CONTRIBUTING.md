@@ -15,11 +15,13 @@ Thank you for helping improve the project.
 ```powershell
 python -m venv .venv
 & ./.venv/Scripts/Activate.ps1
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
+pip install -r requirements.txt -c constraints.txt
+pip install -r requirements-dev.txt -c constraints.txt
 ```
 
 Use the interpreter inside `.venv` for all development commands.
+
+`constraints.txt` carries the version floors and compatibility caps for packages the code never imports directly (pip pulls them in as dependencies). The launcher scripts pass it to pip with `-c`, and `scripts/check_requirements.py` verifies both files before deciding whether anything needs installing.
 
 ## Code Standards
 

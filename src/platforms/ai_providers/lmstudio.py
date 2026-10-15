@@ -2,7 +2,6 @@
 LM Studio client implementation using the server's OpenAI-compatible endpoint.
 Supports text-only streaming and multimodal (text + image) requests for local inference.
 """
-import base64
 import io
 from typing import Any
 
@@ -11,7 +10,7 @@ from openai import AsyncOpenAI
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel, UsageModel
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_api_call_default
 
 
 class LMStudioClient(BaseAIClient):
@@ -20,34 +19,12 @@ class LMStudioClient(BaseAIClient):
     def __init__(self, base_url: str, logger: Logger) -> None:
         super().__init__(logger)
         self.base_url = base_url
-        self._client: AsyncOpenAI | None = None
         self._cached_model: str | None = None
         self._known_unsupported_params.add("openrouter_reasoning_effort")
 
-    async def _initialize_client(self) -> None:
-        """Initialize the LM Studio API client."""
-        self._client = self._create_client()
-
-    def _create_client(self) -> AsyncOpenAI:
+    def _build_client(self) -> AsyncOpenAI:
         """Create an OpenAI-compatible client pointed at the LM Studio server."""
         return AsyncOpenAI(base_url=self.base_url, api_key="lm-studio")
-
-    def _ensure_client(self) -> AsyncOpenAI:
-        """Ensure a client exists and return it."""
-        if not self._client:
-            self._client = self._create_client()
-        return self._client
-
-    async def close(self) -> None:
-        """Close the SDK client."""
-        client = self._client
-        if not client:
-            return
-        try:
-            self.logger.debug("Closing LMStudioClient SDK session")
-            await client.close()
-        finally:
-            self._client = None
 
     async def _get_model_or_auto_select(self, client: AsyncOpenAI, model: str) -> str:
         """Get model name or auto-select from loaded models (cached)."""
@@ -76,7 +53,7 @@ class LMStudioClient(BaseAIClient):
                 prepared.append({"role": "assistant", "content": content})
         return prepared
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list, model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
@@ -97,7 +74,7 @@ class LMStudioClient(BaseAIClient):
             self.logger.error("Error during LM Studio request: %s", str(e))
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
@@ -112,13 +89,8 @@ class LMStudioClient(BaseAIClient):
         """
         client = self._ensure_client()
         try:
-            img_data = self.process_chart_image(chart_image)
-            base64_image = base64.b64encode(img_data).decode("utf-8")
             user_text = self._extract_user_text_from_messages(messages)
-            multimodal_content = [
-                {"type": "text", "text": user_text},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
-            ]
+            _, multimodal_content = self._build_multimodal_content(user_text, chart_image)
             prepared = self._attach_multimodal_content(self._build_messages(messages), multimodal_content)
             model = await self._get_model_or_auto_select(client, model)
             self.logger.debug("Sending chart analysis request to LM Studio API with model: %s", model)
@@ -134,7 +106,7 @@ class LMStudioClient(BaseAIClient):
             self.logger.error("Error during LM Studio chart analysis request: %s", str(e))
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def stream_chat_completion(
         self,
         model: str,
@@ -190,7 +162,7 @@ class LMStudioClient(BaseAIClient):
             return self._handle_exception(e)
 
     def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
-        """Handle LM Studio specific exceptions, falling back to common handler."""
+        """Map the LM Studio GPU-crash signature, then fall back to the common handler."""
         error_message = str(exception)
         if "ErrorDeviceLost" in error_message or "vk::Queue::submit" in error_message:
             friendly_msg = (

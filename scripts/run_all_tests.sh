@@ -67,7 +67,11 @@ if [[ "${SKIP_INSTALL}" != "true" ]]; then
     if [[ -f "${REPO_ROOT}/requirements.txt" ]]; then
         echo "Installing/updating dependencies from requirements.txt..."
         "${PIP_BIN}" install --upgrade pip
-        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+        if [[ -f "${REPO_ROOT}/constraints.txt" ]]; then
+            "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt" -c "${REPO_ROOT}/constraints.txt"
+        else
+            "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+        fi
     else
         echo "No requirements.txt found; skipping pip install."
     fi

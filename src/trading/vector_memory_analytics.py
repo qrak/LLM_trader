@@ -1,6 +1,7 @@
 """Analytics helpers for vector memory."""
 
 import math
+from datetime import datetime, timezone
 from typing import Any, ClassVar
 
 from .data_models import VectorSearchResult
@@ -17,6 +18,9 @@ class VectorMemoryAnalyticsMixin:
     FACTOR_NAMES: Any = None
     FACTOR_BUCKETS: Any = None
     RR_FLOOR_MIN_SAMPLE_SIZE: Any = None
+    _decay_half_life_days: int
+    _max_age_days: int
+    _parse_trade_timestamp: Any
 
     """Statistics, reporting, and threshold-learning behavior."""
 
@@ -696,104 +700,97 @@ class VectorMemoryAnalyticsMixin:
                 reduction = min(0.50, max(0.20, 1 - (divergent_avg / aligned_avg)))
                 thresholds["position_reduce_divergent"] = round(reduction, 2)
 
+    def _sl_tightening_pairs(
+        self, raw_snapshot: dict[str, Any], now: datetime,
+    ) -> list[tuple[float, float, bool, float]]:
+        """One outcome per closed position, aged from its selected UPDATE, not a late close write."""
+        raw_ids = raw_snapshot.get("ids") or []
+        raw_metas = raw_snapshot.get("metadatas") or []
+        closes: dict[str, tuple[str, dict]] = {}
+        for idx, meta in enumerate(raw_metas):
+            if meta.get("outcome") not in ("WIN", "LOSS"):
+                continue
+            trade_id = raw_ids[idx] if idx < len(raw_ids) else ""
+            aliases = (meta.get("position_id"), meta.get("position_entry_trade_id"), trade_id)
+            canonical_id = next((alias for alias in aliases if alias), "")
+            for alias in aliases:
+                if alias:
+                    closes[alias] = (canonical_id, meta)
+
+        positions: dict[str, tuple[float, float, bool, datetime]] = {}
+        for meta in raw_metas:
+            if (meta.get("outcome") != "UPDATE" or not meta.get("is_tightening")
+                    or meta.get("action_type") not in ("SL_TRAIL", "BOTH")):
+                continue
+            paired = closes.get(meta.get("position_id", "")) or closes.get(
+                meta.get("position_entry_trade_id", "")
+            )
+            if paired is None:
+                continue
+            position_id, close = paired
+            pp = meta.get("price_progress")
+            pnl = close.get("pnl_pct")
+            if pp is None or pnl is None or pp is True or pp is False or pnl is True or pnl is False:
+                continue
+            try:
+                progress, close_pnl = float(pp), float(pnl)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if not math.isfinite(progress) or not math.isfinite(close_pnl):
+                continue
+            updated_at = self._parse_trade_timestamp(meta.get("timestamp"))
+            closed_at = self._parse_trade_timestamp(close.get("timestamp"))
+            age_days = (now - updated_at).total_seconds() / 86400
+            if not 0 <= age_days <= self._max_age_days or not updated_at <= closed_at <= now:
+                continue
+            previous = positions.get(position_id)
+            if previous is None or (progress, updated_at) < (previous[0], previous[3]):
+                positions[position_id] = (progress, close_pnl, close.get("outcome") == "WIN", updated_at)
+        return [
+            (progress, pnl, won, 2 ** (-((now - timestamp).total_seconds() / 86400) / self._decay_half_life_days))
+            for progress, pnl, won, timestamp in positions.values()
+        ]
+
     def _learn_sl_tightening_threshold(
         self,
         raw_snapshot: dict[str, Any] | None,
         min_sample_size: int,
         thresholds: dict[str, Any],
     ) -> None:
-        """Learn optimal SL tightening progress threshold from paired update/close outcomes.
-
-        Pairs each accepted SL-tightening UPDATE record with the eventual WIN/LOSS close
-        for that position, then scans candidate thresholds to find the lowest value with
-        positive expectancy.
-        """
+        """Apply recency to paired outcomes; this is not a counterfactual SL benefit estimate."""
         if not raw_snapshot:
             return
-        raw_ids: list[str] = raw_snapshot.get("ids") or []
-        raw_metas: list[dict] = raw_snapshot.get("metadatas") or []
-        if not raw_metas:
-            return
-
-        close_lookup: dict[str, dict] = {}
-        update_records: list[dict] = []
-        for idx, meta in enumerate(raw_metas):
-            outcome = meta.get("outcome")
-            if outcome in ("WIN", "LOSS"):
-                trade_id = raw_ids[idx] if idx < len(raw_ids) else ""
-                pid = meta.get("position_id", "")
-                pet_id = meta.get("position_entry_trade_id", "")
-                if trade_id:
-                    close_lookup[trade_id] = meta
-                if pid:
-                    close_lookup.setdefault(pid, meta)
-                if pet_id:
-                    close_lookup.setdefault(pet_id, meta)
-            elif outcome == "UPDATE":
-                action = meta.get("action_type", "")
-                if action in ("SL_TRAIL", "BOTH") and meta.get("is_tightening"):
-                    pp = meta.get("price_progress")
-                    if pp is not None and isinstance(pp, (int, float)) and pp == pp:  # noqa: PLR0124
-                        update_records.append(meta)
-
-        if not update_records or not close_lookup:
-            return
-
-        best_per_position: dict[str, dict] = {}
-        for meta in update_records:
-            pos_id = meta.get("position_id", "")
-            if not pos_id:
-                continue
-            existing = best_per_position.get(pos_id)
-            if existing is None or meta.get("price_progress", 1.0) < existing.get("price_progress", 1.0):
-                best_per_position[pos_id] = meta
-
-        pairs: list[tuple[float, float, bool]] = []
-        for pos_id, update_meta in best_per_position.items():
-            close_meta = (
-                close_lookup.get(pos_id)
-                or close_lookup.get(update_meta.get("position_entry_trade_id", ""))
-            )
-            if close_meta is None:
-                continue
-            close_pnl = close_meta.get("pnl_pct", 0.0)
-            is_win = close_meta.get("outcome") == "WIN"
-            pp = update_meta.get("price_progress", 0.0)
-            pairs.append((float(pp), float(close_pnl), is_win))
-
-        if not pairs:
-            return
-
-        candidates = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40]
-        learned_threshold: float | None = None
-        best_stats: dict[str, Any] = {}
-        for candidate in candidates:
-            eligible = [(pp, pnl, w) for pp, pnl, w in pairs if pp >= candidate]
+        pairs = self._sl_tightening_pairs(raw_snapshot, datetime.now(timezone.utc))
+        for candidate in (0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40):
+            eligible = [(pnl, won, weight) for pp, pnl, won, weight in pairs if pp >= candidate]
             if len(eligible) < min_sample_size:
                 continue
-            wins = [pnl for _, pnl, w in eligible if w]
-            losses = [pnl for _, pnl, w in eligible if not w]
-            win_rate = len(wins) / len(eligible)
-            avg_win = sum(wins) / len(wins) if wins else 0.0
-            avg_loss = sum(losses) / len(losses) if losses else 0.0
-            expectancy = win_rate * avg_win + (1 - win_rate) * avg_loss
-            if expectancy > 0:
-                learned_threshold = candidate
-                best_stats = {
-                    "learned_threshold": candidate,
-                    "sample_count": len(pairs),
-                    "paired_sample_count": len(eligible),
-                    "win_rate": round(win_rate, 4),
-                    "avg_win_pct": round(avg_win, 4),
-                    "avg_loss_pct": round(avg_loss, 4),
-                    "expectancy_pct": round(expectancy, 4),
-                    "source": "brain",
-                    "basis": "paired_update_outcomes",
-                }
-                break
-
-        if learned_threshold is not None:
-            thresholds["sl_tightening"] = best_stats
+            weight_sum = sum(weight for _, _, weight in eligible)
+            effective_count = weight_sum ** 2 / sum(weight ** 2 for _, _, weight in eligible)
+            if effective_count + 1e-9 < min_sample_size:
+                continue
+            expectancy = sum(pnl * weight for pnl, _, weight in eligible) / weight_sum
+            if expectancy <= 0:
+                continue
+            win_weight = sum(weight for _, won, weight in eligible if won)
+            loss_weight = weight_sum - win_weight
+            thresholds["sl_tightening"] = {
+                "learned_threshold": candidate,
+                "sample_count": len(eligible),
+                "paired_sample_count": len(eligible),
+                "effective_sample_count": min(float(len(eligible)), effective_count),
+                "half_life_days": self._decay_half_life_days,
+                "max_age_days": self._max_age_days,
+                "win_rate": round(win_weight / weight_sum, 4),
+                "avg_win_pct": round(sum(pnl * w for pnl, won, w in eligible if won) / win_weight, 4)
+                    if win_weight else 0.0,
+                "avg_loss_pct": round(sum(pnl * w for pnl, won, w in eligible if not won) / loss_weight, 4)
+                    if loss_weight else 0.0,
+                "expectancy_pct": round(expectancy, 4),
+                "source": "brain",
+                "basis": "paired_update_outcomes",
+            }
+            return
 
     def get_confidence_recommendation(self, min_sample_size: int = 5) -> str | None:
         """Generate recommendation based on confidence calibration."""

@@ -1,0 +1,25 @@
+# Version floors and compatibility caps for packages this project never imports
+# directly. They reach the environment as dependencies of the packages listed in
+# requirements.txt, so `pip install -r requirements.txt -c constraints.txt` keeps
+# a fresh install off the versions the security alerts were raised against
+# without pretending the code imports them.
+#
+# The launchers (scripts/start_script_*.ps1, scripts/start_script_main_*.sh,
+# scripts/run_all_tests.sh) pass this file to pip with -c, and
+# scripts/check_requirements.py verifies it before deciding whether to run pip.
+# Verify the whole graph with `pip check` after changing anything here.
+
+# Security floors. Comments name the release that fixed the advisory; the venv
+# runs exactly these versions.
+accelerate>=1.15.0
+jinja2>=3.1.6
+Pillow==12.3.0
+requests>=2.34.2
+transformers>=5.14.1
+urllib3>=2.7.0
+
+# Compatibility caps. See src/rag/AGENTS.md: newer htmldate releases require
+# charset-normalizer/urllib3 versions the installed CCXT release cannot use, and
+# chardet 6 is unverified against the feed/HTML parsers.
+chardet<6
+htmldate>=1.10,<1.11

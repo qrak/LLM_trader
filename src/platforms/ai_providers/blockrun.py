@@ -2,14 +2,13 @@
 BlockRun.AI client implementation using the official blockrun-llm SDK (v1.4.7+).
 Supports text-only and multimodal (text + image) chat with x402 micropayments.
 """
-import base64
 import io
 from typing import Any
 
 from src.logger.logger import Logger
 from src.platforms.ai_providers.base import BaseAIClient
 from src.platforms.ai_providers.response_models import ChatResponseModel
-from src.utils.decorators import retry_api_call
+from src.utils.decorators import retry_api_call_default
 
 try:
     from blockrun_llm import AsyncLLMClient
@@ -42,7 +41,7 @@ class BlockRunClient(BaseAIClient):
             self.logger.debug("Closing BlockRunClient SDK session")
             self._client = None
 
-    async def _ensure_client(self) -> Any:
+    async def _ensure_sdk_client(self) -> Any:
         """Ensure a client exists and return it, initializing if needed."""
         if not self._client:
             await self._initialize_client()
@@ -54,7 +53,7 @@ class BlockRunClient(BaseAIClient):
             return message.replace(self._wallet_key, f"{self._wallet_key[:6]}...{self._wallet_key[-4:]}")
         return message
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion(  # type: ignore[reportIncompatibleMethodOverride]
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
@@ -63,7 +62,7 @@ class BlockRunClient(BaseAIClient):
         Returns:
             ChatResponseModel or None if failed
         """
-        client = await self._ensure_client()
+        client = await self._ensure_sdk_client()
         try:
             self.logger.debug("Sending request to BlockRun SDK with model: %s", model)
             effective_model = self._ensure_provider_prefix(model)
@@ -78,7 +77,7 @@ class BlockRunClient(BaseAIClient):
         except Exception as e:  # noqa: BLE001
             return self._handle_exception(e)
 
-    @retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_api_call_default
     async def chat_completion_with_chart_analysis(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         model: str,
@@ -91,15 +90,10 @@ class BlockRunClient(BaseAIClient):
         Returns:
             ChatResponseModel or None if failed
         """
-        client = await self._ensure_client()
+        client = await self._ensure_sdk_client()
         try:
-            img_data = self.process_chart_image(chart_image)
-            base64_image = base64.b64encode(img_data).decode("utf-8")
             user_text = self._extract_all_user_text_from_messages(messages)
-            multimodal_content = [
-                {"type": "text", "text": user_text},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
-            ]
+            img_data, multimodal_content = self._build_multimodal_content(user_text, chart_image)
             multimodal_messages = self._prepare_multimodal_messages(messages, multimodal_content)
             self.logger.debug("Sending chart analysis request to BlockRun SDK (%s bytes)", len(img_data))
             effective_model = self._ensure_provider_prefix(model)

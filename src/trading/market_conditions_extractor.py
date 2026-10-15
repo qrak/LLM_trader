@@ -183,6 +183,7 @@ class MarketConditionsExtractor:
             pfe=float(conditions.get("pfe", 0.0)),
             supertrend_direction=str(conditions.get("supertrend_direction", "NEUTRAL")),
             social_sentiment_reddit=conditions.get("social_sentiment_reddit", ""),
+            portfolio_pnl_pct=conditions.get("portfolio_pnl_pct", 0.0),
         )
 
     def extract_confluence_factors(self, result: dict) -> tuple:

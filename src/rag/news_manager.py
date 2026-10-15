@@ -9,6 +9,7 @@ from typing import Any
 from src.logger.logger import Logger
 
 from .file_handler import RagFileHandler
+from .news_ingestion.schema_mapper import has_news_boilerplate, strip_news_boilerplate
 from .news_repository import NewsRepository
 
 
@@ -83,7 +84,8 @@ class NewsManager:
         """Merge new articles into the local database, deduplicate, and persist.
 
         Deduplication is URL-first: if a canonical URL already exists in the
-        database the incoming article is skipped regardless of its ``id``.
+        database the incoming article is skipped regardless of its ``id``, unless
+        it improves a short body or replaces detected navigation with clean text.
         This is provider-agnostic and works for RSS/Crawl4AI sourced articles.
         A stable ``id`` is still required for
         downstream consumers; the new RSS provider generates a deterministic
@@ -114,10 +116,16 @@ class NewsManager:
                     unique.append(a)
                 else:
                     existing = url_to_existing[url]
-                    new_len = len(a.get("body", ""))
-                    old_len = len(existing.get("body", ""))
-                    if old_len < min_body and new_len > old_len:
+                    new_body = strip_news_boilerplate(a.get("body", ""))
+                    old_body = existing.get("body", "")
+                    improves_short_body = len(old_body) < min_body and len(new_body) > len(old_body)
+                    replaces_boilerplate = has_news_boilerplate(old_body) and len(new_body) >= min_body
+                    if improves_short_body or replaces_boilerplate:
+                        article_id = existing.get("id")
                         existing.update(a)
+                        existing["body"] = new_body
+                        if article_id:
+                            existing["id"] = article_id
                         self._normalize(existing)
                         body_updated = True
             elif a.get("id") and a["id"] not in existing_ids:

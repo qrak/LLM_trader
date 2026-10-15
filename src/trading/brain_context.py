@@ -1,6 +1,7 @@
 """Prompt context and threshold retrieval for the trading brain."""
 
 from collections.abc import Callable
+from time import monotonic
 from typing import Any
 
 from src.utils.indicator_classifier import (
@@ -18,6 +19,8 @@ from .vector_memory import VectorMemoryService
 class BrainContextProvider:
     """Build LLM prompt context from vector memory and learned rules."""
 
+    STATS_CACHE_TTL_SECONDS = 300
+
     def __init__(
         self,
         vector_memory: VectorMemoryService,
@@ -34,6 +37,7 @@ class BrainContextProvider:
         self.prompt_budget = prompt_budget
         self._stats_cache: dict[str, Any] = {}
         self._cache_trade_count: int = 0
+        self._stats_cache_updated_at = 0.0
 
     def clear_stats_cache(self) -> None:
         """Invalidate cached vector-memory statistics."""
@@ -395,9 +399,12 @@ class BrainContextProvider:
     def get_cached_stats(self, key: str, compute_fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         """Get stats from cache or compute and cache them."""
         current_count = self.vector_memory.experience_count
-        if current_count != self._cache_trade_count:
+        now = monotonic()
+        if (current_count != self._cache_trade_count
+                or now - self._stats_cache_updated_at >= self.STATS_CACHE_TTL_SECONDS):
             self._stats_cache = {}
             self._cache_trade_count = current_count
+            self._stats_cache_updated_at = now
         if key not in self._stats_cache:
             self._stats_cache[key] = compute_fn()
         return self._stats_cache[key]

@@ -144,6 +144,11 @@ class _RetryContext:
 
 def _should_retry_api_error(error_value: Any) -> bool:
     """Check if an API error should trigger a retry."""
+    if isinstance(error_value, str):
+        try:
+            error_value = json.loads(error_value)
+        except ValueError:
+            return error_value == "timeout"
     if isinstance(error_value, dict):
         if error_value.get("code") in (500, 502, 503, 504):
             return True
@@ -175,11 +180,10 @@ def retry_api_call(
 ):
     """Retry decorator for API call methods that return a dict possibly containing an 'error' key.
 
-    ``retry_on_empty`` additionally retries a reply that carries no decision-bearing JSON object:
-    blank content, prose only, or a JSON object without the ``analysis`` payload (a JSON-output
-    provider that answers this way leaves the parser with no decision, so resending the identical
-    request is the only fix). Off by default: for providers whose replies are not JSON, such an
-    answer is legitimate.
+    ``retry_on_empty`` additionally retries missing choices, blank content, prose,
+    or an object that only echoes the requested format. Any usable JSON object,
+    including a post-mortem, is a served answer. Explicit errors retain their
+    own retry classification. Off by default for non-JSON providers.
     """
     def decorator(func: Any):
         @functools.wraps(func)
@@ -191,6 +195,16 @@ def retry_api_call(
             return await context.execute_with_retry()
         return wrapper
     return decorator
+
+
+def retry_api_call_default(func: Any) -> Any:
+    """Apply the project-wide API retry policy: 3 attempts, 1s base delay, x2 backoff, 30s cap."""
+    return retry_api_call(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)(func)
+
+
+def retry_async_default(func: Any) -> Any:
+    """Apply the project-wide async retry policy: 3 attempts, 1s base delay, x2 backoff, 30s cap."""
+    return retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)(func)
 
 
 class _ApiRetryContext:
@@ -263,15 +277,18 @@ class _ApiRetryContext:
         """
         if not self.retry_on_empty:
             return False
+        error = response.get("error") if isinstance(response, dict) else getattr(response, "error", None)
+        if error:
+            return False
         content = self._extract_content(response)
         if content is None:
             return False
         payload = self._json_object(content)
         if payload is not None and not _carries_no_payload(payload):
             return False
-        self.retry_reason = "reply without a decision object"
+        self.retry_reason = "reply without a usable JSON payload"
         self.logger.warning(
-            "Provider returned no decision object for model %s: %s", self.model, content[:120]
+            "Provider returned no usable JSON payload for model %s: %s", self.model, content[:120]
         )
         return True
 
@@ -294,8 +311,11 @@ class _ApiRetryContext:
         if choices is None and isinstance(response, dict):
             choices = response.get("choices")
         if not choices:
-            return None
+            return ""
         first = choices[0]
+        error = first.get("error") if isinstance(first, dict) else getattr(first, "error", None)
+        if error:
+            return None
         message = getattr(first, "message", None)
         if message is None and isinstance(first, dict):
             message = first.get("message")
@@ -329,6 +349,8 @@ class _ApiRetryContext:
         """Normalise an SDK error object into a plain dict, or None when absent."""
         if not error:
             return None
+        if isinstance(error, dict):
+            return error
         try:
             return error.model_dump()
         except AttributeError:
@@ -338,7 +360,7 @@ class _ApiRetryContext:
         """Check an SDK response object for retryable errors using duck-typing."""
         error = getattr(response, "error", None)
         error_dict = self._sdk_error_dict(error)
-        if error_dict and _should_retry_api_error(error_dict):
+        if _should_retry_api_error(error) or (error_dict and _should_retry_api_error(error_dict)):
             self.logger.warning("Retryable SDK error for model %s: %s", self.model, error)
             return True
 

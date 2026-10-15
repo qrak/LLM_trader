@@ -15,8 +15,10 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import aiohttp
+from trafilatura import extract
 
 from .rss_primitives import extract_html_body_text, normalize_url
+from .schema_mapper import has_news_boilerplate, strip_news_boilerplate
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -138,6 +140,20 @@ class Crawl4AIEnricher:
         CrawlResult attributes (markdown, cleaned_html, html, url, success)
         exist as part of the library's documented API.
         """
+        html = result.cleaned_html or result.html or ""
+        for candidate_html in dict.fromkeys((html, result.html or "")):
+            if not candidate_html:
+                continue
+            try:
+                text = extract(candidate_html, include_comments=False, include_tables=False, favor_precision=True) or ""
+            except (TypeError, ValueError):
+                text = ""
+            cleaned = strip_news_boilerplate(text)
+            if cleaned != text.strip():
+                text = cleaned
+            if len(text) >= self.min_chars and not self._is_unusable_body(text):
+                return text
+
         markdown_obj = result.markdown
         candidates: list[str] = []
 
@@ -158,13 +174,12 @@ class Crawl4AIEnricher:
                 candidates.append(cited)
 
         for candidate in candidates:
-            text = self._clean_markdown_text(candidate)
+            text = strip_news_boilerplate(self._clean_markdown_text(candidate))
             if len(text) >= self.min_chars and not self._is_unusable_body(text):
                 return text
 
-        html = result.cleaned_html or result.html or ""
         if html:
-            text = extract_html_body_text(html).strip()
+            text = strip_news_boilerplate(extract_html_body_text(html))
             if len(text) >= self.min_chars and not self._is_unusable_body(text):
                 return text
 
@@ -211,7 +226,7 @@ class Crawl4AIEnricher:
                 if resp.status != 200:
                     return None
                 html = await resp.text(encoding="utf-8", errors="replace")
-                body = extract_html_body_text(html)
+                body = strip_news_boilerplate(extract_html_body_text(html))
                 return body if len(body) >= self.min_chars and not self._is_unusable_body(body) else None
         except Exception:  # noqa: BLE001
             return None
@@ -230,7 +245,10 @@ class Crawl4AIEnricher:
             item
             for item in items
             if self._is_safe_external_url(str(item.get("url") or ""))
-            and len(str(item.get("body_text") or "")) < self.min_chars
+            and (
+                len(str(item.get("body_text") or "")) < self.min_chars
+                or has_news_boilerplate(str(item.get("body_text") or ""))
+            )
         ]
         if not targets:
             return 0

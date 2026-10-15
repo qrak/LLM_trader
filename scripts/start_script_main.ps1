@@ -24,6 +24,7 @@ $RepoRoot = Split-Path -Parent $PSScriptRoot
 $VenvPath = Join-Path $RepoRoot $Venv
 $ActivatePath = Join-Path $VenvPath 'Scripts\Activate.ps1'
 $RequirementsPath = Join-Path $RepoRoot 'requirements.txt'
+$ConstraintsPath = Join-Path $RepoRoot 'constraints.txt'
 $StartPath = Join-Path $RepoRoot 'start.py'
 
 Write-Output "== scripts/start_script_main.ps1 (main) =="
@@ -49,6 +50,13 @@ if (-not (Test-Path $ActivatePath)) {
 Write-Output "Activating virtual environment..."
 . $ActivatePath
 
+# constraints.txt holds the floors and caps of packages this project does not import
+# directly; both install branches pass it to pip so they stay enforced.
+$PipInstallArgs = @('-r', $RequirementsPath)
+if (Test-Path $ConstraintsPath) {
+    $PipInstallArgs += @('-c', $ConstraintsPath)
+}
+
 if (-not $SkipInstall) {
     if (Test-Path $RequirementsPath) {
         Write-Output "Checking installed packages against requirements.txt (version-aware)..."
@@ -56,7 +64,7 @@ if (-not $SkipInstall) {
         if ($LASTEXITCODE -ne 0) {
             Write-Output "Requirement check failed (exit $LASTEXITCODE); running pip install to be safe."
             python -m pip install --upgrade pip
-            python -m pip install -r $RequirementsPath
+            python -m pip install @PipInstallArgs
         }
         elseif ($missing.Count -eq 0) {
             Write-Output "All requirements satisfied; skipping pip install."
@@ -65,7 +73,7 @@ if (-not $SkipInstall) {
             Write-Output "Missing or mismatched requirements detected:`n$($missing -join "`n")"
             Write-Output "Installing/updating dependencies from requirements.txt..."
             python -m pip install --upgrade pip
-            python -m pip install -r $RequirementsPath
+            python -m pip install @PipInstallArgs
         }
     }
     else {

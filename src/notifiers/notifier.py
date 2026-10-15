@@ -17,7 +17,7 @@ from src.trading.executor_reconciliation import (
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,
 )
-from src.utils.decorators import retry_async
+from src.utils.decorators import retry_async_default
 
 from .base_notifier import BaseNotifier, format_commission
 from .filehandler import DiscordFileHandler
@@ -186,7 +186,7 @@ class DiscordNotifier(BaseNotifier):
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Error during Discord notifier shutdown: %s", e)
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def send_message(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             message: str,
@@ -294,7 +294,7 @@ class DiscordNotifier(BaseNotifier):
             self.logger.error("Error sending embed: %s", e)
             return None
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def send_trading_decision(self, decision: Any, channel_id: int) -> None:  # type: ignore[reportIncompatibleMethodOverride]
         """Send a trading decision as Discord embed."""
         try:
@@ -339,7 +339,7 @@ class DiscordNotifier(BaseNotifier):
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending trading decision: %s", e)
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def send_analysis_notification(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             result: dict,
@@ -527,7 +527,7 @@ class DiscordNotifier(BaseNotifier):
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending position status: %s", e)
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def send_performance_stats(  # type: ignore[reportIncompatibleMethodOverride]
             self,
             trade_history: list[dict[str, Any]],

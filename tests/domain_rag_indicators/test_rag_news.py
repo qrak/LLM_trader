@@ -39,6 +39,7 @@ from src.rag.news_ingestion.rss_primitives import (
 )
 from src.rag.news_ingestion.rss_provider import RSSCrawl4AINewsProvider
 from src.rag.news_ingestion.schema_mapper import (
+    has_news_boilerplate,
     make_article_id,
     strip_news_boilerplate,
     to_article_schema,
@@ -884,6 +885,86 @@ def test_news_repository_load_fallback_articles_forwards_the_hours_window():
     file_handler.load_fallback_articles.assert_called_once_with(max_age_hours=48)
 
 
+@pytest.mark.parametrize("separator", ["", " ", "\n"])
+def test_compact_market_ticker_is_removed_without_losing_article_prices(separator):
+    ticker = "\n".join(f"BTC${index}.00{separator}-2.05%" for index in range(12))
+    body = f"{ticker}\nPrice data by\n{PRICE_PROSE}"
+
+    assert has_news_boilerplate(body)
+    assert strip_news_boilerplate(body) == PRICE_PROSE
+    assert not has_news_boilerplate(PRICE_PROSE)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Asset news\nAll news News Terminal\nGuide categories\nBrowse Directory\n" * 10,
+        "\n".join(f"BTC${index}.00-2.05%" for index in range(12)),
+    ],
+)
+def test_unrecoverable_navigation_is_not_passed_to_the_prompt(body):
+    assert has_news_boilerplate(body)
+    assert strip_news_boilerplate(body) == ""
+
+
+def test_news_manager_replaces_long_boilerplate_with_shorter_clean_body():
+    manager, file_handler = make_news_manager()
+    article = {
+        "id": "stable-id", "url": "https://example.com/story", "published_on": time.time(),
+        "body": "Asset news\nAll news News Terminal\nGuide categories\nBrowse Directory\n" * 50,
+    }
+    manager.news_database = [article.copy()]
+    new_body = "Bitcoin fell to $82,000 after inflation exceeded expectations. " * 12
+
+    assert manager.update_news_database([{**article, "id": "different-id", "body": new_body}])
+    assert len(manager.news_database) == 1
+    assert manager.news_database[0]["id"] == "stable-id"
+    assert manager.news_database[0]["body"] == new_body.strip()
+    assert manager.news_database[0]["body_lower"] == new_body.strip().lower()
+    file_handler.save_news_articles.assert_called_once_with(manager.news_database)
+
+
+@pytest.mark.parametrize(
+    ("old_body", "new_body"),
+    [
+        ("Good full article. " * 100, "Short summary."),
+        ("Good full article. " * 100, "Another clean but shorter article. " * 15),
+        ("Good full article. " * 100, "Asset news\nAll news News Terminal\nGuide categories\n" * 50),
+        ("teaser", "Asset news\nAll news News Terminal\nGuide categories\n" * 50),
+        ("Asset news\nAll news News Terminal\nGuide categories\n" * 50, "Short summary."),
+    ],
+)
+def test_news_manager_does_not_replace_bodies_with_worse_or_insufficient_text(old_body, new_body):
+    manager, file_handler = make_news_manager()
+    article = {"id": "stable", "url": "https://example.com/story", "published_on": time.time(), "body": old_body}
+    manager.news_database = [article.copy()]
+
+    assert not manager.update_news_database([{**article, "body": new_body}])
+    assert manager.news_database == [article]
+    file_handler.save_news_articles.assert_not_called()
+
+
+async def test_enricher_retries_long_navigation_bodies():
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=True)
+    enricher._enrich_crawl4ai = AsyncMock(return_value=1)
+    dirty = {"url": "https://example.com/bad", "body_text": "Asset news\nAll news News Terminal\nGuide categories\n" * 20}
+    clean = {"url": "https://example.com/good", "body_text": "Bitcoin market liquidity improved. " * 30}
+
+    assert await enricher.enrich_items([dirty, clean]) == 1
+    enricher._enrich_crawl4ai.assert_awaited_once_with([dirty])
+
+
+def test_enricher_tries_original_html_when_cleaned_html_contains_only_navigation(monkeypatch):
+    dirty = "Asset news\nAll news News Terminal\nGuide categories\n" * 20
+    body = "Bitcoin fell to $82,000 after inflation exceeded expectations. " * 12
+    extractor = MagicMock(side_effect=[dirty, body])
+    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", extractor)
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    assert enricher._extract_crawl4ai_body(SimpleNamespace(cleaned_html="cleaned", html="original", markdown=dirty)) == body
+    assert [c.args[0] for c in extractor.call_args_list] == ["cleaned", "original"]
+
+
 def test_news_manager_update_news_database_is_url_first():
     manager, file_handler = make_news_manager()
     now = time.time()
@@ -1157,3 +1238,103 @@ def test_process_article_simple_drops_pure_junk_and_strips_chrome():
     assert "Make preferred on" not in processed
     assert "Share this article" not in processed
     assert "Summary" not in processed
+
+
+def test_enricher_real_trafilatura_removes_page_navigation():
+    body = "Bitcoin liquidity improved across exchanges as market makers provided additional depth during the session. " * 12
+    html = f"<html><body><nav>Navigation and unrelated links</nav><article><p>{body}</p></article></body></html>"
+    result = SimpleNamespace(cleaned_html=html, html="", markdown="Fallback markdown " * 50)
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    extracted = enricher._extract_crawl4ai_body(result)
+
+    assert extracted is not None
+    assert "Bitcoin liquidity improved" in extracted
+    assert "Navigation and unrelated links" not in extracted
+    assert "Fallback markdown" not in extracted
+
+
+def test_enricher_prefers_trafilatura_on_browser_html(monkeypatch):
+    body = "Bitcoin liquidity improved across exchanges during the session. " * 12
+    html = f"<article><p>{body}</p></article>"
+    result = SimpleNamespace(cleaned_html=html, html="", markdown="Navigation " * 100)
+    extract_mock = MagicMock(return_value=body)
+    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", extract_mock)
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    assert enricher._extract_crawl4ai_body(result) == body
+    extract_mock.assert_called_once_with(
+        html, include_comments=False, include_tables=False, favor_precision=True
+    )
+
+
+@pytest.mark.parametrize("extracted", [None, "", "Too short", "404 Not Found " * 50])
+def test_enricher_retains_markdown_when_trafilatura_is_unusable(monkeypatch, extracted):
+    body = "Bitcoin liquidity improved across exchanges during the session. " * 12
+    result = SimpleNamespace(cleaned_html="<article>Incomplete</article>", html="", markdown=body)
+    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(return_value=extracted))
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    assert enricher._extract_crawl4ai_body(result) == body.strip()
+
+
+@pytest.mark.parametrize("error", [ValueError("invalid HTML"), TypeError("invalid input")])
+def test_enricher_retains_markdown_when_trafilatura_rejects_html(monkeypatch, error):
+    body = "Bitcoin liquidity improved across exchanges during the session. " * 12
+    result = SimpleNamespace(cleaned_html="<article>Incomplete</article>", html="", markdown=body)
+    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(side_effect=error))
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    assert enricher._extract_crawl4ai_body(result) == body.strip()
+
+
+def test_enricher_keeps_the_original_html_fallback_when_both_extractors_are_empty(monkeypatch):
+    body = "Bitcoin liquidity improved across exchanges during the session. " * 12
+    result = SimpleNamespace(cleaned_html=f"<article><p>{body}</p></article>", html="", markdown="")
+    monkeypatch.setattr("src.rag.news_ingestion.crawl4ai_enricher.extract", MagicMock(return_value=None))
+    enricher = Crawl4AIEnricher(logger=null_logger(), use_crawl4ai=False)
+
+    assert enricher._extract_crawl4ai_body(result) == body.strip()
+
+
+def test_feedparser_mapping_keeps_encoded_body_author_and_utc_offset():
+    payload = '''<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item>
+        <title>Bitcoin news</title><link>https://example.com/story?utm_source=rss</link>
+        <description><![CDATA[<p>Short summary.</p>]]></description>
+        <content:encoded><![CDATA[<p>Full article body.</p>]]></content:encoded>
+        <dc:creator>Reporter</dc:creator><guid isPermaLink="false">story-id</guid>
+        <pubDate>Wed, 02 Apr 2025 14:00:00 +0200</pubDate>
+        </item></channel></rss>'''
+
+    item, = parse_rss_items(payload, "src")
+
+    assert item["body_text"] == "Full article body."
+    assert item["summary"] == "Short summary."
+    assert item["body_source"] == "content:encoded"
+    assert item["author"] == "Reporter"
+    assert item["raw_source_id"] == "story-id"
+    assert item["url"] == "https://example.com/story"
+    assert item["published_at_epoch"] == datetime(2025, 4, 2, 12, tzinfo=timezone.utc).timestamp()
+
+
+def test_feedparser_keeps_rss_description_and_first_creator_with_duplicate_dc_fields():
+    payload = '''<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <channel><item><title>Bitcoin news</title><link>https://example.com/story</link>
+        <description>Original RSS summary.</description><dc:description/>
+        <dc:creator>First reporter</dc:creator><dc:creator>Second reporter</dc:creator>
+        </item></channel></rss>'''
+
+    item, = parse_rss_items(payload, "coindesk")
+
+    assert item["summary"] == "Original RSS summary."
+    assert item["body_text"] == "Original RSS summary."
+    assert item["author"] == "First reporter"
+
+
+def test_feedparser_still_rejects_entity_expansion():
+    payload = '''<!DOCTYPE rss [<!ENTITY secret SYSTEM "file:///C:/Windows/win.ini">]>
+        <rss version="2.0"><channel><item><title>&secret;</title>
+        <link>https://example.com/story</link></item></channel></rss>'''
+
+    assert parse_rss_items(payload, "src") == []

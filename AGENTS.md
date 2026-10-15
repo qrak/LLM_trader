@@ -288,7 +288,7 @@ LLM_trader/
 ├── README.md                    # Project overview, setup, roadmap
 ├── CHANGELOG.md                 # Version history (newest first)
 ├── docs/                        # Older changelog entries: changelog-archive-{2025,2026}.md
-├── requirements.txt / -dev.txt
+├── requirements.txt / -dev.txt / constraints.txt
 ├── keys.env / keys.env.example  # Secrets
 ├── config/
 │   ├── config.ini               # Active configuration

@@ -5,7 +5,6 @@ Access to optimized volume indicator calculations.
 """
 from .volume_indicators import (
     ad_line_numba,
-    average_quote_volume_numba,
     cci_numba,
     chaikin_money_flow_numba,
     eom_numba,
@@ -21,7 +20,6 @@ from .volume_indicators import (
 
 __all__ = [
     "ad_line_numba",
-    "average_quote_volume_numba",
     "cci_numba",
     "chaikin_money_flow_numba",
     "eom_numba",

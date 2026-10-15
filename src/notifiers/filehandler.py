@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-from src.utils.decorators import retry_async
+from src.utils.decorators import retry_async_default
 
 if TYPE_CHECKING:
     from src.config.loader import Config
@@ -208,7 +208,7 @@ class DiscordFileHandler:
             self.logger.error("Error deleting message %s: %s", message_id, e)
             return False
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def _delete_message(self, message_id: int, channel_id: int) -> bool:
         if not self.bot or self.bot.is_closed():
             self.logger.warning("Bot closed, cannot delete message %s", message_id)

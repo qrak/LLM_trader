@@ -2,7 +2,9 @@
 Base client for AI providers with shared functionality.
 Implements common patterns: context managers, image processing, error handling.
 """
+import base64
 import io
+import json
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -19,6 +21,7 @@ class BaseAIClient(ABC):
     def __init__(self, logger: Logger) -> None:
         self.logger = logger
         self.api_key: str | None = None
+        self._client: Any = None
         self._known_unsupported_params = {"thinking_budget", "thinking_config", "top_k", "freq_penalty", "pres_penalty"}
 
     async def __aenter__(self):
@@ -31,18 +34,35 @@ class BaseAIClient(ABC):
         await self.close()
 
     @abstractmethod
-    async def _initialize_client(self) -> None:
-        """Initialize the underlying SDK client. Called by __aenter__."""
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Close and cleanup the client."""
-
-    @abstractmethod
     async def chat_completion(
         self, model: str, messages: list[dict[str, Any]], model_config: dict[str, Any]
     ) -> ChatResponseModel | None:
         """Send a chat completion request."""
+
+    def _build_client(self) -> Any:
+        """Create the provider SDK client for providers served by the OpenAI SDK."""
+        raise NotImplementedError(f"{type(self).__name__} does not build an OpenAI SDK client")
+
+    async def _initialize_client(self) -> None:
+        """Initialize the provider SDK client. Called by __aenter__."""
+        self._client = self._build_client()
+
+    def _ensure_client(self) -> Any:
+        """Ensure the provider SDK client exists and return it."""
+        if not self._client:
+            self._client = self._build_client()
+        return self._client
+
+    async def close(self) -> None:
+        """Close the provider SDK client and drop the handle."""
+        client = self._client
+        if not client:
+            return
+        try:
+            self.logger.debug("Closing %s SDK session", type(self).__name__)
+            await client.close()
+        finally:
+            self._client = None
 
     @abstractmethod
     async def chat_completion_with_chart_analysis(
@@ -116,6 +136,24 @@ class BaseAIClient(ABC):
         prepared[last_user_index] = {"role": "user", "content": multimodal_content}
         return prepared
 
+    def _build_multimodal_content(
+        self,
+        user_text: str,
+        chart_image: io.BytesIO | bytes | str,
+    ) -> tuple[bytes, list[dict[str, Any]]]:
+        """Process a chart image and build the OpenAI-style multimodal content block.
+
+        Returns the raw image bytes (for logging) together with the ``text`` +
+        ``image_url`` block shared by every OpenAI-compatible chart flow.
+        """
+        img_data = self.process_chart_image(chart_image)
+        base64_image = base64.b64encode(img_data).decode("utf-8")
+        multimodal_content = [
+            {"type": "text", "text": user_text},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+        ]
+        return img_data, multimodal_content
+
     def _sanitize_error_message(self, message: str) -> str:
         """
         Sanitize error message by redaction of sensitive information like API keys.
@@ -162,6 +200,18 @@ class BaseAIClient(ABC):
             return ChatResponseModel.from_error(f"connection: {error_message_sanitized}")
         return None
 
+    def _handle_exception(self, exception: Exception) -> ChatResponseModel | None:
+        """Classify a provider exception through the shared handler.
+
+        Returns None for an unclassified error after logging it, so a provider
+        client only overrides this when it has provider-specific errors to map.
+        """
+        result = self.handle_common_errors(exception)
+        if result:
+            return result
+        self.logger.error("Unhandled %s error: %s", type(self).__name__, exception)
+        return None
+
     def convert_pydantic_response(self, response: Any) -> ChatResponseModel:
         """
         Convert any Pydantic SDK response to ChatResponseModel.
@@ -171,6 +221,13 @@ class BaseAIClient(ABC):
             return ChatResponseModel.from_error("Empty response from SDK")
 
         inner = response
+        provider_error = getattr(inner, "error", None)
+        error_text = (
+            self._sanitize_error_message(
+                json.dumps(provider_error) if isinstance(provider_error, dict) else str(provider_error)
+            )
+            if provider_error else None
+        )
 
         try:
             choices_data = []
@@ -232,7 +289,8 @@ class BaseAIClient(ABC):
                 choices=choices_data,
                 usage=usage_model,
                 id=resp_id,
-                model=resp_model
+                model=resp_model,
+                error=error_text,
             )
         except (AttributeError, TypeError) as e:
             self.logger.error("Failed to create response model: %s", e)

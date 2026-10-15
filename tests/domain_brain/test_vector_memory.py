@@ -225,6 +225,7 @@ def raw_snapshot(updates: list[dict], closes: list[dict]) -> dict:
 def sl_tightening_cases(count: int, outcome: str, pnl: float) -> tuple[list[dict], list[dict]]:
     """Paired SL-tightening UPDATE records and their eventual close, per position."""
     trade_ids = [f"trade_pos{index}" for index in range(count)]
+    timestamp = datetime.now(timezone.utc).isoformat()
     updates = [
         {
             "action_type": "SL_TRAIL",
@@ -232,6 +233,7 @@ def sl_tightening_cases(count: int, outcome: str, pnl: float) -> tuple[list[dict
             "price_progress": 0.30,
             "position_id": f"SYM|pos{index}",
             "position_entry_trade_id": trade_ids[index],
+            "timestamp": timestamp,
         }
         for index in range(count)
     ]
@@ -242,6 +244,7 @@ def sl_tightening_cases(count: int, outcome: str, pnl: float) -> tuple[list[dict
             "pnl_pct": pnl,
             "position_id": f"SYM|pos{index}",
             "position_entry_trade_id": trade_ids[index],
+            "timestamp": timestamp,
         }
         for index in range(count)
     ]
@@ -1418,3 +1421,97 @@ def test_prune_propagates_a_failing_collection_count():
 
     with pytest.raises(RuntimeError, match="collection unavailable"):
         service.prune_aged_documents()
+
+
+def sl_decay_snapshot(ages: list[float], pnls: list[float]) -> dict:
+    now = datetime.now(timezone.utc)
+    updates, closes = sl_tightening_cases(len(ages), "WIN", 1.0)
+    for update, close, age, pnl in zip(updates, closes, ages, pnls, strict=True):
+        timestamp = (now - timedelta(days=age)).isoformat()
+        update["timestamp"] = timestamp
+        close["timestamp"] = timestamp
+        close["pnl_pct"] = pnl
+        close["outcome"] = "WIN" if pnl > 0 else "LOSS"
+    return raw_snapshot(updates, closes)
+
+
+def test_sl_decay_weights_outcomes_instead_of_using_unweighted_mean():
+    snapshot = sl_decay_snapshot([0] * 6 + [28] * 6, [-1.0] * 6 + [2.0] * 6)
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+def test_sl_decay_exposes_fractional_age_weights_and_effective_sample_size():
+    snapshot = sl_decay_snapshot([0] * 6 + [14.5] * 6, [2.0] * 6 + [-1.0] * 6)
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    learned = thresholds["sl_tightening"]
+    weight = 2 ** (-14.5 / 14)
+    expected = (6 + 6 * weight) ** 2 / (6 + 6 * weight ** 2)
+    assert learned["effective_sample_count"] == pytest.approx(expected)
+    assert learned["expectancy_pct"] == pytest.approx((2 - weight) / (1 + weight), abs=0.0001)
+    assert learned["half_life_days"] == 14
+    assert learned["max_age_days"] == 56
+    assert learned["sample_count"] == learned["paired_sample_count"] == 12
+    assert learned["basis"] == "paired_update_outcomes"
+
+
+def test_sl_decay_rejects_concentrated_evidence_despite_raw_count():
+    snapshot = sl_decay_snapshot([0] * 2 + [55] * 10, [1.0] * 12)
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+@pytest.mark.parametrize("age", [56.01, 70.0, -1.0])
+def test_sl_decay_excludes_out_of_window_and_future_observations(age):
+    snapshot = sl_decay_snapshot([age] * 12, [1.0] * 12)
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("timestamp", None), ("timestamp", "invalid"), ("price_progress", float("inf")),
+    ("price_progress", float("nan")), ("price_progress", True),
+    ("pnl_pct", float("nan")), ("pnl_pct", float("inf")), ("pnl_pct", True),
+])
+def test_sl_decay_skips_invalid_evidence(field, value):
+    snapshot = sl_decay_snapshot([0] * 12, [1.0] * 12)
+    for meta in snapshot["metadatas"]:
+        if field in meta:
+            meta[field] = value
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+def test_sl_decay_uses_old_update_age_even_when_close_was_backfilled_today():
+    snapshot = sl_decay_snapshot([70] * 12, [1.0] * 12)
+    for meta in snapshot["metadatas"]:
+        if meta["outcome"] != "UPDATE":
+            meta["timestamp"] = datetime.now(timezone.utc).isoformat()
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+def test_sl_decay_deduplicates_update_aliases_of_the_same_closed_position():
+    snapshot = sl_decay_snapshot([0], [1.0])
+    original = snapshot["metadatas"][0]
+    for index in range(20):
+        snapshot["ids"].append(f"duplicate_{index}")
+        snapshot["metadatas"].append({**original, "position_id": f"alias_{index}"})
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds
+
+
+def test_sl_decay_counts_only_the_candidate_eligible_subset():
+    snapshot = sl_decay_snapshot([0] * 12, [-2.0] * 8 + [1.0] * 4)
+    for index, meta in enumerate(snapshot["metadatas"][:12]):
+        meta["price_progress"] = 0.10 if index < 8 else 0.30
+    thresholds = {}
+    make_service()._learn_sl_tightening_threshold(snapshot, 5, thresholds)
+    assert "sl_tightening" not in thresholds

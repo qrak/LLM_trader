@@ -1,5 +1,4 @@
 from .momentum_indicators import (
-    calculate_relative_strength_numba,
     coppock_curve_numba,
     detect_rsi_divergence,
     kst_numba,
@@ -16,7 +15,6 @@ from .momentum_indicators import (
 )
 
 __all__ = [
-    "calculate_relative_strength_numba",
     "coppock_curve_numba",
     "detect_rsi_divergence",
     "kst_numba",

@@ -373,25 +373,6 @@ def detect_rsi_divergence(close_prices, rsi_values, length=14):
     return divergence
 
 @njit(cache=True)
-def calculate_relative_strength_numba(pair_close, benchmark_close, window=14):
-    n = len(pair_close)
-    rs_array = np.zeros(n)
-
-    for i in range(window, n):
-        if math.isnan(pair_close[i]) or math.isnan(benchmark_close[i]) or benchmark_close[i] == 0:
-            rs_array[i] = 0.0
-            continue
-
-        pair_return = np.log(pair_close[i] / pair_close[i - window])
-        benchmark_return = np.log(benchmark_close[i] / benchmark_close[i - window])
-
-        rs_value = pair_return - benchmark_return
-
-        rs_array[i] = min(max(float(rs_value), -0.5), 0.5)
-
-    return rs_array
-
-@njit(cache=True)
 def _uo_numba(high, low, close, fast, medium, slow, fast_w, medium_w, slow_w, drift):
     n = len(high)
     uo = np.full(n, np.nan)

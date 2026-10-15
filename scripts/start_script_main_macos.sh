@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENV_PATH="${REPO_ROOT}/.venv"
 PYTHON_BIN="${VENV_PATH}/bin/python"
 PIP_BIN="${VENV_PATH}/bin/pip"
+CONSTRAINTS_PATH="${REPO_ROOT}/constraints.txt"
 
 SYMBOL=""
 TIMEFRAME=""
@@ -66,7 +67,11 @@ fi
 
 install_requirements() {
     "${PIP_BIN}" install --upgrade pip
-    "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+    if [[ -f "${CONSTRAINTS_PATH}" ]]; then
+        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt" -c "${CONSTRAINTS_PATH}"
+    else
+        "${PIP_BIN}" install -r "${REPO_ROOT}/requirements.txt"
+    fi
 }
 
 if [[ "${SKIP_INSTALL}" != "true" ]]; then

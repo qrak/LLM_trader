@@ -28,7 +28,7 @@ from src.trading.executor_reconciliation import (
     RECONCILE_UNVERIFIED,
     LocalPositionReconciliation,
 )
-from src.utils.decorators import retry_async
+from src.utils.decorators import retry_async_default
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
@@ -930,7 +930,7 @@ class CryptoTradingBot:
             raw = raw[:pos] + "\n\n⚠️  REJECTED: " + reason + raw[pos:]
         result["raw_response"] = raw
 
-    @retry_async(max_retries=3, initial_delay=1, backoff_factor=2, max_delay=30)
+    @retry_async_default
     async def _fetch_current_ticker(self) -> dict[str, Any] | None:
         """Fetch current ticker from exchange."""
         if self.current_exchange is None or self.current_symbol is None:
