@@ -1,7 +1,7 @@
 {
   "schema": "https://qrak.org/project.schema.json",
   "version": 1,
-  "generated": "2026-09-19",
+  "generated": "2026-10-15",
   "purpose": "Machine-readable factual summary of qrak.org and the project it documents, so that AI tools and crawlers do not have to infer facts from marketing copy. Every number here is reproducible from the repository.",
   "site": {
     "name": "Semantic Signal",
@@ -44,14 +44,14 @@
     "type": "open-source LLM trading agent",
     "licence_repo": "https://github.com/qrak/LLM_trader",
     "started": "2025-12-21",
-    "commits": 444,
+    "commits": 478,
     "runtime": "Python 3.13",
     "live_dashboard": "https://semanticsignal.qrak.org",
     "capabilities": [
       "multimodal chart analysis: a 1920x1080 Plotly candlestick PNG is sent to the model together with the numeric indicator stack",
       "vector memory: closed trades embedded with BAAI/bge-base-en-v1.5 (768 dimensions) into ChromaDB; 3 nearest past trades plus 20-trade statistics, 5 recent rejections and 3 learned rules are retrieved before each decision",
       "reflection engine: writes natural-language trading rules from past results, tagged anti_pattern / corrective / best practice",
-      "expected-value gate: EV computed from the bot's own closed-trade history; a negative EV signal is rejected deterministically, overriding the model",
+      "expected-value framework in the prompt: fees, the position cap and expectancy read from the bot's own closed trades go into every prompt; the deterministic checks are the symbol whitelist and the position-size cap, and the entry R/R floor is learned from expectancy (min_rr_entry = 0.0)",
       "separate executor service: CCXT order placement, leverage and exchange-side stops behind a seven-check safety guard, with a JSONL verdict journal",
       "free news and sentiment: RSS (CoinDesk, CoinTelegraph, Decrypt, CryptoSlate), Reddit Atom feeds, CoinGecko, DeFiLlama, Alternative.me Fear & Greed",
       "layered agent documentation: a root AGENTS.md plus a per-package AGENTS.md file, so a model reads only the area it touches"
@@ -59,7 +59,7 @@
     "stack": [
       "Python 3.13",
       "FastAPI",
-      "NumPy + Numba (97 compiled indicator functions in src/indicators/)",
+      "NumPy + Numba (79 compiled indicator functions in src/indicators/)",
       "ChromaDB + sentence-transformers (BAAI/bge-base-en-v1.5)",
       "CCXT",
       "Plotly + Kaleido",
@@ -76,13 +76,15 @@
       "news_articles_in_prompt": 5,
       "recent_trades_fetched": 500
     },
-    "llm_providers": ["Google AI", "DeepSeek", "OpenRouter", "local (LM Studio)"],
+    "llm_providers": ["Google AI", "DeepSeek", "OpenRouter", "BlockRun", "local (LM Studio)"],
     "tests": {
-      "collected": 1549,
-      "passing": 1532,
+      "collected": 2265,
+      "passing": 2247,
       "skipped": 17,
+      "failing": 1,
       "command": "python -m pytest tests -q",
-      "measured": "2026-09-19"
+      "measured": "2026-10-15",
+      "failure_note": "the failing test drives a live dashboard in a browser; the run had no dashboard listening"
     },
     "status": {
       "trading_mode": "paper (simulated capital, 10,000 USDC book)",

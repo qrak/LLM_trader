@@ -5,7 +5,7 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 <ArticleLayout
 	title="How the Bot Reads Charts: From Candles to Conviction — Semantic Signal"
 	description="The Semantic Signal pipeline: CCXT market data, Numba JIT indicators, a 1920x1080 chart image for a multimodal model, and deterministic risk limits before an order is sent."
-	meta="Article · first published August 2026 · updated September 2026"
+	meta="Article · first published August 2026 · updated October 2026"
 >
 	<span slot="title">How the Bot Reads Charts: From Candles to Conviction</span>
 	<p slot="subtitle" class="subtitle">What actually happens inside a 4-hour analysis cycle — from raw exchange data to a reasoned decision with stop-loss and take-profit levels.</p>
@@ -17,8 +17,8 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 	</section>
 
 	<section class="section">
-		<h2>97 Numba-compiled functions, microseconds each</h2>
-		<p>The indicator engine is NumPy plus Numba with <code>@njit(cache=True)</code>: each function compiles to machine code on first call and caches the result. <code>src/indicators/</code> holds <strong>97 of them</strong> (134 across the whole <code>src/</code> tree) — EMA, ADX, Supertrend, Ichimoku, Parabolic SAR, CMF, OBV, RSI, custom support/resistance and volatility work — with zero external technical-analysis dependencies.</p>
+		<h2>79 Numba-compiled functions, microseconds each</h2>
+		<p>The indicator engine is NumPy plus Numba with <code>@njit(cache=True)</code>: each function compiles to machine code on first call and caches the result. <code>src/indicators/</code> holds <strong>79 of them</strong> (116 across the whole <code>src/</code> tree) — EMA, ADX, Supertrend, Ichimoku, Parabolic SAR, CMF, OBV, RSI, custom support/resistance and volatility work — with zero external technical-analysis dependencies.</p>
 		<p>That matters for the next step: the model receives a numeric stack that was computed deterministically and can be cross-checked line by line, instead of a black-box library's output.</p>
 	</section>
 
@@ -41,12 +41,12 @@ import ArticleLayout from '../../layouts/ArticleLayout.astro';
 		<div class="formula-box">
 			EV = (Win Rate × Average Win) − ((1 − Win Rate) × Average Loss) − Fees
 		</div>
-		<p>If EV comes out negative, the signal is rejected. This is deterministic arithmetic that overrides the model — it is not a suggestion in a prompt. Expected value is currently the <em>only</em> hard entry gate: the old fixed 1.5 R/R floor was removed in September 2026 (<code>min_rr_entry = 0.0</code>) and replaced by one shared floor policy that combines the configured value with the brain's own borderline R/R, so that the number shown to the model is the same number the executor enforces.</p>
+		<p>That expected-value calculation lives in the prompt, not in a deterministic gate: the repository does not currently reject a signal on arithmetic alone. What <em>is</em> deterministic is narrower — the symbol whitelist, the position-size cap and the validation of stop/target values — plus one shared R/R floor policy that combines the configured <code>min_rr_entry</code> (currently <code>0.0</code>, so no fixed 1.5 floor) with the brain's own borderline R/R, so the number shown to the model is the number the executor enforces.</p>
 	</section>
 
 	<section class="section">
 		<h2>The falsification check</h2>
-		<p>Before a signal is accepted, the model has to write an explicit price invalidation trigger: the exact condition under which the trade is wrong. If it cannot defend the call against its own invalidation test, the signal is rejected. A missed +EV opportunity is treated as mathematically identical to a realized loss, so the bot is penalised for not trading when it should have.</p>
+		<p>Before a signal is accepted, the model has to write an explicit price invalidation trigger: the exact condition under which the trade is wrong. Like the expected-value discussion, that step lives in the prompt rather than in a deterministic gate; the checks the code enforces stay where they can be tested — symbol, position cap and validated stop/target levels.</p>
 		<p>The final output is a decision with reasoning, risk parameters and stop-loss/take-profit levels — logged to the audit trail and visible on the <a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener">live dashboard</a>. Stops are ATR-scaled rather than fixed percentages, and exits poll live prices every 15 minutes in hard mode.</p>
 	</section>
 

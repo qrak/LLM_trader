@@ -2,30 +2,31 @@
 
 > An open-source LLM trading agent built by Piotr Kurnicki (@qrak) in Wrocław,
 > Poland. It renders a 1920×1080 candlestick chart for a multimodal model,
-> keeps a 768-dimensional vector memory of its own closed trades, and puts one
-> deterministic expected-value gate between the model's opinion and any order.
+> keeps a 768-dimensional vector memory of its own closed trades, and keeps
+> deterministic pre-execution checks (symbol whitelist, position-size cap, validated
+> stop/target levels) between the model's opinion and any order.
 > It trades simulated capital by default; a separate executor service runs
 > against an exchange testnet. Profitability is unproven and the site says so.
 
 Key facts, all verifiable in the repository:
 
 - Language / runtime: Python 3.13 (bot), Astro (this site)
-- Test suite: 1,549 tests collected, 1,532 passing, 17 skipped — `python -m pytest tests -q`
-- 97 Numba-compiled indicator functions in `src/indicators/` (134 across `src/`)
+- Test suite: 2,265 tests collected, 2,247 passing, 17 skipped, 1 failing — `python -m pytest tests -q` (measured 2026-10-15; the failure is a browser test that drives a live dashboard, run without one listening)
+- 79 Numba-compiled indicator functions in `src/indicators/` (116 across `src/`)
 - Data per cycle: 999 candles, 50-level order book, funding rate, 24h volume, 500 recent trades
 - Chart image sent to the model: 1920×1080 PNG (Plotly + Kaleido)
 - Vector memory: ChromaDB with `BAAI/bge-base-en-v1.5` embeddings (768 dimensions)
 - Retrieval before each decision: 3 nearest past trades, 20-trade statistics, 5 recent rejections, 3 learned rules
 - Entry gate: expected value computed from the bot's own closed trades (the old fixed 1.5 R/R floor was removed; `min_rr_entry = 0.0`)
 - Trading mode: simulated capital (10,000 USDC paper book). The executor runs with `ENABLE_TESTNET=true` — sandbox only, no real funds
-- Development: 444 commits, first commit 2025-12-21
+- Development: 478 commits, first commit 2025-12-21
 
 ## Pages
 
-- [Home](https://qrak.org/): what the system is, a feature comparison against Freqtrade / 3Commas / Cryptohopper (including the rows where it loses), and where every number comes from
+- [Home](https://qrak.org/): what the system is, how it differs from Freqtrade / TradingAgents / Vibe-Trading, and where every number comes from
 - [Full story & technology](https://qrak.org/story/): the development history with real commit dates, the mathematics of the gates, an honest status section, and an errata list of claims this site used to make
 - [Articles](https://qrak.org/articles/): technical write-ups
-- [How the bot reads charts](https://qrak.org/articles/chart-vision/): candles → indicators → chart image → expected-value gate
+- [How the bot reads charts](https://qrak.org/articles/chart-vision/): candles → indicators → chart image → prompt-level expected value, and which checks are deterministic
 - [Vector memory](https://qrak.org/articles/vector-memory/): how closed trades become retrievable lessons
 - [From paper to a live executor](https://qrak.org/articles/executor-separation/): the seven pre-execution checks, the verdict journal, and what is still missing before real capital
 - [About the developer](https://qrak.org/about/): background, repositories, how the project is maintained

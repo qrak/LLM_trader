@@ -8,7 +8,7 @@
 
 🌐 **[Public Landing Page](https://semanticsignal.qrak.org/landing.html)** — interactive architecture overview & system showcase
 📊 **[Live Dashboard](https://semanticsignal.qrak.org)** — watch the trading brain think
-📖 **[Interactive Web Story](https://semanticsignal.qrak.org/story)** | **[Development Article](articles/architecture_and_journey.md)**
+📖 **[Interactive Web Story](https://semanticsignal.qrak.org/story)**
 💬 **[Join the Discord](https://discord.gg/ZC48aTTqR2)**
 
 ---

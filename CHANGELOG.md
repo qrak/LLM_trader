@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-10-15 — Site freshness pass: claims re-measured, redundant article removed
+
+### Changed
+- `src/dashboard/static/landing.html` (served at `semanticsignal.qrak.org/landing.html`):
+  the test figure moves from "1,380+" to **2,265**, "50+" indicators becomes **79
+  Numba-compiled indicator functions**, the memory card says **three** ChromaDB collections
+  and **three** nearest past trades (was "four" and "top-5"), and the risk copy no longer
+  claims a fixed "minimum 1.5 R:R" — the floor is learned from expectancy with
+  `min_rr_entry = 0.0`. "zero lint errors, CI-ready" becomes "ruff clean on `src/` and
+  `scripts/`": a repo-wide `ruff check .` still reports 18 pre-existing findings in three
+  browser test files.
+- `website/src/pages/story.astro`: the provenance constants at the top carry the measured run
+  (**2,265 collected, 2,247 passing, 17 skipped, 1 failing** — the browser test that drives a
+  live dashboard), the September timeline entry keeps its dated 1,549, the Numba count is 79 in
+  `src/indicators/` (116 across `src/`), the header date moves to 15 October 2026, Quick Start
+  installs with `-c constraints.txt`, and the errata list records both corrections.
+- `website/src/pages/index.astro`, `about.astro` and `articles/chart-vision.astro`: the `TESTS_*`
+  constants gained `TESTS_FAILED`, the "top-5 most similar past setups" claim became three, the
+  Numba figures moved to 79 / 116, and the chart-vision article no longer claims a deterministic
+  expected-value gate ("if EV comes out negative, the signal is rejected") or that a missed +EV
+  setup is scored as a loss — EV lives in the prompt; the deterministic checks are the symbol
+  whitelist, the position cap and validated stop/target levels.
+- About copy (landing + `/about`): the "Open to Work" badge and the "Open to work" section are gone.
+  He works in a backend/AI role and the site is a portfolio, so the copy now states that instead of
+  framing the project as a job application. "Currently working in warehouse logistics" is history
+  (the December 2025 origin story), not the current situation.
+- `website/public/llms.txt` and `project.json`: commits 444 → **478**, tests 1,549 → **2,265**
+  (with `failing: 1` and the reason), 97 → **79** indicator functions, the intro's "deterministic
+  expected-value gate" corrected to the real pre-execution checks, BlockRun added to the provider
+  list, and the generated/measured dates moved to 2026-10-15.
+- `articles/architecture_and_journey.md` deleted: it duplicated the /story page, was linked from
+  neither the site navigation nor the sitemap, and carried stale figures (1,380+ tests, Kelly
+  sizing, a 1.5 R/R gate). The README no longer links it.
+
+### Verification
+- Every number re-measured on commit `c094bdb`: `python -m pytest tests -q`,
+  `grep -rhoE "@njit" src/indicators | wc -l`, `git rev-list --count HEAD` (478), the collection
+  constants in `src/trading/vector_memory.py`, and the retrieval limits in
+  `src/trading/brain_context.py` (`k=3`, rules `n_results=3`, stats `k=20`).
+- A grep after the edit finds no stale figure left in either file except the two deliberately
+  dated mentions in the timeline and the errata list.
+- Live checks use `?cb=` probes against `semanticsignal.qrak.org/landing.html` and `/story`.
+- No bot restart, no model request, no order.
+
 ## 2026-10-15 — Move non-imported dependency pins into constraints.txt
 
 ### Changed

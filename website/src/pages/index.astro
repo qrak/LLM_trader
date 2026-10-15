@@ -1,12 +1,14 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
-// Verified against the repo on 2026-09-19:
-//   python -m pytest tests -q  ->  1532 passed, 17 skipped (1549 collected)
+// Verified against the repo on 2026-10-15:
+//   python -m pytest tests -q  ->  2247 passed, 17 skipped, 1 failed (2265 collected)
+//   The failure is the browser test that drives a live dashboard, run without one listening.
 // Keep these in sync with the code before every deploy.
-const TESTS_TOTAL = '1,549';
-const TESTS_PASSING = '1,532';
+const TESTS_TOTAL = '2,265';
+const TESTS_PASSING = '2,247';
 const TESTS_SKIPPED = '17';
+const TESTS_FAILED = '1';
 ---
 
 <Layout
@@ -30,7 +32,7 @@ const TESTS_SKIPPED = '17';
 		<dl class="status">
 			<div><dt>trading</dt><dd>simulated capital (paper)</dd></div>
 			<div><dt>live executor</dt><dd>exchange testnet only — no real funds</dd></div>
-			<div><dt>test suite</dt><dd>{TESTS_TOTAL} tests · {TESTS_PASSING} passing · {TESTS_SKIPPED} skipped</dd></div>
+			<div><dt>test suite</dt><dd>{TESTS_TOTAL} tests · {TESTS_PASSING} passing · {TESTS_SKIPPED} skipped · {TESTS_FAILED} failing (live-dashboard test)</dd></div>
 			<div><dt>providers</dt><dd>Google AI, DeepSeek, OpenRouter, local — switchable</dd></div>
 		</dl>
 	</section>
@@ -62,7 +64,7 @@ const TESTS_SKIPPED = '17';
 			<div class="card-tag">vector_memory</div>
 			<h3>768D memory of closed-trade experiences</h3>
 			<p>Closed-trade experiences are embedded with <code>BAAI/bge-base-en-v1.5</code> into ChromaDB. Before each
-			decision the bot retrieves the top-5 most similar past setups, each tagged with a
+			decision the bot retrieves the three most similar past setups, each tagged with a
 			<strong>Surprise Ratio</strong> so a lucky win does not become a rule.</p>
 		</div>
 
@@ -87,9 +89,9 @@ const TESTS_SKIPPED = '17';
 		<h2>Built in a Wrocław apartment after warehouse shifts</h2>
 		<p>
 			In December 2025 I was working 8-hour warehouse shifts in Poland and testing "AI trading bot"
-			templates in the evenings. Nine months later the project has {TESTS_TOTAL} automated tests, an
-			documented eight-role AI-assisted development workflow, and a live executor running against an
-			exchange testnet — not a cent of real money, by design.
+			templates in the evenings. Nine months later the project has {TESTS_TOTAL} automated tests, layered
+			agent documentation (a root AGENTS.md plus one per package), and a live executor running
+			against an exchange testnet — not a cent of real money, by design.
 		</p>
 		<a href="/story/" class="read-more-link">Read the full development history →</a>
 	</section>
@@ -99,7 +101,7 @@ const TESTS_SKIPPED = '17';
 		<div class="articles-grid">
 			<a href="/articles/chart-vision/" class="article-card">
 				<h3>How the bot reads charts</h3>
-				<p>Market history, 50+ Numba indicators, a 1920×1080 chart image — and a model prompted to defend its call.</p>
+				<p>Market history, 79 Numba indicator functions, a 1920×1080 chart image — and a model prompted to defend its call.</p>
 			</a>
 			<a href="/articles/vector-memory/" class="article-card">
 				<h3>Vector memory</h3>
