@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-10-16 — Pattern states: durations, honest labels, canonical ATR, prompt legend
+
+### Changed
+- **Prompt legend**: `## Key Terminology` in `src/analyzer/prompts/template_manager.py` now names the calculator's fixed windows (RSI 14 Wilder smoothing, MACD 12/26/9 EMA, Stochastic 14/3/3, Bollinger 20 with 2 population standard deviations, ATR and ATR% 20 Wilder, Keltner EMA(20) of close ± 1.5 × the same Wilder ATR(20), ADX/±DI 14, Choppiness 14, CCI 14, ROC 14, PPO 12/26, CMF 20, MFI 14, Force Index 20, VWAP/TWAP 20, Donchian 20, Chandelier 20 × 3 ATR) and every detector threshold (RSI 30/70; Stochastic 20/80 with crosses counted inside 30/70; volume spike ≥2.5× and dry-up ≤0.5× the 20-bar average; climax volume ≥3× the 50-bar average; ATR spike ≥1.5× the previous 14-bar average; BB squeeze = band width inside the lowest 20% of 120 bars; TTM squeeze = the bands inside a Keltner channel; MACD histogram trend = majority of its last 3 changes; volatility trend = 6 of the last 9 ATR changes; accumulation/distribution = up-bar share above 60% / below 40% over 10 bars with `strength = |share - 0.5| × 2`; volume-price divergence ±2%/volume below -15%; divergence spacing 5 bars), plus the `now` / `N bars ago` / `for N bars` convention and the 25-line cap. The legend grows 1852 → 3574 characters (≈ +430 prompt tokens on a ~100k-token budget), and the printed Wilder ATR is now named instead of leaving the model to assume the KC's smoothing.
+- **State durations**: `macd_histogram_trend_streak_numba`, `volatility_trend_streak_numba`, `bb_squeeze_streak_numba` and `accumulation_distribution_streak_numba` count the consecutive bars the same label has held — each re-evaluates its own detector's rule per bar through a shared `_*_at` helper, so the streak cannot drift from the label — and the engine renders `for N bars` (`IndicatorPatternEngine._bar_label` supplies the singular). Live BTC/USDC 4h output: `MACD histogram increasing for 4 bars now`, `Volatility decreasing for 1 bar now`, `Distribution for 3 bars (strength: 0.25) over last 10 periods now`.
+- **Labels**: `bb_squeeze` states its own measurement (`for N bars (band width in the lowest 20% of the last 120 bars)`) instead of "low volatility, breakout imminent"; `MACD histogram … (momentum shift)` is gone; Stochastic cross descriptions no longer add "(strong signal)"; `RSI W-Bottom` / `M-Top` describe the shape (two troughs in oversold / two peaks in overbought) instead of claiming "bullish/bearish reversal confirmation". `BB_SQUEEZE_PERCENTILE` / `BB_SQUEEZE_LOOKBACK` live in `volatility_patterns.py` and the engine quotes them, so prompt text cannot drift from the detector.
+- **ATR**: `keltner_channels_numba` accepts `atr_mamode` (default `"ema"`, keeping the existing two-ATR pinning test valid) and `TechnicalCalculator` now asks for `multiplier=1.5, atr_mamode="rma"`, so the Keltner channel uses the same Wilder ATR as the printed `ATR:` line while its middle stays EMA(20).
+- `src/analyzer/AGENTS.md` documents the canonical pairing, the measured per-cycle state frequencies (MACD histogram direction 100%, Stochastic cross 96%, 20/50 SMA cross 85%, MACD cross 77%, volatility trend 64%, accumulation/distribution 62%, TTM squeeze 41%, BB squeeze 34% of 608 logged cycles), the streak helpers and the legend's role.
+
+### Verification
+- Real pipeline probe (`TechnicalCalculator` → `IndicatorPatternEngine` → `filter_recent_patterns`) on live ccxt BTC/USDC 4h (999 closed bars): `kc_upper - kc_middle` equals `1.5 × ATR` to 7.3e-12 (same smoothing), and the emitted volatility/momentum/volume lines carry their durations.
+- `tests/domain_rag_indicators/test_indicators_and_patterns.py` + `tests/domain_brain/test_prompt_template.py`: **411 passed**, 8 new tests (four streak pins, BB-squeeze constants vs detector defaults, engine duration/claim assertions, Stochastic wording, singular `1 bar`). Full suite **2317 passed, 17 skipped** (155 s). Ruff clean on `src start.py scripts`; Pyright 0 errors / 0 warnings; `import start` smoke OK. No paid model calls, bot restarts or orders.
+
+## 2026-10-16 — TTM Squeeze: canonical channel width, duration and release reporting
+
+### Changed
+- `TechnicalCalculator._calculate_volatility_indicators` builds the Keltner Channel at **1.5 × ATR** (was 2.0), so the squeeze condition matches John Carter's published TTM Squeeze — BB(20, 2σ) inside KC(20, 1.5 × ATR). 2.0 × ATR is the loose Squeeze Pro tier, not extreme compression. One channel definition feeds both the pattern engine and the prompt's `KC: U/M/L` line, so that line narrows with it (no second, contradictory Keltner channel).
+- `detect_keltner_squeeze_numba` returns `(in_squeeze, bars_in_squeeze, bars_since_release)` instead of a bare bool. The engine now describes the state with its length (`TTM Squeeze (in compression for 3 bars) now`) instead of the fixed "extreme low volatility" claim, and emits a separate `ttm_squeeze_fired` event (`TTM Squeeze fired (compression ended) 7 bars ago`) once the bands leave the channel. The release reaches the prompt only while it fits the existing volatility recency window (5 bars = 20 h on 4h), so it does not linger as a stale signal.
+- `src/analyzer/AGENTS.md` documents the canonical pairing, the measured 42% vs 15% firing rate and the state-plus-release contract.
+
+### Verification
+- Real pipeline probe on live ccxt BTC/USDC 4h (999 closed bars, 2026-05-02 → 2026-10-15) through `TechnicalCalculator` → `IndicatorPatternEngine` → `filter_recent_patterns`: the squeeze now reads ON on **15%** of bars (42% at 2.0 × ATR), longest run 14 bars. Today's closed bar reports `ttm_squeeze_fired` 7 bars ago — outside the 5-bar window, so the prompt carries **no** volatility line, where the old threshold claimed "squeeze on" (BB 80651.91/84337.45 vs KC 1.5 80745.76/83938.74; KC 2.0 was 80213.60/84470.91).
+- `tests/domain_rag_indicators/test_indicators_and_patterns.py`: **292 passed**, 6 new tests (run length, bars since the bands left, never-inside, engine duration line, engine release event, and a `KC = EMA(20) ± 1.5 × ATR` pin driven through the real `TechnicalCalculator`). Full suite **2309 passed, 17 skipped**; Ruff clean on `src start.py scripts`; Pyright 0 errors / 0 warnings; `import start` smoke OK. No paid model calls, bot restarts or orders.
+
+## 2026-10-16 — Crawl4AI Cloud promo banner silenced in the bot console
+
+### Changed
+- Importing `src/rag/news_ingestion/crawl4ai_enricher.py` (the bot's only Crawl4AI consumer) now exports `CRAWL4AI_NO_CLOUD_NOTICE=1`, so Crawl4AI's hosted-cloud promo notice no longer prints into the bot console — neither `show_once` at crawler start nor `show_blocked` after an anti-bot block. The library reads the flag at every call site, so no start-up ordering is involved, and nothing about crawling behaviour changes.
+
+### Verification
+- Real A/B probe through the Windows venv with an isolated notice-marker directory: without the module, `show_once()` printed the 436-character banner; after importing the module, `show_once()` returned `False` with 0 characters written, `show_blocked()` returned `False` with 0 characters, and `crawl4ai.cloud_notice.is_off()` returned `True`.
+- `tests/domain_rag_indicators/test_rag_news.py`: **130 passed in 4.17 s**, including the new `test_crawl4ai_enricher_module_import_disables_the_cloud_notice`, which imports the module in a clean child interpreter with the variable removed from the environment. Ruff clean on `src start.py scripts`; Pyright 0 errors / 0 warnings. No paid model calls, bot restarts or orders.
+
+## 2026-10-15 — Full research reports and token-based verbosity
+
+### Changed
+- Add `model_verbosity = full` as the loader and configuration-template default. Low/medium/high retain compact 3/5/13-line formats; full requests developed Markdown research sections inspired by DiscordCryptoAnalyzer, without changing trading JSON, execution rules or Python R/R validation labels.
+- Verbosity now specifies approximate **new narrative output-token targets**: 400 / 1000 / 2000 / 8000. These exclude decision JSON and hidden reasoning; hard provider caps remain separate and replies are never cut after generation.
+- Remove the separate previous-reasoning length cap entirely. Keep instruction/schema sanitization and the structured-thesis preference. Existing whole-request PromptBudgetPolicy handles provider/model context capacity and output/image/safety reserves, including smaller fallback models; protected Python R/R feedback is never silently removed. Remove the template-only token-counter dependency made unnecessary by this change.
+- Move general settings, provider/model configuration and risk/executor settings above RAG internals, paths and debug controls in `config.ini.example`. Document full in the admin dropdown, README and analyzer contract.
+- Check tiktoken 0.11.0 against upstream 0.14.0: updates add OpenAI model mappings/performance, not native Gemini/DeepSeek tokenizers or rate cards. Leave the dependency unchanged; provider API usage remains the source for cost estimates. Cache-hit discounts remain outside the current rate-table calculation.
+
+### Verification
+- Full isolated Windows suite: **2302 passed, 17 skipped** (this follow-up baseline: 2293 passed, 17 skipped). Ruff clean; Pyright: 0 errors / 0 warnings. Import/compile smoke confirms the full default, all four provider envelopes and uncapped prior-reasoning continuity protected by the whole-request budget. A 20,014-estimated-token prior thesis now survives intact (previously cut to 3,000, losing its final invalidation trigger). Regression coverage includes spot/futures, chart/no-chart guidance, admin persistence, Unicode, API-usage precedence, long Markdown replies through the real parser/processor, smaller-model fallback reduction and refusal to drop protected Python R/R feedback. No paid model calls, bot restarts or orders.
+
 ## 2026-10-15 — Site freshness pass: claims re-measured, redundant article removed
 
 ### Changed

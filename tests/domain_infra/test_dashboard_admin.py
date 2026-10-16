@@ -997,3 +997,9 @@ def test_dashboard_server_wires_the_admin_router(tmp_path):
     assert type(server.app.state.admin_router) is AdminRouter
     assert server.app.state.writable_config is server.writable_config
     assert check_credentials("admin", "testpass123") is True
+
+async def test_model_verbosity_full_can_be_selected_and_persisted(writable_config, tmp_config):
+    schema = writable_config.get_section_schema("model_config")
+    assert "full" in schema["keys"]["model_verbosity"]["options"]
+    assert await writable_config.set_value("model_config", "model_verbosity", "full") == "hot"
+    assert WritableConfig(tmp_config).get_value("model_config", "model_verbosity") == "full"

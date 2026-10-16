@@ -107,7 +107,9 @@ class TechnicalCalculator:
             np.nan
         )
 
-        kc_upper, kc_middle, kc_lower = self.ti.keltner_channels(length=20, multiplier=2)
+        kc_upper, kc_middle, kc_lower = self.ti.keltner_channels(
+            length=20, multiplier=1.5, atr_mamode="rma"
+        )
         indicators["kc_upper"] = kc_upper
         indicators["kc_middle"] = kc_middle
         indicators["kc_lower"] = kc_lower

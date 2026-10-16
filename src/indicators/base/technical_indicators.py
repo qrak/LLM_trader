@@ -582,7 +582,7 @@ class TechnicalIndicators(IndicatorBase):
             required_length=length
         )
 
-    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = "ema") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def keltner_channels(self, length: int = 20, multiplier: float = 2.0, mamode: str = "ema", atr_mamode: str = "ema") -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return self.calculate_indicator(
             keltner_channels_numba,
             self.high,
@@ -591,6 +591,7 @@ class TechnicalIndicators(IndicatorBase):
             length,
             multiplier,
             mamode,
+            atr_mamode,
             required_length=length
         )
 

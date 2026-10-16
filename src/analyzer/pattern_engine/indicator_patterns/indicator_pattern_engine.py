@@ -26,6 +26,7 @@ from .macd_patterns import (
     detect_macd_crossover_numba,
     detect_macd_zero_cross_numba,
     get_macd_histogram_trend_numba,
+    macd_histogram_trend_streak_numba,
 )
 from .rsi_patterns import (
     detect_rsi_m_top_numba,
@@ -40,12 +41,17 @@ from .stochastic_patterns import (
     detect_stoch_oversold_numba,
 )
 from .volatility_patterns import (
+    BB_SQUEEZE_LOOKBACK,
+    BB_SQUEEZE_PERCENTILE,
+    bb_squeeze_streak_numba,
     detect_atr_spike_numba,
     detect_bb_squeeze_numba,
     detect_keltner_squeeze_numba,
     detect_volatility_trend_numba,
+    volatility_trend_streak_numba,
 )
 from .volume_patterns import (
+    accumulation_distribution_streak_numba,
     detect_accumulation_distribution_numba,
     detect_climax_volume_numba,
     detect_volume_dryup_numba,
@@ -71,6 +77,11 @@ class IndicatorPatternEngine:
         ts_str = f" at {timestamps[index].strftime('%Y-%m-%d %H:%M:%S')} UTC" if (timestamps and 0 <= index < len(timestamps) and isinstance(timestamps[index], datetime)) else ""
         period_str = "now" if periods_ago == 0 else ("1 period ago" if periods_ago == 1 else f"{periods_ago} periods ago")
         return period_str + ts_str
+
+    @staticmethod
+    def _bar_label(bars: int) -> str:
+        """Singular/plural unit for a state duration measured in bars."""
+        return "bar" if bars == 1 else "bars"
 
     def detect_patterns(
         self,
@@ -221,7 +232,10 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append({
                     "type": "rsi_w_bottom",
-                    "description": "RSI W-Bottom detected (bullish reversal confirmation)",
+                    "description": (
+                        "RSI W-Bottom detected (two oversold troughs, the second higher "
+                        "in RSI while price makes an equal or lower low)"
+                    ),
                     "index": len(rsi) - 1,
                     "details": {
                         "first_rsi": float(first_rsi),
@@ -238,7 +252,10 @@ class IndicatorPatternEngine:
             if found:
                 patterns.append({
                     "type": "rsi_m_top",
-                    "description": "RSI M-Top detected (bearish reversal confirmation)",
+                    "description": (
+                        "RSI M-Top detected (two overbought peaks, the second lower "
+                        "in RSI while price makes an equal or higher high)"
+                    ),
                     "index": len(rsi) - 1,
                     "details": {
                         "first_rsi": float(first_rsi),
@@ -305,15 +322,20 @@ class IndicatorPatternEngine:
             hist_trend = get_macd_histogram_trend_numba(macd_hist)
             if hist_trend != 0:
                 trend_name = "increasing" if hist_trend > 0 else "decreasing"
+                bars = macd_histogram_trend_streak_numba(macd_hist)
                 pattern_index = len(macd_hist) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 patterns.append({
                     "type": f"macd_histogram_{trend_name}",
-                    "description": f"MACD histogram {trend_name} (momentum shift) {timestamp_str}",
+                    "description": (
+                        f"MACD histogram {trend_name} for {bars} "
+                        f"{self._bar_label(bars)} {timestamp_str}"
+                    ),
                     "index": pattern_index,
                     "details": {
                         "trend": int(hist_trend),
                         "current_hist": float(macd_hist[-1]),
+                        "bars_in_state": int(bars),
                         "periods_ago": 0
                     }
                 })
@@ -431,17 +453,22 @@ class IndicatorPatternEngine:
             vol_trend = detect_volatility_trend_numba(atr)
             if vol_trend != 0:
                 trend_name = "increasing" if vol_trend > 0 else "decreasing"
+                bars = volatility_trend_streak_numba(atr)
                 pattern_index = len(atr) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 confidence = 65
                 patterns.append({
                     "type": f"volatility_{trend_name}",
-                    "description": f"Volatility {trend_name} {timestamp_str}",
+                    "description": (
+                        f"Volatility {trend_name} for {bars} "
+                        f"{self._bar_label(bars)} {timestamp_str}"
+                    ),
                     "index": pattern_index,
                     "confidence": confidence,
                     "details": {
                         "trend": int(vol_trend),
                         "current_atr": float(atr[-1]),
+                        "bars_in_state": int(bars),
                         "periods_ago": 0
                     }
                 })
@@ -453,41 +480,69 @@ class IndicatorPatternEngine:
                 bb_upper, bb_lower
             )
             if found:
+                bars = bb_squeeze_streak_numba(bb_upper, bb_lower)
                 pattern_index = len(bb_upper) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 confidence = round(max(0.0, min(100.0, 100.0 - width_percentile)))
                 patterns.append({
                     "type": "bb_squeeze",
-                    "description": f"Bollinger Band squeeze detected (low volatility, breakout imminent) {timestamp_str}",
+                    "description": (
+                        f"Bollinger Band squeeze for {bars} {self._bar_label(bars)} "
+                        f"(band width in the lowest "
+                        f"{BB_SQUEEZE_PERCENTILE:.0f}% of the last {BB_SQUEEZE_LOOKBACK} bars) "
+                        f"{timestamp_str}"
+                    ),
                     "index": pattern_index,
                     "confidence": confidence,
                     "details": {
                         "current_width": float(current_width),
                         "percentile_width": float(percentile_width),
                         "width_percentile": float(width_percentile),
+                        "bars_in_state": int(bars),
                         "periods_ago": 0
                     }
                 })
 
         if all(k in technical_history for k in ["bb_upper", "bb_lower", "kc_upper", "kc_lower"]):
-            found = detect_keltner_squeeze_numba(
+            in_squeeze, bars_in_squeeze, bars_since_release = detect_keltner_squeeze_numba(
                 technical_history["kc_upper"],
                 technical_history["kc_lower"],
                 technical_history["bb_upper"],
                 technical_history["bb_lower"]
             )
-            if found:
+            if in_squeeze:
                 pattern_index = len(technical_history["bb_upper"]) - 1
                 timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
                 confidence = 85
+                bar_label = self._bar_label(bars_in_squeeze)
                 patterns.append({
                     "type": "ttm_squeeze",
-                    "description": f"TTM Squeeze detected (extreme low volatility) {timestamp_str}",
+                    "description": (
+                        "TTM Squeeze detected "
+                        f"(in compression for {bars_in_squeeze} {bar_label}) {timestamp_str}"
+                    ),
                     "index": pattern_index,
                     "confidence": confidence,
                     "details": {
                         "squeeze_type": "ttm",
+                        "bars_in_squeeze": int(bars_in_squeeze),
                         "periods_ago": 0
+                    }
+                })
+            elif bars_since_release >= 0:
+                pattern_index = len(technical_history["bb_upper"]) - 1 - bars_since_release
+                timestamp_str = self._format_pattern_time(
+                    bars_since_release, pattern_index, timestamps
+                )
+                patterns.append({
+                    "type": "ttm_squeeze_fired",
+                    "description": f"TTM Squeeze fired (compression ended) {timestamp_str}",
+                    "index": pattern_index,
+                    "confidence": 85,
+                    "details": {
+                        "squeeze_type": "ttm",
+                        "bars_since_release": int(bars_since_release),
+                        "periods_ago": int(bars_since_release)
                     }
                 })
 
@@ -542,7 +597,7 @@ class IndicatorPatternEngine:
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
             desc = f"Stochastic bullish crossover {timestamp_str}"
             if in_oversold:
-                desc += " in oversold territory (strong signal)"
+                desc += " in oversold territory"
             confidence = 80 if in_oversold else 60
             patterns.append({
                 "type": "stoch_bullish_crossover",
@@ -563,7 +618,7 @@ class IndicatorPatternEngine:
             timestamp_str = self._format_pattern_time(periods_ago, pattern_index, timestamps)
             desc = f"Stochastic bearish crossover {timestamp_str}"
             if in_overbought:
-                desc += " in overbought territory (strong signal)"
+                desc += " in overbought territory"
             confidence = 80 if in_overbought else 60
             patterns.append({
                 "type": "stoch_bearish_crossover",
@@ -818,9 +873,13 @@ class IndicatorPatternEngine:
         found, is_accumulation, strength, up_vol_ratio = detect_accumulation_distribution_numba(volume, prices)
         if found:
             phase = "Accumulation" if is_accumulation else "Distribution"
+            bars = accumulation_distribution_streak_numba(volume, prices, is_accumulation)
             pattern_index = len(volume) - 1
             timestamp_str = self._format_pattern_time(0, pattern_index, timestamps)
-            desc = f"{phase} detected (strength: {strength:.2f}) over last 10 periods {timestamp_str}"
+            desc = (
+                f"{phase} for {bars} {self._bar_label(bars)} (strength: {strength:.2f}) "
+                f"over last 10 periods {timestamp_str}"
+            )
 
             confidence = min(100, int(50 + strength * 50))
             patterns.append({
@@ -833,6 +892,7 @@ class IndicatorPatternEngine:
                     "strength": float(strength),
                     "up_volume_ratio": float(up_vol_ratio),
                     "lookback_periods": 10,
+                    "bars_in_state": int(bars),
                     "periods_ago": 0
                 }
             })

@@ -271,8 +271,13 @@ def donchian_channels_numba(high, low, length=20):
 
 
 @njit(cache=True)
-def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="ema"):
-    """Calculate Keltner Channels using ATR for band width."""
+def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="ema", atr_mamode="ema"):
+    """Calculate Keltner Channels using ATR for band width.
+
+    ``mamode`` smooths the middle line, ``atr_mamode`` the ATR that sets the width.
+    John Carter's TTM Squeeze pairs an EMA middle with the Wilder ("rma") ATR, the
+    same smoothing the prompt's own ATR line uses.
+    """
     n = len(close)
 
     if mamode == "sma":
@@ -280,7 +285,7 @@ def keltner_channels_numba(high, low, close, length=20, multiplier=2.0, mamode="
     else:
         middle = ema_numba(close, length)
 
-    atr_val = atr_numba(high, low, close, length, mamode=mamode)
+    atr_val = atr_numba(high, low, close, length, mamode=atr_mamode)
 
     upper = np.full(n, np.nan)
     lower = np.full(n, np.nan)

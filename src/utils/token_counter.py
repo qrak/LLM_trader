@@ -91,6 +91,18 @@ class TokenCounter:
             return 0
         return len(self.tokenizer.encode(text, disallowed_special=()))
 
+    def truncate_text(self, text: str, max_tokens: int) -> str:
+        """Keep a Unicode-safe prefix within the local estimated-token budget."""
+        if max_tokens < 0:
+            raise ValueError("max_tokens must be non-negative")
+        tokens = self.tokenizer.encode(text, disallowed_special=())
+        if len(tokens) <= max_tokens:
+            return text
+        prefix = self.tokenizer.decode(tokens[:max_tokens], errors="ignore")
+        while self.count_tokens(prefix) > max_tokens:
+            prefix = prefix[:-1]
+        return prefix
+
     def track_prompt_tokens(self, text: str, message_type: str = "prompt") -> int:
         """
         Count tokens in prompt text and track them in session stats.

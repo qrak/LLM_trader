@@ -159,6 +159,50 @@ def detect_volume_price_divergence_numba(volume: np.ndarray, prices: np.ndarray,
 
 
 @njit
+def _up_volume_ratio_at(volume: np.ndarray, prices: np.ndarray, end: int, lookback: int) -> float:
+    """Share of directional volume that traded on up bars as of bar `end`.
+
+    Returns -1.0 for a window that is unusable (too short, misaligned, holding a
+    NaN or carrying no directional volume).
+    """
+    if end < lookback or end >= len(volume) or end >= len(prices):
+        return -1.0
+
+    for i in range(end - lookback, end + 1):
+        if math.isnan(volume[i]) or math.isnan(prices[i]):
+            return -1.0
+
+    up_volume = 0.0
+    down_volume = 0.0
+
+    for i in range(end - lookback + 1, end + 1):
+        price_change = prices[i] - prices[i - 1]
+        if price_change > 0:
+            up_volume += volume[i]
+        elif price_change < 0:
+            down_volume += volume[i]
+
+    total_volume = up_volume + down_volume
+
+    if total_volume <= 0:
+        return -1.0
+
+    return up_volume / total_volume
+
+
+@njit
+def _accumulation_phase(up_volume_ratio: float) -> int:
+    """1 = accumulation, -1 = distribution, 0 = neither (or an unusable window)."""
+    if up_volume_ratio < 0.0:
+        return 0
+    if up_volume_ratio > 0.60:
+        return 1
+    if up_volume_ratio < 0.40:
+        return -1
+    return 0
+
+
+@njit
 def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarray, lookback: int = 10) -> tuple:
     """
     Detect accumulation (buying pressure) or distribution (selling pressure).
@@ -172,38 +216,39 @@ def detect_accumulation_distribution_numba(volume: np.ndarray, prices: np.ndarra
     if len(volume) < lookback + 1 or len(prices) < lookback + 1:
         return False, False, 0.0, 0.0
 
-    recent_volume = volume[-(lookback + 1):]
-    recent_prices = prices[-(lookback + 1):]
+    up_volume_ratio = _up_volume_ratio_at(volume, prices, len(volume) - 1, lookback)
+    phase = _accumulation_phase(up_volume_ratio)
 
-    for i in range(len(recent_volume)):
-        if math.isnan(recent_volume[i]) or math.isnan(recent_prices[i]):
-            return False, False, 0.0, 0.0
+    if phase == 0:
+        return False, False, 0.0, float(max(up_volume_ratio, 0.0))
 
-    up_volume = 0.0
-    down_volume = 0.0
+    strength = abs(float(up_volume_ratio - 0.5)) * 2.0
 
-    for i in range(1, len(recent_prices)):
-        price_change = recent_prices[i] - recent_prices[i - 1]
-        vol = recent_volume[i]
+    return True, phase > 0, strength, float(up_volume_ratio)
 
-        if price_change > 0:
-            up_volume += vol
-        elif price_change < 0:
-            down_volume += vol
 
-    total_volume = up_volume + down_volume
+@njit
+def accumulation_distribution_streak_numba(
+    volume: np.ndarray,
+    prices: np.ndarray,
+    is_accumulation: bool,
+    lookback: int = 10
+) -> int:
+    """
+    Consecutive bars the same volume phase has been detected.
 
-    if total_volume <= 0:
-        return False, False, 0.0, 0.0
+    The phase is a state, so this is how long it has already lasted: a long run is
+    an established flow regime rather than a fresh shift. 0 for a phase that only
+    started on the last bar's window boundary.
+    """
+    if len(volume) < lookback + 1 or len(prices) < lookback + 1:
+        return 0
 
-    up_volume_ratio = up_volume / total_volume
+    phase = 1 if is_accumulation else -1
 
-    if up_volume_ratio > 0.60:
-        strength = float(up_volume_ratio - 0.5) * 2.0
-        return True, True, strength, float(up_volume_ratio)
-
-    if up_volume_ratio < 0.40:
-        strength = float(0.5 - up_volume_ratio) * 2.0
-        return True, False, strength, float(up_volume_ratio)
-
-    return False, False, 0.0, float(up_volume_ratio)
+    bars = 0
+    for end in range(len(volume) - 1, lookback - 1, -1):
+        if _accumulation_phase(_up_volume_ratio_at(volume, prices, end, lookback)) != phase:
+            break
+        bars += 1
+    return bars

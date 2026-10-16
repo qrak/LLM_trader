@@ -250,8 +250,8 @@ _SCHEMA: dict[str, SectionMeta] = {
             ),
             "model_verbosity": SettingMeta(
                 key="model_verbosity", type="enum", category="hot",
-                description="Model output verbosity",
-                options=("low", "medium", "high"),
+                description="New analysis detail: ~400/1000/2000/8000 narrative output tokens",
+                options=("low", "medium", "high", "full"),
             ),
         },
     ),

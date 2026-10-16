@@ -99,6 +99,28 @@ def detect_macd_zero_cross_numba(
 
 
 @njit(cache=True)
+def _macd_hist_trend_at(macd_hist: np.ndarray, end: int, lookback: int) -> int:
+    """The MACD histogram direction rule evaluated as of bar `end`."""
+    if end < lookback:
+        return 0
+
+    increasing = 0
+    decreasing = 0
+
+    for i in range(end - lookback + 1, end + 1):
+        if macd_hist[i] > macd_hist[i - 1]:
+            increasing += 1
+        elif macd_hist[i] < macd_hist[i - 1]:
+            decreasing += 1
+
+    if increasing > decreasing:
+        return 1
+    if decreasing > increasing:
+        return -1
+    return 0
+
+
+@njit(cache=True)
 def get_macd_histogram_trend_numba(
     macd_hist: np.ndarray,
     lookback: int = 3
@@ -111,19 +133,32 @@ def get_macd_histogram_trend_numba(
     if len(macd_hist) < lookback + 1:
         return 0
 
-    recent_hist = macd_hist[-lookback-1:]
+    return _macd_hist_trend_at(macd_hist, len(macd_hist) - 1, lookback)
 
-    increasing = 0
-    decreasing = 0
 
-    for i in range(1, len(recent_hist)):
-        if recent_hist[i] > recent_hist[i-1]:
-            increasing += 1
-        elif recent_hist[i] < recent_hist[i-1]:
-            decreasing += 1
+@njit(cache=True)
+def macd_histogram_trend_streak_numba(
+    macd_hist: np.ndarray,
+    lookback: int = 3
+) -> int:
+    """
+    Consecutive bars the histogram direction has kept its current sign.
 
-    if increasing > decreasing:
-        return 1
-    if decreasing > increasing:
-        return -1
-    return 0
+    The direction is a state (a majority of the last `lookback` changes), so this
+    is how long it has already held: a long run is an established momentum, not a
+    fresh turn. 0 for a mixed reading, which carries no state to measure.
+    """
+    n = len(macd_hist)
+    if n < lookback + 1:
+        return 0
+
+    current = _macd_hist_trend_at(macd_hist, n - 1, lookback)
+    if current == 0:
+        return 0
+
+    bars = 0
+    for end in range(n - 1, lookback - 1, -1):
+        if _macd_hist_trend_at(macd_hist, end, lookback) != current:
+            break
+        bars += 1
+    return bars

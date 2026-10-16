@@ -34,18 +34,32 @@ from src.analyzer.pattern_engine.indicator_patterns.divergence_patterns import (
 from src.analyzer.pattern_engine.indicator_patterns.indicator_pattern_engine import (
     IndicatorPatternEngine,
 )
+from src.analyzer.pattern_engine.indicator_patterns.macd_patterns import (
+    get_macd_histogram_trend_numba,
+    macd_histogram_trend_streak_numba,
+)
 from src.analyzer.pattern_engine.indicator_patterns.rsi_patterns import (
     detect_rsi_overbought_numba,
     detect_rsi_oversold_numba,
 )
 from src.analyzer.pattern_engine.indicator_patterns.stochastic_patterns import (
+    detect_stoch_bearish_crossover_numba,
+    detect_stoch_bullish_crossover_numba,
     detect_stoch_overbought_numba,
     detect_stoch_oversold_numba,
 )
 from src.analyzer.pattern_engine.indicator_patterns.volatility_patterns import (
+    BB_SQUEEZE_LOOKBACK,
+    BB_SQUEEZE_PERCENTILE,
+    bb_squeeze_streak_numba,
     detect_bb_squeeze_numba,
+    detect_keltner_squeeze_numba,
+    detect_volatility_trend_numba,
+    volatility_trend_streak_numba,
 )
 from src.analyzer.pattern_engine.indicator_patterns.volume_patterns import (
+    accumulation_distribution_streak_numba,
+    detect_accumulation_distribution_numba,
     detect_climax_volume_numba,
     detect_volume_dryup_numba,
     detect_volume_spike_numba,
@@ -59,6 +73,7 @@ from src.analyzer.pattern_quality_scorer import (
     PatternQualityScorer,
     QualityScore,
 )
+from src.analyzer.technical_calculator import TechnicalCalculator
 from src.indicators.base.technical_indicators import TechnicalIndicators
 from src.indicators.momentum.momentum_indicators import (
     coppock_curve_numba,
@@ -1192,6 +1207,261 @@ def test_bb_squeeze_confidence_stays_inside_zero_to_hundred():
     assert len(squeeze) == 1
     assert squeeze[0]["confidence"] == 100
     assert squeeze[0]["details"]["width_percentile"] == 0.0
+
+
+def test_ttm_squeeze_run_length_counts_every_bar_inside_the_channel():
+    kc_upper = np.full(30, 110.0)
+    kc_lower = np.full(30, 90.0)
+    bb_upper = np.full(30, 111.0)
+    bb_lower = np.full(30, 89.0)
+    bb_upper[-3:] = 105.0
+    bb_lower[-3:] = 95.0
+
+    assert detect_keltner_squeeze_numba(
+        kc_upper, kc_lower, bb_upper, bb_lower
+    ) == (True, 3, -1)
+
+
+def test_ttm_squeeze_reports_the_bars_since_the_bands_left():
+    kc_upper = np.full(30, 110.0)
+    kc_lower = np.full(30, 90.0)
+    bb_upper = np.full(30, 105.0)
+    bb_lower = np.full(30, 95.0)
+    bb_upper[-2:] = 111.0
+    bb_lower[-2:] = 89.0
+
+    assert detect_keltner_squeeze_numba(
+        kc_upper, kc_lower, bb_upper, bb_lower
+    ) == (False, 0, 1)
+
+
+def test_ttm_squeeze_never_inside_reports_no_state_and_no_release():
+    kc_upper = np.full(30, 110.0)
+    kc_lower = np.full(30, 90.0)
+    bb_upper = np.full(30, 111.0)
+    bb_lower = np.full(30, 89.0)
+
+    assert detect_keltner_squeeze_numba(
+        kc_upper, kc_lower, bb_upper, bb_lower
+    ) == (False, 0, -1)
+
+
+def test_pattern_engine_reports_how_long_the_compression_has_run():
+    kc_upper = np.full(40, 110.0)
+    kc_lower = np.full(40, 90.0)
+    bb_upper = np.full(40, 105.0)
+    bb_lower = np.full(40, 95.0)
+
+    volatility = IndicatorPatternEngine().detect_patterns(
+        {
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "kc_upper": kc_upper,
+            "kc_lower": kc_lower,
+        }
+    )["volatility"]
+    squeeze = [pattern for pattern in volatility if pattern["type"] == "ttm_squeeze"]
+
+    assert len(squeeze) == 1
+    assert squeeze[0]["details"]["bars_in_squeeze"] == 40
+    assert "in compression for 40 bars" in squeeze[0]["description"]
+    assert "extreme low volatility" not in squeeze[0]["description"]
+
+
+def test_pattern_engine_reports_the_release_once_the_bands_leave_the_channel():
+    kc_upper = np.full(40, 110.0)
+    kc_lower = np.full(40, 90.0)
+    bb_upper = np.full(40, 105.0)
+    bb_lower = np.full(40, 95.0)
+    bb_upper[-2:] = 111.0
+    bb_lower[-2:] = 89.0
+
+    volatility = IndicatorPatternEngine().detect_patterns(
+        {
+            "bb_upper": bb_upper,
+            "bb_lower": bb_lower,
+            "kc_upper": kc_upper,
+            "kc_lower": kc_lower,
+        }
+    )["volatility"]
+    types = {pattern["type"] for pattern in volatility}
+    fired = [pattern for pattern in volatility if pattern["type"] == "ttm_squeeze_fired"]
+
+    assert "ttm_squeeze" not in types
+    assert len(fired) == 1
+    assert fired[0]["details"]["bars_since_release"] == 1
+    assert fired[0]["index"] == 38
+    assert "fired" in fired[0]["description"]
+
+
+def test_keltner_channel_behind_the_ttm_squeeze_is_1_5_wilder_atr_wide():
+    """The squeeze compares the BB against the canonical KC(20, 1.5 x Wilder ATR)."""
+    bar_count = 300
+    index = np.arange(bar_count, dtype=float)
+    close = 100.0 + 10.0 * np.sin(index / 12.0) + index * 0.05
+    high = close + 1.5
+    low = close - 1.5
+    volume = np.full(bar_count, 1000.0)
+    ohlcv = np.column_stack((index, close - 0.2, high, low, close, volume))
+
+    indicators = TechnicalCalculator(null_logger()).get_indicators(ohlcv)
+
+    expected_middle = ema_numba(np.asarray(close), 20)
+    expected_atr = atr_numba(
+        np.asarray(high), np.asarray(low), np.asarray(close), 20, mamode="rma"
+    )
+
+    np.testing.assert_allclose(
+        indicators["kc_middle"], expected_middle, equal_nan=True, rtol=1e-12
+    )
+    np.testing.assert_allclose(
+        indicators["kc_upper"] - indicators["kc_middle"],
+        1.5 * expected_atr,
+        equal_nan=True,
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        indicators["kc_middle"] - indicators["kc_lower"],
+        1.5 * expected_atr,
+        equal_nan=True,
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        indicators["atr"], expected_atr, equal_nan=True, rtol=1e-12
+    )
+
+
+def test_macd_histogram_trend_streak_counts_the_bars_the_rule_has_held():
+    rising = candles(*[float(value) for value in range(1, 11)])
+    turning = candles(-1.0, -2.0, -3.0, -4.0, 1.0, 2.0, 3.0, 4.0)
+
+    assert get_macd_histogram_trend_numba(rising) == 1
+    assert macd_histogram_trend_streak_numba(rising) == 7
+    assert get_macd_histogram_trend_numba(turning) == 1
+    assert macd_histogram_trend_streak_numba(turning) == 3
+
+
+def test_volatility_trend_streak_counts_the_bars_the_rule_has_held():
+    rising = candles(*[float(value) for value in range(1, 21)])
+
+    assert detect_volatility_trend_numba(rising) == 1
+    assert volatility_trend_streak_numba(rising) == 11
+
+
+def test_bb_squeeze_streak_counts_the_bars_inside_the_threshold():
+    ramp = np.linspace(1000.0, 2000.0, 200)
+    squeezed = np.concatenate([ramp, np.full(5, 400.0)])
+    upper, lower = band(squeezed)
+
+    assert detect_bb_squeeze_numba(upper, lower)[0] is True
+    assert bb_squeeze_streak_numba(upper, lower) == 5
+    assert bb_squeeze_streak_numba(*band(ramp)) == 0
+
+
+def test_bb_squeeze_constants_match_the_detector_defaults():
+    squeezed = np.concatenate([np.linspace(1000.0, 2000.0, 200), np.full(5, 400.0)])
+    upper, lower = band(squeezed)
+
+    assert detect_bb_squeeze_numba(
+        upper, lower, BB_SQUEEZE_PERCENTILE, BB_SQUEEZE_LOOKBACK
+    ) == detect_bb_squeeze_numba(upper, lower)
+    assert bb_squeeze_streak_numba(
+        upper, lower, BB_SQUEEZE_PERCENTILE, BB_SQUEEZE_LOOKBACK
+    ) == bb_squeeze_streak_numba(upper, lower)
+
+
+def test_accumulation_distribution_streak_counts_the_bars_of_the_phase():
+    falling = np.linspace(100.0, 90.0, 11)
+    rising_run = np.linspace(90.0, 120.0, 30)
+    prices = np.concatenate([falling, rising_run])
+    volume = np.full(prices.size, 100.0)
+
+    phase_found, is_accumulation, strength, up_share = (
+        detect_accumulation_distribution_numba(volume, prices)
+    )
+
+    assert (phase_found, is_accumulation) == (True, True)
+    assert strength == 1.0
+    assert up_share == 1.0
+    assert accumulation_distribution_streak_numba(volume, prices, True) == 24
+    assert accumulation_distribution_streak_numba(volume, prices, False) == 0
+
+
+def test_pattern_engine_reports_state_durations_without_absolute_claims():
+    bar_count = 130
+    index = np.arange(bar_count, dtype=float)
+    close = np.linspace(120.0, 100.0, bar_count)
+    ohlcv = np.column_stack(
+        (index, close, close + 1.0, close - 1.0, close, np.full(bar_count, 100.0))
+    )
+    technical_history = {
+        "atr": candles(*[float(value) for value in range(1, bar_count + 1)]),
+        "macd_line": candles(*[float(value) for value in range(1, bar_count + 1)]),
+        "macd_signal": candles(*[float(value) for value in range(0, bar_count)]),
+        "macd_hist": candles(*[float(value) for value in range(1, bar_count + 1)]),
+    }
+    squeezed_widths = np.concatenate(
+        (np.linspace(1000.0, 2000.0, bar_count - 4), np.full(4, 400.0))
+    )
+    technical_history["bb_upper"], technical_history["bb_lower"] = band(squeezed_widths)
+
+    patterns = IndicatorPatternEngine().detect_patterns(technical_history, ohlcv)
+    descriptions = {
+        pattern["type"]: pattern["description"]
+        for group in patterns.values()
+        for pattern in group
+    }
+
+    assert "for 4 bars (band width in the lowest 20% of the last 120 bars)" in (
+        descriptions["bb_squeeze"]
+    )
+    assert patterns["volatility"][0]["details"]["bars_in_state"] == 121
+    assert "Volatility increasing for 121 bars" in descriptions["volatility_increasing"]
+    assert "MACD histogram increasing for 127 bars" in (
+        descriptions["macd_histogram_increasing"]
+    )
+    assert "Distribution for 120 bars (strength: 1.00) over last 10 periods" in (
+        descriptions["volume_distribution"]
+    )
+    assert "momentum shift" not in descriptions["macd_histogram_increasing"]
+    assert "breakout imminent" not in descriptions["bb_squeeze"]
+    assert "low volatility" not in descriptions["bb_squeeze"]
+
+
+def test_stochastic_crossover_descriptions_do_not_grade_the_signal():
+    stoch_k = candles(12.0, 15.0, 18.0, 22.0, 26.0)
+    stoch_d = candles(20.0, 19.0, 18.0, 17.0, 16.0)
+
+    found, _, _, _, in_oversold = detect_stoch_bullish_crossover_numba(stoch_k, stoch_d)
+    patterns = IndicatorPatternEngine().detect_patterns(
+        {"stoch_k": stoch_k, "stoch_d": stoch_d}
+    )["stochastic"]
+    bullish = [
+        pattern for pattern in patterns if pattern["type"] == "stoch_bullish_crossover"
+    ]
+
+    assert found is True
+    assert in_oversold is True
+    assert len(bullish) == 1
+    assert bullish[0]["description"].endswith("in oversold territory")
+    assert "strong signal" not in bullish[0]["description"]
+
+
+def test_state_descriptions_use_the_singular_bar_label():
+    """A state that flipped on the last bar reads "1 bar", not "1 bars"."""
+    atr = candles(
+        100.0, 99.0, 98.0, 97.0, 96.0, 95.0, 94.0, 93.0, 92.0, 91.0, 90.0, 89.0,
+        90.0, 91.0, 92.0, 93.0, 94.0, 93.0, 92.0, 91.0, 92.0,
+    )
+
+    volatility = IndicatorPatternEngine().detect_patterns({"atr": atr})["volatility"]
+    increasing = [
+        pattern for pattern in volatility if pattern["type"] == "volatility_increasing"
+    ]
+
+    assert len(increasing) == 1
+    assert increasing[0]["description"] == "Volatility increasing for 1 bar now"
+    assert increasing[0]["details"]["bars_in_state"] == 1
 
 
 def test_threshold_breaches_are_strict_at_the_boundary():

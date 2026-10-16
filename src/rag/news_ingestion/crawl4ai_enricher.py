@@ -3,12 +3,19 @@
 Enriches items whose body text is below *min_chars* by crawling the article
 URL with Crawl4AI's AsyncWebCrawler. Falls back to a plain aiohttp HTML
 extraction if crawl4ai is not installed or the browser setup is unavailable.
+
+Importing this module sets ``CRAWL4AI_NO_CLOUD_NOTICE``, which switches off
+Crawl4AI's hosted-cloud promo banner (shown at crawler start and after an
+anti-bot block). The bot runs that library unattended, so the banner is noise
+in the console, and the flag is read at every call site, so no start-up
+ordering is involved.
 """
 from __future__ import annotations
 
 import asyncio
 import ipaddress
 import math
+import os
 import re
 import sys
 from typing import TYPE_CHECKING, Any
@@ -23,6 +30,8 @@ from .schema_mapper import has_news_boilerplate, strip_news_boilerplate
 if TYPE_CHECKING:
     from src.config.loader import Config
     from src.logger.logger import Logger
+
+os.environ["CRAWL4AI_NO_CLOUD_NOTICE"] = "1"
 
 
 class Crawl4AIEnricher:

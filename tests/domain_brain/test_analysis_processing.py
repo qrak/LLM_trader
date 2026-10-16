@@ -621,3 +621,33 @@ def test_decision_graph_and_synopsis_are_pure_functions():
     )
     assert "flat" in text.lower() or "no open position" in text.lower()
     assert "HOLD" in text
+
+@pytest.mark.parametrize("json_mode", [True, False])
+@pytest.mark.parametrize("valid_entry", [True, False])
+async def test_full_markdown_report_survives_processing_and_python_rr_checks(json_mode, valid_entry):
+    payload = json.loads(json_object_reply("BUY"))
+    narrative = (
+        "## 1) Technical Analysis Overview\n\n"
+        + "**Metrics:** closed-candle evidence; interpretation remains separate.\n\n" * 200
+        + "## 10) Risk Considerations & Final Synthesis\n\nThe current setup has explicit invalidation.\n\n"
+        + "11) RISK/REWARD: RR_CHECK side=LONG entry=100 SL=90 TP=120 reward=20 risk=10 R/R=2\n"
+        + "12) DECISION: BUY\n13) EXECUTION NOTE: current cycle only."
+    )
+    payload["narrative"] = narrative
+    if not valid_entry:
+        payload["analysis"]["risk_reward_ratio"] = 9.0
+    raw = json.dumps(payload) if json_mode else narrative + "\n```json\n" + json.dumps({"analysis": payload["analysis"]}) + "\n```"
+    processor, model_manager = make_json_parser_processor(raw)
+    result = await processor.process_analysis(system_prompt="system", prompt="prompt")
+    assert result["response_validation"]["status"] == "valid"
+    assert result["analysis"]["signal"] == ("BUY" if valid_entry else "HOLD")
+    assert "## 1) Technical Analysis Overview" in result["raw_response"]
+    assert result["raw_response"].count("**Metrics:**") == 200
+    assert "## 10) Risk Considerations & Final Synthesis" in result["raw_response"]
+    if not valid_entry:
+        assert "12) DECISION: HOLD" in result["raw_response"]
+        assert "13) EXECUTION NOTE: no order" in result["raw_response"]
+        assert "12) DECISION: BUY" not in result["raw_response"]
+    block = result["raw_response"].split("```json", 1)[1].rsplit("```", 1)[0]
+    assert json.loads(block)["analysis"]["signal"] == result["analysis"]["signal"]
+    model_manager.send_prompt_streaming.assert_awaited_once()

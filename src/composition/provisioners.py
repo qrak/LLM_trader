@@ -441,7 +441,9 @@ class ProvisioningMixin:
             market_fmt,
             ev_formatter=ev_fmt,
             timeframe_validator=utils["timeframe_validator"],
-            template_manager=TemplateManager(self.config, self.logger, utils["timeframe_validator"]),
+            template_manager=TemplateManager(
+                self.config, self.logger, utils["timeframe_validator"],
+            ),
         )
 
         engine = AnalysisEngine(

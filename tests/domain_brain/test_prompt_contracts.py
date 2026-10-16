@@ -15,6 +15,7 @@ from src.analyzer.analysis_context import AnalysisContext
 from src.analyzer.prompts.prompt_builder import PromptBuilder
 from src.analyzer.prompts.template_manager import TemplateManager
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
 
 SYMBOL = "BTC/USDT"
@@ -268,26 +269,16 @@ def test_previous_reasoning_keeps_only_answer_lines(config, previous_response, e
     assert [marker for marker in forbidden if marker in section] == []
 
 
-@pytest.mark.parametrize(
-    ("verbosity", "max_chars", "section_chars"),
-    [("low", 1500, 1655), ("medium", 3000, 3154), ("high", 4500, 4655)],
-    ids=["low", "medium", "high"],
-)
-def test_previous_reasoning_truncation_scales_with_verbosity(verbosity, max_chars, section_chars):
-    """The rendered continuity block grows with the per-verbosity character cap."""
+@pytest.mark.parametrize("verbosity", ["low", "medium", "high", "full"])
+def test_previous_reasoning_has_no_separate_cap_and_is_independent_of_verbosity(verbosity):
     manager = manager_with_verbosity(verbosity)
-    long_block = ("Context sentence with tactical details and invalidation logic. " * 200).strip()
-    previous_response = (
-        long_block + '\n```json\n{"analysis": {"signal": "HOLD", "confidence": 70}}\n```'
-    )
-
-    section = previous_context(
-        manager.build_system_prompt(SYMBOL, previous_response=previous_response)
-    )
-
-    assert manager._get_previous_reasoning_char_cap() == max_chars
-    assert len(section) == section_chars
-    assert section.endswith("[Previous reasoning truncated for prompt safety.]")
+    long_block = ("Context sentence with tactical details and invalidation logic. " * 1000).strip()
+    long_block += "\nLate invalidation trigger: close below 69000 invalidates the prior thesis."
+    assert TokenCounter().count_tokens(long_block) > 8000
+    clean = manager._sanitize_previous_reasoning(long_block)
+    assert clean == long_block
+    assert clean == manager_with_verbosity("low")._sanitize_previous_reasoning(long_block)
+    assert clean in previous_context(manager.build_system_prompt(SYMBOL, previous_response=long_block))
 
 
 def test_update_gating_wording_has_no_competing_percentage_thresholds(config):

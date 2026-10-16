@@ -19,14 +19,14 @@ if TYPE_CHECKING:
 class TemplateManager:
     """Manages prompt templates, system prompts, and analysis steps for trading decisions."""
 
-    PROMPT_VERSION = "trading-analysis-prompt-v1.4"
+    PROMPT_VERSION = "trading-analysis-prompt-v1.6"
     RESPONSE_CONTRACT_VERSION = "trading-analysis-response-v1"
     PROMPT_VARIANT = "decision-gated"
-    PREVIOUS_REASONING_MAX_CHARS = 3000
-    PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY = {  # noqa: RUF012
-        "low": 1500,
-        "medium": 3000,
-        "high": 4500,
+    NARRATIVE_TARGET_TOKENS = {  # noqa: RUF012
+        "low": 400,
+        "medium": 1000,
+        "high": 2000,
+        "full": 8000,
     }
     PREVIOUS_REASONING_LINE_PATTERN = re.compile(r"^\d\)\s+[A-Z0-9 &/]+:")
     PREVIOUS_PROMPT_SECTION_MARKERS = (
@@ -145,16 +145,11 @@ class TemplateManager:
         """Normalize verbosity value with safe fallback."""
         raw_value = value if value is not None else self.config.MODEL_VERBOSITY
         normalized = str(raw_value).strip().lower()
-        if normalized in self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY:
+        if normalized in self.NARRATIVE_TARGET_TOKENS:
             return normalized
         return "medium"
 
-    def _get_previous_reasoning_char_cap(self, verbosity: str | None = None) -> int:
-        """Return max previous reasoning characters by verbosity level."""
-        normalized = self._normalize_model_verbosity(verbosity)
-        return self.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY.get(normalized, self.PREVIOUS_REASONING_MAX_CHARS)
-
-    def _sanitize_previous_reasoning(self, previous_response: str, verbosity: str | None = None) -> str:
+    def _sanitize_previous_reasoning(self, previous_response: str) -> str:
         """Keep only prior decision reasoning, removing echoed prompt/schema instructions."""
         text_without_json = re.sub(
             r"```json\s*.*?\s*```",
@@ -184,12 +179,7 @@ class TemplateManager:
             if self._is_previous_json_or_markdown_artifact(stripped):
                 continue
             sanitized.append(stripped)
-        clean_text = re.sub(r"\n{3,}", "\n\n", "\n".join(sanitized)).strip()
-        max_chars = self._get_previous_reasoning_char_cap(verbosity)
-        if len(clean_text) <= max_chars:
-            return clean_text
-        truncated = clean_text[:max_chars].rsplit("\n", 1)[0].strip()
-        return f"{truncated}\n[Previous reasoning truncated for prompt safety.]" if truncated else ""
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(sanitized)).strip()
 
     def _is_previous_prompt_instruction_line(self, line: str) -> bool:
         """Return True when a prior response line looks like leaked prompt instructions."""
@@ -333,7 +323,15 @@ class TemplateManager:
         thresholds = dynamic_thresholds or {}
         adx_strong = thresholds.get("adx_strong_threshold", 25)
         _verbosity = self._normalize_model_verbosity(model_verbosity)
-        if _verbosity == "high":
+        if _verbosity == "full":
+            _output_rule = (
+                "Output rule: write a full research report with Markdown headings, bullets and "
+                "multi-paragraph interpretations, not a compressed list of one-line labels. "
+                "Keep the final 11) RISK/REWARD:, 12) DECISION: and 13) EXECUTION NOTE: "
+                "labels at the start of plain-text lines for Python validation. "
+                "Response Format defines the provider envelope; Markdown belongs only in the narrative."
+            )
+        elif _verbosity == "high":
             _output_rule = (
                 "Output rule: use detailed parser-safe numbered labels (e.g., '1) MARKET STRUCTURE:'). "
                 "Each label: quantitative data first, then a brief interpretation. "
@@ -463,12 +461,40 @@ class TemplateManager:
             ),
             (
                 "- Indicator variants (these are the calculator's fixed windows, NOT the textbook "
-                "defaults): TSI uses the fast 20/10 smoothing, not 25/13; KST weights ROC 5/10/15/20 "
+                "defaults): RSI 14 (Wilder smoothing), MACD 12/26/9 (EMA), Stochastic 14/3/3, "
+                "Bollinger 20 with 2 population standard deviations, ATR and ATR% 20 (Wilder), "
+                "Keltner EMA(20) of close ± 1.5 x the same Wilder ATR(20), ADX/+DI/-DI 14, "
+                "Choppiness 14, CCI 14, ROC 14, PPO 12/26, CMF 20, MFI 14, Force Index 20, "
+                "VWAP/TWAP 20, Donchian 20, Chandelier 20 x 3 ATR; TSI uses the fast 20/10 "
+                "smoothing, not 25/13; KST weights ROC 5/10/15/20 "
                 "smoothed by SMA 3/5/7/9 (short variant, not Pring's 10/15/20/30 smoothed 10/10/10/15); "
-                "Keltner bands are built from their own EMA-smoothed ATR, so KC width does not match "
-                "the ATR value printed in the same block; Vortex VI+ and VI- each hover around 1.0 "
+                "the Keltner half-width is 1.5 x the printed 20-bar ATR, so the KC band is never the "
+                "ATR value itself; Vortex VI+ and VI- each hover around 1.0 "
                 "(a value near 1 means balanced flow, not missing data) — read them against each other, "
                 "not against 1."
+            ),
+            (
+                "- Pattern-engine thresholds, all measured on the last CLOSED candle: RSI "
+                "oversold/overbought at 30/70; Stochastic at 20/80, with crosses counted inside "
+                "30/70; volume spike at or above 2.5x and dry-up at or below 0.5x the 20-bar "
+                "average volume; climax volume at or above 3x the 50-bar average; ATR spike at or "
+                "above 1.5x the previous 14-bar average; Bollinger squeeze = band width inside the "
+                "lowest 20% of the last 120 bars; TTM squeeze = the Bollinger bands inside a "
+                "Keltner channel; MACD histogram trend = the majority direction of its last 3 "
+                "changes; volatility trend = at least 6 of the last 9 ATR changes in one "
+                "direction; accumulation/distribution = the up-bar share of directional volume "
+                "above 60% (accumulation) or below 40% (distribution) over 10 bars, and its "
+                "strength is |share - 0.5| x 2, so 0.2 is the smallest reported reading; "
+                "volume-price divergence compares the two halves of 20 bars and needs price "
+                "beyond 2% with volume below -15%; divergences need at least 5 bars between the "
+                "two swings."
+            ),
+            (
+                "- Pattern lines: \"now\" means the state holds on the last closed candle, while "
+                "\"N bars ago\" is when an event happened. State lines report how long they have "
+                "already lasted (\"for N bars\") — a state running for dozens of bars is an "
+                "established condition, not a fresh setup, and it disappears from the list only "
+                "once it ends. The list shows at most the 25 most recent lines."
             ),
             (
                 "- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
@@ -525,7 +551,7 @@ class TemplateManager:
                 feedback_line, _, previous_reasoning = previous_response.partition("\n")
             else:
                 previous_reasoning = previous_response
-            text_reasoning = self._sanitize_previous_reasoning(previous_reasoning, _verbosity)
+            text_reasoning = self._sanitize_previous_reasoning(previous_reasoning)
             prior_analysis = self._extract_previous_analysis(previous_response)
             if prior_analysis is not None and prior_analysis.get("reasoning"):
                 text_reasoning = ""
@@ -757,6 +783,74 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
         return rules
 
+    @staticmethod
+    def _build_full_report_sections(chart_validation_line: str) -> str:
+        """Expand the research narrative without changing the decision/validation contract."""
+        chart_section = (
+            "Describe only visible patterns, their location, forming/confirmed status, bias, "
+            "invalidation and agreement/conflict with numerical indicators."
+            f"{chart_validation_line}"
+            if chart_validation_line else
+            "No chart image is supplied. State this limitation; discuss only supplied numerical "
+            "patterns and never claim visual confirmation."
+        )
+        return f"""Start with a short educational/not-financial-advice disclaimer. Use these sections:
+
+## 1) Technical Analysis Overview
+Current live price vs last closed candle, supplied period changes and ranges, regime and key metrics.
+After quantitative observations, explain what they mean in accessible language. State explicitly
+that indicators use completed candles only; the live price is not closed-candle confirmation.
+
+## 2) Multi-Timeframe Assessment
+Separate short-term, medium-term and daily/weekly macro subsections using the supplied periods.
+Quantify changes, structural alignment/conflicts and their decision implications for each horizon.
+
+## 3) Technical Indicators Summary
+Use Momentum, Trend, Volatility and Volume & Flow subsections. Cover the material supplied
+indicators, values, direction and divergences, including ADX/DI, Choppiness, RSI/MACD, ATR/bands,
+CMF/OBV/MFI where available. Follow each category with an interpretation, not just a data dump.
+
+## 4) Key Technical Levels
+Prioritize supports and resistances with prices, distances from current price and structural
+confluence. Distinguish historical levels from current ranges and explain confirmation/invalidation.
+
+## 5) Market Context
+Compare the asset to the broader market and supplied BTC/ETH, dominance and Fear & Greed data.
+Separate measured relative performance from speculative explanations of institutional activity.
+
+## 6) News Summary & Impact Assessment
+For each material supplied article, identify source/date, summarize facts and assess likely impact
+and horizon. Cite only supplied URLs. Flag stale/conflicting reports; if none exist, state unavailable.
+
+## 7) Chart Pattern Analysis & Visual Integration
+{chart_section}
+
+## 8) Educational & Historical Context
+Explain the concepts that matter to this setup. Historical analogues must come from supplied
+history or trade evidence, with dates and limitations. Do not invent backtests, historical events,
+correlations, win rates or probabilities; state when evidence is insufficient for an analogue.
+
+## 9) Potential Catalysts & Bull/Bear/Neutral Scenarios
+Develop each plausible scenario with evidence, horizon, confirmation and invalidation levels.
+These are observations to reassess next cycle, NOT pending orders or staged/future entries.
+Use qualitative likelihoods unless supplied calibrated evidence supports numerical probabilities.
+
+## 10) Risk Considerations, Position Management & Final Synthesis
+Explain technical, liquidity and macro risks. If a position exists, assess its actual entry, P&L,
+SL/TP progress and hybrid tightening policy; otherwise state flat, without inventing exposure.
+Conclude with a cohesive multi-paragraph synthesis: current state in plain language, the 2-3
+critical drivers, conflicting evidence and what to watch next. Do not quote numerical R/R here.
+
+Finish with these EXACT unheaded labels at column zero (not Markdown headings, bullets or code):
+11) RISK/REWARD: keep all numerical R/R discussion here, using the RR_CHECK contract in Decision Rules; otherwise N/A
+12) DECISION: exactly one current signal, consistent with analysis.signal, on ONE line
+13) EXECUTION NOTE: current execution or management action and technical rationale on ONE line
+
+Use quantitative data first, then developed interpretive paragraphs (typically 4-8 sentences per
+major subsection when evidence supports it). Avoid repetition and padding. Mark missing inputs
+explicitly rather than fabricating values. Detailed scenarios never override Decision Rules or
+create additional signals. End with a brief risk disclaimer before the final three labels."""
+
     def build_response_template(self, has_chart_analysis: bool = False,
                                 model_verbosity: str | None = None,
                                 dynamic_thresholds: dict[str, Any] | None = None) -> str:
@@ -781,7 +875,22 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
 
 
         verbosity = (model_verbosity or self.config.MODEL_VERBOSITY).lower()
-        if verbosity == "high":
+        if verbosity == "full":
+            _output_header = (
+                "Output: a full Markdown research report followed by the existing decision JSON. "
+                "JSON is truth. This is NOT the 13-line summary: develop sections 1-10 with "
+                "subheadings, quantitative bullet points and explanatory paragraphs. "
+                "Use as much space as the supplied evidence needs; no response character cap is "
+                "imposed by model_verbosity (the provider output-token limit still applies). "
+                "Finish the report before the JSON; never omit the decision to make room for prose."
+            )
+            _narrative_section = self._build_full_report_sections(chart_validation_line)
+            _reasoning_guidance = (
+                "Concise decision continuity summary: thesis and key drivers, market regime, "
+                "confirming/conflicting evidence, invalidation trigger, and what to watch next. "
+                "Do not duplicate the full report in this field."
+            )
+        elif verbosity == "high":
             _output_header = (
                 "Output: 13 plain-text numbered lines + JSON. JSON is truth. No markdown headings. "
                 "Each line must address its section using quantitative data first, then interpretation."
@@ -854,27 +963,43 @@ Mandatory: All trades require stops based on technical levels (not arbitrary %),
     }}"""
 
         if is_json_object_output:
-            _output_header = (
-                "Output: ONE JSON object and NOTHING outside it. No prose before or after it, "
-                "no markdown headings. Put the numbered narrative lines in the \"narrative\" "
-                "string (ONE string, lines joined with \\n — not an array) and the decision in "
-                "\"analysis\". Each narrative line must use quantitative data first, then "
-                "interpretation."
-            )
-            _narrative_label = 'Narrative (the lines below as one string in "narrative", \\n separated):'
+            if verbosity == "full":
+                _output_header = (
+                    "Output: ONE JSON object and NOTHING outside it. Put the FULL Markdown "
+                    "research report described below in the \"narrative\" string (ONE string, "
+                    "not an array; escape newlines as \\n) and the existing decision object in "
+                    "\"analysis\". Markdown headings and paragraphs are allowed INSIDE narrative, "
+                    "not around the JSON object. Do not compress the report into one-line labels. "
+                    "No response character cap is imposed by model_verbosity; respect the provider "
+                    "output-token limit and leave room for the complete decision object."
+                )
+                _narrative_label = 'Narrative (full Markdown report inside "narrative"):'
+            else:
+                _output_header = (
+                    "Output: ONE JSON object and NOTHING outside it. No prose before or after it, "
+                    "no markdown headings. Put the numbered narrative lines in the \"narrative\" "
+                    "string (ONE string, lines joined with \\n — not an array) and the decision in "
+                    "\"analysis\". Each narrative line must use quantitative data first, then "
+                    "interpretation."
+                )
+                _narrative_label = 'Narrative (the lines below as one string in "narrative", \\n separated):'
             _json_example = (
                 '{\n'
-                '    "narrative": "<narrative lines 1) and up, joined with \\n>",\n'
+                '    "narrative": "<complete narrative, newlines escaped as \\n>",\n'
                 f'{_analysis_object}\n'
                 '}'
             )
         else:
-            _narrative_label = "Narrative (plain-text only):"
+            _narrative_label = "Narrative (full Markdown report):" if verbosity == "full" else "Narrative (plain-text only):"
             _json_example = f'{{\n{_analysis_object}\n}}'
 
+        narrative_budget = self.NARRATIVE_TARGET_TOKENS[self._normalize_model_verbosity(model_verbosity)]
         response_template = f"""## Response Format
 
 {_output_header}
+Narrative length target: approximately {narrative_budget} output tokens, excluding decision JSON
+and hidden reasoning. This is a writing target, not a hard API cap or a truncation rule.
+Use less when evidence is limited; always finish the decision JSON within the provider output cap.
 
 {_narrative_label}
 {_narrative_section}

@@ -20,7 +20,7 @@ CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 
 VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
-VALID_MODEL_VERBOSITIES = {"low", "medium", "high"}
+VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
@@ -180,7 +180,7 @@ class Config:
     def _validate_model_verbosity(self) -> None:
         """Validate model_verbosity config value at startup."""
         self._normalize_model_verbosity(
-            self.get_config("model_config", "model_verbosity", "high"),
+            self.get_config("model_config", "model_verbosity", "full"),
             "model_verbosity",
         )
 
@@ -370,7 +370,7 @@ class Config:
     @property
     def MODEL_VERBOSITY(self) -> str:
         return self._normalize_model_verbosity(
-            self.get_config("model_config", "model_verbosity", "high"),
+            self.get_config("model_config", "model_verbosity", "full"),
             "model_verbosity",
         )
 

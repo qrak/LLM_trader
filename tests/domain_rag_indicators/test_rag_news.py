@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import subprocess
+import sys
 import time
 from contextlib import ExitStack, nullcontext
 from datetime import datetime, timedelta, timezone
@@ -724,6 +727,34 @@ def test_crawl4ai_enricher_defaults_without_config_or_kwargs():
     assert enricher.timeout == 30.0
     assert enricher.min_chars == 400
     assert type(enricher._use_crawl4ai) is bool
+
+
+def test_crawl4ai_enricher_module_import_disables_the_cloud_notice():
+    repo_root = Path(__file__).resolve().parents[2]
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key != "CRAWL4AI_NO_CLOUD_NOTICE"
+    }
+    env["PYTHONPATH"] = str(repo_root)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import os, src.rag.news_ingestion.crawl4ai_enricher; "
+            "print(os.environ.get('CRAWL4AI_NO_CLOUD_NOTICE'))",
+        ],
+        cwd=str(repo_root),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1"
 
 
 def test_crawl4ai_enricher_reads_config_when_kwargs_are_absent():

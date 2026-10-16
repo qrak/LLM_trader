@@ -15,6 +15,7 @@ import pytest
 
 from src.analyzer.prompts.template_manager import TemplateManager
 from src.utils.timeframe_validator import TimeframeValidator
+from src.utils.token_counter import TokenCounter
 from tests.conftest import make_config, null_logger
 
 SYMBOL = "BTC/USDT"
@@ -248,14 +249,14 @@ def test_prompt_metadata_is_backend_only():
     """Metadata is attribution data: exact dict contract, never rendered."""
     manager = make_manager()
     assert manager.build_prompt_metadata() == {
-        "prompt_version": "trading-analysis-prompt-v1.4",
+        "prompt_version": "trading-analysis-prompt-v1.6",
         "response_contract_version": "trading-analysis-response-v1",
         "prompt_variant": "decision-gated",
         "model_verbosity": "high",
     }
     assert_absent(
         manager.build_system_prompt(SYMBOL),
-        ["Prompt Metadata", "trading-analysis-prompt-v1.4", "trading-analysis-response-v1"],
+        ["Prompt Metadata", "trading-analysis-prompt-v1.5", "trading-analysis-response-v1"],
     )
 
 
@@ -325,12 +326,36 @@ def test_system_prompt_renders_mandated_sections():
         ("- Price action shorthand: 4G/0R = 4 green and 0 red candles in the lookback window; "
         "⚠️ marks a TD Setup of 8 or more, i.e. an exhausted move that often reverses."),
         ("- Indicator variants (these are the calculator's fixed windows, NOT the textbook "
-        "defaults): TSI uses the fast 20/10 smoothing, not 25/13; KST weights ROC 5/10/15/20 "
+        "defaults): RSI 14 (Wilder smoothing), MACD 12/26/9 (EMA), Stochastic 14/3/3, "
+        "Bollinger 20 with 2 population standard deviations, ATR and ATR% 20 (Wilder), "
+        "Keltner EMA(20) of close ± 1.5 x the same Wilder ATR(20), ADX/+DI/-DI 14, "
+        "Choppiness 14, CCI 14, ROC 14, PPO 12/26, CMF 20, MFI 14, Force Index 20, "
+        "VWAP/TWAP 20, Donchian 20, Chandelier 20 x 3 ATR; TSI uses the fast 20/10 "
+        "smoothing, not 25/13; KST weights ROC 5/10/15/20 "
         "smoothed by SMA 3/5/7/9 (short variant, not Pring's 10/15/20/30 smoothed 10/10/10/15); "
-        "Keltner bands are built from their own EMA-smoothed ATR, so KC width does not match "
-        "the ATR value printed in the same block; Vortex VI+ and VI- each hover around 1.0 "
+        "the Keltner half-width is 1.5 x the printed 20-bar ATR, so the KC band is never the "
+        "ATR value itself; Vortex VI+ and VI- each hover around 1.0 "
         "(a value near 1 means balanced flow, not missing data) — read them against each other, "
         "not against 1."),
+        ("- Pattern-engine thresholds, all measured on the last CLOSED candle: RSI "
+        "oversold/overbought at 30/70; Stochastic at 20/80, with crosses counted inside "
+        "30/70; volume spike at or above 2.5x and dry-up at or below 0.5x the 20-bar "
+        "average volume; climax volume at or above 3x the 50-bar average; ATR spike at or "
+        "above 1.5x the previous 14-bar average; Bollinger squeeze = band width inside the "
+        "lowest 20% of the last 120 bars; TTM squeeze = the Bollinger bands inside a "
+        "Keltner channel; MACD histogram trend = the majority direction of its last 3 "
+        "changes; volatility trend = at least 6 of the last 9 ATR changes in one "
+        "direction; accumulation/distribution = the up-bar share of directional volume "
+        "above 60% (accumulation) or below 40% (distribution) over 10 bars, and its "
+        "strength is |share - 0.5| x 2, so 0.2 is the smallest reported reading; "
+        "volume-price divergence compares the two halves of 20 bars and needs price "
+        "beyond 2% with volume below -15%; divergences need at least 5 bars between the "
+        "two swings."),
+        ("- Pattern lines: \"now\" means the state holds on the last closed candle, while "
+        "\"N bars ago\" is when an event happened. State lines report how long they have "
+        "already lasted (\"for N bars\") — a state running for dozens of bars is an "
+        "established condition, not a fresh setup, and it disappears from the list only "
+        "once it ends. The list shows at most the 25 most recent lines."),
         ("- Series with an arbitrary origin: OBV, PVT and AD Line accumulate volume from the "
         "start of the loaded window, so only each one's CHANGE carries information — never "
         "read the absolute level; negative but rising OBV is not bearish because of its sign. Variance is measured in price^2 over the last 20 candles, so "
@@ -353,6 +378,10 @@ def test_system_prompt_renders_mandated_sections():
         "## PREVIOUS ANALYSIS CONTEXT",
         "Bull vs Bear Debate Protocol",
         "decision-gated",
+        "momentum shift",
+        "breakout imminent",
+        "strong signal",
+        "reversal confirmation",
     ])
 
 
@@ -1110,22 +1139,19 @@ def test_empty_optional_contexts_are_not_injected():
     assert_absent(bare, ["## PREVIOUS ANALYSIS CONTEXT", "Temporal Context"])
 
 
-def test_previous_reasoning_truncation_boundary():
-    """The verbosity cap truncates only past the limit and drops the tail wholesale."""
-    cap = TemplateManager.PREVIOUS_REASONING_MAX_CHARS_BY_VERBOSITY["low"]
-    prefix = "1) MARKET STRUCTURE: "
-    at_cap = prefix + "x" * (cap - len(prefix))
-    assert len(at_cap) == cap
+@pytest.mark.parametrize("tokens", [2999, 3000, 3001, 16000])
+def test_previous_reasoning_does_not_cut_at_the_retired_limit(tokens):
     manager = make_manager(make_config(MODEL_VERBOSITY="low"))
-    assert_fragments(manager.build_system_prompt(SYMBOL, previous_response=at_cap), [at_cap])
-    over_cap = manager.build_system_prompt(SYMBOL, previous_response=at_cap + "x")
-    assert_fragments(over_cap, ["[Previous reasoning truncated for prompt safety.]"])
-    long_previous = "\n".join(
-        f"1) MARKET STRUCTURE: line-{index}-" + "x" * 120 for index in range(60)
-    )
-    truncated = make_manager().build_system_prompt(SYMBOL, previous_response=long_previous)
-    assert_fragments(truncated, ["line-0-", "[Previous reasoning truncated for prompt safety.]"])
-    assert_absent(truncated, ["line-59-"])
+    text = "market" + " market" * (tokens - 1)
+    assert TokenCounter().count_tokens(text) == tokens
+    assert manager._sanitize_previous_reasoning(text) == text
+
+
+def test_previous_reasoning_keeps_unicode_and_a_late_invalidation_trigger():
+    manager = make_manager()
+    text = ("Rynek — zmienność, płynność, 确认 😀.\n" * 1000) + "INVALIDATION: close below support."
+    assert TokenCounter().count_tokens(text) > 8000
+    assert manager._sanitize_previous_reasoning(text) == text
 
 
 def test_previous_reasoning_strips_leaked_prompt_instructions():
@@ -1247,3 +1273,46 @@ def test_analysis_steps_matrix(symbol, config_overrides, kwargs, expected, forbi
     manager = make_manager(make_config(**config_overrides))
     assert_fragments(manager.build_analysis_steps(symbol, **kwargs), expected)
     assert_absent(manager.build_analysis_steps(symbol, **kwargs), forbidden)
+
+@pytest.mark.parametrize("provider", ["deepseek", "googleai", "openrouter", "local"])
+@pytest.mark.parametrize("market_type", ["spot", "futures"])
+@pytest.mark.parametrize("chart", [False, True])
+def test_full_report_keeps_provider_envelope_and_validation_labels(provider, market_type, chart):
+    manager = make_manager(make_config(PROVIDER=provider, MARKET_TYPE=market_type, MODEL_VERBOSITY="full"))
+    system = manager.build_system_prompt(SYMBOL)
+    template = manager.build_response_template(has_chart_analysis=chart)
+    assert "full research report with Markdown headings" in system
+    assert "Do NOT use Markdown headings" not in system
+    assert "approximately 8000 output tokens" in template
+    for heading in (
+        "Technical Analysis Overview", "Multi-Timeframe Assessment", "Technical Indicators Summary",
+        "Key Technical Levels", "Market Context", "News Summary & Impact Assessment",
+        "Chart Pattern Analysis & Visual Integration", "Educational & Historical Context",
+        "Potential Catalysts & Bull/Bear/Neutral Scenarios", "Final Synthesis",
+    ):
+        assert heading in template
+    assert "11) RISK/REWARD:" in template
+    assert "12) DECISION:" in template and "13) EXECUTION NOTE:" in template
+    assert "indicators use completed candles only" in template
+    assert "Do not invent backtests" in template
+    assert "No chart image is supplied" in template if not chart else "P1-price" in template
+    assert "Output: 13 plain-text numbered lines" not in template
+    assert "no markdown headings" not in template
+    example = template.split("```json\n", 1)[1].split("```", 1)[0]
+    parsed = json.loads(example)
+    assert ("narrative" in parsed) == (provider == "deepseek")
+    assert parsed["analysis"]["signal"] == "HOLD"
+    signals = "LONG, SHORT" if market_type == "futures" else "BUY, SELL"
+    assert f"Allowed signals: {signals}, HOLD, CLOSE, UPDATE." in template
+    assert ("Output: ONE JSON object and NOTHING outside it" in template) == (provider == "deepseek")
+
+
+@pytest.mark.parametrize("verbosity,target", [("low", 400), ("medium", 1000), ("high", 2000), ("full", 8000)])
+def test_verbosity_targets_new_narrative_tokens_not_previous_context(verbosity, target):
+    manager = make_manager(make_config(MODEL_VERBOSITY=verbosity))
+    template = manager.build_response_template()
+    assert f"approximately {target} output tokens" in template
+    assert "excluding decision JSON" in template
+    assert "not a hard API cap or a truncation rule" in template
+    assert ("## 1) Technical Analysis Overview" in template) == (verbosity == "full")
+    assert "full research report" in manager.build_system_prompt(SYMBOL, model_verbosity="full")

@@ -16,6 +16,7 @@ import ccxt
 import pytest
 from pydantic import BaseModel, ValidationError
 
+from src.analyzer.prompts.template_manager import TemplateManager
 from src.managers.model_manager import ModelManager
 from src.managers.provider_orchestrator import ProviderOrchestrator
 from src.managers.provider_types import ProviderClients
@@ -175,6 +176,76 @@ def test_protected_oversize_and_output_reserves_fail_closed():
         policy.prepare_messages(budget_request(), "deepseek", "small", {"max_tokens": 3000})
     with pytest.raises(PromptBudgetExceeded, match="Protected request"):
         policy.prepare_messages([{"role": "user", "content": "protected " * 10000}], "deepseek", "small", {"max_tokens": 128})
+
+
+@pytest.mark.parametrize("structured", [False, True], ids=["narrative-fallback", "structured-thesis"])
+def test_long_previous_reasoning_survives_when_the_whole_request_fits(structured):
+    config = make_config(MODEL_VERBOSITY="full")
+    counter = TokenCounter()
+    text = ("Closed-candle evidence and tactical invalidation details. " * 2000).strip()
+    text += "\nINVALIDATION_AT_END: close below support invalidates the prior thesis."
+    assert counter.count_tokens(text) > 16000
+    previous = "```json\n" + json.dumps({"analysis": {"signal": "HOLD", "confidence": 70, "reasoning": text}}) + "\n```" if structured else text
+    template = TemplateManager(config, null_logger())
+    messages = [{"role": "system", "content": template.build_system_prompt("BTC/USDC", previous_response=previous)}]
+    policy = PromptBudgetPolicy(counter, null_logger())
+    sent = policy.prepare_messages(messages, "deepseek", "deepseek-flash", {"max_tokens": 65536})
+    assert sent is messages
+    assert text in sent[0]["content"]
+    assert sent[0]["content"].count("INVALIDATION_AT_END") == 1
+    assert "truncated for prompt safety" not in sent[0]["content"]
+    assert policy.count_messages(sent) < policy.input_limit("deepseek", "deepseek-flash", {"max_tokens": 65536})
+
+
+@pytest.mark.parametrize("chart", [False, True])
+async def test_long_previous_analysis_is_rebudgeted_on_a_smaller_openrouter_fallback(chart):
+    config = make_config(MODEL_VERBOSITY="full")
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    text = ("Closed-candle evidence and tactical invalidation details. " * 2000) + "INVALIDATION_AT_END"
+    system = TemplateManager(config, null_logger()).build_system_prompt("BTC/USDC", previous_response=text)
+    system += "\n## CURRENT POSITION\nSHORT; SL 84750; TP 82050.\n## Response Format\nReturn required JSON."
+    messages = [{"role": "system", "content": system}]
+    original = [dict(message) for message in messages]
+    success = ChatResponseModel.from_content("valid answer")
+    client = MagicMock()
+    client.chat_completion = AsyncMock(side_effect=[_rate_limited_response(), success])
+    client.chat_completion_with_chart_analysis = AsyncMock(side_effect=[_rate_limited_response(), success])
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), image_reserve_tokens=512, context_windows={
+        f"openrouter/{_BASE_MODEL}": 100000, f"openrouter/{_FALLBACK_MODEL}": 10000,
+    })
+    orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(openrouter=client), prompt_budget=policy)
+    result = await orchestrator.invoke("openrouter", messages, chart=chart, chart_image=b"image" if chart else None)
+    assert result.success
+    assert result.model == _FALLBACK_MODEL
+    method = client.chat_completion_with_chart_analysis if chart else client.chat_completion
+    assert method.await_count == 2
+    first, second = method.await_args_list
+    assert text in first.args[1][0]["content"]
+    sent = second.args[1]
+    assert "[Prompt budget: optional previous analysis omitted.]" in sent[0]["content"]
+    assert "INVALIDATION_AT_END" not in sent[0]["content"]
+    for protected in ("### DETERMINISTIC TIME CHECK", "## Core Principles", "SHORT; SL 84750; TP 82050.", "Return required JSON."):
+        assert protected in sent[0]["content"]
+    assert policy.count_messages(sent) <= policy.input_limit("openrouter", _FALLBACK_MODEL, {"max_tokens": 128}, chart=chart)
+    assert messages == original
+
+
+async def test_oversized_previous_python_feedback_is_not_silently_discarded_or_sent():
+    config = make_config(MODEL_VERBOSITY="full")
+    config.get_model_config = lambda model: {"max_tokens": 128}
+    previous = "Python R/R validation of previous cycle: rejected entry; corrected R/R 1.20.\n"
+    previous += "Closed-candle evidence and tactical invalidation details. " * 2000
+    system = TemplateManager(config, null_logger()).build_system_prompt("BTC/USDC", previous_response=previous)
+    messages = [{"role": "system", "content": system}]
+    policy = PromptBudgetPolicy(TokenCounter(), null_logger(), context_windows={"deepseek/small": 10000})
+    client = MagicMock()
+    client.chat_completion = AsyncMock()
+    orchestrator = ProviderOrchestrator(null_logger(), config, ProviderClients(deepseek=client), prompt_budget=policy)
+    result = await orchestrator.invoke("deepseek", messages, model="small")
+    assert not result.success
+    assert "Protected request" in result.error
+    assert "### PYTHON R/R FEEDBACK" in messages[0]["content"]
+    client.chat_completion.assert_not_awaited()
 
 _TREND_MESSAGE = "Input should be 'BULLISH', 'BEARISH' or 'NEUTRAL'"
 

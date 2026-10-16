@@ -9,6 +9,27 @@
 # loader falls back to its own default in src/config/loader.py.
 # ==============================================================================
 
+# === General ===
+[general]
+crypto_pair = BTC/USDC
+# ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
+# signals with high noise, frequent false breakouts, and reduced win rates.
+# The bot was designed and tested for 4h+ swing/positional trading. Smaller
+# timeframes will degrade performance significantly and increase costs due to
+# more frequent LLM calls. You have been warned.
+timeframe = 4h
+candle_limit = 999
+ai_chart_candle_limit = 125
+# Discord notifications (analysis posts + old-message cleanup)
+discord_bot = false
+
+# Adds the CoinGecko project description to the prompt (costs extra tokens)
+include_coin_description = false
+# spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
+market_type = spot
+# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
+entry_order_type = market
+
 # === AI Providers ===
 [ai_providers]
 # local | googleai | openrouter | deepseek | blockrun | all
@@ -45,87 +66,54 @@ google_studio_model = gemini-3.8-flash
 # Examples: openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash
 # blockrun_model = deepseek/deepseek-reasoner
 
-# === General ===
-[general]
-crypto_pair = BTC/USDC
-# ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
-# signals with high noise, frequent false breakouts, and reduced win rates.
-# The bot was designed and tested for 4h+ swing/positional trading. Smaller
-# timeframes will degrade performance significantly and increase costs due to
-# more frequent LLM calls. You have been warned.
-timeframe = 4h
-candle_limit = 999
-ai_chart_candle_limit = 125
-# Discord notifications (analysis posts + old-message cleanup)
-discord_bot = false
+# === Model Configuration ===
+# Which keys apply depends on the provider set in [ai_providers].
+# OpenAI-compatible providers (openrouter, local, blockrun) get temperature,
+# top_p, top_k, max_tokens and the penalties. Google gets ONLY
+# google_max_tokens + google_thinking_level + google_code_execution, so those
+# sampling keys are ignored while provider = googleai.
+[model_config]
+# New analysis detail + approximate NARRATIVE length (tokens, not characters):
+# low = 400 (3 lines), medium = 1000 (5 lines), high = 2000 (13 lines),
+# full = 8000 (complete research report with sections and interpretations).
+# Targets exclude decision JSON and hidden reasoning; they are not hard API caps.
+# Previous analysis has no separate length cap; structured decision summaries
+# are preferred. [prompt_budget] protects the whole request for each target model.
+model_verbosity = full
 
-# Adds the CoinGecko project description to the prompt (costs extra tokens)
-include_coin_description = false
-# spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
-market_type = spot
-# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
-entry_order_type = market
+temperature = 1.0
+top_p = 0.9
+top_k = 40
+# REQUIRED - the bot refuses to start without it. Used by every provider except Google.
+max_tokens = 32768
+# frequency_penalty and presence_penalty are also accepted (0.0 = off)
+# REQUIRED while provider = googleai. Output cap and it INCLUDES thought tokens.
+# gemini-3.8-flash allows up to 65536; with thinking = high a low cap can cut
+# the answer off mid-sentence (and a cut answer means no parsed decision).
+google_max_tokens = 65536
+# How deep the model thinks before answering: low | medium | high.
+# Google's own default for gemini-3.8-flash is medium; high = maximum depth
+# (slower and more output tokens, but the most thorough analysis).
+# NOTE: "minimal" is not supported by this model and returns an API error.
+google_thinking_level = high
+# Let the model run Python code while answering (off = plain text answer)
+google_code_execution = false
+# OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
+# xhigh and max both map to DeepSeek's max reasoning level
+openrouter_reasoning_effort = max
 
-# === Debug ===
-[debug]
-# Save the generated chart PNGs to disk (debugging only)
-save_chart_images = false
-# Folder for those PNGs, relative to the working directory (repo root)
-chart_save_path = chart_images
-# DEBUG-level logging - very noisy, for troubleshooting only
-logger_debug = true
-
-# === Paths ===
-[directories]
-# Both relative to the repo root
-log_dir = logs
-data_dir = data
-
-# === RAG / News ===
-[rag]
-update_interval_hours = 4               # hours between RAG rebuilds
-coingecko_update_interval_hours = 24    # hours between coin-list refreshes
-defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
-coingecko_global_api_url = https://api.coingecko.com/api/v3/global
-news_limit = 5                          # max articles in AI context
-article_max_tokens = 1000               # max tokens per article
-# Empty = use all four feeds below; otherwise a comma-separated subset of
-# coindesk, cointelegraph, decrypt, cryptoslate
-news_sources =
-news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
-news_source_cointelegraph_url = https://cointelegraph.com/rss
-news_source_decrypt_url = https://decrypt.co/feed
-news_source_cryptoslate_url = https://cryptoslate.com/feed/
-news_page_enrichment = true             # fetch full article body via Crawl4AI
-news_min_body_chars = 400               # skip articles with less body text
-news_timeout_seconds = 20
-rag_update_timeout_seconds = 180
-news_fetch_total_timeout_seconds = 45
-news_enrichment_timeout_seconds = 120
-news_max_concurrency = 6                # parallel Crawl4AI fetches
-news_max_items_per_source = 100
-# Article scoring weights - the thresholds are CHARACTER counts of the article body
-# body shorter than this -> score x penalty_multiplier
-density_penalty_threshold = 300
-# body longer than this -> score x boost_multiplier
-density_boost_threshold = 1000
-density_penalty_multiplier = 0.5
-density_boost_multiplier = 1.2
-# bonus when ALL query keywords appear in the article title + body
-cooccurrence_multiplier = 1.5
-news_crawl4ai_enabled = true
-news_crawl_timeout = 20
-
-# === Exchanges ===
-[exchanges]
-supported = binance,kucoin,gateio,mexc,hyperliquid  # priority order
-market_refresh_hours = 24
-
-# === Paper Trading ===
-[demo_trading]
-# Paper-trading capital (USDC) and the fee used in EV / profit calculations
-demo_quote_capital = 10000
-transaction_fee_percent = 0.00075
+# DeepSeek thinking effort: none | minimal | low | medium | high | max (thinking mode is enabled by default).
+# Thinking tokens are billed as output and count toward deepseek_max_tokens.
+# `high` is a deliberate choice; it is slower/costlier and does not guarantee correct R/R arithmetic.
+deepseek_reasoning_effort = high
+# DeepSeek max output (falls back to max_tokens when absent). Thinking tokens count
+# toward this cap and DeepSeek allows up to 384k, so keep a wide margin: a hit cap
+# cuts the reply mid-answer, and a cut reply means no parsed decision.
+deepseek_max_tokens = 65536
+# DeepSeek requests are sent with response_format=json_object, so while provider =
+# deepseek the prompt asks for ONE JSON object ({"narrative": ..., "analysis": {...}})
+# instead of narrative + fenced block. The wire format and the prompt are switched by
+# the `provider = deepseek` selection alone - there is no separate switch to keep in sync.
 
 # === Risk Management ===
 [risk_management]
@@ -181,9 +169,27 @@ exit_path = data/trading/executor_exits.jsonl
 # a tighter executor limit than the bot's %-of-capital sizing would produce).
 max_position_usdc = 0
 
-# === Cooldowns ===
-[cooldowns]
-file_message_expiry = 168  # hours before tracked messages are cleaned up
+# === Paper Trading ===
+[demo_trading]
+# Paper-trading capital (USDC) and the fee used in EV / profit calculations
+demo_quote_capital = 10000
+transaction_fee_percent = 0.00075
+
+# === Dashboard ===
+[dashboard]
+enabled = true
+host = 0.0.0.0
+port = 8000
+# CORS lets OTHER websites call the dashboard API from a browser. Leave it off
+# unless you need it; with enable_cors = true, origins "*" means ANY page on the
+# internet is allowed to talk to your dashboard.
+enable_cors = false
+cors_origins = *
+
+# === Exchanges ===
+[exchanges]
+supported = binance,kucoin,gateio,mexc,hyperliquid  # priority order
+market_refresh_hours = 24
 
 # === Research Team (Bull/Bear Debate) ===
 # Enables structured bull-vs-bear analysis in the LLM prompt.
@@ -205,60 +211,40 @@ enabled = false
 [social_sentiment]
 enabled = false
 
-# === Model Configuration ===
-# Which keys apply depends on the provider set in [ai_providers].
-# OpenAI-compatible providers (openrouter, local, blockrun) get temperature,
-# top_p, top_k, max_tokens and the penalties. Google gets ONLY
-# google_max_tokens + google_thinking_level + google_code_execution, so those
-# sampling keys are ignored while provider = googleai.
-[model_config]
-temperature = 1.0
-top_p = 0.9
-top_k = 40
-# REQUIRED - the bot refuses to start without it. Used by every provider except Google.
-max_tokens = 32768
-# frequency_penalty and presence_penalty are also accepted (0.0 = off)
-# REQUIRED while provider = googleai. Output cap and it INCLUDES thought tokens.
-# gemini-3.8-flash allows up to 65536; with thinking = high a low cap can cut
-# the answer off mid-sentence (and a cut answer means no parsed decision).
-google_max_tokens = 65536
-# How deep the model thinks before answering: low | medium | high.
-# Google's own default for gemini-3.8-flash is medium; high = maximum depth
-# (slower and more output tokens, but the most thorough analysis).
-# NOTE: "minimal" is not supported by this model and returns an API error.
-google_thinking_level = high
-# Let the model run Python code while answering (off = plain text answer)
-google_code_execution = false
-# NOT the model's chattiness - how much of the PREVIOUS analysis is carried into
-# the next prompt: low = 1500 chars, medium = 3000, high = 4500
-model_verbosity = high
-# OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
-# xhigh and max both map to DeepSeek's max reasoning level
-openrouter_reasoning_effort = max
-
-# DeepSeek thinking effort: none | minimal | low | medium | high | max (thinking mode is enabled by default).
-# Thinking tokens are billed as output and count toward deepseek_max_tokens.
-# `high` is a deliberate choice; it is slower/costlier and does not guarantee correct R/R arithmetic.
-deepseek_reasoning_effort = high
-# DeepSeek max output (falls back to max_tokens when absent). Thinking tokens count
-# toward this cap and DeepSeek allows up to 384k, so keep a wide margin: a hit cap
-# cuts the reply mid-answer, and a cut reply means no parsed decision.
-deepseek_max_tokens = 65536
-# DeepSeek requests are sent with response_format=json_object, so while provider =
-# deepseek the prompt asks for ONE JSON object ({"narrative": ..., "analysis": {...}})
-# instead of narrative + fenced block. The wire format and the prompt are switched by
-# the `provider = deepseek` selection alone - there is no separate switch to keep in sync.
-
-# === Dashboard ===
-[dashboard]
-enabled = true
-host = 0.0.0.0
-port = 8000
-# CORS lets OTHER websites call the dashboard API from a browser. Leave it off
-# unless you need it; with enable_cors = true, origins "*" means ANY page on the
-# internet is allowed to talk to your dashboard.
-enable_cors = false
-cors_origins = *
+# === RAG / News ===
+[rag]
+update_interval_hours = 4               # hours between RAG rebuilds
+coingecko_update_interval_hours = 24    # hours between coin-list refreshes
+defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
+coingecko_global_api_url = https://api.coingecko.com/api/v3/global
+news_limit = 5                          # max articles in AI context
+article_max_tokens = 1000               # max tokens per article
+# Empty = use all four feeds below; otherwise a comma-separated subset of
+# coindesk, cointelegraph, decrypt, cryptoslate
+news_sources =
+news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
+news_source_cointelegraph_url = https://cointelegraph.com/rss
+news_source_decrypt_url = https://decrypt.co/feed
+news_source_cryptoslate_url = https://cryptoslate.com/feed/
+news_page_enrichment = true             # fetch full article body via Crawl4AI
+news_min_body_chars = 400               # skip articles with less body text
+news_timeout_seconds = 20
+rag_update_timeout_seconds = 180
+news_fetch_total_timeout_seconds = 45
+news_enrichment_timeout_seconds = 120
+news_max_concurrency = 6                # parallel Crawl4AI fetches
+news_max_items_per_source = 100
+# Article scoring weights - the thresholds are CHARACTER counts of the article body
+# body shorter than this -> score x penalty_multiplier
+density_penalty_threshold = 300
+# body longer than this -> score x boost_multiplier
+density_boost_threshold = 1000
+density_penalty_multiplier = 0.5
+density_boost_multiplier = 1.2
+# bonus when ALL query keywords appear in the article title + body
+cooccurrence_multiplier = 1.5
+news_crawl4ai_enabled = true
+news_crawl_timeout = 20
 
 # === Estimated-token safety budgets ===
 # TokenCounter uses cl100k_base: estimates, not exact provider/vision token counts.
@@ -279,3 +265,22 @@ googleai/gemini-3.8-flash = 1048576
 googleai/gemini-3-flash-preview = 1048576
 openrouter/google/gemini-3-flash-preview = 1048576
 openrouter/deepseek/deepseek-v4.1-flash = 1048576
+
+# === Paths ===
+[directories]
+# Both relative to the repo root
+log_dir = logs
+data_dir = data
+
+# === Debug ===
+[debug]
+# Save the generated chart PNGs to disk (debugging only)
+save_chart_images = false
+# Folder for those PNGs, relative to the working directory (repo root)
+chart_save_path = chart_images
+# DEBUG-level logging - very noisy, for troubleshooting only
+logger_debug = true
+
+# === Cooldowns ===
+[cooldowns]
+file_message_expiry = 168  # hours before tracked messages are cleaned up
