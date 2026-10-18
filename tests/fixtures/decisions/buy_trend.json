@@ -1,0 +1,21 @@
+{
+  "source": "2026_09_28",
+  "payload": {
+    "analysis": {
+      "signal": "BUY",
+      "confidence": 58,
+      "entry_price": 83257.62,
+      "stop_loss": 82400.0,
+      "take_profit": 84800.0,
+      "risk_reward_ratio": 1.798,
+      "position_size": 0.032,
+      "quantity": 0.00384,
+      "order_type": "market",
+      "reduce_only": false,
+      "leverage": 1,
+      "symbol": "BTC/USDC",
+      "reasoning": "(1) Thesis: mean-reversion long at the retested range low 83166.62/83174.66 with daily-trend support — price is statistically stretched (Z -2.51, BB %B -0.14) at the exact structural floor. (2) Regime: transitional (Choppiness 53.0, ADX 14."
+    },
+    "narrative": "1) MARKET STRUCTURE: 4h range 83166.62-85257.47 (width ~2.5 pct) remains intact; price 83257.62 sits ~4 pct up from the range low and 2.4 pct below the top, and the latest bar expanded range +134 pct "
+  }
+}

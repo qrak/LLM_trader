@@ -1,0 +1,21 @@
+{
+  "source": "2026_10_02",
+  "payload": {
+    "analysis": {
+      "signal": "BUY",
+      "confidence": 61,
+      "entry_price": 86271.46,
+      "stop_loss": 85100,
+      "take_profit": 88200,
+      "risk_reward_ratio": 1.65,
+      "position_size": 0.045,
+      "quantity": 0.00521,
+      "order_type": "market",
+      "reduce_only": false,
+      "leverage": 1,
+      "symbol": "BTC/USDC",
+      "reasoning": "(1) Thesis: the 4h breakout above the 85618.00 range top is now confirmed on the last closed candle (86081.73) with expanding volume (+84 pct) and a strongly bid order book (+0.706 imbalance, top-10 +0.962), so the prior-cycle condition for"
+    },
+    "narrative": "1) MARKET STRUCTURE: 4h uptrend with 18G/6R (+3.6% over the window) and price above rising 20/50/200 SMA (83966/84023/80448); the last closed candle (86081.73) sits ABOVE the prior 85618.00 range top,"
+  }
+}

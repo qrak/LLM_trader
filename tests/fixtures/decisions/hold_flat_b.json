@@ -1,0 +1,21 @@
+{
+  "source": "2026_09_26",
+  "payload": {
+    "analysis": {
+      "signal": "HOLD",
+      "confidence": 70,
+      "entry_price": null,
+      "stop_loss": null,
+      "take_profit": null,
+      "risk_reward_ratio": null,
+      "position_size": 0.0,
+      "quantity": 0.0,
+      "order_type": null,
+      "reduce_only": false,
+      "leverage": 1,
+      "symbol": "BTC/USDC",
+      "reasoning": "(1) No valid edge: ADX 15.67 with +DI 20.95/-DI 19.88 intertwined and Choppiness 59.7 -> transitional with no directional dominance; price 84121.64 is mid-range (82857.14-86274.23), not at a boundary, so no mean-reversion entry either. (2) "
+    },
+    "narrative": "1) MARKET STRUCTURE: Donchian range 82857.14-86274.23 (width ~3.9%), price 84121.64 sits ~1.5% above range low and ~2.5% below range high, essentially mid-range; recent tape printed 9G/15R (-2.4%) wit"
+  }
+}

@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit tests + ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt -c constraints.txt -r requirements-dev.txt
+      - name: Lint
+        run: ruff check src scripts
+      - name: Unit tests (no network, no browser, no API keys)
+        run: pytest tests -q -m "not integration" --timeout=120 -p no:cacheprovider

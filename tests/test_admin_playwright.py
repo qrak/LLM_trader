@@ -27,6 +27,8 @@ pytest.importorskip("playwright")
 
 from playwright.sync_api import expect, sync_playwright
 
+pytestmark = pytest.mark.integration
+
 
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

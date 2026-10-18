@@ -17,6 +17,8 @@ pytest.importorskip("playwright")
 
 from playwright.sync_api import expect, sync_playwright
 
+pytestmark = pytest.mark.integration
+
 LIVE_URL = os.environ.get("LLM_TRADER_URL", "https://semanticsignal.qrak.org")
 ADMIN_URL = f"{LIVE_URL}/admin"
 
