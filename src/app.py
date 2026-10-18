@@ -7,13 +7,16 @@ import asyncio
 import inspect
 import io
 import os
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
+from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, append_cycle
 from src.managers.persistence_manager import PersistenceManager
 from src.trading import (
     ExitMonitor,
@@ -22,12 +25,19 @@ from src.trading import (
     TradingMemoryService,
     TradingStatisticsService,
 )
+from src.trading.cycle_state import (
+    CycleCheckpointStore,
+    CycleState,
+    hash_decision,
+    is_duplicate_intent,
+)
 from src.trading.data_models import TradeDecision
 from src.trading.executor_reconciliation import (
     NON_BOOKED_INTENT_STATES,
     RECONCILE_UNVERIFIED,
     LocalPositionReconciliation,
 )
+from src.trading.pending_approval import PendingApprovalStore, requires_approval
 from src.utils.decorators import retry_async_default
 from src.utils.timeframe_validator import TimeframeValidator
 
@@ -114,6 +124,9 @@ class CryptoTradingBot:
         self.http_session = services.http_session
 
         self.persistence = services.persistence
+        state_dir = self._state_directory()
+        self._cycle_checkpoints = CycleCheckpointStore(state_dir / "cycle_state.json")
+        self._approvals = PendingApprovalStore(state_dir / "approvals.json")
         self.model_manager = services.model_manager
         self.brain_service = services.brain_service
         self.statistics_service = services.statistics_service
@@ -138,6 +151,13 @@ class CryptoTradingBot:
             if services.position_monitor_factory is not None
             else None
         )
+
+    def _state_directory(self) -> Path:
+        """Runtime state next to the trade data; a temp dir only for non-path test doubles."""
+        data_dir = getattr(self.persistence, "data_dir", None)
+        if isinstance(data_dir, (str, Path)):
+            return Path(data_dir)
+        return Path(tempfile.gettempdir()) / "llm_trader_runtime"
 
     @property
     def active_tasks(self) -> set[asyncio.Task]:
@@ -305,6 +325,7 @@ class CryptoTradingBot:
 
     async def _execute_trading_check(self, check_count: int, force_news_update: bool = True, is_candle_close: bool = True):
         """Execute a single trading check iteration."""
+        cycle_started = time.perf_counter()
         self._log_check_header(check_count)
 
         current_ticker, current_price = await self._fetch_ticker_data()
@@ -323,6 +344,11 @@ class CryptoTradingBot:
 
         if "error" in result:
             self.logger.error("Analysis failed: %s", result["error"])
+            self._record_cycle_metric(
+                result=None, decision=None, intent_state=None,
+                latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
+                error=str(result["error"]),
+            )
             return
 
         snapshot_after_analysis = self._position_snapshot_token()
@@ -377,6 +403,27 @@ class CryptoTradingBot:
             )
             decision = None
 
+        analysis = result.get("analysis")
+        decision_hash = (
+            hash_decision(decision.action, self.current_symbol, analysis)
+            if decision is not None and analysis is not None else None
+        )
+        previous_checkpoint = self._cycle_checkpoints.load()
+        if (
+            str(getattr(decision, "action", "")).upper() in ("BUY", "SELL")
+            and is_duplicate_intent(previous_checkpoint, decision_hash)
+        ):
+            self.logger.warning(
+                "Duplicate intent suppressed: checkpoint %s already forwarded %s %s (hash=%s) "
+                "without confirmation — reconciling with the executor instead of sending again.",
+                previous_checkpoint.cycle_id if previous_checkpoint else "?",
+                getattr(decision, "action", "?"), self.current_symbol, decision_hash,
+            )
+            decision = None
+
+        if decision is not None and not await self._await_manual_approval(decision, analysis, decision_hash):
+            decision = None
+
         if decision:
             await self._handle_new_position(decision, current_price)
         else:
@@ -389,15 +436,30 @@ class CryptoTradingBot:
         if decision is not None and decision.action == "HOLD" and result.get("analysis"):
             self._patch_rejected_signal_in_response(result, decision)
 
-        analysis = result.get("analysis")
         if self.executor_handler is not None and analysis and decision is not None:
+            self._cycle_checkpoints.record(
+                CycleState.DECIDED, symbol=self.current_symbol, decision_hash=decision_hash,
+            )
             forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
                     self.current_symbol, forward_delivered,
                     order_id=decision.order_id,
                 )
+            if forward_delivered and str(getattr(decision, "action", "")).upper() in ("BUY", "SELL"):
+                self._cycle_checkpoints.record(
+                    CycleState.INTENT_SENT,
+                    symbol=self.current_symbol,
+                    decision_hash=decision_hash,
+                )
             intent_state = await self._resolve_position_intents(decision, forward_delivered)
+            if str(getattr(decision, "action", "")).upper() in ("BUY", "SELL", "CLOSE", "UPDATE"):
+                self._cycle_checkpoints.record(
+                    CycleState.CONFIRMED if intent_state == "confirmed" else CycleState.FAILED,
+                    symbol=self.current_symbol,
+                    decision_hash=decision_hash,
+                    detail=intent_state,
+                )
 
         execution_note = self._build_execution_note(
             result, decision, stale_recommendation, reconcile_outcome,
@@ -409,6 +471,100 @@ class CryptoTradingBot:
         await self._report_unconfirmed_intent()
         await self._report_rejected_intent()
         await self._save_analysis_data(result)
+        self._record_cycle_metric(
+            result=result, decision=decision, intent_state=intent_state,
+            latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
+            stale=stale_recommendation,
+        )
+
+    async def _await_manual_approval(
+        self, decision: Any, analysis: dict[str, Any] | None, decision_hash: str | None
+    ) -> bool:
+        """True when execution may proceed; False when the gate refused or timed out.
+
+        Disabled by default: ``risk_management.require_approval_above_usdc = 0`` keeps the
+        old path. A pending entry that expires is a REFUSAL — never an execution.
+        """
+        threshold = float(getattr(self.config, "REQUIRE_APPROVAL_ABOVE_USDC", 0) or 0)
+        action = str(getattr(decision, "action", "") or "").upper()
+        if action not in ("BUY", "SELL") or threshold <= 0:
+            return True
+        try:
+            amount = float((analysis or {}).get("entry_price") or 0.0) * float(
+                (analysis or {}).get("quantity") or 0.0
+            )
+        except (TypeError, ValueError):
+            amount = 0.0
+        if not requires_approval(amount, threshold):
+            return True
+
+        ttl = float(getattr(self.config, "APPROVAL_TTL_MINUTES", 15) or 15)
+        poll = float(getattr(self.config, "APPROVAL_POLL_SECONDS", 5) or 5)
+        approval = self._approvals.submit(
+            action=action,
+            symbol=self.current_symbol,
+            decision_hash=decision_hash,
+            payload={"analysis": analysis or {}, "action": action},
+            quote_amount=amount,
+            ttl_minutes=ttl,
+        )
+        self.logger.warning(
+            "Decision %s %s (%.2f USDC) needs human approval: id=%s, expires in %.0f min — "
+            "the trade is NOT sent until it is approved in the admin console.",
+            action, self.current_symbol, amount, approval.approval_id, ttl,
+        )
+        deadline = time.monotonic() + ttl * 60
+        while time.monotonic() < deadline:
+            await asyncio.sleep(max(1.0, poll))
+            current = self._approvals.get(approval.approval_id)
+            if current is None:
+                break
+            if current.status == "approved":
+                self.logger.warning(
+                    "Approval %s granted — forwarding %s %s now.", approval.approval_id, action, self.current_symbol
+                )
+                return True
+            if current.status in ("rejected", "expired"):
+                self.logger.warning(
+                    "Approval %s %s — the decision was NOT executed.", approval.approval_id, current.status
+                )
+                return False
+        self.logger.warning("Approval %s timed out — the decision was NOT executed.", approval.approval_id)
+        return False
+
+    def _record_cycle_metric(
+        self,
+        *,
+        result: dict[str, Any] | None,
+        decision: Any,
+        intent_state: str | None,
+        latency_ms: float,
+        stale: bool = False,
+        error: str | None = None,
+    ) -> None:
+        """Record one cycle in the metrics journal. Metrics must never break trading."""
+        data_dir = getattr(self.persistence, "data_dir", None)
+        if not isinstance(data_dir, (str, Path)):
+            return
+        try:
+            analysis = (result or {}).get("analysis") or {}
+            signal = str(analysis.get("signal") or "UNKNOWN").upper()
+            action = str(getattr(decision, "action", "") or "").upper() or None
+            append_cycle(
+                data_dir / DEFAULT_RELATIVE_PATH,
+                {
+                    "symbol": self.current_symbol,
+                    "signal": signal,
+                    "action": action,
+                    "intent_state": intent_state,
+                    "latency_ms": round(latency_ms, 1),
+                    "stale": bool(stale),
+                    "guarded": signal in ("BUY", "SELL") and action is None and not error,
+                    "error": error,
+                },
+            )
+        except Exception:
+            self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
 
     async def _forward_local_exit_request(self) -> str | None:
         """Forward a CLOSE the local SL/TP monitor requested to the executor.

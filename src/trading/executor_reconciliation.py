@@ -1062,7 +1062,8 @@ class ExecutorReconciliationMixin:
             detail=detail or current.detail,
             payload=payload if payload is not None else current.payload,
         )
-        self.logger.warning(
+        log = self.logger.warning if state == INTENT_UNKNOWN else self.logger.info
+        log(
             "Position intent %s -> %s (evidence=%s, detail=%s)",
             key, state, source, detail or "",
         )

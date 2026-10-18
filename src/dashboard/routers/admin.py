@@ -11,6 +11,7 @@ All endpoints except /login and /health require authentication.
 
 import asyncio
 import time
+from dataclasses import asdict
 from typing import Any
 
 from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
@@ -18,6 +19,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 from ...config.writable_config import WritableConfig
+from ...trading.pending_approval import PendingApprovalStore
 from ..auth import (
     COOKIE_NAME,
     _get_real_client_ip,
@@ -80,6 +82,7 @@ class AdminRouter:
         exchange_manager: Any = None,
         dashboard_state: Any = None,
         force_analysis_event: asyncio.Event | None = None,
+        approvals: PendingApprovalStore | None = None,
     ):
         self.router = APIRouter(prefix="/api/admin", tags=["admin"])
         self.writable_config = writable_config
@@ -90,6 +93,7 @@ class AdminRouter:
         self.analysis_engine = analysis_engine
         self.exchange_manager = exchange_manager
         self.dashboard_state = dashboard_state
+        self.approvals = approvals
         self._force_analysis = force_analysis_event
         self._dashboard_feed_enabled = True
         self._human_input: str = ""
@@ -248,6 +252,37 @@ class AdminRouter:
                 "force_analysis_available": self._force_analysis is not None,
             }
 
+
+        @self.router.get("/approvals")
+        async def list_approvals():
+            """Pending and recent human approvals for high-risk decisions."""
+            if self.approvals is None:
+                return {"approvals": []}
+            return {"approvals": [asdict(approval) for approval in self.approvals.list()]}
+
+        @self.router.post("/approvals/{approval_id}/approve")
+        async def approve_decision(approval_id: str):
+            """Approve a pending decision; an expired one stays refused."""
+            if self.approvals is None:
+                return JSONResponse(status_code=404, content={"status": "disabled"})
+            approval = self.approvals.approve(approval_id)
+            if approval is None:
+                return JSONResponse(status_code=404, content={"status": "not_found"})
+            if self.logger:
+                self.logger.warning("Admin: approval %s -> %s", approval_id, approval.status)
+            return {"status": approval.status, "approval": asdict(approval)}
+
+        @self.router.post("/approvals/{approval_id}/reject")
+        async def reject_decision(approval_id: str):
+            """Reject a pending decision (never executes it)."""
+            if self.approvals is None:
+                return JSONResponse(status_code=404, content={"status": "disabled"})
+            approval = self.approvals.reject(approval_id)
+            if approval is None:
+                return JSONResponse(status_code=404, content={"status": "not_found"})
+            if self.logger:
+                self.logger.warning("Admin: approval %s -> %s", approval_id, approval.status)
+            return {"status": approval.status, "approval": asdict(approval)}
 
         @self.router.post("/system/human-input")
         async def set_human_input(body: HumanInputRequest):

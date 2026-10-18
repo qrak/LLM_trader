@@ -1,0 +1,2 @@
+# Optional: MCP server exposing trade history read-only (not needed by the bot runtime).
+mcp>=1.9

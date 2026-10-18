@@ -6,6 +6,7 @@ import os
 import time as time_module
 from collections import defaultdict
 from contextlib import asynccontextmanager, nullcontext
+from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
@@ -15,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from ..config.writable_config import WritableConfig
+from ..trading.pending_approval import PendingApprovalStore
 from .auth import AdminAuthMiddleware, init_auth
 from .console_buffer import ConsoleBuffer
 from .dashboard_state import DashboardState
@@ -148,6 +150,13 @@ class DashboardServer:
         app.state.log_stream_manager = self.log_stream_manager
         app.state.request_counts = request_counts
 
+    def _build_approval_store(self) -> PendingApprovalStore | None:
+        """Approvals share the bot's data directory; without one the console shows none."""
+        data_dir = getattr(self.persistence, "data_dir", None)
+        if not isinstance(data_dir, (str, Path)):
+            return None
+        return PendingApprovalStore(Path(data_dir) / "approvals.json")
+
     def _register_routers(self, app: FastAPI) -> None:
         """Build every dashboard router and mount it (plus the admin auth middleware)."""
         brain_router = brain.BrainRouter(
@@ -198,6 +207,7 @@ class DashboardServer:
             exchange_manager=self.exchange_manager,
             dashboard_state=self.dashboard_state,
             force_analysis_event=self._force_analysis_event,
+            approvals=self._build_approval_store(),
         )
         app.include_router(admin_router.router)
         app.state.admin_router = admin_router
