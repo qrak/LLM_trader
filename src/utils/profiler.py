@@ -28,7 +28,7 @@ def profile_performance(func: Callable) -> Callable:
                 else func(*args, **kwargs)
 
         instance = args[0]
-        logger = instance.logger
+        logger = getattr(instance, "logger", None)
 
         start_time = time.perf_counter()
         class_name = instance.__class__.__name__
@@ -47,7 +47,8 @@ def profile_performance(func: Callable) -> Callable:
             slow_marker = " [SLOW]" if duration > 1000 else ""
             msg = f"Performance: {class_name}.{method_name} took {duration:.2f}ms{slow_marker}"
 
-            logger.debug(msg)
+            if logger is not None:
+                logger.debug(msg)
 
     @functools.wraps(func)
     def sync_wrapper(*args, **kwargs) -> Any:
@@ -55,7 +56,7 @@ def profile_performance(func: Callable) -> Callable:
             return func(*args, **kwargs)
 
         instance = args[0]
-        logger = instance.logger
+        logger = getattr(instance, "logger", None)
 
         start_time = time.perf_counter()
         class_name = instance.__class__.__name__
@@ -70,7 +71,8 @@ def profile_performance(func: Callable) -> Callable:
             slow_marker = " [SLOW]" if duration > 1000 else ""
             msg = f"Performance: {class_name}.{method_name} took {duration:.2f}ms{slow_marker}"
 
-            logger.debug(msg)
+            if logger is not None:
+                logger.debug(msg)
 
     if asyncio.iscoroutinefunction(func):
         return wrapper
