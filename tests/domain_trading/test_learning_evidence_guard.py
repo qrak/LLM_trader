@@ -16,14 +16,24 @@ Every test uses doubles and temporary paths: no live repo, no exchange, no crede
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.trading.executor_reconciliation import ExitEvidence
+from src.dashboard.routers.performance import PerformanceRouter
+from src.managers.persistence_manager import PersistenceManager
+from src.trading.data_models import FILL_DIVERGENCE_MARKER
+from src.trading.executor_reconciliation import (
+    ExitEvidence,
+    exit_evidence_is_learnable,
+    fill_divergence_reason,
+)
+from src.trading.memory import TradingMemoryService
+from src.trading.statistics_calculator import StatisticsCalculator
 from src.trading.trading_strategy import TradingStrategy
 from tests.conftest import (
     make_config,
@@ -33,6 +43,10 @@ from tests.conftest import (
     mock_persistence,
     mock_statistics,
     null_logger,
+    verified_market_evidence,
+)
+from tests.domain_trading.test_bookkeeping_authority import (
+    TestExecutedEntrySettlement as _EntrySettlement,
 )
 
 ENTRY_TIME = datetime(2026, 9, 21, 8, 12, 0, tzinfo=timezone.utc)
@@ -45,6 +59,8 @@ def proven_exit(**overrides: Any) -> ExitEvidence:
         "price": 84500.0,
         "quantity": 0.00554,
         "event_id": "executor_exit_journal#event-1",
+        "fill_verification": "verified",
+        "market_verification": verified_market_evidence(),
         "fee": 0.0,
         "fee_currency": "USDC",
     }
@@ -205,6 +221,201 @@ class TestFailedPostMortemMeansNoLesson:
 
         strategy.brain_service.update_from_closed_trade.assert_not_called()
         assert _logged(logger, "no confirmed post-mortem analysis")
+
+
+class TestDivergentFillMeansNoLesson:
+    """A fill the real market never made is BOOKED for history, but never TAUGHT.
+
+    2026-10-17: a sandbox take-profit filled at 77506 while the real market traded at
+    81325. The bot booked +4.68% (the best trade of the whole run), the post-mortem
+    called it "plan_followed" with "no meaningful adverse excursion", and the brain was
+    fed a WIN experience. The executor's divergence marking now books the close (history
+    stays paired, the position is released) and refuses the lesson.
+    """
+
+    DIVERGENT_ARTIFACT: ClassVar[dict[str, Any]] = {
+        "fill_verification": "divergent",
+        "reference_price": 81325.09,
+        "deviation_pct": -4.6963,
+    }
+
+    async def test_divergent_close_is_booked_but_never_teaches(self, tmp_path: Path) -> None:
+        position = _position()
+        strategy, logger, persistence, post_mortem = _strategy(tmp_path, position)
+
+        await strategy.close_position(
+            "take_profit", 77506.0, make_market_conditions(),
+            filled_quantity=0.00554, evidence=proven_exit(**self.DIVERGENT_ARTIFACT),
+        )
+
+        persistence.async_save_trade_decision.assert_awaited_once()
+        assert strategy.current_position is None
+        post_mortem.analyze_closed_trade.assert_not_awaited()
+        strategy.brain_service.update_from_closed_trade.assert_not_called()
+        assert _logged(logger, "no exit evidence")
+        assert _logged(logger, "the venue's fill price is not a price the real market made")
+
+    async def test_marker_lands_on_the_close_row_so_the_model_sees_it(self, tmp_path: Path) -> None:
+        """The CLOSE row's reasoning is what the prompt renders — the artifact must show."""
+        position = _position()
+        strategy, _, persistence, _ = _strategy(tmp_path, position)
+
+        await strategy.close_position(
+            f"{FILL_DIVERGENCE_MARKER}: take_profit_filled @ 77506.0", 77506.0,
+            make_market_conditions(),
+            filled_quantity=0.00554, evidence=proven_exit(**self.DIVERGENT_ARTIFACT),
+        )
+
+        decision = persistence.async_save_trade_decision.await_args.args[0]
+        assert FILL_DIVERGENCE_MARKER in decision.reasoning
+
+    async def test_verified_fill_still_teaches(self, tmp_path: Path) -> None:
+        """No false positives: an ordinary close keeps teaching exactly as before."""
+        position = _position()
+        strategy, _, _, post_mortem = _strategy(tmp_path, position)
+
+        await strategy.close_position(
+            "take_profit", 84500.0, make_market_conditions(),
+            filled_quantity=0.00554,
+            evidence=proven_exit(
+                fill_verification="verified", reference_price=84510.0, deviation_pct=-0.0118
+            ),
+        )
+
+        post_mortem.analyze_closed_trade.assert_awaited_once()
+        strategy.brain_service.update_from_closed_trade.assert_called_once()
+
+
+class TestDivergenceVocabulary:
+    """The refusal must name the numbers: an operator (and the model) gets the evidence."""
+
+    def test_reason_carries_both_prices(self) -> None:
+        evidence = proven_exit(
+            price=77506.0, fill_verification="divergent",
+            reference_price=81325.09, deviation_pct=-4.6963,
+        )
+
+        reason = fill_divergence_reason(evidence)
+
+        assert "77,506.00" in reason
+        assert "81,325.09" in reason
+        assert "-4.70%" in reason
+
+    def test_guard_refuses_a_divergent_evidence_directly(self) -> None:
+        learnable, reason = exit_evidence_is_learnable(
+            proven_exit(
+                price=77506.0, fill_verification="divergent",
+                reference_price=81325.09, deviation_pct=-4.6963,
+            )
+        )
+
+        assert learnable is False
+        assert "not a price the real market made" in reason
+
+    @pytest.mark.parametrize("value", ["verified", "unavailable", "disabled", None, ""])
+    def test_only_verified_market_evidence_can_teach(self, value: Any) -> None:
+        """Unknown, disabled and legacy prices never authorize learning."""
+        learnable, reason = exit_evidence_is_learnable(
+            proven_exit(price=84500.0, fill_verification=value)
+        )
+
+        assert learnable is (value == "verified"), reason
+
+
+class TestDivergentFillIsNotCounted:
+    """A marked CLOSE never moves a statistic — the pair is dropped, not counted."""
+
+    @staticmethod
+    def _entry(price: float, quantity: float = 0.00554) -> dict[str, Any]:
+        return {"action": "SELL", "price": price, "quantity": quantity,
+                "quote_amount": price * quantity, "reasoning": "entry"}
+
+    @staticmethod
+    def _close(price: float, reasoning: str = "Position closed") -> dict[str, Any]:
+        return {"action": "CLOSE_SHORT", "price": price, "reasoning": reasoning}
+
+    def test_marked_close_pair_is_excluded_from_statistics(self) -> None:
+        history = [
+            self._entry(81308.48),
+            self._close(77506.0, f"{FILL_DIVERGENCE_MARKER}: take_profit_filled @ 77506.0"),
+            self._entry(81308.48),
+            self._close(82000.0),  # an ordinary, honest loss
+        ]
+
+        stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
+
+        assert stats.total_trades == 1
+        assert stats.losing_trades == 1
+        assert stats.winning_trades == 0
+        assert stats.best_trade_pct < 0  # the +4.68% artifact is gone
+
+    def test_without_the_marker_the_same_pair_counts(self) -> None:
+        """The guard keys on the marker only — an unmarked close still counts."""
+        history = [self._entry(81308.48), self._close(77506.0, "Position closed")]
+
+        stats = StatisticsCalculator.calculate_from_history(history, 10000.0)
+
+        assert stats.total_trades == 1
+        assert stats.best_trade_pct == pytest.approx(4.6766, abs=1e-3)
+
+
+class TestMarketEvidenceQuarantine:
+    async def test_verified_label_without_historical_provenance_cannot_teach(self, tmp_path):
+        strategy, _, persistence, post_mortem = _strategy(tmp_path, _position())
+        await strategy.close_position("take_profit", 84500.0, make_market_conditions(),
+                                     evidence=proven_exit(market_verification=None))
+        assert persistence.async_save_trade_decision.await_args.args[0].execution_quality["eligible"] is False
+        post_mortem.analyze_closed_trade.assert_not_awaited()
+        strategy.brain_service.update_from_closed_trade.assert_not_called()
+
+    def test_equity_curve_keeps_excluded_exit_flat_without_misassigning_next_result(self):
+        history = [
+            {"action": "SELL", "price": 100.0, "quantity": 1.0, "timestamp": "entry1"},
+            {"action": "CLOSE_SHORT", "price": 50.0, "timestamp": "exit1", "execution_quality": {"eligible": False}},
+            {"action": "SELL", "price": 100.0, "quantity": 1.0, "timestamp": "entry2"},
+            {"action": "CLOSE_SHORT", "price": 110.0, "timestamp": "exit2"},
+        ]
+        router = PerformanceRouter(make_config(), null_logger(), MagicMock())
+        curve = router._process_trade_history(history, {"initial_capital": 1000.0})
+        assert [p["value"] for p in curve] == [1000.0, 1000.0, 1000.0, 990.0]
+
+    @pytest.mark.parametrize("status", ["unavailable", "disabled", None, "", "divergent"])
+    async def test_missing_or_divergent_market_reference_books_without_learning_or_statistics(self, tmp_path, status):
+        strategy, _, persistence, post_mortem = _strategy(tmp_path, _position())
+        await strategy.close_position("take_profit", 77506.0, make_market_conditions(),
+                                     evidence=proven_exit(price=77506, fill_verification=status))
+        decision = persistence.async_save_trade_decision.await_args.args[0]
+        assert decision.execution_quality["eligible"] is False
+        history = [{"action": "BUY", "price": 81200.45, "quantity": 0.00554}, decision.to_dict()]
+        assert StatisticsCalculator.calculate_from_history(history).total_trades == 0
+        assert strategy.current_position is None
+        post_mortem.analyze_closed_trade.assert_not_awaited()
+        strategy.brain_service.update_from_closed_trade.assert_not_called()
+
+    async def test_divergent_entry_survives_sqlite_and_position_restart_and_excludes_normal_exit(self, tmp_path):
+        strategy, persistence, intent, receipt = _EntrySettlement.setup_entry(tmp_path)
+        receipt.update(average_price=90000, fill_verification="divergent", reference_price=81325.09)
+        Path(strategy.config.EXECUTOR_VERDICT_PATH).write_text(json.dumps(receipt) + "\n", encoding="utf-8")
+        await strategy.resolve_position_intents_after_forward(intent.order_id, True)
+        restarted = PersistenceManager(null_logger(), str(persistence.data_dir))
+        position = restarted.load_position()
+        assert position.entry_execution_quality["fill_verification"] == "divergent"
+        assert restarted.load_trade_history()[0]["execution_quality"]["eligible"] is False
+        strategy.current_position = position
+        strategy.persistence = restarted
+        strategy.memory_service = TradingMemoryService(null_logger(), restarted)
+        post_mortem = MagicMock()
+        post_mortem.analyze_closed_trade = AsyncMock(return_value=MagicMock())
+        strategy.post_mortem_service = post_mortem
+        await strategy.close_position("normal_exit", 81000, make_market_conditions(),
+                                     evidence=proven_exit(price=81000, quantity=position.size))
+        post_mortem.analyze_closed_trade.assert_not_awaited()
+        strategy.brain_service.update_from_closed_trade.assert_not_called()
+        history = restarted.load_trade_history()
+        assert len(history) == 2
+        assert StatisticsCalculator.calculate_from_history(history).total_trades == 0
+        memory = TradingMemoryService(null_logger(), restarted)
+        assert "Overall Performance" not in memory.get_context_summary()
 
 
 class TestProvenExitTeachesOnce:

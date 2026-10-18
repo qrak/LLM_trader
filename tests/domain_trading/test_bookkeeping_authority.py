@@ -48,6 +48,7 @@ from tests.conftest import (
     mock_persistence,
     mock_statistics,
     null_logger,
+    verified_market_evidence,
 )
 
 ENTRY_TIME = datetime(2026, 9, 21, 8, 12, 0, tzinfo=timezone.utc)
@@ -69,6 +70,7 @@ def _position(**overrides: Any) -> Position:
         "size": 0.00554,
         "entry_time": ENTRY_TIME,
         "conditions_at_entry": make_market_conditions(),
+        "entry_execution_quality": verified_market_evidence(),
     }
     values.update(overrides)
     return make_position(**values)
@@ -121,6 +123,7 @@ def _exit_record(**overrides: Any) -> dict[str, Any]:
         "exit_reason": "take_profit_filled",
         "protection_order_id": "2012150",
         "source": "reconcile",
+        **verified_market_evidence(),
     }
     record.update(overrides)
     return record
@@ -1122,6 +1125,7 @@ def _receipt(**overrides: Any) -> dict[str, Any]:
         "state": "filled",
         "close_confirmed": True,
         "protection_version": 7,
+        **verified_market_evidence(),
         "fill_evidence": "exchange_order_fill",
     }
     row.update(overrides)
@@ -1651,6 +1655,7 @@ class TestExecutedEntrySettlement:
         receipt = {
             "order_id": intent.order_id, "symbol": position.symbol, "signal": signal,
             "verdict": "executed", "state": "filled", "position_id": "venue-position",
+            **verified_market_evidence(),
             "filled_quantity": 0.00441, "average_price": 83862.62,
             "fill_evidence": "exchange_trade_fills", "fees_known": True,
             "fees": [{"currency": "USDC", "amount": 0.0}], "exposure_possible": True,

@@ -106,6 +106,13 @@ class ExchangeManager:
 
             exchange = exchange_class(exchange_config)
 
+            if getattr(self.config, "EXCHANGE_SANDBOX", False):
+                try:
+                    exchange.set_sandbox_mode(True)
+                    self.logger.info("Sandbox mode enabled for %s - market data from the testnet", exchange_id)
+                except Exception as e:  # noqa: BLE001 - not every exchange has testnet URLs
+                    self.logger.warning("Sandbox mode unavailable for %s: %s", exchange_id, e)
+
             await exchange.load_markets()
 
             self.exchanges[exchange_id] = exchange

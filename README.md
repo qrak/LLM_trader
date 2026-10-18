@@ -192,7 +192,7 @@ Key settings in `config/config.ini`:
 | `crypto_pair` | BTC/USDC | Trading pair |
 | `timeframe` | 4h | Analysis candle timeframe (4h or higher; smaller frames degrade signal quality) |
 | `model_verbosity` | full | New-analysis detail: low (~400), medium (~1000), high (~2000), full (~8000 narrative output tokens) |
-| `provider` | deepseek | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `blockrun`, `all`) |
+| `provider` | deepseek | AI provider (`local`, `googleai`, `openrouter`, `deepseek`, `all`; BlockRun is a fallback-chain member only) |
 | `demo_quote_capital` | 10000 | Simulated capital (USDC) |
 | `max_position_size` | 0.10 | Max position as a fraction of capital |
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |

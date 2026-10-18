@@ -604,6 +604,18 @@ class Config:
         return self.get_config("exchanges", "market_refresh_hours", 24)
 
     @property
+    def EXCHANGE_SANDBOX(self) -> bool:
+        """Whether market data comes from the exchange's testnet (ccxt sandbox URLs).
+
+        Keep this in sync with the venue the executor trades on: with sandbox off the
+        bot reads the REAL market while the executor's protective orders rest on the
+        testnet book, so a stop or target can fill at a price the real chart never
+        printed. See ``references/testnet-vs-real-market.md`` in the executor skill.
+        """
+        val = self.get_config("exchanges", "sandbox", False)
+        return bool(val)
+
+    @property
     def TRANSACTION_FEE_PERCENT(self):
         """Transaction fee percentage for limit orders (default 0.075%)."""
         return float(self.get_config("demo_trading", "transaction_fee_percent", 0.00075))

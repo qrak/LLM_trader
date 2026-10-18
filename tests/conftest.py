@@ -102,6 +102,14 @@ PRODUCTION_DEFAULTS: dict[str, Any] = {
 }
 
 
+def verified_market_evidence(price: float = 84500.0) -> dict[str, Any]:
+    """Synthetic same-time public-trade evidence for proven-execution fixtures."""
+    return {"fill_verification": "verified", "reference_price": price,
+            "fill_timestamp": "2026-09-21T09:32:51.956000+00:00",
+            "reference_timestamp": "2026-09-21T09:32:51.950000+00:00",
+            "reference_source": "binance_spot_agg_trades"}
+
+
 def make_config(**overrides: Any) -> SimpleNamespace:
     """Config double carrying the production defaults plus explicit overrides."""
     values = dict(PRODUCTION_DEFAULTS)

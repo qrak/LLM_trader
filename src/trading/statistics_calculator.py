@@ -14,8 +14,10 @@ import numpy as np
 from src.trading.data_models import (
     ENTRY_SIGNALS,
     EXIT_SIGNALS,
+    FILL_DIVERGENCE_MARKER,
     LONG_ENTRY_SIGNALS,
     ClosedTradeResult,
+    execution_quality_is_eligible,
 )
 from src.utils.data_utils import SerializableMixin
 
@@ -113,7 +115,13 @@ class StatisticsCalculator:
 
     @staticmethod
     def _extract_closed_trades(trade_history: list[dict[str, Any]]) -> list[ClosedTradeResult]:
-        """Extract closed trades with P&L from history."""
+        """Extract closed trades with P&L from history.
+
+        A CLOSE whose reasoning carries :data:`FILL_DIVERGENCE_MARKER` is SKIPPED: the
+        venue filled it at a price the real market never made (a sandbox/venue artifact),
+        so it is booked for history pairing but must not move a single statistic. Its
+        entry is dropped with it — the pair never becomes a "trade".
+        """
         closed_trades: list[ClosedTradeResult] = []
         open_position: dict[str, Any] | None = None
         for trade in trade_history:
@@ -121,6 +129,11 @@ class StatisticsCalculator:
             if action in ENTRY_SIGNALS:
                 open_position = trade
             elif action in EXIT_SIGNALS and open_position:
+                if (not execution_quality_is_eligible(trade.get("execution_quality"))
+                        or not execution_quality_is_eligible(open_position.get("execution_quality"))
+                        or FILL_DIVERGENCE_MARKER in str(trade.get("reasoning") or "")):
+                    open_position = None
+                    continue
                 entry_price = open_position.get("price", 0)
                 exit_price = trade.get("price", 0)
                 quantity = open_position.get("quantity", 0) or 0.0

@@ -46,7 +46,19 @@ from src.utils.format_utils import FormatUtils
 from src.utils.prompt_budget import PromptBudgetExceeded, PromptBudgetPolicy
 from src.utils.timeframe_validator import TimeframeValidator
 from src.utils.token_counter import TokenCounter
-from tests.conftest import make_config, make_market_conditions, make_position
+from tests.conftest import (
+    make_config,
+    make_market_conditions,
+    verified_market_evidence,
+)
+from tests.conftest import (
+    make_position as build_position,
+)
+
+
+def make_position(**overrides):
+    """Closed-trade learning fixtures represent independently verified entries."""
+    return build_position(**{"entry_execution_quality": verified_market_evidence(), **overrides})
 
 
 def proven_exit(**overrides) -> ExitEvidence:
@@ -61,6 +73,8 @@ def proven_exit(**overrides) -> ExitEvidence:
         "price": 52000.0,
         "quantity": 0.01,
         "event_id": "probe-event-1",
+        "fill_verification": "verified",
+        "market_verification": verified_market_evidence(52000.0),
     }
     values.update(overrides)
     return ExitEvidence(**values)
@@ -1475,6 +1489,14 @@ class TestBrainRefusesUnprovenLessons:
     has no proven exit fact behind it.
     """
 
+    def test_verified_exit_cannot_teach_an_unknown_entry(self):
+        brain = learning_brain()
+        assert brain.update_from_closed_trade(
+            position=make_position(entry_execution_quality=None), close_price=52000.0,
+            close_reason="take_profit", market_conditions=make_market_conditions(), evidence=proven_exit(),
+        ) is False
+        brain.vector_memory.store_experience.assert_not_called()
+
     def test_without_evidence_nothing_is_stored_and_the_skip_is_logged(self):
         brain = learning_brain()
         logger = brain.logger
@@ -1556,6 +1578,8 @@ class TestBrainRefusesUnprovenLessons:
                 "price": 52000.0,
                 "quantity": 0.01,
                 "event_id": "dict-event",
+                "fill_verification": "verified",
+                "market_verification": verified_market_evidence(52000.0),
             },
         )
         refused = brain.update_from_closed_trade(

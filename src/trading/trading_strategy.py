@@ -9,7 +9,14 @@ from src.logger.logger import Logger
 from src.utils.timeframe_validator import TimeframeValidator
 
 from .brain import TradingBrainService
-from .data_models import LocalExitRequest, MarketConditions, Position, TradeDecision
+from .data_models import (
+    FILL_DIVERGENCE_MARKER,
+    LocalExitRequest,
+    MarketConditions,
+    Position,
+    TradeDecision,
+    market_verification_is_verified,
+)
 from .executor_reconciliation import (
     INTENT_ACTION_CLOSE,
     INTENT_CONFIRMED,
@@ -369,6 +376,17 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         fee_text = self._commission_text(exit_fee, fee_source)
         learnable, refusal_reason = exit_evidence_is_learnable(evidence)
+        entry_quality = closed_position.entry_execution_quality
+        if (entry_quality is not None or self.config.EXECUTOR_API_ENABLED) and not market_verification_is_verified(entry_quality):
+            learnable = False
+            refusal_reason = f"entry execution price was not market-verified ({(entry_quality or {}).get('fill_verification') or 'missing'})"
+        exit_quality = evidence.to_dict() if evidence is not None and not isinstance(evidence, dict) else dict(evidence or {})
+        execution_quality = {"eligible": learnable, "entry": entry_quality, "exit": exit_quality, "reason": refusal_reason}
+        if not learnable:
+            divergent = (entry_quality or {}).get("fill_verification") == "divergent" or exit_quality.get("fill_verification") == "divergent"
+            marker = FILL_DIVERGENCE_MARKER if divergent else "EXECUTION UNVERIFIED"
+            if marker not in reason:
+                reason = f"{marker}: {refusal_reason}. {reason}"
         if filled_quantity is None:
             filled_quantity = getattr(evidence, "quantity", None)
         booked_quantity, quantity_note = self._booked_quantity(closed_position, filled_quantity)
@@ -378,6 +396,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
                 closed_position.symbol, reason,
             )
 
+        pnl_text = f"P&L: {pnl:+.2f}%." if learnable else "Strategy P&L: excluded (unverified execution)."
         decision = TradeDecision(
             timestamp=exit_time or datetime.now(timezone.utc),
             symbol=closed_position.symbol,
@@ -390,8 +409,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             quote_amount=closed_position.quote_amount,
             quantity=booked_quantity,
             fee=exit_fee,
+            execution_quality=execution_quality,
             reasoning=(
-                f"Position closed: {reason}. P&L: {pnl:+.2f}%. {fee_text}{quantity_note}"
+                f"Position closed: {reason}. {pnl_text} {fee_text}{quantity_note}"
             ),
         )
 

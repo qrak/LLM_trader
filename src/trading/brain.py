@@ -13,7 +13,13 @@ from .brain_exit_profiles import ExitProfileResolver
 from .brain_experience import BrainExperienceRecorder
 from .brain_patterns import TradePatternAnalyzer
 from .brain_reflection import BrainReflectionEngine
-from .data_models import ExitExecutionContext, MarketSnapshot, Position, TradeDecision
+from .data_models import (
+    ExitExecutionContext,
+    MarketSnapshot,
+    Position,
+    TradeDecision,
+    market_verification_is_verified,
+)
 from .executor_reconciliation import (
     LESSON_SKIPPED_NO_EVIDENCE,
     exit_evidence_is_learnable,
@@ -133,6 +139,8 @@ class TradingBrainService:
             True when the experience was recorded, False when it was refused.
         """
         learnable, reason = exit_evidence_is_learnable(evidence)
+        if not market_verification_is_verified(position.entry_execution_quality):
+            learnable, reason = False, "entry execution price was not market-verified"
         if not learnable:
             self.logger.warning(
                 "%s (%s) | %s %s",

@@ -216,7 +216,7 @@ class BrainContextProvider:
                 return ""
             lines = []
             for pm in recent:
-                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get("pnl_pct") is not None else ""
+                pnl_str = f", P&L: {pm['pnl_pct']:+.1f}%" if pm.get("pnl_pct") is not None and pm["verdict"] != "excluded" else ""
                 lines.append(
                     f"— {pm['verdict']} ({pm['created_at'][:10]}, {pm['symbol']}): {pm['lesson_learned']}{pnl_str}"
                 )

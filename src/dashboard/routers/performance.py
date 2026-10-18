@@ -41,8 +41,7 @@ class PerformanceRouter:
         initial_capital = stats.get("initial_capital", 10000.0)
         running_capital = initial_capital
         # pylint: disable=protected-access
-        closed_trades = StatisticsCalculator._extract_closed_trades(trades)
-        closed_trade_idx = 0
+        closed_trades = []
         open_position = None
         for trade in trades:
             ts = trade.get("timestamp")
@@ -56,13 +55,14 @@ class PerformanceRouter:
                     "price": trade.get("price")
                 })
             elif action in EXIT_SIGNALS and open_position:
-                if closed_trade_idx < len(closed_trades):
-                    closed = closed_trades[closed_trade_idx]
+                closed_trades = StatisticsCalculator._extract_closed_trades([open_position, trade])
+                if closed_trades:
+                    closed = closed_trades[0]
                     if closed.pnl_quote:
                         running_capital += closed.pnl_quote
                     else:
                         running_capital += running_capital * closed.pnl_pct / 100
-                    closed_trade_idx += 1
+
                 equity_curve.append({
                     "time": ts,
                     "value": round(running_capital, 2),

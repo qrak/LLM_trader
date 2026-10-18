@@ -27,6 +27,7 @@ from src.trading.data_models import (
     MarketConditions,
     Position,
     TradeDecision,
+    market_verification_is_verified,
 )
 from src.trading.statistics_calculator import TradingStatistics
 from src.utils.data_utils import serialize_for_json
@@ -98,6 +99,7 @@ class PersistenceManager:
                 "symbol": position.symbol,
                 "confluence_factors": [[name, score] for name, score in position.confluence_factors],
                 "entry_fee": position.entry_fee,
+                "entry_execution_quality": position.entry_execution_quality,
                 "size_pct": position.size_pct,
                 "quote_amount": position.quote_amount,
                 "atr_at_entry": position.atr_at_entry,
@@ -169,6 +171,7 @@ class PersistenceManager:
                     symbol=data.get("symbol", "BTC/USDC"),
                     confluence_factors=cf_tuple,
                     entry_fee=data.get("entry_fee"),
+                    entry_execution_quality=data.get("entry_execution_quality"),
                     quote_amount=data.get("quote_amount", 0.0),
                     size_pct=data.get("size_pct", 0.0),
                     atr_at_entry=data.get("atr_at_entry", 0.0),
@@ -247,7 +250,7 @@ class PersistenceManager:
             "market_sentiment_at_entry", "order_book_bias_at_entry",
             "stop_loss_type_at_entry", "stop_loss_check_interval_at_entry",
             "take_profit_type_at_entry", "take_profit_check_interval_at_entry",
-            "max_drawdown_pct", "max_profit_pct",
+            "max_drawdown_pct", "max_profit_pct", "entry_execution_quality",
         }]
         if unknown_keys:
             warnings.append(
@@ -289,6 +292,8 @@ class PersistenceManager:
             price=position.entry_price, quantity=position.size, fee=position.entry_fee,
             tolerance_seconds=0.0 if history_time else self.ENTRY_DECISION_MATCH_TOLERANCE_SECONDS,
             row_id=row_id,
+            execution_quality={"eligible": market_verification_is_verified(position.entry_execution_quality),
+                               "entry": position.entry_execution_quality},
         )
         self.save_position(position, strict=True)
         return history_id
@@ -356,7 +361,8 @@ class PersistenceManager:
                     quote_amount=decision_dict.get("quote_amount", 0.0),
                     quantity=decision_dict.get("quantity", 0.0),
                     fee=decision_dict.get("fee"),
-                    reasoning=decision_dict.get("reasoning", "")
+                    reasoning=decision_dict.get("reasoning", ""),
+                    execution_quality=decision_dict.get("execution_quality"),
                 )
 
             self.logger.warning("Could not find entry decision for position at %s", entry_time)

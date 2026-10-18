@@ -19,10 +19,14 @@ from typing import Any
 import httpx
 
 from .data_models import (
+    FILL_DIVERGENCE_MARKER,
+    FILL_VERIFICATION_DIVERGENT,
     LONG_ENTRY_SIGNALS,
+    MARKET_VERIFICATION_FIELDS,
     SHORT_ENTRY_SIGNALS,
     Position,
     TradeDecision,
+    market_verification_is_verified,
 )
 
 ENTRY_CONFIRM_ATTEMPTS = 10
@@ -105,6 +109,11 @@ LESSON_SKIPPED_NO_POST_MORTEM = (
 LESSON_SKIPPED_ALREADY_LEARNED = (
     "Lesson skipped: this exit was already processed (idempotency) — no second "
     "brain entry was written"
+)
+LESSON_SKIPPED_FILL_DIVERGENCE = (
+    "Lesson skipped: the venue fill price is not a price the real market made "
+    "(sandbox/venue artifact) — booked for history, excluded from statistics and "
+    "from the brain"
 )
 
 
@@ -532,6 +541,14 @@ class VerifiedExit:
     fees: tuple[float, ...] | None = None
     fee_currency: str | None = None
     protection_version: str | None = None
+    # Fill-vs-market marking the executor puts on every exchange-side exit
+    # (``verified`` / ``divergent`` / ``unavailable`` / ``disabled``) together with
+    # the real-market reference it used. ``divergent`` = the price is a venue
+    # artifact: booked, never counted, never learned.
+    fill_verification: str | None = None
+    reference_price: float | None = None
+    deviation_pct: float | None = None
+    market_verification: dict[str, Any] | None = None
 
     @property
     def exit_fee(self) -> float | None:
@@ -564,6 +581,13 @@ class ExitEvidence:
     protection_version: str | None = None
     fee: float | None = None
     fee_currency: str | None = None
+    #: Fill-vs-market marking carried from the executor's exit journal
+    #: (``verified`` / ``divergent`` / ``unavailable`` / ``disabled``) plus the
+    #: real-market reference it was measured against.
+    fill_verification: str | None = None
+    reference_price: float | None = None
+    deviation_pct: float | None = None
+    market_verification: dict[str, Any] | None = None
 
     @property
     def identity(self) -> str:
@@ -580,7 +604,32 @@ class ExitEvidence:
             "protection_version": self.protection_version,
             "fee": self.fee,
             "fee_currency": self.fee_currency,
+            "fill_verification": self.fill_verification,
+            "reference_price": self.reference_price,
+            "deviation_pct": self.deviation_pct,
+            "market_verification": self.market_verification,
         }
+
+
+def exit_fill_is_divergent(value: Any) -> bool:
+    """True when the executor marked this fill as divergent from the REAL market."""
+    return str(value or "").strip().lower() == FILL_VERIFICATION_DIVERGENT
+
+
+def fill_divergence_reason(evidence: Any) -> str:
+    """Operator-facing sentence explaining why such a fill cannot be a lesson."""
+    reference = _positive_float(getattr(evidence, "reference_price", None))
+    deviation = getattr(evidence, "deviation_pct", None)
+    price = _positive_float(getattr(evidence, "price", None))
+    measured = ""
+    if reference is not None and price is not None:
+        measured = f" — the venue filled at {price:,.2f} while the real market traded at {reference:,.2f}"
+    crossed = f" ({deviation:+.2f}%)" if isinstance(deviation, (int, float)) else ""
+    return (
+        f"the venue's fill price is not a price the real market made{measured}{crossed}: "
+        f"an exchange-side print the market never made cannot become a lesson, a statistic "
+        f"or a chart level"
+    )
 
 
 def exit_evidence_is_learnable(evidence: Any) -> tuple[bool, str]:
@@ -601,9 +650,17 @@ def exit_evidence_is_learnable(evidence: Any) -> tuple[bool, str]:
             protection_version=evidence.get("protection_version"),
             fee=_non_negative_float(evidence.get("fee")),
             fee_currency=evidence.get("fee_currency"),
+            fill_verification=evidence.get("fill_verification"),
+            reference_price=_positive_float(evidence.get("reference_price")),
+            deviation_pct=evidence.get("deviation_pct"),
+            market_verification=evidence.get("market_verification"),
         )
     if not isinstance(evidence, ExitEvidence):
         return False, f"unrecognized evidence object ({type(evidence).__name__})"
+    if exit_fill_is_divergent(evidence.fill_verification):
+        return False, fill_divergence_reason(evidence)
+    if evidence.fill_verification != "verified" or not market_verification_is_verified(evidence.market_verification):
+        return False, f"execution price was not market-verified ({evidence.fill_verification or 'missing'})"
     source = str(evidence.source or "")
     if source not in EXECUTOR_CONFIRMATION_SOURCES:
         return False, f"source {source!r} is not a confirming source"
@@ -752,6 +809,18 @@ def verify_exit_record(record: Any) -> tuple[VerifiedExit | None, str | None]:
                 if record.get("protection_version") is not None
                 else None
             ),
+            fill_verification=(
+                str(record["fill_verification"])
+                if record.get("fill_verification") is not None
+                else None
+            ),
+            market_verification={key: record.get(key) for key in MARKET_VERIFICATION_FIELDS},
+            reference_price=_positive_float(record.get("reference_price")),
+            deviation_pct=(
+                record.get("deviation_pct")
+                if isinstance(record.get("deviation_pct"), (int, float))
+                else None
+            ),
         ),
         None,
     )
@@ -830,6 +899,10 @@ def exit_record_from_receipt(receipt: Any, *, symbol: str | None = None) -> tupl
         "protection_version": receipt.get("protection_version"),
         "receipt_fill_evidence": receipt.get("fill_evidence"),
         "source": "executor_verdict_journal",
+        # Fill-vs-market marking the executor attached to the receipt: "divergent"
+        # means the venue filled at a price the real market never made. The close is
+        # still booked, but it is not counted and not learned from.
+        **{key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS},
     }
     verified, rejection = verify_exit_record(record)
     if verified is None:
@@ -1679,7 +1752,8 @@ class ExecutorReconciliationMixin:
                 return False
             fees = _actual_fees(receipt) if receipt.get("fees_known") is True else None
             fee = math.fsum(fees) if fees else None
-            fill = {"price": price, "quantity": quantity, "fee": fee}
+            quality = {key: receipt.get(key) for key in MARKET_VERIFICATION_FIELDS}
+            fill = {"price": price, "quantity": quantity, "fee": fee, "execution_quality": quality}
             previous_fill = payload.get("entry_fill")
             if previous_fill == fill:
                 return True
@@ -1692,6 +1766,7 @@ class ExecutorReconciliationMixin:
                 size_pct *= quote_amount / position.quote_amount
             settled = replace(
                 position, entry_price=price, size=quantity, entry_fee=fee,
+                entry_execution_quality=quality,
                 quote_amount=quote_amount, size_pct=size_pct,
             )
             row_id = await asyncio.to_thread(
@@ -2038,6 +2113,32 @@ class ExecutorReconciliationMixin:
                 f"{verified.exit_reason} @ {verified.exit_price} "
                 f"(exchange order {verified.protection_order_id}, evidence {verified.evidence})"
             )
+            if exit_fill_is_divergent(verified.fill_verification):
+                # The venue filled at a price the real market never made (a sandbox
+                # book is a few dollars deep). The close is STILL booked — history
+                # must stay paired — but the marker keeps it out of statistics and
+                # out of the brain, and tells the model this is not a chart level.
+                self.logger.critical(
+                    "FILL DIVERGENCE %s: %s — booking the CLOSE for history pairing, "
+                    "excluding it from statistics and learning.",
+                    position.symbol,
+                    fill_divergence_reason(verified),
+                )
+                self._state_divergence = (
+                    f"fill divergence for {position.symbol}: {fill_divergence_reason(verified)}"
+                    f" (booked, not counted, not learned)"
+                )
+                detail = (
+                    f"{FILL_DIVERGENCE_MARKER}: the venue filled at {verified.exit_price:,.2f}"
+                    + (
+                        f" while the real market traded at {verified.reference_price:,.2f}"
+                        f" ({verified.deviation_pct:+.2f}%)"
+                        if verified.reference_price is not None
+                        and isinstance(verified.deviation_pct, (int, float))
+                        else ""
+                    )
+                    + f" — NOT a market level. {detail}"
+                )
             self.logger.warning(
                 "Executor confirmed no open position for %s while a local position was tracked — "
                 "booking the exchange-side exit (%s) so trade history stays paired.",
@@ -2063,6 +2164,12 @@ class ExecutorReconciliationMixin:
                     protection_version=verified.protection_version,
                     fee=verified.exit_fee,
                     fee_currency=verified.fee_currency,
+                    # Fill-vs-market marking from the executor: "divergent" means
+                    # book it, never count it, never learn from it.
+                    fill_verification=verified.fill_verification,
+                    reference_price=verified.reference_price,
+                    deviation_pct=verified.deviation_pct,
+                    market_verification=verified.market_verification,
                 ),
             )
             self._executor_side_exit_reason = f"{reason_label}: {detail}"

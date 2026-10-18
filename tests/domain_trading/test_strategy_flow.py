@@ -45,6 +45,7 @@ from tests.conftest import (
     mock_persistence,
     mock_statistics,
     null_logger,
+    verified_market_evidence,
 )
 
 _PARSER = UnifiedParser(logger=null_logger(), format_utils=FormatUtils())
@@ -258,6 +259,8 @@ def proven_exit(**overrides: Any) -> ExitEvidence:
         "price": 110.0,
         "quantity": 0.01,
         "event_id": "probe-close-event",
+        "fill_verification": "verified",
+        "market_verification": verified_market_evidence(110.0),
     }
     values.update(overrides)
     return ExitEvidence(**values)

@@ -1,16 +1,15 @@
 # ==============================================================================
 # config.ini.example - TEMPLATE. Copy it to config/config.ini and edit the copy.
-#
-# Secrets do NOT belong here: API keys, admin credentials and Discord channel
-# IDs go into OS/service environment variables (recommended) or optional keys.env.
-# See keys.env.example; process variables override the file. config.ini is separate.
-#
+# Secrets do NOT belong here: API keys, admin credentials and Discord channel IDs go
+# into OS/service environment variables (recommended) or optional keys.env.
+# See keys.env.example.
 # Only the keys marked REQUIRED have to be present; delete any other key and the
 # loader falls back to its own default in src/config/loader.py.
 # ==============================================================================
 
 # === General ===
 [general]
+# Trading pair and the candle data every analysis is based on.
 crypto_pair = BTC/USDC
 # ⚠ CRYPTO IS VOLATILE — timeframes below 4h (1h, 15m, 5m, 1m) produce unreliable
 # signals with high noise, frequent false breakouts, and reduced win rates.
@@ -18,30 +17,38 @@ crypto_pair = BTC/USDC
 # timeframes will degrade performance significantly and increase costs due to
 # more frequent LLM calls. You have been warned.
 timeframe = 4h
+# Candles fetched per timeframe, and candles drawn into the chart image sent with the prompt.
 candle_limit = 999
 ai_chart_candle_limit = 125
-# Discord notifications (analysis posts + old-message cleanup)
+# Discord notifications (analysis posts + old-message cleanup); needs BOT_TOKEN_DISCORD and
+# MAIN_CHANNEL_ID from the environment.
 discord_bot = false
-
 # Adds the CoinGecko project description to the prompt (costs extra tokens)
 include_coin_description = false
 # spot = BUY/SELL signals, futures = LONG/SHORT signals with leverage
 market_type = spot
-# market = instant execution, limit = conditional (disabled for now, infrastructure kept)
+# market = instant execution. limit = the model may also ask for a limit order; the bot forwards
+# the order type as-is and the conditional part is handled on the executor's side.
 entry_order_type = market
 
 # === AI Providers ===
 [ai_providers]
-# local | googleai | openrouter | deepseek | blockrun | all
-# "all" builds a fallback chain: the providers below are tried in order and the
-# first one that answers wins. Only the entries belonging to the ACTIVE provider
-# matter - the rest are ignored (e.g. nothing in deepseek_* is used while
-# provider = googleai).
+# local | googleai | openrouter | deepseek | all
+# blockrun is NOT a valid value here: the loader rejects it (VALID_PROVIDERS in
+# src/config/loader.py) and only uses it as a chain member of "all", and only with
+# BLOCKRUN_WALLET_KEY set.
+# "all" builds a fallback chain whose order is fixed in the code, not taken from this file:
+#   text:   googleai -> deepseek -> local -> openrouter -> blockrun
+#   charts: googleai -> deepseek -> openrouter -> blockrun
+# Unavailable providers are skipped; the first valid answer wins.
+# Only the active provider is used, but the per-model config is picked by EXACT model-name match
+# (deepseek_model / google_studio_model), so keep those names distinct across providers.
 provider = googleai
 
 # LM Studio (local)
+# Non-empty base URL = the LM Studio client is created; empty = the provider is unusable.
 lm_studio_base_url = http://localhost:1234/v1
-# Empty = LM Studio disabled; otherwise the model name loaded in the LM Studio app
+# Empty = the first model loaded in the LM Studio server is selected automatically.
 lm_studio_model =
 lm_studio_streaming = false
 
@@ -55,23 +62,24 @@ deepseek_base_url = https://api.deepseek.com
 # One model for text + chart analysis (flash accepts images natively)
 deepseek_model = deepseek-flash
 
-# Google AI Studio - the model must exist in the Google docs; its thinking
-# level and output cap live in [model_config] below
+# Google AI Studio - the model must exist in the Google docs; its thinking level and output cap
+# live in [model_config] below. It also needs an entry in [model_context_windows], otherwise the
+# request is refused before it is sent.
 google_studio_model = gemini-3.8-flash
 
-# BlockRun.AI (x402 micropayments)
-# Base URL for BlockRun AI API
+# BlockRun.AI (x402 micropayments) - reachable only as part of the "all" chain (see above).
+# Paid per request from BLOCKRUN_WALLET_KEY; the model is given as provider/model, e.g.
+# openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash.
 # blockrun_base_url = https://blockrun.ai/api
-# Model to use with BlockRun (format: provider/model)
-# Examples: openai/gpt-4o, anthropic/claude-sonnet-4, google/gemini-2.5-flash
 # blockrun_model = deepseek/deepseek-reasoner
 
 # === Model Configuration ===
-# Which keys apply depends on the provider set in [ai_providers].
-# OpenAI-compatible providers (openrouter, local, blockrun) get temperature,
-# top_p, top_k, max_tokens and the penalties. Google gets ONLY
-# google_max_tokens + google_thinking_level + google_code_execution, so those
-# sampling keys are ignored while provider = googleai.
+# Which keys apply is decided by MODEL NAME, not by the active provider:
+#   openrouter / local -> temperature, top_p, top_k, max_tokens (OpenRouter drops presence_penalty)
+#   blockrun           -> only temperature, top_p, top_k, max_tokens
+#   deepseek           -> ONLY max_tokens + reasoning_effort + response_format; the sampling keys
+#                         and both penalties above are ignored
+#   googleai           -> ONLY google_max_tokens + google_thinking_level + google_code_execution
 [model_config]
 # New analysis detail + approximate NARRATIVE length (tokens, not characters):
 # low = 400 (3 lines), medium = 1000 (5 lines), high = 2000 (13 lines),
@@ -87,23 +95,25 @@ top_k = 40
 # REQUIRED - the bot refuses to start without it. Used by every provider except Google.
 max_tokens = 32768
 # frequency_penalty and presence_penalty are also accepted (0.0 = off)
-# REQUIRED while provider = googleai. Output cap and it INCLUDES thought tokens.
-# gemini-3.8-flash allows up to 65536; with thinking = high a low cap can cut
-# the answer off mid-sentence (and a cut answer means no parsed decision).
+# REQUIRED while provider = googleai OR all. Output cap, and it INCLUDES thought tokens.
+# gemini-3.8-flash accepts up to 65536; with thinking = high a low cap can cut the answer off
+# mid-sentence (and a cut answer means no parsed decision).
 google_max_tokens = 65536
 # How deep the model thinks before answering: low | medium | high.
 # Google's own default for gemini-3.8-flash is medium; high = maximum depth
 # (slower and more output tokens, but the most thorough analysis).
 # NOTE: "minimal" is not supported by this model and returns an API error.
 google_thinking_level = high
-# Let the model run Python code while answering (off = plain text answer)
+# Let the model run Python code while answering CHART-analysis requests (off = plain text answer);
+# text-only requests never get the code-execution tool.
 google_code_execution = false
 # OpenRouter reasoning effort: none | minimal | low | medium | high | xhigh | max
-# xhigh and max both map to DeepSeek's max reasoning level
+# The bot forwards the value unchanged - "xhigh"/"max" handling happens on OpenRouter's side.
 openrouter_reasoning_effort = max
 
-# DeepSeek thinking effort: none | minimal | low | medium | high | max (thinking mode is enabled by default).
-# Thinking tokens are billed as output and count toward deepseek_max_tokens.
+# DeepSeek thinking effort: minimal | low | medium | high | max (thinking is enabled by default).
+# The bot does not validate this value. Thinking tokens are billed as output and count toward
+# deepseek_max_tokens.
 # `high` is a deliberate choice; it is slower/costlier and does not guarantee correct R/R arithmetic.
 deepseek_reasoning_effort = high
 # DeepSeek max output (falls back to max_tokens when absent). Thinking tokens count
@@ -124,23 +134,26 @@ take_profit_type = hard
 # (1m, 15m, 1h, 4h); must not exceed the timeframe. Unused in "soft" mode.
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
+# Hard ceiling on the position as a fraction of capital; the regime profile may only tighten it
+# (with 0.10: aggressive 0.10 / neutral 0.08 / conservative 0.05).
 max_position_size = 0.10
-# Baseline floor for the risk/reward gate, shared by the prompt and the executor:
-# entries below the effective R/R are rejected. 0 starts without a hard floor;
-# the brain can add one after enough losing low-R/R trades.
+# Baseline floor for the risk/reward gate, shared by the prompt and the bot's own entry gate:
+# entries below the effective R/R are rejected. 0 starts without a hard floor; the brain can add
+# one after enough losing low-R/R trades.
 min_rr_entry = 0.0
 # Fallback sizes when AI doesn't provide position_size (by confidence)
 position_size_fallback_low = 0.01
 position_size_fallback_medium = 0.02
 position_size_fallback_high = 0.03
-# SL tightening: minimum price progress toward TP before SL can be tightened
-sl_tightening_scalping = 0.25        # < 1h timeframe
-sl_tightening_intraday = 0.20        # 1h–4h
-sl_tightening_swing = 0.15           # 4h–1d
-sl_tightening_position = 0.10        # 1d+
-sl_tightening_floor = 0.05           # brain can't push below this
-sl_tightening_ceiling = 0.40         # brain can't push above this
-sl_tightening_min_samples = 10       # min paired samples before brain override
+# SL tightening: minimum price progress toward TP before the stop can be tightened
+# (timeframe bands, then the range the brain may learn and the sample threshold for it).
+sl_tightening_scalping = 0.25          # < 1h timeframe
+sl_tightening_intraday = 0.20          # 1h–4h
+sl_tightening_swing = 0.15             # 4h–1d
+sl_tightening_position = 0.10          # 1d+
+sl_tightening_floor = 0.05             # brain can't push below this
+sl_tightening_ceiling = 0.40           # brain can't push above this
+sl_tightening_min_samples = 10         # min paired samples before brain override
 
 # === Executor API ===
 # Forward trading decisions to the separate llm_trader_executor service
@@ -176,6 +189,7 @@ demo_quote_capital = 10000
 transaction_fee_percent = 0.00075
 
 # === Dashboard ===
+# Local web dashboard: analysis history, statistics, live console.
 [dashboard]
 enabled = true
 host = 0.0.0.0
@@ -188,8 +202,16 @@ cors_origins = *
 
 # === Exchanges ===
 [exchanges]
-supported = binance,kucoin,gateio,mexc,hyperliquid  # priority order
+# ccxt exchange ids in priority order. "gateio" is not a ccxt id (ccxt names it "gate"), so that
+# entry never loads - rename it if you want the venue.
+supported = binance,kucoin,gateio,mexc,hyperliquid
+# Hours between exchange market refreshes
 market_refresh_hours = 24
+# Market data source: false = the REAL exchange, true = the exchange's TESTNET.
+# Turn ON only while the executor trades the testnet - then the bot measures the same
+# book its stop/target orders rest on (instead of the real market, whose chart never
+# prints the testnet fill). Public testnet data needs no API keys.
+sandbox = false
 
 # === Research Team (Bull/Bear Debate) ===
 # Enables structured bull-vs-bear analysis in the LLM prompt.
@@ -207,33 +229,45 @@ enabled = false
 # Up to 15 distinct titles from the last 48h fit in a 600-token context budget.
 # The trading LLM assesses outlook with cited titles in its existing response.
 # No keyword sentiment score, extra LLM request or vector index is used.
+# (these limits are hardcoded in the analyst, not config keys)
 # (this template ships it disabled so the first run makes no Reddit requests)
 [social_sentiment]
 enabled = false
 
 # === RAG / News ===
 [rag]
-update_interval_hours = 4               # hours between RAG rebuilds
-coingecko_update_interval_hours = 24    # hours between coin-list refreshes
-defillama_update_interval_hours = 0.25  # hours between DeFiLlama TVL refreshes
+# How often the RAG layer rebuilds news + market knowledge, how long the CoinGecko catalog stays
+# in its HTTP cache and how often DeFiLlama TVL is refreshed (all in hours).
+# Note: the CoinGecko client's own refresh interval is fixed at 24h in the code; this key only
+# controls the HTTP cache TTL.
+update_interval_hours = 4              # hours between RAG rebuilds
+coingecko_update_interval_hours = 24   # HTTP cache TTL for the coin catalog
+defillama_update_interval_hours = 0.25 # hours between DeFiLlama TVL refreshes
 coingecko_global_api_url = https://api.coingecko.com/api/v3/global
-news_limit = 5                          # max articles in AI context
-article_max_tokens = 1000               # max tokens per article
+# Context budget: how many articles reach the model and how many tokens each may take.
+news_limit = 5                         # max articles in AI context
+article_max_tokens = 1000              # max tokens per article
 # Empty = use all four feeds below; otherwise a comma-separated subset of
-# coindesk, cointelegraph, decrypt, cryptoslate
+# coindesk, cointelegraph, decrypt, cryptoslate. Unknown names are ignored silently.
 news_sources =
 news_source_coindesk_url = https://www.coindesk.com/arc/outboundfeeds/rss/
 news_source_cointelegraph_url = https://cointelegraph.com/rss
 news_source_decrypt_url = https://decrypt.co/feed
 news_source_cryptoslate_url = https://cryptoslate.com/feed/
-news_page_enrichment = true             # fetch full article body via Crawl4AI
-news_min_body_chars = 400               # skip articles with less body text
-news_timeout_seconds = 20
-rag_update_timeout_seconds = 180
-news_fetch_total_timeout_seconds = 45
-news_enrichment_timeout_seconds = 120
-news_max_concurrency = 6                # parallel Crawl4AI fetches
-news_max_items_per_source = 100
+# Fetch the full article body when the RSS body is short or contains page boilerplate
+# (Crawl4AI first, plain HTTP as fallback).
+news_page_enrichment = true
+# Body-length threshold used by enrichment AND by context ordering: shorter bodies are the
+# enrichment targets (a crawl result below the threshold is rejected) and full-body articles are
+# placed BEFORE short ones in the context pool. Articles are not dropped for being short.
+news_min_body_chars = 400
+# Timeouts (seconds) and parallelism of the news pipeline.
+news_timeout_seconds = 20              # one RSS feed / one page request
+rag_update_timeout_seconds = 180       # whole market-knowledge refresh per cycle
+news_fetch_total_timeout_seconds = 45  # all RSS feeds together
+news_enrichment_timeout_seconds = 120  # the whole enrichment batch
+news_max_concurrency = 6               # parallel page fetches (Crawl4AI hard-caps at 6)
+news_max_items_per_source = 100        # articles read per RSS feed
 # Article scoring weights - the thresholds are CHARACTER counts of the article body
 # body shorter than this -> score x penalty_multiplier
 density_penalty_threshold = 300
@@ -241,23 +275,31 @@ density_penalty_threshold = 300
 density_boost_threshold = 1000
 density_penalty_multiplier = 0.5
 density_boost_multiplier = 1.2
-# bonus when ALL query keywords appear in the article title + body
+# bonus when ALL query keywords (at least two) appear in the article title + body
 cooccurrence_multiplier = 1.5
-news_crawl4ai_enabled = true
-news_crawl_timeout = 20
+news_crawl4ai_enabled = true           # use the Crawl4AI browser instead of plain HTTP
+news_crawl_timeout = 20                # per-page Crawl4AI timeout
 
 # === Estimated-token safety budgets ===
 # TokenCounter uses cl100k_base: estimates, not exact provider/vision token counts.
 [prompt_budget]
+# Cap for the brain/memory context: optional ranges are dropped to fit, and the request is
+# refused rather than cutting a lesson.
 brain_max_tokens = 50000
+# Cap for the WHOLE request per target model. When nothing fits, the optional sections (news,
+# recent decisions, previous analysis, similar experiences, semantic rules) are dropped and
+# protected content (e.g. Python R/R feedback) refuses to send instead.
 request_max_tokens = 100000
+# Headroom kept below the model's context window (must not exceed 50).
 safety_margin_percent = 10
+# Extra reservation for requests that carry a chart image.
 image_reserve_tokens = 16384
 
-# Exact provider/model IDs; values are configured context-window capacities.
+# === Model context windows ===
+# Exact provider/model IDs; the value is the configured context-window capacity.
 # Unknown targets are refused before sending. Add local/model-id using the
 # context actually loaded in the local server, not an advertised model maximum.
-# Defaults verified against DeepSeek/Google docs and the public OpenRouter catalog.
+# The numbers follow the providers' documentation - the bot does not verify them.
 [model_context_windows]
 deepseek/deepseek-flash = 1000000
 deepseek/deepseek-v4-pro = 1000000
@@ -268,7 +310,8 @@ openrouter/deepseek/deepseek-v4.1-flash = 1048576
 
 # === Paths ===
 [directories]
-# Both relative to the repo root
+# Relative to the process working directory (the repo root only when the bot is started from
+# there); the RAG data directory is pinned to the repo root in the code.
 log_dir = logs
 data_dir = data
 
@@ -280,7 +323,7 @@ save_chart_images = false
 chart_save_path = chart_images
 # DEBUG-level logging - very noisy, for troubleshooting only
 logger_debug = true
-
 # === Cooldowns ===
 [cooldowns]
-file_message_expiry = 168  # hours before tracked messages are cleaned up
+# hours before tracked chat messages are cleaned up
+file_message_expiry = 168

@@ -2,6 +2,14 @@
 
 Scope: `src/trading/`. Root [`AGENTS.md`](../../AGENTS.md) stays canonical for system-wide policy; this file adds package-specific detail and never overrides it.
 
+## Execution quality and sandbox isolation
+
+- Account for proven venue executions even when market-data verification is missing or inconsistent; never invent a real-market exit to replace a sandbox fill.
+- Learning requires verified exit evidence with execution-time reference provenance and a verified executor entry. Disabled, unavailable, legacy and status-only evidence cannot authorize a new lesson.
+- Persist entry verification in Position.entry_execution_quality and structured TradeDecision.execution_quality in SQLite; keep it through restart and entry settlement.
+- Statistics, short-term prompt totals and equity curves consume the same structured eligibility, not caller-supplied reason text. Quarantined post-mortems must not advertise a successful plan or strategy P&L.
+- Command references are persisted for replay. Unknown execution time is not detection/creation time. Historical repairs require fingerprinted dry-run, backup, stopped processes and a verified second-run no-op; retain raw executions and reset untraceable rule-validation feedback explicitly.
+
 ## Trading Brain
 
 ### 🧠 Brain Agent — TradingBrainService

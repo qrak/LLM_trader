@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-18 — Historical fill verification and learning quarantine
+
+### Fixed
+- Executor fill checks use execution-time public Binance trades through CCXT, not the detection-time ticker; reference evidence is persisted with command receipts for restart replay. Invalid thresholds are refused.
+- Entry quality survives position/history round-trips and governs the later close. Missing, disabled, legacy or inconsistent verification cannot teach the brain or count as strategy performance. Actual executions are still accounted for.
+- Structured history eligibility drives statistics, short-term prompt totals and the dashboard equity curve, independently of free-text close reasons. Excluded post-mortems do not advertise profit.
+- Offline historical repair is fingerprint-gated and backed up; sandbox-only closes are quarantined without changing their execution prices. Untraceable semantic-rule validation feedback is reset explicitly rather than guessed.
+
+
 ## 2026-10-16 — Pattern states: durations, honest labels, canonical ATR, prompt legend
 
 ### Changed

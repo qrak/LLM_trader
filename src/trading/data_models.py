@@ -1,5 +1,7 @@
 """Dataclasses for trading system."""
 
+import json
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -10,6 +12,52 @@ LONG_ENTRY_SIGNALS = frozenset({"BUY", "LONG"})
 SHORT_ENTRY_SIGNALS = frozenset({"SELL", "SHORT"})
 ENTRY_SIGNALS = LONG_ENTRY_SIGNALS | SHORT_ENTRY_SIGNALS
 EXIT_SIGNALS = frozenset({"CLOSE", "CLOSE_LONG", "CLOSE_SHORT"})
+
+#: Marker put into a CLOSE row's reasoning when the VENUE's fill price is not a price
+#: the real market made (see executor_reconciliation / the executor's fill check).
+#: Such a close is still booked — history must stay paired — but it is excluded from
+#: statistics and from the trading brain: the 2026-10-17 sandbox take-profit filled
+#: 4.7% below the real market and was counted as the best trade of the whole run.
+FILL_DIVERGENCE_MARKER = "EXIT FILL DIVERGENCE"
+
+#: ``fill_verification`` value the executor writes for such a fill.
+FILL_VERIFICATION_DIVERGENT = "divergent"
+MARKET_VERIFICATION_FIELDS = (
+    "fill_verification", "reference_price", "deviation_pct", "reference_source",
+    "fill_timestamp", "reference_timestamp", "reference_window_start", "reference_window_end",
+    "reference_url", "reference_sample_count", "reference_low", "reference_high",
+    "fill_checks", "verification_error",
+)
+
+
+
+def market_verification_is_verified(value: Any) -> bool:
+    """A status without contemporaneous reference provenance is not verification."""
+    if not isinstance(value, dict) or value.get("fill_verification") != "verified":
+        return False
+    if value.get("reference_source") != "binance_spot_agg_trades":
+        return False
+    try:
+        fill = datetime.fromisoformat(str(value["fill_timestamp"]).replace("Z", "+00:00"))
+        reference = datetime.fromisoformat(str(value["reference_timestamp"]).replace("Z", "+00:00"))
+        price = float(value["reference_price"])
+        return (fill.tzinfo is not None and reference.tzinfo is not None
+                and 0 <= (fill - reference).total_seconds() <= 1
+                and math.isfinite(price) and price > 0)
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def execution_quality_is_eligible(value: Any) -> bool:
+    """Legacy history remains readable; explicit quality requires affirmative eligibility."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (ValueError, TypeError):
+            return False
+    return isinstance(value, dict) and value.get("eligible") is True
 
 
 def entry_direction(signal: str) -> str:
@@ -75,6 +123,7 @@ class Position(SerializableMixin):
     conditions_at_entry: MarketConditions
     confluence_factors: tuple = field(default_factory=tuple)
     entry_fee: float | None = None
+    entry_execution_quality: dict[str, Any] | None = None
     quote_amount: float = 0.0
     size_pct: float = 0.0
     atr_at_entry: float = 0.0
@@ -145,6 +194,7 @@ class TradeDecision(SerializableMixin):
     reasoning: str = ""
     indicators_json: str | dict[str, Any] | None = None
     order_id: str | None = None
+    execution_quality: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -237,6 +287,11 @@ class TradingMemory(SerializableMixin):
             if decision.action in ENTRY_SIGNALS:
                 open_position = decision
             elif decision.action in EXIT_SIGNALS and open_position:
+                if (not execution_quality_is_eligible(decision.execution_quality)
+                        or not execution_quality_is_eligible(open_position.execution_quality)
+                        or FILL_DIVERGENCE_MARKER in decision.reasoning):
+                    open_position = None
+                    continue
                 if open_position.action in LONG_ENTRY_SIGNALS:
                     pnl_pct = ((decision.price - open_position.price) / open_position.price) * 100
                     pnl_quote = (decision.price - open_position.price) * open_position.quantity

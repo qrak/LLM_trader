@@ -6,6 +6,7 @@ indexed queries without full-file deserialization.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from datetime import datetime, timedelta
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS trade_history (
     fee REAL,
     reasoning TEXT,
     indicators_json TEXT,
+    execution_quality TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -41,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_th_action ON trade_history(action);
 _INSERT_COLS = [
     "timestamp", "symbol", "action", "confidence", "price",
     "stop_loss", "take_profit", "position_size", "quote_amount",
-    "quantity", "fee", "reasoning", "indicators_json",
+    "quantity", "fee", "reasoning", "indicators_json", "execution_quality",
 ]
 _INSERT_SQL = f"INSERT INTO trade_history ({', '.join(_INSERT_COLS)}) VALUES ({', '.join(['?'] * len(_INSERT_COLS))})"
 
@@ -73,6 +75,9 @@ class SQLiteTradeHistory:
             conn = self._get_conn()
             try:
                 conn.executescript(SCHEMA_SQL)
+                columns = {r[1] for r in conn.execute("PRAGMA table_info(trade_history)")}
+                if "execution_quality" not in columns:
+                    conn.execute("ALTER TABLE trade_history ADD COLUMN execution_quality TEXT")
                 conn.commit()
             finally:
                 conn.close()
@@ -82,6 +87,8 @@ class SQLiteTradeHistory:
         """Normalize a JSON value to the SQLite column type."""
         if value is None:
             return None
+        if col == "execution_quality" and isinstance(value, dict):
+            return json.dumps(value, allow_nan=False, sort_keys=True)
         if col in {"price", "stop_loss", "take_profit", "position_size", "quote_amount", "quantity", "fee"}:
             try:
                 return float(value)
@@ -113,6 +120,7 @@ class SQLiteTradeHistory:
         self, *, entry_time: datetime, symbol: str, actions: frozenset[str],
         price: float, quantity: float, fee: float | None,
         tolerance_seconds: float, row_id: int | None = None,
+        execution_quality: dict[str, Any] | None = None,
     ) -> int:
         """Update exactly one correlated entry, preserving its timestamp and reasoning."""
         since = (entry_time - timedelta(seconds=tolerance_seconds)).isoformat()
@@ -141,13 +149,24 @@ class SQLiteTradeHistory:
                     size_pct *= quote_amount / allocation
                 conn.execute(
                     "UPDATE trade_history SET price = ?, quantity = ?, fee = ?, "
-                    "quote_amount = ?, position_size = ? WHERE id = ?",
-                    (price, quantity, fee, quote_amount, size_pct, row["id"]),
+                    "quote_amount = ?, position_size = ?, execution_quality = ? WHERE id = ?",
+                    (price, quantity, fee, quote_amount, size_pct, self._coerce_col("execution_quality", execution_quality), row["id"]),
                 )
                 conn.commit()
                 return int(row["id"])
             finally:
                 conn.close()
+
+    @staticmethod
+    def _decode_row(row: sqlite3.Row) -> dict[str, Any]:
+        result = dict(row)
+        raw = result.get("execution_quality")
+        if raw is not None:
+            try:
+                result["execution_quality"] = json.loads(raw)
+            except (ValueError, TypeError):
+                result["execution_quality"] = {"eligible": False, "reason": "invalid execution quality"}
+        return result
 
     def query(
         self,
@@ -195,7 +214,7 @@ class SQLiteTradeHistory:
             conn = self._get_conn()
             try:
                 rows = conn.execute(sql, params).fetchall()
-                return [dict(r) for r in rows]
+                return [self._decode_row(r) for r in rows]
             except Exception as e:  # noqa: BLE001
                 self._logger.error("Query failed: %s", e)
                 return []
@@ -236,7 +255,7 @@ class SQLiteTradeHistory:
                 rows = conn.execute(
                     "SELECT * FROM trade_history ORDER BY timestamp ASC"
                 ).fetchall()
-                return [dict(r) for r in rows]
+                return [self._decode_row(r) for r in rows]
             finally:
                 conn.close()
 
