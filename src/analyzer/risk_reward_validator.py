@@ -88,6 +88,7 @@ class RiskRewardValidator:
             return narrative
 
         corrections: list[str] = []
+        verified_ratios: list[float] = []
         for check in checks:
             side, *numbers = check.groups()
             entry, stop, target, quoted_reward, quoted_risk, quoted_ratio = map(float, numbers)
@@ -95,6 +96,7 @@ class RiskRewardValidator:
             if not math.isfinite(actual):
                 issues.append(f"invalid {side.upper()} R/R price triple in narrative")
                 continue
+            verified_ratios.append(actual)
             reward = abs(target - entry)
             risk = abs(entry - stop)
             if (abs(quoted_reward - reward) > 0.011 or abs(quoted_risk - risk) > 0.011
@@ -109,9 +111,46 @@ class RiskRewardValidator:
                 f"RR_CHECK side={side.upper()} entry={entry:g} SL={stop:g} TP={target:g} "
                 f"reward={reward:.2f} risk={risk:.2f} R/R={actual:.2f}"
             )
-        if issues or len(self.RATIO.findall(text)) != len(checks):
+        prose = self.CHECK.sub(" ", text)
+        unverified = self._unverified_ratios(prose, verified_ratios)
+        if issues or unverified:
             if not issues:
-                issues.append("narrative contained additional unverified R/R figures")
+                quoted = ", ".join(f"{value:g}" for value in unverified[:3])
+                issues.append(f"narrative contained additional unverified R/R figures: {quoted}")
             corrected = "; ".join(corrections) if corrections else "N/A — invalid price levels"
             return narrative[:section.start()] + f"11) RISK/REWARD: Python verified: {corrected}\n" + narrative[section.end():]
         return narrative
+
+    @classmethod
+    def _quoted_ratios(cls, text: str) -> list[float]:
+        """Numeric values of ratio-shaped phrases, tolerant to comma decimals."""
+        values: list[float] = []
+        for match in cls.RATIO.findall(text):
+            number = re.search(r"\d+(?:[.,]\d+)?", match)
+            if number is None:
+                continue
+            try:
+                values.append(float(number.group(0).replace(",", ".")))
+            except ValueError:
+                continue
+        return values
+
+    @classmethod
+    def _unverified_ratios(cls, prose: str, verified: list[float]) -> list[float]:
+        """Ratios quoted in prose that no verified price triple supports.
+
+        ``RR_CHECK`` lines are stripped by the caller: ``risk=819.51 R/R=1.953``
+        otherwise made the ``<number> R/R`` pattern count 819.51 as a quoted ratio,
+        so an operator saw "additional unverified R/R figures" every cycle even though
+        the model had quoted one, correctly rounded, verified ratio. Repeats of a
+        verified value are fine; only distinct values outside rounding tolerance are
+        reported.
+        """
+        tolerance = 0.055
+        unverified: list[float] = []
+        for value in cls._quoted_ratios(prose):
+            if any(abs(value - actual) <= tolerance for actual in verified):
+                continue
+            if value not in unverified:
+                unverified.append(value)
+        return unverified

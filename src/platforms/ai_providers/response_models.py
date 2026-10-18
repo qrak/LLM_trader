@@ -1,8 +1,9 @@
 """Unified Pydantic response models for all AI providers."""
+import re
 from enum import Enum
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class MessageModel(BaseModel):
@@ -116,6 +117,26 @@ class RedditAssessmentModel(BaseModel):
     outlook: Literal["BULLISH", "BEARISH", "MIXED", "INSUFFICIENT_EVIDENCE"]
     evidence: list[Annotated[int, Field(strict=True, ge=1)]]
     reason: str = Field(min_length=1, max_length=240)
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def coerce_decimal_string_evidence(cls, value: Any) -> Any:
+        """Accept title IDs quoted as decimal strings ("12" -> 12).
+
+        Providers occasionally serialise the numeric title IDs as strings. Strict int
+        validation rejected the WHOLE assessment in that case, so usable sentiment
+        evidence was discarded over formatting. Only plain ASCII digits are coerced;
+        anything else is still rejected by the strict field.
+        """
+        if not isinstance(value, (list, tuple)):
+            return value
+        coerced: list[Any] = []
+        for item in value:
+            if isinstance(item, str) and re.fullmatch(r"[0-9]+", item.strip()):
+                coerced.append(int(item.strip()))
+            else:
+                coerced.append(item)
+        return coerced
 
     @model_validator(mode="after")
     def validate_evidence(self) -> "RedditAssessmentModel":

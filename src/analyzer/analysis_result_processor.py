@@ -9,6 +9,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from src.analyzer.decision_contract import validate_decision_payload
 from src.analyzer.pattern_quality_scorer import PatternQualityScorer
 from src.analyzer.risk_reward_validator import RiskRewardValidator
 from src.analyzer.trend_validator import TrendValidator
@@ -95,6 +96,42 @@ class AnalysisResultProcessor:
                 "error": "Invalid response format",
                 "raw_response": cleaned_response
             }
+        parse_failed = bool(parsed_response.get("parse_error"))
+        problems = (
+            validate_decision_payload(parsed_response)
+            if isinstance(parsed_response.get("analysis"), dict) and not parse_failed else []
+        )
+        if problems:
+            self.logger.warning(
+                "AI response contract violation: %s — asking once more with the violations",
+                "; ".join(problems[:3]),
+            )
+            correction = (
+                "\n\n## CONTRACT CORRECTION\n"
+                "Your previous response failed these Python checks:\n- "
+                + "\n- ".join(problems[:5])
+                + "\nReturn the FULL response again, with one valid decision object and complete "
+                "execution fields. Do not repeat the violation.\n"
+            )
+            complete_response = await self.model_manager.send_prompt_streaming(
+                prompt=prompt + correction,
+                system_message=system_prompt,
+                provider=provider,
+                model=model,
+            )
+            cleaned_response = self._clean_response(complete_response)
+            parsed_response = self.unified_parser.parse_ai_response(cleaned_response)
+            if not self.unified_parser.validate_ai_response(parsed_response):
+                self.logger.error("Contract retry returned an invalid response shape")
+                return {
+                    "error": "Invalid response format after contract retry",
+                    "raw_response": cleaned_response
+                }
+            remaining = validate_decision_payload(parsed_response)
+            if remaining:
+                self.logger.error(
+                    "Contract still violated after one retry: %s", "; ".join(remaining[:3])
+                )
         self._log_response_validation(parsed_response.get("response_validation"))
         if "narrative" not in parsed_response and "```json" in cleaned_response:
             parsed_response["narrative"] = cleaned_response.split("```json", 1)[0].strip()
