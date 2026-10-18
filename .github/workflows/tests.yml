@@ -22,6 +22,8 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt -c constraints.txt -r requirements-dev.txt
+      - name: Seed config from the tracked template (no secrets)
+        run: cp config/config.ini.example config/config.ini
       - name: Lint
         run: ruff check src scripts
       - name: Unit tests (no network, no browser, no API keys)
