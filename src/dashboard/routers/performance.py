@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, load_cycles, summarize
 from src.trading.data_models import ENTRY_SIGNALS, EXIT_SIGNALS
 from src.trading.statistics_calculator import StatisticsCalculator, TradingStatistics
 
@@ -21,6 +22,15 @@ class PerformanceRouter:
 
         self.router.add_api_route("/history", self.get_performance_history, methods=["GET"])
         self.router.add_api_route("/stats", self.get_statistics, methods=["GET"])
+        self.router.add_api_route("/cycles", self.get_cycle_metrics, methods=["GET"])
+
+    async def get_cycle_metrics(self, days: int = 1) -> dict[str, Any]:
+        """Cycle journal summary: counts, HOLD share, latency p50/p95 (no cost yet)."""
+        if self.persistence is None:
+            return summarize([], days=days)
+        path = Path(self.persistence.data_dir) / DEFAULT_RELATIVE_PATH
+        records = await asyncio.to_thread(load_cycles, path)
+        return summarize(records, days=days)
 
     def _load_json_file(self, file_path: Path) -> dict[str, Any]:
         """Load JSON from a file synchronously."""

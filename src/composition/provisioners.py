@@ -55,6 +55,7 @@ from src.managers.model_manager import (
 )
 from src.managers.persistence_manager import PersistenceManager
 from src.managers.post_mortem_repository import PostMortemRepository
+from src.managers.provider_health import ProviderHealth
 from src.managers.risk_manager import RiskManager
 from src.notifiers import ConsoleNotifier, DiscordNotifier
 from src.parsing.unified_parser import UnifiedParser
@@ -377,7 +378,16 @@ class ProvisioningMixin:
             blockrun=blockrun_client,
             deepseek=deepseek_client,
         )
-        orchestrator = ProviderOrchestrator(self.logger, self.config, provider_clients, prompt_budget=utils["prompt_budget"])
+        provider_health = None
+        if getattr(self.config, "CIRCUIT_BREAKER_ENABLED", True):
+            provider_health = ProviderHealth(
+                failure_threshold=getattr(self.config, "CIRCUIT_BREAKER_FAILURE_THRESHOLD", 3),
+                cooldown_seconds=getattr(self.config, "CIRCUIT_BREAKER_COOLDOWN_SECONDS", 120.0),
+            )
+        orchestrator = ProviderOrchestrator(
+            self.logger, self.config, provider_clients,
+            prompt_budget=utils["prompt_budget"], provider_health=provider_health,
+        )
 
         manager = ModelManager(
             logger=self.logger,

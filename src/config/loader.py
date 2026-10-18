@@ -128,6 +128,47 @@ class Config:
         _ = (self.BRAIN_MAX_TOKENS, self.PROMPT_MAX_TOKENS, self.PROMPT_SAFETY_MARGIN_PERCENT,
              self.PROMPT_IMAGE_RESERVE_TOKENS, self.MODEL_CONTEXT_WINDOWS)
 
+    @property
+    def CIRCUIT_BREAKER_ENABLED(self) -> bool:
+        raw = self.get_config("circuit_breaker", "enabled", "true")
+        return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+    @property
+    def CIRCUIT_BREAKER_FAILURE_THRESHOLD(self) -> int:
+        try:
+            return max(1, int(self.get_config("circuit_breaker", "failure_threshold", 3)))
+        except (TypeError, ValueError):
+            return 3
+
+    @property
+    def CIRCUIT_BREAKER_COOLDOWN_SECONDS(self) -> float:
+        try:
+            return max(1.0, float(self.get_config("circuit_breaker", "cooldown_seconds", 120)))
+        except (TypeError, ValueError):
+            return 120.0
+
+    @property
+    def REQUIRE_APPROVAL_ABOVE_USDC(self) -> float:
+        """Quote value above which a BUY/SELL waits for a human. 0 disables the gate."""
+        try:
+            return max(0.0, float(self.get_config("risk_management", "require_approval_above_usdc", 0)))
+        except (TypeError, ValueError):
+            return 0.0
+
+    @property
+    def APPROVAL_TTL_MINUTES(self) -> float:
+        try:
+            return max(1.0, float(self.get_config("risk_management", "approval_ttl_minutes", 15)))
+        except (TypeError, ValueError):
+            return 15.0
+
+    @property
+    def APPROVAL_POLL_SECONDS(self) -> float:
+        try:
+            return max(1.0, float(self.get_config("risk_management", "approval_poll_seconds", 5)))
+        except (TypeError, ValueError):
+            return 5.0
+
     def _validate_provider(self):
         """Validate that the configured AI provider is supported."""
         provider = self.PROVIDER.lower()

@@ -3,6 +3,7 @@ import io
 from typing import TYPE_CHECKING, Any, cast
 
 from src.logger.logger import Logger
+from src.managers.provider_health import ProviderHealth
 from src.managers.provider_types import (
     InvocationResult,
     ProviderClients,
@@ -33,6 +34,7 @@ class ProviderOrchestrator:
         config: "Config",
         clients: ProviderClients,
         prompt_budget: PromptBudgetPolicy | None = None,
+        provider_health: ProviderHealth | None = None,
     ) -> None:
         """
         Initialize the provider orchestrator.
@@ -41,6 +43,7 @@ class ProviderOrchestrator:
         self.config = config
         self.clients = clients
         self.prompt_budget = prompt_budget
+        self.provider_health = provider_health
         self._providers = self._build_provider_metadata()
 
     def _build_provider_metadata(self) -> dict[str, ProviderMetadata]:
@@ -202,14 +205,23 @@ class ProviderOrchestrator:
             InvocationResult from first successful provider, or last failure
         """
         last_result: InvocationResult | None = None
-        for provider in providers:
-            if not self.is_available(provider):
-                continue
+        for provider in self._circuit_open_providers(providers):
             effective_model = self.resolve_model(provider, model)
             self._log_attempt(provider, effective_model, chart)
             result = await self.invoke(provider, messages, chart=chart, chart_image=chart_image, model=model)
             if result.success and not self._is_rate_limited(result.response):
+                if self.provider_health is not None:
+                    self.provider_health.record_success(provider)
                 return result
+            if self.provider_health is not None:
+                self.provider_health.record_failure(
+                    provider,
+                    category=(
+                        ProviderHealth.RATE_LIMIT_CATEGORY
+                        if self._is_rate_limited(result.response) else "error"
+                    ),
+                    detail=getattr(result.response, "error", None),
+                )
             self._log_failure(provider)
             last_result = result
         return last_result or InvocationResult(
@@ -479,6 +491,27 @@ class ProviderOrchestrator:
             return
         noun = "chart analysis" if chart else "request"
         self.logger.info("Attempting %s with %s model: %s", noun, metadata.name, model)
+
+    def _circuit_open_providers(self, providers: list[str]) -> list[str]:
+        """Providers worth asking, with a fail-open last resort.
+
+        All providers open means the breaker itself would silence the bot. In that case
+        the primary is attempted once regardless and the situation is logged CRITICAL:
+        a degraded call is better than a silent HOLD, and the operator must see it.
+        """
+        available = [provider for provider in providers if self.is_available(provider)]
+        if self.provider_health is None:
+            return available
+        allowed = [provider for provider in available if self.provider_health.allows(provider)]
+        if allowed:
+            return allowed
+        if available:
+            self.logger.critical(
+                "All provider circuits are open — forcing one attempt on %s (fail-open)",
+                available[0],
+            )
+            return available[:1]
+        return []
 
     def _log_failure(self, provider: str) -> None:
         """Log provider failure with appropriate message."""
