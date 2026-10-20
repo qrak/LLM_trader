@@ -69,3 +69,19 @@ def test_ratio_without_price_triple_is_still_refused():
 
     assert issues
     assert "N/A" in response["narrative"]
+
+
+def test_near_miss_ratio_beyond_rounding_tolerance_is_still_unverified():
+    """Rounding tolerance is 0.055, not 0.5: 2.35 against a verified 1.953 is a lie."""
+    narrative = (
+        "11) RISK/REWARD: " + CHECK + ", a wider stop would allow a 2.35 R/R read.\n"
+        "12) DECISION: HOLD"
+    )
+    response = _response(narrative)
+
+    issues = RiskRewardValidator().validate(response)
+
+    assert any("2.35" in issue for issue in issues), issues
+    assert "Python verified" in response["narrative"]
+    assert "2.35 R/R" not in response["narrative"]
+

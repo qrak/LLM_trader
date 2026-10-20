@@ -17,7 +17,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from ..config.writable_config import WritableConfig
 from ..trading.pending_approval import PendingApprovalStore
-from .auth import AdminAuthMiddleware, init_auth
+from .auth import AdminAuthMiddleware, init_auth, resolve_client_ip
 from .console_buffer import ConsoleBuffer
 from .dashboard_state import DashboardState
 from .log_stream import LogStreamManager
@@ -107,9 +107,10 @@ class DashboardServer:
 
         app.add_middleware(GZipMiddleware, minimum_size=500)
         _register_cache_and_security_middleware(app)
+        heavy_requests = _register_concurrency_middleware(app)
         request_counts = _register_rate_limit_middleware(app)
         self._add_cors_middleware(app)
-        self._wire_app_state(app, request_counts)
+        self._wire_app_state(app, request_counts, heavy_requests)
         self._register_routers(app)
         self._register_pages(app)
 
@@ -135,7 +136,12 @@ class DashboardServer:
                 allow_headers=["*"],
             )
 
-    def _wire_app_state(self, app: FastAPI, request_counts: dict[str, list[float]]) -> None:
+    def _wire_app_state(
+        self,
+        app: FastAPI,
+        request_counts: dict[str, list[float]],
+        heavy_requests: dict[str, float],
+    ) -> None:
         """Publish the shared services on app.state for routers and tests."""
         app.state.brain_service = self.brain_service
         app.state.vector_memory = self.vector_memory
@@ -149,6 +155,7 @@ class DashboardServer:
         app.state.writable_config = self.writable_config
         app.state.log_stream_manager = self.log_stream_manager
         app.state.request_counts = request_counts
+        app.state.heavy_requests = heavy_requests
 
     def _build_approval_store(self) -> PendingApprovalStore | None:
         """Approvals share the bot's data directory; without one the console shows none."""
@@ -518,10 +525,69 @@ def _register_cache_and_security_middleware(app: FastAPI) -> None:
                     return Response(status_code=304, headers=headers)
         return response
 
+HEAVY_PATH_PREFIXES = (
+    "/api/brain",
+    "/api/visuals",
+    "/api/console",
+    "/api/monitor/news",
+    "/api/monitor/last_",
+)
+MAX_CONCURRENT_HEAVY = 50
+HEAVY_TIMEOUT_SECONDS = 20.0
+
+
+def _is_heavy_path(path: str) -> bool:
+    """Return True for endpoints that build charts, vectors or large log payloads."""
+    return path.startswith(HEAVY_PATH_PREFIXES)
+
+
+def _register_concurrency_middleware(app: FastAPI) -> dict[str, float]:
+    """Cap concurrent heavy requests so they cannot starve the trading loop.
+
+    A saturated dashboard must shed load instead of queueing unbounded work in the
+    same event loop that runs the analysis cycle. Requests beyond the cap get 503
+    immediately; a slow GET is cancelled at the timeout and answers 504.
+    """
+    state: dict[str, float] = {"active": 0, "timeout_s": HEAVY_TIMEOUT_SECONDS}
+
+    @app.middleware("http")
+    async def concurrency_middleware(request, call_next):
+        if not _is_heavy_path(request.url.path):
+            return await call_next(request)
+
+        if state["active"] >= MAX_CONCURRENT_HEAVY:
+            return JSONResponse(
+                status_code=503,
+                content={"error": "Server busy. Try again later."},
+                headers={"Retry-After": "1"},
+            )
+
+        state["active"] += 1
+        try:
+            if request.method in ("GET", "HEAD"):
+                try:
+                    return await asyncio.wait_for(
+                        call_next(request), timeout=state["timeout_s"]
+                    )
+                except asyncio.TimeoutError:
+                    return JSONResponse(
+                        status_code=504,
+                        content={"error": "Request timed out. Try again later."},
+                        headers={"Retry-After": "1"},
+                    )
+            return await call_next(request)
+        finally:
+            state["active"] -= 1
+
+    return state
+
+
 def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
-    """Install the per-IP rate limiter and return its request-count store."""
-    request_counts = defaultdict(list)
+    """Install the per-client rate limiter and return its request-count store."""
+    request_counts: defaultdict[str, list[float]] = defaultdict(list)
     rate_limit = 300
+    write_rate_limit = 30
+    write_suffix = "#write"
     rate_window = 60
     max_unique_ips = (
         10000
@@ -532,9 +598,10 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
 
     @app.middleware("http")
     async def rate_limit_middleware(request, call_next):
-        if request.url.path.startswith(
+        path = request.url.path
+        if path.startswith(
             "/static"
-        ) or not request.url.path.startswith("/api"):
+        ) or not path.startswith("/api"):
             return await call_next(request)
 
         current_time = time_module.monotonic()
@@ -542,8 +609,8 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
         if len(request_counts) > max_unique_ips:
             if current_time - state["last_cleanup_time"] > cleanup_interval:
                 keys_to_remove = [
-                    ip
-                    for ip, timestamps in request_counts.items()
+                    key
+                    for key, timestamps in request_counts.items()
                     if not timestamps or current_time - timestamps[-1] > rate_window
                 ]
                 for key in keys_to_remove:
@@ -557,20 +624,31 @@ def _register_rate_limit_middleware(app: FastAPI) -> dict[str, list[float]]:
                 except StopIteration:
                     break
 
-        client_ip = request.client.host if request.client else "unknown"
+        direct_ip = request.client.host if request.client else "unknown"
+        client_ip = resolve_client_ip(
+            direct_ip, request.headers.get("cf-connecting-ip")
+        )
+        is_write = request.method not in ("GET", "HEAD")
+        bucket_key = f"{client_ip}{write_suffix}" if is_write else client_ip
+        bucket_limit = write_rate_limit if is_write else rate_limit
 
-        if client_ip in request_counts:
-            request_counts[client_ip] = [
+        if bucket_key in request_counts:
+            request_counts[bucket_key] = [
                 t
-                for t in request_counts[client_ip]
+                for t in request_counts[bucket_key]
                 if current_time - t < rate_window
             ]
 
-        if len(request_counts[client_ip]) >= rate_limit:
+        if len(request_counts[bucket_key]) >= bucket_limit:
+            retry_after = max(
+                1,
+                int(rate_window - (current_time - request_counts[bucket_key][0])) + 1,
+            )
             return JSONResponse(
                 status_code=429,
                 content={"error": "Rate limit exceeded. Try again later."},
+                headers={"Retry-After": str(retry_after)},
             )
-        request_counts[client_ip].append(current_time)
+        request_counts[bucket_key].append(current_time)
         return await call_next(request)
     return request_counts

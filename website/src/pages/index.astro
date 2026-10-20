@@ -1,14 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
-// Verified against the repo on 2026-10-15:
-//   python -m pytest tests -q  ->  2247 passed, 17 skipped, 1 failed (2265 collected)
-//   The failure is the browser test that drives a live dashboard, run without one listening.
+// Verified against the repo on 2026-10-20:
+//   python -m pytest tests -q  ->  2419 passed, 0 skipped, 0 failed (2419 collected)
 // Keep these in sync with the code before every deploy.
-const TESTS_TOTAL = '2,265';
-const TESTS_PASSING = '2,247';
-const TESTS_SKIPPED = '17';
-const TESTS_FAILED = '1';
+const TESTS_TOTAL = '2,419';
 ---
 
 <Layout
@@ -32,7 +28,7 @@ const TESTS_FAILED = '1';
 		<dl class="status">
 			<div><dt>trading</dt><dd>simulated capital (paper)</dd></div>
 			<div><dt>live executor</dt><dd>exchange testnet only — no real funds</dd></div>
-			<div><dt>test suite</dt><dd>{TESTS_TOTAL} tests · {TESTS_PASSING} passing · {TESTS_SKIPPED} skipped · {TESTS_FAILED} failing (live-dashboard test)</dd></div>
+			<div><dt>test suite</dt><dd>{TESTS_TOTAL} tests · all passing · about two and a half minutes</dd></div>
 			<div><dt>providers</dt><dd>Google AI, DeepSeek, OpenRouter, local — switchable</dd></div>
 		</dl>
 	</section>
@@ -125,7 +121,7 @@ market data, 50 lvls     config/config.ini · src/analyzer/data_fetcher.py
 trade memory 768D        src/trading/vector_memory.py (BAAI/bge-base-en-v1.5)
 risk limits, pre-entry   src/trading/position_management.py
 agent docs, 9 files    AGENTS.md + one per package (src/trading, src/analyzer, ...)
-tests {TESTS_TOTAL}            python -m pytest tests -q   -&gt; {TESTS_PASSING} passed, {TESTS_SKIPPED} skipped</code></pre>
+tests {TESTS_TOTAL}            python -m pytest tests -q   -&gt; all passing, 0 skipped</code></pre>
 	</section>
 
 	<section class="risk-disclaimer">

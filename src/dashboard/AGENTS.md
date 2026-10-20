@@ -1,129 +1,31 @@
 # AGENTS.md — Dashboard
 
-Scope: `src/dashboard/`. Root [`AGENTS.md`](../../AGENTS.md) stays canonical for system-wide policy; this file adds package-specific detail and never overrides it.
+Scope: `src/dashboard/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical for system-wide policy.
 
-## Dashboard
+`server.py` (`DashboardServer`, FastAPI + WebSocket) is composed in `start.py` with `brain_service, vector_memory, analysis_engine, config, logger, unified_parser, persistence, exchange_manager`; shared state is the `dashboard_state.py` singleton. 7 routers: brain `/api/brain/*` · monitor `/api/monitor/*` · performance `/api/performance/*` · visuals `/api/visuals/*` · admin `/api/admin/*` · console · ws `/ws/*`.
 
-### 📊 Dashboard Agent — Real-Time Web UI
+`/admin`: HMAC-SHA256 cookie sessions, credentials from `keys.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_SIGNING_KEY`). `WritableConfig` (`src/config/writable_config.py`) does atomic INI writes (`os.replace()`) and signals hot reload through `asyncio.Event`. Controls `POST /api/admin/system/trigger-analysis`, `/toggle-feed`, `/human-input` (consumed next cycle). `LogStreamHandler` feeds subscriber `asyncio.Queue`s at `/api/admin/logs/stream?token=…`; the console WS `/api/admin/console?token=…` accepts `force_analysis`, `toggle_feed`, `human_input`, `get_status`. UI at `static/admin/index.html`.
 
-> **Module path:** `src/dashboard/server.py` (FastAPI) + 5 routers in `src/dashboard/`
-> **Type:** FastAPI + WebSocket streaming dashboard
-> **Live URL:** [https://semanticsignal.qrak.org](https://semanticsignal.qrak.org)
+Runtime: `0.0.0.0:8000`, GZip on, `static/` mounted (`index.html`, `main.js`, `css/`, `modules/`), lifespan startup/shutdown; CORS off unless `dashboard.enable_cors = true`.
 
----
+## Persistence
 
-#### Agent Persona & Role
+History reaches the UI only through the injected `PersistenceManager` — routes never open `trade_history.json` or the DB. `PerformanceRouter` gets `persistence` from `DashboardServer`; brain/vector endpoints call `persistence.load_trade_history()`. Empty history renders an empty state, not an error.
 
-The Dashboard is the **real-time monitoring and visualization interface** for the LLM Trader system. It provides:
+## Cache (Cloudflare edge)
 
-- **Live decision streaming** — WebSocket push of each analysis cycle result
-- **Performance analytics** — SQLite-backed trade history, P&L curves, win rates
-- **Brain state inspection** — vector memory contents, learned rules, confidence stats
-- **System health monitoring** — provider status, token costs, cycle timing
+- Bypass `/api/brain/refresh-price` and `/api/brain/vectors?query=*`; cache `GET /api/visuals/charts/latest` 300s keeping its revision query (never strip it at the edge — rotate after an analysis or tab return, reject late responses from an older revision); cache shells and versioned assets; never a broad `/api/*` rule — positions and status stay fresh.
+- `/api/brain/refresh-price` coalesces callers into one exchange attempt behind an asyncio lock and reuses the result 10s (monotonic clock, failures included); query strings, reload and browser no-cache cannot bypass it, HTTP stays `no-store`, trading-loop fetches and WS cadence unchanged.
+- `?preview=true` on `/api/monitor/news` returns the same 30 cards with 300-char excerpts, no bodies or internal search fields; the default response and RAG cache stay full. `/api/status/countdown` is cacheable only as a short-lived fallback (live updates use WS). `DashboardServer` hands `analysis_engine.rag_engine` to `MonitorRouter` (the brain does not own news RAG); verify startup plus the route with a real `TradingBrainService`, including no-brain/no-RAG and disk fallback.
+- Vector factor stats read the closed-trade recorder's metadata: S/R uses `support_resistance_strength_score`, Trend groups use the entry snapshot not exit-time `market_regime`. Keep API factor names stable.
 
----
+## UI conventions
 
-#### Architecture
+- UI work never changes backend logic: one micro-improvement at a time, under ~50 lines, never a redesign. Animation stays 0.2s ease / 0.3s cubic-bezier and honours `@media (prefers-reduced-motion: reduce)`.
+- Reuse the CSS variables and classes (`.toolbar-btn`, `.panel`, `.btn-primary`, `.spinner`, `.empty-state`). No hardcoded colour, no inline style, no `onclick=""` — wire with `addEventListener`.
+- Accessibility: `aria-label`/`role` on interactive elements, full keyboard operability (Tab, Enter/Space, Esc, focus trap in modals and lightbox), WCAG 2.1 AA contrast, `aria-live="polite"` for dynamic regions, decorative emoji `aria-hidden="true"`, inputs labelled with `aria-required`/`aria-invalid`.
+- Every async action shows state (disabled + spinner, "Copied!", inline errors): no dead click, no silent failure.
+- No build step: no npm/yarn/pnpm, no `package.json`, no new CDN scripts; bump `?v=` on every JS/CSS change (one-year immutable cache).
+- Web layer, beyond the root security rules: strict CSP with CDN allowlist, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` limiting geolocation/microphone/camera, HSTS over HTTPS, per-visitor rate limiting (300 reads / 30 writes per minute keyed by `resolve_client_ip()`, so tunnel traffic is not one bucket), 50-request cap with 503/504 shedding, WebSocket origin validation and connection limits.
 
-##### Server (`server.py`)
-Injected via DI from `start.py`:
-```
-DashboardServer(
-  brain_service, vector_memory, analysis_engine,
-  config, logger, unified_parser, persistence, exchange_manager
-)
-```
-
-##### 5 API Routers
-
-| Router | File | Endpoints |
-|--------|------|-----------|
-| **Brain** | `routers/brain.py` | `/api/brain/*` — decisions, signals, context |
-| **Monitor** | `routers/monitor.py` | `/api/monitor/*` — system health, provider status |
-| **Performance** | `routers/performance.py` | `/api/performance/*` — P&L, statistics, trade history |
-| **Visuals** | `routers/visuals.py` | `/api/visuals/*` — chart data, indicator plots |
-| **WebSocket** | `routers/ws_router.py` | `/ws/*` — real-time streaming |
-| **Admin** | `routers/admin.py` | `/api/admin/*` — config CRUD, system control, log streaming, auth |
-
-##### Admin Console (`/admin`)
-- **Auth:** HMAC-SHA256 cookie sessions. Credentials from `keys.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, `ADMIN_SIGNING_KEY`)
-- **Config write:** `WritableConfig` (async atomic INI writes via `os.replace()`). Hot-reload signal via `asyncio.Event`
-- **Control:** Force analysis (`POST /api/admin/system/trigger-analysis`), toggle feed (`POST /api/admin/system/toggle-feed`)
-- **Human input:** `POST /api/admin/system/human-input` — consumed by bot on next cycle
-- **Log streaming:** `LogStreamHandler` → subscriber `asyncio.Queue`s. WS at `/api/admin/logs/stream?token=...`
-- **Console WS:** Bidirectional at `/api/admin/console?token=...` — accepts `force_analysis`, `toggle_feed`, `human_input`, `get_status`
-- **Frontend:** Vanilla JS + Tailwind CDN at `src/dashboard/static/admin/index.html`
-
-##### Static Frontend
-- `src/dashboard/static/` — HTML, Vanilla JS, Vis.js, ApexCharts
-- Dark theme, auto-refreshing WebSocket data
-- Real-time candlestick charts + indicator overlays
-
----
-
-#### Key Behaviors
-
-- **Startup:** Bound to `0.0.0.0:8000` (configurable)
-- **CORS:** Disabled by default; enabled only when `config.ini` sets `dashboard.enable_cors = true`
-- **GZip:** Compression enabled for API responses
-- **Static files:** Mounted from `static/` directory
-- **Lifecycle:** Managed via FastAPI lifespan context manager
-- **State:** Shared via `dashboard_state.py` singleton
-- **Trade history:** Performance and brain endpoints read via injected `PersistenceManager`; direct `trade_history.json` reads are forbidden
-
-#### Persistence Contract
-
-- `PerformanceRouter` receives `persistence` from `DashboardServer` and calls persistence-backed history APIs.
-- Brain/vector endpoints use `persistence.load_trade_history()` when they need trade-history context.
-- Dashboard routes must not open runtime files directly for trade history; SQLite access stays behind `PersistenceManager` / `SQLiteTradeHistory`.
-- Empty SQLite history should render empty dashboard state gracefully, not as an error.
-
----
-
-#### Cache Strategy (Cloudflare)
-
-| Rule | Target | Reason |
-|------|--------|--------|
-| **Bypass** | `/api/brain/refresh-price` | Volatile price endpoint |
-| **Bypass** | `/api/brain/vectors?query=*` | High-cardinality search |
-| **Cache** | `/api/status/countdown` | Short-lived fallback; live updates use WebSocket |
-| **No broad cache rule** | `/api/*` | Position, status and private APIs must stay fresh |
-| **Cache** | GET `/api/visuals/charts/latest` | Edge TTL 300s; preserve revision query across polls and rotate after analysis / tab return |
-| **Cache** | HTML shell pages | Static shell |
-| **Cache** | Static assets | Versioned assets |
-
-- Never strip chart revision query parameters at the edge: doing so defeats immediate post-analysis refresh. Keep one revision URL between ordinary polls and reject late responses from an older request.
-- The news panel requests `/api/monitor/news?preview=true`: the same 30 cards with 300-character excerpts, without full article bodies and internal search fields. The default API response and RAG cache remain full; polling intervals are unchanged.
-- `DashboardServer` supplies `analysis_engine.rag_engine` to `MonitorRouter`; the
-  trading brain does not own news RAG. Verify this through startup plus the HTTP
-  route with a real `TradingBrainService`, including no brain/no RAG and disk fallback.
-- Vector factor statistics consume the closed-trade recorder's actual metadata:
-  S/R scores use `support_resistance_strength_score`, and Trend groups use the entry
-  snapshot, not exit-time `market_regime`. Keep API factor names stable and verify a
-  real isolated ChromaDB round-trip through `/api/brain/vectors`.
-- `/api/brain/refresh-price` shares one exchange attempt across all dashboard callers in the process, then reuses its result for 10 seconds measured with a monotonic clock. An asyncio lock coalesces concurrent callers; failed attempts are cached too. Query strings, reload and browser no-cache cannot bypass this origin-side cooldown. HTTP remains no-store; trading-loop fetches and WebSocket cadence are unchanged.
-
----
-
-#### Edge Cases
-
-| Scenario | Handling |
-|----------|----------|
-| **WebSocket disconnect** | Client auto-reconnects, resends subscription |
-| **No data yet** | Returns empty state gracefully |
-| **No SQLite trade history rows** | Performance and brain routes return empty history/state gracefully |
-| **Dashboard server toggle/restart in-process** | DashboardState retains last-known values while the Python process remains alive |
-| **Large vector memory queries** | Truncated/paginated API responses |
-| **Concurrent dashboard access** | FastAPI async handles concurrent requests |
-
-## UI & Accessibility Conventions
-
-- HTML/CSS/JS live in `src/dashboard/static/` (`index.html`, `main.js`, `css/`, `modules/`, `admin/`); `server.py`, `auth.py`, `dashboard_state.py` and `routers/` are backend. UI work never changes backend logic.
-- One micro-improvement at a time, under ~50 lines; never a page redesign.
-- Use the existing CSS variables and classes (`.toolbar-btn`, `.panel`, `.btn-primary`, `.spinner`, `.empty-state`); never hardcode a color, never inline styles, never `onclick=""` — wire events with `addEventListener`.
-- Keep animation timing consistent (0.2s ease, 0.3s cubic-bezier) and honour `@media (prefers-reduced-motion: reduce)`.
-- Accessibility: `aria-label`/`role` on interactive elements, full keyboard operability (Tab, Enter/Space, Esc, focus trap in modals and lightbox), WCAG 2.1 AA contrast, `aria-live="polite"` for dynamic updates, decorative emoji `aria-hidden="true"`, every input labelled with `aria-required`/`aria-invalid` where relevant.
-- Every async action shows state (disabled + spinner on submit, "Copied!" feedback, inline errors): no dead click, no silent failure.
-- Every dynamic HTML string goes through `window.DOMPurify.sanitize()`.
-- No build step: never add npm/yarn/pnpm dependencies, new CDN scripts or a `package.json`; bump the `?v=` asset version on every JS/CSS change (one-year immutable cache).
-- Web-layer security: strict CSP with a CDN allowlist, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` limiting geolocation/microphone/camera, HSTS when served over HTTPS, per-IP rate limiting on `/api/*`, origin validation and connection limits on the WebSocket, `/admin` and `/api/admin` reachable only from the LAN behind admin auth.
+Degradation: WS disconnect → reconnect and resubscribe; no data or no SQLite rows → empty state; in-process restart → `DashboardState` keeps last-known values; large vector queries → truncated/paginated.

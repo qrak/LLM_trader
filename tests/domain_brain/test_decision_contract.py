@@ -68,3 +68,37 @@ def test_bool_confidence_is_refused():
 
 def test_non_object_payload_is_refused():
     assert validate_decision_payload(None) == ["payload must be an object"]
+
+
+@pytest.mark.parametrize(
+    "entry, stop, target",
+    [(110.0, 100.0, 105.0), (95.0, 100.0, 105.0)],
+    ids=["entry-above-target", "entry-below-stop"],
+)
+def test_buy_levels_must_bracket_the_entry_not_just_order_the_brackets(
+    entry: float, stop: float, target: float
+) -> None:
+    """``stop_loss < take_profit`` alone passes a BUY whose entry sits outside the bracket."""
+    problems = validate_decision_payload({
+        "analysis": {
+            "signal": "BUY", "confidence": 70, "entry_price": entry,
+            "stop_loss": stop, "take_profit": target, "risk_reward_ratio": 1.0,
+            "position_size": 0.05,
+        }
+    })
+
+    assert any("stop_loss < entry_price < take_profit" in problem for problem in problems)
+
+
+def test_position_size_above_one_is_refused():
+    """Size is a fraction of the account: 5.0 is a 5x account, not a 0.05 stake."""
+    problems = validate_decision_payload({
+        "analysis": {
+            "signal": "BUY", "confidence": 70, "entry_price": 100.0,
+            "stop_loss": 95.0, "take_profit": 110.0, "risk_reward_ratio": 2.0,
+            "position_size": 5.0,
+        }
+    })
+
+    assert any("position_size" in problem for problem in problems)
+

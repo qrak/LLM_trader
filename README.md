@@ -13,8 +13,7 @@
 
 ---
 
-> 💡 **Paper trading by default — no real funds are involved anywhere in this project.**
-> Decisions can be forwarded to a **separate executor service** (private repository for now) that places CCXT orders on an exchange testnet behind its own safety guards; a command the executor never confirms is reported to the operator and re-checked during position synchronisation before the next analysis. Profitability is unproven; see the [Disclaimer](#disclaimer).
+> 💡 **Paper trading by default — no real funds are involved.** A decision may be forwarded to a separate, private executor service. Profitability is unproven; see the [Disclaimer](#disclaimer).
 
 ---
 
@@ -94,7 +93,7 @@ Each launcher checks `requirements.txt` and `constraints.txt` against the instal
 
 - **🔀 Multi-Provider AI Routing** — Primary: DeepSeek official API (`deepseek-flash`, accepts charts natively). Configurable fallback chain across Google Gemini, OpenRouter, a local LM Studio server and BlockRun; every provider that supports images gets the chart.
 
-- **🧪 Regression Tests** — 2,265 collected tests on the current revision, covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are exercised, without live model or exchange calls.
+- **🧪 Regression Tests** — 2,419 collected tests on the current revision, covering LLM output corruption, async races, rate-limit backoff, closed-loop feedback and spot/futures wiring. Real temporary SQLite and ChromaDB databases are exercised, without live model or exchange calls.
 
 - **🗂️ Layered Agent Documentation** — Root [`AGENTS.md`](AGENTS.md) plus a per-package `AGENTS.md` for each area, so a coding model reads one package instead of the whole manual.
 
@@ -158,7 +157,7 @@ flowchart TB
 ## Testing
 
 ```bash
-# Full suite — 2,265 collected tests (measured on the current revision)
+# Full suite — 2,419 collected tests (measured on the current revision)
 pytest tests/ -q
 
 # Focused areas
@@ -173,11 +172,11 @@ ruff check src scripts start.py
 
 | Test area | Files | `def test_` functions | Notes |
 |-----------|-------|----------------------|-------|
-| `tests/domain_trading` | 7 | 105 | Signals, orders, exits, risk, post-mortem |
-| `tests/domain_brain` | 8 | 211 | ChromaDB operations, rules, scoring, embedding cache |
-| `tests/domain_rag_indicators` | 9 | 221 | RSS/Crawl4AI, news database, indicator maths |
-| `tests/domain_infra` | 12 | 179 | Provider fallback, dashboard routes, persistence |
-| `tests/test_admin_*.py`, `tests/test_shutdown_real.py` | 3 | — | Playwright/browser checks; skipped unless a dashboard is running |
+| `tests/domain_trading` | 9 | 317 | Signals, orders, exits, risk, post-mortem |
+| `tests/domain_brain` | 12 | 271 | ChromaDB operations, rules, scoring, embedding cache |
+| `tests/domain_rag_indicators` | 9 | 274 | RSS/Crawl4AI, news database, indicator maths |
+| `tests/domain_infra` | 17 | 359 | Provider fallback, dashboard routes, persistence |
+| `tests/test_admin_playwright.py` | 1 | 35 | Playwright/browser checks; skipped unless a dashboard is running |
 
 Parametrisation multiplies the function counts, so the collected total is larger than the sum of `def test_`.
 
@@ -285,7 +284,7 @@ Each file links back to the root; the root never duplicates package detail.
 
 ## Roadmap
 
-- 🔄 **Live trading** — via the separate executor service (private for now), currently exercised on an exchange testnet with `real_money_enabled = false`
+- 🔄 **Live trading** — delegated to a separate, private executor service (exchange testnet)
 - ⏳ **Multiple trading-agent personalities** — conservative, aggressive, contrarian, trend-following *(aspirational)*
 - ⏳ **Multi-model consensus** — a "council of models" for collective decision-making *(aspirational)*
 
@@ -293,7 +292,7 @@ Each file links back to the root; the root never duplicates package detail.
 
 ## Disclaimer
 
-**NOT FINANCIAL ADVICE.** This software is experimental and in BETA. It trades a simulated book by default and no real funds are involved; the executor service runs against an exchange testnet. Profitability is unproven, paper results are not live results, and exchange reconciliation is the least-tested part of the live path. No warranty provided. Use at your own risk.
+**NOT FINANCIAL ADVICE.** This software is experimental and in BETA. It trades a simulated book by default and no real funds are involved. Profitability is unproven, paper results are not live results, and exchange reconciliation is the least-tested part of the live path. No warranty provided. Use at your own risk.
 
 ## License
 

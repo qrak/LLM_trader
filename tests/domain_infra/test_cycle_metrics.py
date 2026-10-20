@@ -77,7 +77,11 @@ async def test_dashboard_endpoint_summarizes_the_journal(tmp_path):
     router = PerformanceRouter(config=MagicMock(), logger=MagicMock(),
                                dashboard_state=MagicMock(),
                                persistence=SimpleNamespace(data_dir=tmp_path))
-    append_cycle(tmp_path / "metrics" / "cycles.jsonl", {"signal": "HOLD", "latency_ms": 10.0}, now=NOW)
+    append_cycle(
+        tmp_path / "metrics" / "cycles.jsonl",
+        {"signal": "HOLD", "latency_ms": 10.0},
+        now=datetime.now(timezone.utc),
+    )
 
     summary = await router.get_cycle_metrics(days=1)
 

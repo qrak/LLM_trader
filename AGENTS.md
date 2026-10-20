@@ -2,7 +2,7 @@
 
 > **Repository:** [https://github.com/qrak/LLM_trader.git](https://github.com/qrak/LLM_trader.git)
 > **Python:** 3.13, `.venv/`, `python start.py`
-> **Status:** BETA / Research Edition — paper-trading mode only
+> **Execution:** decisions are forwarded to the external executor service (`[executor_api]`, `enabled = true`); with `enabled = false` the bot is pure paper/sim
 > **Live Dashboard:** [https://semanticsignal.qrak.org](https://semanticsignal.qrak.org)
 
 ---
@@ -19,77 +19,20 @@ Root `AGENTS.md` is the single instruction source of truth in this repository ac
 
 ## 1. System Overview
 
-**SEMANTIC SIGNAL LLM (LLM Trader)** is an autonomous, asyncio-first trading bot that converts market data, news (via RAG), and chart images into structured BUY / SELL / HOLD decisions via large language models. The system operates a **distributed multi-agent intelligence architecture**: specialized agents for technical analysis, pattern recognition, news retrieval, risk validation, outcome-aware learning, and reflection-based rule synthesis — all coordinated through a central trading loop.
+Asyncio-first trading bot: market data, news (RAG) and chart images become structured BUY / SELL / HOLD decisions from an LLM. A central trading loop coordinates data ingestion, technical analysis (Numba indicator kernels), RAG retrieval, risk validation, an outcome-aware brain (vector memory + reflection), and an order-governance chain. Filled orders are executed by a separate service; the bot keeps the decision loop and books what the venue actually did.
 
-```mermaid
-flowchart TB
-    subgraph External["External Layer"]
-        EX["Exchanges<br/>(Binance, KuCoin, Gate.io,<br/>MEXC, Hyperliquid)<br/>&#8209; CCXT"]
-        CG["CoinGecko<br/>DeFiLlama"]
-        ALT["Alternative.me<br/>(Fear & Greed)"]
-        RSS["RSS Feeds<br/>(CoinDesk, CoinTelegraph,<br/>Decrypt, CryptoSlate)"]
-        AI_PROV["AI Providers<br/>Google Gemini (primary)<br/>LM Studio (local text fallback)<br/>OpenRouter (secondary configurable provider)"]
-    end
-
-    subgraph DataIngestion["Data Ingestion Layer"]
-        DF["DataFetcher<br/>OHLCV + Order Book + Trade Flow"]
-        RAG["RAG Engine Agent<br/>News + Fundamentals"]
-    end
-
-    subgraph AnalysisLayer["Analysis Layer"]
-        TA["Analysis Engine Agent<br/>Technical Calculator<br/>50+ Indicators"]
-        PE["Pattern Engine<br/>Deterministic Indicator<br/>Pattern Detection<br/>Numba JIT compiled"]
-        CGEN["Chart Generator<br/>4K PNG Candlestick<br/>SMA/RSI/Volume/CMF+OBV"]
-    end
-
-    subgraph BrainLayer["Learning & Memory Layer"]
-        BRAIN["🧠 Brain Agent<br/>TradingBrainService"]
-        VM["Vector Memory<br/>ChromaDB<br/>Trade Experiences<br/>Semantic Rules<br/>Confidence Stats"]
-        REFL["Reflection Engine<br/>Best‑practice Rules<br/>Anti‑patterns<br/>AI Mistake Rules"]
-    end
-
-    subgraph RiskLayer["Risk & Execution Layer"]
-        RP["Risk Manager<br/>Dynamic SL/TP<br/>Position Sizing"]
-        GP["Order Governance Pipeline<br/>Symbol Guard<br/>Max Size Guard"]
-        STRAT["Trading Strategy<br/>Exit Monitor<br/>Position Status Monitor"]
-    end
-
-    subgraph Output["Output Layer"]
-        DASH["📊 Dashboard<br/>FastAPI + WebSocket"]
-        LOGS["Audit Trail<br/>Position Logs<br/>SQLite Trade History"]
-    end
-
-    subgraph Providers["Provider Orchestration"]
-        PO["Provider Orchestrator<br/>Fallback Chain"]
-    end
-
-    %% Data Flow
-    EX --> DF
-    RSS --> RAG
-    CG --> RAG
-    ALT --> TA
-    DF --> TA
-    TA --> PE
-    TA --> CGEN
-    
-    RAG --> TA
-    TA --> PO
-    PO --> AI_PROV
-    
-    AI_PROV -->|"Structured Signal"| RP
-    RP --> GP
-    GP --> STRAT
-    
-    STRAT -->|"Closed Trade"| BRAIN
-    BRAIN --> VM
-    VM -->|"Reflection Loop"| REFL
-    REFL -->|"Rules"| VM
-    VM -->|"Context Injection"| BRAIN
-    BRAIN -->|"Confidence + Rules"| TA
-    
-    TA --> DASH
-    STRAT --> DASH
-    STRAT --> LOGS
+```
+DataFetcher ─▶ AnalysisEngine ─▶ ProviderOrchestrator ─▶ UnifiedParser
+   (CCXT)       TechCalc+Pattern+Chart+RAG+Brain        (fallback chain)
+                                                              │
+   BrainContextProvider ◀── vector memory ◀── closed trade     ▼
+        (confidence + rules into next prompt)          GuardPipeline ─▶ RiskManager
+                                                              │            (SL/TP, size)
+                                                              ▼                │
+                                                     TradingStrategy ◀─────────┘
+                                                     (R:R gate, OrderLifecycle, ExitMonitor)
+                                                              │
+                                                        executor_api ─▶ venue, verdict journal ─▶ booking
 ```
 
 ---
@@ -99,8 +42,8 @@ flowchart TB
 | # | Agent Name | Primary Responsibility | Core Model | Core Implementation |
 |---|------------|----------------------|------------|---------------------|
 | 1 | **🧠 Brain Agent** (TradingBrainService) | Outcome-aware decision enricher, semantic rule learning via reflection loops, confidence calibration | Deterministic/vector memory; context is injected into provider-routed LLM prompts | [`src/trading/brain.py`](./src/trading/brain.py) |
-| 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Gemini 3.6 Flash (multimodal) | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
-| 3 | **📰 RAG Engine Agent** | News aggregation (RSS + Crawl4AI), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
+| 2 | **🔬 Analysis Engine Agent** | Market data collection, 50+ technical indicators, pattern recognition, chart generation, AI signal synthesis | Provider-routed (`provider` in `config/config.ini`); the chart-vision step needs a multimodal model | [`src/analyzer/analysis_engine.py`](./src/analyzer/analysis_engine.py) |
+| 3 | **📰 RAG Engine Agent** | News aggregation (RSS + optional Crawl4AI enrichment), fundamentals (DeFiLlama), relevance scoring, context retrieval | Deterministic (no LLM) | [`src/rag/rag_engine.py`](./src/rag/rag_engine.py) |
 | 4 | **⚙️ Risk Manager Agent** | Dynamic SL/TP scaling, position sizing, signal validation, circuit breakers | Deterministic | [`src/managers/risk_manager.py`](./src/managers/risk_manager.py) |
 | 5 | **☁️ Provider Orchestrator** | AI provider lifecycle, multi-provider fallback chain, parameter negotiation | — | [`src/managers/provider_orchestrator.py`](./src/managers/provider_orchestrator.py) |
 | 6 | **🛡️ Governance Pipeline** | Pre-execution guard chain: symbol whitelist, max position size | Deterministic | [`src/trading/guards/pipeline.py`](./src/trading/guards/pipeline.py) |
@@ -112,21 +55,21 @@ flowchart TB
 
 ### 3.1 Startup (CompositionRoot)
 
-`start.py` → `SingleInstanceLock` → Event loop with `GracefulShutdownManager` → 9-stage dependency provisioning:
+`start.py` → `SingleInstanceLock` → Event loop with `GracefulShutdownManager` → 9-stage dependency provisioning (`src/composition/provisioners.py`):
 
 | Stage | Provisioner | Dependencies Created |
 |-------|------------|---------------------|
 | 1 | `_provision_infrastructure` | ExchangeManager, aiohttp session, KeyboardHandler |
 | 2 | `_provision_utilities` | FormatUtils, UnifiedParser, TokenCounter, TimeframeValidator, CategoryCollisionResolver |
-| 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS/Crawl4AI news client |
+| 3 | `_provision_platforms` | CCXTMarketAPI, CoinGecko, Alternative.me, DeFiLlama, RSS news client + Crawl4AI enricher |
 | 4 | `_provision_rag_layer` | RagEngine, NewsManager, LocalTaxonomyProvider, TickerManager |
 | 5 | `_provision_model_layer` | AI provider clients, ProviderOrchestrator, ModelManager |
 | 6 | `_provision_analyzer_layer` | AnalysisEngine, MarketDataCollector, TechnicalCalculator, PatternAnalyzer |
 | 7 | `_provision_trading_layer` | TradingStrategy, ExitMonitor, VectorMemoryService, TradingStatisticsService, TradingBrainService |
-| 8 | `_provision_notifiers` | Discord notifier with DiscordFileHandler, or console fallback notifier |
+| 8 | `_provision_notifiers` | Discord notifier with file handler, or console fallback notifier |
 | 9 | `_provision_dashboard_layer` | DashboardServer, DashboardState, force_analysis_event |
 
-**Architectural invariant:** All services are instantiated in the composition layer and injected via constructor parameters. **Never** construct service dependencies inside other service classes, and **never** use in-function lazy imports (`Pylint C0415`) to resolve circular dependency cycles—refactor constructor parameter injection at the CompositionRoot (`start.py`) instead.
+**Architectural invariant:** All services are instantiated in the composition layer and injected via constructor parameters. **Never** construct service dependencies inside other service classes, and **never** use in-function lazy imports (`Pylint C0415`) to resolve circular dependency cycles — refactor constructor parameter injection at the CompositionRoot (`start.py`) instead.
 
 ### 3.2 Main Loop
 
@@ -135,23 +78,25 @@ AnalysisEngine.analyze_market()
   ├── MarketDataCollector → DataFetcher (OHLCV + order book + trade flow)
   ├── TechnicalCalculator (50+ indicators) + LongTerm data + Weekly macro
   ├── PatternAnalyzer → IndicatorPatternEngine (deterministic indicator-pattern kernels)
-  ├── ChartGenerator (4K PNG) → LLM visual chart-pattern analysis (via analysis_result_processor.py)
+  ├── ChartGenerator (4K PNG) → LLM visual chart-pattern analysis (analysis_result_processor.py)
   ├── RAG context retrieval
   ├── Brain context injection (confidence + rules similar to current conditions)
-  ├── AI provider call → TradingAnalysisResponseModel (prompt includes step 5.5 invalidation check:
-  │      model must name a specific invalidation trigger or HOLD)
+  ├── AI provider call → TradingAnalysisResponseModel (prompt step 5.5: the model must
+  │      name a specific invalidation trigger or HOLD)
   └── Structured dict returned to TradingStrategy
        ↓
 TradingStrategy.process_analysis()
     ├── PositionExtractor + UnifiedParser → extract and validate signal
     ├── GuardPipeline (symbol → max size)
     ├── RiskManager → RiskAssessment (SL/TP scaling, computes R:R)
-    ├── TradingStrategy → R:R minimum check against max(config floor, brain floor; both default 0.0)
-    ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → EXECUTED (or REJECTED)
-    ├── Approval is recorded as an audit event, not as an OrderLifecycle state
-    ├── PersistenceManager → SQLite-only trade_history.db append (no JSON fallback/migration)
+    ├── R:R gate: max(config `min_rr_entry`, brain floor) — both 0.0 by default,
+    │      so the gate is inert unless a floor is configured or learned
+    ├── OrderLifecycle → INTENT → READY_FOR_REVIEW → EXECUTED (or REJECTED);
+    │      approval is an audit event, not a lifecycle state
+    ├── executor_api forward (order_id keyed) when `[executor_api] enabled = true`
+    ├── PersistenceManager → SQLite-only trade_history.db append (no JSON fallback)
     ├── RiskManager friction drain → store_blocked_trade feedback for brain learning
-    └── ExitMonitor (dual-mode: soft at candle close; hard at configurable interval per SL/TP type)
+    └── ExitMonitor (soft at candle close; hard at a configurable interval per SL/TP type)
        └── PositionStatusMonitor → background asyncio loop with dynamic rescheduling
        ↓
 BrainAgent.update_from_closed_trade()
@@ -162,101 +107,43 @@ BrainAgent.update_from_closed_trade()
 
 ### 3.3 Shutdown
 
-`GracefulShutdownManager` handles:
-- SIGINT/SIGTERM → drain active analysis → persist state → close providers → flush logs
-- Keyboard handler → manual stop with state preservation
+`GracefulShutdownManager`: SIGINT/SIGTERM → drain active analysis → persist state → close providers → flush logs; the keyboard handler performs a manual stop with state preservation.
 
 ---
 
 ## 4. Core Data Flow
 
-### 4.1 Decision Cycle
+### 4.1 Learning Loop
 
 ```
-┌──────────────┐    ┌──────────────────────┐    ┌───────────────────┐
-│  DataFetcher  │───▶│   AnalysisEngine     │───▶│  ProviderOrch.    │
-│  (CCXT/API)   │    │  TechCalc + Pattern  │    │  (Fallback Chain) │
-└──────────────┘    │  Chart + RAG + Brain  │    └────────┬──────────┘
-                    └──────────────────────┘             │
-                                    ▲                    ▼
-                                    │           ┌──────────────────┐
-                                    │           │   UnifiedParser   │
-                                    │           │  → TradingSignal  │
-                                    │           └────────┬──────────┘
-                                    │                    ▼
-                                    │           ┌──────────────────┐
-                                    │           │  GuardPipeline   │
-                                    │           │  3 Guards (pass?)│
-                                    │           └────────┬──────────┘
-                                    │                    ▼
-                                    │           ┌──────────────────┐
-                                    │           │   RiskManager    │
-                                    │           │  SL/TP/Size/R:R  │
-                                    │           └────────┬──────────┘
-                                    │                    │
-                                    │                    ▼
-                                    │           ┌──────────────────────┐
-                                    │           │ TradingStrategy      │
-                                    │           │ R:R check (min 1.5)  │
-                                    │           │ + ExitMonitor        │
-                                    │           └────────┬─────────────┘
-                                    │                    │
-                                    │                    ▼ (on close)
-                                    │           ┌──────────────────────┐
-                                    └───────────│   BrainAgent         │
-                                                │  Experience +        │
-                                                │  Reflection + Rules  │
-                                                └──────────────────────┘
-```
-
-### 4.2 Learning Loop
-
-```
-Closed Trade ──▶ BrainExperienceRecorder ──▶ ChromaDB (vector memory)
-                                                   │
-                                                   ├── Update matched semantic-rule validation/contradiction counters
-                                                   │
-                          trade_count % interval == 0
-                                                   │
-                                                   ▼
-                                          ReflectionEngine
-                                          ├── Best-practice rules
-                                          ├── Anti-pattern rules
-                                          └── AI-mistake rules
-                                                   │
-                                                   ▼
-                                          Next Cycle: BrainContextProvider
-                                          queries ChromaDB for:
-                                          - Similar past trades (top-5)
-                                                                                    - Relevant rules (matched to conditions,
-                                                                                        scored by similarity + evidence + timeframe freshness)
-                                          - Confidence stats by level
-                                          - Blocked trade feedback
-                                                   │
-                                                   ▼
-                                          Injected into LLM prompt
+Closed trade ─▶ BrainExperienceRecorder ─▶ ChromaDB (vector memory)
+                     ├── update matched semantic-rule validation / contradiction counters
+                     ├── trade_count % interval == 0 → ReflectionEngine
+                     │      (best-practice → anti-pattern → AI-mistake rules)
+                     └── next cycle: BrainContextProvider queries ChromaDB for
+                            similar past trades (top-5), rules scored by similarity +
+                            evidence + timeframe freshness, confidence stats by level,
+                            blocked-trade feedback → injected into the LLM prompt
 ```
 
 Semantic-rule policy:
-- Active semantic rules are durable learned policy and are not deleted by age-only pruning.
-- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, contradiction count, and **surprise ratio** (see below).
-- Closed trades that match active rules update validation or contradiction metadata for later ranking.
-- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high surprise ratio (>1.5) means the outcome was driven by factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Rules derived from high-surprise trades carry a `⚠️ high surprise` annotation in their rule text, allowing the LLM to discount lucky outcomes when forming policy.
-- Inactive old rules may be physically pruned as storage maintenance; active rules should be deactivated by evidence, not age.
 
-### 4.3 Trade Persistence
+- Active semantic rules are durable learned policy and are not deleted by age-only pruning; they are deactivated by evidence. Inactive old rules may be pruned as storage maintenance.
+- Rule influence is soft-ranked by semantic similarity, evidence quality, timeframe-aware freshness, contradiction count, and **surprise ratio**.
+- Closed trades that match active rules update validation or contradiction metadata used by that ranking.
+- **Surprise ratio** (`|realized P&L - expected P&L| / expected P&L`) is computed at trade close. A high ratio (>1.5) means the outcome came from factors outside the entry thesis — the trade won despite flawed reasoning (or lost despite good reasoning). Rules derived from such trades carry a `⚠️ high surprise` annotation so the LLM can discount lucky outcomes.
+
+### 4.2 Trade Persistence
 
 - Trade history is SQLite-only at `data/trading/trade_history.db` via `SQLiteTradeHistory` and `PersistenceManager`.
-- Runtime code must not read, write, or auto-migrate `trade_history.json`.
-- `PersistenceManager.save_trade_decision()` fails loudly if SQLite persistence fails; do not add JSON fallback paths.
-- Dashboard, brain entry-decision lookup, and query scripts must consume trade history through injected persistence or SQLite APIs.
-- Historical `.json.migrated` files are backups only, not runtime inputs.
+- Runtime code must not read, write, or auto-migrate `trade_history.json`; historical `.json.migrated` files are backups, not runtime inputs.
+- `PersistenceManager.save_trade_decision()` fails loudly if SQLite persistence fails — do not add JSON fallback paths.
+- Dashboard, brain entry-decision lookup, and query scripts consume trade history through injected persistence or SQLite APIs.
 - **Zero Backward Compatibility & Startup Clutter Policy**:
-  - Runtime code in `src/` and `start.py` must remain 100% clean, canonical, and clutter-free.
+  - Runtime code in `src/` and `start.py` stays canonical and clutter-free.
   - Never introduce inline schema migration `ALTER TABLE` statements, legacy unit conversion methods, rule migration hooks (`refresh_semantic_rules_if_stale`), or `try/except` fallback paths into runtime service initialization.
-  - Never add `sys.path.insert(0, ...)` manipulation hacks into `start.py`.
-  - Never include startup auto-rehydration loops in `start.py`. Any database or vector storage rehydrations/conversions MUST be executed explicitly via standalone CLI scripts (e.g., in `scripts/`), after which the script is executed once and deleted.
-  - **Classes Only in `src/utils/`**: All utility concerns across `src/utils/` and `app.py` must be encapsulated as a Class (e.g., `JournalRotator`, `TokenCounter`). Standalone utility functions are strictly forbidden.
+  - Never add `sys.path.insert(0, ...)` manipulation hacks to `start.py`, and never add startup auto-rehydration loops there. Database or vector-storage rehydrations run as standalone CLI scripts in `scripts/`, executed once and deleted.
+  - **Classes Only in `src/utils/`**: every utility concern is encapsulated as a class (`JournalRotator`, `TokenCounter`); standalone utility functions are forbidden.
 
 ---
 
@@ -266,15 +153,18 @@ Active config at `config/config.ini`. Key settings:
 
 | Setting | Value |
 |---------|-------|
-| **Pair** | BTC/USDC (USD Coin) |
+| **Pair** | BTC/USDC |
 | **Timeframe** | 4h |
-| **Candles** | 999 (125 for AI chart) |
-| **Capital** | $10,000 simulated |
-| **Fee** | 0.075% |
-| **Max Position** | 10% of portfolio |
+| **Candles** | 999 (125 for the AI chart) |
+| **Capital** | $10,000 simulated (`demo_quote_capital`) |
+| **Fee** | 0.075% (`transaction_fee_percent`) |
+| **Max Position** | 10% of portfolio (`max_position_size`) |
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
+| **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
 | **News update** | Every 4 hours, 5 articles max |
-| **Model** | Google Gemini 3.6 Flash (provider=`googleai`), OpenRouter base model `google/gemini-3-flash-preview`, OpenRouter fallback `deepseek/deepseek-r1:free` |
+| **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
+| **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
+| **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
 | **Dashboard** | 0.0.0.0:8000 |
 
 ---
@@ -283,85 +173,61 @@ Active config at `config/config.ini`. Key settings:
 
 ```
 LLM_trader/
-├── start.py                     # Entry point + CompositionRoot
-├── AGENTS.md                    # THIS FILE — single master architecture blueprint & rules
-├── README.md                    # Project overview, setup, roadmap
-├── CHANGELOG.md                 # Version history (newest first)
-├── docs/                        # Older changelog entries: changelog-archive-{2025,2026}.md
+├── start.py                     # Entry point + CompositionRoot + SingleInstanceLock
+├── AGENTS.md                    # THIS FILE — master rules; package detail lives in src/*/AGENTS.md
+├── README.md / CHANGELOG.md     # Overview & setup / version history (newest first)
+├── docs/                        # changelog-archive-{2025,2026}.md, adr/
 ├── requirements.txt / -dev.txt / constraints.txt
-├── keys.env / keys.env.example  # Secrets
+├── keys.env / keys.env.example  # Secrets (gitignored / template)
 ├── config/
 │   ├── config.ini               # Active configuration
 │   ├── model_pricing.json       # Per-model cost data (BASE rates)
-│   ├── peak_rates.example.json  # Optional peak/off-peak billing windows (copy to peak_rates.json)
-│   └── rag_priorities.json      # Category/generic RAG priority config (important_categories + generic_priorities)
+│   ├── peak_rates.example.json  # Optional peak/off-peak billing windows
+│   └── rag_priorities.json      # RAG priorities (important_categories + generic_priorities)
 ├── src/
-│   ├── app.py                   # Main application wiring
-│   ├── trading/                 # 🧠 Brain Agent + Strategy + Monitors
-│   │   ├── brain.py             # TradingBrainService (facade)
-│   │   ├── brain_*.py           # 5 collaborators
+│   ├── app.py                   # Main application wiring (ApplicationServices)
+│   ├── composition/             # provisioners.py, startup_support.py — DI wiring
+│   ├── trading/                 # 🧠 Brain + Strategy + Monitors
+│   │   ├── brain.py             # TradingBrainService (facade) + brain_*.py collaborators
 │   │   ├── trading_strategy.py  # Strategy orchestration
 │   │   ├── exit_monitor.py      # Hard/soft exit checks
-│   │   ├── vector_memory.py     # ChromaDB interface
-│   │   ├── vector_memory_*.py   # Analytics, rules, context (3 collaborators)
-│   │   ├── regime_risk_profile.py # Regime-aware risk profile selector (Risk Manager)
+│   │   ├── vector_memory.py     # ChromaDB interface + vector_memory_*.py collaborators
+│   │   ├── executor_reconciliation.py  # tri-state position truth + intent journal
+│   │   ├── regime_risk_profile.py      # Regime-aware risk profile (Risk Manager)
 │   │   ├── statistics.py        # P&L tracking
-│   │   └── guards/              # 🛡️ Governance Pipeline
-│   ├── analyzer/                # 🔬 Analysis Engine
-│   │   ├── analysis_engine.py   # Orchestrator
-│   │   ├── technical_calculator.py # 50+ indicators
-│   │   ├── pattern_engine/      # Chart + indicator patterns
-│   │   ├── prompts/             # System prompt construction
-│   │   ├── formatters/          # Context formatting (4 non-init source modules)
-│   │   ├── data_fetcher.py      # Exchange data abstraction
-│   │   └── ...                  # 15+ supporting modules
-│   ├── rag/                     # 📰 RAG Engine
-│   │   ├── rag_engine.py        # Orchestrator
-│   │   ├── news_manager.py      # News lifecycle
-│   │   ├── news_ingestion/      # RSS + Crawl4AI
-│   │   └── ...                  # 15+ supporting modules
-│   ├── managers/                # ⚙️ Risk Manager + ☁️ Provider Orchestrator
-│   │   ├── risk_manager.py      # Signal safety layer
-│   │   ├── persistence_manager.py # Position/state facade + SQLite trade history access
-│   │   ├── sqlite_trade_history.py # SQLite-only trade history store
-│   │   ├── provider_orchestrator.py  # AI fallback chain
-│   │   └── model_manager.py     # Model lifecycle
-│   ├── dashboard/               # 📊 Dashboard
-│   │   ├── server.py            # FastAPI app
-│   │   └── routers/             # 7 API routers
-│   ├── indicators/              # Indicator library — 50+ Numba functions
-│   ├── platforms/               # AI providers + exchange APIs
+│   │   └── guards/              # 🛡️ Governance Pipeline (2 guards + pipeline.py)
+│   ├── analyzer/                # 🔬 Analysis Engine (analysis_engine, technical_calculator,
+│   │                            #    pattern_engine/, prompts/, formatters/, data_fetcher)
+│   ├── rag/                     # 📰 RAG Engine (rag_engine, news_manager, news_ingestion/)
+│   ├── managers/                # ⚙️ Risk Manager, persistence_manager, sqlite_trade_history,
+│   │                            #    provider_orchestrator, model_manager
+│   ├── dashboard/               # 📊 server.py + routers/ (6 REST routers + ws_router)
+│   ├── indicators/              # 79 Numba-compiled indicator functions
+│   ├── platforms/               # AI provider clients + exchange APIs
 │   ├── parsing/                 # UnifiedParser
 │   ├── logger/                  # Structured logging
-│   ├── notifiers/               # Discord, console, file
-│   └── utils/                   # Profiler, token counter, etc.
-├── tests/                       # 89 test_*.py files + conftest.py
+│   ├── notifiers/               # Discord, console, file handler
+│   └── utils/                   # Profiler, token counter, decorators (classes only)
+├── tests/                       # 48 test_*.py in domain_{trading,brain,rag_indicators,infra}
+│                                #   + test_admin_playwright.py (marker: integration) + conftest.py
 ├── data/                        # Runtime state (not committed)
-├── logs/                        # Rotated daily log output
-│   └── Bot/                     # Logger name (defined in logger init)
-│       └── YYYY_MM_DD/          # One folder per day
-│           ├── Bot.log          # Full structured log (all levels)
-│           └── errors.log       # Error-level only log
-├── scripts/                     # Cross-platform startup scripts
-│   └── install_agent_terminal_guard.ps1 # Optional session-local PowerShell literal ^U guard
-├── src/*/AGENTS.md              # Per-area agent docs (analyzer, trading, trading/guards, indicators,
-│                                # managers, rag, dashboard) plus src/AGENTS.md — each links back here
+├── logs/Bot/YYYY_MM_DD/         # Bot.log (all levels) + errors.log (error level)
+└── scripts/                     # Cross-platform startup scripts (Windows .ps1 are gitignored)
 ```
 
 ---
 
 ## 7. Active Platform Integrations
 
-- **Exchanges:** Binance, KuCoin, Gate.io, MEXC, Hyperliquid (via CCXT)
+- **Exchanges:** Binance, KuCoin, MEXC, Hyperliquid via CCXT (`gateio` is not a valid CCXT id — the ccxt name is `gate`, so that entry never loads)
 - **Market Data:** CoinGecko, Alternative.me, DeFiLlama, CCXT exchange market data
-- **AI Providers:** Google AI (primary — Gemini 3.6 Flash), LM Studio (local text fallback), OpenRouter (secondary provider with configurable base + fallback models)
-- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, RSS feeds with Crawl4AI enrichment
+- **AI Providers:** DeepSeek (active `provider`), OpenRouter (base + fallback models), Google AI and LM Studio as configurable alternatives
+- **Execution:** external `llm_trader_executor` service over HTTP (`127.0.0.1:9199`), which places real exchange orders via CCXT and writes the verdict/exit journals the bot reads
+- **News Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate RSS feeds, with optional Crawl4AI page enrichment (`src/rag/news_ingestion/crawl4ai_enricher.py`)
 
 ---
 
 ## 8. Operational Rules
-
-Use this root `AGENTS.md` as the canonical source for all global standards and agent policies.
 
 ### Terminal Guardrails (All Agents)
 
@@ -370,24 +236,20 @@ Use this root `AGENTS.md` as the canonical source for all global standards and a
 - On Windows/PowerShell in VS Code, prompt-edit control text such as `^U` is sent literally and becomes part of the command name. Do not assume Linux/readline behavior.
 - Never send terminal follow-up probes or marker echoes (for example `Write-Output $LASTEXITCODE`, `echo DONE`, or a "flush" command) to recover hidden or truncated validation output.
 - If validation output is incomplete, either trust the user's visible terminal output when provided or rerun the exact validation command once with a generous timeout.
-- `scripts/install_agent_terminal_guard.ps1` can be dot-sourced as a session-local safety net for accidental literal `^U` prefixes; it is not a substitute for clean commands.
 - Never chain validation commands with `;`, `&&`, variable assignment, redirect/capture, and readback in one line.
 - For pytest validation, trust only raw output from a direct pytest command.
-- If terminal output is empty or malformed, do not claim success.
-- Never infer pass/fail from a trailing `PYTEST_EXIT` marker when earlier commands in that same line failed.
+- If terminal output is empty or malformed, do not claim success, and never infer pass/fail from a trailing exit-code marker.
 
 ### Operator Commands
 
-Keep platform-specific setup, startup, test, lint, and type-check commands in `README.md`.
-This file documents agent architecture and execution policy only.
+Keep platform-specific setup, startup, test, lint, and type-check commands in `README.md`. This file documents agent architecture and execution policy only.
 
 ### Safety
 
-- **Paper trading only** — real exchange order execution not implemented
-- **Hard SL/TP exits** are configured at 15-minute intervals; soft candle-close exits are supported by ExitMonitor
-- **Max position:** 10% of portfolio
-- **Simulated capital:** $10,000 with 0.075% fee model
-- **Fail-closed behavior** if governance/risk validation cannot decide safely
+- **Execution is delegated:** with `[executor_api] enabled = true` the bot forwards intents and the executor places them on the venue; disabling it makes the bot pure paper/simulation. Never assume "paper only".
+- **Hard SL/TP exits** run at 15-minute intervals; soft candle-close exits are supported by `ExitMonitor`.
+- **Max position:** 10% of portfolio; **simulated capital:** $10,000 with a 0.075% fee model.
+- **Fail-closed behavior** if governance/risk validation cannot decide safely.
 
 ---
 
@@ -398,14 +260,14 @@ This file documents agent architecture and execution policy only.
 Use this checklist for every documentation or tooling-policy PR:
 
 1. All behavioral policy changes are documented in root `AGENTS.md`.
-2. Do not introduce IDE-specific policy files (for example Copilot, Claude, or Windsurf instruction docs) as authoritative guidance.
+2. Do not introduce IDE-specific policy files (Copilot, Claude, Windsurf instruction docs) as authoritative guidance.
 3. `.github/workflows/*` may define CI execution logic only; workflow comments must not replace policy documentation in `AGENTS.md`.
 4. If a command, validation rule, or safety guard changes, update the related AGENTS section in the same PR.
-5. Before merge, run a repository search to ensure no stale references point to removed tool-specific instruction files.
+5. Before merge, search the repository for stale references to removed tool-specific instruction files.
 
 ### Drift Prevention Rule
 
-- Any new tool-specific instruction file must be a non-authoritative pointer to `AGENTS.md`; if it contains independent policy, it should be rejected in review.
+Any new tool-specific instruction file must be a non-authoritative pointer to `AGENTS.md`; if it contains independent policy, reject it in review.
 
 ---
 
@@ -416,7 +278,7 @@ Use this checklist for every documentation or tooling-policy PR:
 ### Architecture
 - **Dependency injection only.** Every class receives its dependencies (`logger`, `config`, collaborators) through `__init__`; the single composition root is `start.py`. Never construct a collaborator inside a method.
 - **`self.logger`, never `self._logger`** — `@retry_async` reads `instance.logger`.
-- **No standalone functions in `app.py`**, and no loose helper modules: every concern is a class wired once from `start.py`. Utility code lives in `src/utils/` as classes, not as functions inside submodules.
+- **No standalone functions in `src/app.py`**, and no loose helper modules: every concern is a class wired once from `start.py`. Utility code lives in `src/utils/` as classes.
 - **Top-level imports only.** An in-function import added to dodge a circular import means the wiring is wrong — fix it in the composition root.
 - **No `sys.path` manipulation and no startup auto-rehydration loops** in `start.py`; one-off data conversions run as a script that is executed once and deleted.
 
@@ -436,11 +298,13 @@ Use this checklist for every documentation or tooling-policy PR:
 ### Performance
 - Optimize only against measured evidence — never prematurely, never at the cost of readability: a clear 10% win beats an opaque 15% win.
 - Keep an optimization self-contained (well under 50 lines), behavior-preserving, and safe under the asyncio event loop and thread concurrency.
-- Ask before adding a dependency, changing queue sizes or thread boundaries, touching the core trading loop (`app.py`, `start.py`), or changing ChromaDB collection schemas and embedding logic.
+- Ask before adding a dependency, changing queue sizes or thread boundaries, touching the core trading loop (`src/app.py`, `start.py`), or changing ChromaDB collection schemas and embedding logic.
 
 ### Dead code
 - **Zero compatibility leftovers.** Delete dead endpoints, cache prefixes, CSS, DOM ids, aliases and retired guards immediately; git history is the archive.
 - The decision wire format (signal names, payload fields) is a contract: never change it silently.
+
+---
 
 ## 11. Security Conventions
 
@@ -451,22 +315,26 @@ Use this checklist for every documentation or tooling-policy PR:
 - A security change is done only when you have exercised the attack vector and shown it fails; report severity, the vulnerable location, the concrete impact, the fix and the proof.
 - Ask before changing authentication or authorization logic, session-cookie formats, admin middleware, or rate limiting on `/api/admin/login`.
 
+---
+
 ## 12. Change Workflow & Verification Gates
 
 1. **Reproduce before fixing.** A bug you cannot reproduce is a bug you cannot verify.
 2. **One change, one purpose.** Never refactor and fix in the same change; keep the diff minimal and behavior identical beyond the stated fix.
-3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, then the targeted file `pytest tests/<matching>.py -x -q`.
-4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures, and `pyright src start.py` with no new errors.
-5. **Test isolation:** delete `position_state.json` / `position_state.json.tmp` before a suite, or point `state_path` at a temp directory; a test double must never default to a live state file or a live journal path.
+3. **Fast gate first:** `py_compile` the touched files, `ruff check src/`, `python -c "import start"`, then the targeted `pytest tests/<matching>.py -x -q`.
+4. **Full gate before claiming done:** `pytest tests/ -q` with 0 failures and 0 skips, and `pyright src start.py` with no new errors.
+5. **Test isolation:** a test double must never default to a live state file, a live journal path (`data/trading/*.jsonl`) or a live brain database; point it at a temp directory.
 6. **A bug fix ships with a regression test**, added to the existing test file for that module rather than a new one.
 7. **Read the diff after every edit:** a patch that matched the wrong anchor relocates or truncates code silently.
 8. **Never commit or push without explicit user consent.** Run the suite first; commit only with 0 failures.
 9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked.
-10. Known pre-existing noise, never caused by your change: 3 admin Playwright tests and 8 collection errors (NumPy/Numba constraint, stale import), plus 18 pre-existing `BLE001`/`S110` hits in `tests/{test_admin_live,test_admin_playwright,test_shutdown_real}.py` — `ruff check src start.py scripts` is the gate that must be clean.
+10. Known pre-existing noise, never caused by your change: 9 `BLE001` hits in `tests/test_admin_playwright.py` (the only browser suite, excluded from CI by the `integration` marker) — `ruff check src start.py scripts` is the gate that must be clean.
+
+---
 
 ## 13. Package Maps (read on demand)
 
-Root `AGENTS.md` is canonical for system-wide rules. Package detail lives next to the code, in per-directory `AGENTS.md` files, so a task reads only the map it needs:
+Root `AGENTS.md` is canonical for system-wide rules. Package detail lives next to the code so a task reads only the map it needs:
 
 | Area | Detail file | Covers |
 |---|---|---|

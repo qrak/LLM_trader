@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-10-20 — Suite proven with mutants; dead suites and agent-doc rot removed
+
+### Changed
+- Agent documentation trimmed from 117.6 KB to 70.0 KB across nine files (root `AGENTS.md` plus eight package files): duplicated policy removed, dead references dropped (`scripts/install_agent_terminal_guard.ps1`, `position_state.json`, `executed_state.json`, `refresh_semantic_rules_if_stale`, `contract-validation-warnings.md`), and false statements corrected — the files claimed paper-only execution while `[executor_api] enabled = true`, quoted a `1.50` R:R gate against `min_rr_entry = 0.0`, and named Gemini as the active provider while `provider = deepseek`.
+- The README and the site no longer carry a personal name; the author is `@qrak`. The executor paragraph now states only that decisions may be forwarded to a separate, private service.
+- Always-skipped suites deleted: `tests/test_shutdown_real.py` (one function, zero assertions, could not fail) and `tests/test_admin_live.py` (required the production admin password, duplicated the Playwright suite). Their durable CSP/HSTS coverage moved to `tests/domain_infra/test_dashboard_brain.py`.
+
+### Fixed
+- Four untested paths found by mutation testing now have assertions: the narrative R/R tolerance (`2.35` claimed against a verified `1.953`), BUY bracket ordering (`stop < entry < target`), `position_size > 1`, and a fill divergence above 1% (previously a 50% tolerance passed all 182 tests in that file).
+- `tests/domain_infra/test_dashboard_brain.py` rate-limit test no longer depends on an internal call path; it seeds `app.state.request_counts` directly.
+
+### Verified
+- Mutation probe: 9 realistic mutants in `src/`; **5 killed** before the new assertions, **9 killed** after.
+- Full suite: **2419 passed, 0 skipped, 0 failed** in ~160 s. CI gate `pytest -m "not integration"`: 2385 passed, 34 deselected. `ruff check src start.py scripts` clean.
+
+## 2026-10-20 — Dashboard limits follow the real visitor; heavy endpoints shed load
+
+### Fixed
+- `/api/*` rate limiting, the WebSocket connection cap and the admin login limiter resolve the visitor through `resolve_client_ip()`, so traffic arriving through the Cloudflare tunnel is limited per visitor instead of sharing the tunnel's address. The header is trusted only on a loopback peer, so a direct connection cannot spoof it.
+- Writes have their own budget instead of spending the read budget, and 429 responses carry `Retry-After`.
+- Heavy endpoints (`/api/brain*`, `/api/visuals*`, `/api/console*`, `/api/monitor/news`, `/api/monitor/last_*`) are capped in concurrency: excess work is refused immediately and a slow GET is cancelled, so a flood cannot queue unbounded work in the event loop that also runs the analysis cycle.
+- `tests/domain_infra/test_cycle_metrics.py::test_dashboard_endpoint_summarizes_the_journal` stamped its journal record with a fixed 2026-10-18 time while the endpoint reads the real clock, so it started failing two days later. The fixture now writes the record with the current time; the endpoint's day-window behaviour is unchanged and still covered by `test_summarize_counts_and_window`.
+
+### Verified
+- Dashboard suite: **70 passed**, 7 new tests — header trust, per-visitor isolation end to end through `TestClient`, WebSocket keying, the write budget, load shedding, and timeout release.
+- Full suite: **2415 passed, 17 skipped, 0 failed**. Ruff clean on `src start.py scripts`; Pyright 0 errors / 0 warnings.
+
 ## 2026-10-18 — Historical fill verification and learning quarantine
 
 ### Fixed

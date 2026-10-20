@@ -1,409 +1,77 @@
 # AGENTS.md — Trading Brain & Strategy
 
-Scope: `src/trading/`. Root [`AGENTS.md`](../../AGENTS.md) stays canonical for system-wide policy; this file adds package-specific detail and never overrides it.
+Scope: `src/trading/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
 ## Execution quality and sandbox isolation
 
-- Account for proven venue executions even when market-data verification is missing or inconsistent; never invent a real-market exit to replace a sandbox fill.
-- Learning requires verified exit evidence with execution-time reference provenance and a verified executor entry. Disabled, unavailable, legacy and status-only evidence cannot authorize a new lesson.
-- Persist entry verification in Position.entry_execution_quality and structured TradeDecision.execution_quality in SQLite; keep it through restart and entry settlement.
-- Statistics, short-term prompt totals and equity curves consume the same structured eligibility, not caller-supplied reason text. Quarantined post-mortems must not advertise a successful plan or strategy P&L.
-- Command references are persisted for replay. Unknown execution time is not detection/creation time. Historical repairs require fingerprinted dry-run, backup, stopped processes and a verified second-run no-op; retain raw executions and reset untraceable rule-validation feedback explicitly.
-
-## Trading Brain
-
-### 🧠 Brain Agent — TradingBrainService
-
-> **Module path:** `src/trading/brain.py` (facade) + collaborators in `src/trading/`
-> **Type:** Central LLM Decision Engine & Outcome-Aware Learning Loop
-> **Core Model:** No direct LLM calls; deterministic/vector-memory service whose context is injected into AnalysisEngine prompts routed by ProviderOrchestrator
-
----
-
-#### Agent Persona & Role
-
-The Brain Agent is the **central reasoning and learning subsystem** of LLM Trader. It acts as both:
-
-- **Decision Enricher:** Injects historical trade outcomes, confidence calibration, blocked-trade feedback, and learned rules into every LLM prompt so the model makes context-aware decisions.
-- **Autonomous Learner:** After each closed trade, records the outcome into ChromaDB vector memory, and periodically reflects on trade clusters to synthesize semantic rules (best-practices, anti-patterns, corrective measures, AI-mistake patterns).
-
-The Brain does **not** execute trades or calculate indicators — it operates purely on metadata produced by the AnalysisEngine and TradingStrategy.
-
-##### Key Collaborators
-
-| Module | File | Responsibility |
-|--------|------|----------------|
-| `BrainContextProvider` | `brain_context.py` | Assembles the "Trading Brain" context block injected into every LLM decision prompt — includes blocked-trade feedback from ChromaDB |
-| `BrainExperienceRecorder` | `brain_experience.py` | Translates closed-trade data + market conditions into structured vector-memory experiences |
-| `ExitProfileResolver` | `brain_exit_profiles.py` | Single source of truth for SL/TP execution profiles serialization and rule rendering |
-| `TradePatternAnalyzer` | `brain_patterns.py` | Statistical analysis engine — win/loss grouping, failure diagnostics, AI mistake classification |
-| `BrainReflectionEngine` | `brain_reflection.py` | Synthesizes learned semantic rules from trade metadata clusters via periodic reflection loops |
-| `ExecutorHandler` | `executor_handler.py` | Builds executor payload from analysis + strategy decision, persists to `latest_decision.json`, HTTP-forwards to `llm_trader_executor` |
-
----
-
-#### Inputs
-
-##### From TradingStrategy (via `close_position()`)
-- `Position` — entry/exit/PNL, confidence, confluence factors, drawdown metrics
-- `close_price` — exit price at time of close
-- `close_reason` — stop_loss / take_profit / analysis_signal
-- `entry_decision` — original entry TradeDecision (retrieved from SQLite trade history through `PersistenceManager` for reasoning context)
-- `market_conditions` — MarketConditions at close time (or from entry if preferred)
-
-##### From VectorMemoryService (ChromaDB)
-- Trade experiences: 20+ metadata fields per trade (entry confidence, AI reasoning, ADX/RSI/ATR at entry, volatility, SL/TP distances, RR ratio, max drawdown/profit, fear & greed, market regime, confluence count, timeframe alignment, exit execution context, factor scores)
-- Semantic rules: best_practice, anti_pattern, corrective, ai_mistake types
-- Blocked-trade feedback: guard-type grouped rejection history
-- Confidence calibration stats: win rate by confidence level, direction bias, ADX performance, factor performance
-
----
-
-#### Outputs
-
-##### `get_context()` — Formatted text block for LLM prompt injection
-- Confidence calibration by level (HIGH/MEDIUM/LOW with win rate, trade count, avg P&L)
-- Direction bias check (long vs short count, "LIMITED DATA" warning)
-- Blocked-trade feedback (recent 5, ≤ 168h)
-- Vector-retrieved similar past experiences (top-5 semantic similarity search)
-- CoT Step 6 — Historical Evidence instructions (win-rate < 50% → reduce confidence, anti-pattern matching, AI-mistake memory, exit-execution memory)
-- Learned trading rules matched to current conditions (similarity %, timeframe freshness, evidence score, tagged by type)
-- Recent persisted post-mortem lessons (up to five) from the shared
-  `PostMortemRepository`. `_provision_trading_layer` must inject the same repository
-  into `TradingBrainService` and `PostMortemService`; test this through real
-  provisioning and system-prompt assembly, not only an isolated brain constructor.
-- Brain context is rebuilt per request and uses the shared `PromptBudgetPolicy`
-  and `TokenCounter` from the composition root. The default emergency budget is
-  50,000 estimated tokens, not a character cutoff. Whole optional experience/rule
-  ranges are removed by owned line indexes; never remove or partially cut recent
-  lessons, rejection feedback or risk guidance. If protected content cannot fit,
-  raise `PromptBudgetExceeded` before a model call. Log estimated input/output
-  tokens whenever reduction occurs. Keep three experiences, three relevant rules,
-  five recent lessons and five rejection samples; stats do not enumerate history.
-  Test production wiring and real SQLite/prompt assembly with >64,000 characters
-  still below the token budget, plus complete lesson retention during reduction.
-
-##### `get_dynamic_thresholds()` — ~15 learned parameters
-- R/R minimum thresholds, ADX thresholds, SL tightening progress thresholds
-- Position size limits, confluence count minimums, timeframe alignment reduction coefficients
-- Historical MAE: `safe_mae_pct` is the observed maximum magnitude of signed
-  `max_drawdown_pct` among WIN experiences, converted from percentage points to a
-  fraction. Require at least five valid winning samples by default; exclude missing,
-  malformed, non-finite, boolean and positive drawdowns, LOSS and UPDATE entries.
-  Explicit zero observations count, and a learned zero baseline is not insufficient
-  data. Carry `safe_mae_sample_count` to the real prompt; label the maximum as
-  historical evidence, never a guaranteed safe drawdown or a hard SL floor.
-- Preserve `_portfolio_pnl_pct` when extracting `MarketConditions`: pass the
-  already-read value to the dataclass constructor. Verify positive, negative,
-  zero and absent values through Position serialization, real isolated Chroma
-  storage and prompt rendering. Portfolio return and the trade's `pnl_pct` are
-  separate fields; do not overwrite historical snapshots with current equity.
-- Closed experiences persist `position.trend_direction_at_entry` separately from
-  exit-time `market_regime`. Dashboard S/R statistics read
-  `support_resistance_strength_score` while retaining the existing API bucket names
-  and older persisted `support_resistance_score` data. Do not migrate live memories
-  or infer unknown historical entry trends from exit conditions.
-
-##### `get_vector_context()` — Vector-similarity search results + contextual stats
+- Account for proven venue executions even when market-data verification is missing or inconsistent; never invent a real-market exit to replace a sandbox fill. Learning needs verified exit evidence with execution-time reference provenance **and** a verified executor entry — disabled, unavailable, legacy and status-only evidence cannot authorize a lesson.
+- Persist entry verification in `Position.entry_execution_quality` and structured `TradeDecision.execution_quality` in SQLite, kept through restart and entry settlement. Statistics, prompt totals and equity curves read that same structured eligibility, never caller reason text; a quarantined post-mortem must not advertise a successful plan or strategy P&L.
+- Command references are persisted for replay; unknown execution time is not detection/creation time. Historical repairs need a fingerprinted dry-run, backup, stopped processes and a verified second-run no-op; retain raw executions and reset untraceable rule-validation feedback explicitly.
 
-##### Semantic Rules (stored to ChromaDB)
-- **Best-practice rules:** ≥5 wins total, ≥3 same-pattern, ≥60% win rate → `rule_best_*`
-- **Anti-pattern rules:** ≥3 losses total, ≥2 same-pattern, ≥60% loss rate → ⚠️ `rule_anti_*` with failure_reason + recommended_adjustment
-- **Corrective rules:** ≥3 losses, ≥2 same-pattern, <60% loss rate → ⚡ `rule_corrective_*`
-- **AI-mistake rules:** ≥2 mistakes classified → `rule_ai_mistake_*` with failed_assumption, mistake_type
-
----
-
-#### Prompting Strategy
+## Brain (`brain.py` facade)
 
-##### Reflection Cadence (timeframe-adaptive)
-
-| Timeframe Bucket | Trade Interval |
-|-----------------|----------------|
-| Scalping (≤ 30 min) | Every 10 trades |
-| Intraday (60–239 min) | Every 7 trades |
-| Swing (240–1439 min) | Every 5 trades |
-| Position (≥ 1440 min) | Every 3 trades |
+No LLM calls: a deterministic vector-memory service whose context is injected into the analysis prompt. It never executes trades or computes indicators.
 
-On each reflection tick, three reflection loops fire **sequentially** (not parallel):
-1. `trigger_reflection()` — best-practice rules from winning clusters
-2. `trigger_loss_reflection()` — anti-pattern / corrective rules from losing clusters
-3. `trigger_ai_mistake_reflection()` — AI mistake pattern detection
-
-##### Context Injection Strategy
-
-The brain context is injected as a structured section in the LLM prompt **after** technical analysis but **before** the final decision instruction:
-
-```
---- Trading Brain Context ---
-[Confidence Calibration by Level]
-[Direction Bias Warning]
-[Blocked Trade Feedback]
-[Top-5 Similar Past Experiences]
-[Active Semantic Rules Matched to Current Conditions]
-[Historical Evidence Instructions (CoT Step 6)]
-```
-
-##### Embedding Strategy
-- `build_rich_context_string()` — categorical labels for storage/retrieval
-- `build_query_document()` — embedding query mirrors stored format but includes raw numeric values, reducing embedding asymmetry
-- Hybrid retrieval: 70% similarity + 30% recency decay
-
-##### Semantic Rule Influence Scoring
-
-Active semantic rules are durable learned policy, not raw trade examples. They are preserved while active, but their prompt influence is soft-ranked by:
-
-- Semantic similarity to the current market context
-- Evidence quality (`wins`, `losses`, `source_trades`, `expectancy_pct`, `profit_factor`)
-- Timeframe-aware freshness using the same half-life model as trade experiences
-- Contradiction penalty from matched closed trades that disagree with the rule
-
-For the default 4h timeframe, the rule freshness half-life is about 14 days. Older active rules are not deleted automatically; they receive lower freshness labels (`maturing`, `stale`, `legacy`) unless recently validated by matching outcomes.
-
-##### Confidence Threshold — Adaptive Learning
-
-The brain learns a `confidence_threshold` dynamically from historical trade data in `VectorMemoryAnalytics`:
-
-| Condition | Threshold Set |
-|-----------|--------------|
-| HIGH confidence win rate > 70% | 65 (relaxed — HIGH confidence is reliable) |
-| HIGH confidence win rate < 55% | 75 (tightened — HIGH confidence underperforming) |
-| Default (insufficient data) | 70 |
-
-This threshold is injected into LLM prompts to guide the model's self-assessed confidence level, but does **not** directly gate position sizing — position sizing uses confidence as a string label ("HIGH"/"MEDIUM"/"LOW") against configured fallback size percentages.
-
----
-
-#### SL Tightening Policy
-
-The `StopLossTighteningPolicy` enforces a **price-progress gate** before allowing the LLM to tighten an open position's stop loss. This prevents premature SL adjustments that would turn small pullbacks into exits.
-
-##### Timeframe-Adaptive Base Thresholds
-
-| Timeframe | Min Progress to TP | Meaning |
-|-----------|-------------------|---------|
-| Scalping (<1h) | 25% | Price must travel 25% toward TP before SL can tighten |
-| Intraday (1h–4h) | 20% | |
-| Swing (4h–1d) | 15% | |
-| Position (>1d) | 10% | |
-
-##### Blending with Brain-Learned Thresholds
-
-The effective threshold is resolved by `_resolve_effective_threshold()`:
-1. Start with the timeframe base threshold
-2. If a brain-learned SL tightening threshold exists with enough samples, use the learned value clamped to the configured floor/ceiling
-3. Expose the result via `get_dynamic_thresholds()` as `sl_tightening_pct`, `sl_tightening_source`, and the nested `sl_tightening` payload
-
-SL outcome learning is recency-weighted, not a causal estimate of tightening benefit.
-Use at most one observation per closed position (smallest observed tightening progress,
-canonicalized through its close record); never count UPDATE aliases as separate trades.
-Age each observation from that UPDATE's timestamp, so a late close write does not
-rejuvenate it. Require a valid, non-future UPDATE followed by a valid close timestamp.
-Apply the timeframe-derived exponential half-life and maximum age with fractional days
-(4h: 14/56 days); exclude invalid/non-finite/bool evidence and expired observations.
-For each candidate, report only its eligible raw sample count and effective sample
-count `(sum(w) ** 2) / sum(w ** 2)`. Weight expectancy, win rate and conditional
-win/loss means consistently. Activation requires both raw and effective counts to meet
-`SL_TIGHTENING_MIN_SAMPLES`; missing effective evidence means configuration, not an
-old learned threshold. The learning algorithm's minimum remains separately enforced.
-`BrainContextProvider` invalidates statistics after 300 monotonic seconds on the next
-request even if experience count is unchanged, and `TradingBrainService` copies the
-nested SL payload before adding display fields. Regression coverage must exercise
-real isolated Chroma storage, time-only expiry and the resulting prompt for LONG/SHORT.
-No intrabar replay, alternative-exit comparison, cost-aware optimization or chronological
-out-of-sample validation is implemented by this recency-only stage.
-
-##### Position Update Gating
-
-There is no minimum time interval between position parameter updates. Each valid UPDATE may
-be processed immediately, including on consecutive analysis cycles. The brain still records
-position updates and learns from closed trades; executor-state checks, SL tightening and
-widening policies, and execution receipts remain unchanged.
-
-##### Refused Updates Are Recorded, Not Swallowed
-
-Executor connection failures and transport timeouts are availability warnings, not
-`CRITICAL` errors. `_executor_has_position()` returns `None`, clears stale query
-evidence and retains the local position; reconciliation remains unverified and
-UPDATE/CLOSE still require confirmation. Do not add a traceback to this expected
-offline path or hide unexpected code/payload failures behind the same warning.
-
-Every command the bot refuses to send — a blocked UPDATE (tightening gate or widening cap) or an UPDATE/CLOSE skipped because the executor state could not be verified — is written
-down: `PositionManagementMixin._record_refused_command()` records it as a position intent with
-`state=refused`, `evidence=bot_policy` in `data/trading/bot_position_intents.jsonl` and queues a
-one-shot operator alert (`take_rejected_intent_alert()` → `CryptoTradingBot._report_rejected_intent()`).
-`TradingStrategy.get_position_context()` renders the newest intent as a `### Last Action Outcome`
-block, so the next analysis — one per timeframe, the only place a refusal can still change a
-verdict — sees the requested level, the level still in force, and that nothing was sent.
-
-UPDATE/CLOSE forwarding allows 30 seconds for queue delay plus execution. A missing verdict
-still means UNKNOWN, not success. Independent reconciliation and the pre-analysis hook
-revisit pending/unknown UPDATE receipts without waiting or sending another command. Match
-the exact order and current trade; persist corrected levels on success or refusal, and
-never let an older receipt overwrite a newer UPDATE. Prompt outcomes are scoped to the
-current trade and ordered by command creation, not delayed receipt arrival. A confirmation
-explicitly supersedes an earlier missing-confirmation alert.
-
-A queued CLOSE may produce its verdict after the bot's immediate journal read, and the executor's
-market-order reply may prove quantity but omit average price. The executor re-reads that exact
-order before writing the verdict; `book_executor_side_exit()` also revisits a matching
-pending/unknown CLOSE intent during periodic reconciliation and books only a fully validated
-fill receipt. No price or quantity means keep the local position and alert — never infer P&L
-from the entry price or an `executed` flag alone.
-
----
-
-#### Edge Cases & Guardrails
-
-| Scenario | Handling |
-|----------|----------|
-| **No prior trade data** | `get_context()` builds context from vector memory (blocked-trade feedback, similar experiences, semantic rules); if all are empty, it returns an empty string and the brain section is skipped |
-| **Insufficient data for reflection** | <5 wins → skip best-practice; <3 losses → skip loss reflection; <2 mistakes → skip AI mistake reflection |
-| **Low win rate (<60%)** | Best-practice rule rejected |
-| **Single-occurrence patterns** | Skipped (need ≥3 wins / ≥2 losses / ≥2 mistakes for pattern) |
-| **Unknown exit profiles** | `UNKNOWN_EXIT_PROFILE` sentinel used as default; `refresh_semantic_rules_if_stale()` migrates legacy rules |
-| **ChromaDB unavailable** | All operations gracefully degrade — `get_context()` returns empty, reflection skipped with warning log |
-| **Reflection failure** | All reflection wrapped in try/except with warning log — never crashes the trading loop |
-| **Blocked trade feedback stall** | Failures silently caught/passed |
-| **timeframe_minutes ≤ 0** | Defaults to 240 minutes |
-| **Cross-restart trade count** | `trade_count` re-read from `vector_memory.trade_count` on init |
-| **Stats cache staleness** | Invalidated when experience count changes or 300 monotonic seconds elapse; recomputed on the next request |
-| **Unknown profile in vector context** | Replaced with resolved rule defaults in `get_context()` |
-| **"LIMITED DATA" flag detected** | Swaps full CoT instructions for "rely on standard TA" note |
-
----
-
-#### Executor Forward Pipeline
-
-When the LLM outputs a BUY/SELL, the decision flows through two stages before reaching the exchange:
-
-##### Stage 1: Strategy Decision (TradingStrategy)
-`process_analysis()` runs the guard pipeline, risk manager, and R:R check. If the trade is blocked (e.g. R:R < 1.50), it stores a **blocked-trade friction** in ChromaDB (`system_constraints_rejections` collection) and returns `TradeDecision(action="HOLD")`.
-
-##### Stage 2: Context Patching + Executor Handler
-
-```python
-### In CryptoTradingBot._execute_trading_check():
-
-### 1. If strategy vetoed the BUY/SELL, rewrite the saved previous response
-###    so the LLM sees "HOLD" next cycle (not "BUY" with no position):
-if decision is not None and decision.action == "HOLD" and result.get("analysis"):
-    self._patch_rejected_signal_in_response(result, decision)
-
-### 2. Save analysis data (possibly patched) for next-cycle LLM context
-self._save_analysis_data(result)
-
-### 3. Delegate executor pipeline to ExecutorHandler
-analysis = result.get("analysis")
-if self.executor_handler is not None and analysis:
-    await self.executor_handler.handle(analysis, decision, self.current_symbol)
-```
-
-##### ExecutorHandler (`src/trading/executor_handler.py`)
-
-```python
-class ExecutorHandler:
-    # Constructor injection — no isinstance/getattr, known types only
-    def __init__(self, persistence, config, logger): ...
-
-    async def handle(self, analysis, strategy_decision, symbol):
-        payload = self._build(analysis, strategy_decision, symbol)  # None on HOLD veto
-        if payload is None:
-            return
-        self._persist(payload)     # atomic write to latest_decision.json
-        await self._forward(payload)  # HTTP POST to llm_trader_executor
-```
-
-Wired once in `start.py` `build_dependencies()` — not in app.py constructors.
-
-Register `ExecutorHandler.close` in `CryptoTradingBot.initialize` after the bot's
-shutdown callback, so its persistent HTTP client is closed during normal exit and
-in-place reload. Test actual shutdown callback execution, including an earlier
-callback failure, an unused handler and repeated shutdown requests.
-
-##### Blocked-Trade Feedback Loop (ChromaDB → LLM Prompt)
-
-```
-LLM outputs BUY with R:R 0.62
-  → TradingStrategy rejects (R:R < 1.50)
-  → store_blocked_trade(guard_type="rr_minimum", ...) → ChromaDB
-  → Returns TradeDecision(action="HOLD")
-  → _patch_rejected_signal_in_response()  → rewrites raw_response "BUY" → "HOLD"
-  → _save_analysis_data()                 → persists patched response
-  → ExecutorHandler._build() sees action="HOLD" → returns None (no executor forward)
-
-Next analysis cycle:
-  → BrainContextProvider.get_context()
-    → vector_memory.get_blocked_trade_feedback(n=5, max_age_hours=168)
-    → Injects "## CRITICAL FEEDBACK: System Rejections" into prompt
-      "Your R/R: 0.62 | Required: 1.50 (gap: -0.88)"
-  → LLM also sees its own previous response as "HOLD" (patched), not "BUY"
-```
-
-##### Response Parameters to `config.ini` (for `[executor_api]`)
-
-```ini
-[executor_api]
-enabled = true
-url = http://127.0.0.1:9199/decision
-```
-
-##### Vector Memory Maintenance
-
-- `VectorMemoryService.prune_aged_documents()` may prune stale experiences and blocked-trade feedback beyond the relevance window.
-- Active semantic rules (`active=True`) are preserved even when old; do not delete active learned rules by age alone.
-- Active semantic rules are ranked with timeframe-aware freshness/evidence scoring before prompt injection; age lowers influence but does not physically delete a rule.
-- Matched closed trades update semantic-rule `validation_hit_count`, `last_validated_at`, `contradiction_count`, and `last_contradicted_at` metadata.
-- Timestamp parsing must be datetime-aware so malformed timestamps are skipped safely instead of corrupting prune decisions.
-
-##### Trade Persistence Contract
-
-- Trading code records decisions through `PersistenceManager.async_save_trade_decision()` and must not write trade-history files directly.
-- Trade history is SQLite-only (`trade_history.db`). Do not reintroduce `trade_history.json` readers, fallback writes, or auto-migration paths.
-- Entry-decision recovery for close-time brain learning uses SQLite timestamp-window lookup with optional symbol filtering.
-
----
-
-#### Data Flow
-
-```
-Market Data + Indicators
-    ↓
-AnalysisEngine ──→ Position + MarketConditions
-    ↓
-TradingStrategy ──→ closed trade
-    ├── PersistenceManager.get_entry_decision_for_position()
-    │     └── SQLite trade_history lookup by timestamp + symbol
-    ↓
-TradingBrainService.update_from_closed_trade()
-    ├── BrainExperienceRecorder.record_closed_trade()
-    │     └── VectorMemoryService.store_experience()
-    │           (trade metadata + vector embedding)
-    ├── trade_count++
-    └── if count % reflection_interval == 0:
-          ├── BrainReflectionEngine.trigger_reflection()       → best-practice rules
-          ├── trigger_loss_reflection()                        → anti-pattern/corrective rules
-          └── trigger_ai_mistake_reflection()                  → AI mistake rules
-
-Before next LLM decision:
-TradingBrainService.get_context()
-    └── BrainContextProvider.get_context()
-          ├── VectorMemoryService (confidence stats, direction bias, blocked feedback)
-          ├── get_vector_context() (semantic similarity search)
-          └── VectorMemoryService.get_relevant_rules()
-                ↓
-    Injected into LLM prompt as "Trading Brain Context" section
-```
-
-## Regression Contracts (never break these)
-
-- Existing-position handling rechecks `current_position` after executor verification
-  and after an awaited protection update. A closed local position produces no stale
-  CLOSE/UPDATE decision, intent, history row or position-update learning event.
-- `PositionManagementMixin` declares its sibling-method callable contracts. The
-  shared static commission formatter lives in this mixin and remains inherited by
-  `TradingStrategy`; do not duplicate it or add compatibility wrappers.
-- `executor_handler.py`, `exchange_executor.py` and `safety.py` changes need thorough tests: an UPDATE carrying `quantity=0.0` must use the tracker's real quantity; market orders carry `entry_price=None`; a spot SELL is blocked while `SPOT_SHORT_ALLOWED=False` and that rejection is logged, never silent.
-- Verify the read/write round-trip after any data-model or persistence change, and check `position_state.json` / `executed_state.json` are clean before and after.
-- The executor keeps its file fallback — it is what makes a restart reliable even when the HTTP path works.
-- Decision semantics stay put: SafetyGuard still deduplicates by `order_id`, the executor still executes, positions still persist.
+Collaborators: `BrainContextProvider` (prompt block + blocked feedback) · `BrainExperienceRecorder` (trade → experience) · `ExitProfileResolver` (sole SL/TP profile serializer) · `TradePatternAnalyzer` (grouping, diagnostics, AI-mistake classes) · `BrainReflectionEngine` (rule synthesis) · `ExecutorHandler` (payload + forward), files `brain_context.py`, `brain_experience.py`, `brain_exit_profiles.py`, `brain_patterns.py`, `brain_reflection.py`, `executor_handler.py`.
+
+In: `Position` (entry/exit/P&L, confidence, confluence, drawdown), `close_price`, `close_reason`, the entry `TradeDecision` from SQLite via `PersistenceManager`, `MarketConditions`. ChromaDB stores 20+ fields per trade (confidence, reasoning, indicators, volatility, SL/TP distance, R:R, drawdown/profit, sentiment, regime, confluence, alignment, exit context, factor scores) plus rules, blocked feedback and calibration.
+
+`get_context()` renders calibration by level, bias with `LIMITED DATA`, the last 5 blocked trades (≤168h), the **top-3** similar experiences, CoT Step 6 (win rate <50% → lower confidence, anti-pattern/AI-mistake/exit memory), rules matched to conditions (similarity %, freshness, evidence, type), and up to five post-mortems from the shared `PostMortemRepository` — `_provision_trading_layer` must inject the *same* repository into `TradingBrainService` and `PostMortemService`; test real provisioning and prompt assembly, not an isolated constructor.
+
+Context rebuilds per request on the shared `PromptBudgetPolicy` + `TokenCounter`; the brain's default emergency budget is 50,000 estimated tokens, not a character cutoff (provider-side mechanics: `managers/AGENTS.md`). Never trim or partially cut recent lessons, rejection feedback or risk guidance — raise `PromptBudgetExceeded` before the model call instead, and log estimated tokens on every reduction. Keep 3 experiences, 3 rules, 5 lessons, 5 rejection samples; stats never enumerate history. Test with >64,000 characters under budget plus full lesson retention.
+
+`get_dynamic_thresholds()` exposes ~15 learned parameters: R/R floor, ADX thresholds, SL tightening progress, size limits, confluence minimums, timeframe-alignment coefficients.
+
+- `safe_mae_pct` = largest signed `max_drawdown_pct` magnitude among WIN experiences, percentage points converted to a fraction. Require ≥5 valid wins by default; exclude missing, malformed, non-finite, boolean and positive drawdowns, LOSS and UPDATE entries. Zeros count — a learned zero is not insufficient data. Carry `safe_mae_sample_count`; label the value historical evidence, never a guaranteed drawdown or hard SL floor.
+- When extracting `MarketConditions`, pass the already-read `_portfolio_pnl_pct` to the constructor and verify positive/negative/zero/absent through Position serialization, real isolated Chroma storage and prompt rendering. Portfolio return and the trade's `pnl_pct` stay separate; never overwrite historical snapshots with current equity.
+- Closed experiences persist `position.trend_direction_at_entry` apart from exit-time `market_regime`. Dashboard S/R stats read `support_resistance_strength_score` while keeping API bucket names and older `support_resistance_score` rows; do not migrate live memories or infer entry trends from exit conditions.
+
+Rule creation: best-practice ≥5 wins, ≥3 same-pattern, ≥60% win rate → `rule_best_*`; anti-pattern ≥3 losses, ≥2 same-pattern, ≥60% loss rate → `rule_anti_*` with failure_reason + recommended_adjustment; corrective ≥3 losses, ≥2 same-pattern, <60% loss rate → `rule_corrective_*`; AI-mistake ≥2 classified → `rule_ai_mistake_*` with failed_assumption + mistake_type.
+
+Reflection cadence: scalping (≤30 min) every 10 trades, intraday (60–239) 7, swing (240–1439) 5, position (≥1440) 3. Three loops then run **sequentially**: `trigger_reflection()`, `trigger_loss_reflection()`, `trigger_ai_mistake_reflection()`.
+
+Injected after technicals, before the final decision instruction: calibration → bias → blocked feedback → top-3 experiences → matched rules → CoT Step 6. Embedding: `build_rich_context_string()` for storage, `build_query_document()` for queries (same shape plus raw numbers, less asymmetry), hybrid retrieval 70% similarity + 30% recency decay.
+
+Rules are durable policy, not examples: kept while active but soft-ranked by similarity, evidence quality (`wins`, `losses`, `source_trades`, `expectancy_pct`, `profit_factor`), freshness (~14-day half-life at 4h) and a contradiction penalty. Old rules are never auto-deleted; they degrade to `maturing`, `stale`, `legacy` unless revalidated.
+
+`confidence_threshold` is learned in `VectorMemoryAnalytics`: HIGH win rate >70% → 65, <55% → 75, else 70. It shapes self-assessment only — sizing uses the HIGH/MEDIUM/LOW string against configured fallbacks.
+
+## SL tightening
+
+`StopLossTighteningPolicy` gates tightening behind progress toward TP: scalping (<1h) 25%, intraday (1h–4h) 20%, swing (4h–1d) 15%, position (>1d) 10%. `resolve_effective_threshold()` starts from that base, uses a learned threshold with enough samples (clamped to the configured floor/ceiling), and exposes `sl_tightening_pct`, `sl_tightening_source` and the nested payload.
+
+Learning is recency-weighted, not causal: one observation per closed position (smallest progress, canonicalized through its close record), never counting UPDATE aliases as trades. Age it from that UPDATE's timestamp; require a valid non-future UPDATE followed by a valid close. Apply the timeframe half-life and max age in fractional days (4h: 14/56), excluding invalid, non-finite, boolean and expired evidence. Report raw and effective counts `(sum(w) ** 2) / sum(w ** 2)`; weight expectancy, win rate and conditional win/loss means consistently. Activation needs both counts ≥ `SL_TIGHTENING_MIN_SAMPLES`; missing effective evidence means configuration, not an old learned value. `BrainContextProvider` invalidates stats after 300 monotonic seconds even when the experience count is unchanged; `TradingBrainService` copies the nested payload before adding display fields. Regression coverage needs real isolated Chroma storage, time-only expiry and the resulting LONG/SHORT prompt. No intrabar replay, alternative-exit comparison, cost-aware optimization or out-of-sample validation exists yet.
+
+No minimum interval between position updates: each valid UPDATE may be processed immediately, consecutive cycles included. Executor-state checks, tightening/widening policy and receipts are unchanged.
+
+## Updates, refusals, reconciliation
+
+- Executor connection failures and timeouts are availability warnings, not `CRITICAL`. `_executor_has_position()` returns `None`, clears stale query evidence and keeps the local position; reconciliation stays unverified and UPDATE/CLOSE still need confirmation. No traceback on this expected offline path, no hiding real payload failures behind the same warning.
+- Every refused command — a blocked UPDATE (tightening gate, widening cap) or an UPDATE/CLOSE skipped for unverified executor state — is recorded: `PositionManagementMixin._record_refused_command()` writes a position intent with `state=refused`, `evidence=bot_policy` in `data/trading/bot_position_intents.jsonl` and queues a one-shot alert (`take_rejected_intent_alert()` → `CryptoTradingBot._report_rejected_intent()`). `TradingStrategy.get_position_context()` renders the newest intent as `### Last Action Outcome`, so the next analysis (one per timeframe, the only place a refusal can change a verdict) sees the requested level, the level in force, and that nothing was sent.
+- UPDATE/CLOSE forwarding allows 30s for queue delay plus execution; a missing verdict is UNKNOWN, not success. Reconciliation and the pre-analysis hook revisit pending/unknown UPDATE receipts without resending; match the exact order and trade, persist corrected levels on success or refusal, never let an older receipt overwrite a newer UPDATE. Prompt outcomes are scoped to the current trade and ordered by command creation, not receipt arrival; a confirmation supersedes an earlier missing-confirmation alert.
+- A queued CLOSE may settle after the bot's journal read, and a market-order reply may prove quantity while omitting average price. The executor re-reads that order before writing the verdict; `book_executor_side_exit()` revisits a matching pending/unknown CLOSE during reconciliation and books only a fully validated fill receipt. No price or quantity → keep the local position and alert; never infer P&L from entry price or an `executed` flag.
+
+## Executor forward pipeline
+
+`TradingStrategy.process_analysis()` runs guards, `RiskManager` and the R/R gate; a block stores a blocked-trade friction (`system_constraints_rejections`) and returns `TradeDecision(action="HOLD")`. `CryptoTradingBot._execute_trading_check()` then patches the saved response (`_patch_rejected_signal_in_response()`) so the next prompt sees the `HOLD` instead of a fill that never happened, saves via `_save_analysis_data()`, and calls `await self.executor_handler.handle(analysis, decision, symbol)`.
+
+`ExecutorHandler(persistence, config, logger)` builds the payload (`None` on HOLD veto), persists `latest_decision.json` atomically, HTTP-POSTs to `llm_trader_executor` (`[executor_api] enabled`, `url = http://127.0.0.1:9199/decision`). Wired once in `start.py build_dependencies()`, not in `app.py` constructors. Register `ExecutorHandler.close` in `CryptoTradingBot.initialize` *after* the shutdown callback so the HTTP client closes on normal exit and in-place reload; test the callback itself, including an earlier callback failure, an unused handler and repeated shutdown.
+
+Blocked trades: BUY below the R/R floor → strategy rejects → `store_blocked_trade(guard_type="rr_minimum", …)` → HOLD → no forward; next cycle `get_blocked_trade_feedback(n=5, max_age_hours=168)` renders `## CRITICAL FEEDBACK: System Rejections`, alongside the model's own patched HOLD.
+
+`prune_aged_documents()` may drop stale experiences and blocked feedback, but active rules (`active=True`) are never deleted by age — only down-ranked. Matching closed trades update `validation_hit_count`, `last_validated_at`, `contradiction_count`, `last_contradicted_at`. Timestamp parsing must be datetime-aware so malformed values are skipped instead of corrupting prune decisions.
+
+Persistence: decisions go through `PersistenceManager.async_save_trade_decision()`, never trade-history files; `trade_history.db` is the only store — no `trade_history.json` readers, fallback writes or auto-migration. Close-time learning recovers the entry decision by SQLite timestamp window with optional symbol.
+
+## Degradation
+
+ChromaDB unavailable → `get_context()` returns an empty string (brain section skipped) and reflection is skipped with a warning; neither ever crashes the trading loop, and blocked-feedback failures are caught and passed. Reflection also skips when there is not enough data (<5 wins, <3 losses, <2 mistakes) and a best-practice rule needs ≥60% win rate. `timeframe_minutes ≤ 0` → 240. The trade counter is re-read from vector memory on init (cross-restart); stats invalidate on count change or 300 monotonic seconds. Unknown exit profiles → `UNKNOWN_EXIT_PROFILE` sentinel default. `get_vector_context()` serves similarity results plus contextual stats; `close_position()` is the learning entry point.
+
+## Regression contracts
+
+- Existing-position handling rechecks `current_position` after executor verification and after an awaited protection update; a closed local position produces no stale CLOSE/UPDATE decision, intent, history row or learning event.
+- `PositionManagementMixin` declares its sibling-method callable contracts; the shared static commission formatter lives there, stays inherited by `TradingStrategy`, never duplicated or wrapped.
+- `executor_handler.py` changes need thorough tests: an UPDATE carrying `quantity=0.0` must use the tracker's real quantity; market orders carry `entry_price=None`; a spot SELL is blocked while `SPOT_SHORT_ALLOWED=False` and that rejection is logged, never silent.
+- Verify read/write round-trips after any data-model or persistence change.
+- The executor keeps its file fallback — that is what makes a restart reliable even when HTTP works.
+- Decision semantics stay put: `SafetyGuard` deduplicates by `order_id`, the executor executes, positions persist.

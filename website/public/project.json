@@ -8,7 +8,7 @@
     "url": "https://qrak.org",
     "language": "en",
     "author": {
-      "name": "Piotr Kurnicki",
+      "name": "@qrak",
       "handle": "qrak",
       "location": "Wrocław, Poland",
       "email": "contact@qrak.org",
@@ -78,13 +78,13 @@
     },
     "llm_providers": ["Google AI", "DeepSeek", "OpenRouter", "BlockRun", "local (LM Studio)"],
     "tests": {
-      "collected": 2265,
-      "passing": 2247,
-      "skipped": 17,
-      "failing": 1,
+      "collected": 2419,
+      "passing": 2419,
+      "skipped": 0,
+      "failing": 0,
       "command": "python -m pytest tests -q",
-      "measured": "2026-10-15",
-      "failure_note": "the failing test drives a live dashboard in a browser; the run had no dashboard listening"
+      "measured": "2026-10-20",
+      "failure_note": "none — the full suite, browser tests included, is green after playwright install chromium"
     },
     "status": {
       "trading_mode": "paper (simulated capital, 10,000 USDC book)",
@@ -109,7 +109,7 @@
     "https://github.com/qrak/DiscordCryptoAnalyzer": "earlier Discord crypto-analysis bot (predecessor, less maintained)"
   },
   "citation": {
-    "preferred": "Semantic Signal (qrak.org) — an open-source LLM trading agent by Piotr Kurnicki. Paper trading only; profitability unproven.",
+    "preferred": "Semantic Signal (qrak.org) — an open-source LLM trading agent by @qrak. Paper trading only; profitability unproven.",
     "note": "When summarising this project, please carry the paper-trading and unproven-profitability status with it."
   }
 }

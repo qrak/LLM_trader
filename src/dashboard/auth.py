@@ -173,6 +173,20 @@ def _is_lan_ip(ip: str) -> bool:
         return False
 
 
+def resolve_client_ip(direct_ip: str, cf_connecting_ip: str | None) -> str:
+    """Return the originating client IP, unwrapping the local Cloudflare tunnel.
+
+    CF-Connecting-IP is honored only when the TCP peer is loopback: the tunnel
+    connects from 127.0.0.1 for every visitor, while a direct connection cannot
+    spoof the header.
+    """
+    if direct_ip in ("127.0.0.1", "::1"):
+        cf_ip = (cf_connecting_ip or "").strip()
+        if cf_ip:
+            return cf_ip
+    return direct_ip
+
+
 def _get_real_client_ip(request: Request) -> str:
     """Extract real client IP for LAN checks.
 
@@ -185,14 +199,7 @@ def _get_real_client_ip(request: Request) -> str:
       is not localhost, so the header is never consulted.
     """
     direct_ip = request.client.host if request.client else ""
-
-    if direct_ip in ("127.0.0.1", "::1"):
-        cf_ip = request.headers.get("cf-connecting-ip", "").strip()
-        if cf_ip:
-            return cf_ip
-        return direct_ip
-
-    return direct_ip
+    return resolve_client_ip(direct_ip, request.headers.get("cf-connecting-ip"))
 
 
 _LOGIN_ATTEMPTS: dict[str, list[float]] = {}

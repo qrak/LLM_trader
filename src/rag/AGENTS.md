@@ -1,151 +1,43 @@
 # AGENTS.md — RAG Engine
 
-Scope: `src/rag/`. Root [`AGENTS.md`](../../AGENTS.md) stays canonical for system-wide policy; this file adds package-specific detail and never overrides it.
+Scope: `src/rag/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 
-## RAG Engine
+Deterministic retrieval — no LLM call. `rag_engine.py` builds a time-decayed local news/fundamentals index and hands the AnalysisEngine a token-limited text block.
 
-### 📰 RAG Engine Agent — News Aggregation & Market Fundamentals
+| Module | File | Role |
+|---|---|---|
+| `NewsManager` | `news_manager.py` | fetch → dedupe → persist lifecycle, lock per update interval |
+| `NewsRepository` | `news_repository.py` | read/write news storage |
+| `ContextBuilder` | `context_builder.py` | keyword search + token-limited block |
+| `ArticleScoringPolicy` | `scoring_policy.py` | field-weighted relevance + recency |
+| `LocalTaxonomy` | `local_taxonomy.py` | crypto category hierarchy |
+| `TickerManager` | `ticker_manager.py` | coin ↔ ticker mapping, dynamic symbol detection |
+| `ArticleProcessor` | `article_processor.py` | normalize, extract body, strip boilerplate |
+| `CategoryProcessor` | `category_processor.py` | news → taxonomy category |
+| `IndexManager` | `index_manager.py` | 4 in-memory indices |
+| `CategoryCollisionResolver` | `collision_resolver.py` | category-word priority collisions |
+| `RSSCrawl4AINewsProvider` | `news_ingestion/rss_provider.py` | RSS polling (4 feeds by default) |
+| `Crawl4AIEnricher` | `news_ingestion/crawl4ai_enricher.py` | optional page enrichment |
+| schema functions | `news_ingestion/schema_mapper.py` | `to_article_schema`, `strip_news_boilerplate`, `make_article_id` |
+| `file_handler.py` | | file-based fallback store when indices break |
+| `MarketDataManager` | `market_data_manager.py` | market-data lifecycle |
+| `MarketDataCache` / `MarketDataFetcher` / `MarketOverviewBuilder` | `market_components/` | cache / CoinGecko+DeFiLlama fetch / overview text |
 
-> **Module path:** `src/rag/rag_engine.py` (orchestrator) + 15+ collaborators in `src/rag/`
-> **Type:** Retrieval-Augmented Generation pipeline for news and market fundamentals
-> **Sources:** CoinDesk, CoinTelegraph, Decrypt, CryptoSlate, RSS feeds + Crawl4AI enrichment + DefiLlama
+Pipeline: RSS poll → Crawl4AI enrich (optional) → schema mapper → `ArticleProcessor` → `CategoryProcessor` → scoring → collision resolver → `NewsRepository` → `IndexManager` (category, tag, coin, keyword) → `ContextBuilder`.
 
----
+## Rules
 
-#### Agent Persona & Role
+- Dedupe is **URL-first** (`news_manager.py`, `rss_primitives.py`), no fuzzy matching; URL normalization stays local.
+- RSS contract: validate with defusedxml before `feedparser`, keep the RSS-only contract and first creator, drop Dublin Core description aliases so CoinDesk's empty duplicate cannot overwrite the real summary.
+- Scoring: `FIELD_WEIGHTS = {"title": 10, "body": 3, "categories": 5, "tags": 4}` plus a recency factor; no source-authority weighting.
+- Enrichment chain: Crawl4AI HTML → trafilatura text → Crawl4AI markdown when short/unusable → HTML extractor → aiohttp direct → raw RSS text.
+- Density penalty defaults to 300 (`loader.py`). Long contaminated bodies are retried; a URL merge accepts a clean body ≥400 chars over a contaminated cache even when shorter, keeps the stored ID, and never downgrades clean full text to a summary.
+- Dependency bounds are deliberate: `constraints.txt` caps htmldate <1.11, `requirements.txt` pins trafilatura 2.1.0 (newer need charset-normalizer/urllib3 incompatible with the installed CCXT); launchers pass `-c constraints.txt`. Run `pip check` before touching them.
+- Config: 4h news interval, 5 articles; `config/rag_priorities.json` carries `important_categories` + `generic_priorities` only, never per-ticker weights.
+- State: `data/news_cache/` (per-source, categorized), `data/news_fetch_preview/` (raw + normalized pre-enrichment), `data/backup/news_cache/` (cold storage).
 
-The RAG Engine is the **news and fundamentals intelligence subsystem**. It aggregates, enriches, categorizes, and indexes crypto market news and fundamentals data into a context window that the AnalysisEngine injects into every LLM decision prompt.
+## Degradation
 
-Unlike the Reading Agent, the RAG Engine does **not** send queries to an LLM — it performs deterministic information retrieval over a curated, time-decayed local index. The output is a text block of recent, relevant articles and fundamental metrics formatted for prompt injection.
-
-##### Key Collaborators
-
-| Module | File | Responsibility |
-|--------|------|----------------|
-| `NewsManager` | `news_manager.py` | Fetch → deduplicate → persist news lifecycle |
-| `NewsRepository` | `news_repository.py` | Read/write interface for news storage |
-| `ContextBuilder` | `context_builder.py` | Keyword search + token-limited context formatting |
-| `ArticleScoringPolicy` | `scoring_policy.py` | 5-factor relevance scoring for news articles |
-| `LocalTaxonomy` | `local_taxonomy.py` | Domain-specific crypto category hierarchy |
-| `TickerManager` | `ticker_manager.py` | Coin/ticker ↔ name mapping for symbol detection |
-| `ArticleProcessor` | `article_processor.py` | Normalization, body extraction, boilerplate stripping |
-| `CategoryProcessor` | `category_processor.py` | News → taxonomy category classification |
-| `IndexManager` | `index_manager.py` | 4 in-memory indices: category, tag, coin, keyword |
-| `RSSProvider` | `news_ingestion/rss_provider.py` | RSS feed polling from configured sources |
-| `Crawl4AIEnricher` | `news_ingestion/crawl4ai_enricher.py` | Web-page enrichment via Crawl4AI (optional) |
-| `SchemaMapper` | `news_ingestion/schema_mapper.py` | Maps source-specific schemas to unified format |
-| `MarketDataManager` | `market_data_manager.py` | Lifecycle management for market data |
-| `MarketDataCache` | `market_components/market_data_cache.py` | Caching layer for market data fetches |
-| `MarketDataFetcher` | `market_components/market_data_fetcher.py` | Fetches market data from CoinGecko/DeFiLlama |
-| `MarketOverviewBuilder` | `market_components/market_overview_builder.py` | Builds market overview text from raw data |
-
----
-
-#### Inputs
-
-##### From RSS/Web
-- RSS feed XML from configured crypto news sources, mapped by `feedparser` after
-  defusedxml validation. Preserve the RSS-only contract and first creator; remove
-  Dublin Core description aliases before parsing so CoinDesk's empty duplicate
-  cannot overwrite the real RSS summary. URL normalization and dedupe stay local.
-- Raw HTML pages (via Crawl4AI enrichment fallback chain)
-- Per-source raw and normalized JSON artifacts (saved to `data/news_fetch_preview/`)
-
-##### From External APIs
-- CoinGecko — market-wide stats (dominance, volume, BTC dominance)
-- DeFiLlama — TVL data, protocol fundamentals
-
-##### From Configuration
-- `config/config.ini`: news update interval (4h), max articles (5)
-- `rag_priorities.json`: important categories and generic category priorities (not per-ticker weights)
-- `LocalTaxonomy`: predefined category hierarchy for news classification
-
-##### From Query (Consumer-side — AnalysisEngine)
-- Keyword search terms (derived from active trading pair, trending coins)
-- Token limit for context window truncation
-
----
-
-#### Outputs
-
-##### RAG Context Block (for LLM prompt injection)
-- Formatted string: "--- Market News & Fundamentals ---\n[Article 1 summary]\n[Article 2 summary]\n..."
-- Token-limited to fit within model context window
-- Timestamp-stamped for freshness awareness
-
-##### Persisted State
-- `data/news_cache/` — recent news JSON (per-source, categorized)
-- `data/news_fetch_preview/` — pre-enrichment raw + normalized artifacts
-- `data/backup/news_cache/` — cold storage for historical retrieval
-
-##### Indexed Artifacts (via IndexManager)
-4 in-memory indices maintained in sync:
-- **category_index** — taxonomy category → article indices
-- **tag_index** — article tag → article indices
-- **coin_index** — detected coin/ticker → article indices
-- **keyword_index** — category and title keywords → article indices
-
----
-
-#### Pipeline: News Ingestion Flow
-
-```
-RSS Provider polls configured RSS sources (4 by default, every 4h)
-    ↓
-Crawl4AI Enricher (optional — degrades to aiohttp on failure)
-    ↓
-SchemaMapper → unified format
-    ↓
-ArticleProcessor (dedup, normalize, strip boilerplate)
-    ↓
-CategoryProcessor → LocalTaxonomy mapping
-    ↓
-ArticleScoringPolicy (5-factor relevance scoring)
-    ↓
-CategoryCollisionResolver (category-word priority collisions in collision_resolver.py)
-    ↓
-NewsRepository → IndexManager (category/tag/coin/keyword)
-    ↓
-ContextBuilder → token-limited formatted context block
-```
-
-##### Scoring Policy — Scoring Factors
-
-Current scoring uses keyword, category, coin, importance, density, cooccurrence, coin-relevance, and recency logic (no source-authority weighting).
-
-1. **Recency** — newer articles score higher
-2. **Ticker relevance** — coin/ticker mention count
-3. **Category match** — alignment with trading pair category
-4. **Body length / completeness** — penalizes truncated or thin articles
-
-##### Enrichment Fallback Chain
-
-`constraints.txt` caps htmldate below 1.11 and `requirements.txt` pins trafilatura
-2.1.0: newer versions require charset-normalizer/urllib3 versions incompatible with
-the installed CCXT release. The launchers pass constraints.txt to pip with `-c`.
-Verify the entire dependency graph with `pip check` before changing those bounds.
-
-```
-Crawl4AI browser HTML → trafilatura text → Crawl4AI markdown if too short/unusable
-    → existing HTML extractor → aiohttp direct fetch → store raw RSS text
-```
-
----
-
-#### Edge Cases & Guardrails
-
-| Scenario | Handling |
-|----------|----------|
-| **Crawl4AI unavailable** | Degrades gracefully to aiohttp direct fetch |
-| **RSS feed down** | Skips source, logs warning, continues with other sources |
-| **Duplicate article detected** | Article deduplication is URL-first via `news_manager.py` and `rss_primitives.py` (no fuzzy matching) |
-| **Empty news cycle** | Returns empty context — AnalysisEngine continues without news |
-| **Provider rate-limited** | Cache fallback — serves stale data from `news_cache/` |
-| **Body too short / low density** | Density penalty defaults to 300 in `loader.py`; enrichment also retries long bodies with dense ticker/menu clutter. URL merge accepts a clean body >=400 characters over contaminated cache even when shorter, preserves the stored ID, and never downgrades clean full text to a summary. |
-| **Token limit exceeded** | `ContextBuilder` truncates to token budget, keeps highest-scored articles |
-| **Index corruption** | `file_handler.py` provides file-based fallback storage |
-| **New ticker not in TickerManager** | Dynamic symbol detection with name→ticker resolution |
-| **Market data fetch fails** | `MarketDataFetcher` falls back to cache, stale data flagged |
-| **Boilerplate in article body** | `ArticleProcessor` strips common boilerplate patterns |
-| **Schema mismatch per source** | `SchemaMapper` handles per-source field name variants |
-| **Concurrent fetch cycles** | `NewsManager` serializes via lock on update interval |
+- Crawl4AI missing → aiohttp direct fetch; feed down → skip source, warn, continue; rate-limited → serve stale `news_cache/`; empty cycle → empty context, analysis continues.
+- Token budget exceeded → `ContextBuilder` truncates, keeps highest-scored articles; new ticker → dynamic name→ticker resolution; schema variants → per-source mapping in `schema_mapper.py`.
+- `MarketDataFetcher` failure → cache fallback with stale flag.

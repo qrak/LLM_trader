@@ -10,6 +10,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,6 +18,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from starlette.testclient import TestClient
 
+from src.dashboard.auth import resolve_client_ip
 from src.dashboard.dashboard_state import DashboardState
 from src.dashboard.decision_presenter import (
     build_current_market_context,
@@ -25,7 +27,12 @@ from src.dashboard.decision_presenter import (
 )
 from src.dashboard.routers.brain import BrainRouter
 from src.dashboard.routers.performance import PerformanceRouter
-from src.dashboard.server import DashboardServer, _api_cache_policies
+from src.dashboard.routers.ws_router import ConnectionManager
+from src.dashboard.server import (
+    DashboardServer,
+    _api_cache_policies,
+    _register_concurrency_middleware,
+)
 from src.trading.brain import TradingBrainService
 from src.trading.data_models import VectorSearchResult
 from tests.conftest import make_config, make_position
@@ -1303,6 +1310,50 @@ def test_security_headers_are_set_and_hsts_only_when_tls_is_forwarded(client):
     assert proxied.headers["Strict-Transport-Security"] == "max-age=31536000; includeSubDomains"
 
 
+def _script_sources(csp: str) -> list[str]:
+    """Exact ``script-src`` sources of a CSP header, split the way a browser reads them."""
+    directive = next(
+        (part for part in csp.split(";") if part.strip().lower().startswith("script-src")),
+        "",
+    )
+    return directive.split()[1:]
+
+
+def _admin_script_allowed(sources: list[str]) -> bool:
+    return any(
+        source in ("https://cdn.tailwindcss.com", "cdn.tailwindcss.com", "'unsafe-inline'")
+        for source in sources
+    )
+
+
+@pytest.mark.parametrize(
+    "csp, allowed",
+    [
+        ("script-src https://cdn.tailwindcss.com", True),
+        ("script-src cdn.tailwindcss.com", True),
+        ("script-src 'unsafe-inline'", True),
+        ("script-src https://cdn.tailwindcss.com.evil.example", False),
+        ("script-src https://evil.example/cdn.tailwindcss.com", False),
+        ("default-src https://cdn.tailwindcss.com; script-src 'self'", False),
+    ],
+)
+def test_admin_script_matcher_accepts_the_origin_and_rejects_lookalikes(csp: str, allowed: bool) -> None:
+    """Exact-source matching, not substring: a lookalike host must not pass for the CDN."""
+    assert _admin_script_allowed(_script_sources(csp)) is allowed
+
+
+def test_served_csp_keeps_the_admin_console_scripts_working(client):
+    """The admin page bootstraps inline and pulls Tailwind from its CDN — the real header allows both."""
+    csp = client.get("/api/does-not-exist").headers["Content-Security-Policy"]
+    sources = _script_sources(csp)
+
+    assert _admin_script_allowed(sources) is True
+    assert "https://cdn.tailwindcss.com" in sources
+    assert "*" not in sources
+    assert "default-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+
+
 def test_rate_limit_window_blocks_api_clients_and_exempts_static(client, dashboard_server):
     request_counts = dashboard_server.app.state.request_counts
     request_counts["testclient"] = [time.monotonic()] * 300
@@ -1316,6 +1367,103 @@ def test_rate_limit_window_blocks_api_clients_and_exempts_static(client, dashboa
     request_counts["testclient"] = [time.monotonic() - 61] * 300
 
     assert client.get("/api/does-not-exist").status_code == 404
+
+
+def test_resolve_client_ip_unwraps_the_tunnel_only_from_loopback():
+    assert resolve_client_ip("127.0.0.1", "203.0.113.7") == "203.0.113.7"
+    assert resolve_client_ip("::1", "203.0.113.7") == "203.0.113.7"
+    assert resolve_client_ip("192.168.100.5", "203.0.113.7") == "192.168.100.5"
+    assert resolve_client_ip("127.0.0.1", "") == "127.0.0.1"
+
+
+def test_tunnel_visitors_get_separate_rate_limit_buckets(dashboard_server):
+    with TestClient(dashboard_server.app, client=("127.0.0.1", 50000)) as tunnel_client:
+        request_counts = dashboard_server.app.state.request_counts
+        request_counts["203.0.113.7"] = [time.monotonic()] * 300
+
+        blocked = tunnel_client.get(
+            "/api/does-not-exist", headers={"cf-connecting-ip": "203.0.113.7"}
+        )
+        allowed = tunnel_client.get(
+            "/api/does-not-exist", headers={"cf-connecting-ip": "198.51.100.9"}
+        )
+
+        assert blocked.status_code == 429
+        assert allowed.status_code == 404
+
+
+def test_connection_manager_counts_tunnel_visitors_by_forwarded_ip():
+    manager = ConnectionManager(max_per_ip=1)
+    first = MagicMock()
+    first.client = SimpleNamespace(host="127.0.0.1")
+    first.headers = {"cf-connecting-ip": "203.0.113.7"}
+    first.accept = AsyncMock()
+    first.close = AsyncMock()
+    second = MagicMock()
+    second.client = SimpleNamespace(host="127.0.0.1")
+    second.headers = {"cf-connecting-ip": "203.0.113.7"}
+    second.accept = AsyncMock()
+    second.close = AsyncMock()
+
+    assert asyncio.run(manager.connect(first)) is True
+    assert asyncio.run(manager.connect(second)) is False
+    assert manager.ip_counts == {"203.0.113.7": 1}
+
+
+def test_write_requests_use_a_separate_rate_limit_bucket(client, dashboard_server):
+    request_counts = dashboard_server.app.state.request_counts
+    request_counts["testclient#write"] = [time.monotonic()] * 30
+
+    blocked = client.post("/api/brain/refresh")
+
+    assert blocked.status_code == 429
+    assert blocked.json() == {"error": "Rate limit exceeded. Try again later."}
+    assert "retry-after" in blocked.headers
+    assert client.get("/api/does-not-exist").status_code == 404
+
+
+def test_saturated_heavy_endpoints_shed_load_without_touching_light_routes(
+    client, dashboard_server
+):
+    heavy_requests = dashboard_server.app.state.heavy_requests
+    heavy_requests["active"] = 50
+    try:
+        blocked = client.get("/api/brain/status")
+
+        assert blocked.status_code == 503
+        assert blocked.headers["retry-after"] == "1"
+        assert client.get("/api/does-not-exist").status_code == 404
+    finally:
+        heavy_requests["active"] = 0
+
+
+def test_heavy_endpoint_timeout_answers_504(client, dashboard_server):
+    heavy_requests = dashboard_server.app.state.heavy_requests
+    heavy_requests["timeout_s"] = 0
+    try:
+        timed_out = client.get("/api/brain/status")
+
+        assert timed_out.status_code == 504
+        assert heavy_requests["active"] == 0
+    finally:
+        heavy_requests["timeout_s"] = 20.0
+
+
+def test_heavy_endpoint_timeout_cancels_a_slow_handler():
+    app = FastAPI()
+    heavy_requests = _register_concurrency_middleware(app)
+
+    @app.get("/api/brain/slow")
+    async def slow_handler():
+        await asyncio.sleep(0.2)
+        return {"status": "done"}
+
+    heavy_requests["timeout_s"] = 0.01
+    with TestClient(app) as slow_client:
+        timed_out = slow_client.get("/api/brain/slow")
+
+    assert timed_out.status_code == 504
+    assert heavy_requests["active"] == 0
 
 
 def test_api_cache_policy_matrix_maps_each_endpoint_family():

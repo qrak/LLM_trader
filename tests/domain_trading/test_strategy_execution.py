@@ -1707,3 +1707,26 @@ class TestExecutorProtectionVersionProbe:
         strategy, _, _ = _strategy(EXECUTOR_API_ENABLED=False, EXECUTOR_API_URL="")
 
         assert await strategy.executor_protection_version("BTC/USDT") is None
+
+
+class TestBookedFillQuantity:
+    """The booked close quantity comes from executor evidence, and 1% is the tripwire."""
+
+    def test_a_quarter_size_divergence_is_booked_and_warned(self) -> None:
+        """1% of the local size, not 50%: 0.01 vs 0.0125 must reach the operator's row."""
+        position = make_position(size=0.01)
+
+        booked, note = TradingStrategy._booked_quantity(position, 0.0125)
+
+        assert booked == pytest.approx(0.0125)
+        assert "WARNING" in note
+        assert "0.01250000" in note and "0.01000000" in note
+
+    def test_a_divergence_within_one_percent_is_booked_silently(self) -> None:
+        position = make_position(size=0.01)
+
+        booked, note = TradingStrategy._booked_quantity(position, 0.01005)
+
+        assert booked == pytest.approx(0.01005)
+        assert note == ""
+

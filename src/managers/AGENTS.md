@@ -1,228 +1,54 @@
 # AGENTS.md — Managers
 
-Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) stays canonical for system-wide policy; this file adds package-specific detail and never overrides it.
+Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Three services: `risk_manager.py`, `persistence_manager.py` + `sqlite_trade_history.py`, `provider_orchestrator.py`. All dependencies arrive from the composition root — never construct one inside trading, dashboard or guard code.
 
-## Managers
+## Risk Manager
 
-### ⚙️ Risk Manager, Persistence Manager & Provider Orchestrator
+Signal safety layer: raw LLM signal → validated `RiskAssessment`. Execution is delegated: the bot forwards the decision to `llm_trader_executor` (`[executor_api] enabled`), which places real orders via CCXT; with `enabled = false` nothing leaves the process. Never describe this layer as paper-only.
 
-> **Module path:** `src/managers/risk_manager.py` + `src/managers/persistence_manager.py` + `src/managers/sqlite_trade_history.py` + `src/managers/provider_orchestrator.py`
-> **Type:** Signal Execution Safety + SQLite Persistence + AI Provider Fallback Chain
-
----
-
-#### 1. Risk Manager Agent
-
-> **File:** `src/managers/risk_manager.py`
-
-##### Agent Persona & Role
-
-The Risk Manager is the **safety layer between the LLM-generated trading signal and actual order execution.** It converts raw AI signals into a validated `RiskAssessment` by applying dynamic position sizing, SL/TP scaling, and consistency checks.
-
-It is **not** a full risk management system — real exchange order execution is not yet implemented. The Risk Manager operates in paper-trading simulation mode.
-
-##### Inputs
-
-- `TradingAnalysisModel` from `UnifiedParser` — signal, confidence, entry_price, stop_loss, take_profit, position_size
-- `MarketConditions` — current price, ATR, volatility indicators
-- `Position` (existing) — for UPDATE/CLOSE signal handling
-- **Brain-learned thresholds** — dynamic SL/TP/RR/confluence thresholds from `get_dynamic_thresholds()`
-
-##### Outputs
-
-| Field | Description |
-|-------|-------------|
-| `RiskAssessment` | Validated signal (BUY/SELL/HOLD/CLOSE/UPDATE) |
-| `entry_price` | Price level for execution |
-| `stop_loss` | Fixed or dynamic SL level |
-| `take_profit` | Fixed or dynamic TP level |
-| `position_size` | Size as fraction of portfolio (0–1) |
-| `risk_reward_ratio` | Computed R:R from SL/TP |
-| `confidence` | Pass-through from LLM signal |
-| `reasoning` | Risk-adjusted rationale |
-| `frictions` | List of blocking reasons (if signal rejected) |
-
-##### Core Logic: Dynamic SL/TP Scaling
+In: `TradingAnalysisModel` (signal, confidence, `entry_price`, `stop_loss`, `take_profit`, `position_size`), `MarketConditions` (price, ATR, volatility), the existing `Position` for UPDATE/CLOSE, brain thresholds from `get_dynamic_thresholds()`. Out: `RiskAssessment` carrying the validated signal, `entry_price`, `stop_loss`, `take_profit`, `position_size` (0–1 portfolio fraction), `risk_reward_ratio`, `confidence`, `reasoning` and `frictions` (blocking reasons when rejected).
 
 ```
-Default SL = ATR × 2 (tight 2:1 R/R baseline)
-Default TP = ATR × 4
-AI-provided SL/TP → validated and used if reasonable
-Circuit breakers:
-  - SL clamped to [1%–10%] of entry price
-  - SL consistency: SL must be below entry (LONG) / above entry (SHORT)
-  - TP consistency: TP must be above entry (LONG) / below entry (SHORT)
-  - Violations → friction recorded, dynamic default substituted
-ATR fallback: if ATR unavailable → 2% of current price
-
-Volatility classification (embedded in RiskAssessment + friction metadata):
-  - ATR > 3% → HIGH
-  - ATR < 1.5% → LOW
-  - 1.5%–3% → MEDIUM
+SL default = ATR × 2, TP default = ATR × 4; AI-provided levels are used when reasonable
+SL clamped to [1%, 10%] of entry; TP distance clamped to 50%
+SL below entry (LONG) / above (SHORT); TP above (LONG) / below (SHORT)
+violation → friction recorded + dynamic default substituted
+ATR unavailable → 2% of price
+ATR > 3% → HIGH volatility; < 1.5% → LOW; else MEDIUM (kept in friction metadata)
 ```
 
-##### R:R Enforcement — Two-Layer Defense
+A regime profile cap may only tighten `MAX_POSITION_SIZE`, never raise it; an invalid cap raises `ValueError`.
 
-RiskManager computes `rr_ratio` = TP distance / SL distance but does **NOT** reject on it.
-TradingStrategy and the prompt share one effective floor: the greater of configured
-`MIN_RR_ENTRY` and brain-provided `rr_borderline_min` (both default **0.0**). With no learned
-floor, R/R remains an EV input rather than a hard veto. After at least 10 closed trades below
-1.0 R/R, negative expectancy can raise the brain floor to 0.5 or 1.0; profitable evidence
-leaves it at 0.0. The brain may raise the configured floor but cannot lower it.
+R:R is computed, never rejected here. The floor is `max(MIN_RR_ENTRY, brain rr_borderline_min)`, both default 0.0 (`rr_policy.py`); the brain may raise the configured floor, never lower it, and only negative expectancy over ≥10 closed trades below 1.0 R/R can push it to 0.5 or 1.0. Enforcement happens in `TradingStrategy`, which records `guard_type="rr_minimum"` as blocked-trade feedback.
 
-```python
-if rr_ratio < max(configured_min_rr, brain_thresholds.get("rr_borderline_min", configured_min_rr)):
-    # Blocked as guard_type="rr_minimum" → stored as blocked-trade feedback
-```
+Friction lifecycle: `RiskManager.calculate_entry_parameters()` accumulates into `_last_frictions`, `TradingStrategy._open_new_position()` calls `get_and_clear_frictions()`, each friction becomes `vector_memory.store_blocked_trade()` so the brain learns from clamping.
 
-##### Friction Lifecycle
+Sizing: HIGH (≥70) 3%, MEDIUM (50–69) 2%, LOW (<50) 1%, hard cap 10%. An invalid configured fallback size falls back to the MEDIUM value and logs a warning. Missing fields → frictions, no exception. UPDATE with no position → "No existing position to update". Brain thresholds missing → `config.ini` defaults.
 
-1. `RiskManager.calculate_entry_parameters()` → accumulates frictions in `_last_frictions` list during SL/TP clamping
-2. `TradingStrategy._open_new_position()` → calls `get_and_clear_frictions()` after RiskAssessment
-3. Each friction → `vector_memory.store_blocked_trade()` → Brain Agent learns from clamping events
+## Persistence Manager
 
-##### Position Sizing
+Single persistence facade: positions, statistics, monitor state, previous/last analysis snapshots, trade history. Trade history is SQLite-only, no legacy JSON path.
 
-| Confidence Level | Fallback Size |
-|-----------------|---------------|
-| HIGH (string; numeric extractor maps ≥70) | 3% |
-| MEDIUM (numeric extractor maps 50–69) | 2% |
-| LOW (numeric extractor maps <50) | 1% |
-| Max position | 10% of portfolio (configurable) |
+- Append: `save_trade_decision()` → `SQLiteTradeHistory.insert()`; failure raises (`RuntimeError` when no row id) — never continue on another store.
+- `load_trade_history()` exports from SQLite; `get_entry_decision_for_position()` queries by timestamp window plus optional symbol, skips malformed rows, returns `None` + warning when absent.
+- Dashboard routes reach history only through the injected `PersistenceManager`.
+- Do not reintroduce `trade_history.json` reads, writes, fallbacks or auto-migration; `*.json.migrated` files are backups, not inputs. Do not pass `json_path` — the constructor takes `logger` and `db_path` only.
+- WAL + `synchronous=NORMAL` per connection; inserts coerce `TradeDecision` fields to stable column types; queries validate `ASC`/`DESC` and clamp pagination (`ValueError` before any SQL on a bad direction).
 
-##### Edge Cases & Guardrails
+## Provider Orchestrator (`provider_orchestrator.py`)
 
-| Scenario | Handling |
-|----------|----------|
-| **AI signal missing required fields** | Returns `RiskAssessment` with frictions list, blocked-trade feedback |
-| **SL/TP outside clamped range** | Clamped to [1%–10%], friction logged |
-| **No position for UPDATE signal** | Friction: "No existing position to update" |
-| **ATR unavailable** | Falls back to percentage-based SL (2% of current price) |
-| **Brain thresholds unavailable** | Uses config defaults from `config.ini` |
-| **Invalid configured fallback size** | Falls back to configured MEDIUM size and logs warning |
-| **R:R below minimum** | Enforced in TradingStrategy (not RiskManager) — blocked as `guard_type="rr_minimum"` against max(config floor, brain floor; both default 0.0) |
-| **SL on wrong side of entry** | SL above entry for BUY / below entry for SELL → dynamic SL substituted, friction logged |
+`PromptBudgetPolicy` is built once (`_provision_utilities`) with the shared `TokenCounter` and injected into the brain and `ProviderOrchestrator`. Before **every** client call — model override, provider fallback, OpenRouter internal fallback, local streaming — budget the actual model against its exact configured context-window key: reserve output, framing, chart tokens and safety margin, and enforce the whole-request ceiling. Unknown capacity or a missing/invalid output reserve fails **without an API call**. Reduce only complete optional sections with unambiguous owned headers; duplicate or forged headers must not delete protected position/risk/schema/lesson sections; never mutate messages shared with another fallback model. Log `Full prompt content` at the prepared-request boundary, after reduction.
 
----
+| Provider | Client | Default model | Chart |
+|---|---|---|---|
+| `googleai` | `GoogleAIClient` | Gemini 3.6 Flash | yes, paid-tier fallback |
+| `openrouter` | `OpenRouterClient` | `google/gemini-3-flash-preview` | yes, fallback `deepseek/deepseek-r1:free` |
+| `local` | `LMStudioClient` | LM Studio model | none — skipped by the chart chain |
 
-#### 2. Persistence Manager Agent
+Text: googleai → googleai paid tier → local → openrouter base → openrouter fallback → HOLD. Chart: googleai → paid tier → openrouter base → fallback → HOLD (auth errors fall through to the next provider; local is skipped because metadata marks it chart-unsupported even though the client can send images). An explicit `local` chart request returns an error before fallback.
 
-> **Files:** `src/managers/persistence_manager.py`, `src/managers/sqlite_trade_history.py`
+Clients: `GoogleAIClient` (official `google.genai` SDK, base64 inline images), `OpenRouterClient` (official `openrouter` SDK, data-URI images), `LMStudioClient` (`lmstudio.AsyncClient`, image-capable but chart-disabled by metadata) — all `@retry_api_call`, OpenRouter also param-retry.
 
-##### Persistence Manager Persona & Role
-
-Persistence Manager is the **single persistence facade for trading runtime state.** It owns positions, statistics, monitor state, previous/last analysis snapshots, and trade-history access. Trade history is SQLite-only and must not fall back to legacy JSON files.
-
-##### SQLite Trade History Contract
-
-| Responsibility | Owner | Rule |
-|----------------|-------|------|
-| Trade append | `PersistenceManager.save_trade_decision()` → `SQLiteTradeHistory.insert()` | SQLite-only; raise if persistence fails |
-| Full history export | `PersistenceManager.load_trade_history()` | Export from SQLite only |
-| Entry-decision lookup | `get_entry_decision_for_position()` | Query SQLite by timestamp window and optional symbol |
-| Dashboard history | Dashboard routers via injected persistence | No direct file reads |
-
-##### Non-Negotiable Rules
-
-- Do not reintroduce `trade_history.json` runtime reads, writes, fallback paths, or auto-migration.
-- Do not pass `json_path` into `SQLiteTradeHistory`; its constructor accepts only `logger` and `db_path`.
-- Historical `.json.migrated` files are backups only and are not runtime inputs.
-- SQLite write failure is a hard persistence failure; do not silently continue with an alternate store.
-- Keep all service dependencies injected from the composition root; do not construct persistence dependencies inside trading, dashboard, or guard classes.
-
-##### SQLite Store Behavior
-
-- WAL journal mode and `synchronous=NORMAL` are enabled per connection.
-- Inserts coerce `TradeDecision` fields into stable SQLite column types.
-- Queries validate sort direction (`ASC`/`DESC`) and clamp pagination.
-
-##### Edge Cases
-
-| Scenario | Handling |
-|----------|----------|
-| **No trade history rows** | Returns empty list / `None` timestamp; callers decide no-history behavior |
-| **Invalid query order** | Raises `ValueError` before SQL generation |
-| **SQLite insert returns no row id** | `PersistenceManager.save_trade_decision()` raises `RuntimeError` |
-| **Entry timestamp not found** | Returns `None` and logs warning |
-| **Malformed persisted timestamp** | Entry lookup skips malformed candidate rows |
-
----
-
-#### 3. Provider Orchestrator Agent
-
-`PromptBudgetPolicy` is constructed once by `_provision_utilities`, using the
-shared `TokenCounter`, then injected into the brain and `ProviderOrchestrator`.
-Before each client call, including explicit model overrides, provider fallback,
-OpenRouter's internal model fallback and local streaming, budget the actual model
-against its exact configured context-window key. Reserve output, framing, chart
-tokens and safety margin; enforce the configurable whole-request ceiling.
-Unknown capacities or missing/invalid output reserves fail without an API call.
-Reduce only complete optional sections with unambiguous owned header boundaries;
-duplicate/forged headers must not delete protected position/risk/schema/lesson
-sections. Do not mutate the original messages shared with another fallback model.
-Log `Full prompt content` at the prepared-request boundary, not before reduction.
-
-> **File:** `src/managers/provider_orchestrator.py`
-
-##### Agent Persona & Role
-
-The Provider Orchestrator manages the **AI provider lifecycle and fallback chain** — routing analysis requests to the best available LLM provider with automatic degradation when the primary provider is unavailable, rate-limited, or returning errors.
-
-##### Provider Registry
-
-| Name | Client | Default Model | Chart Support | Fallback Model |
-|------|--------|---------------|---------------|----------------|
-| `googleai` | `GoogleAIClient` | Google Gemini 3.6 Flash | ✅ Yes | Google paid tier |
-| `openrouter` | `OpenRouterClient` | Configurable base model (`google/gemini-3-flash-preview` by default) | ✅ Yes | `deepseek/deepseek-r1:free` by default |
-| `local` | `LMStudioClient` | LM Studio model | Disabled in orchestrator | — |
-
-##### Fallback Chain Strategy
-
-**Text requests:**
-```
-Primary: googleai (Gemini 3.6 Flash)
-  → Rate limited / overloaded? → googleai paid tier (auth errors fall through to next provider)
-  → Still failing? → local (LM Studio, text-only path)
-  → Still failing? → openrouter (configured base model)
-  → Still failing? → openrouter fallback model
-  → All providers failed? → HOLD with error
-```
-
-**Chart (multimodal) requests:**
-```
-Primary: googleai (Gemini 3.6 Flash)
-  → Rate limited / overloaded? → googleai paid tier (auth errors fall through to next provider)
-  → Still failing? → openrouter (configured base model)
-  → Still failing? → openrouter fallback model
-  → All providers failed? → HOLD with error
-```
-Note: `local` is skipped in the orchestrator's chart fallback chain because provider metadata marks it as chart-unsupported, even though the LM Studio client has a chart-analysis method.
-
-##### Key Behaviors
-
-- **Parameter auto-retry:** provider clients use `_execute_with_param_retry()` to catch unsupported parameter errors, strip the offending parameter, and retry (up to 3×)
-- **Known unsupported params** filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`
-- **Chart analysis routing:** Only `googleai` and `openrouter` are enabled for orchestrated multimodal (text + image) requests; explicit `local` chart requests return an error before fallback
-- **Cost tracking via OpenRouter** `get_generation_cost()` — async query after response for token + cost data
-- **Error classification:** quota, auth, timeout, overloaded, connection — each maps to a specific error response the caller uses for fallback decisions
-- **API key redaction:** `_sanitize_error_message()` redacts API keys from all error logs
-
-##### Client Implementations
-
-| Client | Transport | Image Support | Retry |
-|--------|-----------|---------------|-------|
-| `GoogleAIClient` | Official `google.genai` SDK | Base64-encoded inline | `@retry_api_call` |
-| `OpenRouterClient` | Official `openrouter` SDK (`OpenRouter`) | Base64 data URI | `@retry_api_call` + param retry |
-| `LMStudioClient` | Official LM Studio Python SDK (`lmstudio.AsyncClient`) | Available in client, but disabled by orchestrator metadata and skipped by the chart fallback chain | `@retry_api_call` |
-
-##### Provider Orchestrator Edge Cases
-
-| Scenario | Handling |
-|----------|----------|
-| **Rate limited** → retry with backoff | Exponential backoff: 1s → 2s → 4s → ... → 30s max, 3 retries |
-| **Unsupported parameter** → retry without it | Detected via error message regex, stripped from config, retried |
-| **SDK version mismatch** | OpenRouter: falls back to `OpenRouter(api_key=...)` without `server_url` |
-| **All providers fail** | Returns HOLD signal via fallback response |
-| **Chart provider disabled for images** | Orchestrator returns an error for `local`; chart fallback chain only includes `googleai` and `openrouter` |
-| **Non-text response parts** (Google) | Silently filtered, text parts extracted |
-| **Provider not in registry** | `get_metadata()` returns None → caller uses provider not found error |
+- `_execute_with_param_retry()` strips an unsupported parameter and retries up to 3× (backoff 1→2→4s, 30s cap). Filtered pre-emptively: `thinking_budget`, `thinking_config`, `top_k`, `freq_penalty`, `pres_penalty`.
+- Error classification: quota, auth, timeout, overloaded, connection — each maps to a distinct response the caller uses for fallback. `_sanitize_error_message()` redacts API keys in every error path.
+- Cost via OpenRouter `get_generation_cost()` after the response. Google non-text parts are filtered silently. `get_metadata()` returns `None` for an unregistered provider → caller emits provider-not-found. All providers down → HOLD.

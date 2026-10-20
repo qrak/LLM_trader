@@ -1,6 +1,6 @@
 # Semantic Signal — qrak.org
 
-> An open-source LLM trading agent built by Piotr Kurnicki (@qrak) in Wrocław,
+> An open-source LLM trading agent built by @qrak in Wrocław,
 > Poland. It renders a 1920×1080 candlestick chart for a multimodal model,
 > keeps a 768-dimensional vector memory of its own closed trades, and keeps
 > deterministic pre-execution checks (symbol whitelist, position-size cap, validated
@@ -11,7 +11,7 @@
 Key facts, all verifiable in the repository:
 
 - Language / runtime: Python 3.13 (bot), Astro (this site)
-- Test suite: 2,265 tests collected, 2,247 passing, 17 skipped, 1 failing — `python -m pytest tests -q` (measured 2026-10-15; the failure is a browser test that drives a live dashboard, run without one listening)
+- Test suite: 2,419 tests collected, all passing, none skipped, none failing — `python -m pytest tests -q` (measured 2026-10-20, browser suite included after `playwright install chromium`)
 - 79 Numba-compiled indicator functions in `src/indicators/` (116 across `src/`)
 - Data per cycle: 999 candles, 50-level order book, funding rate, 24h volume, 500 recent trades
 - Chart image sent to the model: 1920×1080 PNG (Plotly + Kaleido)

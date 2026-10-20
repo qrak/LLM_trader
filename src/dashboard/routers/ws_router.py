@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from ..auth import resolve_client_ip
+
 
 class ConnectionManager:
     """Manages WebSocket connections with rate limiting."""
@@ -13,8 +15,15 @@ class ConnectionManager:
     def __init__(self, max_connections: int = 1000, max_per_ip: int = 10):
         self.active_connections: set[WebSocket] = set()
         self.ip_counts: dict[str, int] = defaultdict(int)
+        self.client_keys: dict[WebSocket, str] = {}
         self.max_connections = max_connections
         self.max_per_ip = max_per_ip
+
+    @staticmethod
+    def _client_key(websocket: WebSocket) -> str:
+        """Key a connection by the real visitor IP, not the tunnel's loopback address."""
+        direct_ip = websocket.client.host if websocket.client else "unknown"
+        return resolve_client_ip(direct_ip, websocket.headers.get("cf-connecting-ip"))
 
     async def connect(self, websocket: WebSocket) -> bool:
         """Accept connection if limits allow."""
@@ -22,12 +31,13 @@ class ConnectionManager:
             await websocket.close(code=1013, reason="Server busy")
             return False
 
-        client_ip = websocket.client.host if websocket.client else "unknown"
+        client_ip = self._client_key(websocket)
         if self.ip_counts[client_ip] >= self.max_per_ip:
             await websocket.close(code=1008, reason="Rate limit exceeded")
             return False
 
         self.active_connections.add(websocket)
+        self.client_keys[websocket] = client_ip
         self.ip_counts[client_ip] += 1
 
         try:
@@ -39,12 +49,15 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket):
         """Remove connection and update counts."""
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-            client_ip = websocket.client.host if websocket.client else "unknown"
-            self.ip_counts[client_ip] -= 1
-            if self.ip_counts[client_ip] <= 0:
-                del self.ip_counts[client_ip]
+        if websocket not in self.active_connections:
+            return
+        self.active_connections.remove(websocket)
+        client_ip = self.client_keys.pop(websocket, None)
+        if client_ip is None:
+            return
+        self.ip_counts[client_ip] -= 1
+        if self.ip_counts[client_ip] <= 0:
+            del self.ip_counts[client_ip]
 
     async def broadcast(self, data: dict[str, Any]):
         """Broadcast data to all active connections."""
