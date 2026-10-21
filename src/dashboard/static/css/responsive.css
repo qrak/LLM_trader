@@ -18,9 +18,9 @@
         position: fixed;
         top: 0;
         left: 0;
-        bottom: 0;
+        bottom: var(--banner-height);
         width: 280px;
-                height: 100vh;
+        height: auto;
         z-index: 1000;
         transform: translateX(-100%);
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -83,6 +83,7 @@
 
         .kpi-grid,
     .vector-stats,
+    .rules-grid,
     .position-grid {
         grid-template-columns: 1fr;
         gap: 15px;

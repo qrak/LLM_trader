@@ -261,7 +261,7 @@ function renderSemanticRules(rules) {
     };
 
     const renderDetailBlock = (label, value, color) => value
-        ? `<div style="font-size:11px; color:var(--text-muted); margin-top:6px; padding:4px 8px; background:rgba(255,255,255,0.04); border-radius:4px; border-left:2px solid ${color};">
+        ? `<div style="font-size:12px; line-height:1.45; color:var(--text-muted); margin-top:6px; padding:5px 8px; background:rgba(255,255,255,0.04); border-radius:4px; border-left:2px solid ${color};">
                → ${label}: ${escapeHtml(value)}
            </div>`
         : '';

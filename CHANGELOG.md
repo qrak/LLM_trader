@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-21 — Dashboard sidebar fits at 100% zoom; decision graph legible
+
+### Fixed
+- Left sidebar no longer loses its bottom at 100% browser zoom: spacing is height-aware (`clamp()` on `vh`), the sidebar scrolls as one column instead of clipping its footer, and the fixed supporter banner reserves exactly its own height (`--banner-height`). On a 600 px-tall viewport the whole column — ten tabs, status, Next Analysis countdown, donation block, contacts and CoinGecko note — is visible; below that it scrolls with nothing hidden behind the banner.
+- The mobile "close menu" X was rendered on desktop because `.mobile-close-btn` was hidden only inside the `max-width: 768px` block; it was stealing header width and wrapping the brand into three lines. It is now desktop-hidden and drawer-only.
+- `Brain Activity` decision graph was unreadable: `network.fit()` shrank it to 0.41× at 1920 px and 0.27× at 1366 px (14 px labels rendered at 4–6 px). Fit now stops at a 0.75 zoom floor, node labels are compact and shorter per type, hierarchical spacing is tighter, and the canvas re-fits after fonts load, on tab show and on resize. The `⟲` button still fits the whole map.
+- `Memory Bank` semantic-rule cards render in 320–420 px columns instead of one 280 px column beside empty space; rule text, detail blocks and metadata move from 11 px to 12–13.5 px. `Trade Journal` close reasons and lessons likewise move to 12–13.5 px.
+
+### Verified
+- Playwright at 2560×1440, 1920×1200, 1920×910, 1366×657, 1536×600 and 390×844: sidebar `scrollHeight === clientHeight` at every height ≥ 600 px, footer bottom above the banner, no horizontal overflow, brand on one line.
+- Full suite: **2385 passed, 34 deselected** (`pytest -m "not integration"`).
+
 ## 2026-10-20 — Suite proven with mutants; dead suites and agent-doc rot removed
 
 ### Changed

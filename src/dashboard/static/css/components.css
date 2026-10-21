@@ -460,7 +460,8 @@ button:hover {
 
 .rules-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(320px, 420px));
+    justify-content: start;
     gap: 15px;
     margin-bottom: 30px;
 }
@@ -481,8 +482,8 @@ button:hover {
 }
 
 .rule-text {
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 13.5px;
+    line-height: 1.55;
     color: var(--text-main);
     margin-bottom: 12px;
 }
@@ -490,7 +491,7 @@ button:hover {
 .rule-meta {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--text-muted);
     border-top: 1px solid var(--border-subtle);
     padding-top: 8px;
@@ -820,7 +821,7 @@ button:hover {
 }
 .decision-body {
     display: grid;
-    grid-template-columns: 1.4fr 0.9fr;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
     gap: 12px;
     padding: 0 12px 16px;
     min-height: 380px;

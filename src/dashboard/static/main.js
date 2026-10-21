@@ -1,8 +1,8 @@
 import { initPerformanceChart, updatePerformanceData } from './modules/performance_chart.js?v=4.6';
-import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.6';
+import { initDecisionPathwaysPanel, updateDecisionPathways } from './modules/decision_pathways_panel.js?v=2.7';
 import { updateLogs } from './modules/log_viewer.js?v=4.8';
 import { updateVisuals } from './modules/visuals.js?v=4.7';
-import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.10';
+import { initVectorPanel, updateVectorData } from './modules/vector_panel.js?v=4.11';
 import { initFullscreen } from './modules/fullscreen.js?v=4.7';
 import { initWebSocket, startCountdownLoop } from './modules/websocket.js?v=4.7';
 import { initPositionPanel, updatePositionData } from './modules/position_panel.js?v=4.10';

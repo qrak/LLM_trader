@@ -802,15 +802,15 @@
 }
 
 .pm-reason {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--text-muted);
     margin-bottom: 6px;
 }
 
 .pm-lesson {
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--text-secondary);
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--text-main);
 }
 
 .pm-lesson mark {

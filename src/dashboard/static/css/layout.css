@@ -1,8 +1,9 @@
 #app-container {
     display: flex;
     height: 100vh;
+    height: 100dvh;
     width: 100vw;
-    padding-bottom: 28px;
+    padding-bottom: var(--banner-height);
 }
 
 #sidebar {
@@ -12,21 +13,40 @@
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bg-dark-3) transparent;
     z-index: 10;
 }
 
+#sidebar > * {
+    flex: 0 0 auto;
+}
+
 .sidebar-header {
-    height: 80px;
     display: flex;
     align-items: center;
-    padding: 0 24px;
+    padding: clamp(6px, 1.3vh, 16px) 14px;
     border-bottom: 1px solid var(--border-subtle);
 }
 
 .logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    min-width: 0;
+}
+
+.logo > div {
+    min-width: 0;
+}
+
+.mobile-close-btn {
+    display: none;
 }
 
 .logo-icon {
@@ -38,11 +58,13 @@
 }
 
 .logo h1 {
-    font-size: 16px;
+    font-size: clamp(13px, 1.5vh, 15px);
     margin: 0;
-    letter-spacing: 1px;
+    letter-spacing: 0.3px;
     font-family: var(--font-display);
     font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
 }
 
 .logo .highlight {
@@ -50,40 +72,50 @@
 }
 
 .logo .subtitle {
-    font-size: 10px;
+    font-size: clamp(8px, 0.9vh, 9.5px);
     color: var(--text-muted);
-    letter-spacing: 2px;
+    letter-spacing: clamp(0.8px, 0.16vh, 1.6px);
     font-family: var(--font-display);
+    line-height: 1.25;
+    white-space: nowrap;
 }
 
 .sidebar-nav {
-    padding: 24px 16px;
+    padding: clamp(6px, 1.1vh, 16px) clamp(8px, 1.2vh, 16px);
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    flex: 1;
+    gap: clamp(1px, 0.42vh, 6px);
 }
 
 .tab-btn {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 10px;
+    padding: clamp(2.5px, 0.5vh, 10px) 12px;
     text-decoration: none;
-    color: var(--text-muted);
+    color: var(--text-nav);
     border-radius: 8px;
     transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    font-size: clamp(12px, 1.5vh, 14px);
+    line-height: 1.25;
     font-weight: 500;
     cursor: pointer;
+    flex: 0 0 auto;
 }
 
 .tab-btn .icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 1.25rem;
-    height: 1.25rem;
+    width: clamp(16px, 1.55vh, 20px);
+    height: clamp(16px, 1.55vh, 20px);
+    flex-shrink: 0;
     transition: transform 0.2s ease;
+}
+
+.tab-btn .icon svg {
+    width: 100%;
+    height: 100%;
 }
 
 .tab-btn:hover {
@@ -107,18 +139,18 @@
 }
 
 .sidebar-footer {
-    padding: 24px;
+    margin-top: auto;
+    padding: clamp(6px, 1.3vh, 20px);
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 240, 255, 0.02) 100%);
     border-top: 1px solid var(--border-subtle);
-    overflow-y: auto;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
-    font-size: 12px;
+    margin-bottom: clamp(3px, 0.8vh, 12px);
+    font-size: clamp(11px, 1.3vh, 12px);
 }
 
 .status-dot {
@@ -158,8 +190,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 12px;
-    padding-top: 12px;
+    font-size: clamp(11px, 1.3vh, 12px);
+    padding-top: clamp(4px, 0.8vh, 12px);
+    padding-bottom: 2px;
+    gap: 8px;
     border-top: 1px solid var(--border-subtle);
 }
 
@@ -222,16 +256,16 @@
 }
 
 .donation-block {
-    margin-top: 12px;
-    padding: 8px 8px;
+    margin-top: clamp(5px, 0.8vh, 12px);
+    padding: clamp(5px, 0.8vh, 8px) 8px;
     background: linear-gradient(135deg,
         rgba(100, 200, 255, 0.05) 0%,
         rgba(100, 200, 255, 0.01) 100%);
     border: 1px solid var(--border-subtle);
     border-radius: 6px;
-    font-size: 10px;
+    font-size: clamp(9px, 1.05vh, 10px);
     color: var(--text-muted);
-    line-height: 1.35;
+    line-height: 1.3;
 }
 
 .donation-header {
@@ -239,9 +273,9 @@
     align-items: center;
     gap: 4px;
     font-weight: 600;
-    font-size: 11px;
+    font-size: clamp(10px, 1.2vh, 11px);
     color: var(--text-primary);
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .donation-header .icon {
@@ -249,10 +283,11 @@
 }
 
 .donation-story {
-    margin: 0 0 6px 0;
-    font-size: 9.5px;
+    margin: 0 0 4px 0;
+    font-size: clamp(8.5px, 1vh, 9.5px);
+    line-height: 1.3;
     color: var(--text-muted);
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
 .donation-details {
@@ -301,9 +336,10 @@
 
 .donation-ps {
     margin: 2px 0 0 0;
-    font-size: 9px;
+    font-size: clamp(8px, 0.95vh, 9px);
+    line-height: 1.25;
     color: var(--text-muted);
-    opacity: 0.65;
+    opacity: 0.75;
     font-style: italic;
     text-align: center;
 }
@@ -313,7 +349,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    padding: 6px 16px;
+    padding: 4px 16px;
     background: linear-gradient(90deg,
         rgba(255, 221, 0, 0.06) 0%,
         rgba(255, 221, 0, 0.02) 100%);
@@ -354,14 +390,14 @@
     align-items: center;
     justify-content: center;
     gap: 5px;
-    padding: 6px 10px;
-    margin: 6px 0;
+    padding: clamp(3px, 0.6vh, 6px) 10px;
+    margin: clamp(3px, 0.6vh, 6px) 0;
     background: #FFDD00;
     color: #000;
     text-decoration: none;
     border-radius: 5px;
     font-weight: 600;
-    font-size: 11px;
+    font-size: clamp(10px, 1.2vh, 11px);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -421,21 +457,22 @@
 }
 
 .contact-list {
-    margin-top: 15px;
-    padding-top: 15px;
+    margin-top: clamp(5px, 0.8vh, 12px);
+    padding-top: clamp(5px, 0.8vh, 12px);
     border-top: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: clamp(3px, 0.5vh, 6px);
 }
 
 .contact-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     color: var(--text-muted);
     text-decoration: none;
-    font-size: 11px;
+    font-size: clamp(10px, 1.2vh, 11px);
+    line-height: 1.3;
     transition: color 0.2s;
 }
 
@@ -444,18 +481,23 @@
 }
 
 .contact-item .icon {
-    font-size: 14px;
-    width: 1.0rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
     text-align: center;
 }
 
 .attribution-note {
-    margin-top: 12px;
-    padding-top: 12px;
+    margin-top: clamp(5px, 0.8vh, 10px);
+    padding-top: clamp(5px, 0.8vh, 10px);
     border-top: 1px solid var(--border-subtle);
-    font-size: 10px;
+    font-size: clamp(8.5px, 1vh, 9.5px);
+    line-height: 1.3;
     color: var(--text-muted);
-    opacity: 0.7;
+    opacity: 0.75;
 }
 
 .attribution-note a {

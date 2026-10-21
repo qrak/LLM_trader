@@ -23,6 +23,7 @@
     --accent-gold: #FBBF24;
     --text-main: #e6edf3;
     --text-muted: #8b949e;
+    --text-nav: #a5b0bd;
     --text-dim: #484f58;
     --border-subtle: rgba(240, 246, 252, 0.1);
     --border-glow: rgba(0, 240, 255, 0.15);
@@ -30,6 +31,7 @@
     --glow-success: rgba(63, 185, 80, 0.25);
     --glow-danger: rgba(248, 81, 73, 0.25);
     --sidebar-width: 260px;
+    --banner-height: 24px;
     --font-display: 'Exo 2', 'Inter', sans-serif;
     --font-body: 'Inter', -apple-system, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;

@@ -2,7 +2,10 @@
 let network = null;
 let nodesDS = null;
 let edgesDS = null;
+let resizeObserver = null;
 const nodePayloads = new Map();
+
+const READABLE_MIN_ZOOM = 0.75;
 
 const COLOR = {
     decision: { background: '#58a6ff', border: '#1f6feb' },
@@ -65,11 +68,28 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
+function compactLabel(n) {
+    const data = n.data || {};
+    if (n.type === 'experience') {
+        const pnl = typeof data.pnl_pct === 'number'
+            ? `${data.pnl_pct >= 0 ? '+' : ''}${data.pnl_pct.toFixed(1)}%`
+            : '';
+        return `${data.outcome || n.label || ''} ${pnl}`.trim();
+    }
+    if (n.type === 'rule' && data.rule_type) {
+        return String(data.rule_type).replace(/_/g, ' ');
+    }
+    if (n.type === 'journal' && data.verdict) {
+        return String(data.verdict).replace(/_/g, ' ').toLowerCase();
+    }
+    return n.label || n.id;
+}
+
 function toVisNode(n) {
     const data = n.data || {};
-    const rawLabel = n.label || n.id;
+    const rawLabel = compactLabel(n);
     const isLeaf = ['experience', 'journal', 'rule', 'blocked'].includes(n.type);
-    const maxLen = isLeaf ? 18 : 28;
+    const maxLen = isLeaf ? 14 : 26;
     const label = rawLabel.length > maxLen ? rawLabel.substring(0, maxLen - 1) + '…' : rawLabel;
     const level = n.level ?? 1;
     return {
@@ -77,15 +97,15 @@ function toVisNode(n) {
         label: label,
         level: level,
         group: n.group || n.type,
-        title: n.title || rawLabel || '',
+        title: n.title || n.label || rawLabel || '',
         shape: shapeFor(n.type),
         size: sizeFor(n.type),
         color: colorFor(n.type, n.group, data),
-        font: { size: 14, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
+        font: { size: 15, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
         borderWidth: 2,
         margin: { top: 8, bottom: 8, left: 12, right: 12 },
         x: 0,
-        y: level * 160,
+        y: level * 120,
         raw: data,
         nodeType: n.type,
     };
@@ -95,6 +115,15 @@ function fitNetwork() {
     if (network && typeof network.fit === 'function') {
         network.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
     }
+}
+
+function fitReadable() {
+    if (!network || typeof network.fit !== 'function') return;
+    network.fit({ animation: false, minZoomLevel: READABLE_MIN_ZOOM });
+}
+
+function scheduleReadableFit() {
+    requestAnimationFrame(() => requestAnimationFrame(fitReadable));
 }
 
 function zoomIn() {
@@ -118,6 +147,12 @@ function setupZoomControls() {
     if (zf) zf.addEventListener('click', fitNetwork);
 }
 
+function syncCanvasSize() {
+    if (!network) return;
+    network.setSize('100%', '100%');
+    network.redraw();
+}
+
 function ensureNetwork() {
     const container = document.getElementById('decision-graph');
     if (!container) return null;
@@ -135,7 +170,7 @@ function ensureNetwork() {
     edgesDS = new vis.DataSet([]);
     const options = {
         nodes: {
-            font: { size: 14, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
+            font: { size: 15, color: '#e6edf3', face: 'Inter, sans-serif', strokeWidth: 2, strokeColor: '#0d1117' },
             borderWidth: 2,
             shadow: false,
             margin: 10,
@@ -151,9 +186,9 @@ function ensureNetwork() {
                 enabled: true,
                 direction: 'UD',
                 sortMethod: 'directed',
-                levelSeparation: 150,
-                nodeSpacing: 180,
-                treeSpacing: 200,
+                levelSeparation: 110,
+                nodeSpacing: 120,
+                treeSpacing: 140,
                 blockShifting: true,
                 edgeMinimization: true,
             },
@@ -179,6 +214,12 @@ function ensureNetwork() {
     window.decisionZoomIn = zoomIn;
     window.decisionZoomOut = zoomOut;
     setupZoomControls();
+
+    if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(syncCanvasSize);
+        resizeObserver.observe(container);
+    }
+    window.addEventListener('resize', syncCanvasSize);
 
     network.on('selectNode', (params) => {
         const id = params.nodes && params.nodes[0];
@@ -323,9 +364,10 @@ function updateGraph(graph) {
         });
         nodesDS.update(group);
     });
-    setTimeout(function () {
-        network.fit({ animation: false });
-    }, 150);
+    setTimeout(scheduleReadableFit, 120);
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(scheduleReadableFit).catch(function () {});
+    }
 }
 
 function renderChrome(data) {
