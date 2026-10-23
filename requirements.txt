@@ -3,7 +3,7 @@
 # Version floors and compatibility caps for packages that arrive only as
 # dependencies of these live in constraints.txt, which the launchers pass to pip
 # with -c and scripts/check_requirements.py verifies alongside this file.
-ccxt
+ccxt==4.5.89
 tiktoken==0.11.0
 aiohttp==3.14.4
 aiodns==3.6.1
