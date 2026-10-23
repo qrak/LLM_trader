@@ -5,7 +5,10 @@ prove (an ``unknown`` booking with a corrupted local size). This suite pins the 
 
 * a close whose exit fact is not proven (no evidence, unknown price/amount, a
   non-confirming source, no stable event id) must NOT ask the post-mortem and must NOT
-  update the brain — the skip is logged explicitly as "Lesson skipped: no exit evidence";
+  update the brain — the skip is logged explicitly, and the headline names the finding:
+  "Lesson skipped: no exit evidence" when nothing was measured, "Lesson skipped: the
+  venue fill price is not a price the real market made" when the fill was measured and
+  found to be an off-market print;
 * a post-mortem that fails (returns None or raises) must NOT produce a brain entry
   either — nothing is written that could pass for an analysis;
 * a proven exit + a validated post-mortem teaches the brain exactly ONCE per exit
@@ -17,7 +20,7 @@ Every test uses doubles and temporary paths: no live repo, no exchange, no crede
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock
@@ -26,11 +29,18 @@ import pytest
 
 from src.dashboard.routers.performance import PerformanceRouter
 from src.managers.persistence_manager import PersistenceManager
-from src.trading.data_models import FILL_DIVERGENCE_MARKER
+from src.trading.data_models import (
+    FILL_DIVERGENCE_MARKER,
+    MAX_MARKET_REFERENCE_WINDOW_SECONDS,
+    market_verification_is_verified,
+)
 from src.trading.executor_reconciliation import (
     ExitEvidence,
+    LESSON_SKIPPED_FILL_DIVERGENCE,
+    LESSON_SKIPPED_NO_EVIDENCE,
     exit_evidence_is_learnable,
     fill_divergence_reason,
+    market_verification_gap_reason,
 )
 from src.trading.memory import TradingMemoryService
 from src.trading.statistics_calculator import StatisticsCalculator
@@ -252,7 +262,8 @@ class TestDivergentFillMeansNoLesson:
         assert strategy.current_position is None
         post_mortem.analyze_closed_trade.assert_not_awaited()
         strategy.brain_service.update_from_closed_trade.assert_not_called()
-        assert _logged(logger, "no exit evidence")
+        assert _logged(logger, LESSON_SKIPPED_FILL_DIVERGENCE)
+        assert not _logged(logger, LESSON_SKIPPED_NO_EVIDENCE)
         assert _logged(logger, "the venue's fill price is not a price the real market made")
 
     async def test_marker_lands_on_the_close_row_so_the_model_sees_it(self, tmp_path: Path) -> None:
@@ -284,6 +295,107 @@ class TestDivergentFillMeansNoLesson:
 
         post_mortem.analyze_closed_trade.assert_awaited_once()
         strategy.brain_service.update_from_closed_trade.assert_called_once()
+
+
+FILL_AT = datetime(2026, 10, 22, 0, 0, 33, 281000, tzinfo=timezone.utc)
+
+
+def _market_evidence(age_seconds: float, window_seconds: float | None) -> dict[str, Any]:
+    """A ``verified`` payload whose reference print sits ``age_seconds`` before the fill."""
+    evidence: dict[str, Any] = {
+        "fill_verification": "verified",
+        "reference_price": 84037.19,
+        "reference_source": "binance_spot_agg_trades",
+        "fill_timestamp": FILL_AT.isoformat(),
+        "reference_timestamp": (FILL_AT - timedelta(seconds=age_seconds)).isoformat(),
+    }
+    if window_seconds is not None:
+        evidence["reference_window_seconds"] = window_seconds
+        evidence["reference_window_start"] = (FILL_AT - timedelta(seconds=window_seconds)).isoformat()
+        evidence["reference_window_end"] = FILL_AT.isoformat()
+    return evidence
+
+
+class TestReferenceWindowIsBounded:
+    """A widened window may never pass a print from minutes ago as "the price at the fill"."""
+
+    def test_print_inside_the_window_verifies(self) -> None:
+        assert market_verification_is_verified(_market_evidence(9.0, 10.0))
+
+    def test_print_outside_the_window_is_not_verification(self) -> None:
+        assert not market_verification_is_verified(_market_evidence(11.0, 10.0))
+
+    def test_unbounded_window_is_refused(self) -> None:
+        assert not market_verification_is_verified(
+            _market_evidence(60.0, MAX_MARKET_REFERENCE_WINDOW_SECONDS + 1)
+        )
+
+    def test_window_bounds_alone_are_enough(self) -> None:
+        payload = _market_evidence(9.0, None)
+        payload["reference_window_start"] = (FILL_AT - timedelta(seconds=10)).isoformat()
+        payload["reference_window_end"] = FILL_AT.isoformat()
+        assert market_verification_is_verified(payload)
+
+    def test_legacy_payload_without_a_window_keeps_the_one_second_rule(self) -> None:
+        assert market_verification_is_verified(_market_evidence(0.5, None))
+        assert not market_verification_is_verified(_market_evidence(2.0, None))
+
+    def test_future_reference_print_is_never_verification(self) -> None:
+        assert not market_verification_is_verified(_market_evidence(-1.0, 10.0))
+
+
+class TestMissingSampleIsNotADivergence:
+    """A divergence says the venue's price was wrong; a gap says nothing was measured.
+
+    2026-10-22: the executor had no public print to compare against (a one-second
+    window on a thin pair), and the operator-facing line read "Lesson skipped: no exit
+    evidence" — the same headline as a missing fill. The two findings are now named.
+    """
+
+    UNAVAILABLE: ClassVar[dict[str, Any]] = {
+        "fill_verification": "unavailable",
+        "reference_window_seconds": 10.0,
+        "verification_reason": "no_reference_print",
+    }
+
+    def test_gap_reason_never_claims_the_venue_printed_a_wrong_price(self) -> None:
+        reason = market_verification_gap_reason(self.UNAVAILABLE)
+
+        assert "no public print" in reason
+        assert "10s" in reason
+        assert "not a price the real market made" not in reason
+
+    def test_gap_reason_names_a_switched_off_check(self) -> None:
+        assert "switched off" in market_verification_gap_reason({"fill_verification": "disabled"})
+
+    def test_missing_sample_is_refused_as_unverified_not_as_divergent(self) -> None:
+        learnable, reason = exit_evidence_is_learnable(
+            proven_exit(fill_verification="unavailable", market_verification=self.UNAVAILABLE)
+        )
+
+        assert learnable is False
+        assert "no public print" in reason
+        assert "not a price the real market made" not in reason
+
+    async def test_unavailable_close_keeps_the_no_evidence_headline(self, tmp_path: Path) -> None:
+        position = _position()
+        strategy, logger, persistence, post_mortem = _strategy(tmp_path, position)
+
+        await strategy.close_position(
+            "take_profit", 84500.0, make_market_conditions(),
+            filled_quantity=0.00554,
+            evidence=proven_exit(fill_verification="unavailable", market_verification=self.UNAVAILABLE),
+        )
+
+        decision = persistence.async_save_trade_decision.await_args.args[0]
+        assert FILL_DIVERGENCE_MARKER not in decision.reasoning
+        assert "EXECUTION UNVERIFIED" in decision.reasoning
+        assert decision.execution_quality["eligible"] is False
+        post_mortem.analyze_closed_trade.assert_not_awaited()
+        strategy.brain_service.update_from_closed_trade.assert_not_called()
+        assert _logged(logger, LESSON_SKIPPED_NO_EVIDENCE)
+        assert not _logged(logger, LESSON_SKIPPED_FILL_DIVERGENCE)
+        assert _logged(logger, "no public print")
 
 
 class TestDivergenceVocabulary:

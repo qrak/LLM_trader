@@ -22,17 +22,53 @@ FILL_DIVERGENCE_MARKER = "EXIT FILL DIVERGENCE"
 
 #: ``fill_verification`` value the executor writes for such a fill.
 FILL_VERIFICATION_DIVERGENT = "divergent"
+#: ``fill_verification`` value of a fill whose price matched the real market.
+FILL_VERIFICATION_VERIFIED = "verified"
+#: ``fill_verification`` value meaning "there was nothing to compare against" —
+#: a different finding from ``divergent``: the venue's price was never measured.
+FILL_VERIFICATION_UNAVAILABLE = "unavailable"
+#: How far back the executor's reference window may reach. A window that reaches
+#: further would let a print from minutes ago pass as "the price at the fill".
+MAX_MARKET_REFERENCE_WINDOW_SECONDS = 120.0
 MARKET_VERIFICATION_FIELDS = (
     "fill_verification", "reference_price", "deviation_pct", "reference_source",
     "fill_timestamp", "reference_timestamp", "reference_window_start", "reference_window_end",
+    "reference_window_seconds", "reference_symbol", "verification_reason",
     "reference_url", "reference_sample_count", "reference_low", "reference_high",
     "fill_checks", "verification_error",
 )
 
 
+def _reference_window_seconds(value: dict[str, Any]) -> float | None:
+    """Seconds the executor's reference window reached back from the fill.
+
+    The explicit field wins; otherwise the window is measured from its own bounds.
+    ``None`` means the payload never stated one (legacy: a one-second window).
+    """
+    try:
+        window = float(value["reference_window_seconds"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        window = None
+    if window is not None and math.isfinite(window) and window > 0:
+        return window
+    try:
+        start = datetime.fromisoformat(str(value["reference_window_start"]).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(value["reference_window_end"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if start.tzinfo is None or end.tzinfo is None:
+        return None
+    span = (end - start).total_seconds()
+    return span if math.isfinite(span) and span > 0 else None
+
 
 def market_verification_is_verified(value: Any) -> bool:
-    """A status without contemporaneous reference provenance is not verification."""
+    """A status without contemporaneous reference provenance is not verification.
+
+    The reference print must sit INSIDE the window the executor reports, and that
+    window must stay bounded — a widened window may not smuggle in a print from
+    minutes away. A payload that states no window keeps the original one-second rule.
+    """
     if not isinstance(value, dict) or value.get("fill_verification") != "verified":
         return False
     if value.get("reference_source") != "binance_spot_agg_trades":
@@ -41,11 +77,19 @@ def market_verification_is_verified(value: Any) -> bool:
         fill = datetime.fromisoformat(str(value["fill_timestamp"]).replace("Z", "+00:00"))
         reference = datetime.fromisoformat(str(value["reference_timestamp"]).replace("Z", "+00:00"))
         price = float(value["reference_price"])
-        return (fill.tzinfo is not None and reference.tzinfo is not None
-                and 0 <= (fill - reference).total_seconds() <= 1
-                and math.isfinite(price) and price > 0)
     except (KeyError, TypeError, ValueError, OverflowError):
         return False
+    if fill.tzinfo is None or reference.tzinfo is None:
+        return False
+    window = _reference_window_seconds(value)
+    if window is None:
+        window = 1.0
+    lag = (fill - reference).total_seconds()
+    return (
+        math.isfinite(price) and price > 0
+        and window <= MAX_MARKET_REFERENCE_WINDOW_SECONDS
+        and 0 <= lag <= window
+    )
 
 
 def execution_quality_is_eligible(value: Any) -> bool:

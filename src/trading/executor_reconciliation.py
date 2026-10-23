@@ -21,6 +21,8 @@ import httpx
 from .data_models import (
     FILL_DIVERGENCE_MARKER,
     FILL_VERIFICATION_DIVERGENT,
+    FILL_VERIFICATION_UNAVAILABLE,
+    FILL_VERIFICATION_VERIFIED,
     LONG_ENTRY_SIGNALS,
     MARKET_VERIFICATION_FIELDS,
     SHORT_ENTRY_SIGNALS,
@@ -616,6 +618,55 @@ def exit_fill_is_divergent(value: Any) -> bool:
     return str(value or "").strip().lower() == FILL_VERIFICATION_DIVERGENT
 
 
+def fill_verification_status(quality: Any) -> str:
+    """``fill_verification`` of a quality/evidence mapping, ``""`` when it carries none."""
+    if isinstance(quality, str):
+        try:
+            quality = json.loads(quality)
+        except (ValueError, TypeError):
+            return ""
+    if not isinstance(quality, dict):
+        return ""
+    return str(quality.get("fill_verification") or "").strip().lower()
+
+
+def close_fill_is_divergent(entry_quality: Any, evidence: Any) -> bool:
+    """True when EITHER leg of a close carries a venue-artifact fill mark.
+
+    A divergence and a missing sample both refuse the lesson, but they are different
+    findings and must never be reported with the same headline.
+    """
+    if fill_verification_status(entry_quality) == FILL_VERIFICATION_DIVERGENT:
+        return True
+    if isinstance(evidence, dict):
+        return exit_fill_is_divergent(evidence.get("fill_verification"))
+    return exit_fill_is_divergent(getattr(evidence, "fill_verification", None))
+
+
+def market_verification_gap_reason(quality: Any) -> str:
+    """Operator-facing sentence for a fill the REAL market could not be checked against.
+
+    Distinct from :func:`fill_divergence_reason` on purpose: nothing was measured
+    here, so nothing may be claimed about the venue's price.
+    """
+    status = fill_verification_status(quality)
+    window = quality.get("reference_window_seconds") if isinstance(quality, dict) else None
+    span = f"{window:g}s " if isinstance(window, (int, float)) and not isinstance(window, bool) else ""
+    if status == FILL_VERIFICATION_UNAVAILABLE:
+        return (
+            f"no public print on the real market in the {span}reference window before the "
+            f"fill — the execution price could not be market-checked"
+        )
+    if status == FILL_VERIFICATION_VERIFIED:
+        return (
+            "the fill is marked verified but its reference print is not contemporaneous "
+            "with the fill"
+        )
+    if status == "disabled":
+        return "the fill-vs-market check is switched off (FILL_DIVERGENCE_MAX_PCT=0)"
+    return f"the fill carries no market check at all ({status or 'missing'})"
+
+
 def fill_divergence_reason(evidence: Any) -> str:
     """Operator-facing sentence explaining why such a fill cannot be a lesson."""
     reference = _positive_float(getattr(evidence, "reference_price", None))
@@ -659,8 +710,11 @@ def exit_evidence_is_learnable(evidence: Any) -> tuple[bool, str]:
         return False, f"unrecognized evidence object ({type(evidence).__name__})"
     if exit_fill_is_divergent(evidence.fill_verification):
         return False, fill_divergence_reason(evidence)
-    if evidence.fill_verification != "verified" or not market_verification_is_verified(evidence.market_verification):
-        return False, f"execution price was not market-verified ({evidence.fill_verification or 'missing'})"
+    if evidence.fill_verification != FILL_VERIFICATION_VERIFIED or not market_verification_is_verified(evidence.market_verification):
+        return False, market_verification_gap_reason({
+            **(evidence.market_verification or {}),
+            "fill_verification": evidence.fill_verification,
+        })
     source = str(evidence.source or "")
     if source not in EXECUTOR_CONFIRMATION_SOURCES:
         return False, f"source {source!r} is not a confirming source"
