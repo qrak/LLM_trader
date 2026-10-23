@@ -165,6 +165,7 @@ Active config at `config/config.ini`. Key settings:
 | **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
+| **Real-market stop** | `[risk_management] reference_exit_check_seconds = 10` (0 = off; pairs with the executor's `PROTECTION_BACKSTOP_MULTIPLIER`) |
 | **Dashboard** | 0.0.0.0:8000 |
 
 ---

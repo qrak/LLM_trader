@@ -4,6 +4,7 @@ Loads secrets from the process environment or optional keys.env, and settings fr
 """
 
 import configparser
+import math
 import os
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,8 @@ CONFIG_INI_PATH = CONFIG_DIR / "config.ini"
 VALID_PROVIDERS = {"local", "googleai", "openrouter", "deepseek", "all"}
 VALID_EXIT_TYPES = {"soft", "hard"}
 VALID_MODEL_VERBOSITIES = {"low", "medium", "high", "full"}
+MIN_REFERENCE_EXIT_CHECK_SECONDS = 2.0
+MAX_REFERENCE_EXIT_CHECK_SECONDS = 120.0
 
 class Config:
     """Configuration class that loads settings from environment and INI files.
@@ -769,6 +772,38 @@ class Config:
     def TAKE_PROFIT_CHECK_INTERVAL_SECONDS(self) -> int:
         """Take-profit monitor interval in seconds."""
         return self.TAKE_PROFIT_CHECK_INTERVAL_MINUTES * 60
+
+    @property
+    def REFERENCE_EXIT_CHECK_SECONDS(self) -> float:
+        """How often the REAL-market stop is evaluated while a position is open.
+
+        With the executor live the exchange's own stop-loss leg is only a
+        catastrophe backstop (its ``PROTECTION_BACKSTOP_MULTIPLIER``): the real
+        exit is this check, running against the real market the bot reads
+        (``[exchanges] sandbox = false``). 0 disables it — and disabling it while
+        the executor still places a widened leg leaves the position with a
+        backstop only, so the two settings move together.
+        """
+        raw = self.get_config("risk_management", "reference_exit_check_seconds", 10)
+        if isinstance(raw, bool):
+            raise ValueError("reference_exit_check_seconds must be a number of seconds")  # noqa: TRY004
+        try:
+            value = float(raw)
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise ValueError("reference_exit_check_seconds must be a number of seconds") from exc
+        if not math.isfinite(value) or value < 0 or value > MAX_REFERENCE_EXIT_CHECK_SECONDS:
+            raise ValueError(
+                "reference_exit_check_seconds must be 0 (disabled) or between "
+                f"{MIN_REFERENCE_EXIT_CHECK_SECONDS:g} and "
+                f"{MAX_REFERENCE_EXIT_CHECK_SECONDS:g}"
+            )
+        if 0 < value < MIN_REFERENCE_EXIT_CHECK_SECONDS:
+            raise ValueError(
+                "reference_exit_check_seconds must be 0 (disabled) or at least "
+                f"{MIN_REFERENCE_EXIT_CHECK_SECONDS:g} — a faster poll only burns "
+                f"the exchange's public rate limit"
+            )
+        return value
 
 
     @property

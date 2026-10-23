@@ -8,6 +8,13 @@ Scope: `src/trading/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 - Persist entry verification in `Position.entry_execution_quality` and structured `TradeDecision.execution_quality` in SQLite, kept through restart and entry settlement. Statistics, prompt totals and equity curves read that same structured eligibility, never caller reason text; a quarantined post-mortem must not advertise a successful plan or strategy P&L.
 - Command references are persisted for replay; unknown execution time is not detection/creation time. Historical repairs need a fingerprinted dry-run, backup, stopped processes and a verified second-run no-op; retain raw executions and reset untraceable rule-validation feedback explicitly.
 
+## Exit ownership: real price, venue backstop
+
+- The bot reads the REAL market (`[exchanges] sandbox = false`) while the executor's protective orders rest on the testnet book. With the executor live the exchange leg is a CATASTROPHE backstop (executor `PROTECTION_BACKSTOP_MULTIPLIER`, default 2.5x the stop distance, floor 1.5% of entry; the target leg is untouched) — the stop that actually runs is `PositionStatusMonitor.check_reference_exits()` on `[risk_management] reference_exit_check_seconds` (default 10 s, `0` disables, otherwise 2–120 s). A hit is forwarded to the executor at once through `CryptoTradingBot.forward_local_exit_request()`, retried every 60 s with the same `order_id` (the executor dedups on it), and alerted once per (position, reason).
+- `TradingStrategy.check_reference_exit()` is side-effect free by contract: no live metrics update, no position persist, no booking — it registers the same CLOSE intent as every other local exit condition and returns None (Wave 3). A check every few seconds must never become a write every few seconds, and only fill evidence closes the trade.
+- No real price → no check: warn once per 5 min and leave the position to the exchange backstop. The two switches are a pair — disabling this check while the executor still places a widened leg leaves the position with a backstop and no stop (ADR 0005).
+- `[exchanges] sandbox = true` makes this "real" check measure the testnet book; `start.py` warns at startup when that is combined with a live executor.
+
 ## Brain (`brain.py` facade)
 
 No LLM calls: a deterministic vector-memory service whose context is injected into the analysis prompt. It never executes trades or computes indicators.

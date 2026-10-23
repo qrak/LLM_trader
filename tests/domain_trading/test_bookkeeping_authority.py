@@ -492,6 +492,25 @@ class TestLocalExitNeverBooksWithoutFillEvidence:
         assert persistence.async_save_trade_decision.await_count == 0
         assert len(strategy.unbooked_position_intents()) == 1
 
+    async def test_reference_exit_writes_nothing_until_fill_evidence(self, tmp_path: Path) -> None:
+        """The fast real-market check must not turn into a write every few seconds."""
+        position = _position()
+        strategy, _, persistence = _strategy(tmp_path, position)
+        before = (position.max_drawdown_pct, position.max_profit_pct)
+
+        reason = await strategy.check_reference_exit(84400.0)
+        below = await strategy.check_reference_exit(78700.0)
+
+        assert reason is None and below is None
+        assert strategy.current_position is position
+        persistence.async_save_position.assert_not_awaited()
+        assert (position.max_drawdown_pct, position.max_profit_pct) == before
+        request = strategy.take_local_exit_request()
+        assert request is not None and request.reason == "stop_loss"
+        assert request.state == INTENT_PENDING
+        recommendation = strategy.take_pending_local_close_decision()
+        assert recommendation is not None and recommendation.action == "CLOSE"
+
     async def test_fill_evidence_booked_once_at_the_fill_price(self, tmp_path: Path) -> None:
         """Only a real fill (price AND quantity) books the CLOSE, exactly once."""
         position = _position()

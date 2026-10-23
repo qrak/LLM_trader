@@ -197,6 +197,7 @@ Key settings in `config/config.ini`:
 | `min_rr_entry` | 0.0 | Baseline R/R floor for the entry gate (0 = no fixed floor; the brain can raise it) |
 | `stop_loss_type` | hard | `hard` (interval polling) or `soft` (candle close) |
 | `stop_loss_check_interval` | 15m | Hard-exit polling interval; must not exceed the timeframe |
+| `reference_exit_check_seconds` | 10 | How often the SL/TP is checked against the REAL market while a position is open and the executor is live (`0` = off). This is the stop that runs; the exchange leg is only a catastrophe backstop |
 
 `[model_config] model_verbosity` controls the **new answer**, not how much history is carried
 forward. `full` requests a complete Markdown research report: metrics, timeframe comparison,

@@ -566,6 +566,14 @@ class CryptoTradingBot:
         except Exception:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
 
+    async def forward_local_exit_request(self) -> str | None:
+        """Public hook for the position monitor: forward a pending CLOSE now.
+
+        The monitor evaluates the real-market stop every few seconds; waiting for
+        the next analysis cycle (hours) to hand the CLOSE over would defeat it.
+        """
+        return await self._forward_local_exit_request()
+
     async def _forward_local_exit_request(self) -> str | None:
         """Forward a CLOSE the local SL/TP monitor requested to the executor.
 

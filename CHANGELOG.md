@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-10-22 — The real price runs the stop; the exchange leg becomes a backstop
+
+### Changed
+- With the executor live the bot used to skip its own bracket entirely (`manages_exits() = False`), so the only stop was the protective leg on the testnet book — a book thin enough to print prices the real market never made. The bot now evaluates the position's SL/TP against the **real** market it already reads (`[exchanges] sandbox = false`) on its own fast cadence, `[risk_management] reference_exit_check_seconds` (default `10`, `0` disables, otherwise bounded to 2–120 s). A hit goes through the same `_close_on_exit` intent as every other local exit condition: an INTENT, never a booking.
+- The monitor hands that CLOSE to the executor **immediately** (`PositionStatusMonitor.check_reference_exits` → `CryptoTradingBot.forward_local_exit_request`) instead of waiting for the next analysis cycle, which could be hours. The forward is retried every 60 s with the same `order_id` (the executor's `SafetyGuard` dedups on it), and the operator alert is sent once per (position, reason) so a position held at its stop does not page every ten seconds.
+- `TradingStrategy.check_reference_exit()` is deliberately side-effect free: it does not update live MAE/MFE or persist the position, so a check every few seconds never becomes a write every few seconds. Nothing is booked — the trade still closes only on the executor's fill evidence, and `divergent`/`unavailable` verification keeps its quarantine.
+- An unavailable real price skips the check and says so once per 5 minutes: the position then rests on the exchange backstop alone, and the startup banner warns when `sandbox = true` makes the "real" check measure the testnet book.
+- The executor side of the same change (see its changelog) places the leg at `2.5x` the stop distance with a `1.5%` floor, so venue noise cannot pre-empt the monitor. The pair is deliberate: turning this check off (`0`) belongs with `PROTECTION_BACKSTOP_MULTIPLIER=1.0` / `PROTECTION_BACKSTOP_MIN_PCT=0` in the executor.
+- `docs/adr/0005-real-price-exit-ownership.md` records the decision, the alternatives (no exchange leg, both legs widened, re-pricing/trailing, heartbeat-driven widening) and why they lost.
+
+### Verified
+- 33 new tests: the 2026-10-22 scenario (real 84,037 against an 83,100 stop) closes nothing while a real price at the stop requests a CLOSE and forwards it, short-side symmetry, no executor → no evaluation, missing price → one paced warning, forward retry without alert spam, a new position reporting again, a failing forward reported instead of swallowed, the side-effect-free strategy check, the cadence bounds and the public forwarding hook.
+- Full suite: **2428 passed, 34 deselected** (`pytest -m "not integration"`); `ruff check src scripts` clean.
+- No bot/executor process was started, restarted or signalled: both still run the previous code until the user restarts them.
+
+## 2026-10-22 — Fill check reads a window, not a single second; "no sample" stops reading as a divergence
+
+### Changed
+- The executor's fill-vs-market check now reads a window reaching back from the fill (`FILL_REFERENCE_WINDOW_SECONDS`, default 10 s, bounded at 120 s) and falls back to a deeper quote twin (`BTC/USDC` → `BTC/USDT`) when the traded pair printed nothing. `market_verification_is_verified` (`src/trading/data_models.py`) validates the reference print against the window the executor reports instead of a hard one-second rule, and refuses a window beyond the bound — a widened window may never pass a print from minutes ago as "the price at the fill". A payload that states no window keeps the old one-second rule.
+- The two findings are now named apart: `divergent` (the venue's price is not a price the real market made) and `unavailable` (nothing was measured). A close refused for a divergent fill logs `LESSON_SKIPPED_FILL_DIVERGENCE` and keeps the `EXIT FILL DIVERGENCE` marker; a close refused for a missing sample keeps `LESSON_SKIPPED_NO_EVIDENCE`, carries `EXECUTION UNVERIFIED`, and the refusal now reads "no public print on the real market in the 10s reference window before the fill — the execution price could not be market-checked" instead of the vague "execution price was not market-verified (unavailable)". The entry-side refusal names the same reason, in `trading_strategy.py` and `brain.py` alike.
+- `MARKET_VERIFICATION_FIELDS` carries the new executor fields (`reference_window_seconds`, `reference_symbol`, `verification_reason`) into the exit evidence, so the window the fill was measured in is visible to the operator and the model.
+
+### Verified
+- Measured on the live public API: the 2026-10-18 and 2026-10-19 fills that the one-second window discarded now verify at `+0.000%` and `-0.005%` deviation; the 2026-10-22 venue artifact stays `divergent` at `-1.214%` with the same reference price (84,037.19).
+- 10 new tests: window bounds and legacy payloads, future print refused, twin fallback, gap wording, and an `unavailable` close keeping the no-evidence headline (the divergent-close test now pins the divergence headline instead of "no exit evidence").
+- Full suite: **2395 passed, 34 deselected** (`pytest -m "not integration"`); `ruff check src scripts` clean.
+
 ## 2026-10-21 — Dashboard sidebar fits at 100% zoom; decision graph legible
 
 ### Fixed

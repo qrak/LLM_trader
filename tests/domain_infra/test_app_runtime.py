@@ -4,6 +4,7 @@ crash-logging hooks.
 """
 
 import asyncio
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -277,6 +278,22 @@ async def test_local_exit_recommendation_is_queued_when_no_executor_handler_exis
     executor_handler_missing.trading_strategy.take_pending_local_close_decision.assert_not_called()
 
 
+async def test_the_monitor_can_forward_a_close_through_the_public_hook() -> None:
+    """The real-market stop fires every few seconds: it needs a public forward."""
+    executor_handler = MagicMock()
+    executor_handler.handle = AsyncMock(return_value=True)
+    harness = trading_check_bot(executor_handler=executor_handler)
+    harness.trading_strategy.take_pending_local_close_decision = MagicMock(
+        return_value=SimpleNamespace(action="CLOSE", order_id="close-1")
+    )
+    harness.trading_strategy.resolve_position_intents_after_forward = AsyncMock(
+        return_value="pending"
+    )
+
+    assert await harness.bot.forward_local_exit_request() == "pending"
+    executor_handler.handle.assert_awaited_once()
+
+
 def test_reload_flag_lifecycle():
     manager = shutdown_manager()
     try:
@@ -513,6 +530,21 @@ def test_crash_writer_is_a_noop_without_a_configured_path(monkeypatch):
         raise RuntimeError("must not be written anywhere")
     except RuntimeError as exc:
         _write_fallback_crash(type(exc), exc, exc.__traceback__)
+
+
+def test_logger_console_width_follows_the_live_terminal(tmp_path, monkeypatch):
+    """A logger built without an injected console must not pin the width it saw at startup."""
+    size = {"value": os.terminal_size((60, 30))}
+    monkeypatch.delenv("COLUMNS", raising=False)
+    monkeypatch.delenv("LINES", raising=False)
+    monkeypatch.setattr(os, "get_terminal_size", lambda *args, **kwargs: size["value"])
+
+    logger = Logger(logger_name="WidthBot", log_dir=str(tmp_path / "logs"))
+    console = logger.handlers[0].console
+    size["value"] = os.terminal_size((175, 45))
+
+    assert console.width == 175 - int(console.legacy_windows)
+    logger.close()
 
 
 async def test_unconfirmed_command_is_alerted_to_the_operator() -> None:

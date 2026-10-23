@@ -24,12 +24,15 @@ from .executor_reconciliation import (
     INTENT_REFUSED,
     INTENT_UNKNOWN,
     LESSON_SKIPPED_ALREADY_LEARNED,
+    LESSON_SKIPPED_FILL_DIVERGENCE,
     LESSON_SKIPPED_NO_EVIDENCE,
     LESSON_SKIPPED_NO_POST_MORTEM,
     MAX_LEARNED_EXIT_EVENTS,
     ExecutorReconciliationMixin,
     LocalPositionReconciliation,
+    close_fill_is_divergent,
     exit_evidence_is_learnable,
+    market_verification_gap_reason,
     position_identity,
 )
 from .guards.pipeline import GuardPipeline
@@ -175,6 +178,33 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         return None
 
+    async def check_reference_exit(self, current_price: float) -> str | None:
+        """Evaluate the bracket against the REAL market, fast, without side effects.
+
+        The bot reads the real market while the executor's protective leg rests on
+        the venue's own (testnet) book, so a venue-only excursion can fill that leg
+        at a price the real market never made (2026-10-22: filled 83,016.90 while
+        the real market traded at 84,037). This is the real stop: the position's
+        own SL/TP evaluated against the real price, on the monitor's fast cadence.
+
+        Deliberately does NOT update live metrics or persist the position: a check
+        every few seconds must not turn into a write every few seconds. A hit goes
+        through the same ``_close_on_exit`` as every other local exit condition —
+        an INTENT, never a booking, and the caller forwards it to the executor.
+        """
+        position = self.current_position
+        if position is None:
+            return None
+        if position.is_stop_hit(current_price):  # type: ignore
+            return await self._close_on_exit("stop_loss", current_price)
+        if position.is_target_hit(current_price):  # type: ignore
+            return await self._close_on_exit("take_profit", current_price)
+        return None
+
+    def executor_query_available(self) -> bool:
+        """True when executor queries are configured (enabled AND a URL is set)."""
+        return self._executor_query_available()
+
     async def _close_on_exit(self, reason: str, current_price: float) -> str | None:
         """Local SL/TP condition hit: REQUEST a close — never book one locally.
 
@@ -201,9 +231,13 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         symbol = position.symbol
         ledger = self.position_intents()
         intent_key = self.intent_identity(INTENT_ACTION_CLOSE, symbol, position_id=position_key)
+        previous_intent = ledger.get(intent_key)
+        self._local_exit_request_was_pending = bool(
+            previous_intent is not None and previous_intent.state == INTENT_PENDING
+        )
 
         if self._executor_query_available():
-            existing = ledger.get(intent_key)
+            existing = previous_intent
             order_id = (
                 existing.order_id
                 if existing is not None and existing.state == INTENT_PENDING and existing.order_id
@@ -281,12 +315,28 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
             order_id=order_id,
             detail=note,
         )
+        self._log_local_exit_condition(reason, current_price, state)
+        self._unconfirmed_intent_alert = note
+        return None
+
+    def _log_local_exit_condition(self, reason: str, current_price: float, state: str) -> None:
+        """Shout on the first hit, keep a trace while the same exit is still pending.
+
+        A condition that keeps tripping while its CLOSE is pending is the SAME fact,
+        not a new emergency: the monitor raises the operator alert and the retry path
+        bounds how often this runs, so a repeat belongs in the debug trail instead of
+        a second CRITICAL every few seconds.
+        """
+        if self._local_exit_request_was_pending:
+            self.logger.debug(
+                "Local exit condition %s still pending @ %s (state=%s, position kept)",
+                reason, current_price, state,
+            )
+            return
         self.logger.critical(
             "LOCAL EXIT CONDITION %s hit @ %s — NOTHING booked locally (state=%s, position kept)",
             reason, current_price, state,
         )
-        self._unconfirmed_intent_alert = note
-        return None
 
     def take_local_exit_request(self) -> "LocalExitRequest | None":
         """One-shot read of the last unbooked local exit condition (or None)."""
@@ -379,11 +429,11 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         entry_quality = closed_position.entry_execution_quality
         if (entry_quality is not None or self.config.EXECUTOR_API_ENABLED) and not market_verification_is_verified(entry_quality):
             learnable = False
-            refusal_reason = f"entry execution price was not market-verified ({(entry_quality or {}).get('fill_verification') or 'missing'})"
+            refusal_reason = f"entry {market_verification_gap_reason(entry_quality)}"
         exit_quality = evidence.to_dict() if evidence is not None and not isinstance(evidence, dict) else dict(evidence or {})
         execution_quality = {"eligible": learnable, "entry": entry_quality, "exit": exit_quality, "reason": refusal_reason}
+        divergent = close_fill_is_divergent(entry_quality, evidence)
         if not learnable:
-            divergent = (entry_quality or {}).get("fill_verification") == "divergent" or exit_quality.get("fill_verification") == "divergent"
             marker = FILL_DIVERGENCE_MARKER if divergent else "EXECUTION UNVERIFIED"
             if marker not in reason:
                 reason = f"{marker}: {refusal_reason}. {reason}"
@@ -436,8 +486,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         post_mortem_result: Any | None = None
         if not learnable:
             self.logger.warning(
-                "%s (%s) | %s %s", LESSON_SKIPPED_NO_EVIDENCE, refusal_reason,
-                closed_position.symbol, reason,
+                "%s (%s) | %s %s",
+                LESSON_SKIPPED_FILL_DIVERGENCE if divergent else LESSON_SKIPPED_NO_EVIDENCE,
+                refusal_reason, closed_position.symbol, reason,
             )
         elif not entry_decision:
             self.logger.warning(

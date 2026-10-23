@@ -300,6 +300,9 @@ def monitor_context(
     fetch_current_ticker: Any = None,
     interruptible_sleep: Any = None,
     manages_exits: Callable[[], bool] | None = None,
+    reference_exits_enabled: Callable[[], bool] | None = None,
+    reference_exit_check_seconds: float = 10.0,
+    forward_local_close: Any = None,
 ) -> SimpleNamespace:
     """PositionStatusMonitor wired to an in-memory monitor-state store."""
     config = exit_config()
@@ -319,6 +322,9 @@ def monitor_context(
         interruptible_sleep=interruptible_sleep or noop_sleep,
         get_symbol=lambda: CONFIG_PAIR,
         manages_exits=manages_exits,
+        reference_exits_enabled=reference_exits_enabled,
+        reference_exit_check_seconds=reference_exit_check_seconds,
+        forward_local_close=forward_local_close,
     )
     return SimpleNamespace(
         config=config,
@@ -1363,3 +1369,171 @@ def test_corrupted_numeric_payload_normalizes_to_none(
     analysis = PARSER.parse_ai_response(raw)["analysis"]
 
     assert EXTRACTOR.extract_trading_info(analysis) == expected
+
+
+class TestRealMarketExitCheck:
+    """The stop that actually runs: the real price, fast, forwarded at once.
+
+    2026-10-22: the testnet printed a venue-wide flash crash (66,975) and the
+    exchange stop at 83,100 filled at 83,016.90 while the REAL market traded at
+    84,037. The real price is the bot's own ticker (``sandbox = false``); this
+    check evaluates the bracket against it and hands a hit to the executor instead
+    of waiting for the next 4h cycle.
+    """
+
+    def _monitor(self, **kwargs: Any) -> SimpleNamespace:
+        kwargs.setdefault("reference_exits_enabled", lambda: True)
+        kwargs.setdefault("strategy", exit_strategy(executor_api_enabled=True))
+        return monitor_context(**kwargs)
+
+    def test_the_cadence_is_infinite_when_the_check_is_off(self) -> None:
+        ctx = monitor_context(reference_exit_check_seconds=0.0)
+        assert math.isinf(ctx.position_monitor.seconds_until_next_reference_check(NOW))
+
+    def test_the_cadence_is_infinite_without_a_live_executor(self) -> None:
+        ctx = monitor_context(reference_exits_enabled=lambda: False)
+        monitor = ctx.position_monitor
+        assert math.isinf(monitor.seconds_until_next_reference_check(NOW))
+        assert monitor.reference_exit_check_seconds == 10.0
+
+    def test_the_first_check_is_due_immediately_then_waits_its_interval(self) -> None:
+        ctx = self._monitor()
+        monitor = ctx.position_monitor
+        assert monitor.seconds_until_next_reference_check(NOW) == 0.0
+        monitor._last_reference_check_at = NOW
+        assert monitor.seconds_until_next_reference_check(NOW) == pytest.approx(10.0)
+        later = NOW + timedelta(seconds=12)
+        assert monitor.seconds_until_next_reference_check(later) == 0.0
+
+    async def test_the_incident_scenario_does_not_close_the_position(self) -> None:
+        """Real market 84,037 against a 83,100 stop: the crash was venue-only."""
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
+        forward = AsyncMock(return_value="pending")
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward)
+
+        await ctx.position_monitor.check_reference_exits(84_037.19)
+
+        assert forward.await_count == 0
+        assert strategy._local_exit_request is None
+        assert strategy._pending_local_close_decision is None
+        assert strategy.current_position is not None
+
+    async def test_a_real_price_at_the_stop_requests_a_close_and_forwards_it(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
+        forward = AsyncMock(return_value="pending")
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward)
+
+        await ctx.position_monitor.check_reference_exits(83_050.0)
+
+        assert forward.await_count == 1
+        recommendation = strategy.take_pending_local_close_decision()
+        assert recommendation is not None
+        assert recommendation.action == "CLOSE"
+        assert strategy.current_position is not None
+        assert strategy.close_position.await_count == 0
+
+    async def test_a_real_price_at_the_target_requests_a_close_too(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0, take_profit=86_000.0)
+        forward = AsyncMock(return_value="pending")
+        notifier = MagicMock()
+        notifier.send_message = AsyncMock()
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward, notifier=notifier)
+
+        await ctx.position_monitor.check_reference_exits(86_010.0)
+
+        assert forward.await_count == 1
+        message = notifier.send_message.await_args.args[0]
+        assert "take_profit" in message
+        recommendation = strategy.take_pending_local_close_decision()
+        assert recommendation is not None and recommendation.action == "CLOSE"
+
+    async def test_a_short_position_is_closed_when_the_real_price_rises(self) -> None:
+        strategy = exit_strategy(direction="SHORT", executor_api_enabled=True)
+        strategy.current_position = short_position(stop_loss=105.0, take_profit=85.0)
+        forward = AsyncMock(return_value="pending")
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward)
+
+        await ctx.position_monitor.check_reference_exits(105.5)
+
+        assert forward.await_count == 1
+
+    async def test_nothing_runs_without_a_live_executor(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0)
+        strategy.check_reference_exit = AsyncMock()
+        forward = AsyncMock(return_value="pending")
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward,
+                            reference_exits_enabled=lambda: False)
+
+        await ctx.position_monitor.check_reference_exits(80_000.0)
+
+        strategy.check_reference_exit.assert_not_awaited()
+        assert forward.await_count == 0
+
+    async def test_without_a_price_nothing_is_evaluated_and_the_alert_is_paced(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0)
+        strategy.check_reference_exit = AsyncMock()
+        ctx = self._monitor(strategy=strategy)
+
+        await ctx.position_monitor.check_reference_exits(None)
+        await ctx.position_monitor.check_reference_exits(None)
+
+        strategy.check_reference_exit.assert_not_awaited()
+        first = ctx.position_monitor._last_reference_missing_alert_at
+        assert first is not None
+        assert ctx.position_monitor._last_reference_check_at is not None
+
+    async def test_repeated_hits_retry_the_forward_but_alert_only_once(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0)
+        forward = AsyncMock(return_value="pending")
+        notifier = MagicMock()
+        notifier.send_message = AsyncMock()
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward, notifier=notifier)
+        monitor = ctx.position_monitor
+
+        await monitor.check_reference_exits(80_000.0)
+        await monitor.check_reference_exits(79_000.0)
+        assert forward.await_count == 1
+        assert notifier.send_message.await_count == 1
+
+        monitor._last_reference_forward_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+        await monitor.check_reference_exits(78_000.0)
+
+        assert forward.await_count == 2
+        assert notifier.send_message.await_count == 1
+
+    async def test_a_new_position_reports_again(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0)
+        notifier = MagicMock()
+        notifier.send_message = AsyncMock()
+        ctx = self._monitor(strategy=strategy, notifier=notifier)
+        monitor = ctx.position_monitor
+
+        await monitor.check_reference_exits(80_000.0)
+        strategy.current_position = make_position(
+            entry_price=82_000.0, stop_loss=81_000.0, take_profit=90_000.0,
+            direction="LONG",
+            entry_time=datetime(2026, 10, 22, 6, 0, tzinfo=timezone.utc),
+        )
+        monitor._last_reference_forward_at = None
+        await monitor.check_reference_exits(80_500.0)
+
+        assert notifier.send_message.await_count == 2
+
+    async def test_a_failing_forward_is_reported_not_swallowed(self) -> None:
+        strategy = exit_strategy(executor_api_enabled=True)
+        strategy.current_position = long_position(stop_loss=83_100.0)
+        forward = AsyncMock(side_effect=RuntimeError("executor down"))
+        ctx = self._monitor(strategy=strategy, forward_local_close=forward)
+
+        await ctx.position_monitor.check_reference_exits(80_000.0)
+
+        assert forward.await_count == 1
+        assert strategy.current_position is not None
+        assert strategy.close_position.await_count == 0

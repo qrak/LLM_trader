@@ -667,3 +667,31 @@ def test_api_usage_is_recorded_without_local_retokenization(monkeypatch):
     stats = counter.get_usage_stats()
     assert stats["prompt"] == 1234 and stats["completion"] == 567 and stats["total"] == 1801
     assert counter.session_costs.deepseek == 0.0123
+
+
+class TestReferenceExitCheckCadence:
+    """Cadence of the real-market stop: explicit 0 or a bounded interval.
+
+    The check is the stop that actually runs once the executor is live (the
+    exchange leg is only a catastrophe backstop), so a value that cannot be
+    executed is a configuration error, never a silent fallback.
+    """
+
+    def test_the_default_is_ten_seconds(self) -> None:
+        assert config_with({}).REFERENCE_EXIT_CHECK_SECONDS == 10.0
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [("0", 0.0), ("2", 2.0), ("10", 10.0), ("120", 120.0), (15, 15.0), ("7.5", 7.5)],
+    )
+    def test_bounded_values_are_accepted(self, value, expected) -> None:
+        config = config_with({"risk_management": {"reference_exit_check_seconds": value}})
+        assert config.REFERENCE_EXIT_CHECK_SECONDS == pytest.approx(expected)
+
+    @pytest.mark.parametrize(
+        "value", ["1", "1.9", "120.1", "-5", "", "abc", "nan", "inf", True, None]
+    )
+    def test_anything_else_is_a_configuration_error(self, value) -> None:
+        config = config_with({"risk_management": {"reference_exit_check_seconds": value}})
+        with pytest.raises(ValueError):
+            config.REFERENCE_EXIT_CHECK_SECONDS

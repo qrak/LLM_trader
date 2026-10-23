@@ -134,6 +134,14 @@ take_profit_type = hard
 # (1m, 15m, 1h, 4h); must not exceed the timeframe. Unused in "soft" mode.
 stop_loss_check_interval = 15m
 take_profit_check_interval = 15m
+# How often the position's SL/TP is evaluated against the REAL market while the
+# executor is live (seconds; 0 disables). This is the stop that actually runs: the
+# exchange's own stop-loss leg is only a catastrophe backstop, placed beyond the
+# venue's price noise by the executor's PROTECTION_BACKSTOP_MULTIPLIER. Requires
+# [exchanges] sandbox = false — with testnet market data the check evaluates the
+# testnet book and protects nothing. Turning it off (0) is safe ONLY together with
+# PROTECTION_BACKSTOP_MULTIPLIER=1.0 and PROTECTION_BACKSTOP_MIN_PCT=0.
+reference_exit_check_seconds = 10
 # Hard ceiling on the position as a fraction of capital; the regime profile may only tighten it
 # (with 0.10: aggressive 0.10 / neutral 0.08 / conservative 0.05).
 max_position_size = 0.10
