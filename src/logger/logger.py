@@ -162,7 +162,7 @@ class Logger(logging.Logger):
             self._add_error_file_handler(error_log_dir)
 
     def _add_console_handler(self, console: Console | None = None):
-        target_console = console or Console(color_system="auto", width=180)
+        target_console = console or Console(color_system="auto")
         rich_handler = RichHandler(
             console=target_console, rich_tracebacks=False, omit_repeated_times=False
         )

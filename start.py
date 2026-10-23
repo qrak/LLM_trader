@@ -162,8 +162,7 @@ class CompositionRoot(ProvisioningMixin):
 
     def __init__(self):
         self.config = config
-        terminal_width = os.get_terminal_size().columns
-        self.console = Console(width=terminal_width)
+        self.console = Console(color_system="auto")
         self.logger = Logger(
             logger_name="Bot", logger_debug=config.LOGGER_DEBUG, console=self.console
         )

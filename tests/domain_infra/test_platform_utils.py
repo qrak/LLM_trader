@@ -5,6 +5,7 @@ exchange symbol preloading.
 
 import ast
 import json
+import os
 import sqlite3
 from dataclasses import MISSING, fields
 from datetime import datetime, timedelta, timezone
@@ -133,6 +134,22 @@ def test_start_module_exposes_composition_root_and_single_instance_lock():
     assert callable(lock._release_windows_mutex)
     assert callable(lock.acquire)
     assert callable(lock.release)
+
+
+def test_startup_console_width_follows_the_live_terminal(monkeypatch):
+    """A console opened in a narrow window must widen with the terminal, not stay pinned."""
+    import start as start_module
+
+    size = {"value": os.terminal_size((60, 30))}
+    monkeypatch.delenv("COLUMNS", raising=False)
+    monkeypatch.delenv("LINES", raising=False)
+    monkeypatch.setattr(start_module, "Logger", MagicMock())
+    monkeypatch.setattr(os, "get_terminal_size", lambda *args, **kwargs: size["value"])
+
+    root = start_module.CompositionRoot()
+    size["value"] = os.terminal_size((175, 45))
+
+    assert root.console.width == 175 - int(root.console.legacy_windows)
 
 
 @pytest.mark.parametrize(
