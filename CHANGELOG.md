@@ -10,8 +10,10 @@
 
 ### Verified
 - Both triggers ran end to end on the public repo. The manual dispatch published `build-2026.10.26-0228`; the green `tests` run on the same commit fired the `workflow_run` path, published `build-2026.10.26-0233`, deleted the `-0228` **release entry** and kept its tag — the Releases page then held exactly one build, and both stamps stayed checkout-able.
-- Generated notes diffed against the previous release (`v1.1.5`), so the body listed the four dependabot PRs merged since, not an empty range.
 - No application code, test, config, dependency or runtime file changed: the set is the new workflow, `CONTRIBUTING.md` and this entry.
+
+### Fixed
+- GitHub's own generated notes list merged pull requests only: the second automated build (`build-2026.10.26-0239`, a direct push) published a "Latest build" with an empty "What's Changed" and nothing but a compare link. The body is now composed from `git log --no-merges` over the range from the previous build tag (40 commits max, `- %s (%h)`) plus the compare link, so a direct push still shows what changed and the notes are reproducible from the repository without the Release Notes API.
 
 ## 2026-10-26 — Inference cost enters the cycle journal and the EV threshold
 

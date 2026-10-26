@@ -55,11 +55,11 @@ branch — with a single deployer and `git pull` as the deploy, a second long-li
 duplicate every merge.
 
 Releases are automatic. After a green `tests` run on `master`, `.github/workflows/release.yml` creates
-an annotated date tag (`build-YYYY.MM.DD-HHMM`, UTC) and publishes the "Latest build" release with
-generated notes; older build entries are rolled off the page while their tags stay, so
-`git checkout build-2026.10.26-1530` is the rollback point. Nothing in this repository ships as a
-versioned artifact — there is no `__version__`, no packaged build and no download URL — so running a
-specific version never requires a release.
+an annotated date tag (`build-YYYY.MM.DD-HHMM`, UTC) and publishes the "Latest build" release whose
+body lists the commits since the previous build; older build entries are rolled off the page while
+their tags stay, so `git checkout build-2026.10.26-1530` is the rollback point. Nothing in this
+repository ships as a versioned artifact — there is no `__version__`, no packaged build and no download
+URL — so running a specific version never requires a release.
 
 Semantic-version tags (`v1.x`) are therefore reserved for milestones worth pointing a person at, not
 for a cadence: no release PR per merge, and no renumbering of releases after the fact.

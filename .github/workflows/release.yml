@@ -66,11 +66,29 @@ jobs:
         run: |
           set -euo pipefail
           short="${SHA:0:7}"
+          prev=$(git tag -l 'build-*' --sort=-creatordate | grep -vx "$TAG" | head -n1 || true)
+          if [ -n "$prev" ]; then
+            range="$prev..$TAG"
+            compare="**Full diff**: https://github.com/$REPO/compare/$range"
+          else
+            range=""
+            compare=""
+          fi
+
+          notes=$(git log -40 --no-merges --pretty='- %s (%h)' $range)
+          {
+            echo "Automatic build of \`$short\` from \`master\` - published after the \`tests\` workflow went green, or on a manual dispatch."
+            echo
+            echo "This page keeps a single build entry; every build keeps its date tag, so \`git checkout $TAG\` is the rollback point."
+            echo
+            echo "### Changes"
+            if [ -n "$notes" ]; then echo "$notes"; else echo "- nothing but a re-tag of the previous build"; fi
+            [ -z "$compare" ] || { echo; echo "$compare"; }
+          } > "$RUNNER_TEMP/notes.md"
+
           gh release create "$TAG" --repo "$REPO" \
             --title "Latest build — ${TAG#build-} ($short)" \
-            --notes "Automatic build of \`$short\` from \`master\` - published after the \`tests\` workflow went green, or on a manual dispatch.
-          This page keeps a single build entry; every build keeps its date tag, so \`git checkout $TAG\` is the rollback point." \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/notes.md" \
             --latest
 
       - name: Roll older build entries off the page
