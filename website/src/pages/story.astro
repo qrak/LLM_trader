@@ -3,9 +3,9 @@ import Layout from '../layouts/Layout.astro';
 
 // Verified against the repo on 2026-10-20 (see the "Where these numbers come
 // from" section at the bottom of this page):
-//   python -m pytest tests -q          -> 2419 passed, 0 skipped, 0 failed (2419 collected)
+//   python -m pytest tests -q          -> 2514 passed, 0 skipped, 0 failed (2514 collected)
 //   grep -rhoE "@njit" src/indicators  -> 79 Numba-compiled functions (125 across src/)
-const TESTS_TOTAL = '2,419';
+const TESTS_TOTAL = '2,514';
 ---
 
 <Layout
@@ -127,7 +127,7 @@ def supertrend_numba(high: np.ndarray, low: np.ndarray, close: np.ndarray,
 			<h2>4. Honest status — September 2026</h2>
 			<ul>
 				<li><strong>Trading:</strong> simulated capital only (a 10,000 USDC paper book). No real funds are involved anywhere in this project.</li>
-				<li><strong>Tests:</strong> {TESTS_TOTAL} collected, every one passing, none skipped and none failing — the browser suite included, after <code>playwright install chromium</code>. <code>python -m pytest tests -q</code>, measured 20 October 2026.</li>
+				<li><strong>Tests:</strong> {TESTS_TOTAL} collected, every one passing, none skipped and none failing — the browser suite included, after <code>playwright install chromium</code>. <code>python -m pytest tests -q</code>, measured 26 October 2026.</li>
 				<li><strong>Executor:</strong> implemented as a separate service and wired to an exchange <strong>testnet</strong> (<code>ENABLE_TESTNET=true</code>, sandbox endpoints). It has placed test orders and journals their verdicts; live trading with real money is not enabled.</li>
 				<li><strong>Profitability:</strong> unproven. Development has had losing stretches and the code comments admit it. If that ever changes, this page changes with it.</li>
 				<li><strong>Source:</strong> the whole thing is at <a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">github.com/qrak/LLM_trader</a>. Read the code before you believe a word of this page.</li>
