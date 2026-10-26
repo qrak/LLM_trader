@@ -10,7 +10,7 @@ on the same checkout.
 
 | item | value |
 |---|---|
-| Ledger window | 2026-09-20 → 2026-10-26 (37 days) |
+| Ledger window | 2026-09-20 → 2026-10-26 (36 days) |
 | Instrument | BTC/USDC, 4h candles |
 | Mode | Paper book (`demo_quote_capital = 10000` USDC), decisions forwarded to a testnet executor |
 | Closed trades | 12 |

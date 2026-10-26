@@ -30,7 +30,7 @@ such everywhere below.
 
 ## Results — live paper trading
 
-**Window:** 2026-09-20 → 2026-10-26 (37 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
+**Window:** 2026-09-20 → 2026-10-26 (36 days), BTC/USDC, 4h candles, 10 000 USDC simulated capital.
 **Source:** the bot's own ledger (`data/trading/`), reproducible with `python scripts/results_report.py`.
 
 | metric | bot | buy & hold |
@@ -135,15 +135,14 @@ flowchart TB
 ## Testing
 
 ```bash
-python -m pytest tests -q          # 2,514 tests, ~155 s
+python -m pytest tests -q          # 2,514 tests, ~145 s
 ruff check src scripts start.py    # clean
 pyright src start.py               # 0 errors
 ```
 
 Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `domain_brain`
 (vector memory, rules, scoring), `domain_rag_indicators` (news pipeline, indicator maths) and
-`domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI that
-is skipped unless a dashboard is running. Parametrisation multiplies the collected count, so it is
+`domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI that is marked integration, so CI skips it. Parametrisation multiplies the collected count, so it is
 larger than the number of `def test_` functions. CI runs the same gates on every push:
 `ruff`, `pyright`, `pytest -m "not integration"`, the website build and CodeQL.
 

@@ -84,14 +84,14 @@ are skipped; `provider = local` needs no cloud key.
 ## Running the tests
 
 ```bash
-python -m pytest tests -q                 # 2,514 tests, ~155 s
+python -m pytest tests -q                 # 2,514 tests, ~145 s
 python -m pytest tests/domain_trading -q  # one area
 ruff check src scripts start.py
 pyright src start.py
 ```
 
-`tests/test_admin_playwright.py` needs Playwright plus Chromium and is skipped unless a dashboard
-is running. On Windows the default temp directory can deny `tmp_path`; pass
+`tests/test_admin_playwright.py` needs Playwright plus Chromium, is marked `integration` (excluded
+from CI), and skips itself when Playwright is not installed. On Windows the default temp directory can deny `tmp_path`; pass
 `--basetemp=C:\Users\Public\_pytest` if collection fails on permissions.
 
 ## Deploying the website
