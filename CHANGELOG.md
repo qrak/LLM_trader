@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-10-26 — The README shows the product before explaining it, and the site stops quoting a stale suite
+
+### Changed
+- `README.md` rebuilt around proof instead of prose: a real dashboard screenshot and a short GIF at
+  the top, a nine-language switcher (`readme-i18n.com` renders and re-translates on every README
+  change, so no translated files can rot), a **Results** section with the live paper-trading ledger
+  and the buy-and-hold benchmark, a comparison table against TradingAgents / Freqtrade / Hummingbot,
+  and a feature table. The long-form sections were **moved, not deleted**.
+- New `docs/`: `FEATURES.md` (every feature with its implementing file), `SETUP.md` (requirements,
+  platform scripts, secrets, website deploy), `CONFIGURATION.md` (every config key, prompt budget,
+  billing windows, executor handoff), `RESULTS.md` (ledger, benchmark, caveats, reproduction).
+- `scripts/results_report.py` recomputes the ledger, inference cost, cycle statistics and the BTC
+  buy-and-hold benchmark from `data/trading/` plus one public Binance klines call; `docs/RESULTS.md`
+  is its output, so a reader can re-run the page.
+- `scripts/check_agents_md.py` fails when a repository path quoted in an `AGENTS.md` file no longer
+  exists. It currently checks 83 references across the 9 files.
+- Root `AGENTS.md` was verified against the code rather than trusted: the chart is **1920×1080**,
+  not 4K (three claims, two files), the suite is **52** `test_*.py` files, not 48, and a
+  "Documentation map" plus a drift gate were added. Everything else in the 361 lines checked out,
+  including the 79 Numba kernels, the six REST routers, `ai_chart_candle_limit = 125` and the
+  9 documented `BLE001` hits.
+- `qrak.org` (Astro) and the legacy dashboard landing (`semanticsignal.qrak.org/landing`) now quote
+  **2,514 tests measured 2026-10-26** instead of 2,419; `website/public/project.json` and `llms.txt`
+  were synced with the same number.
+- `.github/workflows/tests.yml` lints `start.py` too: `README.md` and `AGENTS.md` had documented
+  `ruff check src scripts start.py` for months while CI only ran `ruff check src scripts`.
+
+### Verified
+- `pytest tests -q -m "not integration" --timeout=120`: **2,480 passed, 34 deselected in 143.91 s**
+  (2,514 collected in total).
+- `ruff check src scripts start.py`: clean. `pyright src start.py`: 0 errors.
+- `python scripts/check_agents_md.py`: 83 references, all present.
+- `python scripts/results_report.py`: 12 closed trades, +0.14%, BTC/USDC −1.83% over the same window.
+- `npm run build` in `website/`: 11 pages plus `dist/llms-full.txt`.
+
+### Notes
+- The results section is deliberately unflattering: +0.14% against a −1.83% underlying is a two
+  percentage-point difference over five weeks on 12 trades, the paper book records zero fees, and at
+  a 0.15% round trip the gain would roughly disappear. `docs/RESULTS.md` says so in the same words.
+- No application code, config key or test changed; the only Python changes are the two new scripts.
+
 ## 2026-10-26 — CI now enforces what the repository already claimed, and `master` is gated
 
 ### Changed

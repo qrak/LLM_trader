@@ -31,7 +31,7 @@ jobs:
       - name: Seed config from the tracked template (no secrets)
         run: cp config/config.ini.example config/config.ini
       - name: Lint
-        run: ruff check src scripts
+        run: ruff check src scripts start.py
       - name: Type check
         # pyrightconfig.json points at .venv; the runner has no .venv, so name the interpreter.
         run: python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src start.py
