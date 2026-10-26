@@ -9,4 +9,4 @@ pytest-timeout>=2.4.0
 ruff==0.16.0
 # Pinned: pyright is a gate, not a convenience. A new release turns new rules on and would
 # fail CI on code nobody touched; bump it in its own commit with the resulting fixes.
-pyright==1.1.411
+pyright==1.1.414
