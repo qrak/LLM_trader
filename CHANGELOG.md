@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-10-26 — CI now enforces what the repository already claimed, and `master` is gated
+
+### Changed
+- `.github/workflows/tests.yml` runs **pyright** after ruff. Every changelog entry in this file quotes a "pyright 0 errors" result, but no workflow executed it; the gate lived only in the habit of whoever ran the command. `requirements-dev.txt` pins `pyright==1.1.411` for the same reason `ruff` is pinned: a new release turns new rules on and would fail CI on code nobody touched.
+- `.github/workflows/tests.yml` gains a **website** job: `npm ci && npm run build` in `website/`. Dependabot bumps `astro`, `vite`, `zod` and `undici` every few days, and nothing verified the site still built — CodeQL parses JavaScript but never runs Astro.
+- `.github/workflows/tests.yml` gains `concurrency` keyed on the ref: a superseded pull request run is cancelled, a `master` run never is, so every green push still produces exactly one build (the release workflow keys off a completed run).
+- `.github/workflows/dependency-review.yml` fails a pull request that introduces a high-severity dependency. Dependabot repairs what is already known to be vulnerable; this stops a new one from arriving.
+- Ruleset **"master: green before merge"** (repository setting, not a file): `deletion` and `non_fast_forward` are blocked, and a pull request merge requires `python checks`, `website build`, `Analyze (python)` and `Analyze (javascript-typescript)`. Repository administrators bypass, so direct commits to `master` keep working; `CONTRIBUTING.md` documents the rule and the trap that a required context which never reports makes the branch permanently unmergeable.
+- Secret scanning and push protection were already enabled on this public repository (`keys.env` is ignored and untracked); the optional `secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` return `200` from the API but stay `disabled`, so they were left alone rather than claimed.
+
+### Verified
+- Run `40390670598` on `26fccd4`: `python checks` green in 7 min (pyright inside it), `website build` green in 20 s, CodeQL `Analyze (python)` and `Analyze (javascript-typescript)` green. The same push produced its `build release` run through `workflow_run`.
+- Local before pushing: `pyright --pythonpath … src start.py` → 0 errors in 13 s; `npm ci && npm run build` → 11 pages in 20 s + 10 s on a warm tree.
+- Ruleset read back from the API with the four contexts and `bypass_mode: always` for the administrator role; the documentation-only commit after it was pushed to `master` under the ruleset, which is what proved the bypass works.
+
 ## 2026-10-26 — Releases stop being a second, hand-written history
 
 ### Changed

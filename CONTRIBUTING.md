@@ -64,6 +64,13 @@ URL — so running a specific version never requires a release.
 Semantic-version tags (`v1.x`) are therefore reserved for milestones worth pointing a person at, not
 for a cadence: no release PR per merge, and no renumbering of releases after the fact.
 
+`master` carries a ruleset ("master: green before merge"): the branch cannot be deleted or
+force-pushed, and merging a pull request needs `python checks` (ruff, pyright, unit tests),
+`website build`, `Analyze (python)` and `Analyze (javascript-typescript)`. Repository
+administrators bypass it, so a direct fix push still works — the ruleset stops accidents, not you.
+If you add a required job, add its exact job `name` to the ruleset in the same change; a required
+context that never reports keeps the branch permanently unmergeable.
+
 ## Pull Request Checklist
 
 - Describe what changed and why.
