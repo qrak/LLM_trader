@@ -1,0 +1,88 @@
+name: build release
+
+# One release entry, always current.
+#
+# Every green `tests` run on `master` gets an immutable date tag
+# (`build-YYYY.MM.DD-HHMM`, UTC) as a rollback anchor, and the newest build becomes the only
+# `build-*` entry on the Releases page: older build entries are removed while their tags stay,
+# so `git checkout build-2026.10.26-1530` still works and the page never shows a stale build.
+#
+# Semver tags (`v1.x`) stay manual and milestone-only. Nothing in this tree reads a version
+# (no `__version__`, no artifact, no download URL), so a version per merge is bookkeeping
+# without a consumer.
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: tag + rolling release
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Tag the tested commit
+        id: tag
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tag="build-$(date -u +%Y.%m.%d-%H%M)"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            tag="$tag.$GITHUB_RUN_ATTEMPT"
+          fi
+          git tag -a "$tag" -m "green build of $SHA"
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the rolling release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          short="${SHA:0:7}"
+          gh release create "$TAG" --repo "$REPO" \
+            --title "Latest build — ${TAG#build-} ($short)" \
+            --notes "Automatic build of \`$short\` from \`master\`, published only after the \`tests\` workflow passed.
+          This page keeps a single build entry; every build keeps its date tag, so \`git checkout $TAG\` is the rollback point." \
+            --generate-notes \
+            --latest
+
+      - name: Roll older build entries off the page
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          older=$(gh release list --repo "$REPO" --limit 200 --json tagName \
+            --jq '.[].tagName' | grep '^build-' | grep -vx "$TAG" || true)
+          for old in $older; do
+            gh release delete "$old" --repo "$REPO" --yes
+          done
+          echo "kept: $TAG"

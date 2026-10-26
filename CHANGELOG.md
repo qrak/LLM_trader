@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-26 — Releases stop being a second, hand-written history
+
+### Changed
+- `.github/workflows/release.yml` publishes builds. After a green `tests` run on `master` it writes an annotated `build-YYYY.MM.DD-HHMM` (UTC) tag and updates one rolling "Latest build" release whose body is generated from the commits, then deletes the older `build-*` release **entries** while keeping their tags. The page therefore shows exactly one current build, and `git checkout build-<stamp>` still works as a rollback point — the role `pre-hold-fix-2026-09-18` played by hand.
+- Hand-maintained semver releases stop being a cadence; `v1.x` is milestone-only. Nothing reads a version: no `__version__`, no release artifact, no download URL, and no page on `website/` links to Releases. The four-month `v1.0` → `v1.1.5` train was prose maintained for a consumer that does not exist, and it aged within days — `v1.1.5` was already 14 commits and 8 changelog entries behind when this landed.
+- `CONTRIBUTING.md` documents the model under "Branches, Versions and Releases" (single trunk, automatic releases, semver reserved for milestones) and drops the stale "create a feature branch from `main`" line: the branch is `master`.
+- Deleted `develop` and `experimental`. Both were fully merged into `master` (0 commits unique to either), so the repository keeps one long-lived branch; a `nightly` branch was rejected on purpose, since it would duplicate every merge for a deploy that is `git pull`.
+
+### Verified
+- `release.yml` parses as YAML and its `if:` gate is satisfied by both triggers (`workflow_run` on a green push to `master`, and a manual `workflow_dispatch`); `gh workflow view` resolves the pushed file.
+- No application code, test, config, dependency or runtime file changed: the set is the new workflow, `CONTRIBUTING.md` and this entry.
+
 ## 2026-10-26 — Inference cost enters the cycle journal and the EV threshold
 
 ### Changed
