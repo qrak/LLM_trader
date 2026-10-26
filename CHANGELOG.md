@@ -9,7 +9,8 @@
 - Deleted `develop` and `experimental`. Both were fully merged into `master` (0 commits unique to either), so the repository keeps one long-lived branch; a `nightly` branch was rejected on purpose, since it would duplicate every merge for a deploy that is `git pull`.
 
 ### Verified
-- `release.yml` parses as YAML and its `if:` gate is satisfied by both triggers (`workflow_run` on a green push to `master`, and a manual `workflow_dispatch`); `gh workflow view` resolves the pushed file.
+- Both triggers ran end to end on the public repo. The manual dispatch published `build-2026.10.26-0228`; the green `tests` run on the same commit fired the `workflow_run` path, published `build-2026.10.26-0233`, deleted the `-0228` **release entry** and kept its tag — the Releases page then held exactly one build, and both stamps stayed checkout-able.
+- Generated notes diffed against the previous release (`v1.1.5`), so the body listed the four dependabot PRs merged since, not an empty range.
 - No application code, test, config, dependency or runtime file changed: the set is the new workflow, `CONTRIBUTING.md` and this entry.
 
 ## 2026-10-26 — Inference cost enters the cycle journal and the EV threshold
