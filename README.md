@@ -142,7 +142,8 @@ pyright src start.py               # 0 errors
 
 Four areas — `domain_trading` (signals, orders, exits, risk, post-mortem), `domain_brain`
 (vector memory, rules, scoring), `domain_rag_indicators` (news pipeline, indicator maths) and
-`domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI that is marked integration, so CI skips it. Parametrisation multiplies the collected count, so it is
+`domain_infra` (providers, dashboard, persistence) — plus a Playwright check of the admin UI,
+marked `integration` so CI skips it. Parametrisation multiplies the collected count, so it is
 larger than the number of `def test_` functions. CI runs the same gates on every push:
 `ruff`, `pyright`, `pytest -m "not integration"`, the website build and CodeQL.
 
