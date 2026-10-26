@@ -1,0 +1,24 @@
+name: dependency review
+
+# Dependabot fixes what is already known to be vulnerable; this job stops a pull request
+# from introducing a vulnerable or incompatible dependency in the first place.
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    name: dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure

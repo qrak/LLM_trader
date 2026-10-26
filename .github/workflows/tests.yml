@@ -9,9 +9,15 @@ on:
 permissions:
   contents: read
 
+# A pull request that is pushed to twice should not queue behind its own stale run.
+# A push to master must never be cancelled: release.yml publishes one build per green run.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   unit:
-    name: unit tests + ruff
+    name: python checks
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -26,5 +32,26 @@ jobs:
         run: cp config/config.ini.example config/config.ini
       - name: Lint
         run: ruff check src scripts
+      - name: Type check
+        # pyrightconfig.json points at .venv; the runner has no .venv, so name the interpreter.
+        run: python -m pyright --pythonpath "$(python -c 'import sys; print(sys.executable)')" src start.py
       - name: Unit tests (no network, no browser, no API keys)
         run: pytest tests -q -m "not integration" --timeout=120 -p no:cacheprovider
+
+  website:
+    name: website build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: website
+      - name: Build the site
+        run: npm run build
+        working-directory: website
