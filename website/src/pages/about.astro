@@ -3,49 +3,41 @@ import ArticleLayout from '../layouts/ArticleLayout.astro';
 ---
 
 <ArticleLayout
-	title="About — Semantic Signal LLM Trader"
-	description="About @qrak: self-taught backend developer from Wrocław, Poland, building an open-source AI trading bot with 2,514 automated tests."
+	title="About — Semantic Signal"
+	description="About @qrak: backend developer in Wrocław, Poland. Semantic Signal is an open-source LLM trading agent with 2,514 automated tests."
 	meta="About"
 >
-	<span slot="title">About the developer</span>
-	<p slot="subtitle" class="subtitle">Self-taught backend developer. AI/LLM specialist. Building autonomous systems after hours in Wrocław, Poland.</p>
+	<span slot="title">About</span>
+	<p slot="subtitle" class="subtitle">Backend developer, Wrocław, Poland.</p>
 
 	<section class="section">
-		<h2>Who I am</h2>
-		<p>I'm <strong>@qrak</strong> — a self-taught backend developer with deep AI/LLM experience. I work in a backend/AI role, and I build autonomous AI systems on my own time. My strength is depth rather than breadth: every line of this codebase was written, tested and understood by me.</p>
-		<p>Before the warehouse I worked with <strong>enterprise SAP environments at BSH Sprzęt Gospodarstwa Domowego</strong>, where I learned how large, mission-critical systems are structured — and what happens when they are built carelessly.</p>
+		<h2>Who</h2>
+		<p>I'm <strong>@qrak</strong>. Backend developer with AI/LLM experience; before that I worked with enterprise SAP environments at BSH Sprzęt Gospodarstwa Domowego. Semantic Signal is my own project, built after hours.</p>
 	</section>
 
 	<section class="section">
-		<h2>What I'm building now</h2>
-		<p>Semantic Signal is an open-source, vision-capable AI trading agent: it reads candlestick charts as images, keeps semantic memory of closed-trade experiences, and uses a Bull/Bear reasoning prompt alongside deterministic risk limits before acting.</p>
-		<p>Right now I'm hardening the <strong>trade executor</strong> — the separate service that carries the system from simulated capital towards real exchange orders, under the same guard chain and with a verdict journal that confirms what happened to every order. Capital stays simulated until that path proves itself; today it runs against an exchange testnet, and the site says so instead of implying otherwise.</p>
-		<p>More on the project: <a href="/story/">the full development history</a>.</p>
+		<h2>The project</h2>
+		<p>An open-source LLM trading agent: it reads candlestick charts as images, keeps semantic memory of closed trades, and applies deterministic risk limits before a decision is booked. Capital is simulated.</p>
+		<p>The executor — the separate service that places orders — runs against an exchange testnet. That path stays on testnet until it has been verified, and the site says so.</p>
+		<p>History: <a href="/story/">the full development history</a>. Numbers: <a href="/results/">the results page</a>.</p>
 	</section>
 
 	<section class="section">
-		<h2>What I actually work on (repositories)</h2>
+		<h2>Repositories</h2>
 		<ul>
-			<li><a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">qrak/LLM_trader</a> — the main project, and the one this site documents: the reasoning engine, the Numba indicator library, the vector memory, the dashboard and this website. Started December 2025, still active.</li>
-			<li><a href="https://github.com/qrak/ti_numba" target="_blank" rel="noopener">qrak/ti_numba</a> — high-performance technical indicators built on Numba JIT, extracted as a standalone library. This is the indicator work the bot runs on.</li>
-			<li><a href="https://github.com/qrak/DiscordCryptoAnalyzer" target="_blank" rel="noopener">qrak/DiscordCryptoAnalyzer</a> — the earlier Discord bot that analysed crypto markets and posted to a server. The precursor to the current project; less maintained, kept public for the history.</li>
-			<li>Everything else on <a href="https://github.com/qrak" target="_blank" rel="noopener">my GitHub</a> is older experiments and tools, and I would rather say that than pad the list.</li>
+			<li><a href="https://github.com/qrak/LLM_trader" target="_blank" rel="noopener">qrak/LLM_trader</a> — the main project: reasoning engine, Numba indicator library, vector memory, dashboard and this site.</li>
+			<li><a href="https://github.com/qrak/ti_numba" target="_blank" rel="noopener">qrak/ti_numba</a> — the technical indicators, extracted as a standalone library.</li>
+			<li><a href="https://github.com/qrak/DiscordCryptoAnalyzer" target="_blank" rel="noopener">qrak/DiscordCryptoAnalyzer</a> — the earlier bot, kept for the history.</li>
 		</ul>
 	</section>
 
 	<section class="section">
-		<h2>How I work</h2>
+		<h2>How the code is maintained</h2>
 		<ul>
-			<li><strong>Tests before claims.</strong> The suite is at <strong>2,514 tests</strong>, all of them passing, none skipped, and runs in about two and a half minutes — <code>python -m pytest tests -q</code>. Numbers on this site come from that run, not from memory.</li>
-			<li><strong>A changelog with the ugly parts in it.</strong> Decisions, reversals and the "this aged badly" notes are in the public <code>CHANGELOG.md</code>, including a brain-learning reset after a losing streak.</li>
-			<li><strong>Corrections in public.</strong> When the site claims something the code no longer does, the page changes and the old claim stays visible in the <a href="/story/">story's errata section</a>.</li>
+			<li><strong>2,514 tests</strong>, ruff and pyright clean in CI, ~145 s for the suite — <code>python -m pytest tests -q</code>.</li>
+			<li><strong>CHANGELOG.md</strong> records decisions, reversals and mistakes, including a brain-learning reset after a losing streak.</li>
+			<li><strong>AGENTS.md</strong> per package documents conventions for coding models.</li>
 		</ul>
-	</section>
-
-	<section class="section">
-		<h2>Where I am now</h2>
-		<p>I work in a <strong>backend/AI role</strong>; Semantic Signal is what I build on my own time, as an open-source portfolio project rather than a product pitch.</p>
-		<p>No university degree — the portfolio is the argument: a repo with 2,514 tests you can run yourself, a <a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener">live dashboard</a> you can inspect right now, and a codebase whose history is fully documented.</p>
 	</section>
 
 	<section class="section">
