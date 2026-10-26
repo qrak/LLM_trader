@@ -1,8 +1,7 @@
 # Features in detail
 
 The README keeps one line per feature; this page is the full description, written as
-implementation notes rather than marketing. Every number here is checkable in the file named
-next to it.
+implementation notes. Every number here is checkable in the file named next to it.
 
 ## Brain with memory
 

@@ -3,11 +3,11 @@
 ## 2026-10-26 — The README shows the product before explaining it, and the site stops quoting a stale suite
 
 ### Changed
-- `README.md` rebuilt around proof instead of prose: a real dashboard screenshot and a short GIF at
-  the top, a nine-language switcher (`readme-i18n.com` renders and re-translates on every README
-  change, so no translated files can rot), a **Results** section with the live paper-trading ledger
-  and the buy-and-hold benchmark, a comparison table against TradingAgents / Freqtrade / Hummingbot,
-  and a feature table. The long-form sections were **moved, not deleted**.
+- `README.md` rebuilt: a dashboard screenshot and a short GIF at the top, a nine-language switcher
+  (`readme-i18n.com` renders and re-translates on every README change, so no translated files can
+  rot), a **Results** section with the live paper-trading ledger and the buy-and-hold benchmark, and
+  a feature table. The long-form sections were **moved, not deleted**. There is deliberately no
+  "News" block (a release feed belongs in this file) and no per-project comparison table.
 - New `docs/`: `FEATURES.md` (every feature with its implementing file), `SETUP.md` (requirements,
   platform scripts, secrets, website deploy), `CONFIGURATION.md` (every config key, prompt budget,
   billing windows, executor handoff), `RESULTS.md` (ledger, benchmark, caveats, reproduction).

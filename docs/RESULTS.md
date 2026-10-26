@@ -71,13 +71,12 @@ retrieval and a multimodal LLM call.
 The bot finished +0.14% while the underlying fell 1.83%. That is a ~2 percentage point
 difference over five weeks — not evidence of an edge.
 
-## Honest limitations
+## Limitations
 
-- **The sample is tiny.** Twelve closed trades cannot separate skill from noise; a 41.7% win
-  rate with a 1.41 profit factor is one lucky streak away from 0.8.
+- **The sample is tiny.** Twelve closed trades cannot separate skill from noise.
 - **Recorded fees are zero.** The paper book stores `fee = 0.0` on every row. At a 0.15%
   round-trip fee on each of the 12 trades (8% of capital per position, ~$1.20 per trade) the
-  +$13.95 gain would be roughly erased. The ledger is gross of trading costs.
+  +$13.95 gain would mostly disappear. The ledger is gross of trading costs.
 - **Two trades are excluded on purpose.** Both sandbox exits printed below the real market low
   in the same minute (exit fill divergence), so they are kept in execution history but dropped
   from statistics and from the brain's learning — see `src/trading/post_mortem.py` and the

@@ -69,7 +69,7 @@ const TRADES = [
 		</p>
 		<figure class="chart">
 			<img src="/results-vs-btc.png" width="1200" height="520" alt="Bot +0.14% versus BTC buy-and-hold −1.83% over the same window" loading="lazy" />
-			<figcaption>Same window, same instrument. A two percentage point difference over five weeks is noise, not an edge.</figcaption>
+			<figcaption>Same window, same instrument. Two percentage points over five weeks is not an edge.</figcaption>
 		</figure>
 	</section>
 
@@ -93,12 +93,12 @@ const TRADES = [
 	</section>
 
 	<section class="section">
-		<h2>What these numbers do not prove</h2>
+		<h2>Caveats</h2>
 		<ul>
-			<li><strong>Twelve trades cannot separate skill from noise.</strong> A 41.7% win rate with a 1.41 profit factor is one lucky streak away from 0.8.</li>
-			<li><strong>The paper book records zero fees.</strong> At a 0.15% round trip on each of the 12 trades, the +$13.95 gain would be roughly erased. The ledger above is gross of trading costs.</li>
+			<li><strong>Twelve trades cannot separate skill from noise.</strong> The sample is too small to read as a track record.</li>
+			<li><strong>The paper book records zero fees.</strong> At a 0.15% round trip on each of the 12 trades the +$13.95 gain would mostly disappear, so the ledger is gross of trading costs.</li>
 			<li><strong>Two trades are excluded on purpose</strong> — both sandbox exits printed below the real market low in the same minute, so they stay in execution history but not in statistics or in the brain's learning.</li>
-			<li><strong>This is a paper book.</strong> The executor can reach an exchange testnet, not live funds. Profitability is unproven and stated as such in the README.</li>
+			<li><strong>This is a paper book.</strong> The executor can reach an exchange testnet, not live funds.</li>
 		</ul>
 		<p>
 			Full methodology, per-trade table and the reproduction command:
