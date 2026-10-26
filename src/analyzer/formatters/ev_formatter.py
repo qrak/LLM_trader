@@ -8,10 +8,16 @@ Fee model: round trip = 2 × fee_percent × POSITION notional (0.075% per side o
 Binance spot). The worked example anchors on the standard (NEUTRAL profile)
 position cap — fees must never be computed off the whole portfolio, or every EV
 estimate looks ~6× costlier than the trade it describes.
+
+Inference cost is a rolling per-analysis average supplied by the app. When it is
+positive the section adds the cost, nets it out of step 5 and raises the 1.5×
+threshold to fees + inference. With no measured cost the section is byte-identical
+to the fee-only version, so the prompt does not change before the first measurement.
 """
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -39,7 +45,9 @@ class EVFrameworkFormatter:
         """Round-trip fee in dollars for a position of the given notional."""
         return position_notional * self.fee_percent * 2
 
-    def build_ev_framework_section(self, current_capital: float) -> str:
+    def build_ev_framework_section(
+        self, current_capital: float, inference_cost_usd: float = 0.0
+    ) -> str:
         """Build the EV framework block injected into the system prompt."""
         pnl = current_capital - self.starting_capital
         pnl_pct = (pnl / self.starting_capital) * 100 if self.starting_capital > 0 else 0.0
@@ -48,7 +56,46 @@ class EVFrameworkFormatter:
         standard_pct = self.STANDARD_POSITION_PCT * 100
         example_notional = current_capital * self.STANDARD_POSITION_PCT
         example_fee = self.round_trip_fee(example_notional)
-        breakeven_ev = example_fee * 1.5
+
+        inference_cost = 0.0
+        if not isinstance(inference_cost_usd, bool):
+            try:
+                candidate = float(inference_cost_usd)
+            except (TypeError, ValueError):
+                candidate = 0.0
+            if math.isfinite(candidate):
+                inference_cost = max(0.0, candidate)
+
+        cost_base = example_fee + inference_cost
+        breakeven_ev = cost_base * 1.5
+
+        step_five = (
+            f"  5. EV = P(win) × avg_win + (1−P(win)) × (−avg_loss) − round-trip fee "
+            f"({round_trip_pct:.3f}% of the position size)"
+        )
+        hold_rule = "- **HOLD if EV is negative or below the 1.5× fee threshold**"
+        cost_lines: list[str] = []
+        threshold_lines: list[str] = []
+        threshold_rule = (
+            f"- **Take the trade if EV > 1.5× the round-trip fee of your position** "
+            f"(fee ${example_fee:,.2f} on a standard {standard_pct:.0f}% position → "
+            f"EV must exceed ${breakeven_ev:,.2f})"
+        )
+        if inference_cost > 0:
+            step_five += f" − inference cost (${inference_cost:,.4f})"
+            hold_rule = "- **HOLD if EV is negative or below the 1.5× cost threshold**"
+            cost_lines.append(
+                f"- Inference cost (rolling average per analysis): ${inference_cost:,.4f}"
+            )
+            threshold_lines.append(
+                f"- Net break-even: ${cost_base:,.2f} (round-trip fee ${example_fee:,.2f} + "
+                f"inference ${inference_cost:,.4f}); EV threshold 1.5× = ${breakeven_ev:,.2f}"
+            )
+            threshold_rule = (
+                f"- **Take the trade if EV > 1.5× (round-trip fee of your position + inference cost)** "
+                f"(fee ${example_fee:,.2f} on a standard {standard_pct:.0f}% position + "
+                f"inference ${inference_cost:,.4f} → EV must exceed ${breakeven_ev:,.2f})"
+            )
 
         lines = [
             "",
@@ -66,6 +113,7 @@ class EVFrameworkFormatter:
                 f"({side_fee_pct:.3f}% per side) — e.g. ${example_fee:,.2f} on a standard "
                 f"{standard_pct:.0f}% position (${example_notional:,.2f})"
             ),
+            *cost_lines,
             "",
             "### EV Decision Rule",
             "For every BUY or SELL decision, explicitly estimate:",
@@ -73,18 +121,12 @@ class EVFrameworkFormatter:
             "  2. avg_win — expected profit in dollars if TP is hit",
             "  3. P(lose) — probability the trade hits SL first (≈ 1 − P(win))",
             "  4. avg_loss — expected loss in dollars if SL is hit",
-            (
-                f"  5. EV = P(win) × avg_win + (1−P(win)) × (−avg_loss) − round-trip fee "
-                f"({round_trip_pct:.3f}% of the position size)"
-            ),
+            step_five,
             "",
             "### EV Thresholds",
-            (
-                f"- **Take the trade if EV > 1.5× the round-trip fee of your position** "
-                f"(fee ${example_fee:,.2f} on a standard {standard_pct:.0f}% position → "
-                f"EV must exceed ${breakeven_ev:,.2f})"
-            ),
-            "- **HOLD if EV is negative or below the 1.5× fee threshold**",
+            *threshold_lines,
+            threshold_rule,
+            hold_rule,
             "- **After the system R/R floor is met, EV decides entry quality.** An R/R near the active floor with a well-supported P(win) can be +EV; a high R/R with a low P(win) can be negative EV and must be rejected. Do not HOLD solely because the ratio is close to the floor.",
             (
                 "- **State P(win) AND its basis** (which confluences, regime and structure support it). P(win) is logged "

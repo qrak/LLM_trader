@@ -124,50 +124,87 @@ class DefiLlamaClient:
             self.session = aiohttp.ClientSession()
         return self.session
 
-    async def get_stablecoins(self) -> list[StablecoinData]:
-        """Fetch list of all stablecoins."""
-        url = f"{self.STABLECOINS_URL}/stablecoins"
+    async def _fetch_json(self, url: str, expected_type: type) -> Any | None:
+        """Decode a DefiLlama body as JSON whatever Content-Type it declares.
+
+        DefiLlama answers `/v2/chains` with a valid JSON array under
+        `text/html; charset=utf-8`; aiohttp's `response.json()` refuses that
+        mimetype and raised ContentTypeError, so every cycle discarded the whole
+        chain list and macro data along with it. Reading and decoding the body
+        here keeps the data and reports the real failure (HTTP status, a
+        non-JSON body, or a JSON shape the endpoint no longer honours) instead
+        of "200, message='Attempt to decode JSON...'".
+
+        The container shape is checked here, once, so callers get either the
+        expected type or `None` and never repeat the same `isinstance`.
+
+        Macro data is informational: an unavailable pull is logged and returned
+        as `None` rather than raised, so the bot keeps trading without it.
+        """
         try:
             session = await self._get_session()
             async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    pegged = data.get("peggedAssets", [])
-                    return [
-                        StablecoinData(
-                            id=item.get("id", ""),
-                            name=item.get("name", ""),
-                            symbol=item.get("symbol", ""),
-                            gecko_id=item.get("gecko_id"),
-                            pegType=item.get("pegType"),
-                            circulating=float(item.get("circulating", {}).get("peggedUSD", 0) or 0),
-                            circulatingPrevDay=float(item.get("circulatingPrevDay", {}).get("peggedUSD", 0) or 0),
-                            circulatingPrev1Week=float(item.get("circulatingPrev1Week", {}).get("peggedUSD", 0) or 0),
-                            circulatingPrev1Month=float(item.get("circulatingPrev1Month", {}).get("peggedUSD", 0) or 0)
-                        )
-                        for item in pegged
-                        if item.get("circulating", {}).get("peggedUSD") is not None
-                    ]
-                self.logger.error("DefiLlama Stablecoins API error: %s", response.status)
-                return []
+                if response.status != 200:
+                    self.logger.warning("DefiLlama %s answered HTTP %s", url, response.status)
+                    return None
+                body = await response.read()
         except Exception as e:  # noqa: BLE001
-            self.logger.error("Error fetching stablecoins: %s", e)
+            self.logger.error("DefiLlama request to %s failed: %s", url, e)
+            return None
+
+        try:
+            data = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            preview = body[:160].decode("utf-8", "replace").replace("\n", " ")
+            self.logger.error("DefiLlama %s did not return JSON (%s): %s", url, e, preview)
+            return None
+
+        if not isinstance(data, expected_type):
+            self.logger.error(
+                "DefiLlama %s returned %s, expected %s",
+                url, type(data).__name__, expected_type.__name__,
+            )
+            return None
+        return data
+
+    @staticmethod
+    def _records(value: Any) -> list[dict[str, Any]]:
+        """Keep the object members of a JSON array, dropping anything else."""
+        if not isinstance(value, list):
             return []
+        return [item for item in value if isinstance(item, dict)]
+
+    async def get_stablecoins(self) -> list[StablecoinData]:
+        """Fetch list of all stablecoins."""
+        data = await self._fetch_json(f"{self.STABLECOINS_URL}/stablecoins", dict)
+        if data is None:
+            return []
+        pegged = data.get("peggedAssets")
+        if not isinstance(pegged, list):
+            self.logger.error("DefiLlama stablecoins payload has no peggedAssets list")
+            return []
+        return [
+            StablecoinData(
+                id=item.get("id", ""),
+                name=item.get("name", ""),
+                symbol=item.get("symbol", ""),
+                gecko_id=item.get("gecko_id"),
+                pegType=item.get("pegType"),
+                circulating=float(item.get("circulating", {}).get("peggedUSD", 0) or 0),
+                circulatingPrevDay=float(item.get("circulatingPrevDay", {}).get("peggedUSD", 0) or 0),
+                circulatingPrev1Week=float(item.get("circulatingPrev1Week", {}).get("peggedUSD", 0) or 0),
+                circulatingPrev1Month=float(item.get("circulatingPrev1Month", {}).get("peggedUSD", 0) or 0)
+            )
+            for item in self._records(pegged)
+            if item.get("circulating", {}).get("peggedUSD") is not None
+        ]
 
     async def get_chains_tvl(self) -> list[ChainTVLData]:
         """Fetch current TVL of all chains."""
-        url = f"{self.BASE_URL}/v2/chains"
-        try:
-            session = await self._get_session()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return [ChainTVLData(**item) for item in data]
-                self.logger.error("DefiLlama Chains API error: %s", response.status)
-                return []
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error fetching chain TVL: %s", e)
+        data = await self._fetch_json(f"{self.BASE_URL}/v2/chains", list)
+        if data is None:
             return []
+        return [ChainTVLData(**item) for item in self._records(data)]
 
     async def get_macro_overview(self) -> MacroMarketData | None:
         """Get aggregated macro market data (Stablecoin MC + TVL)."""
@@ -178,6 +215,10 @@ class DefiLlamaClient:
             )
 
             if not stables or not chains:
+                self.logger.warning(
+                    "Macro overview unavailable: stablecoins=%s chains=%s",
+                    len(stables), len(chains)
+                )
                 return None
 
             total_stable_mc = sum(s.circulating for s in stables)
@@ -215,83 +256,61 @@ class DefiLlamaClient:
 
     async def get_dex_volumes(self) -> DexVolumeData | None:
         """Fetch DEX volume overview."""
-        url = f"{self.BASE_URL}/overview/dexs"
-        try:
-            session = await self._get_session()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    protocols = data.get("protocols", [])
-                    top_protocols = sorted(
-                        [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
-                        key=lambda x: self._safe_float(x.get("total24h")),
-                        reverse=True
-                    )[:5]
-
-                    return DexVolumeData(
-                        total_24h=self._safe_float(data.get("total24h")),
-                        change_1d=self._safe_float(data.get("change_1d")),
-                        top_protocols=top_protocols
-                    )
-                self.logger.warning("DefiLlama DEX API error: %s", response.status)
-                return None
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error fetching DEX volumes: %s", e)
+        data = await self._fetch_json(f"{self.BASE_URL}/overview/dexs", dict)
+        if data is None:
             return None
+        protocols = self._records(data.get("protocols"))
+        top_protocols = sorted(
+            [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
+            key=lambda x: self._safe_float(x.get("total24h")),
+            reverse=True
+        )[:5]
+
+        return DexVolumeData(
+            total_24h=self._safe_float(data.get("total24h")),
+            change_1d=self._safe_float(data.get("change_1d")),
+            top_protocols=top_protocols
+        )
 
     async def get_fees_data(self) -> FeesData | None:
         """Fetch fees and revenue overview."""
-        url = f"{self.BASE_URL}/overview/fees"
-        try:
-            session = await self._get_session()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    protocols = data.get("protocols", [])
-                    top_earners = sorted(
-                        [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
-                        key=lambda x: self._safe_float(x.get("total24h")),
-                        reverse=True
-                    )[:5]
-
-                    total_revenue = sum(self._safe_float(p.get("total24hRevenue")) for p in protocols) if protocols else 0
-
-                    return FeesData(
-                        total_24h_fees=self._safe_float(data.get("total24h")),
-                        total_24h_revenue=total_revenue,
-                        top_earners=top_earners
-                    )
-                self.logger.warning("DefiLlama Fees API error: %s", response.status)
-                return None
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error fetching fees data: %s", e)
+        data = await self._fetch_json(f"{self.BASE_URL}/overview/fees", dict)
+        if data is None:
             return None
+        protocols = self._records(data.get("protocols"))
+        top_earners = sorted(
+            [p for p in protocols if self._safe_float(p.get("total24h")) > 0],
+            key=lambda x: self._safe_float(x.get("total24h")),
+            reverse=True
+        )[:5]
+
+        total_revenue = sum(
+            self._safe_float(p.get("total24hRevenue")) for p in protocols
+        ) if protocols else 0
+
+        return FeesData(
+            total_24h_fees=self._safe_float(data.get("total24h")),
+            total_24h_revenue=total_revenue,
+            top_earners=top_earners
+        )
 
     async def get_options_data(self) -> OptionsData | None:
         """Fetch options market overview."""
-        url = f"{self.BASE_URL}/overview/options"
-        try:
-            session = await self._get_session()
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    protocols = data.get("protocols", [])
-                    top_protocols = sorted(
-                        [p for p in protocols if self._safe_float(p.get("totalNotionalVolume")) > 0],
-                        key=lambda x: self._safe_float(x.get("totalNotionalVolume")),
-                        reverse=True
-                    )[:5]
-
-                    return OptionsData(
-                        notional_volume_24h=self._safe_float(data.get("totalNotionalVolume")),
-                        premium_volume_24h=self._safe_float(data.get("totalPremiumVolume")),
-                        top_protocols=top_protocols
-                    )
-                self.logger.warning("DefiLlama Options API error: %s", response.status)
-                return None
-        except Exception as e:  # noqa: BLE001
-            self.logger.error("Error fetching options data: %s", e)
+        data = await self._fetch_json(f"{self.BASE_URL}/overview/options", dict)
+        if data is None:
             return None
+        protocols = self._records(data.get("protocols"))
+        top_protocols = sorted(
+            [p for p in protocols if self._safe_float(p.get("totalNotionalVolume")) > 0],
+            key=lambda x: self._safe_float(x.get("totalNotionalVolume")),
+            reverse=True
+        )[:5]
+
+        return OptionsData(
+            notional_volume_24h=self._safe_float(data.get("totalNotionalVolume")),
+            premium_volume_24h=self._safe_float(data.get("totalPremiumVolume")),
+            top_protocols=top_protocols
+        )
 
     async def get_defi_fundamentals(self) -> DeFiFundamentalsData | None:
         """Fetch all DeFi fundamentals (Macro + DEX + Fees + Options)."""
@@ -323,8 +342,11 @@ class DefiLlamaClient:
 
             macro, dex, fees, options = results
 
-            if isinstance(macro, (Exception, BaseException)) or not macro:
+            if isinstance(macro, BaseException):
                 self.logger.error("Failed to fetch macro data: %s", macro)
+                return None
+            if not macro:
+                self.logger.error("Macro data unavailable, so DeFi fundamentals are skipped")
                 return None
 
             if isinstance(dex, Exception):

@@ -1781,7 +1781,7 @@ class TestTradingMemoryContext:
                     "reasoning": "Position closed: stop_loss. P&L: +3.30%. Fee: $0.0426",
                 },
                 "profit-protecting stop",
-                "- [2026-04-14 20:00] CLOSE_LONG @ $74,286.53 (Conf: HIGH) - "
+                "- [2026-04-14 20:00 UTC] CLOSE_LONG @ $74,286.53 (Conf: HIGH) - "
                 "Position closed: profit-protecting stop. P&L: +3.30%. Fee: $0.0426",
                 "- Total P&L: $+2.29 (+3.18%)",
                 "100.0% (1/1 trades)",
@@ -1803,7 +1803,7 @@ class TestTradingMemoryContext:
                     "reasoning": "Position closed: stop_loss. P&L: -1.00%. Fee: $0.0426",
                 },
                 "loss-cutting stop",
-                "- [2026-04-14 20:00] CLOSE_SHORT @ $72,720.00 (Conf: HIGH) - "
+                "- [2026-04-14 20:00 UTC] CLOSE_SHORT @ $72,720.00 (Conf: HIGH) - "
                 "Position closed: loss-cutting stop. P&L: -1.00%. Fee: $0.0426",
                 "- Total P&L: $-0.72 (-1.00%)",
                 "0.0% (0/1 trades)",
@@ -1827,7 +1827,7 @@ class TestTradingMemoryContext:
                     "reasoning": "Position closed: stop_loss. P&L: +0.00%. Fee: $0.0000",
                 },
                 "breakeven stop",
-                "- [2026-04-14 20:00] CLOSE_LONG @ $100.00 (Conf: HIGH) - "
+                "- [2026-04-14 20:00 UTC] CLOSE_LONG @ $100.00 (Conf: HIGH) - "
                 "Position closed: breakeven stop. P&L: +0.00%. Fee: $0.0000",
                 "- Total P&L: $+0.00 (+0.00%)",
                 "0.0% (0/1 trades)",
@@ -1851,7 +1851,7 @@ class TestTradingMemoryContext:
                     "reasoning": "Position closed: take_profit. P&L: +10.00%. Fee: $0.0000",
                 },
                 "take profit",
-                "- [2026-04-14 20:00] CLOSE_LONG @ $110.00 (Conf: HIGH) - "
+                "- [2026-04-14 20:00 UTC] CLOSE_LONG @ $110.00 (Conf: HIGH) - "
                 "Position closed: take profit. P&L: +10.00%. Fee: $0.0000",
                 "- Total P&L: $+10.00 (+10.00%)",
                 "100.0% (1/1 trades)",

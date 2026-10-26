@@ -100,6 +100,14 @@ class RecordingExitStrategy:
         self.calls.append(("check_take_profit", current_price))
         return self.close_reason
 
+    def take_local_exit_request(self) -> LocalExitRequest | None:
+        """No unbooked local exit condition in this double."""
+        return None
+
+    def take_executor_side_exit_reason(self) -> str | None:
+        """No exchange-side exit booked in this double."""
+        return None
+
 
 class LocalExitRequestStrategy(RecordingExitStrategy):
     """Exit-strategy double reporting an UNBOOKED local exit request (wave 3).
@@ -280,8 +288,12 @@ def exit_strategy(direction: str = "LONG", *, executor_api_enabled: bool = False
     strategy.statistics_service = MagicMock()
     strategy._state_divergence = None
     strategy._unconfirmed_intent_alert = None
+    strategy._rejected_intent_alert = None
     strategy._local_exit_request = None
     strategy._pending_local_close_decision = None
+    strategy._position_transition_lock = None
+    strategy._booked_exit_events = set()
+    strategy._position_intent_ledger = None
     strategy.config = SimpleNamespace(
         EXECUTOR_API_ENABLED=executor_api_enabled,
         EXECUTOR_API_URL="http://127.0.0.1:9199/decision" if executor_api_enabled else "",

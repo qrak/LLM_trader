@@ -168,11 +168,11 @@ class ChartGenerator:
                             first_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[0][0])
                             last_time_dt = self.format_utils.parse_timestamp_ms(ohlcv[-1][0])
                         else:
-                            first_time_dt = datetime.fromtimestamp(ohlcv[0][0] / 1000)  # noqa: DTZ006
-                            last_time_dt = datetime.fromtimestamp(ohlcv[-1][0] / 1000)  # noqa: DTZ006
+                            first_time_dt = datetime.fromtimestamp(ohlcv[0][0] / 1000, tz=timezone.utc)
+                            last_time_dt = datetime.fromtimestamp(ohlcv[-1][0] / 1000, tz=timezone.utc)
 
-                        first_time = first_time_dt.strftime("%Y-%m-%d %H:%M") if first_time_dt else "N/A"
-                        last_time = last_time_dt.strftime("%Y-%m-%d %H:%M") if last_time_dt else "N/A"
+                        first_time = first_time_dt.strftime("%Y-%m-%d %H:%M UTC") if first_time_dt else "N/A"
+                        last_time = last_time_dt.strftime("%Y-%m-%d %H:%M UTC") if last_time_dt else "N/A"
                         current_price = ohlcv[-1][4]
                         self.logger.info("📈 Data range: %s to %s | Current price: %s", first_time, last_time, current_price)
 

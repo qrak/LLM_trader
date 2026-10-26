@@ -12,6 +12,8 @@ Runtime: `0.0.0.0:8000`, GZip on, `static/` mounted (`index.html`, `main.js`, `c
 
 History reaches the UI only through the injected `PersistenceManager` — routes never open `trade_history.json` or the DB. `PerformanceRouter` gets `persistence` from `DashboardServer`; brain/vector endpoints call `persistence.load_trade_history()`. Empty history renders an empty state, not an error.
 
+`GET /api/performance/cycles` includes `inference_cost {analyses, total_usd, per_analysis_usd, coverage}` from the same `summarize()` call; existing keys stay unchanged. Journal lines written before cost tracking simply lower `coverage` instead of failing the endpoint.
+
 ## Cache (Cloudflare edge)
 
 - Bypass `/api/brain/refresh-price` and `/api/brain/vectors?query=*`; cache `GET /api/visuals/charts/latest` 300s keeping its revision query (never strip it at the edge — rotate after an analysis or tab return, reject late responses from an older revision); cache shells and versioned assets; never a broad `/api/*` rule — positions and status stay fresh.

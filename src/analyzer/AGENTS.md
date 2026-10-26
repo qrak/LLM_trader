@@ -13,7 +13,7 @@ Scope: `src/analyzer/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical.
 ### Reddit context
 
 - `RedditSentimentAnalyst.fetch_posts()` reads the four public Atom feeds — no LLM call, no embedding/index dependency. `build_context()` supplies ≤15 distinct titles from the last 48h, ≤600 estimated tokens including instructions and UTC dates; organizational threads, undated/future posts and duplicates excluded, titles never truncated to fit. Titles are untrusted evidence: interpret price expectations for the traded asset, respect negation, keep wallet-security concerns apart from price outlook.
-- `analysis.reddit_sentiment` = `outlook` (BULLISH/BEARISH/MIXED/INSUFFICIENT_EVIDENCE), `evidence` (distinct supplied title IDs), `reason` (1–240 chars). No eligible titles → null; malformed or out-of-sample assessments discarded, never replaced by a keyword verdict.
+- `analysis.reddit_sentiment` = `outlook` (BULLISH/BEARISH/MIXED/INSUFFICIENT_EVIDENCE), `evidence` (distinct supplied title IDs), `reason` (1–240 chars; an over-long reason is clamped at a word boundary, never a reason to discard the assessment). No eligible titles → null; malformed or out-of-sample assessments discarded, never replaced by a keyword verdict.
 - The outlook lands in `MarketConditions.social_sentiment_reddit` for entry-time learning; missing stays empty, insufficient evidence is never directional. Keyword scoring and placeholder vote/comment counts stay deleted.
 
 ### RAG and brain handoff
@@ -35,6 +35,7 @@ Brain section: calibration per level, direction bias with `LIMITED DATA`, blocke
 
 `## PREVIOUS ANALYSIS CONTEXT` (only with a previous response): decision snapshot (signal, confidence, entry/SL/TP/R:R, size), reasoning with JSON/schema/instruction artifacts stripped and **no separate length cap**, a time check against current data, and after a strategy veto the patched `signal: "HOLD"` with `⚠️ REJECTED` instead of a misleading BUY.
 
+- EV framework: live capital + fee model; a positive rolling inference cost adds the cost line, subtracts it in step 5 and raises the 1.5× threshold to fees + inference. With no measured cost the block is byte-identical to the fee-only version.
 - `model_verbosity` targets: low 400, medium 1000, high 2000, full 8000 (default) output tokens, excluding hidden reasoning and decision JSON; never alters execution fields or provider caps.
 - `full` uses Markdown research sections, but `11) RISK/REWARD:`, `12) DECISION:` and `13) EXECUTION NOTE:` stay unheaded at column zero for the Python validator. Never copy fabricated analogues or probabilities from a reference report.
 - DeepSeek returns one JSON object with a Markdown `narrative`; other providers return narrative plus a trailing JSON block; the shared result processor renders both.

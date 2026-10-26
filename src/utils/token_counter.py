@@ -303,3 +303,23 @@ class CostStorage:
         """Get costs for a specific provider."""
         return self._providers.get(provider, ProviderCostStats())
 
+    def snapshot(self) -> dict[str, float]:
+        """Cumulative cost and token totals across all providers."""
+        with self._lock:
+            total_cost = 0.0
+            total_input_tokens = 0
+            total_output_tokens = 0
+            for stats in self._providers.values():
+                total_cost += stats.total_cost
+                total_input_tokens += stats.total_input_tokens
+                total_output_tokens += stats.total_output_tokens
+            return {
+                "cost_usd": float(total_cost),
+                "input_tokens": float(total_input_tokens),
+                "output_tokens": float(total_output_tokens),
+            }
+
+    def total_cost(self) -> float:
+        """Cumulative cost across all providers."""
+        return self.snapshot()["cost_usd"]
+

@@ -93,14 +93,8 @@ class BrainRouter:
             result = dict(cached)
             result["brain_lifecycle"] = self.dashboard_state.get_brain_lifecycle()
             return result
-        try:
-            data_dir = self.config.DATA_DIR
-        except AttributeError:
-            data_dir = "data"
-        try:
-            timeframe = self.config.TIMEFRAME
-        except AttributeError:
-            timeframe = "unknown"
+        data_dir = self.config.DATA_DIR
+        timeframe = self.config.TIMEFRAME
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         stats_file = Path(data_dir) / "trading" / "statistics.json"
         status = {
@@ -552,10 +546,7 @@ class BrainRouter:
             "text_available": False,
         }
 
-        try:
-            timeframe = self.config.TIMEFRAME
-        except AttributeError:
-            timeframe = "unknown"
+        timeframe = self.config.TIMEFRAME
         try:
             now["exit_management"] = build_exit_execution_context_from_config(
                 self.config, timeframe
@@ -563,10 +554,7 @@ class BrainRouter:
         except Exception:
             self.logger.error("Failed to build exit management for decision-summary", exc_info=True)  # noqa: G201
 
-        try:
-            data_dir = self.config.DATA_DIR
-        except AttributeError:
-            data_dir = "data"
+        data_dir = self.config.DATA_DIR
         prev_response_file = Path(data_dir) / "trading" / "previous_response.json"
         try:
             if prev_response_file.exists():

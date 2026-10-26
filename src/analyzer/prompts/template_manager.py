@@ -629,10 +629,7 @@ class TemplateManager:
         conf_std = thresholds.get("min_confluences_standard", 2)
         pos_reduce_mixed = thresholds.get("position_reduce_mixed", 0.20)
         pos_reduce_div = thresholds.get("position_reduce_divergent", 0.35)
-        try:
-            max_pos = float(self.config.MAX_POSITION_SIZE)
-        except (AttributeError, TypeError, ValueError):
-            max_pos = 0.10
+        max_pos = float(self.config.MAX_POSITION_SIZE)
         if max_pos <= 0:
             max_pos = 0.10
         min_pos_size = min(thresholds.get("min_position_size", 0.02), max_pos)

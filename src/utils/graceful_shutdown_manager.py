@@ -163,7 +163,7 @@ class GracefulShutdownManager:
             _kl.stop_sync_server(silence_warnings=True)
             if self.logger:
                 self.logger.debug("Kaleido sync server stopped")
-        except (ImportError, AttributeError, Exception):  # noqa: S110, BLE001
+        except Exception:  # noqa: S110, BLE001
             pass
 
         try:

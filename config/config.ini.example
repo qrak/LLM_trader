@@ -17,6 +17,11 @@ crypto_pair = BTC/USDC
 # timeframes will degrade performance significantly and increase costs due to
 # more frequent LLM calls. You have been warned.
 timeframe = 4h
+# Zone used to print timestamps for humans (log lines, notifications, operator
+# messages). Trading itself always runs on UTC candles. Leave empty to follow the OS
+# zone; an IANA name keeps the labels — including the DST switch — correct no matter
+# where the process runs.
+timezone = Europe/Warsaw
 # Candles fetched per timeframe, and candles drawn into the chart image sent with the prompt.
 candle_limit = 999
 ai_chart_candle_limit = 125

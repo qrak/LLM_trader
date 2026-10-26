@@ -138,6 +138,40 @@ def test_ev_section_fee_and_threshold_rules_are_position_based(ev_formatter):
     assert "$7.50" not in section
 
 
+def test_ev_section_with_zero_inference_cost_is_identical(ev_formatter):
+    assert ev_formatter.build_ev_framework_section(
+        current_capital=10000.0, inference_cost_usd=0.0
+    ) == ev_formatter.build_ev_framework_section(current_capital=10000.0)
+
+
+def test_ev_section_charges_inference_cost_in_the_threshold(ev_formatter):
+    section = ev_formatter.build_ev_framework_section(
+        current_capital=10000.0, inference_cost_usd=0.50
+    )
+
+    assert "- Inference cost (rolling average per analysis): $0.5000" in section
+    assert (
+        "- Net break-even: $1.70 (round-trip fee $1.20 + inference $0.5000); "
+        "EV threshold 1.5× = $2.55"
+    ) in section
+    assert "1.5× (round-trip fee of your position + inference cost)" in section
+    assert "EV must exceed $2.55" in section
+    assert "− inference cost ($0.5000)" in section
+    assert "1.5× cost threshold" in section
+    assert "EV must exceed $1.80" not in section
+
+
+@pytest.mark.parametrize(
+    "bad_cost",
+    [-1.0, float("nan"), float("inf"), float("-inf"), None, "x", True],
+    ids=["negative", "nan", "inf", "negative-inf", "none", "string", "bool"],
+)
+def test_ev_section_treats_invalid_inference_cost_as_zero(ev_formatter, bad_cost):
+    assert ev_formatter.build_ev_framework_section(
+        current_capital=10000.0, inference_cost_usd=bad_cost
+    ) == ev_formatter.build_ev_framework_section(current_capital=10000.0)
+
+
 @pytest.mark.parametrize(
     ("market_metrics", "expected_tokens", "forbidden_tokens"),
     [

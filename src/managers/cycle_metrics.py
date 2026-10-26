@@ -6,9 +6,11 @@ guards block anything" — all of which need history across restarts. JSONL appe
 crash-safe enough for metrics (a torn last line is skipped on read) and need no schema
 migration.
 
-Cost is deliberately absent: the provider usage numbers are not plumbed through the
-analyzer yet, and a made-up cost is worse than no cost. Add it here when the usage
-fields reach this layer.
+Cost is recorded only when the provider layer measured it: a cycle may carry
+``inference_cost_usd``, ``prompt_tokens``, ``completion_tokens``, ``provider`` and
+``model``. A missing cost stays absent or ``None`` — never invented. ``summarize()``
+reports cost coverage so a partially covered journal is visible instead of silently
+pretending the missing analyses were free.
 """
 
 from __future__ import annotations
@@ -73,6 +75,17 @@ def percentile(values: Iterable[Any], pct: float) -> float | None:
     return numbers[min(rank, len(numbers)) - 1]
 
 
+def _finite_non_negative(value: Any) -> float | None:
+    """Finite, non-negative number or None; bools and strings are not costs."""
+    if isinstance(value, (bool, str)):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number >= 0 else None
+
+
 def _parse_ts(raw: Any) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
@@ -84,7 +97,7 @@ def _parse_ts(raw: Any) -> datetime | None:
 def summarize(
     records: Iterable[dict[str, Any]], *, days: int = 1, now: datetime | None = None
 ) -> dict[str, Any]:
-    """Aggregate records from the last ``days`` days into the numbers worth watching."""
+    """Aggregate records from the last ``days`` days, including inference-cost coverage."""
     moment = now or datetime.now(timezone.utc)
     cutoff = moment - timedelta(days=days)
     window = [record for record in records if (ts := _parse_ts(record.get("ts"))) is not None and ts >= cutoff]
@@ -92,7 +105,14 @@ def summarize(
     latencies = [record.get("latency_ms") for record in window]
     signals = Counter(str(record.get("signal") or "UNKNOWN").upper() for record in window)
     actions = Counter(str(record.get("action") or "NONE").upper() for record in window)
+    cost_values = [
+        value
+        for record in window
+        if (value := _finite_non_negative(record.get("inference_cost_usd"))) is not None
+    ]
     cycles = len(window)
+    analyses = len(cost_values)
+    total_cost = sum(cost_values)
 
     return {
         "cycles": cycles,
@@ -105,5 +125,11 @@ def summarize(
         "latency_ms": {
             "p50": percentile(latencies, 50),
             "p95": percentile(latencies, 95),
+        },
+        "inference_cost": {
+            "analyses": analyses,
+            "total_usd": round(total_cost, 6),
+            "per_analysis_usd": round(total_cost / analyses, 6) if analyses else None,
+            "coverage": round(analyses / cycles, 4) if cycles else None,
         },
     }

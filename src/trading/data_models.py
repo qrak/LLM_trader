@@ -353,7 +353,7 @@ class TradingMemory(SerializableMixin):
                 open_position = None
 
         for decision in recent:
-            time_str = decision.timestamp.strftime("%Y-%m-%d %H:%M")
+            time_str = f"{decision.timestamp.strftime('%Y-%m-%d %H:%M')} UTC"
             reasoning = self._format_recent_reasoning(
                 decision.reasoning,
                 close_pnl_by_key.get(self._decision_key(decision)),

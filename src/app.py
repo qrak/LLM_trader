@@ -4,11 +4,11 @@ This module defines the `CryptoTradingBot` class, which orchestrates the interac
 between various components like the market analyzer, trading strategy, and external APIs.
 """
 import asyncio
-import inspect
 import io
+import math
 import os
-import tempfile
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.logger.logger import Logger
-from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, append_cycle
+from src.managers.cycle_metrics import DEFAULT_RELATIVE_PATH, append_cycle, load_cycles
 from src.managers.persistence_manager import PersistenceManager
 from src.trading import (
     ExitMonitor,
@@ -39,10 +39,14 @@ from src.trading.executor_reconciliation import (
 )
 from src.trading.pending_approval import PendingApprovalStore, requires_approval
 from src.utils.decorators import retry_async_default
+from src.utils.time_utils import utc_and_local, utc_stamp
 from src.utils.timeframe_validator import TimeframeValidator
 
 if TYPE_CHECKING:
+    from src.analyzer.analysis_engine import AnalysisEngine
+    from src.config.loader import Config
     from src.managers.model_manager import ModelManager
+    from src.trading.trading_strategy import TradingStrategy
 
 
 POSITION_UPDATE_INTERVAL = 3600
@@ -64,11 +68,11 @@ class BotServices:
     """Runtime services required by CryptoTradingBot."""
 
     logger: Logger
-    config: Any
+    config: "Config"
     shutdown_manager: Any | None
     exchange_manager: Any
-    market_analyzer: Any
-    trading_strategy: Any
+    market_analyzer: "AnalysisEngine"
+    trading_strategy: "TradingStrategy"
     discord_notifier: Any
     keyboard_handler: Any
     rag_engine: Any
@@ -94,16 +98,12 @@ class BotServices:
 class CryptoTradingBot:
     """Automated crypto trading bot - TRADING MODE ONLY."""
 
+    INFERENCE_COST_WINDOW = 20
+
     @staticmethod
     def _format_utc_and_local(dt: datetime, local_tz=None) -> str:
         """Format a timestamp with both UTC and local time for operator-facing logs."""
-        utc_dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
-        local_dt = utc_dt.astimezone(local_tz)
-        local_zone = local_dt.tzname() or "local"
-        return (
-            f"{utc_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC "
-            f"/ {local_dt.strftime('%Y-%m-%d %H:%M:%S')} {local_zone}"
-        )
+        return utc_and_local(dt, local_tz)
 
     def __init__(self, services: BotServices):
         """Initialize bot with runtime services assembled by the composition root."""
@@ -137,6 +137,10 @@ class CryptoTradingBot:
         self.ev_formatter = services.ev_formatter
         self.dashboard_state = services.dashboard_state
 
+        self._recent_inference_costs: deque[float] = deque(maxlen=self.INFERENCE_COST_WINDOW)
+        self._last_inference_cost: float | None = None
+        self._seed_inference_costs()
+
         self.tasks = []
         self.running = False
         self._active_tasks = set()
@@ -153,11 +157,97 @@ class CryptoTradingBot:
         )
 
     def _state_directory(self) -> Path:
-        """Runtime state next to the trade data; a temp dir only for non-path test doubles."""
-        data_dir = getattr(self.persistence, "data_dir", None)
-        if isinstance(data_dir, (str, Path)):
-            return Path(data_dir)
-        return Path(tempfile.gettempdir()) / "llm_trader_runtime"
+        """Runtime state lives next to the trade data it describes."""
+        return Path(self.persistence.data_dir)
+
+    @staticmethod
+    def _finite_non_negative(value: Any) -> float | None:
+        """Finite non-negative cost or token value; bools and strings are rejected."""
+        if isinstance(value, (bool, str)):
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        return number if math.isfinite(number) and number >= 0 else None
+
+    def _seed_inference_costs(self) -> None:
+        """Seed the rolling window from the last cycles on disk; never fail startup."""
+        data_dir = self.persistence.data_dir
+        if not isinstance(data_dir, (str, Path)):
+            return
+        try:
+            records = load_cycles(
+                Path(data_dir) / DEFAULT_RELATIVE_PATH,
+                limit=self.INFERENCE_COST_WINDOW,
+            )
+        except (OSError, TypeError, ValueError):
+            self.logger.debug("Could not seed inference costs from the cycle journal", exc_info=True)
+            return
+        for record in records:
+            value = self._finite_non_negative(record.get("inference_cost_usd"))
+            if value is not None:
+                self._recent_inference_costs.append(value)
+
+    def _cost_snapshot(self) -> dict[str, float] | None:
+        """Read the cumulative cost counter; None means no measurement, never zero."""
+        if self.model_manager is None:
+            return None
+        storage = self.model_manager.cost_storage
+        if storage is None:
+            return None
+        try:
+            raw = storage.snapshot()
+        except Exception:
+            self.logger.debug("Could not read the inference cost snapshot", exc_info=True)
+            return None
+        if not isinstance(raw, dict):
+            return None
+        return {
+            key: self._finite_non_negative(raw.get(key)) or 0.0
+            for key in ("cost_usd", "input_tokens", "output_tokens")
+        }
+
+    def _inference_usage(self, before: dict[str, float] | None) -> dict[str, float] | None:
+        """Cost and token delta for this cycle; None when nothing was measured."""
+        if before is None:
+            return None
+        after = self._cost_snapshot()
+        if after is None:
+            return None
+
+        cost_delta_raw = after["cost_usd"] - before["cost_usd"]
+        prompt_delta_raw = after["input_tokens"] - before["input_tokens"]
+        completion_delta_raw = after["output_tokens"] - before["output_tokens"]
+        if cost_delta_raw < 0 or prompt_delta_raw < 0 or completion_delta_raw < 0:
+            self.logger.debug(
+                "Inference counters moved backwards (cost %.6f, prompt %.0f, completion %.0f); "
+                "clamping deltas to zero",
+                cost_delta_raw, prompt_delta_raw, completion_delta_raw,
+            )
+        cost_delta = max(0.0, cost_delta_raw)
+        prompt_delta = max(0, round(prompt_delta_raw))
+        completion_delta = max(0, round(completion_delta_raw))
+        if cost_delta == 0.0 and prompt_delta == 0 and completion_delta == 0:
+            return None
+
+        self._last_inference_cost = cost_delta
+        self._recent_inference_costs.append(cost_delta)
+        self.logger.info(
+            "Cycle inference cost: $%.6f (rolling avg $%.6f)",
+            cost_delta, self._average_inference_cost(),
+        )
+        return {
+            "inference_cost_usd": cost_delta,
+            "prompt_tokens": float(prompt_delta),
+            "completion_tokens": float(completion_delta),
+        }
+
+    def _average_inference_cost(self) -> float:
+        """Rolling average of the last measured per-analysis costs, or 0.0."""
+        if not self._recent_inference_costs:
+            return 0.0
+        return sum(self._recent_inference_costs) / len(self._recent_inference_costs)
 
     @property
     def active_tasks(self) -> set[asyncio.Task]:
@@ -325,6 +415,11 @@ class CryptoTradingBot:
 
     async def _execute_trading_check(self, check_count: int, force_news_update: bool = True, is_candle_close: bool = True):
         """Execute a single trading check iteration."""
+        if self.current_symbol is None:
+            self.logger.error("Trading check skipped: no symbol is selected")
+            return
+        symbol = self.current_symbol
+        cost_before = self._cost_snapshot()
         cycle_started = time.perf_counter()
         self._log_check_header(check_count)
 
@@ -344,10 +439,12 @@ class CryptoTradingBot:
 
         if "error" in result:
             self.logger.error("Analysis failed: %s", result["error"])
+            inference_usage = self._inference_usage(cost_before)
             self._record_cycle_metric(
                 result=None, decision=None, intent_state=None,
                 latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
                 error=str(result["error"]),
+                inference_usage=inference_usage,
             )
             return
 
@@ -380,7 +477,7 @@ class CryptoTradingBot:
             decision = None
         else:
             decision = await self.trading_strategy.process_analysis(
-                result, self.current_symbol, market_price=current_price
+                result, symbol, market_price=current_price
             )
 
         protection_after = self._protection_snapshot()
@@ -410,14 +507,15 @@ class CryptoTradingBot:
         )
         previous_checkpoint = self._cycle_checkpoints.load()
         if (
-            str(getattr(decision, "action", "")).upper() in ("BUY", "SELL")
+            decision is not None
+            and decision.action in ("BUY", "SELL")
             and is_duplicate_intent(previous_checkpoint, decision_hash)
         ):
             self.logger.warning(
                 "Duplicate intent suppressed: checkpoint %s already forwarded %s %s (hash=%s) "
                 "without confirmation — reconciling with the executor instead of sending again.",
                 previous_checkpoint.cycle_id if previous_checkpoint else "?",
-                getattr(decision, "action", "?"), self.current_symbol, decision_hash,
+                decision.action, self.current_symbol, decision_hash,
             )
             decision = None
 
@@ -443,17 +541,17 @@ class CryptoTradingBot:
             forward_delivered = await self.executor_handler.handle(analysis, decision, self.current_symbol)
             if decision.action in ("BUY", "SELL"):
                 await self.trading_strategy.rollback_blocked_entry(
-                    self.current_symbol, forward_delivered,
+                    symbol, forward_delivered,
                     order_id=decision.order_id,
                 )
-            if forward_delivered and str(getattr(decision, "action", "")).upper() in ("BUY", "SELL"):
+            if forward_delivered and decision.action in ("BUY", "SELL"):
                 self._cycle_checkpoints.record(
                     CycleState.INTENT_SENT,
                     symbol=self.current_symbol,
                     decision_hash=decision_hash,
                 )
             intent_state = await self._resolve_position_intents(decision, forward_delivered)
-            if str(getattr(decision, "action", "")).upper() in ("BUY", "SELL", "CLOSE", "UPDATE"):
+            if decision.action in ("BUY", "SELL", "CLOSE", "UPDATE"):
                 self._cycle_checkpoints.record(
                     CycleState.CONFIRMED if intent_state == "confirmed" else CycleState.FAILED,
                     symbol=self.current_symbol,
@@ -471,22 +569,24 @@ class CryptoTradingBot:
         await self._report_unconfirmed_intent()
         await self._report_rejected_intent()
         await self._save_analysis_data(result)
+        inference_usage = self._inference_usage(cost_before)
         self._record_cycle_metric(
             result=result, decision=decision, intent_state=intent_state,
             latency_ms=(time.perf_counter() - cycle_started) * 1000.0,
             stale=stale_recommendation,
+            inference_usage=inference_usage,
         )
 
     async def _await_manual_approval(
-        self, decision: Any, analysis: dict[str, Any] | None, decision_hash: str | None
+        self, decision: TradeDecision, analysis: dict[str, Any] | None, decision_hash: str | None
     ) -> bool:
         """True when execution may proceed; False when the gate refused or timed out.
 
         Disabled by default: ``risk_management.require_approval_above_usdc = 0`` keeps the
         old path. A pending entry that expires is a REFUSAL — never an execution.
         """
-        threshold = float(getattr(self.config, "REQUIRE_APPROVAL_ABOVE_USDC", 0) or 0)
-        action = str(getattr(decision, "action", "") or "").upper()
+        threshold = self.config.REQUIRE_APPROVAL_ABOVE_USDC
+        action = decision.action.upper()
         if action not in ("BUY", "SELL") or threshold <= 0:
             return True
         try:
@@ -498,8 +598,8 @@ class CryptoTradingBot:
         if not requires_approval(amount, threshold):
             return True
 
-        ttl = float(getattr(self.config, "APPROVAL_TTL_MINUTES", 15) or 15)
-        poll = float(getattr(self.config, "APPROVAL_POLL_SECONDS", 5) or 5)
+        ttl = self.config.APPROVAL_TTL_MINUTES
+        poll = self.config.APPROVAL_POLL_SECONDS
         approval = self._approvals.submit(
             action=action,
             symbol=self.current_symbol,
@@ -536,33 +636,42 @@ class CryptoTradingBot:
         self,
         *,
         result: dict[str, Any] | None,
-        decision: Any,
+        decision: TradeDecision | None,
         intent_state: str | None,
         latency_ms: float,
         stale: bool = False,
         error: str | None = None,
+        inference_usage: dict[str, float] | None = None,
     ) -> None:
-        """Record one cycle in the metrics journal. Metrics must never break trading."""
-        data_dir = getattr(self.persistence, "data_dir", None)
-        if not isinstance(data_dir, (str, Path)):
-            return
+        """Record one cycle in the metrics journal, including measured inference cost."""
         try:
-            analysis = (result or {}).get("analysis") or {}
+            result_data = result or {}
+            analysis = result_data.get("analysis") or {}
             signal = str(analysis.get("signal") or "UNKNOWN").upper()
-            action = str(getattr(decision, "action", "") or "").upper() or None
-            append_cycle(
-                data_dir / DEFAULT_RELATIVE_PATH,
-                {
-                    "symbol": self.current_symbol,
-                    "signal": signal,
-                    "action": action,
-                    "intent_state": intent_state,
-                    "latency_ms": round(latency_ms, 1),
-                    "stale": bool(stale),
-                    "guarded": signal in ("BUY", "SELL") and action is None and not error,
-                    "error": error,
-                },
-            )
+            action = decision.action.upper() if decision is not None else None
+            record: dict[str, Any] = {
+                "symbol": self.current_symbol,
+                "signal": signal,
+                "action": action,
+                "intent_state": intent_state,
+                "latency_ms": round(latency_ms, 1),
+                "stale": bool(stale),
+                "guarded": signal in ("BUY", "SELL") and action is None and not error,
+                "error": error,
+            }
+            provider = result_data.get("provider")
+            model = result_data.get("model")
+            if isinstance(provider, str) and provider:
+                record["provider"] = provider
+            if isinstance(model, str) and model:
+                record["model"] = model
+            if inference_usage is not None:
+                record["inference_cost_usd"] = round(
+                    float(inference_usage["inference_cost_usd"]), 6
+                )
+                record["prompt_tokens"] = int(inference_usage["prompt_tokens"])
+                record["completion_tokens"] = int(inference_usage["completion_tokens"])
+            append_cycle(self.persistence.data_dir / DEFAULT_RELATIVE_PATH, record)
         except Exception:
             self.logger.debug("Cycle metrics could not be recorded", exc_info=True)
 
@@ -588,14 +697,7 @@ class CryptoTradingBot:
         """
         if self.executor_handler is None:
             return None
-        taker = getattr(self.trading_strategy, "take_pending_local_close_decision", None)
-        if not callable(taker):
-            return None
-        try:
-            decision = taker()
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning("Failed to read the pending local exit recommendation: %s", e)
-            return None
+        decision = self.trading_strategy.take_pending_local_close_decision()
         if decision is None:
             return None
 
@@ -609,54 +711,37 @@ class CryptoTradingBot:
         self.logger.warning(
             "Local exit recommendation forwarded for %s (order_id=%s, delivered=%s) — the "
             "local position is NOT closed until the executor's fill evidence arrives.",
-            self.current_symbol, getattr(decision, "order_id", None), delivered,
+            self.current_symbol, decision.order_id, delivered,
         )
         return await self._resolve_position_intents(decision, delivered)
 
     async def _reconcile_position_state(self, source: str) -> LocalPositionReconciliation | None:
-        """Run the strategy's public reconciliation hook (no-op when not wired).
+        """Run the strategy's reconciliation hook; a failure is unknown, never a guess.
 
-        The hook books a validated exchange-side exit exactly once; an unwired or
-        non-conforming strategy is left untouched (a test double must not decide the
-        trading state).
+        An exception must not be read as "no position": the local state stays as it
+        was until an exit record proves otherwise.
         """
-        hook = getattr(self.trading_strategy, "reconcile_local_position", None)
-        if not callable(hook):
-            return None
         try:
-            pending = hook(source=source)
-            if not inspect.isawaitable(pending):
-                return None
-            outcome = await pending
+            return await self.trading_strategy.reconcile_local_position(source=source)
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Position reconciliation (%s) failed: %s", source, e)
             return None
-        return outcome if isinstance(outcome, LocalPositionReconciliation) else None
 
-    async def _resolve_position_intents(self, decision: Any, delivered: bool) -> str | None:
+    async def _resolve_position_intents(self, decision: TradeDecision, delivered: bool) -> str | None:
         """Hand the forwarded command's intent to the strategy for evidence-based closure.
 
-        Only the strategy's executor evidence may confirm it; a missing hook (test double,
-        no intent layer) leaves the state unknown here instead of inventing one.
+        Only the strategy's executor evidence may confirm it; a failed read leaves the
+        state unknown here instead of inventing one.
         """
-        resolver = getattr(self.trading_strategy, "resolve_position_intents_after_forward", None)
-        state: Any = None
-        if callable(resolver):
-            try:
-                pending = resolver(
-                    order_id=getattr(decision, "order_id", None),
-                    delivered=delivered,
-                    symbol=self.current_symbol,
-                )
-                if inspect.isawaitable(pending):
-                    state = await pending
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("Failed to resolve the forwarded position intent: %s", e)
-        elif callable(getattr(self.trading_strategy, "position_intent_state", None)):
-            state = self.trading_strategy.position_intent_state(
-                order_id=getattr(decision, "order_id", None)
+        try:
+            return await self.trading_strategy.resolve_position_intents_after_forward(
+                order_id=decision.order_id,
+                delivered=delivered,
+                symbol=self.current_symbol,
             )
-        return state if isinstance(state, str) else None
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning("Failed to resolve the forwarded position intent: %s", e)
+            return None
 
     async def _report_unconfirmed_intent(self) -> None:
         """Alert the operator about a command whose execution the executor never confirmed.
@@ -665,14 +750,8 @@ class CryptoTradingBot:
         the local state stays pending/unknown, the position is left alone, and this is
         the only place that turns that into a visible alert (never a silent close).
         """
-        alert = None
-        hook = getattr(self.trading_strategy, "take_unconfirmed_intent_alert", None)
-        if callable(hook):
-            try:
-                alert = hook()
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("Failed to read the unconfirmed-intent alert: %s", e)
-        if not isinstance(alert, str) or not alert:
+        alert = self.trading_strategy.take_unconfirmed_intent_alert()
+        if not alert:
             return
         self.logger.critical("UNCONFIRMED POSITION INTENT: %s", alert)
         if self.discord_notifier is None:
@@ -694,14 +773,8 @@ class CryptoTradingBot:
         never saw the command and the model's request silently died inside the bot.
         The next analysis prompt carries it too (see the intent ledger).
         """
-        alert = None
-        hook = getattr(self.trading_strategy, "take_rejected_intent_alert", None)
-        if callable(hook):
-            try:
-                alert = hook()
-            except Exception as e:  # noqa: BLE001
-                self.logger.warning("Failed to read the rejected-intent alert: %s", e)
-        if not isinstance(alert, str) or not alert:
+        alert = self.trading_strategy.take_rejected_intent_alert()
+        if not alert:
             return
         self.logger.warning("REFUSED POSITION INTENT: %s", alert)
         if self.discord_notifier is None:
@@ -716,21 +789,13 @@ class CryptoTradingBot:
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Failed to send the rejected-intent alert: %s", e)
 
-    def _position_snapshot_token(self) -> str | None:
-        """Current position revision token, or None when the strategy has no contract."""
-        token_fn = getattr(self.trading_strategy, "position_snapshot_token", None)
-        if not callable(token_fn):
-            return None
-        token = token_fn()
-        return token if isinstance(token, str) else None
+    def _position_snapshot_token(self) -> str:
+        """Trade-level identity of the current position ("flat" when none is open)."""
+        return self.trading_strategy.position_snapshot_token()
 
-    def _protection_snapshot(self) -> tuple[Any, Any] | None:
-        """(stop_loss, take_profit) of the current position, or None without a contract."""
-        snapshot_fn = getattr(self.trading_strategy, "protection_snapshot", None)
-        if not callable(snapshot_fn):
-            return None
-        snapshot = snapshot_fn()
-        return tuple(snapshot) if isinstance(snapshot, tuple) and len(snapshot) == 2 else None
+    def _protection_snapshot(self) -> tuple[float | None, float | None] | None:
+        """(stop_loss, take_profit) of the current position, or None when flat."""
+        return self.trading_strategy.protection_snapshot()
 
     async def _protection_version(self) -> str | None:
         """Query the executor's protection revision; log I/O failures without guessing it."""
@@ -754,7 +819,7 @@ class CryptoTradingBot:
         missing revision is not treated as "unchanged" — it is "unversioned", and the
         wave-1 loosening guard remains the substitute (see ``_protection_guard_note``).
         """
-        if decision is None or str(getattr(decision, "action", "") or "").upper() != "UPDATE":
+        if decision is None or decision.action != "UPDATE":
             return None
         if not version_before or not version_after:
             return None
@@ -780,20 +845,13 @@ class CryptoTradingBot:
         tightening passes, loosening is refused. Without that guard the safe answer is to
         refuse, not to forward.
         """
-        if decision is None or str(getattr(decision, "action", "")).upper() != "UPDATE":
+        if decision is None or decision.action != "UPDATE":
             return None
         if protection_before is None or protection_after is None:
             return None
         if protection_before == protection_after:
             return None
-        guard = getattr(self.trading_strategy, "protection_loosening_reason", None)
-        if not callable(guard):
-            return (
-                f"protection changed during the analysis ({protection_before} -> "
-                f"{protection_after}) and the strategy exposes no protection guard"
-            )
-        reason = guard(decision)
-        return reason if isinstance(reason, str) else None
+        return self.trading_strategy.protection_loosening_reason(decision)
 
     def _build_execution_note(
         self,
@@ -817,7 +875,7 @@ class CryptoTradingBot:
         if signal not in ACTIONABLE_RECOMMENDATIONS:
             return None
 
-        action = str(getattr(decision, "action", "") or "").upper() if decision is not None else ""
+        action = decision.action.upper() if decision is not None else ""
         if decision is not None and action in ACTIONABLE_RECOMMENDATIONS:
             if intent_state in NON_BOOKED_INTENT_STATES:
                 return (
@@ -845,12 +903,12 @@ class CryptoTradingBot:
                 "executed and not turned into a new entry"
             )
         elif decision is not None and action == "HOLD":
-            detail = str(getattr(decision, "reasoning", "") or "no reason given")
+            detail = decision.reasoning or "no reason given"
             reason = f"the strategy rejected the recommendation: {detail}"
-        elif getattr(reconcile_outcome, "state", None) == RECONCILE_UNVERIFIED:
-            detail = getattr(reconcile_outcome, "detail", None) or "no reply from the executor"
+        elif reconcile_outcome is not None and reconcile_outcome.state == RECONCILE_UNVERIFIED:
+            detail = reconcile_outcome.detail or "no reply from the executor"
             reason = f"the exchange did not confirm the position state ({detail}) — not executed"
-        elif getattr(self.trading_strategy, "current_position", None) is None:
+        elif self.trading_strategy.current_position is None:
             reason = (
                 "no open local position (exit detected/settled) — "
                 "there is nothing to update or close"
@@ -866,7 +924,7 @@ class CryptoTradingBot:
         """Log trading check header"""
         current_time = datetime.now(timezone.utc)
         self.logger.info("=" * 60)
-        self.logger.info("Trading Check #%s at %s", check_count, current_time.strftime("%Y-%m-%d %H:%M:%S"))
+        self.logger.info("Trading Check #%s at %s", check_count, self._format_utc_and_local(current_time))
         self.logger.info("=" * 60)
 
     async def _fetch_ticker_data(self):
@@ -969,17 +1027,12 @@ class CryptoTradingBot:
         }
 
     def _get_formatted_last_analysis_time(self) -> str | None:
-        """Get last analysis time formatted as UTC string"""
+        """Get last analysis time formatted as an unambiguous UTC string"""
         last_analysis_time_obj = self.persistence.get_last_analysis_time()
         if not last_analysis_time_obj:
             return None
 
-        if last_analysis_time_obj.tzinfo is None:
-            last_analysis_time_obj = last_analysis_time_obj.replace(tzinfo=timezone.utc)
-        else:
-            last_analysis_time_obj = last_analysis_time_obj.astimezone(timezone.utc)
-
-        return last_analysis_time_obj.strftime("%Y-%m-%d %H:%M:%S")
+        return utc_stamp(last_analysis_time_obj)
 
     def _build_ev_context(self) -> str:
         """Build the EV framework context string with dynamic capital tracking."""
@@ -987,7 +1040,10 @@ class CryptoTradingBot:
             return ""
         demo_capital = float(self.config.DEMO_QUOTE_CAPITAL)
         current_capital = self.statistics_service.get_current_capital(demo_capital)
-        return self.ev_formatter.build_ev_framework_section(current_capital)
+        return self.ev_formatter.build_ev_framework_section(
+            current_capital,
+            inference_cost_usd=self._average_inference_cost(),
+        )
 
     async def _report_executor_side_exit(self) -> None:
         """Send the closing performance summary after an exchange-side exit.
@@ -997,7 +1053,7 @@ class CryptoTradingBot:
         executor's exit journal and flags the reason for us here.
         """
         reason = self.trading_strategy.take_executor_side_exit_reason()
-        if not isinstance(reason, str) or not reason:
+        if not reason:
             return
 
         self.logger.info("Exchange-side exit booked (%s) — sending performance summary", reason)
@@ -1006,7 +1062,7 @@ class CryptoTradingBot:
         except Exception as e:  # noqa: BLE001
             self.logger.warning("Failed to report exchange-side exit: %s", e)
 
-    async def _handle_new_position(self, decision, current_price: float | None):
+    async def _handle_new_position(self, decision: TradeDecision, current_price: float | None):
         """Handle new position creation and status updates"""
         if decision.action not in ("BUY", "SELL"):
             self.logger.debug(
@@ -1031,7 +1087,7 @@ class CryptoTradingBot:
         """
         if self.discord_notifier:
             chart_image = None
-            last_chart_buffer = self.market_analyzer.last_chart_buffer if self.market_analyzer else None
+            last_chart_buffer = self.market_analyzer.last_chart_buffer
             if last_chart_buffer is not None:
                 last_chart_buffer.seek(0)
                 chart_image = io.BytesIO(last_chart_buffer.getvalue())
@@ -1072,12 +1128,8 @@ class CryptoTradingBot:
         raw = result.get("raw_response", "")
         if not raw:
             return
-        signal: str = ""
-        try:
-            analysis = result.get("analysis") or {}
-            signal = str(analysis.get("signal", ""))
-        except (AttributeError, TypeError, KeyError) as exc:
-            self.logger.debug("Failed to extract signal from result analysis: %s", exc)
+        analysis = result.get("analysis") or {}
+        signal = str(analysis.get("signal") or "")
         if signal not in ("BUY", "SELL"):
             return
         reason = decision.reasoning or "Blocked by trading strategy guard"
@@ -1280,7 +1332,7 @@ class CryptoTradingBot:
         so the mismatch needs a human look at the exchange instead of a silent guess.
         """
         message = self.trading_strategy.take_state_divergence()
-        if not isinstance(message, str) or not message:
+        if not message:
             return
         self.logger.critical("State divergence reported to the operator: %s", message)
         if self.discord_notifier is None:

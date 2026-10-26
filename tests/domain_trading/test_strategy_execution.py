@@ -352,9 +352,8 @@ class TestExecutorPayload:
         assert _wire(payload) == expected
         for key, expected_type in expected_types.items():
             assert type(payload[key]) is expected_type
-        stamp = datetime.strptime(payload["timestamp"], "%Y-%m-%dT%H:%M:%S.%f").replace(
-            tzinfo=timezone.utc
-        )
+        stamp = datetime.fromisoformat(payload["timestamp"])
+        assert stamp.tzinfo is not None, "the executor payload must carry an explicit offset"
         elapsed = (datetime.now(timezone.utc) - stamp).total_seconds()
         assert 0 <= elapsed < 60
 

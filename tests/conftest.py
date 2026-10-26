@@ -97,7 +97,16 @@ PRODUCTION_DEFAULTS: dict[str, Any] = {
     "EXECUTOR_API_ENABLED": False,
     "EXECUTOR_API_URL": "http://127.0.0.1:9199/decision",
     "EXECUTOR_VERDICT_PATH": "data/trading/executor_verdicts.jsonl",
+    "EXECUTOR_EXIT_PATH": "data/trading/executor_exits.jsonl",
     "EXECUTOR_MAX_POSITION_USDC": 0.0,
+    "CIRCUIT_BREAKER_ENABLED": True,
+    "CIRCUIT_BREAKER_FAILURE_THRESHOLD": 3,
+    "CIRCUIT_BREAKER_COOLDOWN_SECONDS": 120.0,
+    "REQUIRE_APPROVAL_ABOVE_USDC": 0.0,
+    "APPROVAL_TTL_MINUTES": 15.0,
+    "APPROVAL_POLL_SECONDS": 5.0,
+    "EXCHANGE_SANDBOX": False,
+    "TIMEZONE": "",
     "FILE_MESSAGE_EXPIRY": 604800,
 }
 

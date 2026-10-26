@@ -76,8 +76,6 @@ INTENT_ACTION_CLOSE = "CLOSE"
 
 NON_BOOKED_INTENT_STATES = frozenset({INTENT_PENDING, INTENT_UNKNOWN})
 
-DEFAULT_INTENT_JOURNAL_PATH = "data/trading/bot_position_intents.jsonl"
-
 PHANTOM_ENTRY_GRACE_SECONDS = 900
 """How long an unconfirmed ENTRY may still be in flight before it counts as never sent.
 
@@ -981,46 +979,35 @@ class ExecutorReconciliationMixin:
     _executor_side_exit_reason: str | None
     _position_transition_lock: asyncio.Lock | None
     _booked_exit_events: set[str]
+    _position_intent_ledger: PositionIntentLedger | None
+    _unconfirmed_intent_alert: str | None
+    _rejected_intent_alert: str | None
     _last_reconciliation: LocalPositionReconciliation | None
 
     def _position_lock(self) -> asyncio.Lock:
         """Shared transition lock: app analysis path and the monitor sync serialize here."""
-        lock = getattr(self, "_position_transition_lock", None)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._position_transition_lock = lock
-        return lock
+        if self._position_transition_lock is None:
+            self._position_transition_lock = asyncio.Lock()
+        return self._position_transition_lock
 
     def _booked_exit_event_ids(self) -> set[str]:
         """Per-process set of already-booked exit event ids (idempotency guard)."""
-        booked = getattr(self, "_booked_exit_events", None)
-        if booked is None:
-            booked = set()
-            self._booked_exit_events = booked
-        return booked
+        return self._booked_exit_events
 
 
     def _intent_journal_path(self) -> Path:
         """Filesystem path of the bot's own position-intent journal (JSONL).
 
-        Prefers an explicit ``BOT_INTENT_JOURNAL_PATH``, then the persistence data
-        dir (keeps each deployment/temporary test dir isolated), then a repo default.
+        Comes from ``executor_api.intent_journal_path``; its default keeps every
+        deployment/test isolated in its own data directory.
         """
-        configured = getattr(self.config, "BOT_INTENT_JOURNAL_PATH", None)
-        if configured:
-            return Path(configured)
-        data_dir = getattr(self.persistence, "data_dir", None)
-        if isinstance(data_dir, (str, Path)):
-            return Path(data_dir) / "bot_position_intents.jsonl"
-        return Path(DEFAULT_INTENT_JOURNAL_PATH)
+        return Path(self.config.BOT_INTENT_JOURNAL_PATH)
 
     def position_intents(self) -> PositionIntentLedger:
         """Process-wide intent ledger, replaying its journal on first use."""
-        ledger = getattr(self, "_position_intent_ledger", None)
-        if ledger is None:
-            ledger = PositionIntentLedger(self._intent_journal_path())
-            self._position_intent_ledger = ledger
-        return ledger
+        if self._position_intent_ledger is None:
+            self._position_intent_ledger = PositionIntentLedger(self._intent_journal_path())
+        return self._position_intent_ledger
 
     def intent_identity(self, action: str, symbol: str, *, order_id: str | None = None,
                         position_id: str | None = None) -> str:
@@ -1152,7 +1139,7 @@ class ExecutorReconciliationMixin:
 
     def take_unconfirmed_intent_alert(self) -> str | None:
         """Return and clear the pending one-shot 'unconfirmed command' alert."""
-        message = getattr(self, "_unconfirmed_intent_alert", None)
+        message = self._unconfirmed_intent_alert
         self._unconfirmed_intent_alert = None
         return message
 
@@ -1163,7 +1150,7 @@ class ExecutorReconciliationMixin:
         nothing was sent and no exchange state moved — the operator still has to hear
         about it, because the analysis asked for it in the first place.
         """
-        message = getattr(self, "_rejected_intent_alert", None)
+        message = self._rejected_intent_alert
         self._rejected_intent_alert = None
         return message
 
@@ -1206,7 +1193,7 @@ class ExecutorReconciliationMixin:
         position = self.current_position
         if position is None:
             return "flat"
-        direction = getattr(position, "direction", "") or ""
+        direction = position.direction
         return f"open:{position.symbol}:{direction}:{position.entry_time.isoformat()}"
 
     def protection_snapshot(self) -> tuple[float | None, float | None] | None:
@@ -1214,12 +1201,9 @@ class ExecutorReconciliationMixin:
         position = self.current_position
         if position is None:
             return None
-        return (
-            getattr(position, "stop_loss", None),
-            getattr(position, "take_profit", None),
-        )
+        return (position.stop_loss, position.take_profit)
 
-    def protection_loosening_reason(self, decision: Any) -> str | None:
+    def protection_loosening_reason(self, decision: TradeDecision | None) -> str | None:
         """Why an UPDATE decision must NOT be forwarded, or None when it is safe.
 
         Substitute for the missing protection version (see ``position_snapshot_token``).
@@ -1233,16 +1217,16 @@ class ExecutorReconciliationMixin:
         """
         if decision is None:
             return None
-        if str(getattr(decision, "action", "") or "").upper() != "UPDATE":
+        if decision.action != "UPDATE":
             return None
         position = self.current_position
         if position is None:
             return None
-        proposed = getattr(decision, "stop_loss", None)
-        current = getattr(position, "stop_loss", None)
+        proposed = decision.stop_loss
+        current = position.stop_loss
         if proposed is None or current is None:
             return None
-        direction = str(getattr(position, "direction", "") or "").upper()
+        direction = position.direction.upper()
         widens = (
             (direction == "LONG" and proposed < current)
             or (direction == "SHORT" and proposed > current)
@@ -1276,9 +1260,7 @@ class ExecutorReconciliationMixin:
         no card and no state can claim the executor (let alone the exchange) confirmed
         anything.
         """
-        enabled = bool(getattr(self.config, "EXECUTOR_API_ENABLED", False))
-        url = getattr(self.config, "EXECUTOR_API_URL", "") or ""
-        return enabled and bool(url)
+        return self.config.EXECUTOR_API_ENABLED and bool(self.config.EXECUTOR_API_URL)
 
     async def _executor_has_position(self, symbol: str) -> bool | None:
         """Query the executor API for its current position and venue confirmation."""
@@ -1418,9 +1400,9 @@ class ExecutorReconciliationMixin:
         Never raises: no integration, a failed request or a non-object body all mean
         "no answer".
         """
-        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
+        if not self.config.EXECUTOR_API_ENABLED:
             return None
-        url: str = getattr(self.config, "EXECUTOR_API_URL", "") or ""
+        url = self.config.EXECUTOR_API_URL
         if not url:
             return None
         try:
@@ -1538,7 +1520,7 @@ class ExecutorReconciliationMixin:
           journal is a configuration problem, not proof, so it keeps the fail-open;
         * the intent is older than ``PHANTOM_ENTRY_GRACE_SECONDS``.
         """
-        if not getattr(self.config, "EXECUTOR_API_ENABLED", False):
+        if not self.config.EXECUTOR_API_ENABLED:
             return False
         if not self._executor_verdict_path().exists():
             return False
@@ -1977,10 +1959,7 @@ class ExecutorReconciliationMixin:
 
     def _executor_exit_path(self) -> Path:
         """Filesystem path of the executor's exit journal (JSONL)."""
-        configured = getattr(self.config, "EXECUTOR_EXIT_PATH", None)
-        if configured:
-            return Path(configured)
-        return Path("data/trading/executor_exits.jsonl")
+        return Path(self.config.EXECUTOR_EXIT_PATH)
 
     def _executor_exit_record(self, symbol: str, not_before: datetime | None = None) -> dict | None:
         """Newest exchange-side exit the executor recorded for this symbol.

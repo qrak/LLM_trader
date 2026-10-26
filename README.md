@@ -41,6 +41,7 @@ python start.py               # dashboard at http://localhost:8000
 | `scripts/start_script_main_macos.sh` | Start the bot (macOS) |
 | `scripts/run_all_tests.sh` | Run the full test suite in `.venv` |
 | `scripts/query_trade_history.py` | CLI utility to inspect the SQLite trade history |
+| `scripts/cost_report.py` | Gross vs net P&L after recorded LLM inference cost |
 
 Each launcher checks `requirements.txt` and `constraints.txt` against the installed environment and only runs pip when something is actually unmet.
 </details>

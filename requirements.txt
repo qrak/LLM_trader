@@ -33,3 +33,4 @@ beautifulsoup4>=4.15.0
 httpx>=0.27,<1
 packaging>=24.0
 defusedxml>=0.7.1
+tzdata>=2025.1

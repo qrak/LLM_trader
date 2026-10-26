@@ -11,7 +11,9 @@ Covers the acceptance scenarios:
 
 from __future__ import annotations
 
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -113,6 +115,24 @@ class FakeStrategy:
     async def rollback_blocked_entry(self, symbol: str, forward_delivered: bool, order_id: str | None = None) -> None:
         self.rollback_calls.append((symbol, forward_delivered, order_id))
 
+    def take_pending_local_close_decision(self) -> TradeDecision | None:
+        """No local exit queued in these scenarios."""
+        return None
+
+    def take_unconfirmed_intent_alert(self) -> str | None:
+        """Nothing unconfirmed in these scenarios."""
+        return None
+
+    def take_rejected_intent_alert(self) -> str | None:
+        """Nothing refused in these scenarios."""
+        return None
+
+    async def resolve_position_intents_after_forward(
+        self, order_id: str | None, delivered: bool, symbol: str | None = None
+    ) -> str | None:
+        """No intent layer in this double: the state stays unknown."""
+        return None
+
 
 def open_outcome(state: str = RECONCILE_OPEN_EXECUTOR_REPORTED, **overrides: Any) -> LocalPositionReconciliation:
     values: dict[str, Any] = {
@@ -160,6 +180,9 @@ def harness(
         DEMO_QUOTE_CAPITAL=10000.0,
         SOCIAL_SENTIMENT_ENABLED=False,
         EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
+        REQUIRE_APPROVAL_ABOVE_USDC=0.0,
+        APPROVAL_TTL_MINUTES=15.0,
+        APPROVAL_POLL_SECONDS=5.0,
     )
     discord_notifier = MagicMock()
     discord_notifier.send_analysis_notification = AsyncMock()
@@ -172,6 +195,7 @@ def harness(
     market_analyzer.last_chart_buffer = None
 
     persistence = MagicMock()
+    persistence.data_dir = Path(tempfile.mkdtemp(prefix="llm_trader_sync_state_"))
     persistence.async_save_last_analysis_time = AsyncMock()
     persistence.async_load_previous_response = AsyncMock(return_value={})
     persistence.get_last_analysis_time = MagicMock(return_value=None)

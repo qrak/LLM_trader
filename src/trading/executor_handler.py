@@ -178,7 +178,7 @@ class ExecutorHandler:
 
         now = datetime.now(timezone.utc)
         return {
-            "timestamp": now.strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            "timestamp": now.isoformat(),
             "symbol": str(symbol),
             "signal": str(signal),
             "order_type": str(self._config.ENTRY_ORDER_TYPE),

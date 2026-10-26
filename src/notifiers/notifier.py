@@ -5,7 +5,7 @@ Sends AI trading analysis to Discord with automatic message cleanup.
 import asyncio
 import io
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -18,20 +18,12 @@ from src.trading.executor_reconciliation import (
     VERIFICATION_UNVERIFIED,
 )
 from src.utils.decorators import retry_async_default
+from src.utils.time_utils import utc_stamp as format_utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
 from .filehandler import DiscordFileHandler
 
 NOT_EXECUTED_PREFIX = "🚫 RECOMMENDATION NOT EXECUTED"
-
-
-def format_utc_stamp(moment: datetime | None) -> str:
-    """Format a UTC timestamp for operator-facing embeds."""
-    if moment is None:
-        return "unknown"
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return moment.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
 if TYPE_CHECKING:
@@ -334,7 +326,7 @@ class DiscordNotifier(BaseNotifier):
                     inline=True,
                 )
 
-            embed.set_footer(text=f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+            embed.set_footer(text=f"Time: {format_utc_stamp(decision.timestamp)}")
             await self._send_embed(embed, channel_id)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending trading decision: %s", e)
@@ -506,11 +498,8 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Entry Price", value=f"${position.entry_price:,.2f}", inline=True)
             embed.add_field(name="Current Price", value=f"${current_price:,.2f}", inline=True)
             embed.add_field(name="Quantity", value=self.formatter.fmt(position.size), inline=True)
-            try:
-                if position.quote_amount > 0:
-                    embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
-            except AttributeError:
-                pass
+            if position.quote_amount > 0:
+                embed.add_field(name="Invested", value=f"${position.quote_amount:,.2f}", inline=True)
 
             embed.add_field(name="Unrealized P&L", value=f"{pnl_pct:+.2f}%", inline=True)
             embed.add_field(name=f"P&L ({self.config.QUOTE_CURRENCY})", value=f"${pnl_quote:+,.2f}", inline=True)
@@ -522,7 +511,7 @@ class DiscordNotifier(BaseNotifier):
             embed.add_field(name="Position State", value=state_field, inline=False)
             embed.add_field(name="Entry Fee", value=format_commission(position.entry_fee), inline=True)
             embed.add_field(name="Time Held", value=f"{hours_held:.1f}h", inline=True)
-            embed.set_footer(text=f"Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            embed.set_footer(text=f"Entry Time: {format_utc_stamp(position.entry_time)}")
             await self._send_embed(embed, channel_id)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error sending position status: %s", e)

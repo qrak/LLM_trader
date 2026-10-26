@@ -3,7 +3,7 @@
 Provides functionality for analyzer.market_data_collector.py.
 """
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -245,13 +245,13 @@ class MarketDataCollector:
             historical = []
             for fg in fear_greed_data:
                 historical.append({
-                    "timestamp": datetime.fromtimestamp(int(fg["timestamp"])),  # noqa: DTZ006
+                    "timestamp": datetime.fromtimestamp(int(fg["timestamp"]), tz=timezone.utc),
                     "value": int(fg["value"]),
                     "value_classification": fg["value_classification"]
                 })
 
             context.sentiment = {
-                "timestamp": datetime.fromtimestamp(int(latest_fg["timestamp"])),  # noqa: DTZ006
+                "timestamp": datetime.fromtimestamp(int(latest_fg["timestamp"]), tz=timezone.utc),
                 "fear_greed_index": int(latest_fg["value"]),
                 "value_classification": latest_fg["value_classification"],
                 "historical": historical

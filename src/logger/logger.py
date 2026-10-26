@@ -14,6 +14,8 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
 
+from src.utils.time_utils import day_stamp, format_offset, local_stamp, local_timezone
+
 install_rich_traceback()
 
 _CRASH_LOG_PATH: str = ""
@@ -37,7 +39,7 @@ def _write_fallback_crash(
         if dirname:
             os.makedirs(dirname, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            now = local_stamp(datetime.now(timezone.utc))
             f.write(f"[{now}] {tag}\n")
             traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
             f.write("\n")
@@ -52,6 +54,21 @@ def _resolve_default_log_dir() -> str:
         return config.LOG_DIR
     except Exception:  # noqa: BLE001
         return "logs"
+
+
+class _ZonedFormatter(logging.Formatter):
+    """Render ``asctime`` in the display zone with an explicit UTC offset.
+
+    ``logging`` formats ``asctime`` with ``time.localtime``, so a bare
+    ``02:04:15`` means two different instants on the autumn DST switch. The offset
+    makes every line self-describing and keeps the day folder on the same clock
+    as the line inside it.
+    """
+
+    def formatTime(self, record, datefmt=None):
+        moment = datetime.fromtimestamp(record.created, tz=local_timezone())
+        rendered = moment.strftime(datefmt or self.datefmt or "%d.%m.%Y %H:%M:%S")
+        return f"{rendered} {format_offset(moment)}"
 
 
 class DailyRotatingFileHandler(TimedRotatingFileHandler):
@@ -72,7 +89,7 @@ class DailyRotatingFileHandler(TimedRotatingFileHandler):
         super().__init__(filename, *args, **kwargs)
 
     def emit(self, record):
-        current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        current_date = day_stamp()
 
         current_log_dir = os.path.join(self.log_dir, self.logger_name, current_date)
 
@@ -149,10 +166,10 @@ class Logger(logging.Logger):
             if self.level == logging.DEBUG
             else "[{asctime}] - {message}"
         )
-        return logging.Formatter(format_string, datefmt=self.date_format, style="{")
+        return _ZonedFormatter(format_string, datefmt=self.date_format, style="{")
 
     def _setup_logger(self, console: Console | None = None) -> None:
-        current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        current_date = day_stamp()
         log_dir = self._get_log_dir(current_date)
         error_log_dir = log_dir
 
@@ -208,7 +225,7 @@ class Logger(logging.Logger):
         self.addHandler(error_file_handler)
 
     def _log_rotator(self, source):
-        new_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        new_date = day_stamp()
         new_dir = self._get_log_dir(new_date)
         new_file = os.path.join(new_dir, os.path.basename(source))
         open(new_file, "a", encoding="utf-8").close()
@@ -231,7 +248,7 @@ class Logger(logging.Logger):
           2. threading.excepthook  — background thread crashes
           3. sys.unraisablehook    — __del__ / weakref exceptions at GC time
         """
-        current_date = datetime.now(timezone.utc).strftime("%Y_%m_%d")
+        current_date = day_stamp()
         error_log_dir = self._get_log_dir(current_date)
         global _CRASH_LOG_PATH
         _CRASH_LOG_PATH = os.path.join(error_log_dir, "errors.log")

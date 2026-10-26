@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-10-26 — Inference cost enters the cycle journal and the EV threshold
+
+### Changed
+- Every analysis cycle now snapshots `CostStorage` before and after its LLM work and appends `inference_cost_usd`, `prompt_tokens`, `completion_tokens`, `provider` and `model` to `data/trading/metrics/cycles.jsonl`. The delta covers the chart/text analysis, the contract retry and an awaited post-mortem; a missing snapshot writes no cost fields, and a counter reset clamps to zero.
+- `GET /api/performance/cycles` gains `inference_cost {analyses, total_usd, per_analysis_usd, coverage}`; existing keys are unchanged, and journal lines written before cost tracking lower `coverage` instead of failing the endpoint.
+- The EV prompt now adds the rolling 20-analysis inference cost to the round-trip fee: step 5 subtracts it, `Net break-even` is `1.5 × (fee + inference)`, and the threshold sentence names both. With no measured cost the section is byte-identical to the previous fee-only version.
+- `scripts/cost_report.py` prints gross P&L from `statistics.json`, recorded inference cost, net P&L, cost per analysis and cost per closed trade, with the overlapping-period caveat.
+- The `cycle_metrics.py` "cost deliberately absent" TODO is closed: the journal is schemaless and now carries measured cost instead of a made-up number.
+
+### Verified
+- New tests cover positive, zero and negative inference cost plus NaN/Inf, malformed journal values, cost-aware EV output, the app's snapshot delta/rolling average, the API payload and the standalone report.
+- Full suite: **2514 passed, 0 failed, 0 skipped** (`pytest tests -q` with `--basetemp` outside the repo because the default Windows temp ACL denied `tmp_path`; 155 s).
+- `ruff check src scripts start.py` clean; `pyright src start.py` **0 errors**.
+- Manual report on the current journal: 42 cycles, 0 analyses with cost (the old lines predate this change), gross/net `$8.54`, `cost per analysis: n/a`.
+- No bot or executor process was started, restarted or signalled: the live one-cycle smoke (new `cycles.jsonl` fields and the API payload) needs the next normal restart.
+
+## 2026-10-25 — Every timestamp names its clock; the bot core stops duck-typing itself
+
+### Fixed
+- A log line carried a bare local wall time while its day folder was named after the UTC date. Between 00:00 and 02:00 local the line landed in the previous day's folder, and on the autumn switch `02:04:15` occurred twice in the same file with nothing to tell the two hours apart. Lines now print the display zone **with its UTC offset** (`[25.10.2026 02:04:15 +02:00]`) and `logs/Bot/YYYY_MM_DD` is the same day as the lines inside it; `errors.log` and the last-resort `_write_fallback_crash` writer use the identical stamp.
+- `Trading Check #N at 2026-10-25 00:00:01` printed UTC without saying so and sat next to a local-time prefix, so one line showed two clocks. It now reads `2026-10-25 00:00:01 UTC / 2026-10-25 02:00:01 CEST`.
+- Time fields that lost their zone: the Discord decision footer and the console position status (`Time: …`, `Entry Time: …`), the last-analysis line fed into the prompt, the recent-history lines (`- [2026-04-14 20:00 UTC] CLOSE_LONG …`) and the chart data-range log now all carry `UTC`.
+- The executor handoff sent `timestamp` as `strftime("%Y-%m-%dT%H:%M:%S.%f")`, dropping the offset; the executor only read it correctly because it guesses "naive means UTC". The payload now uses `datetime.isoformat()` (`…+00:00`), which the executor's `fromisoformat` parses unchanged — the file is self-describing for any other consumer.
+- Six `datetime.fromtimestamp()` calls without a zone (format utils ×2, fear-and-greed collection ×2, chart range ×2) used the OS clock; on a host in a negative-offset zone the date shifted by a day. All are `tz=timezone.utc`, so the prompt, the chart label and the log agree with the candle timestamps.
+- `BOT_INTENT_JOURNAL_PATH` existed only in test doubles: production silently fell back to `data/trading/bot_position_intents.jsonl` through a `getattr` probe. It is a real `[executor_api] intent_journal_path` key with that default, so the journal location is configured, not guessed.
+- `PersistenceManager` wrote positions/statistics to a hardcoded `data/trading` while the trade DB honoured `[directories] data_dir`; a custom data directory split one deployment's state across two trees. Both follow `DATA_DIR` now.
+
+### Changed
+- `[general] timezone` (default empty = OS zone, shipped as `Europe/Warsaw`) drives every human-readable timestamp through the new `src/utils/time_utils.py`: `local_timezone()`, `local_stamp()`, `day_stamp()`, `utc_stamp()`, `utc_and_local()`. The name is validated at startup, so a typo fails on boot instead of on the first log line; `tzdata` joined `requirements.txt` because `ZoneInfo` has no IANA database on Windows without it. Trading arithmetic, TTLs and persistence remain on UTC epoch/aware-UTC datetimes — the switch changes labels only, never a candle boundary.
+- `BotServices` now types `config: Config`, `market_analyzer: AnalysisEngine` and `trading_strategy: TradingStrategy` instead of `Any`. That type information is what exposed the remaining probes: pyright checks every `self.config.*` and strategy call, and the module reaches **0 errors** without a single `getattr`.
+- Removed duck typing on the strategy's own contract: `take_pending_local_close_decision()`, `reconcile_local_position()`, `resolve_position_intents_after_forward()` (including the `position_intent_state()` fallback for "a strategy without the resolver"), `take_unconfirmed_intent_alert()`, `take_rejected_intent_alert()`, `position_snapshot_token()`, `protection_snapshot()` and `protection_loosening_reason()` are called directly. `inspect.isawaitable`, `callable()` probes and `isinstance(..., str)` guards around their results are gone; a double now implements the method instead of the caller guessing whether it exists. `PositionStatusMonitor` follows the same contract (`take_local_exit_request()`, `take_executor_side_exit_reason()`, the fields of the reconciliation outcome) and `sync_position_state()` returns `LocalPositionReconciliation | None` instead of `Any`.
+- `executor_reconciliation` no longer lazily creates its own state through `getattr(self, "_x")`: the transition lock, the booked-exit set, the intent ledger and the two one-shot alerts are declared and initialised in `TradingStrategy.__init__`. The ledger stays lazy (it replays its journal on first use) but is typed `PositionIntentLedger | None`, and the first caller can no longer observe a half-built lock.
+- Config probes replaced with direct reads in `app.py` (approval gate), `executor_reconciliation.py` (executor endpoint, exit journal), `provisioners.py` (circuit breaker) and `exchange_manager.py` (sandbox); `make_config()` carries the production defaults for all of them, so a missing key fails in the loader rather than mid-cycle. The dead `except (AttributeError, TypeError, KeyError)` around `result["analysis"]` and the duplicated exit-path default in `_executor_exit_path()` are gone as well.
+- Tests that encoded the removed defences were rewritten rather than kept alive behind `getattr`: a MagicMock returned as a "reason", a strategy without the resolver, and a UTC-named log folder.
+- The interactive rich console keeps the OS clock (it renders only `HH:MM:SS`); every persisted line and every notification is now unambiguous on its own.
+
+### Verified
+- 16 new tests: IANA offsets for summer/winter/half-hour/negative/UTC, the repeated autumn `02:30` hour staying distinguishable, a display-day folder that differs from the UTC date, the offset on a log line and on a crash line, naive input read as UTC, `utc_stamp(None)`, `[general] timezone` validation and the intent-journal default following `DATA_DIR`.
+- Full suite: **2489 passed, 0 failed, 0 skipped** (`pytest tests -q`, 162 s); `ruff check src start.py scripts` clean; `pyright src start.py` 0 errors.
+- No bot or executor process was started, restarted or signalled.
+
+## 2026-10-25 — Macro data outlives a mislabeled Content-Type; a long Reddit reason no longer discards the assessment
+
+### Fixed
+- DefiLlama serves `/v2/chains` as valid JSON under `text/html; charset=utf-8`. `aiohttp.ClientResponse.json()` refuses that mimetype, so every macro refresh raised `Error fetching chain TVL: 200, message='Attempt to decode JSON with unexpected mimetype: text/html; charset=utf-8'`, the chain list came back empty, `get_macro_overview()` returned `None` and the cycle lost both macro and DeFi fundamentals (`Failed to fetch macro data: None`). `DefiLlamaClient._fetch_json()` now reads and decodes the body itself whatever the header says — the live endpoint yields **421 chains** and **$89.5B** TVL instead of an error pair per refresh.
+- The same helper names the real failure instead of repeating the aiohttp message: `DefiLlama <url> answered HTTP <status>`, `<url> did not return JSON` with a 160-character body preview, or `<url> returned dict, expected list` when a healthy status carries the wrong JSON container; a missing snapshot logs `Macro overview unavailable: stablecoins=<n> chains=<n>` and then `Macro data unavailable, so DeFi fundamentals are skipped`, so a bare `None` no longer stands in for a diagnosis.
+- A Reddit assessment whose `reason` ran past 240 characters was discarded whole (`Discarding invalid Reddit assessment: String should have at most 240 characters`) and the response contract was marked invalid with it, although `outlook` and the cited title IDs were usable. `RedditAssessmentModel` now clamps an over-long reason to the documented ceiling at a word boundary before validation — the same tolerance the evidence-ID coercion already applies — so the assessment survives and still feeds entry-time learning.
+
+### Changed
+- DefiLlama payloads are shape-checked once: `_fetch_json(url, expected_type)` owns the request, decode and container check, and `_records()` keeps the object members of an array. The five getters no longer repeat the same `isinstance` (19 checks in the module became 8), and a JSON object where an array belongs no longer surfaces as a crash inside a comprehension.
+- Removed defensive branches that type checking already covers: the `except (ImportError, AttributeError, Exception)` tuple in the shutdown manager, `except AttributeError` around `Position.quote_amount` in the Discord and console notifiers, `getattr(guard, "name", …)` in the guard pipeline, `getattr(parser, "extract_json_block", None)` in the post-mortem service (the parser is now typed `UnifiedParser`), an attribute probe in the visuals router, and `getattr`/`except AttributeError` fallbacks for `FILE_MESSAGE_EXPIRY`, `MAX_POSITION_SIZE`, `DATA_DIR` and `TIMEFRAME` in the file notifier, the prompt template and the brain router. A missing config attribute now fails where it is read instead of silently falling back to `"data"`/`"unknown"`.
+
+### Verified
+- Live probe against the real endpoints: 421 chains, macro TVL `89,508,933,463.80`, no error line.
+- 12 new tests: a JSON body served as `text/html`, a complete fundamentals snapshot, an HTML body, a non-200 status, the wrong JSON container, a mixed array, naming the empty source, the reason clamp (single token and word boundary), the parser contract staying valid, and the autumn DST switch (25.10.2026 Europe/Warsaw: 4 h candle bounds stay on 04:00/08:00 UTC and the label resolves to 05:00 CET).
+- Full suite: **2473 passed, 0 failed, 0 skipped** (`pytest tests -q`, 158 s); `ruff check src start.py scripts` clean; `pyright src start.py` 0 errors.
+- No bot or executor process was started, restarted or signalled: both keep running the previous code until the next restart.
+
 ## 2026-10-22 — The real price runs the stop; the exchange leg becomes a backstop
 
 ### Changed

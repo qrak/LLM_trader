@@ -110,13 +110,32 @@ class TrendModel(BaseModel):
     timeframe_alignment: TimeframeAlignment | None = None
 
 
+REDDIT_REASON_MAX_CHARS = 240
+
+
 class RedditAssessmentModel(BaseModel):
     """Same-call interpretation of the selected Reddit titles, with evidence IDs."""
     model_config = ConfigDict(extra="forbid")
 
     outlook: Literal["BULLISH", "BEARISH", "MIXED", "INSUFFICIENT_EVIDENCE"]
     evidence: list[Annotated[int, Field(strict=True, ge=1)]]
-    reason: str = Field(min_length=1, max_length=240)
+    reason: str = Field(min_length=1, max_length=REDDIT_REASON_MAX_CHARS)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def clamp_reason_length(cls, value: Any) -> Any:
+        """Trim an over-long reason instead of discarding the whole assessment.
+
+        The provider contract asks for <=240 characters and models routinely
+        overshoot by a few. The reason is explanatory prose with no execution
+        meaning, so cutting it at the ceiling keeps the outlook and the cited
+        evidence usable; rejecting the field threw away a valid sentiment.
+        """
+        if not isinstance(value, str) or len(value) <= REDDIT_REASON_MAX_CHARS:
+            return value
+        clipped = value[:REDDIT_REASON_MAX_CHARS]
+        boundary = clipped.rfind(" ")
+        return (clipped[:boundary] if boundary > 0 else clipped).rstrip()
 
     @field_validator("evidence", mode="before")
     @classmethod

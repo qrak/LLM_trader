@@ -149,7 +149,7 @@ class FormatUtils:
             Formatted datetime string or 'N/A' if invalid
         """
         try:
-            dt = datetime.fromtimestamp(timestamp_sec)  # noqa: DTZ006
+            dt = datetime.fromtimestamp(timestamp_sec, tz=timezone.utc)
             return dt.strftime(format_str)
         except (ValueError, TypeError, OSError):
             return "N/A"
@@ -194,7 +194,7 @@ class FormatUtils:
             datetime object or None if invalid
         """
         try:
-            return datetime.fromtimestamp(timestamp_ms / 1000)  # noqa: DTZ006
+            return datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
         except (ValueError, TypeError, OSError):
             return None
 

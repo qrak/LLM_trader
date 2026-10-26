@@ -106,7 +106,7 @@ class ExchangeManager:
 
             exchange = exchange_class(exchange_config)
 
-            if getattr(self.config, "EXCHANGE_SANDBOX", False):
+            if self.config.EXCHANGE_SANDBOX:
                 try:
                     exchange.set_sandbox_mode(True)
                     self.logger.info("Sandbox mode enabled for %s - market data from the testnet", exchange_id)

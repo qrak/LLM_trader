@@ -70,7 +70,7 @@ class DiscordFileHandler:
                 return False
 
         if expire_after is None:
-            expire_after = getattr(self.config, "FILE_MESSAGE_EXPIRY", 0) or 0
+            expire_after = self.config.FILE_MESSAGE_EXPIRY or 0
         now = datetime.now(timezone.utc)
         message_data = {
             "channel_id": channel_id,

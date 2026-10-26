@@ -60,12 +60,40 @@ def test_summarize_counts_and_window(tmp_path):
     assert summary["latency_ms"] == {"p50": 1000.0, "p95": 3000.0}
 
 
+def test_summarize_reports_inference_cost_and_coverage():
+    records = [
+        {"ts": (NOW - timedelta(hours=1)).isoformat(), "inference_cost_usd": 0.25},
+        {"ts": (NOW - timedelta(hours=2)).isoformat(), "inference_cost_usd": 0.0},
+        {"ts": (NOW - timedelta(hours=3)).isoformat(), "inference_cost_usd": None},
+        {"ts": (NOW - timedelta(hours=4)).isoformat(), "inference_cost_usd": "0.5"},
+        {"ts": (NOW - timedelta(hours=5)).isoformat(), "inference_cost_usd": float("nan")},
+        {"ts": (NOW - timedelta(hours=6)).isoformat(), "inference_cost_usd": float("inf")},
+        {"ts": (NOW - timedelta(hours=7)).isoformat(), "inference_cost_usd": -1.0},
+        {"ts": (NOW - timedelta(hours=8)).isoformat(), "inference_cost_usd": True},
+    ]
+
+    summary = summarize(records, days=1, now=NOW)
+
+    assert summary["inference_cost"] == {
+        "analyses": 2,
+        "total_usd": 0.25,
+        "per_analysis_usd": 0.125,
+        "coverage": 0.25,
+    }
+
+
 def test_summarize_without_cycles_is_explicit():
     summary = summarize([], days=1, now=NOW)
 
     assert summary["cycles"] == 0
     assert summary["hold_share"] is None
     assert summary["latency_ms"] == {"p50": None, "p95": None}
+    assert summary["inference_cost"] == {
+        "analyses": 0,
+        "total_usd": 0.0,
+        "per_analysis_usd": None,
+        "coverage": None,
+    }
 
 async def test_dashboard_endpoint_summarizes_the_journal(tmp_path):
     """The endpoint reads the same journal the bot writes; no persistence means zeros."""
@@ -79,7 +107,7 @@ async def test_dashboard_endpoint_summarizes_the_journal(tmp_path):
                                persistence=SimpleNamespace(data_dir=tmp_path))
     append_cycle(
         tmp_path / "metrics" / "cycles.jsonl",
-        {"signal": "HOLD", "latency_ms": 10.0},
+        {"signal": "HOLD", "latency_ms": 10.0, "inference_cost_usd": 0.125},
         now=datetime.now(timezone.utc),
     )
 
@@ -87,7 +115,15 @@ async def test_dashboard_endpoint_summarizes_the_journal(tmp_path):
 
     assert summary["cycles"] == 1
     assert summary["signals"] == {"HOLD": 1}
+    assert summary["inference_cost"] == {
+        "analyses": 1,
+        "total_usd": 0.125,
+        "per_analysis_usd": 0.125,
+        "coverage": 1.0,
+    }
 
     empty = PerformanceRouter(config=MagicMock(), logger=MagicMock(),
                               dashboard_state=MagicMock(), persistence=None)
-    assert (await empty.get_cycle_metrics(days=1))["cycles"] == 0
+    empty_summary = await empty.get_cycle_metrics(days=1)
+    assert empty_summary["cycles"] == 0
+    assert empty_summary["inference_cost"]["analyses"] == 0

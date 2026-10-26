@@ -105,6 +105,12 @@ BrainAgent.update_from_closed_trade()
   └── ReflectionEngine → sequential: best-practice → anti-pattern → AI-mistake rules
 ```
 
+Per cycle the bot snapshots `CostStorage` before and after the LLM work (chart, text,
+contract retry and any awaited post-mortem) and appends the delta to
+`data/trading/metrics/cycles.jsonl`. The last 20 measured costs feed the EV framework,
+whose 1.5× threshold covers the round-trip fee plus inference cost; with no measured
+cost the EV prompt stays fee-only.
+
 ### 3.3 Shutdown
 
 `GracefulShutdownManager`: SIGINT/SIGTERM → drain active analysis → persist state → close providers → flush logs; the keyboard handler performs a manual stop with state preservation.
@@ -158,6 +164,7 @@ Active config at `config/config.ini`. Key settings:
 | **Candles** | 999 (125 for the AI chart) |
 | **Capital** | $10,000 simulated (`demo_quote_capital`) |
 | **Fee** | 0.075% (`transaction_fee_percent`) |
+| **Inference cost** | `CostStorage` delta per cycle; rolling 20-analysis average in the EV prompt; no config key |
 | **Max Position** | 10% of portfolio (`max_position_size`) |
 | **Fallback sizes** | 1% / 2% / 3% (LOW/MEDIUM/HIGH confidence) |
 | **R:R entry floor** | `min_rr_entry = 0.0` (gate inert until set) |
@@ -165,6 +172,7 @@ Active config at `config/config.ini`. Key settings:
 | **Provider** | `provider = deepseek`, `deepseek_model = deepseek-flash`; OpenRouter base `google/gemini-3-flash-preview`, fallback `deepseek/deepseek-v4.1-flash` |
 | **Executor** | `[executor_api] enabled = true`, `url = http://127.0.0.1:9199/decision` |
 | **Market data source** | `[exchanges] sandbox = false` → real exchange book; `true` → testnet book |
+| **Timezone** | `[general] timezone = Europe/Warsaw` — human-readable timestamps only (logs, notifications, check headers, chart labels); trading stays on UTC candles |
 | **Real-market stop** | `[risk_management] reference_exit_check_seconds = 10` (0 = off; pairs with the executor's `PROTECTION_BACKSTOP_MULTIPLIER`) |
 | **Dashboard** | 0.0.0.0:8000 |
 
@@ -208,7 +216,7 @@ LLM_trader/
 │   ├── parsing/                 # UnifiedParser
 │   ├── logger/                  # Structured logging
 │   ├── notifiers/               # Discord, console, file handler
-│   └── utils/                   # Profiler, token counter, decorators (classes only)
+│   └── utils/                   # Profiler, token counter, decorators, time_utils (classes only)
 ├── tests/                       # 48 test_*.py in domain_{trading,brain,rag_indicators,infra}
 │                                #   + test_admin_playwright.py (marker: integration) + conftest.py
 ├── data/                        # Runtime state (not committed)
@@ -285,6 +293,8 @@ Any new tool-specific instruction file must be a non-authoritative pointer to `A
 
 ### Types and data
 - `TradeDecision` and `Position` are `@dataclass(slots=True)` with fixed fields: access attributes directly. Never `hasattr` / `getattr` / `isinstance` on them.
+- The strategy's public surface is a contract, not a probe target: call `position_snapshot_token()`, `protection_snapshot()`, `protection_loosening_reason()`, `reconcile_local_position()`, `resolve_position_intents_after_forward()` and the one-shot `take_*()` readers directly. Wiring a double means implementing the method, not making the caller duck-type it.
+- Every timestamp printed for a human goes through `src/utils/time_utils.py`: `utc_stamp()` for UTC-only text, `utc_and_local()` for a paired label, `local_stamp()`/`day_stamp()` for log lines and folders. Trading arithmetic, persistence and TTLs stay on UTC epoch or aware UTC datetimes — never on the wall clock.
 - Raw payloads from LLM output or API responses are `dict | None`: read them with `.get()`, and keep the guards that protect genuinely unknown data.
 - `TradeDecision` carries no `order_type` / `reduce_only`; those come from `ENTRY_ORDER_TYPE` and `analysis.get("reduce_only", False)`.
 - Validate numbers at the boundary: NaN/Inf are rejected where they enter (`_parse_finite_number`, `_parse_finite_float`, `math.isfinite` for timestamps), and `serialize_for_json` maps NaN/Inf to `None`.

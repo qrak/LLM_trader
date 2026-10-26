@@ -6,6 +6,8 @@ crash-logging hooks.
 import asyncio
 import os
 import sys
+import tempfile
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,9 +19,11 @@ import pytest
 
 from src.app import BotServices, CryptoTradingBot
 from src.logger.logger import Logger, _write_fallback_crash
+from src.managers.cycle_metrics import append_cycle, load_cycles
 from src.trading.executor_handler import ExecutorHandler
 from src.utils.graceful_shutdown_manager import GracefulShutdownManager
 from src.utils.keyboard_handler import KeyboardHandler
+from src.utils.time_utils import day_stamp
 from src.utils.timeframe_validator import TimeframeValidator
 
 
@@ -114,6 +118,9 @@ def trading_check_bot(**overrides: Any) -> SimpleNamespace:
         DEMO_QUOTE_CAPITAL=10000.0,
         SOCIAL_SENTIMENT_ENABLED=False,
         EXECUTOR_VERDICT_PATH="data/trading/executor_verdicts.jsonl",
+        REQUIRE_APPROVAL_ABOVE_USDC=0.0,
+        APPROVAL_TTL_MINUTES=15.0,
+        APPROVAL_POLL_SECONDS=5.0,
     )
     discord_notifier = MagicMock()
     discord_notifier.send_trading_decision = AsyncMock()
@@ -127,12 +134,23 @@ def trading_check_bot(**overrides: Any) -> SimpleNamespace:
     )
     market_analyzer.last_chart_buffer = None
     persistence = MagicMock()
+    persistence.data_dir = Path(tempfile.mkdtemp(prefix="llm_trader_bot_state_"))
     persistence.async_save_last_analysis_time = AsyncMock()
     persistence.get_last_analysis_time = MagicMock(return_value=datetime.now(timezone.utc))
     persistence.async_load_previous_response = AsyncMock(return_value={})
     trading_strategy = MagicMock()
     trading_strategy.process_analysis = AsyncMock(return_value=SimpleNamespace(action="SELL"))
     trading_strategy.current_position = object()
+    trading_strategy.position_snapshot_token = MagicMock(return_value="flat")
+    trading_strategy.protection_snapshot = MagicMock(return_value=None)
+    trading_strategy.protection_loosening_reason = MagicMock(return_value=None)
+    trading_strategy.take_executor_side_exit_reason = MagicMock(return_value=None)
+    trading_strategy.take_state_divergence = MagicMock(return_value=None)
+    trading_strategy.take_unconfirmed_intent_alert = MagicMock(return_value=None)
+    trading_strategy.take_rejected_intent_alert = MagicMock(return_value=None)
+    trading_strategy.take_pending_local_close_decision = MagicMock(return_value=None)
+    trading_strategy.resolve_position_intents_after_forward = AsyncMock(return_value=None)
+    trading_strategy.reconcile_local_position = AsyncMock(return_value=None)
     trading_strategy.get_position_context = MagicMock(return_value="position context")
     memory_service = MagicMock()
     memory_service.get_context_summary = MagicMock(return_value="memory")
@@ -202,15 +220,11 @@ async def test_exchange_side_exit_reports_through_the_position_monitor() -> None
 
 
 async def test_no_closing_summary_without_a_booked_exchange_exit() -> None:
-    """Nothing is reported when no exit was booked, or when the flag is not a reason string."""
+    """Nothing is reported when the strategy flags no booked exchange exit."""
     harness = trading_check_bot()
     harness.position_monitor.handle_position_closed = AsyncMock()
 
     harness.trading_strategy.take_executor_side_exit_reason = MagicMock(return_value=None)
-    await harness.bot._report_executor_side_exit()
-    harness.position_monitor.handle_position_closed.assert_not_awaited()
-
-    harness.trading_strategy.take_executor_side_exit_reason = MagicMock(return_value=MagicMock())
     await harness.bot._report_executor_side_exit()
     harness.position_monitor.handle_position_closed.assert_not_awaited()
 
@@ -385,12 +399,40 @@ def test_next_candle_time_stays_on_utc_boundaries_across_dst_change():
     assert datetime.fromtimestamp(next_after / 1000, timezone.utc) == datetime(2026, 3, 29, 8, 0, tzinfo=timezone.utc)
 
 
+def test_next_candle_time_and_labels_survive_the_autumn_dst_change():
+    warsaw = ZoneInfo("Europe/Warsaw")
+    before_switch = datetime(2026, 10, 25, 0, 4, tzinfo=timezone.utc)
+    after_switch = datetime(2026, 10, 25, 4, 4, tzinfo=timezone.utc)
+
+    next_before = TimeframeValidator.calculate_next_candle_time(
+        int(before_switch.timestamp() * 1000), "4h"
+    )
+    next_after = TimeframeValidator.calculate_next_candle_time(
+        int(after_switch.timestamp() * 1000), "4h"
+    )
+
+    assert datetime.fromtimestamp(next_before / 1000, timezone.utc) == datetime(
+        2026, 10, 25, 4, 0, tzinfo=timezone.utc
+    )
+    assert datetime.fromtimestamp(next_after / 1000, timezone.utc) == datetime(
+        2026, 10, 25, 8, 0, tzinfo=timezone.utc
+    )
+    assert before_switch.astimezone(warsaw).strftime("%H:%M %Z") == "02:04 CEST"
+    assert after_switch.astimezone(warsaw).strftime("%H:%M %Z") == "05:04 CET"
+    assert (
+        CryptoTradingBot._format_utc_and_local(
+            datetime.fromtimestamp(next_before / 1000, timezone.utc), warsaw
+        )
+        == "2026-10-25 04:00:00 UTC / 2026-10-25 05:00:00 CET"
+    )
+
+
 def test_bot_formats_analysis_times_in_utc_and_local():
     bot = CryptoTradingBot.__new__(CryptoTradingBot)
     bot.persistence = MagicMock()
     bot.persistence.get_last_analysis_time.return_value = NaiveUtcDateTime(2026, 4, 14, 4, 0, 48)
 
-    assert bot._get_formatted_last_analysis_time() == "2026-04-14 04:00:48"
+    assert bot._get_formatted_last_analysis_time() == "2026-04-14 04:00:48 UTC"
     assert (
         CryptoTradingBot._format_utc_and_local(datetime(2026, 4, 14, 8, 0, tzinfo=timezone.utc), ZoneInfo("Europe/Warsaw"))
         == "2026-04-14 08:00:00 UTC / 2026-04-14 10:00:00 CEST"
@@ -497,7 +539,7 @@ def test_crash_hooks_write_unhandled_errors_into_errors_log(tmp_path, monkeypatc
     import src.logger.logger as logger_module
 
     crash_path = Path(logger_module._CRASH_LOG_PATH)
-    assert crash_path == tmp_path / "logs" / "TestBot" / datetime.now(timezone.utc).strftime("%Y_%m_%d") / "errors.log"
+    assert crash_path == tmp_path / "logs" / "TestBot" / day_stamp() / "errors.log"
 
     try:
         raise RuntimeError("TEST: fallback writer")
@@ -572,10 +614,6 @@ async def test_no_unconfirmed_alert_without_an_unconfirmed_intent() -> None:
     await harness.bot._report_unconfirmed_intent()
     harness.discord_notifier.send_message.assert_not_awaited()
 
-    harness.trading_strategy.take_unconfirmed_intent_alert = MagicMock(return_value=MagicMock())
-    await harness.bot._report_unconfirmed_intent()
-    harness.discord_notifier.send_message.assert_not_awaited()
-
 
 async def test_refused_command_is_alerted_to_the_operator() -> None:
     """A command the bot's own policy refused is reported, never swallowed silently."""
@@ -620,13 +658,12 @@ async def test_forwarded_command_is_resolved_through_the_strategy_hook() -> None
     )
 
 
-async def test_resolution_is_none_without_a_working_strategy_hook() -> None:
-    """A failing/absent hook is not guessed into a state — None is returned instead."""
+async def test_resolution_is_none_when_the_strategy_hook_fails() -> None:
+    """A failing hook is not guessed into a state — None is returned instead."""
     harness = trading_check_bot()
     harness.trading_strategy.resolve_position_intents_after_forward = MagicMock(
         side_effect=AttributeError("no hook")
     )
-    harness.trading_strategy.position_intent_state = MagicMock(return_value="pending")
 
     state = await harness.bot._resolve_position_intents(
         SimpleNamespace(action="BUY", order_id="order-1"), True
@@ -634,16 +671,180 @@ async def test_resolution_is_none_without_a_working_strategy_hook() -> None:
 
     assert state is None
 
-    strategy_without_resolver = MagicMock(spec=["position_intent_state"])
-    strategy_without_resolver.position_intent_state = MagicMock(return_value="pending")
-    harness.bot.trading_strategy = strategy_without_resolver
 
-    assert (
-        await harness.bot._resolve_position_intents(
-            SimpleNamespace(action="BUY", order_id="order-1"), True
+def test_inference_usage_records_cost_delta_and_rolling_window() -> None:
+    """One cycle's cost is the cumulative-counter delta, then feeds the rolling average."""
+    harness = trading_check_bot()
+    bot = harness.bot
+    before = {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0}
+    after = {"cost_usd": 1.25, "input_tokens": 160.0, "output_tokens": 70.0}
+    bot.model_manager.cost_storage.snapshot = MagicMock(side_effect=[before, after])
+
+    snapshot_before = bot._cost_snapshot()
+    usage = bot._inference_usage(snapshot_before)
+
+    assert usage == {
+        "inference_cost_usd": 0.25,
+        "prompt_tokens": 60.0,
+        "completion_tokens": 20.0,
+    }
+    assert bot._last_inference_cost == 0.25
+    assert list(bot._recent_inference_costs) == [0.25]
+    assert bot._average_inference_cost() == 0.25
+
+
+def test_inference_usage_clamps_a_counter_reset() -> None:
+    """A reset cost counter must not produce a negative cost or an exception."""
+    harness = trading_check_bot()
+    bot = harness.bot
+    before = {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0}
+    after = {"cost_usd": 0.4, "input_tokens": 120.0, "output_tokens": 60.0}
+    bot.model_manager.cost_storage.snapshot = MagicMock(side_effect=[before, after])
+
+    usage = bot._inference_usage(bot._cost_snapshot())
+
+    assert usage is not None
+    assert usage["inference_cost_usd"] == 0.0
+    assert usage["prompt_tokens"] == 20.0
+    assert usage["completion_tokens"] == 10.0
+    assert list(bot._recent_inference_costs) == [0.0]
+    assert bot.logger.debug.called
+
+
+def test_inference_usage_without_storage_is_no_measurement() -> None:
+    harness = trading_check_bot()
+    harness.bot.model_manager.cost_storage = None
+
+    assert harness.bot._cost_snapshot() is None
+    assert harness.bot._inference_usage({"cost_usd": 0.0, "input_tokens": 0.0, "output_tokens": 0.0}) is None
+
+
+def test_build_ev_context_passes_the_rolling_average() -> None:
+    harness = trading_check_bot()
+    formatter = MagicMock()
+    formatter.build_ev_framework_section.return_value = "EV"
+    harness.bot.ev_formatter = formatter
+    harness.bot.statistics_service.get_current_capital = MagicMock(return_value=9000.0)
+    harness.bot._recent_inference_costs = deque([0.10, 0.30], maxlen=20)
+
+    assert harness.bot._build_ev_context() == "EV"
+
+    args, kwargs = formatter.build_ev_framework_section.call_args
+    assert args == (9000.0,)
+    assert kwargs["inference_cost_usd"] == pytest.approx(0.20)
+
+
+def test_record_cycle_metric_writes_cost_and_token_fields() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {"signal": "BUY"},
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result,
+            decision=SimpleNamespace(action="BUY"),
+            intent_state="pending",
+            latency_ms=12.3,
+            inference_usage={
+                "inference_cost_usd": 0.1234567,
+                "prompt_tokens": 100.0,
+                "completion_tokens": 50.0,
+            },
         )
-        == "pending"
+
+    record = append.call_args.args[1]
+    assert record["inference_cost_usd"] == 0.123457
+    assert record["prompt_tokens"] == 100
+    assert record["completion_tokens"] == 50
+    assert record["provider"] == "deepseek"
+    assert record["model"] == "deepseek-flash"
+
+
+def test_record_cycle_metric_without_usage_keeps_provider_but_no_cost() -> None:
+    harness = trading_check_bot()
+    result = {
+        "analysis": {"signal": "HOLD"},
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+    }
+
+    with patch("src.app.append_cycle") as append:
+        harness.bot._record_cycle_metric(
+            result=result,
+            decision=None,
+            intent_state=None,
+            latency_ms=12.3,
+        )
+
+    record = append.call_args.args[1]
+    assert "inference_cost_usd" not in record
+    assert "prompt_tokens" not in record
+    assert "completion_tokens" not in record
+    assert record["provider"] == "deepseek"
+    assert record["model"] == "deepseek-flash"
+
+
+async def test_execute_trading_check_records_the_measured_cost() -> None:
+    harness = trading_check_bot()
+    harness.market_analyzer.analyze_market.return_value = {
+        "analysis": {"signal": "HOLD", "confidence": 50},
+        "raw_response": '{"analysis": {}}',
+        "provider": "deepseek",
+        "model": "deepseek-flash",
+    }
+    harness.bot.model_manager.cost_storage.snapshot = MagicMock(
+        side_effect=[
+            {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0},
+            {"cost_usd": 1.25, "input_tokens": 160.0, "output_tokens": 70.0},
+        ]
     )
+
+    await harness.bot._execute_trading_check(check_count=1)
+
+    records = load_cycles(harness.bot.persistence.data_dir / "metrics" / "cycles.jsonl")
+    record = records[-1]
+    assert record["inference_cost_usd"] == 0.25
+    assert record["prompt_tokens"] == 60
+    assert record["completion_tokens"] == 20
+    assert record["provider"] == "deepseek"
+    assert record["model"] == "deepseek-flash"
+
+
+async def test_execute_trading_check_records_cost_on_analysis_error() -> None:
+    harness = trading_check_bot()
+    harness.market_analyzer.analyze_market.return_value = {"error": "provider down"}
+    harness.bot.model_manager.cost_storage.snapshot = MagicMock(
+        side_effect=[
+            {"cost_usd": 1.0, "input_tokens": 100.0, "output_tokens": 50.0},
+            {"cost_usd": 1.10, "input_tokens": 120.0, "output_tokens": 60.0},
+        ]
+    )
+
+    await harness.bot._execute_trading_check(check_count=1)
+
+    records = load_cycles(harness.bot.persistence.data_dir / "metrics" / "cycles.jsonl")
+    record = records[-1]
+    assert record["error"] == "provider down"
+    assert record["inference_cost_usd"] == 0.1
+    assert record["prompt_tokens"] == 20
+    assert "provider" not in record
+
+
+def test_seed_inference_costs_reads_valid_values_only() -> None:
+    harness = trading_check_bot()
+    path = harness.bot.persistence.data_dir / "metrics" / "cycles.jsonl"
+    append_cycle(path, {"inference_cost_usd": 0.10})
+    append_cycle(path, {"inference_cost_usd": 0.0})
+    append_cycle(path, {"inference_cost_usd": None})
+    append_cycle(path, {"inference_cost_usd": float("nan")})
+    harness.bot._recent_inference_costs.clear()
+
+    harness.bot._seed_inference_costs()
+
+    assert list(harness.bot._recent_inference_costs) == [0.10, 0.0]
 
 
 def test_execution_note_reports_a_pending_command_as_not_confirmed() -> None:

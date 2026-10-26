@@ -4,8 +4,9 @@ import asyncio
 import math
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from .data_models import LocalExitRequest
 from .executor_reconciliation import (
     RECONCILE_EXIT_BOOKED,
     RECONCILE_NO_POSITION,
@@ -13,8 +14,12 @@ from .executor_reconciliation import (
     VERIFICATION_EXCHANGE_VERIFIED,
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,
+    LocalPositionReconciliation,
 )
 from .exit_monitor import ExitMonitor
+
+if TYPE_CHECKING:
+    from .trading_strategy import TradingStrategy
 
 DEFAULT_RECONCILE_INTERVAL_SECONDS = 120.0
 VERIFICATION_FRESHNESS_FACTOR = 2.0
@@ -57,7 +62,7 @@ class PositionStatusMonitor:
         logger: Any,
         config: Any,
         persistence: Any,
-        trading_strategy: Any,
+        trading_strategy: "TradingStrategy",
         exit_monitor: ExitMonitor,
         notifier: Any,
         active_tasks: set[asyncio.Task],
@@ -66,7 +71,7 @@ class PositionStatusMonitor:
         interruptible_sleep: Callable[..., Awaitable[Any]],
         get_symbol: Callable[[], str | None],
         manages_exits: Callable[[], bool] | None = None,
-        reconcile_position: Callable[[], Awaitable[Any]] | None = None,
+        reconcile_position: Callable[[], Awaitable[LocalPositionReconciliation]] | None = None,
         reconcile_interval_seconds: float = DEFAULT_RECONCILE_INTERVAL_SECONDS,
         reference_exits_enabled: Callable[[], bool] | None = None,
         reference_exit_check_seconds: float = DEFAULT_REFERENCE_CHECK_SECONDS,
@@ -94,7 +99,7 @@ class PositionStatusMonitor:
         self._task: asyncio.Task | None = None
         self._position_close_lock = asyncio.Lock()
         self._last_reconcile_at: datetime | None = None
-        self._last_reconcile_outcome: Any = None
+        self._last_reconcile_outcome: LocalPositionReconciliation | None = None
         self._last_executor_reported_open_at: datetime | None = None
         self._last_reference_check_at: datetime | None = None
         self._last_reference_forward_at: datetime | None = None
@@ -120,7 +125,7 @@ class PositionStatusMonitor:
         elapsed = (now - self._last_reconcile_at).total_seconds()
         return max(0.0, self.reconcile_interval_seconds - elapsed)
 
-    async def sync_position_state(self, *, force: bool = False) -> Any:
+    async def sync_position_state(self, *, force: bool = False) -> LocalPositionReconciliation | None:
         """Run the independent local-position reconciliation.
 
         Deliberately depends on nothing but the strategy hook: no ticker, no LLM,
@@ -143,8 +148,8 @@ class PositionStatusMonitor:
 
         self._last_reconcile_at = datetime.now(timezone.utc)
         self._last_reconcile_outcome = outcome
-        if getattr(outcome, "state", None) == RECONCILE_OPEN_EXECUTOR_REPORTED:
-            self._last_executor_reported_open_at = getattr(outcome, "checked_at", None) or now
+        if outcome.state == RECONCILE_OPEN_EXECUTOR_REPORTED:
+            self._last_executor_reported_open_at = outcome.checked_at or now
         return outcome
 
     def verification(self) -> tuple[str, datetime | None, str | None]:
@@ -154,10 +159,17 @@ class PositionStatusMonitor:
         executor-reported. Failed or stale evidence is unverified.
         """
         outcome = self._last_reconcile_outcome
-        state = getattr(outcome, "state", None)
-        checked_at = getattr(outcome, "checked_at", None)
-        detail = getattr(outcome, "detail", None)
-        exchange_verified_at = getattr(outcome, "exchange_verified_at", None)
+        if outcome is None:
+            detail = (
+                "no exchange verification performed yet"
+                if self._last_executor_reported_open_at is None
+                else None
+            )
+            return VERIFICATION_UNVERIFIED, self._last_executor_reported_open_at, detail
+        state = outcome.state
+        checked_at = outcome.checked_at
+        detail = outcome.detail
+        exchange_verified_at = outcome.exchange_verified_at
 
         if state == RECONCILE_OPEN_EXECUTOR_REPORTED and exchange_verified_at is not None:
             freshness = max(
@@ -191,24 +203,15 @@ class PositionStatusMonitor:
 
     def _take_booked_exit_reason(self) -> str | None:
         """Consume the one-shot booked-exit reason so the summary is sent once."""
-        taker = getattr(self.trading_strategy, "take_executor_side_exit_reason", None)
-        if not callable(taker):
-            return None
-        reason = taker()
-        return reason if isinstance(reason, str) and reason else None
+        return self.trading_strategy.take_executor_side_exit_reason() or None
 
-    def _take_local_exit_request(self) -> Any | None:
+    def _take_local_exit_request(self) -> LocalExitRequest | None:
         """Consume the one-shot local exit request (or None when there is none)."""
-        taker = getattr(self.trading_strategy, "take_local_exit_request", None)
-        if not callable(taker):
-            return None
-        try:
-            return taker()
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning("Failed to read the local exit request: %s", e)
-            return None
+        return self.trading_strategy.take_local_exit_request()
 
-    async def _publish_local_exit_request(self, request: Any, *, forwarded: bool | None = None) -> None:
+    async def _publish_local_exit_request(
+        self, request: LocalExitRequest | None, *, forwarded: bool | None = None
+    ) -> None:
         """Log and alert on an unbooked local exit condition.
 
         Wave 3: the strategy never books a CLOSE from a ticker price. When its SL/TP
@@ -223,14 +226,14 @@ class PositionStatusMonitor:
             "LOCAL EXIT CONDITION %s @ %s NOT BOOKED (state=%s, forwarded=%s) — local "
             "position kept, no statistics entry; only executor fill evidence may close "
             "this trade.",
-            getattr(request, "reason", "?"),
-            getattr(request, "observed_price", None),
-            getattr(request, "state", "unknown"),
+            request.reason,
+            request.observed_price,
+            request.state,
             "yes" if forwarded else "no",
         )
         if not self.notifier:
             return
-        detail = getattr(request, "detail", "") or ""
+        detail = request.detail
         forwarded_text = (
             "The CLOSE was handed to the executor; the position stays until its fill "
             "evidence arrives."
@@ -240,7 +243,7 @@ class PositionStatusMonitor:
         )
         message = (
             "🚨 **Local exit condition — no evidence, no booking** — "
-            f"state: {getattr(request, 'state', 'unknown')}. {detail} {forwarded_text} "
+            f"state: {request.state}. {detail} {forwarded_text} "
             "I am not closing the position silently."
         )
         try:
@@ -255,14 +258,13 @@ class PositionStatusMonitor:
     def _current_position_key(self) -> str:
         """Stable identity of the open position the monitor is watching."""
         position = self.trading_strategy.current_position
-        entry_time = getattr(position, "entry_time", None)
-        if isinstance(entry_time, datetime):
-            return f"{self.get_symbol()}|{entry_time.isoformat()}"
-        return str(self.get_symbol() or "?")
+        if position is None:
+            return str(self.get_symbol() or "?")
+        return f"{self.get_symbol()}|{position.entry_time.isoformat()}"
 
-    def _reference_exit_key(self, request: Any) -> tuple[str, str]:
+    def _reference_exit_key(self, request: LocalExitRequest) -> tuple[str, str]:
         """Identity of one unbooked real-market exit: this position and this reason."""
-        return (self._current_position_key(), str(getattr(request, "reason", "?")))
+        return (self._current_position_key(), request.reason)
 
     def _reference_forward_due(self, now: datetime) -> bool:
         """True when a CLOSE may be (re)sent: first time, or after the retry delay."""
@@ -414,7 +416,7 @@ class PositionStatusMonitor:
 
         try:
             outcome = await self.sync_position_state(force=True)
-            if getattr(outcome, "state", None) == RECONCILE_EXIT_BOOKED or getattr(outcome, "exit_booked", False):
+            if outcome is not None and (outcome.state == RECONCILE_EXIT_BOOKED or outcome.exit_booked):
                 reason = self._take_booked_exit_reason() or "exchange-side exit detected"
                 self.logger.info("Position already exited on the exchange — skipping the OPEN card")
                 await self.handle_position_closed(reason)
@@ -560,7 +562,7 @@ class PositionStatusMonitor:
                     self.logger.warning("Independent position sync failed: %s", e)
                     outcome = None
 
-                if getattr(outcome, "exit_booked", False) or getattr(outcome, "state", None) == RECONCILE_EXIT_BOOKED:
+                if outcome is not None and (outcome.exit_booked or outcome.state == RECONCILE_EXIT_BOOKED):
                     reason = self._take_booked_exit_reason() or "exchange-side exit detected"
                     await self.handle_position_closed(reason)
                     break

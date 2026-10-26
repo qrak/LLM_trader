@@ -25,9 +25,9 @@ class GuardPipeline:
             except Exception as exc:  # pylint: disable=broad-exception-caught  # noqa: BLE001
                 results.append(
                     GuardResult(
-                        guard_name=getattr(guard, "name", "unknown_guard"),
+                        guard_name=guard.name,
                         passed=False,
-                        reason=f"Guard '{getattr(guard, 'name', 'unknown')}' failed closed due to error: {exc}",
+                        reason=f"Guard '{guard.name}' failed closed due to error: {exc}",
                     )
                 )
                 break

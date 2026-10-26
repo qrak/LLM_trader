@@ -379,10 +379,10 @@ class ProvisioningMixin:
             deepseek=deepseek_client,
         )
         provider_health = None
-        if getattr(self.config, "CIRCUIT_BREAKER_ENABLED", True):
+        if self.config.CIRCUIT_BREAKER_ENABLED:
             provider_health = ProviderHealth(
-                failure_threshold=getattr(self.config, "CIRCUIT_BREAKER_FAILURE_THRESHOLD", 3),
-                cooldown_seconds=getattr(self.config, "CIRCUIT_BREAKER_COOLDOWN_SECONDS", 120.0),
+                failure_threshold=self.config.CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+                cooldown_seconds=self.config.CIRCUIT_BREAKER_COOLDOWN_SECONDS,
             )
         orchestrator = ProviderOrchestrator(
             self.logger, self.config, provider_clients,
@@ -489,7 +489,9 @@ class ProvisioningMixin:
 
     def _provision_trading_layer(self, utils: dict, models: dict) -> dict:
         """Provision trading strategy and memory services."""
-        persistence = PersistenceManager(self.logger, data_dir="data/trading")
+        persistence = PersistenceManager(
+            self.logger, data_dir=os.path.join(self.config.DATA_DIR, "trading")
+        )
 
         trade_db_path = os.path.join(
             self.config.DATA_DIR, "trading", "trade_history.db"

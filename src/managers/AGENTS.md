@@ -1,6 +1,6 @@
 # AGENTS.md — Managers
 
-Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Three services: `risk_manager.py`, `persistence_manager.py` + `sqlite_trade_history.py`, `provider_orchestrator.py`. All dependencies arrive from the composition root — never construct one inside trading, dashboard or guard code.
+Scope: `src/managers/`. Root [`AGENTS.md`](../../AGENTS.md) is canonical. Three services: `risk_manager.py`, `persistence_manager.py` + `sqlite_trade_history.py`, `provider_orchestrator.py`. `cycle_metrics.py` is the append-only observability journal. All dependencies arrive from the composition root — never construct one inside trading, dashboard or guard code.
 
 ## Risk Manager
 
@@ -34,6 +34,13 @@ Single persistence facade: positions, statistics, monitor state, previous/last a
 - Dashboard routes reach history only through the injected `PersistenceManager`.
 - Do not reintroduce `trade_history.json` reads, writes, fallbacks or auto-migration; `*.json.migrated` files are backups, not inputs. Do not pass `json_path` — the constructor takes `logger` and `db_path` only.
 - WAL + `synchronous=NORMAL` per connection; inserts coerce `TradeDecision` fields to stable column types; queries validate `ASC`/`DESC` and clamp pagination (`ValueError` before any SQL on a bad direction).
+
+## Cycle Metrics (`cycle_metrics.py`)
+
+- `append_cycle()` writes one JSONL line per analysis cycle; the schema is open, and `load_cycles()` skips a torn last line instead of breaking the bot.
+- Cost fields are recorded when the provider layer measured them: `inference_cost_usd` (delta of `CostStorage.snapshot()` around the cycle), `prompt_tokens`, `completion_tokens`, `provider`, `model`. A missing cost stays absent or `None` — never invented.
+- `summarize()` returns `inference_cost` with `analyses`, `total_usd`, `per_analysis_usd` and `coverage`; non-numeric, bool, NaN, Inf and negative costs are ignored.
+- `CostStorage.snapshot()` is the only cumulative read used for cost accounting; `record_usage()`, `save()` and `_load_or_create()` keep their existing semantics.
 
 ## Provider Orchestrator (`provider_orchestrator.py`)
 

@@ -30,6 +30,7 @@ from .executor_reconciliation import (
     MAX_LEARNED_EXIT_EVENTS,
     ExecutorReconciliationMixin,
     LocalPositionReconciliation,
+    PositionIntentLedger,
     close_fill_is_divergent,
     exit_evidence_is_learnable,
     market_verification_gap_reason,
@@ -99,6 +100,9 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
         self._position_transition_lock: asyncio.Lock | None = None
         self._booked_exit_events: set[str] = set()
+        self._position_intent_ledger: PositionIntentLedger | None = None
+        self._unconfirmed_intent_alert: str | None = None
+        self._rejected_intent_alert: str | None = None
         self._last_booked_exit: dict[str, Any] | None = None
         self._last_reconciliation: LocalPositionReconciliation | None = None
         self._learned_exit_events: set[str] = set()
@@ -340,7 +344,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
 
     def take_local_exit_request(self) -> "LocalExitRequest | None":
         """One-shot read of the last unbooked local exit condition (or None)."""
-        request = getattr(self, "_local_exit_request", None)
+        request = self._local_exit_request
         self._local_exit_request = None
         return request
 
@@ -351,7 +355,7 @@ class TradingStrategy(ExecutorReconciliationMixin, PositionManagementMixin):
         recommendation and hands it to the executor. Nothing local is booked either
         way — only the executor's fill evidence closes the trade.
         """
-        decision = getattr(self, "_pending_local_close_decision", None)
+        decision = self._pending_local_close_decision
         self._pending_local_close_decision = None
         return decision
 

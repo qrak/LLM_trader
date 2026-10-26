@@ -135,13 +135,49 @@ def test_llm_assessment_uses_only_the_new_contract(analyst, outlook):
     assessment(evidence=[1, 1]),
     assessment(evidence=[True]),
     assessment(evidence=[]),
-    {**assessment(), "reason": "x" * 241},
     {**assessment(), "extra": "not in the contract"},
     None,
 ])
 def test_invalid_or_uncited_assessment_is_not_used_for_learning(analyst, value):
     assert analyst.validate_assessment(value, post_count=3) is None
     assert analyst.logger.warning.called
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("x" * 241, "x" * 240),
+        (("word " * 100).strip(), ("word " * 100).strip()[:240].rsplit(" ", 1)[0]),
+    ],
+    ids=["single-token", "word-boundary"],
+)
+def test_overlong_reason_is_clamped_instead_of_dropping_the_assessment(analyst, reason, expected):
+    value = {**assessment("BULLISH"), "reason": reason}
+
+    validated = analyst.validate_assessment(value, post_count=3)
+
+    assert validated is not None
+    assert validated["outlook"] == "BULLISH"
+    assert validated["evidence"] == [1]
+    assert validated["reason"] == expected
+    assert not analyst.logger.warning.called
+
+
+def test_parser_keeps_the_response_contract_valid_after_clamping(analyst):
+    response = UnifiedParser(null_logger()).parse_ai_response(json.dumps({
+        "analysis": {
+            "signal": "HOLD",
+            "confidence": 70,
+            "reddit_sentiment": {**assessment(), "reason": "x" * 400},
+        }
+    }))
+
+    assert response["response_validation"]["valid"] is True
+    validated = analyst.validate_assessment(
+        response["analysis"]["reddit_sentiment"], post_count=3
+    )
+    assert validated is not None
+    assert len(validated["reason"]) == 240
 
 
 def test_no_posts_cannot_acquire_a_model_invented_outlook(analyst):

@@ -46,17 +46,11 @@ class VisualsRouter:
                 "debug": {"buffer_exists": True, "bytes_length": 0}
             }
 
-        try:
-            has_buffer_attr = True
-            _ = self.analysis_engine.last_chart_buffer
-        except AttributeError:
-            has_buffer_attr = False
-
         return {
             "error": "No chart generated recently.",
             "debug": {
                 "analysis_engine_exists": self.analysis_engine is not None,
-                "has_buffer_attr": has_buffer_attr,
+                "has_buffer_attr": self.analysis_engine is not None,
                 "buffer_value": str(type(last_chart_buffer)) if last_chart_buffer else "None"
             }
         }

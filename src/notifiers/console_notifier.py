@@ -10,6 +10,7 @@ from src.trading.executor_reconciliation import (
     VERIFICATION_EXECUTOR_REPORTED,
     VERIFICATION_UNVERIFIED,
 )
+from src.utils.time_utils import utc_stamp
 
 from .base_notifier import BaseNotifier, format_commission
 
@@ -65,7 +66,7 @@ class ConsoleNotifier(BaseNotifier):
         print("\n" + "=" * 60)
         print(f"{emoji} TRADING DECISION")
         print("=" * 60)
-        print(f"Time: {decision.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Time: {utc_stamp(decision.timestamp)}")
         print(f"Symbol: {decision.symbol}")
         print(f"Action: {decision.action}")
         print(f"Confidence: {decision.confidence}")
@@ -170,11 +171,8 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Entry Price:     ${position.entry_price:,.2f}")
             print(f"Current Price:   ${current_price:,.2f}")
             print(f"Quantity:        {self.formatter.fmt(position.size)}")
-            try:
-                if position.quote_amount > 0:
-                    print(f"Invested:        ${position.quote_amount:,.2f}")
-            except AttributeError:
-                pass
+            if position.quote_amount > 0:
+                print(f"Invested:        ${position.quote_amount:,.2f}")
             print("-" * 40)
             print(f"Unrealized P&L:  {pnl_pct:+.2f}%")
             print(f"P&L ({self.config.QUOTE_CURRENCY}):  ${pnl_quote:+,.2f}")
@@ -186,7 +184,7 @@ class ConsoleNotifier(BaseNotifier):
             print(f"Exit Monitoring: {self.format_exit_monitoring()}")
             print(f"Entry Fee:       {format_commission(position.entry_fee)}")
             print(f"Time Held:       {hours_held:.1f}h")
-            print(f"Entry Time:      {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Entry Time:      {utc_stamp(position.entry_time)}")
             print("=" * 60)
         except Exception as e:  # noqa: BLE001
             self.logger.error("Error printing position status: %s", e)

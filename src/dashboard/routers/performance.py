@@ -25,7 +25,7 @@ class PerformanceRouter:
         self.router.add_api_route("/cycles", self.get_cycle_metrics, methods=["GET"])
 
     async def get_cycle_metrics(self, days: int = 1) -> dict[str, Any]:
-        """Cycle journal summary: counts, HOLD share, latency p50/p95 (no cost yet)."""
+        """Cycle journal summary: counts, HOLD share, latency p50/p95 and inference cost."""
         if self.persistence is None:
             return summarize([], days=days)
         path = Path(self.persistence.data_dir) / DEFAULT_RELATIVE_PATH

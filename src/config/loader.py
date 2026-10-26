@@ -12,6 +12,7 @@ from typing import Any
 from dotenv import dotenv_values
 
 from src.utils.prompt_budget import PromptBudgetPolicy
+from src.utils.time_utils import resolve_timezone
 from src.utils.timeframe_validator import TimeframeValidator
 
 ROOT_DIR = Path(__file__).parent.parent.parent.resolve()
@@ -35,6 +36,7 @@ class Config:
         self._load_environment()
         self._load_ini_config()
         self._validate_provider()
+        self._validate_timezone()
         self._validate_exit_monitoring()
         self._build_model_configs()
         self._validate_model_verbosity()
@@ -183,6 +185,10 @@ class Config:
                 f"Please update the [ai_providers] -> provider setting."
             )
             raise ValueError(error_msg)
+
+    def _validate_timezone(self) -> None:
+        """Fail at startup, not on the first log line, when the zone name is wrong."""
+        resolve_timezone(self.TIMEZONE or None)
 
     def _validate_exit_monitoring(self):
         """Validate configurable SL/TP execution settings against the timeframe."""
@@ -466,6 +472,11 @@ class Config:
     @property
     def DEBUG_CHART_SAVE_PATH(self):
         return self.get_config("debug", "chart_save_path", "test_images")
+
+    @property
+    def TIMEZONE(self) -> str:
+        """IANA zone used to render timestamps for humans; empty = the OS zone."""
+        return str(self.get_config("general", "timezone", "") or "").strip()
 
     @property
     def LOG_DIR(self):
@@ -827,6 +838,16 @@ class Config:
         return self.get_config(
             "executor_api", "verdict_path", "data/trading/executor_verdicts.jsonl"
         )
+
+    @property
+    def BOT_INTENT_JOURNAL_PATH(self) -> str:
+        """JSONL journal of position intents (one line per forwarded command).
+
+        Lives next to the other trading state so a test or a second deployment can
+        point the bot at an isolated directory instead of the shared default.
+        """
+        default = os.path.join(str(self.DATA_DIR), "trading", "bot_position_intents.jsonl")
+        return str(self.get_config("executor_api", "intent_journal_path", default))
 
     @property
     def EXECUTOR_EXIT_PATH(self) -> str:

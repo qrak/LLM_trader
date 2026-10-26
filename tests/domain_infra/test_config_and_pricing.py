@@ -268,6 +268,25 @@ def test_executor_max_position_usdc_coercion():
     assert config_with({}).EXECUTOR_MAX_POSITION_USDC == 0.0
 
 
+def test_the_display_zone_is_a_validated_config_key():
+    assert config_with({"general": {"timezone": " Europe/Warsaw "}}).TIMEZONE == "Europe/Warsaw"
+    assert config_with({}).TIMEZONE == ""
+
+    broken = config_with({"general": {"timezone": "Europe/Warsow"}})
+    with pytest.raises(ValueError, match=r"\[general\] timezone"):
+        broken._validate_timezone()
+
+
+def test_the_intent_journal_follows_the_data_directory():
+    configured = config_with(
+        {"directories": {"data_dir": "custom_data"}, "executor_api": {"intent_journal_path": "j/intents.jsonl"}}
+    )
+    assert configured.BOT_INTENT_JOURNAL_PATH == "j/intents.jsonl"
+
+    default = config_with({"directories": {"data_dir": "custom_data"}})
+    assert default.BOT_INTENT_JOURNAL_PATH == os.path.join("custom_data", "trading", "bot_position_intents.jsonl")
+
+
 def test_model_pricing_uses_configured_rates():
     pricing = ModelPricing()
 

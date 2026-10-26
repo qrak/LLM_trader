@@ -86,7 +86,7 @@ class PostMortemService:
         self,
         logger: Any,
         model_manager: Any,
-        unified_parser: Any,
+        unified_parser: UnifiedParser,
         repository: PostMortemRepository,
     ) -> None:
         """Initialize post-mortem service dependencies."""
@@ -244,15 +244,13 @@ class PostMortemService:
         if not response_text or not response_text.strip():
             return None
 
-        extract_json_block = getattr(self.unified_parser, "extract_json_block", None)
-        if callable(extract_json_block):
-            try:
-                data = extract_json_block(response_text)
-            except Exception as error:  # noqa: BLE001
-                self.logger.debug("Post-mortem markdown parse error: %s", error)
-                data = None
-            if isinstance(data, dict) and data:
-                return data
+        try:
+            data = self.unified_parser.extract_json_block(response_text)
+        except Exception as error:  # noqa: BLE001
+            self.logger.debug("Post-mortem markdown parse error: %s", error)
+            data = None
+        if data:
+            return data
 
         return UnifiedParser.parse_json_object(response_text)
 
