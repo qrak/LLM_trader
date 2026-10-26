@@ -78,7 +78,7 @@ AnalysisEngine.analyze_market()
   ├── MarketDataCollector → DataFetcher (OHLCV + order book + trade flow)
   ├── TechnicalCalculator (50+ indicators) + LongTerm data + Weekly macro
   ├── PatternAnalyzer → IndicatorPatternEngine (deterministic indicator-pattern kernels)
-  ├── ChartGenerator (4K PNG) → LLM visual chart-pattern analysis (analysis_result_processor.py)
+  ├── ChartGenerator (1920×1080 PNG) → LLM visual chart-pattern analysis (analysis_result_processor.py)
   ├── RAG context retrieval
   ├── Brain context injection (confidence + rules similar to current conditions)
   ├── AI provider call → TradingAnalysisResponseModel (prompt step 5.5: the model must
@@ -217,7 +217,7 @@ LLM_trader/
 │   ├── logger/                  # Structured logging
 │   ├── notifiers/               # Discord, console, file handler
 │   └── utils/                   # Profiler, token counter, decorators, time_utils (classes only)
-├── tests/                       # 48 test_*.py in domain_{trading,brain,rag_indicators,infra}
+├── tests/                       # 52 test_*.py in domain_{trading,brain,rag_indicators,infra}
 │                                #   + test_admin_playwright.py (marker: integration) + conftest.py
 ├── data/                        # Runtime state (not committed)
 ├── logs/Bot/YYYY_MM_DD/         # Bot.log (all levels) + errors.log (error level)
@@ -277,6 +277,24 @@ Use this checklist for every documentation or tooling-policy PR:
 ### Drift Prevention Rule
 
 Any new tool-specific instruction file must be a non-authoritative pointer to `AGENTS.md`; if it contains independent policy, reject it in review.
+
+### Documentation map
+
+`README.md` is the landing page; the long-form pages live in `docs/` so the README stays
+scannable. A fact belongs in exactly one of them and is linked from the others, never copied.
+
+| File | Scope |
+|---|---|
+| `README.md` | What the project is, how it performs, how it compares, quick start |
+| `AGENTS.md` + package files | Policy, architecture, conventions, verification gates |
+| `docs/FEATURES.md` | Every feature in detail, with the implementing file |
+| `docs/SETUP.md` | Requirements, platform scripts, secrets, website deploy |
+| `docs/CONFIGURATION.md` | Every config key, prompt budget, billing windows, executor handoff |
+| `docs/RESULTS.md` | Paper-trading ledger, benchmark, caveats, reproduction command |
+| `CHANGELOG.md` | Dated changes with the run that verified them |
+
+`python scripts/check_agents_md.py` fails when a path quoted in an AGENTS file no longer exists —
+run it after any rename.
 
 ---
 
@@ -340,6 +358,7 @@ Any new tool-specific instruction file must be a non-authoritative pointer to `A
 8. **Never commit or push without explicit user consent.** Run the suite first; commit only with 0 failures.
 9. **Do not touch CI configuration** (`.github/workflows/`, test/lint settings) unless asked.
 10. Known pre-existing noise, never caused by your change: 9 `BLE001` hits in `tests/test_admin_playwright.py` (the only browser suite, excluded from CI by the `integration` marker) — `ruff check src start.py scripts` is the gate that must be clean.
+11. **Documentation drift:** after moving or renaming a file, run `python scripts/check_agents_md.py`; after changing the ledger shape, run `python scripts/results_report.py` and update `docs/RESULTS.md` in the same change.
 
 ---
 
