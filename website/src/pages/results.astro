@@ -1,0 +1,159 @@
+---
+import ArticleLayout from '../layouts/ArticleLayout.astro';
+
+const WINDOW = '20 September – 26 October 2026';
+const ROWS = [
+	['Closed trades', '12'],
+	['Winners / losers', '5 / 5'],
+	['Win rate', '41.7%'],
+	['Return', '+0.14% (+$13.95)'],
+	['Profit factor', '1.41'],
+	['Sharpe / Sortino', '0.19 / 0.36'],
+	['Max drawdown', '−0.25%'],
+	['Best / worst trade', '+4.06% / −2.60%'],
+	['Inference cost', '$6.00 (8.1M in / 3.8M out tokens)'],
+	['Net after inference', '+$7.95'],
+	['Analyses', '48 cycles · median 266 s · $0.0121 each'],
+];
+const TRADES = [
+	['24 Sep', 'LONG', '−2.60%', 'closed'],
+	['24 Sep', 'LONG', '−2.06%', 'stop loss'],
+	['28 Sep', 'LONG', '−0.28%', 'closed'],
+	['02 Oct', 'LONG', '−0.99%', 'closed'],
+	['05 Oct', 'LONG', '−1.12%', 'stop loss'],
+	['10 Oct', 'SHORT', '+3.45%', 'take profit'],
+	['12 Oct', 'SHORT', '+2.04%', 'take profit'],
+	['14 Oct', 'SHORT', '+0.07%', 'stop loss'],
+	['15 Oct', 'SHORT', '—', 'excluded (fill divergence)'],
+	['17 Oct', 'SHORT', '—', 'excluded (fill divergence)'],
+	['26 Oct', 'SHORT', '+1.93%', 'take profit'],
+];
+---
+
+<ArticleLayout
+	title="Results — paper trading ledger | Semantic Signal"
+	description="Live paper-trading ledger for Semantic Signal: 12 closed BTC/USDC trades, +0.14% against a −1.83% buy-and-hold, $6.00 of inference cost, and every caveat that belongs with those numbers."
+	meta="Results"
+>
+	<span slot="title">Results, as the bot recorded them</span>
+	<p slot="subtitle" class="subtitle">
+		{WINDOW} · BTC/USDC · 4h candles · 10 000 USDC simulated capital · paper book with a testnet executor.
+	</p>
+
+	<section class="section">
+		<h2>The ledger</h2>
+		<p>
+			Every number on this page is read from the bot's own runtime files (<code>statistics.json</code>,
+			<code>api_costs.json</code>, <code>trade_history.db</code>, <code>metrics/cycles.jsonl</code>) plus one
+			public Binance klines request for the benchmark. Nothing is typed from memory:
+			<code>python scripts/results_report.py</code> prints it, and
+			<a href="https://github.com/qrak/LLM_trader/blob/master/docs/RESULTS.md" target="_blank" rel="noopener">docs/RESULTS.md</a>
+			is its output.
+		</p>
+
+		<table class="ledger">
+			<tbody>
+				{ROWS.map(([label, value]) => (
+					<tr><th>{label}</th><td>{value}</td></tr>
+				))}
+			</tbody>
+		</table>
+	</section>
+
+	<section class="section">
+		<h2>Versus holding the coin</h2>
+		<p>
+			Over the same 37 days the underlying went from <strong>81 245.48</strong> to
+			<strong>79 758.34</strong> — a <strong>−1.83%</strong> buy-and-hold. The bot finished
+			<strong>+0.14%</strong>.
+		</p>
+		<figure class="chart">
+			<img src="/results-vs-btc.png" width="1200" height="520" alt="Bot +0.14% versus BTC buy-and-hold −1.83% over the same window" loading="lazy" />
+			<figcaption>Same window, same instrument. A two percentage point difference over five weeks is noise, not an edge.</figcaption>
+		</figure>
+	</section>
+
+	<section class="section">
+		<h2>Closed trades</h2>
+		<table class="trades">
+			<thead>
+				<tr><th>Closed</th><th>Side</th><th>P&amp;L</th><th>Exit</th></tr>
+			</thead>
+			<tbody>
+				{TRADES.map(([when, side, pnl, exit]) => (
+					<tr>
+						<td>{when}</td>
+						<td>{side}</td>
+						<td class={pnl.startsWith('+') ? 'up' : pnl.startsWith('−') ? 'down' : ''}>{pnl}</td>
+						<td>{exit}</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</section>
+
+	<section class="section">
+		<h2>What these numbers do not prove</h2>
+		<ul>
+			<li><strong>Twelve trades cannot separate skill from noise.</strong> A 41.7% win rate with a 1.41 profit factor is one lucky streak away from 0.8.</li>
+			<li><strong>The paper book records zero fees.</strong> At a 0.15% round trip on each of the 12 trades, the +$13.95 gain would be roughly erased. The ledger above is gross of trading costs.</li>
+			<li><strong>Two trades are excluded on purpose</strong> — both sandbox exits printed below the real market low in the same minute, so they stay in execution history but not in statistics or in the brain's learning.</li>
+			<li><strong>This is a paper book.</strong> The executor can reach an exchange testnet, not live funds. Profitability is unproven and stated as such in the README.</li>
+		</ul>
+		<p>
+			Full methodology, per-trade table and the reproduction command:
+			<a href="https://github.com/qrak/LLM_trader/blob/master/docs/RESULTS.md" target="_blank" rel="noopener">docs/RESULTS.md</a>.
+			Watch the next cycle live on the <a href="https://semanticsignal.qrak.org" target="_blank" rel="noopener">dashboard</a>.
+		</p>
+	</section>
+</ArticleLayout>
+
+<style>
+	.ledger,
+	.trades {
+		width: 100%;
+		border-collapse: collapse;
+		margin: 1.25rem 0;
+		font-size: 0.95rem;
+	}
+	.ledger th,
+	.ledger td,
+	.trades th,
+	.trades td {
+		padding: 0.5rem 0.75rem;
+		border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+		text-align: left;
+	}
+	.ledger th {
+		color: var(--muted, #94a3b8);
+		font-weight: 500;
+		width: 45%;
+	}
+	.trades th {
+		color: var(--muted, #94a3b8);
+		font-weight: 500;
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.up {
+		color: #34d399;
+	}
+	.down {
+		color: #f87171;
+	}
+	.chart {
+		margin: 1.5rem 0 0;
+	}
+	.chart img {
+		width: 100%;
+		height: auto;
+		border-radius: 0.75rem;
+		border: 1px solid rgba(148, 163, 184, 0.16);
+	}
+	.chart figcaption {
+		margin-top: 0.6rem;
+		font-size: 0.85rem;
+		color: var(--muted, #94a3b8);
+	}
+</style>
