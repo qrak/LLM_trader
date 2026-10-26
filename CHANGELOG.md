@@ -15,6 +15,7 @@
 - Run `40390670598` on `26fccd4`: `python checks` green in 7 min (pyright inside it), `website build` green in 20 s, CodeQL `Analyze (python)` and `Analyze (javascript-typescript)` green. The same push produced its `build release` run through `workflow_run`.
 - Local before pushing: `pyright --pythonpath … src start.py` → 0 errors in 13 s; `npm ci && npm run build` → 11 pages in 20 s + 10 s on a warm tree.
 - Ruleset read back from the API with the four contexts and `bypass_mode: always` for the administrator role; the documentation-only commit after it was pushed to `master` under the ruleset, which is what proved the bypass works.
+- Run `40394293136` on `a5d628c`: `python checks` green with `actions/setup-python@v7` (the log shows the download of `SHA 6d4fd22…`) and `pyright 1.1.414` — the "new pyright version available" line the earlier pin printed is gone, so the pin now tracks PyPI. A pull request with a planted type error (`mergeStateStatus=BLOCKED`, `Type check` red, everything else green) proved the ruleset blocks on a red check instead of only reporting it.
 
 ## 2026-10-26 — Releases stop being a second, hand-written history
 
