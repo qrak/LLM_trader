@@ -13,6 +13,10 @@ from .vector_memory import VectorMemoryService
 class BrainReflectionEngine:
     """Rebuild learned semantic rules from stored closed-trade metadata."""
 
+    LOSS_PATTERN_MIN_LOSSES = 5
+    ANTI_PATTERN_MIN_LOSS_RATE = 0.6
+    BASELINE_MIN_CLOSED_TRADES = 10
+
     def __init__(
         self,
         logger: Logger,
@@ -25,6 +29,15 @@ class BrainReflectionEngine:
         self.vector_memory = vector_memory
         self.analyzer = analyzer
         self.exit_profiles = exit_profiles
+
+    @staticmethod
+    def _closed_win_rate(metas: list[dict[str, Any]]) -> tuple[float, int]:
+        """Win rate and sample size over every closed trade, as the pattern baseline."""
+        closed = [meta for meta in metas if meta.get("outcome") in ("WIN", "LOSS")]
+        if not closed:
+            return 0.0, 0
+        wins = sum(1 for meta in closed if meta.get("outcome") == "WIN")
+        return wins / len(closed), len(closed)
 
     def trigger_reflection(self) -> None:
         """Reflect on recent trades and synthesize best-practice semantic rules."""
@@ -100,36 +113,69 @@ class BrainReflectionEngine:
             self.logger.warning("Reflection failed: %s", e)
 
     def trigger_loss_reflection(self) -> None:
-        """Reflect on losing trades and synthesize anti-pattern and corrective rules."""
+        """Reflect on losing trades and synthesize anti-pattern and corrective rules.
+
+        The pattern key is the direction and the regime, nothing else. Keying the group
+        on the exit reason (as this once did) selected trades *by* the outcome the rule
+        then claimed to explain, so its win rate and loss rate were tautologies: a
+        hard-stop group could never contain a win. The exit reason and the exit profile
+        stay as labels in the rule text and metadata.
+        """
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             loss_metas = [meta for meta in all_metas if meta.get("outcome") == "LOSS"]
-            if len(loss_metas) < 3:
-                self.logger.debug("Not enough losing trades for anti-pattern reflection (need 3+)")
+            if len(loss_metas) < self.LOSS_PATTERN_MIN_LOSSES:
+                self.logger.debug(
+                    "Not enough losing trades for anti-pattern reflection (need %s+)",
+                    self.LOSS_PATTERN_MIN_LOSSES,
+                )
                 return
 
             def build_loss_key(meta: dict[str, Any]) -> str:
-                regime = meta.get("market_regime", "NEUTRAL")
-                close_reason = self.analyzer.normalize_close_reason(meta.get("close_reason", "unknown"))
                 direction = meta.get("direction", "UNKNOWN")
+                regime = meta.get("market_regime", "NEUTRAL")
                 return "|".join([
                     self.exit_profiles.safe_key_part(direction).upper(),
                     self.exit_profiles.safe_key_part(regime).upper(),
-                    close_reason,
-                    self.exit_profiles.build_exit_profile_key(meta),
                 ])
 
             pattern_counts = Counter(build_loss_key(meta) for meta in loss_metas)
             if not pattern_counts:
                 return
             pattern_key, loss_count = pattern_counts.most_common(1)[0]
-            if loss_count < 2:
+            if loss_count < self.LOSS_PATTERN_MIN_LOSSES:
                 self.logger.debug(
-                    "Anti-pattern %s rejected: only %s occurrences (need 2+)", pattern_key, loss_count
+                    "Anti-pattern %s rejected: only %s occurrences (need %s+)",
+                    pattern_key,
+                    loss_count,
+                    self.LOSS_PATTERN_MIN_LOSSES,
                 )
                 return
             group_metas = [meta for meta in all_metas if build_loss_key(meta) == pattern_key]
             metrics = self.analyzer.compute_group_metrics(group_metas)
+            baseline_win_rate, closed_count = self._closed_win_rate(all_metas)
+            if (
+                metrics["loss_rate"] < self.ANTI_PATTERN_MIN_LOSS_RATE
+                and metrics["win_rate"] >= baseline_win_rate
+            ):
+                self.logger.debug(
+                    "Anti-pattern %s rejected: %s losses in %s trades is not below the %.0f%% baseline",
+                    pattern_key,
+                    metrics["losses"],
+                    metrics["total"],
+                    baseline_win_rate * 100,
+                )
+                return
+            significant = closed_count >= self.BASELINE_MIN_CLOSED_TRADES and (
+                self.analyzer.is_significantly_worse(
+                    metrics["wins"], metrics["losses"], baseline_win_rate
+                )
+            )
+            rule_type = (
+                "anti_pattern"
+                if significant and metrics["loss_rate"] >= self.ANTI_PATTERN_MIN_LOSS_RATE
+                else "corrective"
+            )
             surprise_values = [
                 float(m.get("surprise_ratio", 1.0))
                 for m in group_metas
@@ -143,16 +189,15 @@ class BrainReflectionEngine:
             regime = sample_meta.get("market_regime", "NEUTRAL")
             close_reason = metrics["dominant_close_reason"]
             exit_profile = metrics["dominant_exit_profile"]
-            rule_type = "anti_pattern" if metrics["loss_rate"] >= 0.6 else "corrective"
             type_label = "⚠️ AVOID" if rule_type == "anti_pattern" else "⚡ IMPROVE"
             rule_text = (
-                f"{type_label}: {direction} trades in {regime} market often exit via {close_reason}. "
-                f"Exit profile: {exit_profile}. "
-                f"({loss_count} losses, {metrics['wins']} wins — {metrics['win_rate']:.0%} win rate"
+                f"{type_label}: {direction} trades in {regime} market exit most often via {close_reason} "
+                f"({metrics['losses']} losses, {metrics['wins']} wins — {metrics['win_rate']:.0%} win rate "
+                f"vs {baseline_win_rate:.0%} baseline, n={metrics['total']}"
             )
             if avg_surprise > 0:
                 rule_text += f", avg surprise: {avg_surprise:.2f}"
-            rule_text += ")"
+            rule_text += f"). Exit profile: {exit_profile}."
             rule_id = f"rule_{rule_type}_{self.exit_profiles.sanitize_rule_key(pattern_key)}"
             self.vector_memory.store_semantic_rule(
                 rule_id=rule_id,
@@ -164,6 +209,9 @@ class BrainReflectionEngine:
                     source_loss_count=loss_count,
                     failure_reason=failure_reason,
                     recommended_adjustment=recommended_adjustment,
+                    direction=direction,
+                    regime=regime,
+                    baseline_win_rate=round(baseline_win_rate * 100, 1),
                 ),
             )
             self.logger.info(
@@ -173,7 +221,14 @@ class BrainReflectionEngine:
             self.logger.warning("Loss reflection failed: %s", e)
 
     def trigger_ai_mistake_reflection(self) -> None:
-        """Reflect on cases where the AI's confidence or premise was wrong."""
+        """Reflect on cases where the AI's confidence or premise was wrong.
+
+        The key is the mistake type and the confidence level: this is a lesson about
+        calibration, so it must never claim that a direction or a regime was wrong.
+        The comparison group is every closed trade with the same confidence, which is
+        what makes "win rate in comparable trades" a real number instead of the same
+        losing cluster that produced the rule.
+        """
         try:
             all_metas = self.vector_memory.get_trade_metadatas(exclude_updates=True)
             mistake_metas = [meta for meta in all_metas if self.analyzer.classify_ai_mistake(meta)]
@@ -184,14 +239,9 @@ class BrainReflectionEngine:
             def build_mistake_key(meta: dict[str, Any]) -> str:
                 mistake_type = self.analyzer.classify_ai_mistake(meta)
                 confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
-                direction = meta.get("direction", "UNKNOWN")
-                regime = meta.get("market_regime", "NEUTRAL")
                 return "|".join([
-                    mistake_type,
+                    self.exit_profiles.safe_key_part(mistake_type).upper(),
                     self.exit_profiles.safe_key_part(confidence).upper(),
-                    self.exit_profiles.safe_key_part(direction).upper(),
-                    self.exit_profiles.safe_key_part(regime).upper(),
-                    self.exit_profiles.build_exit_profile_key(meta),
                 ])
 
             pattern_counts = Counter(build_mistake_key(meta) for meta in mistake_metas)
@@ -204,23 +254,15 @@ class BrainReflectionEngine:
                 return
             matched_mistakes = [meta for meta in mistake_metas if build_mistake_key(meta) == pattern_key]
             sample_meta = matched_mistakes[0]
-            base_parts = pattern_key.split("|")
-            mistake_type = base_parts[0]
+            mistake_type = self.analyzer.classify_ai_mistake(sample_meta)
             confidence = sample_meta.get("entry_confidence") or sample_meta.get("confidence") or "UNKNOWN"
-            direction = sample_meta.get("direction", "UNKNOWN")
-            regime = sample_meta.get("market_regime", "NEUTRAL")
 
-            def build_base_key(meta: dict[str, Any]) -> str:
+            def build_comparable_key(meta: dict[str, Any]) -> str:
                 meta_confidence = meta.get("entry_confidence") or meta.get("confidence") or "UNKNOWN"
-                return "|".join([
-                    self.exit_profiles.safe_key_part(meta_confidence).upper(),
-                    self.exit_profiles.safe_key_part(meta.get("direction", "UNKNOWN")).upper(),
-                    self.exit_profiles.safe_key_part(meta.get("market_regime", "NEUTRAL")).upper(),
-                    self.exit_profiles.build_exit_profile_key(meta),
-                ])
+                return self.exit_profiles.safe_key_part(meta_confidence).upper()
 
-            base_key = "|".join(base_parts[1:])
-            comparison_group = [meta for meta in all_metas if build_base_key(meta) == base_key]
+            comparable_key = self.exit_profiles.safe_key_part(confidence).upper()
+            comparison_group = [meta for meta in all_metas if build_comparable_key(meta) == comparable_key]
             metrics = self.analyzer.compute_group_metrics(comparison_group or matched_mistakes)
             group_metas_eval = comparison_group or matched_mistakes
             surprise_values = [
@@ -235,7 +277,7 @@ class BrainReflectionEngine:
             )
             recommended_adjustment = self.analyzer.derive_ai_mistake_adjustment(matched_mistakes, mistake_type)
             rule_text = (
-                f"🧠 AI MISTAKE: {confidence} confidence {direction} calls in {regime} market repeated "
+                f"🧠 AI MISTAKE: {confidence} confidence calls repeated "
                 f"{mistake_type.replace('_', ' ')}. Exit profile: {metrics['dominant_exit_profile']}. "
                 f"Failed assumption: {failed_assumption}. "
                 f"({mistake_count} mistake(s), {metrics['win_rate']:.0%} win rate in comparable trades"

@@ -229,6 +229,40 @@ class VectorMemoryRulesMixin:
             self.logger.error("Failed to store semantic rule: %s", e)
             return False
 
+    def deactivate_semantic_rule(self, rule_id: str, reason: str = "") -> bool:
+        """Retire a stored rule without losing its text or its evidence.
+
+        The rule keeps its document, its counters and its history; it only stops being
+        retrieved, because every read path filters on ``active``. Chroma replaces the
+        whole metadata dict on ``update``, so the stored dict is read first and only
+        the lifecycle fields are added.
+        """
+        if not self._ensure_initialized():
+            return False
+
+        try:
+            stored = self._semantic_rules_collection.get(ids=[rule_id], include=["metadatas"])
+            if not stored or not stored["ids"]:
+                self.logger.warning("Cannot deactivate an unknown semantic rule: %s", rule_id)
+                return False
+            metadata = self._metadata_with_rule_defaults(
+                stored["metadatas"][0] if stored["metadatas"] else {}
+            )
+            metadata["active"] = False
+            metadata["deactivated_at"] = datetime.now(timezone.utc).isoformat()
+            if reason:
+                metadata["deactivation_reason"] = reason
+            self._semantic_rules_collection.update(
+                ids=[rule_id],
+                metadatas=[self._sanitize_metadata(metadata)],
+            )
+            self.logger.info("Deactivated semantic rule: %s (%s)", rule_id, reason or "no reason given")
+            return True
+
+        except Exception as e:  # noqa: BLE001
+            self.logger.error("Failed to deactivate semantic rule %s: %s", rule_id, e)
+            return False
+
     def get_active_rules(self, n_results: int = 5) -> list[dict[str, Any]]:
         """Retrieve active semantic rules for prompt injection."""
         if not self._ensure_initialized():

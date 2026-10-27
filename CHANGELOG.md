@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-10-27 — An anti-pattern rule stops being a tautology
+
+### Changed
+- **`src/trading/brain_reflection.py`**: `trigger_loss_reflection()` groups losses on
+  `direction|regime` only. The close reason and the exit profile used to be part of the key,
+  which selected trades *by* the outcome the rule then described: a group of trades that left
+  through a stop loss could not contain a win, so "0 wins, 0% win rate, loss rate 100%" was
+  guaranteed by construction rather than observed. A group now needs at least five losses and a
+  win rate below the closed-trade baseline; `rule_anti_*` additionally requires
+  `TradePatternAnalyzer.is_significantly_worse()` (one-sided exact binomial, α = 0.05, baseline
+  of at least ten closed trades), otherwise the rule is stored as `rule_corrective_*`. The rule
+  text carries `n` and the baseline, so a thin sample is visible in the prompt.
+- **`trigger_ai_mistake_reflection()`** keys on `mistake_type|confidence`, never on the
+  direction or the regime, and its "win rate in comparable trades" is computed over every
+  closed trade at that confidence instead of over the same losing cluster that produced the rule.
+- **`src/trading/brain_patterns.py`**: `is_significantly_worse()`; `compute_group_metrics()`
+  exposes `avg_loss_mfe` and `build_rule_metadata()` separates `avg_loss_mfe_pct` (losers) from
+  `avg_mfe_pct` (winners), which used to read as two different numbers for the same fact; a zero
+  `confluence_count` counts as unmeasured, so "weak entry confluence" only fires on real values.
+- **`src/trading/vector_memory_rules.py`**: `deactivate_semantic_rule()` retires a rule with
+  `active: false` plus a reason, keeping its text and counters (no read path sees it).
+- **`scripts/brain_rules.py`**: `list`, `check` and `deactivate` for a brain directory. `check`
+  prints the exact block a prompt would receive, which is the honest way to verify a retirement.
+
+### Why
+The live store carried `rule_anti_pattern_long_bullish_stop_loss_sl_hard_15m_tp_hard_15m`
+("2 losses, 0 wins — 0% win rate") and a matching AI-mistake rule, both built from the same
+three trades, injected into every LONG-in-BULLISH decision at 65% similarity. Without the
+exit-reason filter the same history is five LONG-in-BULLISH trades: 1 win / 4 losses, one of
+them a +4.07% take-profit the rule would have banned. Its "weak entry confluence (avg 2 factors)"
+averaged a `confluence_count` of 0 (a field not yet recorded on 20 Sep) with one of 5.
+
+### Verified
+- `pytest tests -q` → 2 544 passed, 0 failed, 0 skipped; `ruff check src scripts start.py`
+  clean; `pyright src start.py` 0 errors; `python scripts/check_loose_helpers.py` reports no
+  violations.
+- Regression pin: `test_loss_reflection_stays_silent_on_the_2026_10_history` replays the ten
+  closed trades that produced the rule and asserts the pass stores nothing.
+- A dry run of all three passes on a copy of `data/trading/brain_BTC_USDC_4h` wrote no
+  anti-pattern rule and re-derived the AI-mistake rule without a direction claim
+  (`(4 mistake(s), 50% win rate in comparable trades)`).
+- Both live rules were retired with `scripts/brain_rules.py deactivate`; `check` then printed
+  an empty prompt block.
+
 # Changelog
 
 ## 2026-10-27 — A helper belongs to the class that owns it

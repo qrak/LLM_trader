@@ -909,7 +909,8 @@ def test_best_practice_reflection_stores_rule_with_metrics_and_exit_profile():
             id="win-rate-exactly-sixty",
         ),
         pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 2, False, "", id="two-losses"),
-        pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 3, True, "rule_anti_pattern_", id="three-losses"),
+        pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 4, False, "", id="four-losses"),
+        pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 5, True, "rule_corrective_", id="five-losses"),
         pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)], False, "", id="one-mistake"),
         pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)] * 2, True, "rule_ai_mistake_", id="two-mistakes"),
     ],
@@ -933,7 +934,7 @@ def test_reflection_requires_minimum_samples_and_sixty_percent_win_rate(trigger,
 
 def test_loss_reflection_stores_corrective_rule_with_diagnostics():
     brain = learning_brain()
-    brain.vector_memory.get_trade_metadatas.return_value = [dict(LOSS_META)] * 4
+    brain.vector_memory.get_trade_metadatas.return_value = [dict(LOSS_META)] * 5
 
     brain.trigger_loss_reflection()
 
@@ -942,10 +943,13 @@ def test_loss_reflection_stores_corrective_rule_with_diagnostics():
     assert metadata["failure_reason"]
     assert metadata["recommended_adjustment"]
     assert "ADX" in metadata["failure_reason"] or "stop" in metadata["failure_reason"]
-    assert metadata["rule_type"] in ("anti_pattern", "corrective")
+    assert metadata["rule_type"] == "corrective"
     assert metadata["wins"] == 0
-    assert metadata["losses"] == 4
+    assert metadata["losses"] == 5
     assert metadata["dominant_close_reason"] == "stop_loss"
+    assert metadata["direction"] == "LONG"
+    assert metadata["regime"] == "NEUTRAL"
+    assert metadata["baseline_win_rate"] == 0.0
     assert "ADX >= 20" in metadata["recommended_adjustment"]
 
 
@@ -964,10 +968,10 @@ def test_loss_reflection_stores_corrective_rule_with_diagnostics():
                     take_profit_check_interval="15m",
                 )
             ]
-            * 3,
+            * 5,
             None,
             {
-                "rule_id": "rule_anti_pattern_long_neutral_stop_loss_sl_hard_1m_tp_soft_15m",
+                "rule_id": "rule_corrective_long_neutral",
                 "profile": "SL hard/1m | TP soft/15m",
                 "stop_type": "hard",
                 "take_profit_type": "soft",
@@ -975,11 +979,11 @@ def test_loss_reflection_stores_corrective_rule_with_diagnostics():
             id="explicit-hard-stop-profile",
         ),
         pytest.param(
-            [dict(LOSS_META, adx_at_entry=22)] * 3
-            + [dict(WIN_META, market_regime="NEUTRAL", adx_at_entry=22, close_reason="stop_loss", pnl_pct=1.0)] * 3,
+            [dict(LOSS_META, adx_at_entry=22)] * 5
+            + [dict(WIN_META, market_regime="NEUTRAL", adx_at_entry=22, close_reason="stop_loss", pnl_pct=1.0)],
             HARD_15M,
             {
-                "rule_id": "rule_corrective_long_neutral_stop_loss_sl_hard_15m_tp_hard_15m",
+                "rule_id": "rule_corrective_long_neutral",
                 "profile": "SL hard/15m | TP hard/15m",
                 "stop_type": "hard",
                 "take_profit_type": "hard",
@@ -1018,16 +1022,146 @@ def test_ai_mistake_reflection_stores_sideways_overconfidence_rule():
     assert metadata["entry_confidence"] == "HIGH"
     assert metadata["failed_assumption"] == "expected breakout continuation"
     assert metadata["dominant_exit_profile"] == "SL hard/1m | TP soft/15m"
+    assert metadata["source_pattern"] == "SIDEWAYS_OVERCONFIDENCE|HIGH"
+    assert rule["rule_id"] == "rule_ai_mistake_sideways_overconfidence_high"
     assert "downgrade" in metadata["recommended_adjustment"]
     assert "AI MISTAKE" in rule["rule_text"]
     assert "hard" in metadata["recommended_adjustment"]
+
+
+def test_loss_reflection_groups_by_direction_and_regime_not_exit_reason():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    mixed_exits = [
+        dict(LOSS_META, close_reason="stop_loss", pnl_pct=-1.2),
+        dict(LOSS_META, close_reason="stop_loss", pnl_pct=-0.9),
+        dict(LOSS_META, close_reason="stop_loss", pnl_pct=-1.1),
+        dict(LOSS_META, close_reason="executor closed flat @ 83 000", pnl_pct=-2.0),
+        dict(LOSS_META, close_reason="executor closed flat @ 83 100", pnl_pct=-0.4),
+    ]
+    brain.vector_memory.get_trade_metadatas.return_value = mixed_exits
+
+    brain.trigger_loss_reflection()
+
+    rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
+    metadata = rule["metadata"]
+    assert metadata["source_pattern"] == "LONG|NEUTRAL"
+    assert metadata["losses"] == 5
+    assert metadata["dominant_close_reason"] == "stop_loss"
+    assert rule["rule_id"] == "rule_corrective_long_neutral"
+
+
+def test_loss_reflection_requires_significance_before_avoid():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    losses = [dict(LOSS_META, pnl_pct=-1.0)] * 5
+    wins = [dict(WIN_META, direction="SHORT", pnl_pct=1.5)] * 5
+    brain.vector_memory.get_trade_metadatas.return_value = losses + wins
+
+    brain.trigger_loss_reflection()
+
+    rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
+    assert rule["metadata"]["rule_type"] == "anti_pattern"
+    assert rule["rule_id"] == "rule_anti_pattern_long_neutral"
+    assert rule["metadata"]["baseline_win_rate"] == pytest.approx(50.0)
+    assert "0% win rate vs 50% baseline" in rule["rule_text"]
+    assert "n=5" in rule["rule_text"]
+
+
+def test_loss_reflection_keeps_corrective_when_sample_is_not_significant():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    losses = [dict(LOSS_META, pnl_pct=-1.0)] * 5
+    wins = [dict(WIN_META, market_regime="NEUTRAL", pnl_pct=1.0)] * 2
+    brain.vector_memory.get_trade_metadatas.return_value = losses + wins
+
+    brain.trigger_loss_reflection()
+
+    rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
+    assert rule["metadata"]["rule_type"] == "corrective"
+    assert rule["rule_id"] == "rule_corrective_long_neutral"
+
+
+def test_ai_mistake_rule_never_claims_a_direction_or_regime():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    brain.vector_memory.get_trade_metadatas.return_value = [
+        dict(MISTAKE_META, direction="LONG", market_regime="BULLISH"),
+        dict(MISTAKE_META, direction="SHORT", market_regime="BEARISH"),
+    ]
+
+    brain.trigger_ai_mistake_reflection()
+
+    rule = brain.vector_memory.store_semantic_rule.call_args.kwargs
+    assert rule["metadata"]["source_pattern"] == "SIDEWAYS_OVERCONFIDENCE|HIGH"
+    assert rule["rule_id"] == "rule_ai_mistake_sideways_overconfidence_high"
+    assert "LONG" not in rule["rule_text"]
+    assert "BULLISH" not in rule["rule_text"]
+    assert "sideways overconfidence" in rule["rule_text"]
+
+
+def test_loss_metrics_treat_zero_confluence_as_unmeasured():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    brain.vector_memory.get_trade_metadatas.return_value = [
+        dict(LOSS_META, confluence_count=0, pnl_pct=-1.0),
+        *[dict(LOSS_META, confluence_count=5, pnl_pct=-1.0) for _ in range(4)],
+    ]
+
+    brain.trigger_loss_reflection()
+
+    metadata = brain.vector_memory.store_semantic_rule.call_args.kwargs["metadata"]
+    assert "weak entry confluence" not in metadata["failure_reason"]
+    assert "3 aligned confluences" not in metadata["recommended_adjustment"]
+
+
+def test_rule_metadata_separates_win_and_loss_mfe():
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    brain.vector_memory.get_trade_metadatas.return_value = [
+        dict(LOSS_META, max_profit_pct=0.6, pnl_pct=-1.0),
+        dict(LOSS_META, max_profit_pct=0.0, pnl_pct=-1.0),
+        *[dict(LOSS_META, pnl_pct=-1.0) for _ in range(3)],
+    ]
+
+    brain.trigger_loss_reflection()
+
+    metadata = brain.vector_memory.store_semantic_rule.call_args.kwargs["metadata"]
+    assert metadata["avg_loss_mfe_pct"] == pytest.approx(0.6)
+    assert metadata["avg_mfe_pct"] == 0.0
+
+
+def test_loss_reflection_stays_silent_on_the_2026_10_history():
+    """The live history that produced the tautological rule must produce nothing."""
+    brain = learning_brain(exit_execution_context=HARD_15M)
+    closed = [
+        dict(direction="LONG", market_regime="BULLISH", outcome="WIN", pnl_pct=4.07,
+             close_reason="Executor confirmed flat: take_profit_filled @ 84500.0"),
+        dict(direction="LONG", market_regime="BULLISH", outcome="LOSS", pnl_pct=-2.60,
+             close_reason="Executor confirmed flat: close_confirmed_by_executor @ 83755.35"),
+        dict(direction="LONG", market_regime="BULLISH", outcome="LOSS", pnl_pct=-2.06,
+             close_reason="Executor confirmed flat: stop_loss_filled @ 78800.0"),
+        dict(direction="LONG", market_regime="BEARISH", outcome="LOSS", pnl_pct=-0.28,
+             close_reason="Executor confirmed flat: close_confirmed_by_executor @ 83027.96"),
+        dict(direction="LONG", market_regime="BULLISH", outcome="LOSS", pnl_pct=-0.99,
+             close_reason="CLOSE confirmed by executor: close_confirmed_by_executor @ 85415.76"),
+        dict(direction="LONG", market_regime="BULLISH", outcome="LOSS", pnl_pct=-1.12,
+             close_reason="Executor confirmed flat: stop_loss_filled @ 85348.03"),
+        dict(direction="SHORT", market_regime="BEARISH", outcome="WIN", pnl_pct=3.45,
+             close_reason="Executor confirmed flat: take_profit_filled @ 80302.84"),
+        dict(direction="SHORT", market_regime="BULLISH", outcome="WIN", pnl_pct=2.04,
+             close_reason="Executor confirmed flat: take_profit_filled @ 82000.0"),
+        dict(direction="SHORT", market_regime="BEARISH", outcome="WIN", pnl_pct=0.07,
+             close_reason="Executor confirmed flat: stop_loss_filled @ 83803.45"),
+        dict(direction="SHORT", market_regime="BEARISH", outcome="WIN", pnl_pct=1.93,
+             close_reason="Executor confirmed flat: take_profit_filled @ 79150.0"),
+    ]
+    brain.vector_memory.get_trade_metadatas.return_value = closed
+
+    brain.trigger_loss_reflection()
+
+    brain.vector_memory.store_semantic_rule.assert_not_called()
 
 
 @pytest.mark.parametrize(
     ("trigger", "metas"),
     [
         pytest.param("trigger_reflection", [dict(WIN_META)] * 6, id="best-practice"),
-        pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 3, id="anti-pattern"),
+        pytest.param("trigger_loss_reflection", [dict(LOSS_META)] * 5, id="loss-pattern"),
         pytest.param("trigger_ai_mistake_reflection", [dict(MISTAKE_META)] * 3, id="ai-mistake"),
     ],
 )
@@ -1046,6 +1180,33 @@ def test_reflection_rule_ids_are_deterministic_across_runs(trigger, metas):
     triggers[trigger]()
 
     assert brain.vector_memory.store_semantic_rule.call_args.kwargs["rule_id"] == first
+
+
+def test_deactivate_semantic_rule_hides_it_from_reads_and_keeps_its_text(tmp_path):
+    logger = MagicMock()
+    embedding = MagicMock()
+    embedding.encode.return_value = np.array([1.0, 0.0, 0.0])
+    client = chromadb.PersistentClient(path=str(tmp_path / "brain"), settings=Settings(anonymized_telemetry=False))
+    memory = VectorMemoryService(logger, client, embedding)
+    rule_text = "⚠️ AVOID: LONG trades in BULLISH market exit most often via stop_loss (5 losses, n=5)."
+    assert memory.store_semantic_rule(
+        rule_id="rule_anti_pattern_long_bullish",
+        rule_text=rule_text,
+        metadata={"rule_type": "anti_pattern", "active": True, "source_pattern": "LONG|BULLISH"},
+    )
+    assert "LONG trades in BULLISH" in memory.get_anti_patterns_for_prompt()
+
+    assert memory.deactivate_semantic_rule("rule_anti_pattern_long_bullish", "tautological key") is True
+
+    assert memory.get_anti_patterns_for_prompt() == ""
+    assert memory.get_active_rules() == []
+    stored = memory._semantic_rules_collection.get(ids=["rule_anti_pattern_long_bullish"])
+    assert stored["documents"] == [rule_text]
+    metadata = stored["metadatas"][0]
+    assert metadata["active"] is False
+    assert metadata["deactivation_reason"] == "tautological key"
+    assert metadata["deactivated_at"]
+    assert memory.deactivate_semantic_rule("rule_does_not_exist", "no such rule") is False
 
 
 @pytest.mark.parametrize(

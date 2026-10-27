@@ -1,5 +1,6 @@
 """Trade metadata analysis helpers for trading brain reflection."""
 
+import math
 from collections import Counter
 from typing import Any
 
@@ -108,13 +109,18 @@ class TradePatternAnalyzer:
         return sum(values) / len(values) if values else 0.0
 
     def compute_loss_diagnostics(self, losses: list[dict[str, Any]]) -> dict[str, float]:
-        """Compute reused diagnostic averages for losing trades."""
+        """Compute reused diagnostic averages for losing trades.
+
+        A zero ``confluence_count`` means the field was never measured for that trade
+        (older experiences predate it), not that the entry cleared no confluences, so
+        it is excluded from the average instead of dragging it towards zero.
+        """
         alignment_values = [meta.get("timeframe_alignment") for meta in losses if meta.get("timeframe_alignment")]
         mixed_count = sum(1 for value in alignment_values if value in ("MIXED", "DIVERGENT"))
         return {
             "avg_adx": self.average_meta(losses, "adx_at_entry"),
             "avg_rr": self.average_meta(losses, "rr_ratio"),
-            "avg_confluence": self.average_meta(losses, "confluence_count"),
+            "avg_confluence": self.average_meta(losses, "confluence_count", non_zero=True),
             "avg_loss_mfe": self.average_meta(losses, "max_profit_pct", positive_only=True),
             "mixed_alignment_ratio": mixed_count / len(alignment_values) if alignment_values else 0.0,
         }
@@ -140,6 +146,7 @@ class TradePatternAnalyzer:
             "expectancy_pct": round(metrics["expectancy_pct"], 2),
             "avg_mae_pct": round(metrics["avg_mae"], 2),
             "avg_mfe_pct": round(metrics["avg_mfe"], 2),
+            "avg_loss_mfe_pct": round(metrics["avg_loss_mfe"], 2),
             "dominant_close_reason": metrics["dominant_close_reason"],
             "dominant_exit_profile": metrics["dominant_exit_profile"],
             "dominant_stop_loss_type": metrics["dominant_stop_loss_type"],
@@ -274,6 +281,7 @@ class TradePatternAnalyzer:
         expectancy_pct = win_rate * avg_win_pct + loss_rate * avg_loss_pct
         avg_mae = self.average_meta(losses, "max_drawdown_pct", absolute=True, non_zero=True)
         avg_mfe = self.average_meta(wins, "max_profit_pct", positive_only=True)
+        avg_loss_mfe = self.average_meta(losses, "max_profit_pct", positive_only=True)
         loss_reasons = Counter(self.normalize_close_reason(meta.get("close_reason", "unknown")) for meta in losses)
         dominant_close_reason = loss_reasons.most_common(1)[0][0] if loss_reasons else "unknown"
         profile_metas = losses if losses else group_metas
@@ -296,6 +304,7 @@ class TradePatternAnalyzer:
             "expectancy_pct": expectancy_pct,
             "avg_mae": avg_mae,
             "avg_mfe": avg_mfe,
+            "avg_loss_mfe": avg_loss_mfe,
             "dominant_close_reason": dominant_close_reason,
             "dominant_exit_profile": dominant_exit_profile,
             "dominant_stop_loss_type": dominant_stop_loss_type,
@@ -304,6 +313,32 @@ class TradePatternAnalyzer:
             "dominant_take_profit_interval": dominant_take_profit_interval,
             "loss_metas": losses,
         }
+
+    SIGNIFICANCE_ALPHA = 0.05
+
+    @staticmethod
+    def is_significantly_worse(
+        wins: int,
+        losses: int,
+        baseline_win_rate: float,
+        alpha: float = SIGNIFICANCE_ALPHA,
+    ) -> bool:
+        """Test whether a pattern's win count is below the baseline by chance alone.
+
+        One-sided exact binomial test: the probability of observing ``wins`` or fewer
+        wins in ``wins + losses`` trials when the true win rate equals the baseline.
+        A pattern that merely looks bad on a small sample fails this test, which is
+        what stops a two-trade cluster from becoming a rule. A baseline of 0 or 1
+        carries no information, so it never yields significance.
+        """
+        total = wins + losses
+        if total <= 0 or not 0.0 < baseline_win_rate < 1.0:
+            return False
+        tail = sum(
+            math.comb(total, hits) * baseline_win_rate**hits * (1.0 - baseline_win_rate) ** (total - hits)
+            for hits in range(wins + 1)
+        )
+        return tail < alpha
 
     def derive_failure_reason(self, metrics: dict[str, Any]) -> str:
         """Derive the primary cause of losses from trade group metrics."""
@@ -330,7 +365,7 @@ class TradePatternAnalyzer:
         if avg_confluence > 0 and avg_confluence < 3:
             reasons.append(f"weak entry confluence (avg {avg_confluence:.0f} factors)")
         if avg_loss_mfe > 0.5:
-            reasons.append(f"trades moved favorably (avg MFE +{avg_loss_mfe:.1f}%) before reversing")
+            reasons.append(f"losers reached avg MFE +{avg_loss_mfe:.1f}% before reversing")
         if not reasons:
             reasons.append(f"exits via {dominant_reason}")
         return "; ".join(reasons)
