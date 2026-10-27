@@ -45,7 +45,7 @@ If your change touches prompts, parsing, trading logic, dashboard routes, or new
 
 - Update `README.md` when user-facing behavior changes.
 - Update docs under `docs/` when architecture or workflows change.
-- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes. Add entries at the top; when the file grows, move the entries below the previous release into `docs/changelog-archive-<year>.md` and link them from the `## Archive` section.
+- Update `CHANGELOG.md` for material behavior, configuration, dependency, API, or workflow changes. Add entries at the top; when the file grows, move the entries below the previous release into `docs/changelog-archive-<year>.md` and link them from the `## Archive` section. The changelog records what the code, the data and the deployment do — not the author's profile, availability or biography, which are not repository content; when the site moved to its own repository, one line saying so was enough.
 
 ## Branches, Versions and Releases
 

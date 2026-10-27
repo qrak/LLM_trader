@@ -127,7 +127,7 @@ averaged a `confluence_count` of 0 (a field not yet recorded on 20 Sep) with one
   decoder position, the full-content log, the retry wording, the cleared stale reason and the
   recovery line (and its silence on a first-attempt success).
 
-## 2026-10-27 — The site leaves this repository, and its articles stop selling
+## 2026-10-27 — The site leaves this repository
 
 ### Changed
 - **The Astro site is now its own repository**: [qrak/semantic-signal-site](https://github.com/qrak/semantic-signal-site)
@@ -148,11 +148,6 @@ averaged a `confluence_count` of 0 (a field not yet recorded on 20 Sep) with one
   `301` instead of naming `website/`.
 
 ### Fixed
-- **The author bio no longer claims a role or an employer it should not.** The landing page and
-  `about.astro` said "Backend / AI developer" with "enterprise SAP environments at BSH Sprzęt
-  Gospodarstwa Domowego". Corrected to a hobbyist developer, with `Supply Controller, Inbound
-  Operations` as the day job; no company and no SAP claim on the site. Availability is stated as
-  "remote or on-site — open to offers" rather than "remote-ready".
 - **Articles rewritten for tone and evidence.** `chart-vision`, `vector-memory` and
   `executor-separation` lost the comparisons with other projects, the "brain"/"conviction" framing and
   the self-assessment, and gained what the code actually enforces, the file behind each claim, and a
@@ -437,10 +432,6 @@ averaged a `confluence_count` of 0 (a field not yet recorded on 20 Sep) with one
   expected-value gate ("if EV comes out negative, the signal is rejected") or that a missed +EV
   setup is scored as a loss — EV lives in the prompt; the deterministic checks are the symbol
   whitelist, the position cap and validated stop/target levels.
-- About copy (landing + `/about`): the "Open to Work" badge and the "Open to work" section are gone.
-  He works in a backend/AI role and the site is a portfolio, so the copy now states that instead of
-  framing the project as a job application. "Currently working in warehouse logistics" is history
-  (the December 2025 origin story), not the current situation.
 - `website/public/llms.txt` and `project.json`: commits 444 → **478**, tests 1,549 → **2,265**
   (with `failing: 1` and the reason), 97 → **79** indicator functions, the intro's "deterministic
   expected-value gate" corrected to the real pre-execution checks, BlockRun added to the provider
